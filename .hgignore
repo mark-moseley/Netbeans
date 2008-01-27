@@ -5,6 +5,7 @@
 \.DS_Store$
 \.orig$
 \.rej$
+^nbbuild/antsrc/org/netbeans/nbbuild/extlibs/external\.pyc$
 ^o.apache.tools.ant.module/external/lib$
 ^ant.freeform/test/unit/data/example-projects/simple/dist$
 ^apisupport.project/src/org/netbeans/modules/apisupport/project/resources/sample-build-impl\.xml$
@@ -448,7 +449,6 @@
 ^performance/threaddemo/user\.build\.properties$
 ^php.doc/libdoc/doc\.gzip$
 ^php.doc/libdoc/doc\.html$
-^php\.doc/src/org/netbeans/modules/php/doc/resources
 ^lib.profiler/native/build/dist$
 ^lib.profiler/test/functional/data/projects/j2se-simple/dist$
 ^o.jruby.distro/patched_source$
@@ -737,9 +737,6 @@
 ^xtest/xtest-distribution\.zip$
 ^xtest/results$
 ^xtest/plugins$
-^xtest/examples/MyModule/mymodule\.jar$
-^xtest/examples/PaintApp/dist$
-^xtest/examples/anagrams/dist$
 ^xtest/external/emma\.jar$
 ^xtest/external/emma_ant\.jar$
 ^xtest/instance/results$
