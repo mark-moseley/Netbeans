@@ -8,11 +8,12 @@ TRUNK_NIGHTLY_DIRNAME=`pwd`
 export BUILD_DESC=trunk-nightly
 source init.sh
 
+rm -rf $DIST
+
 if [ ! -z $WORKSPACE ]; then
     #I'm under hudson and have sources here, I need to clone them
     #Clean obsolete sources first
-    mv $NB_ALL $NB_ALL.old
-    rm -rf $NB_ALL.old &
+    rm -rf $NB_ALL
     hg clone $WORKSPACE $NB_ALL
 fi
 
