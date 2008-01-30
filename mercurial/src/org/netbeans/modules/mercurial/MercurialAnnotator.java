@@ -72,6 +72,7 @@ import org.netbeans.modules.mercurial.ui.ignore.IgnoreAction;
 import org.netbeans.modules.mercurial.ui.log.LogAction;
 import org.netbeans.modules.mercurial.ui.merge.MergeAction;
 import org.netbeans.modules.mercurial.ui.properties.PropertiesAction;
+import org.netbeans.modules.mercurial.ui.pull.FetchAction;
 import org.netbeans.modules.mercurial.ui.pull.PullAction;
 import org.netbeans.modules.mercurial.ui.pull.PullOtherAction;
 import org.netbeans.modules.mercurial.ui.push.PushAction;
@@ -335,7 +336,6 @@ public class MercurialAnnotator extends VCSAnnotator {
         Node [] nodes = ctx.getElements().lookupAll(Node.class).toArray(new Node[0]);
         File [] files = ctx.getRootFiles().toArray(new File[ctx.getRootFiles().size()]);
         File root = HgUtils.getRootFile(ctx);
-        boolean goodVersion = Mercurial.getInstance().isGoodVersion();
         boolean noneVersioned = root == null;
         boolean onlyFolders = onlyFolders(files);
         boolean onlyProjects = onlyProjects(nodes);
@@ -364,6 +364,8 @@ public class MercurialAnnotator extends VCSAnnotator {
             actions.add(new PullOtherAction(loc.getString("CTL_PopupMenuItem_PullOther"), ctx)); // NOI18N
             actions.add(new MergeAction(NbBundle.getMessage(MercurialAnnotator.class, "CTL_PopupMenuItem_Merge"), ctx)); // NOI18N
             actions.add(null);
+            actions.add(new FetchAction(NbBundle.getMessage(MercurialAnnotator.class, "CTL_PopupMenuItem_FetchLocal"), ctx)); // NOI18N
+            actions.add(null);
             AnnotateAction tempA = new AnnotateAction(loc.getString("CTL_PopupMenuItem_ShowAnnotations"), ctx); // NOI18N
             if (tempA.visible(nodes)) {
                 tempA = new AnnotateAction(loc.getString("CTL_PopupMenuItem_HideAnnotations"), ctx); // NOI18N
@@ -376,9 +378,6 @@ public class MercurialAnnotator extends VCSAnnotator {
             actions.add(new RevertModificationsAction(NbBundle.getMessage(MercurialAnnotator.class, "CTL_PopupMenuItem_Revert"), ctx)); // NOI18N
             actions.add(new ResolveConflictsAction(NbBundle.getMessage(MercurialAnnotator.class, "CTL_PopupMenuItem_Resolve"), ctx)); // NOI18N
             IgnoreAction tempIA = new IgnoreAction(loc.getString("CTL_PopupMenuItem_Ignore"), ctx); // NOI18N
-            if (files.length > 0 && tempIA.getActionStatus(files) == IgnoreAction.UNIGNORING) {
-                tempIA = new IgnoreAction(loc.getString("CTL_PopupMenuItem_Unignore"), ctx); // NOI18N
-            }
             actions.add(tempIA);
             actions.add(null);
             actions.add(new PropertiesAction(loc.getString("CTL_PopupMenuItem_Properties"), ctx)); // NOI18N
@@ -403,6 +402,9 @@ public class MercurialAnnotator extends VCSAnnotator {
                 actions.add(new MergeAction(NbBundle.getMessage(MercurialAnnotator.class, 
                         "CTL_PopupMenuItem_Merge"), ctx)); // NOI18N
                 actions.add(null);                
+                actions.add(new FetchAction(NbBundle.getMessage(MercurialAnnotator.class, 
+                        "CTL_PopupMenuItem_FetchLocal"), ctx)); // NOI18N
+                actions.add(null);                
 
                 if (!onlyFolders) {
                     AnnotateAction tempA = new AnnotateAction(loc.getString("CTL_PopupMenuItem_ShowAnnotations"), ctx);  // NOI18N
@@ -425,9 +427,6 @@ public class MercurialAnnotator extends VCSAnnotator {
                         "CTL_PopupMenuItem_MarkResolved"), ctx)); // NOI18N
                     
                     IgnoreAction tempIA = new IgnoreAction(loc.getString("CTL_PopupMenuItem_Ignore"), ctx);  // NOI18N
-                    if (files.length > 0 && tempIA.getActionStatus(files) == IgnoreAction.UNIGNORING) {
-                        tempIA = new IgnoreAction(loc.getString("CTL_PopupMenuItem_Unignore"), ctx);  // NOI18N
-                    }
                     actions.add(tempIA);
                 }
                 actions.add(null);
@@ -565,20 +564,23 @@ public class MercurialAnnotator extends VCSAnnotator {
     }
     
     private String annotateFolderNameHtml(String name, FileInformation mostImportantInfo, File mostImportantFile) {
-        String project = HgProjectUtils.getProjectName(mostImportantFile);
-        String fileName = mostImportantFile.getName();
-        if (project == null || fileName.equals(name)) {
-            fileName = null;
-        } else {
-            File repo = Mercurial.getInstance().getTopmostManagedParent(mostImportantFile);
-            if (!repo.equals(mostImportantFile)) {
-                fileName = repo.getName();
-            }
-        }
-
-        name = htmlEncode(name);
+        String nameHtml = htmlEncode(name);
         if (mostImportantInfo.getStatus() == FileInformation.STATUS_NOTVERSIONED_EXCLUDED){
-            return excludedFormat.format(new Object [] { name, ""}); // NOI18N
+            return excludedFormat.format(new Object [] { nameHtml, ""}); // NOI18N
+        }
+        String fileName = mostImportantFile.getName();
+        if (fileName.equals(name)){
+            return uptodateFormat.format(new Object [] { nameHtml, "" }); // NOI18N
+        }
+        
+        // Label top level repository nodes with a repository name label when:
+        // Display Name (name) is different from its repo name (repo.getName())
+        fileName = null;
+        File repo = Mercurial.getInstance().getTopmostManagedParent(mostImportantFile);
+        if(repo != null && repo.equals(mostImportantFile)){
+            if (!repo.getName().equals(name)){
+                fileName = repo.getName();
+            }          
         }
         if (fileName != null)
             return uptodateFormat.format(new Object [] { name, " [" + fileName + "]" }); // NOI18N

@@ -194,7 +194,6 @@ public class HgCommand {
     private static final String HG_PULL_CMD = "pull"; // NOI18N
     private static final String HG_UPDATE_CMD = "-u"; // NOI18N
     private static final String HG_PUSH_CMD = "push"; // NOI18N
-    private static final String HG_PUSH_FORCE_CMD = "-f"; // NOI18N
     private static final String HG_UNBUNDLE_CMD = "unbundle"; // NOI18N
     private static final String HG_ROLLBACK_CMD = "rollback"; // NOI18N
     private static final String HG_VERSION_CMD = "version"; // NOI18N
@@ -202,6 +201,7 @@ public class HgCommand {
     private static final String HG_OUTGOING_CMD = "outgoing"; // NOI18N
     private static final String HG_VIEW_CMD = "view"; // NOI18N
     private static final String HG_VERBOSE_CMD = "-v"; // NOI18N
+    private static final String HG_FETCH_CMD = "fetch"; // NOI18N
     
     private static final String HG_MERGE_NEEDED_ERR = "(run 'hg heads' to see heads, 'hg merge' to merge)"; // NOI18N
     public static final String HG_MERGE_CONFLICT_ERR = "conflicts detected in "; // NOI18N
@@ -232,6 +232,7 @@ public class HgCommand {
     private static final String HG_CANNOT_RUN_ERR = "Cannot run program"; // NOI18N
     private static final String HG_ABORT_ERR = "abort: "; // NOI18N
     private static final String HG_ABORT_PUSH_ERR = "abort: push creates new remote branches!"; // NOI18N
+    private static final String HG_ABORT_NO_FILES_TO_COPY_ERR = "abort: no files to copy"; // NOI18N
     
     private static final String HG_NO_CHANGE_NEEDED_ERR = "no change needed"; // NOI18N
     private static final String HG_NO_ROLLBACK_ERR = "no rollback information available"; // NOI18N
@@ -535,18 +536,15 @@ public class HgCommand {
      *
      * @param File repository of the mercurial repository's root directory
      * @param String source repository to push to
-     * @param boolean force push even if multiple heads will be created
      * @return hg push output
      * @throws org.netbeans.modules.mercurial.HgException
      */
-    public static List<String> doPush(File repository, String to, boolean bForce) throws HgException {
+    public static List<String> doPush(File repository, String to) throws HgException {
         if (repository == null || to == null ) return null;
         List<String> command = new ArrayList<String>();
 
         command.add(getHgCommand());
         command.add(HG_PUSH_CMD);
-        if(bForce)
-            command.add(HG_PUSH_FORCE_CMD);
         command.add(HG_OPT_REPOSITORY);
         command.add(repository.getAbsolutePath());
         command.add(to);
@@ -598,7 +596,32 @@ public class HgCommand {
         } 
         return list;
     }
+    
+    /**
+     * Run the fetch extension for the specified repository
+     *
+     * @param File repository of the mercurial repository's root directory
+     * @throws org.netbeans.modules.mercurial.HgException
+     */
+    public static List<String> doFetch(File repository) throws HgException {
+        if (repository == null) return null;
+        List<String> command = new ArrayList<String>();
 
+        command.add(getHgCommand());
+        command.add(HG_FETCH_CMD);
+        command.add(HG_OPT_REPOSITORY);
+        command.add(repository.getAbsolutePath());
+        
+        List<String> list;
+        list = exec(command);
+
+        if (!list.isEmpty()) {
+            if (isErrorAbort(list.get(list.size() -1))) {
+                handleError(command, list, NbBundle.getMessage(HgCommand.class, "MSG_COMMAND_ABORTED"));
+            }
+        } 
+        return list;
+    }
 
     public static HgLogMessage[] getLogMessages(final String rootUrl, final Set<File> files, String fromRevision, String toRevision) {
         final List<HgLogMessage> messages = new ArrayList<HgLogMessage>(0);  
@@ -1285,7 +1308,9 @@ public class HgCommand {
         List<String> list = exec(command);
         if (!list.isEmpty() &&
              isErrorAbort(list.get(list.size() -1))) {
-            handleError(command, list, NbBundle.getMessage(HgCommand.class, "MSG_RENAME_FAILED"));
+            if (!bAfter || !isErrorAbortNoFilesToCopy(list.get(list.size() -1))) {
+                handleError(command, list, NbBundle.getMessage(HgCommand.class, "MSG_RENAME_FAILED"));
+            }
         }
     }
     
@@ -2175,8 +2200,9 @@ public class HgCommand {
      */
 
     private static List<String> execEnv(List<String> command, List<String> env) throws HgException{
-        assert( !EventQueue.isDispatchThread());
-        assert ( command != null && command.size() > 0);
+        if( EventQueue.isDispatchThread()){
+            Mercurial.LOG.log(Level.FINE, "WARNING execEnv():  calling Hg command in AWT Thread - could stall UI"); // NOI18N
+        }        assert ( command != null && command.size() > 0);
         List<String> list = new ArrayList<String>();
         BufferedReader input = null;
         Process proc = null;
@@ -2281,7 +2307,7 @@ public class HgCommand {
      * @return List of the command's output or an exception if one occured
      */
     private static List<String> exec(List<String> command) throws HgException{
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()){
+        if(!Mercurial.getInstance().isGoodVersion()){
             return new ArrayList<String>();
         }
         return execEnv(command, null);
@@ -2383,6 +2409,10 @@ public class HgCommand {
 
     public static boolean isErrorAbortPush(String msg) {
         return msg.indexOf(HG_ABORT_PUSH_ERR) > -1; // NOI18N
+    }
+
+    public static boolean isErrorAbortNoFilesToCopy(String msg) {
+        return msg.indexOf(HG_ABORT_NO_FILES_TO_COPY_ERR) > -1; // NOI18N
     }
 
     private static boolean isErrorNoChangeNeeded(String msg) {
