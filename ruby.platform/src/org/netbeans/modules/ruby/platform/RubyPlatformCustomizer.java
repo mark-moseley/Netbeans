@@ -569,7 +569,7 @@ public class RubyPlatformCustomizer extends JPanel {
                 return f.isDirectory() || (f.isFile() && f.getName().toLowerCase(Locale.US).contains("ruby")); // NOI18N
             }
             public String getDescription() {
-                return "Ruby Platform"; //getMessage("CTL_JavadocTab");
+                return getMessage("RubyPlatformCustomizer.rubyPlatform");
             }
         });
         int ret = chooser.showOpenDialog(this);
@@ -579,7 +579,7 @@ public class RubyPlatformCustomizer extends JPanel {
             RubyPlatform platform = getPlafListModel().addPlatform(intepreter);
             if (platform == null) {
                 Util.notifyLocalized(RubyPlatformCustomizer.class,
-                        "RubyPlatformCustomizer.invalid.platform.added", intepreter.getAbsolutePath());
+                        "RubyPlatformCustomizer.invalid.platform.added", intepreter.getAbsolutePath()); // NOI18N
             }
             refreshPlatform();
         }
@@ -652,10 +652,10 @@ public class RubyPlatformCustomizer extends JPanel {
         
         boolean isJRuby = platform.isJRuby();
         boolean fdInstalled = platform.hasFastDebuggerInstalled();
-        rubyDebugEngine.setEnabled(!isJRuby && fdInstalled);
+        rubyDebugEngine.setEnabled(fdInstalled);
         installFastDebugger.setEnabled(!isJRuby && platform.hasRubyGemsInstalled());
         installFastDebugger.setVisible(!isJRuby && !fdInstalled);
-        if (isJRuby || !fdInstalled || prefs.isUseClassicDebugger(platform)) {
+        if (!fdInstalled || prefs.isUseClassicDebugger(platform)) {
             classicDebuggerEngine.setSelected(true);
         } else {
             rubyDebugEngine.setSelected(true);
