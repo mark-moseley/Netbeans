@@ -56,8 +56,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.modules.masterfs.filebasedfs.FileBasedFileSystem;
 import org.netbeans.modules.masterfs.filebasedfs.children.ChildrenCache;
+import org.netbeans.modules.masterfs.filebasedfs.utils.FileChangedManager;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Mutex;
+import org.openide.util.NbPreferences;
 import org.openide.util.Utilities;
 
 /**
@@ -138,12 +140,12 @@ public final class FileObjectFactory {
         return issueIfExist(file, caller, parent, child, initTouch, lfs);        
     }
 
-    private boolean checkCacheState(boolean exist, File file, FileBasedFileSystem lfs) {        
-        return checkCacheState(exist, file, false, lfs);
+    private boolean checkCacheState(boolean exist, File file, FileBasedFileSystem lfs, Caller caller) {        
+        return checkCacheState(exist, file, lfs, caller, false);
     }
 
-    private boolean checkCacheState(boolean exist, File file, boolean afterRecovering, FileBasedFileSystem lfs) {        
-        if (lfs.isWarningEnabled()) {
+    private boolean checkCacheState(boolean exist, File file, FileBasedFileSystem lfs, Caller caller, boolean afterRecovering) {        
+        if (lfs.isWarningEnabled() && caller != null && !caller.equals(Caller.GetChildern)) {
             boolean notsame = exist != file.exists();
             if (notsame) {
                 if (afterRecovering) {
@@ -165,6 +167,7 @@ public final class FileObjectFactory {
     }    
 
     private boolean printWarning(File file, Status stat) {
+            NbPreferences.root().node("/org/netbeans").put("warning", file.getAbsolutePath()); 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             PrintStream ps = new PrintStream(bos);
             new Exception().printStackTrace(ps);
@@ -186,6 +189,7 @@ public final class FileObjectFactory {
         boolean exist = false;
         FileObject foForFile = null;
         Integer realExists = new Integer(initTouch);
+        final FileChangedManager fcb = FileChangedManager.getInstance();
 
         //use cached info as much as possible + do refresh if something is wrong
         //exist = (parent != null) ? child != null : (((foForFile = get(file)) != null && foForFile.isValid()) || touchExists(file, realExists));
@@ -193,30 +197,45 @@ public final class FileObjectFactory {
         if (parent != null && parent.isValid()) {
             if (child != null) {
                 if (foForFile == null) {
-                    exist = true;
-                    assert checkCacheState(exist, file, lfs);
+                    exist = true;                    
+                    assert checkCacheState(true, file, lfs, caller);                    
+                    if (fcb.impeachExistence(file, exist)) {
+                        exist = touchExists(file, realExists);
+                        if (!exist) {
+                            parent.refresh();
+                        }
+                    }                                
                 } else if (foForFile.isValid()) {
                     exist = true;
-                    assert checkCacheState(exist, file, lfs);
+                    assert checkCacheState(exist, file, lfs, caller);
+                    if (fcb.impeachExistence(file, exist)) {
+                        exist = touchExists(file, realExists);
+                        if (!exist) {
+                            parent.refresh();
+                        }
+                    }                                                    
                 } else {
                     //!!!!!!!!!!!!!!!!! inconsistence
                     exist = touchExists(file, realExists);
                     if (!exist) {
                         parent.refresh();
                     }
-                    assert checkCacheState(exist, file, true, lfs); 
+                    //assert checkCacheState(exist, file, true, lfs); 
                 }
             } else {
                 if (foForFile == null) {
                     exist = false;
-                    assert checkCacheState(exist, file, lfs);
+                    assert checkCacheState(exist, file, lfs, caller);                    
+                    if (fcb.impeachExistence(file, exist)) {
+                        exist = touchExists(file, realExists);
+                    }
                 } else if (foForFile.isValid()) {
                     //!!!!!!!!!!!!!!!!! inconsistence
                     exist = touchExists(file, realExists);
                     if (!exist) {
                         foForFile.refresh();
                     }
-                    assert checkCacheState(exist, file, true, lfs);
+                    //assert checkCacheState(exist, file, true, lfs);
                 } else {
                     exist = touchExists(file, realExists);
                     if (exist) {
@@ -230,18 +249,27 @@ public final class FileObjectFactory {
             } else if (foForFile.isValid()) {
                 if (parent == null) {
                     exist = true;
-                    assert checkCacheState(exist, file, lfs);
+                    assert checkCacheState(exist, file, lfs, caller);
+                    if (fcb.impeachExistence(file, exist)) {
+                        exist = touchExists(file, realExists);
+                        if (!exist) {
+                            foForFile.refresh();
+                        }
+                    }                                                                        
                 } else {
                     //!!!!!!!!!!!!!!!!! inconsistence
                     exist = touchExists(file, realExists);
                     if (!exist) {
                         foForFile.refresh();
                     }
-                    assert checkCacheState(exist, file, true, lfs);
+                    //assert checkCacheState(exist, file, true, lfs);
                 }
             } else {
                 exist = false;
-                assert checkCacheState(exist, file, lfs);
+                assert checkCacheState(exist, file, lfs, caller);
+                if (fcb.impeachExistence(file, exist)) {
+                    exist = touchExists(file, realExists);
+                }                                                                                        
             }
         }
         if (!exist) {
@@ -267,7 +295,7 @@ public final class FileObjectFactory {
                     exist = touchExists(file, realExists);
                     if (exist && parent != null && parent.isValid()) {
                         parent.refresh();
-                        assert checkCacheState(exist, file, true, lfs);//review first parameter
+                        assert checkCacheState(exist, file, lfs, caller, true);//review first parameter
                     }                    
                     break;
             }
@@ -278,7 +306,7 @@ public final class FileObjectFactory {
     
     private static boolean touchExists(File f, Integer state) {
         if (state == -1) {
-            state = f.exists() ? 1 : 0;
+            state = FileChangedManager.getInstance().exists(f) ? 1 : 0;
         }
         assert state != -1;
         return (state == 1) ? true : false;
