@@ -100,14 +100,15 @@ public final class LibrariesSupport {
      * @param f file to convert; can be relative; cannot be null
      * @return url
      */
-    public static URL convertFileToURL(File f) {
+    public static URL convertFileToURL(String path) {
         try {
+            File f = new File(path);
             if (f.isAbsolute()) {
                 return f.toURI().toURL();
             } else {
                 // create hierarchical relative URI (that is no schema)
                 // to encode OS characters
-                URI uri = new URI(null, null, f.getPath().replace('\\', '/'), null);
+                URI uri = new URI(null, null, path.replace('\\', '/'), null);
                 return new URL("file", null, uri.getRawPath());
             }
 
@@ -127,18 +128,18 @@ public final class LibrariesSupport {
      * @param url file URL to convert; can be relative; cannot be null
      * @return url
      */
-    public static File convertURLToFile(URL url) {
+    public static String convertURLToFile(URL url) {
         if (!"file".equals(url.getProtocol())) {
             throw new IllegalArgumentException("not file URL "+url); //NOI18N
         }
         try {
             if (isAbsoluteURL(url)) {
-                return new File(new URI(url.toExternalForm()));
+                return new URI(url.toExternalForm()).getPath();
             } else {
                 // workaround to decode URL path - created fake absolute URI 
                 // just to construct File instance and properly decoded path:
                 URI uri3 = new URI("file:/"+url.getPath());
-                return new File(new File(uri3).getPath().substring(1));
+                return new File(uri3).getPath().substring(1);
             }
         } catch (URISyntaxException ex) {
 	    IllegalArgumentException y = new IllegalArgumentException();
@@ -195,13 +196,14 @@ public final class LibrariesSupport {
                 throw new IllegalArgumentException("library location must be a file - "+libraryLocation.toExternalForm()); //NOI18N
             }
             File libBase = libLocation.getParentFile();
-            boolean archiveURL = false;
+            String jarFolder = null;
             if ("jar".equals(libraryEntry.getProtocol())) {
+                assert libraryEntry.toExternalForm().indexOf("!/") != -1 : libraryEntry.toExternalForm(); //NOI18N
+                jarFolder = libraryEntry.toExternalForm().substring(libraryEntry.toExternalForm().indexOf("!/")+2); //NOI18N
                 libraryEntry = FileUtil.getArchiveFile(libraryEntry);
-                archiveURL = true;
             }
-            File f = convertURLToFile(libraryEntry);
-            f = FileUtil.normalizeFile(new File(libBase, f.getPath()));
+            String path = convertURLToFile(libraryEntry);
+            File f = FileUtil.normalizeFile(new File(libBase, path));
             URL u;
             try {
                 u = f.toURI().toURL();
@@ -210,8 +212,13 @@ public final class LibrariesSupport {
                 y.initCause(ex);
                 throw y;
             }
-            if (archiveURL) {
+            if (jarFolder != null) {
                 u = FileUtil.getArchiveRoot(u);
+                try {
+                    u = new URL(u + jarFolder.replace('\\', '/')); //NOI18N
+                } catch (MalformedURLException e) {
+                    throw new AssertionError(e);
+                }
             }
             return u;
         }
