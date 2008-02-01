@@ -38,8 +38,9 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.mercurial.ui.view;
+package org.netbeans.modules.mercurial.ui.pull;
 
+import org.netbeans.modules.mercurial.ui.view.*;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.HgException;
@@ -50,26 +51,32 @@ import org.openide.NotifyDescriptor;
 import org.openide.util.RequestProcessor;
 
 import java.io.File;
-import java.util.List;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
-import org.netbeans.modules.mercurial.config.HgConfigFiles;
+import java.util.List;
+import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.ui.actions.ContextAction;
+import org.netbeans.modules.mercurial.config.HgConfigFiles;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 /**
- * View action for mercurial: 
- * hg view - launch hg view to view the dependency tree for the repository
+ * Fetch action for mercurial: 
+ * hg fetch - launch hg view to view the dependency tree for the repository
+ * Pull changes from a remote repository, merge new changes if needed.
+ * This finds all changes from the repository at the specified path
+ * or URL and adds them to the local repository.
+ * 
+ * If the pulled changes add a new head, the head is automatically
+ * merged, and the result of the merge is committed.  Otherwise, the
+ * working directory is updated.
  * 
  * @author John Rice
  */
-public class ViewAction extends ContextAction {
+public class FetchAction extends ContextAction {
     
     private final VCSContext context;
-    private static final String HG_SCRIPTS_DIR = "scripts";
 
-    public ViewAction(String name, VCSContext context) {
+    public FetchAction(String name, VCSContext context) {
         this.context = context;
         putValue(Action.NAME, name);
     }
@@ -77,71 +84,54 @@ public class ViewAction extends ContextAction {
     public void performAction(ActionEvent e) {
         final File root = HgUtils.getRootFile(context);
         if (root == null) return;
-        String repository = root.getAbsolutePath();
-        RequestProcessor rp = RequestProcessor.getDefault();
-        rp.post(new Runnable() {
-            public void run() {
-                performView(root);
-            }
-        });
+        
+        RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(root);
+        HgProgressSupport support = new HgProgressSupport() {
+            public void perform() { performFetch(root); } };
+
+        support.start(rp, root.getAbsolutePath(), org.openide.util.NbBundle.getMessage(FetchAction.class, "MSG_FETCH_PROGRESS")); // NOI18N
     }
 
-    static void performView(File root) {
+    static void performFetch(File root) {
         try {
-            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(ViewAction.class, "MSG_VIEW_TITLE")); // NOI18N
-            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(ViewAction.class, "MSG_VIEW_TITLE_SEP")); // NOI18N
+            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(FetchAction.class, "MSG_FETCH_TITLE")); // NOI18N
+            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(FetchAction.class, "MSG_FETCH_TITLE_SEP")); // NOI18N
 
-            String hgkCommand = HgCommand.HGK_COMMAND;
-            if(Utilities.isWindows()){ 
-                hgkCommand = hgkCommand + HgCommand.HG_WINDOWS_CMD;
-            }
-            boolean bHgkFound = false;
-            if(HgUtils.isInUserPath(hgkCommand)){
-                    bHgkFound = true;                
-            } else if(HgUtils.isSolaris()){
-                File f = new File(HgCommand.HG_HGK_PATH_SOLARIS10, hgkCommand);
-                if(f.exists() && f.isFile()) 
-                    bHgkFound = true;
-            }else if(Utilities.isWindows()){
-                bHgkFound = HgUtils.isInUserPath(HG_SCRIPTS_DIR + File.separator + hgkCommand);                    
-            }
-            boolean bHgkPropExists = HgConfigFiles.getInstance().containsProperty(
-                            HgConfigFiles.HG_EXTENSIONS, HgConfigFiles.HG_EXTENSIONS_HGK);
+            boolean bFetchPropExists = HgConfigFiles.getInstance().containsProperty(
+                            HgConfigFiles.HG_EXTENSIONS, HgConfigFiles.HG_EXTENSIONS_FETCH);
             
-            if(!bHgkFound){
-                HgUtils.outputMercurialTabInRed(
-                            NbBundle.getMessage(ViewAction.class, "MSG_VIEW_HGK_NOT_FOUND_INFO")); // NOI18N
-                HgUtils.outputMercurialTab(""); // NOI18N
-                JOptionPane.showMessageDialog(null,
-                        NbBundle.getMessage(ViewAction.class, "MSG_VIEW_HGK_NOT_FOUND"),// NOI18N
-                        NbBundle.getMessage(ViewAction.class, "MSG_VIEW_HGK_NOT_FOUND_TITLE"),// NOI18N
-                        JOptionPane.INFORMATION_MESSAGE);
-                return;
-            }
-            if(!bHgkPropExists){
-                boolean bConfirmSetHgkProp = false;
-                bConfirmSetHgkProp = HgUtils.confirmDialog(
-                        ViewAction.class, "MSG_VIEW_SETHGK_PROP_CONFIRM_TITLE", // NOI18N
-                        "MSG_VIEW_SETHGK_PROP_CONFIRM_QUERY"); // NOI18N                
-                if (bConfirmSetHgkProp) {
+            if(!bFetchPropExists){
+                boolean bConfirmSetFetchProp = false;
+                bConfirmSetFetchProp = HgUtils.confirmDialog(
+                        FetchAction.class, "MSG_FETCH_SETFETCH_PROP_CONFIRM_TITLE", // NOI18N
+                        "MSG_FETCH_SETFETCH_PROP_CONFIRM_QUERY"); // NOI18N                
+                if (bConfirmSetFetchProp) {
                     HgUtils.outputMercurialTabInRed(
-                            NbBundle.getMessage(ViewAction.class, "MSG_VIEW_SETHGK_PROP_DO_INFO")); // NOI18N
-                    HgConfigFiles.getInstance().setProperty(HgConfigFiles.HG_EXTENSIONS_HGK, ""); // NOI18N
+                            NbBundle.getMessage(FetchAction.class, "MSG_FETCH_SETHGK_PROP_DO_INFO")); // NOI18N
+                    HgConfigFiles.getInstance().setProperty(HgConfigFiles.HG_EXTENSIONS_FETCH, ""); // NOI18N
                 }else{
                     HgUtils.outputMercurialTabInRed(
-                            NbBundle.getMessage(ViewAction.class, "MSG_VIEW_NOTSETHGK_PROP_INFO")); // NOI18N
+                            NbBundle.getMessage(FetchAction.class, "MSG_FETCH_NOTSETHGK_PROP_INFO")); // NOI18N
                     HgUtils.outputMercurialTab(""); // NOI18N
                     return;
                 }
             }
             
-            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(ViewAction.class, 
-                    "MSG_VIEW_LAUNCH_INFO", root.getAbsolutePath())); // NOI18N
-            HgUtils.outputMercurialTab(""); // NOI18N
-            HgCommand.doView(root);
+            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(FetchAction.class, 
+                    "MSG_FETCH_LAUNCH_INFO", root.getAbsolutePath())); // NOI18N
+            
+            List<String> list;
+            list = HgCommand.doFetch(root);
+            
+            if (list != null && !list.isEmpty()) {
+                HgUtils.outputMercurialTab(list);
+            }
         } catch (HgException ex) {
             NotifyDescriptor.Exception e = new NotifyDescriptor.Exception(ex);
             DialogDisplayer.getDefault().notifyLater(e);
+        }finally{
+            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(FetchAction.class, "MSG_FETCH_DONE")); // NOI18N
+            HgUtils.outputMercurialTab(""); // NOI18N
         }
     }
 

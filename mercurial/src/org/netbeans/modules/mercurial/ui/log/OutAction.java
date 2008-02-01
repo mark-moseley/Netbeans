@@ -38,73 +38,37 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.mercurial.ui.add;
+package org.netbeans.modules.mercurial.ui.log;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import org.netbeans.modules.mercurial.FileInformation;
-import org.netbeans.modules.mercurial.FileStatusCache;
-import org.netbeans.modules.mercurial.HgException;
 import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.mercurial.util.HgUtils;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
-import org.netbeans.modules.mercurial.util.HgCommand;
-import org.netbeans.modules.mercurial.ui.actions.ContextAction;
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
+import org.openide.util.NbBundle;
 
 /**
- * Add action for mercurial: 
- * hg add - add the specified files on the next commit
+ * Log action for mercurial: 
+ * hg log - show revision history of entire repository or files
  * 
  * @author John Rice
  */
-public class AddAction extends ContextAction {
+public class OutAction extends ContextAction {
     
     private final VCSContext context;
-
-    public AddAction(String name, VCSContext context) {
+    
+    public OutAction(String name, VCSContext context) {
         this.context = context;
         putValue(Action.NAME, name);
     }
     
-    public boolean isEnabled() {
-        FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();        
-        
-        if(cache.listFiles(context, FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY).length != 0)
-            return true;
-
-        return false;
-    } 
-    
-    public void performAction(ActionEvent ev) {     
-        Mercurial hg = Mercurial.getInstance();
-        File [] files = context.getRootFiles().toArray(new File[context.getRootFiles().size()]);
-        if (files == null || files.length == 0) return;
-
-        FileStatusCache cache = hg.getFileStatusCache();        
-        
-        File root = hg.getTopmostManagedParent(files[0]);
-        List<File> addFiles = new ArrayList<File>();
-        
-        for (File file : files) {
-            if (!file.isDirectory() && (cache.getStatus(file).getStatus() & FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY) != 0){
-                addFiles.add(file);
-            }
-        }
-        if (addFiles.size() == 0) return;
-        
-        try {
-            HgCommand.doAdd(root, addFiles);
-        } catch (HgException ex) {
-            NotifyDescriptor.Exception e = new NotifyDescriptor.Exception(ex);
-            DialogDisplayer.getDefault().notifyLater(e);
-        }
-        // hg.versionedFilesChanged();
-        for (File file : addFiles){
-            cache.refreshCached(file, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
-        }
+    public void performAction(ActionEvent e) {
+        SearchHistoryAction.openOut(context,
+                NbBundle.getMessage(OutAction.class, "MSG_Out_TabTitle", org.netbeans.modules.versioning.util.Utils.getContextDisplayName(context)));
     }
-}
+        
+    public boolean isEnabled() {
+        return HgUtils.getRootFile(context) != null;
+    } 
+}    
