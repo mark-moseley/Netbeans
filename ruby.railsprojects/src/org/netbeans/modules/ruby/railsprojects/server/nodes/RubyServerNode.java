@@ -38,31 +38,32 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.validation.util;
+package org.netbeans.modules.ruby.railsprojects.server.nodes;
 
-import org.netbeans.modules.xml.xam.Component;
-import org.netbeans.modules.xml.xam.spi.Validator;
-import org.netbeans.modules.xml.xam.spi.Validator.ResultType;
-import org.netbeans.modules.bpel.validation.util.QuickFix;
+import org.netbeans.modules.ruby.railsprojects.server.*;
+import javax.swing.Action;
+import org.openide.nodes.AbstractNode;
+import org.openide.nodes.Children;
 
 /**
- * @author Vladimir Yaroslavskiy
- * @version 2007.12.07
+ * A node for displaying <code>RubyServer<code>s under the servers node.
+ *
+ * @author Erno Mononen
  */
-public final class ResultItem extends Validator.ResultItem {
+public class RubyServerNode extends AbstractNode {
     
-  public ResultItem(Validator validator, ResultType type, Component component, String description) {
-    this(validator, type, component, description, null);
-  }
+    private final RubyServer server;
 
-  public ResultItem(Validator validator, ResultType type, Component component, String description, QuickFix quickFix) {
-    super(validator, type, component, description);
-    myQuickFix = quickFix;
-  }         
+    public RubyServerNode(RubyServer server) {
+        super(Children.create(RailsAppChildrenFactory.create(server), false));
+        this.server = server;
+        setDisplayName(server.getNodeName());
+        setIconBaseWithExtension("org/netbeans/modules/ruby/railsprojects/ui/resources/rails.png");
+    }
 
-  public QuickFix getQuickFix() {
-    return myQuickFix;
-  }
-
-  private QuickFix myQuickFix;
+    @Override
+    public Action[] getActions(boolean context) {
+        return new Action[]{};
+    }
+    
 }
