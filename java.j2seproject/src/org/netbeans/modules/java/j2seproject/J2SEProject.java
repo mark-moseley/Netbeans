@@ -67,6 +67,8 @@ import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.ant.AntBuildExtender;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.java.api.common.ant.UpdateImplementation;
 import org.netbeans.modules.java.j2seproject.api.J2SEPropertyEvaluator;
 import org.netbeans.modules.java.j2seproject.classpath.ClassPathProviderImpl;
 import org.netbeans.modules.java.j2seproject.classpath.J2SEProjectClassPathExtender;
@@ -81,6 +83,7 @@ import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties
 import org.netbeans.modules.java.j2seproject.queries.J2SEProjectEncodingQueryImpl;
 import org.netbeans.modules.java.j2seproject.queries.BinaryForSourceQueryImpl;
 import org.netbeans.spi.java.project.support.ExtraSourceJavadocSupport;
+import org.netbeans.spi.java.project.support.LookupMergerSupport;
 import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.SubprojectProvider;
@@ -159,8 +162,9 @@ public final class J2SEProject implements Project, AntProjectListener {
         buildExtender = AntBuildExtenderFactory.createAntExtender(new J2SEExtenderImplementation());
     /// TODO replace this GeneratedFilesHelper with the default one when fixing #101710
         genFilesHelper = new GeneratedFilesHelper(helper, buildExtender);
-        this.updateHelper = new UpdateHelper (this, this.helper, this.aux, this.genFilesHelper,
-            UpdateHelper.createDefaultNotifier());
+        UpdateImplementation updateProject = new UpdateProjectImpl(this, this.helper, aux, genFilesHelper,
+                UpdateProjectImpl.createDefaultNotifier());
+        this.updateHelper = new UpdateHelper(updateProject, helper);
 
         this.cpProvider = new ClassPathProviderImpl(this.helper, evaluator(), getSourceRoots(),getTestSourceRoots()); //Does not use APH to get/put properties/cfgdata
         lookup = createLookup(aux);
@@ -283,8 +287,10 @@ public final class J2SEProject implements Project, AntProjectListener {
             new J2SEProjectEncodingQueryImpl (evaluator()),
             new J2SEPropertyEvaluatorImpl(evaluator()),
             new J2SETemplateAttributesProvider(this.helper),
-            ExtraSourceJavadocSupport.createExtraSourceQueryImplementation(helper, eval),
-            ExtraSourceJavadocSupport.createExtraJavadocQueryImplementation(helper, eval),
+            ExtraSourceJavadocSupport.createExtraSourceQueryImplementation(this, helper, eval),
+            LookupMergerSupport.createSFBLookupMerger(),
+            ExtraSourceJavadocSupport.createExtraJavadocQueryImplementation(this, helper, eval),
+            LookupMergerSupport.createJFBLookupMerger(),
             new BinaryForSourceQueryImpl(this.sourceRoots, this.testRoots, this.helper, this.eval) //Does not use APH to get/put properties/cfgdata
         });
         return LookupProviderSupport.createCompositeLookup(base, "Projects/org-netbeans-modules-java-j2seproject/Lookup"); //NOI18N
