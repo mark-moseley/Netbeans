@@ -746,6 +746,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                 }
             });
             url2CompileWithDepsTask.put(root, new WeakReference<Task>(t));
+            t.schedule(Integer.MAX_VALUE);
             url2CompileWithDeps.put(root, storedFiles);
             compileScheduled++;
         } else {
@@ -1719,9 +1720,9 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
             final ClasspathInfo cpInfo;
             if (!this.ignoreExcludes.contains(root)) {
                 entry = getClassPathEntry(sourcePath, root);
-                cpInfo = ClasspathInfoAccessor.INSTANCE.create(bootPath,compilePath,sourcePath,filter,true,false);
+                cpInfo = ClasspathInfoAccessor.getINSTANCE().create(bootPath,compilePath,sourcePath,filter,true,false);
             } else {
-                cpInfo = ClasspathInfoAccessor.INSTANCE.create(bootPath,compilePath,sourcePath,filter,true,true);
+                cpInfo = ClasspathInfoAccessor.getINSTANCE().create(bootPath,compilePath,sourcePath,filter,true,true);
             }
             
             LOGGER.fine("Initial value of clean: "+clean);
@@ -2014,7 +2015,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                 try {
                     uqImpl.setDirty(null);
                     final JavaFileFilterImplementation filter = JavaFileFilterQuery.getFilter(fo);
-                    ClasspathInfo cpInfo = ClasspathInfoAccessor.INSTANCE.create (fo, filter, true, false);
+                    ClasspathInfo cpInfo = ClasspathInfoAccessor.getINSTANCE().create (fo, filter, true, false);
                     final File rootFile = FileUtil.toFile(rootFo);
                     final File fileFile = FileUtil.toFile(fo);
                     final File classCache = Index.getClassFolder (rootFile);
@@ -2057,7 +2058,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                     if (entry == null || entry.includes(fo)) {
                         String sourceLevel = SourceLevelQuery.getSourceLevel(fo);
                         final CompilerListener listener = new CompilerListener ();
-                        final JavaFileManager fm = ClasspathInfoAccessor.INSTANCE.getFileManager(cpInfo);                
+                        final JavaFileManager fm = ClasspathInfoAccessor.getINSTANCE().getFileManager(cpInfo);                
                         JavaFileObject active = FileObjects.nbFileObject(fo, rootFo, filter, false);
                         JavacTaskImpl jt = JavaSourceAccessor.INSTANCE.createJavacTask(cpInfo, listener, sourceLevel);
                         jt.setTaskListener(listener);
@@ -2071,7 +2072,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                         dumpClasses((List<? extends ClassSymbol>)classes, fm, root.toExternalForm(), null,
                                 com.sun.tools.javac.code.Types.instance(jt.getContext()),
                                 TransTypes.instance(jt.getContext()),
-                                com.sun.tools.javac.util.Name.Table.instance(jt.getContext()));
+                                com.sun.tools.javac.util.Name.Table.instance(jt.getContext()), cpInfo);
                         sa.analyse(trees, jt, fm, active, added);
 
                         for (Pair<String,String> s : classNamesToDelete) {
@@ -2186,7 +2187,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                 FileObject rootFO = FileUtil.toFileObject(rootFile);
                 if (rootFO != null) {
                     final JavaFileFilterImplementation filter = JavaFileFilterQuery.getFilter(rootFO);
-                    ClasspathInfo cpInfo = ClasspathInfoAccessor.INSTANCE.create(rootFO, filter, true, false);
+                    ClasspathInfo cpInfo = ClasspathInfoAccessor.getINSTANCE().create(rootFO, filter, true, false);
                     toReparse = RebuildOraculum.findAllDependent(rootFile, null, cpInfo.getClassIndex(), removed);
                 }
                 //actually delete the sig files:
@@ -2454,9 +2455,9 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
     }
     
      private static String classPathToString(ClasspathInfo info) throws FileStateInvalidException {
-         ClassPath bootPath = ClasspathInfoAccessor.INSTANCE.getCachedClassPath(info, ClasspathInfo.PathKind.BOOT);
-         ClassPath compilePath = ClasspathInfoAccessor.INSTANCE.getCachedClassPath(info, ClasspathInfo.PathKind.COMPILE);
-         ClassPath sourcePath = ClasspathInfoAccessor.INSTANCE.getCachedClassPath(info, ClasspathInfo.PathKind.SOURCE);
+         ClassPath bootPath = ClasspathInfoAccessor.getINSTANCE().getCachedClassPath(info, ClasspathInfo.PathKind.BOOT);
+         ClassPath compilePath = ClasspathInfoAccessor.getINSTANCE().getCachedClassPath(info, ClasspathInfo.PathKind.COMPILE);
+         ClassPath sourcePath = ClasspathInfoAccessor.getINSTANCE().getCachedClassPath(info, ClasspathInfo.PathKind.SOURCE);
 
          StringBuilder sb = new StringBuilder();
 
@@ -2661,7 +2662,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
         JavaFileObject active = null;
         File           activeFile = null;
         Pair<JavaFileObject, File> activePair = null;
-        final JavaFileManager fileManager = ClasspathInfoAccessor.INSTANCE.getFileManager(cpInfo);
+        final JavaFileManager fileManager = ClasspathInfoAccessor.getINSTANCE().getFileManager(cpInfo);
         final CompilerListener listener = new CompilerListener ();    
         Set<URL> toRefresh = new HashSet<URL>();
         LowMemoryNotifier.getDefault().addLowMemoryListener(listener);
@@ -2741,7 +2742,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                                 rootFo.getURL().toExternalForm(), dirtyFiles,
                                 com.sun.tools.javac.code.Types.instance(jt.getContext()),
                                 TransTypes.instance(jt.getContext()),
-                                com.sun.tools.javac.util.Name.Table.instance(jt.getContext()));
+                                com.sun.tools.javac.util.Name.Table.instance(jt.getContext()), cpInfo);
                         if (listener.lowMemory.getAndSet(false)) {
                             jt.finish();
                             jt = null;
@@ -2780,7 +2781,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                                 rootFo.getURL().toExternalForm(), dirtyFiles,
                                 com.sun.tools.javac.code.Types.instance(jt.getContext()),
                                 TransTypes.instance(jt.getContext()),
-                                com.sun.tools.javac.util.Name.Table.instance(jt.getContext()));
+                                com.sun.tools.javac.util.Name.Table.instance(jt.getContext()),cpInfo);
                         if (listener.lowMemory.getAndSet(false)) {
                             jt.finish();
                             jt = null;
@@ -2802,7 +2803,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                             continue;
                         }
                         if (sa != null) {
-                            sa.analyse(trees,jt, ClasspathInfoAccessor.INSTANCE.getFileManager(cpInfo), active, added);
+                            sa.analyse(trees,jt, ClasspathInfoAccessor.getINSTANCE().getFileManager(cpInfo), active, added);
                         }                                
                         List<Diagnostic> diag = new ArrayList<Diagnostic>();
                         URI u = active.toUri();
@@ -2910,10 +2911,11 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
     private static void dumpClasses (final List<? extends ClassSymbol> entered, final JavaFileManager fileManager,
         final String currentRoot, final Set<URI> dirtyFiles, final com.sun.tools.javac.code.Types javacTypes,
         final TransTypes trans,
-        final com.sun.tools.javac.util.Name.Table nameTable) throws IOException {
+        final com.sun.tools.javac.util.Name.Table nameTable,
+        final ClasspathInfo cpInfo) throws IOException {
         for (ClassSymbol classSym : entered) {
             JavaFileObject source = classSym.sourcefile;            
-            dumpTopLevel(classSym, fileManager, source, currentRoot, dirtyFiles, javacTypes, trans, nameTable);
+            dumpTopLevel(classSym, fileManager, source, currentRoot, dirtyFiles, javacTypes, trans, nameTable, cpInfo);
         }
     }
     
@@ -2921,7 +2923,8 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
         final JavaFileObject source, final String currentRootURL, final Set<URI> dirtyFiles,
         final com.sun.tools.javac.code.Types types,
         final TransTypes trans,
-        final com.sun.tools.javac.util.Name.Table nameTable) throws IOException {
+        final com.sun.tools.javac.util.Name.Table nameTable,
+        final ClasspathInfo cpInfo) throws IOException {
         assert source != null;
         if (classSym.getSimpleName() != nameTable.error && classSym.getEnclosingElement().getSimpleName() != nameTable.error) {
             URI uri = source.toUri();
@@ -2932,7 +2935,9 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
             if (sourceName == null && !(new File (source.toUri()).exists())) {
                 return;
             }       
-            assert sourceName != null : "Cannot infer file: " + uri.toString();     //NOI18N
+            if (sourceName == null) {
+                throw new AssertionError ("Cannot infer file: " + uri.toString() + " " + cpInfo);   //NOI18N
+            }
             final StringBuilder classNameBuilder = new StringBuilder ();
             ClassFileUtil.encodeClassName(classSym, classNameBuilder, '.');  //NOI18N
             final String binaryName = classNameBuilder.toString();
