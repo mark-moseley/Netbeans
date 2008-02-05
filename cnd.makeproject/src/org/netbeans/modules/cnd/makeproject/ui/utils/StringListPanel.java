@@ -46,27 +46,21 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyEditorSupport;
 import java.util.Vector;
 import java.util.ArrayList;
-import javax.swing.JFileChooser;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
-import org.netbeans.modules.cnd.api.utils.FileChooser;
-import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
-public class DirectoryChooserPanel extends javax.swing.JPanel implements HelpCtx.Provider, PropertyChangeListener { 
+public class StringListPanel extends javax.swing.JPanel implements HelpCtx.Provider, PropertyChangeListener { 
     private MyListEditorPanel myListEditorPanel;
-    private String baseDir;
     private boolean addPathPanel;
     private BooleanConfiguration inheritValues;
     private PropertyEditorSupport editor;
     private HelpCtx helpCtx;
     
-    public DirectoryChooserPanel(String baseDir, Object[] data, boolean addPathPanel, BooleanConfiguration inheritValues, String inheritText, PropertyEditorSupport editor, PropertyEnv env, HelpCtx helpCtx) {
-	this.baseDir = baseDir;
+    public StringListPanel(Object[] data, boolean addPathPanel, BooleanConfiguration inheritValues, String inheritText, PropertyEditorSupport editor, PropertyEnv env, HelpCtx helpCtx) {
 	this.addPathPanel = addPathPanel;
 	this.inheritValues = inheritValues;
         this.editor = editor;
@@ -229,42 +223,21 @@ public class DirectoryChooserPanel extends javax.swing.JPanel implements HelpCtx
 
         @Override
 	public Object addAction() {
-	    String seed = null;
-	    if (FileChooser.getCurrectChooserFile() != null)
-		seed = FileChooser.getCurrectChooserFile().getPath();
-	    if (seed == null)
-		seed = baseDir;
-	    FileChooser fileChooser = new FileChooser(getString("ADD_DIRECTORY_DIALOG_TITLE"), getString("ADD_DIRECTORY_BUTTON_TXT"), JFileChooser.DIRECTORIES_ONLY, null, seed, true);
-	    PathPanel pathPanel = null;
-	    if (addPathPanel)
-		pathPanel = new PathPanel();
-	    fileChooser.setAccessory(pathPanel);
-	    int ret = fileChooser.showOpenDialog(this);
-	    if (ret == JFileChooser.CANCEL_OPTION)
-		return null;
-	    String itemPath = fileChooser.getSelectedFile().getPath();
-	    itemPath = FilePathAdaptor.mapToRemote(itemPath);
-	    itemPath = FilePathAdaptor.naturalize(itemPath);
-	    String bd = baseDir;
-	    bd = FilePathAdaptor.mapToRemote(bd);
-	    bd = FilePathAdaptor.naturalize(bd);
-	    if (pathPanel != null && pathPanel.getMode() == PathPanel.REL_OR_ABS)
-		itemPath = IpeUtils.toAbsoluteOrRelativePath(bd, itemPath);
-	    else if (pathPanel != null && pathPanel.getMode() == PathPanel.REL)
-		itemPath = IpeUtils.toRelativePath(bd, itemPath);
-	    else
-		itemPath = itemPath;
-	    itemPath = FilePathAdaptor.normalize(itemPath);
-	    return itemPath;
+            NotifyDescriptor.InputLine notifyDescriptor = new NotifyDescriptor.InputLine(getString("ADD_DIALOG_LABEL_TXT"), getString("EDIT_DIALOG_TITLE_TXT"));
+            DialogDisplayer.getDefault().notify(notifyDescriptor);
+            if (notifyDescriptor.getValue() != NotifyDescriptor.OK_OPTION)
+                return null;
+            String newS = notifyDescriptor.getInputText();
+            return newS;
 	}
 
         @Override
 	public String getListLabelText() {
-	    return getString("DIRECTORIES_LABEL_TXT");
+	    return getString("MACROS_LABEL_TXT");
 	}
         @Override
 	public char getListLabelMnemonic() {
-	    return getString("DIRECTORIES_LABEL_MN").charAt(0);
+	    return getString("MACROS_LABEL_MN").charAt(0);
 	}
     
         @Override
