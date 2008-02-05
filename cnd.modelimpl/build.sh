@@ -1,5 +1,4 @@
-#!/bin/sh
-
+#!/bin/bash
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 #
 # Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
@@ -39,32 +38,27 @@
 # Version 2 license, then the option applies only if the new code is
 # made subject to such option by the copyright holder.
 
-DIR=${REGRESSION_SRC}
-FILES=`(cd ${DIR}; ls *.ppp *.cc *.cpp *.c)`
-#FILES=`(cd ${DIR}; ls *.cc)`
-TEMP="/tmp/uniq"
+function main() {
 
-rm -rf ${TEMP} > /dev/null
-mkdir -p ${TEMP} > /dev/null
-
-failures="${TEMP}/__failures"
-rm -rf ${failures} > /dev/null
-
-for F in ${FILES}; do 
- 	file_std="${TEMP}/${F}.dat"
- 	file_err="${TEMP}/${F}.err"
-	./tracemodel.sh ${DIR}/${F} -fu >  ${file_std} 2>${file_err}
-	err=`cat ${file_err}`
-	if [ -z "${err}" ]; then
-		rm ${file_err}
+	local nbbuild="../nbbuild"
+	local ubp="${nbbuild}/user.build.properties"
+	
+	if [ ! -r ${ubp} ]; then
+		echo "Can not read file ${ubp}"
+		return
 	fi
-	cnt=`grep "Unique name check failed" ${file_std} | wc -l`
-	text="${F} ${cnt}"
-	echo ${text}
-	if [ ${cnt} -gt 0 ]; then
-		echo ${text} >> "${failures}"
-	fi
-done
 
-echo "FAILURES:"
-cat ${failures}
+	text="rebuild.cluster.name=nb.cluster.cnd"
+
+	fgrep "${text}" ${ubp}
+	rc=$?
+	if [ ! ${rc} == 0 ]; then
+		echo "The file ${ubp} does not contain \"${text}\""
+		return
+	fi
+
+
+	ant -f ../nbbuild/build.xml rebuild-cluster
+}
+
+main $@
