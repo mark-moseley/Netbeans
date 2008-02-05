@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,62 +38,32 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.ruby.railsprojects.server.nodes;
 
-package org.netbeans.modules.gsfret.source.usages;
+import org.netbeans.modules.ruby.railsprojects.server.*;
+import javax.swing.Action;
+import org.openide.nodes.AbstractNode;
+import org.openide.nodes.Children;
 
-import java.io.File;
-import java.io.IOException;
-import org.apache.lucene.store.SimpleFSLockFactory;
-import org.openide.filesystems.FileUtil;
-    
 /**
- * This file is originally from Retouche, the Java Support 
- * infrastructure in NetBeans. I have modified the file as little
- * as possible to make merging Retouche fixes back as simple as
- * possible. 
+ * A node for displaying <code>RubyServer<code>s under the servers node.
  *
- * @author Tomas Zezula
+ * @author Erno Mononen
  */
-public class NBLockFactory extends SimpleFSLockFactory {    
+public class RubyServerNode extends AbstractNode {
     
-    private static final String LOCK_DIR = "var"+File.separatorChar+"gsf-locks";     //NOI18N
-    
-    private static File lockDir;
-    
-    /** Creates a new instance of NBLockFactory 
-     * @throws java.io.IOException 
-     */
-    public NBLockFactory () throws IOException {
-        super (getLockDir());
-    }       
-    
-    /**
-     * NEVER call this method! The only place where it's save to
-     * call this method is {@link JBrowseModule.restore} to remove
-     * orphan locks from previous IDE session.
-     */
-    public static void clearLocks () {        
-        final File lockDir = getLockDir();
-        final File[] children = lockDir.listFiles();
-        if (children != null) {
-            for (File child : children) {
-                child.delete();
-            }
-        }
+    private final RubyServer server;
+
+    public RubyServerNode(RubyServer server) {
+        super(Children.create(RailsAppChildrenFactory.create(server), false));
+        this.server = server;
+        setDisplayName(server.getNodeName());
+        setIconBaseWithExtension("org/netbeans/modules/ruby/railsprojects/ui/resources/rails.png");
     }
-    
-    private static synchronized File getLockDir () {
-        if (lockDir == null) {
-            final String nbUserDirProp = Index.getNbUserDir();
-            assert nbUserDirProp != null;
-            File userDir = new File (nbUserDirProp);
-            lockDir = FileUtil.normalizeFile(new File (userDir, LOCK_DIR));
-            if (!lockDir.exists()) {
-                lockDir.mkdirs();
-                assert lockDir.isDirectory() && lockDir.canRead() && lockDir.canWrite();
-            }
-        }        
-        return lockDir;
+
+    @Override
+    public Action[] getActions(boolean context) {
+        return new Action[]{};
     }
     
 }
