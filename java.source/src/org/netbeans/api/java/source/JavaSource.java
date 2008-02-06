@@ -2097,6 +2097,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 javacLock.unlock();
             }
         }
+        
+        @Override
+        public boolean isJavaCompilerLocked() {
+            return javacLock.isLocked();
+        }
 
         public JavaSource create(ClasspathInfo cpInfo, PositionConverter binding, Collection<? extends FileObject> files) throws IllegalArgumentException {
             return JavaSource.create(cpInfo, binding, files);
@@ -2606,6 +2611,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
     private static boolean reparseMethod (final CompilationInfoImpl ci, final MethodTree orig, final String newBody) throws IOException {        
         assert ci != null; 
         if (!ci.getJavaSource().supportsReparse) {
+            return false;
+        }
+        if (((JCMethodDecl)orig).localEnv == null) {
+            //We are seeing interface method or abstract or native method with body.
+            //Don't do any optimalization of this broken code - has no attr env.
             return false;
         }
         final Phase currentPhase = ci.getPhase();
