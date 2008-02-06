@@ -373,11 +373,14 @@ public class Mapper extends JPanel {
 
             invalidateNodes();
             repaintNodes();
+            
+            revalidate();
+            repaint();
 
             firePropertyChange(MODEL_PROPERTY, oldModel, model);
         }
     }
-
+    
     public MapperModel getModel() {
         return model;
     }
@@ -690,7 +693,7 @@ public class Mapper extends JPanel {
     }
 
     int getStepSize() {
-        return (getTextHeight() + 4) / 2;
+        return Math.max((getTextHeight() + 2) / 2 + 1, 9);
     }
 
     MapperNode getNode(TreePath treePath, boolean load) {
@@ -717,7 +720,6 @@ public class Mapper extends JPanel {
                 return null;
             }
             if (model.getIndexOfChild(node.getValue(), path[i]) == -1) {
-                System.out.println("Blah");
             }
             node = node.getChild(model.getIndexOfChild(node.getValue(), path[i]));
         }
@@ -793,6 +795,18 @@ public class Mapper extends JPanel {
 
             validNodes = true;
         }
+    }
+    
+    @Override
+    public void doLayout() {
+        validateNodes();
+        super.doLayout();
+    }
+   
+    @Override
+    public Dimension getPreferredSize() {
+        validateNodes();
+        return super.getPreferredSize();
     }
 
     Dimension getPreferredTreeSize() {
