@@ -1,4 +1,5 @@
 # XXX check compatibility; seems to be OK on Python 2.4.4, but not 2.4.2
+# XXX said not to work in d39af2eabb8c; generates JARs of size zero
 
 import os, re, urllib2, sha, inspect
 
@@ -87,6 +88,7 @@ def upload(s, cmd, filename=None, ui=None, repo=None, **kwargs):
     full = '%s-%s' % (_sha1hash(s), n)
     cachefile = os.path.join(_cachedir(), full)
     if not os.path.exists(cachefile):
+        # XXX do not write to local cache, only upload, and if that fails, abort
         handle = open(cachefile, 'wb')
         handle.write(s)
         handle.close()
@@ -111,6 +113,7 @@ util.filtertable.update({
     'download:': download,
     'upload:': upload,
     })
+# XXX for Hg 0.9.6+, try instead adding to reposetup: repo.adddatafilter(name, fn)
 # --- FROM http://odin.himinbi.org/MultipartPostHandler.py ---
 import urllib
 import urllib2
