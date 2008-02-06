@@ -44,6 +44,8 @@ package org.netbeans.api.java.source;
 import com.sun.source.util.TreePath;
 import java.io.File;
 import java.io.OutputStream;
+import java.security.Permission;
+import javax.lang.model.element.TypeElement;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.java.source.TestUtil;
@@ -127,4 +129,77 @@ public class TreePathHandleTest extends NbTestCase {
         assertTrue(tp.getLeaf() == resolved.getLeaf());
     }
     
+    public void test126732() throws Exception {
+        FileObject file = FileUtil.createData(sourceRoot, "test/test.java");
+        String code = "package test;\n" +
+                      "public class Test {\n" +
+                      "    public static void test() {\n" +
+                      "        return Runnable() {\n" +
+                      "                new Runnable() {\n" +
+                      "        };\n" +
+                      "    }\n" +
+                      "}";
+        
+        writeIntoFile(file,code);
+        
+        JavaSource js = JavaSource.forFileObject(file);
+        CompilationInfo info = SourceUtilsTestUtil.getCompilationInfo(js, Phase.RESOLVED);
+        
+        TreePath       tp       = info.getTreeUtilities().pathFor(code.indexOf("new Runnable() {"));
+        TreePathHandle handle   = TreePathHandle.create(tp, info);
+        TreePath       resolved = handle.resolve(info);
+        
+        assertNotNull(resolved);
+        
+        assertTrue(tp.getLeaf() == resolved.getLeaf());
+    }
+    
+    public void testTreePathIsNotParsing() throws Exception {
+        FileObject file = FileUtil.createData(sourceRoot, "test/test.java");
+        
+        writeIntoFile(file, "package test; public class test {}");
+        writeIntoFile(FileUtil.createData(sourceRoot, "test/test2.java"), "package test; public class test2 {}");
+        
+        JavaSource js = JavaSource.forFileObject(file);
+        
+        SourceUtilsTestUtil.compileRecursively(sourceRoot);
+        
+        js.runUserActionTask(new  Task<CompilationController>() {
+            public void run(CompilationController parameter) throws Exception {
+                parameter.toPhase(Phase.RESOLVED);
+                
+                TypeElement string = parameter.getElements().getTypeElement("test.test2");
+                
+                SecurityManager old = System.getSecurityManager();
+                
+                System.setSecurityManager(new SecMan());
+                
+                TreePathHandle.create(string, parameter);
+                
+                System.setSecurityManager(old);
+            }
+        }, true);
+    }
+    
+    private static final class SecMan extends SecurityManager {
+
+        @Override
+        public void checkRead(String file) {
+            assertFalse(file.endsWith("test2.java"));
+        }
+
+        @Override
+        public void checkRead(String file, Object context) {
+            assertFalse(file.endsWith("test2.java"));
+        }
+        
+        @Override
+        public void checkPermission(Permission perm) {
+        }
+
+        @Override
+        public void checkPermission(Permission perm, Object context) {
+        }
+
+    }
 }
