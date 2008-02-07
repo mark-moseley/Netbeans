@@ -41,14 +41,26 @@
 
 package org.netbeans.api.java.source;
 
+import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.util.SimpleTreeVisitor;
+import com.sun.source.util.SourcePositions;
+import com.sun.source.util.TreePath;
+import com.sun.source.util.TreeScanner;
+import com.sun.source.util.Trees;
 import com.sun.tools.javac.api.JavacTaskImpl;
-import com.sun.tools.javac.code.Source;
+import com.sun.tools.javac.api.JavacTrees;
 import com.sun.tools.javac.code.Source;
 import com.sun.tools.javac.code.Symbol.CompletionFailure;
 import com.sun.tools.javac.comp.Enter;
 import com.sun.tools.javac.parser.DocCommentScanner;
+import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCBlock;
+import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
+import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
 import com.sun.tools.javac.util.Abort;
 import com.sun.tools.javac.util.CancelAbort;
 import com.sun.tools.javac.util.CancelService;
@@ -104,10 +116,8 @@ import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import javax.swing.event.ChangeListener;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import javax.swing.text.AbstractDocument;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.StyledDocument;
@@ -117,10 +127,18 @@ import javax.tools.JavaFileObject;
 import javax.tools.ToolProvider;
 import org.netbeans.api.editor.EditorRegistry;
 import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.java.queries.SourceLevelQuery;
 import org.netbeans.api.java.source.ClasspathInfo.PathKind;
 import org.netbeans.api.java.source.ModificationResult.Difference;
+import org.netbeans.api.lexer.TokenChange;
+import org.netbeans.api.lexer.TokenHierarchy;
+import org.netbeans.api.lexer.TokenHierarchyEvent;
+import org.netbeans.api.lexer.TokenHierarchyEventType;
+import org.netbeans.api.lexer.TokenHierarchyListener;
+import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.lib.editor.util.swing.PositionRegion;
 import org.netbeans.modules.java.source.JavaFileFilterQuery;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
 import org.netbeans.modules.java.source.JavadocEnv;
@@ -128,10 +146,12 @@ import org.netbeans.modules.java.source.parsing.FileObjects;
 import org.netbeans.modules.java.preprocessorbridge.spi.JavaFileFilterImplementation;
 import org.netbeans.modules.java.preprocessorbridge.spi.JavaSourceProvider;
 import org.netbeans.modules.java.source.TreeLoader;
+import org.netbeans.modules.java.source.parsing.SourceFileObject;
 import org.netbeans.modules.java.source.tasklist.CompilerSettings;
 import org.netbeans.modules.java.source.usages.ClassIndexImpl;
 import org.netbeans.modules.java.source.usages.ClassIndexManager;
 import org.netbeans.modules.java.source.usages.Index;
+import org.netbeans.modules.java.source.usages.Pair;
 import org.netbeans.modules.java.source.usages.RepositoryUpdater;
 import org.netbeans.modules.java.source.util.LowMemoryEvent;
 import org.netbeans.modules.java.source.util.LowMemoryListener;
@@ -145,7 +165,6 @@ import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -287,7 +306,7 @@ public final class JavaSource {
     private final static SingleThreadFactory factory = new SingleThreadFactory ();
     private final static CurrentRequestReference currentRequest = new CurrentRequestReference ();
     private final static EditorRegistryListener editorRegistryListener = new EditorRegistryListener ();
-    private final static List<DeferredTask> todo = Collections.synchronizedList(new LinkedList<DeferredTask>());
+    private final static List<DeferredTask> todo = Collections.synchronizedList(new LinkedList<DeferredTask>());    
     //Only single thread can operate on the single javac
     private final static ReentrantLock javacLock = new ReentrantLock (true);
     
@@ -300,6 +319,9 @@ public final class JavaSource {
     private final ClasspathInfo classpathInfo;    
     private CompilationInfoImpl currentInfo;
     private java.util.Stack<CompilationInfoImpl> infoStack = new java.util.Stack<CompilationInfoImpl> ();
+    
+    //Incremental parsing support
+    private final List<Pair<DocPositionRegion,MethodTree>> positions = Collections.synchronizedList(new LinkedList<Pair<DocPositionRegion,MethodTree>>());
             
     private int flags = 0;        
     
@@ -307,6 +329,7 @@ public final class JavaSource {
     private FilterListener filterListener;
     
     private PositionConverter binding;
+    private final boolean supportsReparse;
     
     private static final Logger LOGGER = Logger.getLogger(JavaSource.class.getName());
         
@@ -482,6 +505,7 @@ public final class JavaSource {
         this.files = Collections.unmodifiableList(new ArrayList<FileObject>(files));   //Create a defensive copy, prevent modification
         this.fileChangeListener = new FileChangeListenerImpl ();
         this.binding = binding;
+        this.supportsReparse = this.binding == null;
         boolean multipleSources = this.files.size() > 1, filterAssigned = false;
         for (Iterator<? extends FileObject> it = this.files.iterator(); it.hasNext();) {
             FileObject file = it.next();
@@ -536,6 +560,7 @@ public final class JavaSource {
         this.rootFo = root;
         this.classpathInfo.addChangeListener(WeakListeners.change(this.listener, this.classpathInfo));
         this.flags|= IS_CLASS_FILE;
+        this.supportsReparse = false;
         this.binding = new PositionConverter(classFileObject, null);
     }
        
@@ -569,8 +594,8 @@ public final class JavaSource {
         boolean a = false;
         assert a = true;
         if (a && javax.swing.SwingUtilities.isEventDispatchThread()) {
-            StackTraceElement stackTraceElement = Thread.currentThread().getStackTrace()[2];
-            if (warnedAboutRunInEQ.add(stackTraceElement)) {
+            StackTraceElement stackTraceElement = findCaller(Thread.currentThread().getStackTrace());
+            if (stackTraceElement != null && warnedAboutRunInEQ.add(stackTraceElement)) {
                 LOGGER.warning("JavaSource.runUserActionTask called in AWT event thread by: " + stackTraceElement); // NOI18N
             }
         }
@@ -584,16 +609,26 @@ public final class JavaSource {
                 this.javacLock.lock();                                
                 try {
                     CompilationInfoImpl currentInfo = null;
+                    boolean jsInvalid;
+                    Pair<DocPositionRegion, MethodTree> changedMethod = null;
                     synchronized (this) {                        
-                        if (this.currentInfo != null && (this.flags & INVALID)==0) {
-                            currentInfo = this.currentInfo;
-                        }
+                        jsInvalid = this.currentInfo == null || (this.flags & INVALID)!=0;
+                        currentInfo = this.currentInfo;
+                        changedMethod = (currentInfo == null ? null : this.currentInfo.getChangedTree());
                         if (!shared) {
                             this.flags|=INVALID;
                         }                        
-                    }
-                    if (currentInfo == null) {
-                        currentInfo = createCurrentInfo(this, binding, null);
+                    }                    
+                    if (jsInvalid) {
+                        boolean needsFullReparse = true;
+                        if (changedMethod != null && currentInfo != null) {
+                            needsFullReparse = !reparseMethod(currentInfo,
+                                    changedMethod.second,
+                                    changedMethod.first.getText());
+                        }
+                        if (needsFullReparse) {
+                            currentInfo = createCurrentInfo(this, binding, null);
+                        }
                         if (shared) {
                             synchronized (this) {                        
                                 if (this.currentInfo == null || (this.flags & INVALID) != 0) {
@@ -822,8 +857,10 @@ public final class JavaSource {
         boolean a = false;
         assert a = true;        
         if (a && javax.swing.SwingUtilities.isEventDispatchThread()) {
-            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-            LOGGER.warning("JavaSource.runModificationTask called in AWT event thread by: " + stackTrace[2]);     //NOI18N
+            StackTraceElement stackTraceElement = findCaller(Thread.currentThread().getStackTrace());
+            if (stackTraceElement != null && warnedAboutRunInEQ.add(stackTraceElement)) {
+                LOGGER.warning("JavaSource.runModificationTask called in AWT event thread by: " + stackTraceElement);     //NOI18N
+            }
         }
         
         ModificationResult result = new ModificationResult(this);
@@ -837,13 +874,23 @@ public final class JavaSource {
                 this.javacLock.lock();                                
                 try {
                     CompilationInfoImpl currentInfo = null;
+                    boolean jsInvalid;
+                    Pair<DocPositionRegion,MethodTree> changedMethod;
                     synchronized (this) {
-                        if (this.currentInfo != null &&  (this.flags & INVALID) == 0) {
-                            currentInfo = this.currentInfo;
-                        }
+                        jsInvalid = this.currentInfo == null ||  (this.flags & INVALID) != 0;
+                        currentInfo = this.currentInfo;
+                        changedMethod = currentInfo == null ? null : currentInfo.getChangedTree();
                     }
-                    if (currentInfo == null) {
-                        currentInfo = createCurrentInfo(this, binding, null);
+                    if (jsInvalid) {
+                        boolean needsFullReparse = true;
+                        if (changedMethod != null && currentInfo != null) {
+                            needsFullReparse = !reparseMethod(currentInfo,
+                                    changedMethod.second,
+                                    changedMethod.first.getText());
+                        }
+                        if (needsFullReparse) {
+                            currentInfo = createCurrentInfo(this, binding, null);
+                        }
                         synchronized (this) {
                             if (this.currentInfo == null || (this.flags & INVALID) != 0) {
                                 this.currentInfo = currentInfo;
@@ -1189,6 +1236,15 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 CompilationUnitTree unit = it.next();
                 currentInfo.setCompilationUnit(unit);
                 assert !it.hasNext();
+                final Document doc = currentInfo.javaSource.listener == null ? null : currentInfo.javaSource.listener.document;
+                if (doc != null && currentInfo.javaSource.supportsReparse) {
+                    FindMethodRegionsVisitor v = new FindMethodRegionsVisitor(doc,Trees.instance(currentInfo.getJavacTask()).getSourcePositions());
+                    v.visit(unit, null);
+                    synchronized (currentInfo.javaSource.positions) {
+                        currentInfo.javaSource.positions.clear();
+                        currentInfo.javaSource.positions.addAll(v.posRegions);
+                    }
+                }
                 currentPhase = Phase.PARSED;
                 long end = System.currentTimeMillis();
                 FileObject file = currentInfo.getFileObject();
@@ -1237,7 +1293,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             currentInfo.needsRestart = true;
             return currentPhase;            
         } catch (CancelAbort ca) {
-            return Phase.MODIFIED;
+            currentPhase = Phase.MODIFIED;
         } catch (Abort abort) {
             parserError = true;
             currentPhase = Phase.MODIFIED;
@@ -1288,18 +1344,25 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             resetStateImpl();
         }
     });
-        
-    private void resetState(boolean invalidate, boolean updateIndex) {
+    
+    private void resetState (boolean invalidate, boolean updateIndex) {
+        resetState (invalidate, updateIndex, null);
+    }
+               
+    private void resetState(boolean invalidate, boolean updateIndex, Pair<DocPositionRegion,MethodTree> changedMethod) {
         boolean invalid;
         synchronized (this) {
             invalid = (this.flags & INVALID) != 0;
             this.flags|=CHANGE_EXPECTED;
             if (invalidate) {
                 this.flags|=(INVALID|RESCHEDULE_FINISHED_TASKS);
+                if (this.currentInfo != null) {
+                    this.currentInfo.setChangedMethod (changedMethod);
+                }
             }
             if (updateIndex) {
                 this.flags|=UPDATE_INDEX;
-            }
+            }            
         }
         if (updateIndex && !invalid) {
             //First change set the index as dirty
@@ -1488,6 +1551,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                                 else {
                                     assert js.files.size() <= 1;
                                     boolean jsInvalid;
+                                    Pair<DocPositionRegion,MethodTree> changedMethod;
                                     CompilationInfoImpl ci;
                                     synchronized (INTERNAL_LOCK) {
                                         //jl:what does this comment mean?
@@ -1510,12 +1574,26 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                                             }
                                             jsInvalid = js.currentInfo == null || (js.flags & INVALID)!=0;
                                             ci = js.currentInfo;
+                                            changedMethod = ci == null ? null : ci.getChangedTree();
+                                            
                                         }
                                     }
                                     try {
                                         //createCurrentInfo has to be out of synchronized block, it aquires an editor lock                                    
                                         if (jsInvalid) {
-                                            ci = createCurrentInfo (js, js.binding, null);
+                                            boolean needsFullReparse = true;
+                                            if (changedMethod != null && ci != null) {                                                
+                                                javacLock.lock();
+                                                try {
+                                                    needsFullReparse = !reparseMethod(ci,
+                                                            changedMethod.second, changedMethod.first.getText());
+                                                } finally {
+                                                    javacLock.unlock();
+                                                }
+                                            }
+                                            if (needsFullReparse) {
+                                                ci = createCurrentInfo (js, js.binding, null);
+                                            }
                                             synchronized (js) {
                                                 if (js.currentInfo == null || (js.flags & INVALID) != 0) {
                                                     js.currentInfo = ci;
@@ -1633,10 +1711,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         }                        
     }
     
-    private class DocListener implements DocumentListener, PropertyChangeListener, ChangeListener {
+    private class DocListener implements PropertyChangeListener, ChangeListener, TokenHierarchyListener {
         
         private EditorCookie.Observable ec;
-        private DocumentListener docListener;
+        private TokenHierarchyListener lexListener;
+        private volatile Document document;
         
         public DocListener (EditorCookie.Observable ec) {
             assert ec != null;
@@ -1644,38 +1723,30 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             this.ec.addPropertyChangeListener(WeakListeners.propertyChange(this, this.ec));
             Document doc = ec.getDocument();            
             if (doc != null) {
-                doc.addDocumentListener(docListener = WeakListeners.create(DocumentListener.class, this, doc));
-            }
+                TokenHierarchy th = TokenHierarchy.get(doc);
+                th.addTokenHierarchyListener(lexListener = WeakListeners.create(TokenHierarchyListener.class, this,th));
+                document = doc;
+            }            
         }
-        
-        public void insertUpdate(DocumentEvent e) {
-            //Has to reset cache asynchronously
-            //the callback cannot be in synchronized section
-            //since NbDocument.runAtomic fires under lock
-            JavaSource.this.resetState(true, true);
-        }
-
-        public void removeUpdate(DocumentEvent e) {
-            //Has to reset cache asynchronously
-            //the callback cannot be in synchronized section
-            //since NbDocument.runAtomic fires under lock
-            JavaSource.this.resetState(true, true);
-        }
-
-        public void changedUpdate(DocumentEvent e) {
-        }
-
+                                   
         public void propertyChange(PropertyChangeEvent evt) {
             if (EditorCookie.Observable.PROP_DOCUMENT.equals(evt.getPropertyName())) {
                 Object old = evt.getOldValue();                
-                if (old instanceof Document && docListener != null) {
-                    ((Document) old).removeDocumentListener(docListener);
-                    docListener = null;
+                if (old instanceof Document && lexListener != null) {
+                    TokenHierarchy th = TokenHierarchy.get((Document) old);
+                    th.removeTokenHierarchyListener(lexListener);
+                    lexListener = null;
                 }                
                 Document doc = ec.getDocument();                
                 if (doc != null) {
-                    doc.addDocumentListener(docListener = WeakListeners.create(DocumentListener.class, this, doc));
+                    TokenHierarchy th = TokenHierarchy.get(doc);
+                    th.addTokenHierarchyListener(lexListener = WeakListeners.create(TokenHierarchyListener.class, this,th));
+                    this.document = doc;    //set before rescheduling task to avoid race condition
                     resetState(true, false);
+                }
+                else {
+                    //reset document
+                    this.document = doc;
                 }
             }
         }
@@ -1684,6 +1755,58 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             JavaSource.this.resetState(true, false);
         }
         
+        public void tokenHierarchyChanged(TokenHierarchyEvent evt) {
+            Pair<DocPositionRegion,MethodTree> changedMethod = null;
+            if (evt.type() == TokenHierarchyEventType.MODIFICATION) {
+                if (supportsReparse) {
+                    int start = evt.affectedStartOffset();
+                    int end = evt.affectedEndOffset();                                                                
+                    synchronized (positions) {
+                        for (Pair<DocPositionRegion,MethodTree> pe : positions) {
+                            PositionRegion p = pe.first;
+                            if (start > p.getStartOffset() && end < p.getEndOffset()) {
+                                changedMethod = pe;
+                                break;
+                            }
+                        }
+                        if (changedMethod != null) {
+                            TokenChange<JavaTokenId> change = evt.tokenChange(JavaTokenId.language());
+                            if (change != null) {
+                                TokenSequence<JavaTokenId> ts = change.removedTokenSequence();
+                                if (ts != null) {
+                                    while (ts.moveNext()) {
+                                        switch (ts.token().id()) {
+                                            case LBRACE:
+                                            case RBRACE:
+                                                changedMethod = null;
+                                                break;
+                                        }
+                                    }
+                                }
+                                if (changedMethod != null) {
+                                    TokenSequence<JavaTokenId> current = change.currentTokenSequence();                
+                                    current.moveIndex(change.index());
+                                    for (int i=0; i< change.addedTokenCount(); i++) {
+                                        current.moveNext();
+                                        switch (current.token().id()) {
+                                            case LBRACE:
+                                            case RBRACE:
+                                                changedMethod = null;
+                                                break;
+                                            }
+                                    }
+                                }
+                            }
+                        }
+                        positions.clear();
+                        if (changedMethod!=null) {
+                            positions.add (changedMethod);
+                        }
+                    }
+                }
+            }
+            JavaSource.this.resetState(true, changedMethod==null, changedMethod);
+        }        
     }
     
     private static class EditorRegistryListener implements CaretListener, PropertyChangeListener {
@@ -1850,7 +1973,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         }
     }
         
-    private static CompilationInfoImpl createCurrentInfo (final JavaSource js, final PositionConverter binding, final JavacTaskImpl javac) throws IOException {        
+    private static CompilationInfoImpl createCurrentInfo (final JavaSource js, final PositionConverter binding, final JavacTaskImpl javac) throws IOException {                
         CompilationInfoImpl info = new CompilationInfoImpl(js, binding, javac);
         if (binding != null) {
             Logger.getLogger("TIMER").log(Level.FINE, "CompilationInfo",
@@ -1870,7 +1993,23 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         } finally {
             currentRequest.cancelCompleted(request);
         }
-    }    
+    }
+    
+    private static StackTraceElement findCaller(StackTraceElement[] elements) {
+        for (StackTraceElement e : elements) {
+            if (JavaSource.class.getName().equals(e.getClassName())) {
+                continue;
+            }
+            
+            if (e.getClassName().startsWith("java.lang.")) {
+                continue;
+            }
+            
+            return e;
+        }
+        
+        return null;
+    }
     
     private static class SingleThreadFactory implements ThreadFactory {
         
@@ -1953,6 +2092,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             } finally {
                 javacLock.unlock();
             }
+        }
+        
+        @Override
+        public boolean isJavaCompilerLocked() {
+            return javacLock.isLocked();
         }
 
         public JavaSource create(ClasspathInfo cpInfo, PositionConverter binding, Collection<? extends FileObject> files) throws IllegalArgumentException {
@@ -2234,12 +2378,20 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
      */
     static interface JavaFileObjectProvider {
         public JavaFileObject createJavaFileObject (FileObject fo, FileObject root, JavaFileFilterImplementation filter) throws IOException;
+        
+        public void update (JavaFileObject jfo) throws IOException;
     }
     
     static final class DefaultJavaFileObjectProvider implements JavaFileObjectProvider {
         public JavaFileObject createJavaFileObject (FileObject fo, FileObject root, JavaFileFilterImplementation filter) throws IOException {
             return FileObjects.nbFileObject(fo, root, filter, true);
         }
+        
+        public void update (final JavaFileObject jfo) throws IOException {
+            assert jfo instanceof SourceFileObject;
+            ((SourceFileObject)jfo).update();
+        }
+        
     }
     
     private static class LMListener implements LowMemoryListener {                
@@ -2401,6 +2553,273 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         public void close() throws IOException {
         }
     }
+    
+    private static class FindMethodRegionsVisitor extends SimpleTreeVisitor<Void,Void> {
+        
+        final Document doc;
+        final SourcePositions pos;
+        CompilationUnitTree cu;
+        
+        final List<Pair<DocPositionRegion,MethodTree>> posRegions = new LinkedList<Pair<JavaSource.DocPositionRegion, MethodTree>>();
+        
+        public FindMethodRegionsVisitor (final Document doc, final SourcePositions pos) {
+            assert doc != null;
+            assert pos != null;            
+            this.doc = doc;
+            this.pos = pos;
+        }
+
+        @Override
+        public Void visitCompilationUnit(CompilationUnitTree node, Void p) {
+            cu = node;
+            for (Tree t : node.getTypeDecls()) {
+                visit (t,p);
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitClass(ClassTree node, Void p) {
+            for (Tree t : node.getMembers()) {
+                visit(t, p);
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitMethod(MethodTree node, Void p) {            
+            assert cu != null;
+            int startPos = (int) pos.getStartPosition(cu, node.getBody());
+            int endPos = (int) pos.getEndPosition(cu, node.getBody());
+            if (startPos >=0) {
+                try {
+                    posRegions.add(Pair.<DocPositionRegion,MethodTree>of(new DocPositionRegion(doc,startPos,endPos),node));
+                } catch (BadLocationException e) {
+                    //todo: reocvery
+                    e.printStackTrace();
+                }
+            }            
+            return null;
+        }
+                        
+    }
+    
+    private static boolean reparseMethod (final CompilationInfoImpl ci, final MethodTree orig, final String newBody) throws IOException {        
+        assert ci != null; 
+        if (!ci.getJavaSource().supportsReparse) {
+            return false;
+        }
+        if (((JCMethodDecl)orig).localEnv == null) {
+            //We are seeing interface method or abstract or native method with body.
+            //Don't do any optimalization of this broken code - has no attr env.
+            return false;
+        }
+        final Phase currentPhase = ci.getPhase();
+        if (Phase.PARSED.compareTo(currentPhase) > 0) {
+            return false;
+        }
+        try {
+            final CompilationUnitTree cu = ci.getCompilationUnit();
+            if (cu == null || newBody == null) {
+                return false;
+            }
+            final JavacTaskImpl task = ci.getJavacTask();
+            final JavacTrees jt = JavacTrees.instance(task);
+            final int origStartPos = (int) jt.getSourcePositions().getStartPosition(cu, orig.getBody());
+            final int origEndPos = (int) jt.getSourcePositions().getEndPosition(cu, orig.getBody());
+            if (origStartPos > origEndPos) {
+                LOGGER.warning("Javac returned startpos: "+origStartPos+" > endpos: "+origEndPos);  //NOI18N
+                return false;
+            }
+            final FindAnnonVisitor fav = new FindAnnonVisitor();
+            fav.scan(orig.getBody(), null);
+            if (fav.hasLocalClass) {
+                return false;
+            }
+            final int firstInner = fav.firstInner;
+            final int noInner = fav.noInner;
+            final Context ctx = task.getContext();        
+            final Log l = Log.instance(ctx);
+            l.startPartialReparse();
+            final JavaFileObject prevLogged = l.useSource(cu.getSourceFile());
+            JCBlock block;
+            try {
+                DiagnosticListener dl = ctx.get(DiagnosticListener.class);
+                assert dl instanceof CompilationInfoImpl.DiagnosticListenerImpl;
+                ((CompilationInfoImpl.DiagnosticListenerImpl)dl).startPartialReparse(origStartPos, origEndPos);
+                block = task.reparseMethodBody(cu, orig, newBody, firstInner);
+                assert block != null;
+                fav.reset();
+                fav.scan(block, null);
+                final int newNoInner = fav.noInner;
+                if (fav.hasLocalClass || noInner != newNoInner) {
+                    return false;
+                }
+                final int newEndPos = (int) jt.getSourcePositions().getEndPosition(cu, block);
+                final int delta = newEndPos - origEndPos;
+                final Map<JCTree,Integer> endPos = ((JCCompilationUnit)cu).endPositions;
+                final TranslatePosVisitor tpv = new TranslatePosVisitor(orig, endPos, delta);
+                tpv.scan(cu, null);
+                ((JCMethodDecl)orig).body = block;
+                if (Phase.RESOLVED.compareTo(currentPhase)<=0) {
+                    task.reattrMethodBody(orig, block);
+                    if (!((CompilationInfoImpl.DiagnosticListenerImpl)dl).hasPartialReparseErrors()) {
+                        TreePath tp = TreePath.getPath(cu, orig);       //todo: store treepath in changed method => improve speed
+                        Tree t = tp.getParentPath().getLeaf();
+                        task.reflowMethodBody(cu, (ClassTree) t, orig);
+                    }
+                }
+                ((CompilationInfoImpl.DiagnosticListenerImpl)dl).endPartialReparse (delta);
+            } finally {
+                l.endPartialReparse();
+                l.useSource(prevLogged);
+            }
+            jfoProvider.update(ci.jfo);
+        } catch (Throwable t) {
+            if (t instanceof ThreadDeath) {
+                throw (ThreadDeath) t;
+            }
+            dumpSource(ci, t);
+            return false;
+        }
+        return true;
+    }
+    
+    //where
+    
+    private static class FindAnnonVisitor extends TreeScanner<Void,Void> {
+        private int firstInner = -1;
+        private int noInner;
+        private boolean hasLocalClass;
+        
+        public final void reset () {
+            this.firstInner = -1;
+            this.noInner = 0;
+            this.hasLocalClass = false;
+        }
+
+        @Override
+        public Void visitClass(ClassTree node, Void p) {
+            if (firstInner == -1) {
+                firstInner = ((JCClassDecl)node).index;
+            }
+            if (node.getSimpleName().length() != 0) {
+                hasLocalClass = true;
+            }
+            noInner++;
+            return super.visitClass(node, p);
+        }                
+        
+    }
+    
+    private static class TranslatePosVisitor extends TreeScanner<Void,Void> {
+        
+        private final MethodTree changedMethod;
+        private final Map<JCTree,Integer> endPos;
+        private final int delta;
+        boolean active;
+        boolean inMethod;
+        
+        public TranslatePosVisitor (final MethodTree changedMethod, final Map<JCTree, Integer> endPos, final int delta) {
+            assert changedMethod != null;
+            assert endPos != null;
+            this.changedMethod = changedMethod;
+            this.endPos = endPos;
+            this.delta = delta;
+        }
+        
+        
+        @Override
+        public Void scan(Tree node, Void p) {
+            if (active && node != null) {
+                if (((JCTree)node).pos >= 0) {                    
+                    ((JCTree)node).pos+=delta;
+                }                
+            }
+            Void result = super.scan(node, p);            
+            if (inMethod && node != null) {
+                endPos.remove(node);
+            }
+            if (active && node != null) {
+                Integer pos = endPos.remove(node);
+                if (pos != null) {
+                    int newPos;
+                    if (pos < 0) {
+                        newPos = pos;
+                    }
+                    else {
+                        newPos = pos+delta;
+                    }
+                    endPos.put ((JCTree)node,newPos);
+                }                
+            }
+            return result;
+        }
+
+        @Override
+        public Void visitCompilationUnit(CompilationUnitTree node, Void p) {
+            return scan (node.getTypeDecls(), p);
+        }
+                
+
+        @Override
+        public Void visitMethod(MethodTree node, Void p) {    
+            if (active || inMethod) {
+                scan(node.getModifiers(), p);
+                scan(node.getReturnType(), p);
+                scan(node.getTypeParameters(), p);
+                scan(node.getParameters(), p);
+                scan(node.getThrows(), p);
+            }
+            if (node == changedMethod) {
+                inMethod = true;
+            }
+            if (active || inMethod) {
+                scan(node.getBody(), p);
+            }
+            if (inMethod) {
+                active = inMethod;
+                inMethod = false;                
+            }
+            if (active || inMethod) {
+                scan(node.getDefaultValue(), p);
+            }
+            return null;
+        }                
+        
+    }
+    
+    
+    
+    static final class DocPositionRegion extends PositionRegion {
+        
+        private final Document doc;
+        
+        public DocPositionRegion (final Document doc, final int startPos, final int endPos) throws BadLocationException {
+            super (doc,startPos,endPos);
+            assert doc != null;
+            this.doc = doc;
+        }
+        
+        public Document getDocument () {
+            return this.doc;
+        }
+        
+        public String getText () {
+            final String[] result = new String[1];
+            this.doc.render(new Runnable() {
+                public void run () {
+                    try {
+                        result[0] = doc.getText(getStartOffset(), getLength());
+                    } catch (BadLocationException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                }
+            });
+            return result[0];
+        }
+        
+    }        
     
     //Package private test utility methods
     int getReparseDelay () {
