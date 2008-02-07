@@ -99,7 +99,8 @@ public class BDIDebugFrame implements DebugFrame {
         System.out.println("- onTerminate(" + lineNumber + ", " + 
                 xpath + ")");
         
-        myProcessInstance.onTerminate(this);
+        myProcessInstance.onTerminate(
+                new BreakPosition(this, xpath, lineNumber));
     }
     
     public void onExit(
@@ -119,7 +120,8 @@ public class BDIDebugFrame implements DebugFrame {
             final BPELVariable faultData, 
             final DebuggableEngine engine) {
         System.out.println("- onFault(" + lineNumber + ", " + 
-                xpath + ", " + faultQName + ", " + faultData + ")");
+                xpath + ", " + faultQName.replace("\n", "|") + 
+                ", " + faultData + ")");
         
         myDebuggableEngine = engine;
         
