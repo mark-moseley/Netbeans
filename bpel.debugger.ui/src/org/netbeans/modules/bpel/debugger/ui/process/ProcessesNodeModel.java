@@ -22,17 +22,19 @@ package org.netbeans.modules.bpel.debugger.ui.process;
 import javax.xml.namespace.QName;
 import org.netbeans.modules.bpel.debugger.ui.util.HtmlUtil;
 import org.openide.util.NbBundle;
-
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.viewmodel.ModelListener;
 import org.netbeans.spi.viewmodel.NodeModel;
 import org.netbeans.spi.viewmodel.TreeModel;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
-
 import org.netbeans.modules.bpel.debugger.api.BpelDebugger;
 import org.netbeans.modules.bpel.debugger.api.BpelProcess;
 import org.netbeans.modules.bpel.debugger.api.CorrelationSet;
+import org.netbeans.modules.bpel.debugger.api.Fault;
 import org.netbeans.modules.bpel.debugger.api.ProcessInstance;
+import org.netbeans.modules.bpel.debugger.api.WaitingCorrelatedMessage;
+import org.netbeans.modules.bpel.debugger.ui.process.ProcessesTreeModel.FaultsWrapper;
+import org.netbeans.modules.bpel.debugger.ui.util.VariablesUtil;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -41,6 +43,8 @@ import org.netbeans.modules.bpel.debugger.api.ProcessInstance;
 public class ProcessesNodeModel implements NodeModel {
     
     private BpelDebugger myDebugger;
+    
+    private VariablesUtil myVariablesUtil;
     
     public ProcessesNodeModel() {
         // Does nothing
@@ -52,6 +56,7 @@ public class ProcessesNodeModel implements NodeModel {
         
         myDebugger = (BpelDebugger) 
                 contextProvider.lookupFirst(null, BpelDebugger.class);
+        myVariablesUtil = new VariablesUtil(myDebugger);
     }
     
     /**{@inheritDoc}*/
@@ -79,7 +84,9 @@ public class ProcessesNodeModel implements NodeModel {
         }
         
         if (object instanceof ProcessesTreeModel.CorrelationSetsWrapper) {
-            return "Correlation Sets";
+            return NbBundle.getMessage(
+                    ProcessesNodeModel.class, 
+                    "LBL_Correlation_Sets"); // NOI18N
         }
         
         if (object instanceof CorrelationSet) {
@@ -97,7 +104,34 @@ public class ProcessesNodeModel implements NodeModel {
             }
         }
         
-        throw new UnknownTypeException(object);
+        if (object instanceof ProcessesTreeModel.WaitingMessagesWrapper) {
+            return NbBundle.getMessage(
+                    ProcessesNodeModel.class, 
+                    "LBL_Waiting_Messages"); // NOI18N
+        }
+        
+        if (object instanceof WaitingCorrelatedMessage) {
+            return ((WaitingCorrelatedMessage) object).getName();
+        }
+        
+        if (object instanceof FaultsWrapper) {
+            return NbBundle.getMessage(
+                    ProcessesNodeModel.class, 
+                    "LBL_Faults"); // NOI18N
+        }
+        
+        if (object instanceof Fault) {
+            final QName name = ((Fault) object).getQName();
+            final String prefix = name.getPrefix();
+            
+            if ((prefix == null) || prefix.equals("")) {
+                return name.getLocalPart();
+            } else {
+                return name.getPrefix() + ":" + name.getLocalPart();
+            }
+        }
+        
+        return myVariablesUtil.getDisplayName(object);
     }
     
     /**{@inheritDoc}*/
@@ -112,6 +146,17 @@ public class ProcessesNodeModel implements NodeModel {
         
         if (object instanceof CorrelationSet.Property) {
             final QName name = ((CorrelationSet.Property) object).getName();
+            
+            if (name.getNamespaceURI().equals("")) {
+                return name.getLocalPart();
+            } else {
+                return "{" + name.getNamespaceURI() + "} " + 
+                        name.getLocalPart();
+            }
+        }
+        
+        if (object instanceof Fault) {
+            final QName name = ((Fault) object).getQName();
             
             if (name.getNamespaceURI().equals("")) {
                 return name.getLocalPart();
@@ -163,7 +208,23 @@ public class ProcessesNodeModel implements NodeModel {
             return PROCESS_ICON;
         }
         
-        throw new UnknownTypeException(object);
+        if (object instanceof ProcessesTreeModel.WaitingMessagesWrapper) {
+            return PROCESS_ICON;
+        }
+        
+        if (object instanceof WaitingCorrelatedMessage) {
+            return PROCESS_ICON;
+        }
+        
+        if (object instanceof FaultsWrapper) {
+            return PROCESS_ICON;
+        }
+        
+        if (object instanceof Fault) {
+            return PROCESS_ICON;
+        }
+        
+        return myVariablesUtil.getIconBase(object);
     }
     
     /**{@inheritDoc}*/
