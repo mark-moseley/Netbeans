@@ -42,36 +42,52 @@
 -->
 
 <saas-services xmlns="http://xml.netbeans.org/websvc/saas/services/1.0"
-               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/youtube"
-               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
-               xmlns:xi="http://www.w3.org/2001/XInclude"
+               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/google"
+               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'               
                xsi:schemaLocation='http://xml.netbeans.org/websvc/saas/services/1.0 
-                    ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd' 
-               type="http://research.sun.com/wadl/2006/10"
-               api-doc="http://youtube.com/dev_api_ref"
-               url="/org/netbeans/modules/websvc/saas/services/youtube/resources/YouTubeVideosWadl.xml">
+                    ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd'
+               type="custom"
+               api-doc="http://code.google.com/apis/maps/">
+                   
+    <description>Google Map Service</description>
+    
+    <display-name>GoogleMap</display-name>
 
-    <description>YouTube Video Service</description>
-    
-    <display-name>YouTubeVideos</display-name>
-    
-    <!-- xi:include href="YouTubeVideosMetaData.xml"/ -->
     <saas-metadata>
-        <localizing-bundle>org.netbeans.modules.websvc.saas.services.youtube.Bundle</localizing-bundle>
-        <icon16>org/netbeans/modules/websvc/saas/services/youtube/resources/youtube16.png</icon16>
-        <group name="YouTube">
-            <group name="Videos"/>
+        <localizing-bundle>org.netbeans.modules.websvc.components.google.Bundle</localizing-bundle>
+        <icon16>org/netbeans/modules/websvc/components/google/resources/google16.png</icon16>
+        <icon32>....</icon32>
+        <group name="Google">
+            <group name="..."/>
         </group>
-
+        <code-gen>
+            <artifacts targets="java,servlet">
+                <artifact id="GoogleLib" type="library" url="location_of_libarry_jar"/>
+                <artifact id="GoogleUtil" type="template" requires="GoogleLib"
+                    url="Templates/WebServices/GoogleUtil.java"/>
+                <artifact id="GoogleMapResource" type="template" requires="GoogleUtil,GoogleLib"
+                    url="Templates/WebServices/GoogleMapResource.java"/>
+            </artifacts>
+        </code-gen>
+        <!-- http-basic, api-key, custom -->
         <authentication profile="Templates/WebServices/profile.properties">
-            <api-key id="dev_id"/>
+            <api-key id="zwsid"/>
         </authentication>
     </saas-metadata>
 
     <methods>
-        <method name="ListByTag" href="#youtube.listByTag"/>
-        <method name="ListFeatured" href="#youtube.listFeatured"/>
-        <method name="ListPopular" href="#youtube.listPopular"/>
+        <method name="generateGoogleMapCode" href="GoogleMapResource">      
+            <input>
+                <params>
+                    <param name="apiKey" type="string"/>
+                    <param name="address" type="string" default="16 Network Circle, Menlo Park"/>
+                    <param name="zoom" type="int" default="15"/>
+                </params>
+            </input>
+            <output>
+                <media type="text/html"/>
+            </output>
+        </method>
     </methods>
-
+    
 </saas-services>

@@ -42,36 +42,36 @@
 -->
 
 <saas-services xmlns="http://xml.netbeans.org/websvc/saas/services/1.0"
-               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/youtube"
-               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
-               xmlns:xi="http://www.w3.org/2001/XInclude"
+               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/google"
+               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'               
                xsi:schemaLocation='http://xml.netbeans.org/websvc/saas/services/1.0 
                     ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd' 
                type="http://research.sun.com/wadl/2006/10"
-               api-doc="http://youtube.com/dev_api_ref"
-               url="/org/netbeans/modules/websvc/saas/services/youtube/resources/YouTubeVideosWadl.xml">
+               api-doc="http://code.google.com/apis/accounts/AuthForInstalledApps.html"
+               url="/org/netbeans/modules/websvc/saas/services/google/resources/GoogleAccountsWadl.xml">
 
-    <description>YouTube Video Service</description>
+    <description>Google Accounts Service</description>
     
-    <display-name>YouTubeVideos</display-name>
-    
-    <!-- xi:include href="YouTubeVideosMetaData.xml"/ -->
+    <display-name>GoogleAccounts</display-name>
+
     <saas-metadata>
-        <localizing-bundle>org.netbeans.modules.websvc.saas.services.youtube.Bundle</localizing-bundle>
-        <icon16>org/netbeans/modules/websvc/saas/services/youtube/resources/youtube16.png</icon16>
-        <group name="YouTube">
-            <group name="Videos"/>
+
+        <localizing-bundle>org.netbeans.modules.websvc.saas.services.google.Bundle</localizing-bundle>
+
+        <icon16>org/netbeans/modules/websvc/saas/services/google/resources/google16.png</icon16>
+
+        <group name="Google">
         </group>
 
         <authentication profile="Templates/WebServices/profile.properties">
             <api-key id="dev_id"/>
         </authentication>
+
     </saas-metadata>
 
     <methods>
-        <method name="ListByTag" href="#youtube.listByTag"/>
-        <method name="ListFeatured" href="#youtube.listFeatured"/>
-        <method name="ListPopular" href="#youtube.listPopular"/>
+        <method name="getComps" 
+            href="#google.accounts_ClientLogin"/>
     </methods>
 
 </saas-services>

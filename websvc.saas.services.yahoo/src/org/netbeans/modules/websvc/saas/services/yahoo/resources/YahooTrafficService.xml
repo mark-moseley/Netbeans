@@ -42,36 +42,35 @@
 -->
 
 <saas-services xmlns="http://xml.netbeans.org/websvc/saas/services/1.0"
-               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/youtube"
-               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
-               xmlns:xi="http://www.w3.org/2001/XInclude"
+               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/yahoo"
+               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'               
                xsi:schemaLocation='http://xml.netbeans.org/websvc/saas/services/1.0 
                     ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd' 
                type="http://research.sun.com/wadl/2006/10"
-               api-doc="http://youtube.com/dev_api_ref"
-               url="/org/netbeans/modules/websvc/saas/services/youtube/resources/YouTubeVideosWadl.xml">
+               api-doc="http://developer.yahoo.com/traffic/rest/V1/index.html"
+               url="/org/netbeans/modules/websvc/saas/services/yahoo/resources/YahooTrafficServiceWadl.xml">
 
-    <description>YouTube Video Service</description>
+    <description>Yahoo Traffic Service</description>
     
-    <display-name>YouTubeVideos</display-name>
-    
-    <!-- xi:include href="YouTubeVideosMetaData.xml"/ -->
+    <display-name>YahooTrafficService</display-name>
+
     <saas-metadata>
-        <localizing-bundle>org.netbeans.modules.websvc.saas.services.youtube.Bundle</localizing-bundle>
-        <icon16>org/netbeans/modules/websvc/saas/services/youtube/resources/youtube16.png</icon16>
-        <group name="YouTube">
-            <group name="Videos"/>
+
+        <localizing-bundle>org.netbeans.modules.websvc.saas.services.yahoo.Bundle</localizing-bundle>
+
+        <icon16>org/netbeans/modules/websvc/saas/services/yahoo/resources/yahoo16.png</icon16>
+
+        <group name="YahooTrafficService">
         </group>
 
         <authentication profile="Templates/WebServices/profile.properties">
             <api-key id="dev_id"/>
         </authentication>
+
     </saas-metadata>
 
     <methods>
-        <method name="ListByTag" href="#youtube.listByTag"/>
-        <method name="ListFeatured" href="#youtube.listFeatured"/>
-        <method name="ListPopular" href="#youtube.listPopular"/>
+        <method name="getTrafficData" href="#yahoo.trafficData"/>
     </methods>
 
 </saas-services>

@@ -42,36 +42,24 @@
 -->
 
 <saas-services xmlns="http://xml.netbeans.org/websvc/saas/services/1.0"
-               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/youtube"
-               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
-               xmlns:xi="http://www.w3.org/2001/XInclude"
+               xmlns:tns="http://xml.netbeans.org/websvc/saas/component/1.0/facebook"
+               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'               
                xsi:schemaLocation='http://xml.netbeans.org/websvc/saas/services/1.0 
-                    ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd' 
+                    ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd'
                type="http://research.sun.com/wadl/2006/10"
-               api-doc="http://youtube.com/dev_api_ref"
-               url="/org/netbeans/modules/websvc/saas/services/youtube/resources/YouTubeVideosWadl.xml">
-
-    <description>YouTube Video Service</description>
+               api-doc="http://api.facebook.com"
+               url="/org/netbeans/modules/websvc/saas/services/facebook/resources/FacebookSecureWadl.xml">
     
-    <display-name>YouTubeVideos</display-name>
+    <description>Facebook Secure Service</description>
+    <display-name>Facebook Secure</display-name>
     
-    <!-- xi:include href="YouTubeVideosMetaData.xml"/ -->
     <saas-metadata>
-        <localizing-bundle>org.netbeans.modules.websvc.saas.services.youtube.Bundle</localizing-bundle>
-        <icon16>org/netbeans/modules/websvc/saas/services/youtube/resources/youtube16.png</icon16>
-        <group name="YouTube">
-            <group name="Videos"/>
-        </group>
-
-        <authentication profile="Templates/WebServices/profile.properties">
-            <api-key id="dev_id"/>
-        </authentication>
+        <localizing-bundle>org.netbeans.modules.websvc.saas.services.facebook.Bundle</localizing-bundle>
+        <icon16>org/netbeans/modules/websvc/saas/services/facebook/resources/facebook16.png</icon16>
+        <group name="Facebook"/>
     </saas-metadata>
-
-    <methods>
-        <method name="ListByTag" href="#youtube.listByTag"/>
-        <method name="ListFeatured" href="#youtube.listFeatured"/>
-        <method name="ListPopular" href="#youtube.listPopular"/>
-    </methods>
-
+    
+    <!-- Process all methods in the wadl !-->
+    <methods/>
+    
 </saas-services>
