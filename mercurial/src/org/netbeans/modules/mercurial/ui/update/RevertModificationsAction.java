@@ -52,6 +52,7 @@ import org.netbeans.modules.mercurial.FileInformation;
 import org.netbeans.modules.mercurial.util.HgUtils;
 import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.HgException;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.util.RequestProcessor;
@@ -59,7 +60,6 @@ import org.openide.util.NbBundle;
 import org.netbeans.modules.mercurial.util.HgCommand;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import javax.swing.AbstractAction;
 import org.netbeans.modules.mercurial.util.HgRepositoryContextCache;
 
 /**
@@ -67,7 +67,7 @@ import org.netbeans.modules.mercurial.util.HgRepositoryContextCache;
  *
  * @author Padraig O'Briain
  */
-public class RevertModificationsAction extends AbstractAction {
+public class RevertModificationsAction extends ContextAction {
     
     private final VCSContext context;
  
@@ -76,8 +76,7 @@ public class RevertModificationsAction extends AbstractAction {
         putValue(Action.NAME, name);
     }
 
-    public void actionPerformed(ActionEvent e) {
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()) return;
+    public void performAction(ActionEvent e) {
         if(!HgRepositoryContextCache.hasHistory(context)){
             HgUtils.outputMercurialTabInRed(
                     NbBundle.getMessage(UpdateAction.class,
@@ -159,6 +158,14 @@ public class RevertModificationsAction extends AbstractAction {
             DialogDisplayer.getDefault().notifyLater(e);
         }
 
+        if (revStr == null) {
+            for (File file : revertFiles) {
+                HgUtils.forceStatusRefresh(file);
+            }
+        } else {
+            HgUtils.forceStatusRefresh(revertFiles.get(0));
+        }
+
         // refresh filesystem to take account of changes
         FileObject rootObj = FileUtil.toFileObject(repository);
         try {
@@ -173,6 +180,9 @@ public class RevertModificationsAction extends AbstractAction {
     }
 
     public boolean isEnabled() {
-        return HgUtils.getRootFile(context) != null;
+        Set<File> ctxFiles = context != null? context.getRootFiles(): null;
+        if(HgUtils.getRootFile(context) == null || ctxFiles == null || ctxFiles.size() == 0) 
+            return false;
+        return true; 
     }
 }

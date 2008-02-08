@@ -80,10 +80,10 @@ public class HgLogMessage {
         splits = date.split(" ");
         this.date = new Date(Long.parseLong(splits[0]) * 1000); // UTC in miliseconds       
         this.id = id;
-        this.mpaths = new ArrayList();
-        this.apaths = new ArrayList();
-        this.dpaths = new ArrayList();
-        this.cpaths = new ArrayList();
+        this.mpaths = new ArrayList<HgLogMessageChangedPath>();
+        this.apaths = new ArrayList<HgLogMessageChangedPath>();
+        this.dpaths = new ArrayList<HgLogMessageChangedPath>();
+        this.cpaths = new ArrayList<HgLogMessageChangedPath>();
         
         if( fm != null && !fm.equals("")){
             splits = fm.split(" ");
@@ -126,7 +126,7 @@ public class HgLogMessage {
     }
     
     public HgLogMessageChangedPath [] getChangedPaths(){
-        List<HgLogMessageChangedPath> paths = new ArrayList();
+        List<HgLogMessageChangedPath> paths = new ArrayList<HgLogMessageChangedPath>();
         if(!mpaths.isEmpty()) paths.addAll(mpaths);
         if(!apaths.isEmpty()) paths.addAll(apaths);
         if(!dpaths.isEmpty()) paths.addAll(dpaths);
@@ -141,6 +141,9 @@ public class HgLogMessage {
     }
     public String getAuthor() {
         return author;
+    }
+    public String getCSetShortID() {
+        return id;
     }
     public String getMessage() {
         return desc;
