@@ -77,11 +77,11 @@ public class RubyValidation extends JellyTestCase {
 
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new RubyValidation("testIrbShell"));
         suite.addTest(new RubyValidation("testCreateRubyProject"));
         suite.addTest(new RubyValidation("testRunRubyFile"));
         suite.addTest(new RubyValidation("testCreateRailsProject"));
         suite.addTest(new RubyValidation("testRailsGenerate"));
+        suite.addTest(new RubyValidation("testIrbShell"));
         return suite;
     }
     
@@ -240,7 +240,7 @@ public class RubyValidation extends JellyTestCase {
         String helpersLabel = Bundle.getString("org.netbeans.modules.ruby.railsprojects.Bundle", "app_helpers");
         new Node(projectRootNode, helpersLabel+"|"+filename);
         
-        filename = "myview.rhtml"; // NOI18N
+        filename = "myview.html.erb"; // NOI18N
         new EditorOperator(filename);
         // "Views"
         String viewsLabel = Bundle.getString("org.netbeans.modules.ruby.railsprojects.Bundle", "app_views");
