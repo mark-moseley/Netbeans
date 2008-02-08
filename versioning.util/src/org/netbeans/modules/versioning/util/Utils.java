@@ -401,13 +401,13 @@ public final class Utils {
      * @param file file/directory to delete
      */
     public static void deleteRecursively(File file) {
-        if (file.isDirectory()) {
-            File [] files = file.listFiles();
-            for (int i = 0; i < files.length; i++) {
-                deleteRecursively(files[i]);
-            }
+        FileObject fo = FileUtil.toFileObject(file);
+        if (fo == null) return;
+        try {
+            fo.delete();
+        } catch (IOException e) {
+            Utils.logError(Utils.class, e);
         }
-        file.delete();
     }
 
     /**
@@ -620,7 +620,7 @@ public final class Utils {
      */
     public static String getContextDisplayName(VCSContext ctx) {
         // TODO: reuse this code in getActionName() 
-        Set<File> nodes = ctx.getRootFiles();
+        Set<File> nodes = ctx.getFiles();
         int objectCount = nodes.size();
         // if all nodes represent project node the use plain name
         // It avoids "Show changes 2 files" on project node
