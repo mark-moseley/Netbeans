@@ -89,7 +89,7 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
      * The property name for the event fired when a security tag is added or removed
      */
     private static final String SECURITY_ADDED_OR_REMOVED = "security_added_or_removed";
-    
+
     public HibernateCfgDataObject(FileObject pf, HibernateCfgDataLoader loader) throws DataObjectExistsException, IOException {
         super(pf, loader);
 
@@ -162,6 +162,16 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
         assert configuration != null;
         return configuration;
     }
+    
+    /**
+     *  Adds the session Factory model object to the HibernateConfiguration. 
+     *  @param sFactory
+     */
+
+    public void addSessionFactory(SessionFactory sFactory) {
+        getHibernateConfiguration().setSessionFactory(sFactory);
+        modelUpdatedFromUI();
+    }
 
     /**
      * Saves the document.
@@ -180,12 +190,7 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
 
     @Override
     protected Node createNodeDelegate() {
-        return new HibernateCfgDataNode(this, getLookup());
-    }
-
-    @Override
-    public Lookup getLookup() {
-        return getCookieSet().getLookup();
+        return new HibernateCfgDataNode(this);
     }
 
     protected String getPrefixMark() {
@@ -224,13 +229,13 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
     @Override
     public void showElement(Object element) {
         Object target = null;
-        if( element instanceof SessionFactory ||
-            element instanceof Security ) {
+        if (element instanceof SessionFactory ||
+                element instanceof Security) {
             openView(0);
             target = element;
         }
-        
-        if( target != null ) {
+
+        if (target != null) {
             final Object key = target;
             org.netbeans.modules.xml.multiview.Utils.runInAwtDispatchThread(new Runnable() {
 
