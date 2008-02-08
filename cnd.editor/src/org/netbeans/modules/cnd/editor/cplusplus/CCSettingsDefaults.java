@@ -41,18 +41,37 @@
 
 package org.netbeans.modules.cnd.editor.cplusplus;
 
-import org.netbeans.editor.Formatter;
-import org.netbeans.editor.ext.ExtFormatter;
-import org.netbeans.modules.cnd.MIMENames;
 
-/** C++ indentation engine that delegates to C++ formatter */
-public class CCIndentEngine extends BaseIndentEngine {
+import org.netbeans.editor.Acceptor;
+import org.netbeans.editor.AcceptorFactory;
+import org.netbeans.editor.ext.ExtSettingsDefaults;
 
-    public CCIndentEngine() {
-        setAcceptedMimeTypes(new String[] { MIMENames.CPLUSPLUS_MIME_TYPE });
-    }
+/** Default settings values for C and C++ */
+public class CCSettingsDefaults extends ExtSettingsDefaults {
 
-    protected ExtFormatter createFormatter() {
-	return (CCFormatter) Formatter.getFormatter(CCKit.class);
-    }
+    public static final Boolean defaultCCDocAutoPopup = Boolean.FALSE;
+    public static final Boolean defaultPairCharactersCompletion = Boolean.TRUE;
+    public static final Acceptor defaultCCIdentifierAcceptor = AcceptorFactory.JAVA_IDENTIFIER;
+    
+    // Code Folding
+    public static final Boolean defaultCCCodeFoldingEnable = Boolean.TRUE;
+
+    public static final Acceptor defaultIndentHotCharsAcceptor = new Acceptor() {
+            public boolean accept(char ch) {
+                switch (ch) {
+                case '{':
+                case '}':
+                    return true;
+                }
+
+                return false;
+            }
+        };
+
+    // DO WE NEED IT ?
+    public static final String defaultWordMatchStaticWords = 
+            "Exception IntrospectionException FileNotFoundException IOException" //NOI18N
+          + " ArrayIndexOutOfBoundsException ClassCastException ClassNotFoundException" //NOI18N
+          + " CloneNotSupportedException NullPointerException NumberFormatException" //NOI18N
+          + " SQLException IllegalAccessException IllegalArgumentException"; //NOI18N
 }
