@@ -54,8 +54,8 @@ import org.netbeans.modules.bpel.model.api.VariableContainer;
 import org.netbeans.modules.bpel.model.api.VariableDeclaration;
 import org.netbeans.modules.bpel.model.api.VariableReference;
 import org.netbeans.modules.bpel.model.api.references.ReferenceCollection;
-import org.netbeans.modules.bpel.validation.util.QuickFix.Adapter;
-import org.netbeans.modules.bpel.validation.util.Util;
+import org.netbeans.modules.bpel.validation.core.QuickFix.Adapter;
+import org.netbeans.modules.bpel.validation.core.Util;
 import static org.netbeans.modules.soa.ui.util.UI.*;
 
 /**
@@ -86,25 +86,31 @@ class QuickFix {
       myName = name;
     }
 
-    public void doFix() {
-      Variable [] variables = getAppropriateVariables();
+    public boolean canFix() {
+      myVariables = getAppropriateVariables();
 
-      if (variables == null || variables.length == 0) {
-        myDescription = "No suggestions."; // NOI18N // todo
+      if (myVariables == null) {
+        return false;
       }
-      else if (variables.length == 1) {
-        myDescription = "Find ONE variable to: " + variables [0].getName(); // NOI18N // todo
-        // tdoo
-        myReference.setVariable(
-          ((ReferenceCollection) myReference).createReference(variables [0], VariableDeclaration.class));
+      if (myVariables.length == 0) {
+        return false;
       }
-      else {
-        myDescription = "Find variables: " + variables.length; // NOI18N // todo
-        // todo
+      if (myVariables.length != 1) { // todo r
+        return false;
       }
+      return true;
     }
 
-    public String getFixDescription() {
+    public void doFix() {
+      Variable variable = myVariables [0];
+
+      myDescription = i18n(QuickFix.class, "QUICK_FIX_Change_varibale_name", variable.getName()); // NOI18N
+
+      myReference.setVariable(
+        ((ReferenceCollection) myReference).createReference(variable, VariableDeclaration.class));
+    }
+
+    public String getDescription() {
       return myDescription; 
     }
 
@@ -140,6 +146,7 @@ class QuickFix {
 
     private String myName;
     private String myDescription;
+    private Variable [] myVariables;
     private VariableReference myReference;
   }
 }
