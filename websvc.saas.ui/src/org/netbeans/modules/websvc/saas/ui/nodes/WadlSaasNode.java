@@ -36,49 +36,63 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+
 package org.netbeans.modules.websvc.saas.ui.nodes;
 
-import java.util.Collections;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
-import org.netbeans.modules.websvc.saas.model.Saas;
-import org.netbeans.modules.websvc.saas.model.WsdlSaas;
-import org.netbeans.modules.websvc.saas.model.WsdlSaasMethod;
-import org.openide.nodes.Node;
+import java.awt.Image;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import javax.swing.Action;
+import org.netbeans.modules.websvc.saas.model.WadlSaas;
+import org.netbeans.modules.websvc.saas.ui.actions.ViewWadlAction;
+import org.openide.util.actions.SystemAction;
+import org.openide.util.lookup.InstanceContent;
 
 /**
  *
  * @author nam
  */
-public class WsdlSaasNodeChildren extends SaasNodeChildren<Object> {
+public class WadlSaasNode extends SaasNode {
+    
+    public WadlSaasNode(WadlSaas wadlSaas) {
+        this(wadlSaas, new InstanceContent());
+    }
 
-    WsdlSaasNodeChildren(WsdlSaas saas) {
-        super(saas);
+    public WadlSaasNode(WadlSaas wadlSaas, InstanceContent content) {
+        super(new WadlSaasNodeChildren(wadlSaas), wadlSaas);
+        content.add(wadlSaas);
     }
 
     @Override
-    public WsdlSaas getSaas() {
-        return (WsdlSaas) super.getSaas();
+    public WadlSaas getSaas() {
+        return (WadlSaas) super.getSaas();
     }
-
-    protected void updateKeys() {
-        if (getSaas().getState() == Saas.State.READY) {
-            setKeys(getSaas().getPortsOrMethods());
-        } else {
-            setKeys(Collections.emptyList());
-        }
+    
+    private static final java.awt.Image SERVICE_BADGE =
+            org.openide.util.Utilities.loadImage( "org/netbeans/modules/websvc/saas/ui/resources/restservice.png" ); //NOI18N
+    
+    @Override
+    public java.awt.Image getIcon(int type) {
+        return SERVICE_BADGE;
+    }
+    
+    @Override
+    public Image getOpenedIcon(int type){
+        return getIcon( type);
     }
 
     @Override
-    protected Node[] createNodes(Object key) {
-        if (needsWaiting()) {
-            return WAIT_NODES;
-        }
-
-        if (key instanceof WsdlPort) {
-            return new Node[]{ new WsdlPortNode(getSaas(), (WsdlPort) key) };
-        } else if (key instanceof WsdlSaasMethod) {
-            return new Node[]{ new WsdlSaasMethodNode((WsdlSaasMethod) key) };
-        }
-        return new Node[0];
+    public boolean canRename() {
+        return super.canRename();
     }
+
+    @Override
+    public Action[] getActions(boolean context) {
+        List<Action> actions = new ArrayList<Action>(Arrays.asList(super.getActions(context)));
+        actions.add(SystemAction.get(ViewWadlAction.class));
+
+        return actions.toArray(new Action[actions.size()]);
+    }
+
 }

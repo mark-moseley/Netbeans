@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,13 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
+ * Contributor(s):
+ *
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,75 +37,75 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
- * Contributor(s):
- * 
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.websvc.saas.ui.nodes;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-import org.netbeans.modules.websvc.saas.model.Saas;
+import org.netbeans.modules.websvc.saas.model.CustomSaas;
+import org.netbeans.modules.websvc.saas.model.SaasGroup;
 import org.netbeans.modules.websvc.saas.model.SaasServicesModel;
-import org.openide.nodes.AbstractNode;
+import org.netbeans.modules.websvc.saas.model.WadlSaas;
+import org.netbeans.modules.websvc.saas.model.WsdlSaas;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
-import org.openide.util.NbBundle;
 import org.openide.util.WeakListeners;
 
-/**
- *
- * @author nam
- */
-public abstract class SaasNodeChildren<T> extends Children.Keys<T> implements PropertyChangeListener {
-    protected Saas saas;
+public class SaasGroupNodeChildren extends Children.Keys<Object> implements PropertyChangeListener {
     
-    public SaasNodeChildren(Saas saas) {
-        this.saas = saas;
+    private SaasGroup group;
+    
+    public SaasGroupNodeChildren(SaasGroup group) {
+        this.group = group;
         SaasServicesModel model = SaasServicesModel.getInstance();
         model.addPropertyChangeListener(WeakListeners.propertyChange(this, model));
-    }
-
-    public void propertyChange(PropertyChangeEvent evt) {
-        if (evt.getSource() == saas && evt.getPropertyName().equals(Saas.PROP_STATE)) {
-            if (evt.getNewValue() == Saas.State.READY) {
-                updateKeys();
-            }
-        }
-    }
-    
-    public Saas getSaas() {
-        return saas;
     }
     
     @Override
     protected void addNotify() {
         super.addNotify();
-        saas.toStateReady();
         updateKeys();
     }
 
+    public void propertyChange(PropertyChangeEvent evt) {
+        if (evt.getSource() == group) {
+            updateKeys();
+            if (evt.getNewValue() != null) {
+                refreshKey(evt.getNewValue());
+            } else if (evt.getOldValue() != null) {
+                refreshKey(evt.getOldValue());
+            }
+        }
+    }
+    
+    private void updateKeys() {
+        ArrayList<Object> keys = new ArrayList<Object>();
+        keys.addAll(group.getChildrenGroups());
+        keys.addAll(group.getServices());
+        setKeys(keys.toArray());
+    }
+    
     @Override
     protected void removeNotify() {
-        List<T> emptyList = Collections.emptyList();
+        java.util.List<String> emptyList = Collections.emptyList();
         setKeys(emptyList);
         super.removeNotify();
     }
     
-    protected abstract void updateKeys();
-
-    protected static final Node[] EMPTY = new Node[0];
-    protected static final AbstractNode[] WAIT_NODES = { new AbstractNode(Children.LEAF) };
-    static {
-        WAIT_NODES[0].setName(NbBundle.getMessage(WsdlSaasNodeChildren.class, "NODE_LOAD_MSG"));
-        WAIT_NODES[0].setIconBaseWithExtension("org/netbeans/modules/websvc/saas/ui/resources/wait.gif"); // NOI18N
-    }
-
-    public boolean needsWaiting() {
-        return saas.getState() != Saas.State.READY;
+    protected Node[] createNodes(Object key) {
+        if (key instanceof SaasGroup) {
+            SaasGroupNode node = new SaasGroupNode((SaasGroup) key);
+            return new Node[] { node };
+        } else if (key instanceof WadlSaas) {
+            return new Node[] { new WadlSaasNode((WadlSaas)key) };
+        } else if (key instanceof WsdlSaas) {
+            return new Node[] { new WsdlSaasNode((WsdlSaas) key) };
+        } else if (key instanceof CustomSaas) {
+            return new Node[] { new CustomSaasNode((CustomSaas) key) };
+        }
+        return new Node[0];
     }
 }
