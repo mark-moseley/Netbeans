@@ -43,13 +43,10 @@ import org.netbeans.modules.websvc.saas.model.jaxb.Group;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.netbeans.modules.websvc.manager.api.WebServiceDescriptor;
 import org.netbeans.modules.websvc.saas.model.jaxb.SaasServices;
+import org.netbeans.modules.websvc.saas.spi.websvcmgr.WsdlServiceProxyDescriptor;
 import org.netbeans.modules.websvc.saas.util.SaasUtil;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
@@ -66,7 +63,9 @@ public class SaasServicesModel {
     public static final String PROP_GROUPS = "groups";
     public static final String PROP_SERVICES = "services";
     public static final String ROOT_GROUP = "root";
-    public static final String WEBSVC_HOME = WebServiceDescriptor.WEBSVC_HOME;
+    public static final String WEBSVC_HOME = WsdlServiceProxyDescriptor.WEBSVC_HOME;
+    public static final String SERVICE_GROUP_XML = "service-groups.xml";
+    
     private SaasGroup rootGroup;
     private State state = State.UNINITIALIZED;
     private PropertyChangeSupport pps = new PropertyChangeSupport(this);
@@ -84,7 +83,7 @@ public class SaasServicesModel {
         return instance;
     }
 
-    private SaasServicesModel_1() {
+    private SaasServicesModel() {
     }
 
     private void init() {
@@ -103,16 +102,18 @@ public class SaasServicesModel {
     }
 
     private void loadUserDefinedGroups() {
-        FileObject input = FileUtil.toFileObject(new File(WEBSVC_HOME));
+        FileObject input = FileUtil.toFileObject(new File(WEBSVC_HOME, SERVICE_GROUP_XML));
         try {
-            rootGroup = SaasUtil.loadSaasGroup(input);
+            if (input != null) {
+                rootGroup = SaasUtil.loadSaasGroup(input);
+            }
         } catch (Exception e) {
             Exceptions.printStackTrace(e);
         }
         if (rootGroup == null) {
             Group g = new Group();
             g.setName(ROOT_GROUP);
-            rootGroup = new SaasGroup(null, g);
+            rootGroup = new SaasGroup((SaasGroup)null, g);
         }
     }
 
@@ -128,8 +129,15 @@ public class SaasServicesModel {
         }
     }
 
+    public void saveRootGroup() {
+        try {
+            SaasUtil.saveSaasGroup(rootGroup, new File(WEBSVC_HOME, SERVICE_GROUP_XML));
+        } catch(Exception ex) {
+            Exceptions.printStackTrace(ex);
+        }
+    }
+    
     private void loadGroupFromDefaultFileSystemFolder(FileObject folder) {
-        List<Exception> exs = new ArrayList<Exception>();
         for (FileObject fo : folder.getChildren()) {
             try {
                 SaasServices ss = SaasUtil.loadSaasServices(fo);
@@ -143,7 +151,17 @@ public class SaasServicesModel {
                     }
 
                     if (child.getChildrenGroups().size() == 0) {
-                        child.addService(new Saas(parent, ss));
+                        Saas service;
+                        if (Saas.NS_WADL.equals(ss.getType())) {
+                            service = new WadlSaas(parent, ss);
+                            //why contextclassloader only work here not later
+                            ((WadlSaas)service).getWadlModel();
+                        } else if (Saas.NS_WSDL.equals(ss.getType())) {
+                            service = new WsdlSaas(parent, ss);
+                        } else {
+                            service = new Saas(parent, ss);
+                        }
+                        child.addService(service);
                         break;
                     } else {
                         g = g.getGroup().get(0);
@@ -151,20 +169,12 @@ public class SaasServicesModel {
                     parent = child;
                 }
             } catch (Exception ex) {
-                exs.add(ex);
+                Exceptions.printStackTrace(ex);
             }
-        }
-        if (exs.size() > 0) {
-            StringBuffer messages = new StringBuffer();
-            for (Exception ex : exs) {
-                messages.append(ex.getLocalizedMessage());
-                messages.append(System.getProperties().getProperty("line.separator"));
-            }
-            Logger.getLogger(this.getClass().getName()).log(Level.INFO, messages.toString());
         }
     }
 
-    protected SaasGroup getRootGroup() {
+    public SaasGroup getRootGroup() {
         init();
         return rootGroup;
     }
@@ -256,5 +266,9 @@ public class SaasServicesModel {
         init();
         parent.removeService(service);
     //TODO save
+    }
+    
+    public FileObject getWebServiceHome() {
+        return FileUtil.toFileObject(new File(WEBSVC_HOME));
     }
 }
