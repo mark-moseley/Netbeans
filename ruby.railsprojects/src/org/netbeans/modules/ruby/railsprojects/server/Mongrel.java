@@ -51,37 +51,47 @@ import org.netbeans.spi.server.ServerInstanceImplementation;
 import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
 import org.openide.util.NbBundle;
+import org.openide.util.Parameters;
 
 /**
- * TODO:doc
+ * This class represents a Mongrel (gem) installation.
  * 
  * @author Erno Mononen
  */
 class Mongrel implements RubyServer, ServerInstanceImplementation {
 
     static final String GEM_NAME = "mongrel";
+    /**
+     * The pattern for recognizing when an instance of Mongrel has started.
+     */
     private static final Pattern PATTERN = Pattern.compile("\\bMongrel.+available at.+", Pattern.DOTALL);
-    private final List<RailsApplication> applications;
+    private final List<RailsApplication> applications = new ArrayList<RailsApplication>();
     private final RubyPlatform platform;
-    private Node node;
+    private final String version;
     private final ChangeSupport changeSupport = new ChangeSupport(this);
+    
+    private Node node;
 
-    Mongrel(RubyPlatform platform) {
+    Mongrel(RubyPlatform platform, String version) {
+        Parameters.notNull("platform", platform); //NOI18N
         this.platform = platform;
-        this.applications = new ArrayList<RailsApplication>();
+        this.version = version;
     }
 
-    public String getName() {
-        return NbBundle.getMessage(Mongrel.class, "LBL_Mongrel");
+    private Node getNode() {
+        if (this.node == null) {
+            this.node = new RubyServerNode(this);
+        }
+        return node;
     }
-
+    
     // RubyServer  methods
+    public String getNodeName() {
+        return NbBundle.getMessage(Mongrel.class, "LBL_ServerNodeName", getDisplayName(), platform.getLabel());
+    }
+
     public String getStartupParam() {
         return null;
-    }
-
-    public String getDisplayName() {
-        return NbBundle.getMessage(Mongrel.class, "LBL_ServerDisplayName", getName(), platform.getLabel());
     }
 
     public String getServerPath() {
@@ -125,21 +135,15 @@ class Mongrel implements RubyServer, ServerInstanceImplementation {
 
     // ServerInstanceImplementation methods
     public String getServerDisplayName() {
-        return NbBundle.getMessage(Mongrel.class, "LBL_ServerDisplayName", getDisplayName(), platform.getLabel());
+        return getNodeName();
     }
 
     public Node getFullNode() {
-        if (this.node == null) {
-            this.node = new RubyServerNode(this);
-        }
-        return node;
+        return getNode();
     }
 
     public Node getBasicNode() {
-        if (this.node == null) {
-            this.node = new RubyServerNode(this);
-        }
-        return node;
+        return getNode();
     }
 
     public JComponent getCustomizer() {
@@ -159,12 +163,16 @@ class Mongrel implements RubyServer, ServerInstanceImplementation {
         return "MONGREL";
     }
 
+    public String getDisplayName() {
+        return NbBundle.getMessage(Mongrel.class, "LBL_Mongrel", version);
+    }
+
     public String getServerState() {
         // TODO: currently handled in Rails project
         return null;
     }
 
-    public boolean startServer() {
+    public boolean startServer(RubyPlatform platform) {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
@@ -179,4 +187,35 @@ class Mongrel implements RubyServer, ServerInstanceImplementation {
     public boolean stop(String applicationName) {
         throw new UnsupportedOperationException("Not supported yet.");
     }
+
+    public boolean isPlatformSupported(RubyPlatform platform) {
+        return this.platform.equals(platform);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final Mongrel other = (Mongrel) obj;
+        if (this.platform != other.platform && (this.platform == null || !this.platform.equals(other.platform))) {
+            return false;
+        }
+        if (this.version != other.version && (this.version == null || !this.version.equals(other.version))) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 47 * hash + (this.platform != null ? this.platform.hashCode() : 0);
+        hash = 47 * hash + (this.version != null ? this.version.hashCode() : 0);
+        return hash;
+    }
+    
 }

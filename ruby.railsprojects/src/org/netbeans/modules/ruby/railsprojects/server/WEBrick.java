@@ -51,26 +51,39 @@ import org.netbeans.spi.server.ServerInstanceImplementation;
 import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
 import org.openide.util.NbBundle;
+import org.openide.util.Parameters;
 
 /**
- * TODO: doc
+ * This class represents a WEBrick installation.
  *
  * @author Erno Mononen
  */
 class WEBrick implements RubyServer, ServerInstanceImplementation {
 
+    /**
+     * The pattern for recognizing when an instance of WEBrick has started.
+     */
     private static final Pattern PATTERN = Pattern.compile("\\bRails application started on.+", Pattern.DOTALL);
+    
     private final RubyPlatform platform;
     private final List<RailsApplication> applications = new ArrayList<RailsApplication>();
-    private Node node;
     private final ChangeSupport changeSupport = new ChangeSupport(this);
+    private Node node;
 
     WEBrick(RubyPlatform platform) {
+        Parameters.notNull("platform", platform); //NOI18N
         this.platform = platform;
     }
 
-    public String getName() {
-        return NbBundle.getMessage(WEBrick.class, "LBL_WEBrick");
+    private Node getNode() {
+        if (this.node == null) {
+            this.node = new RubyServerNode(this);
+        }
+        return node;
+    }
+    
+    public String getNodeName() {
+        return NbBundle.getMessage(WEBrick.class, "LBL_ServerNodeName", getDisplayName(), platform.getLabel());
     }
 
     // RubyServer methods 
@@ -87,7 +100,7 @@ class WEBrick implements RubyServer, ServerInstanceImplementation {
     }
 
     public String getDisplayName() {
-        return NbBundle.getMessage(WEBrick.class, "LBL_ServerDisplayName", getName(), platform.getLabel());
+        return NbBundle.getMessage(WEBrick.class, "LBL_WEBrick");
     }
 
     public List<RailsApplication> getApplications() {
@@ -121,24 +134,17 @@ class WEBrick implements RubyServer, ServerInstanceImplementation {
         changeSupport.removeChangeListener(listener);
     }
 
-
     // ServerInstanceImplementation methods
     public String getServerDisplayName() {
-        return NbBundle.getMessage(WEBrick.class, "LBL_ServerDisplayName", getDisplayName(), platform.getLabel());
+        return getNodeName();
     }
 
     public Node getFullNode() {
-        if (this.node == null) {
-            this.node = new RubyServerNode(this);
-        }
-        return node;
+        return getNode();
     }
 
     public Node getBasicNode() {
-        if (this.node == null) {
-            this.node = new RubyServerNode(this);
-        }
-        return node;
+        return getNode();
     }
 
     public JComponent getCustomizer() {
@@ -164,7 +170,7 @@ class WEBrick implements RubyServer, ServerInstanceImplementation {
         return null;
     }
 
-    public boolean startServer() {
+    public boolean startServer(RubyPlatform platform) {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
@@ -179,4 +185,31 @@ class WEBrick implements RubyServer, ServerInstanceImplementation {
     public boolean stop(String applicationName) {
         throw new UnsupportedOperationException("Not supported yet.");
     }
+
+    public boolean isPlatformSupported(RubyPlatform platform) {
+        return this.platform.equals(platform);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final WEBrick other = (WEBrick) obj;
+        if (this.platform != other.platform && (this.platform == null || !this.platform.equals(other.platform))) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 11 * hash + (this.platform != null ? this.platform.hashCode() : 0);
+        return hash;
+    }
+    
 }
