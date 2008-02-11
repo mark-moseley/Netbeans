@@ -39,31 +39,66 @@
 
 package org.netbeans.modules.websvc.saas.ui.nodes;
 
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
-import org.netbeans.modules.websvc.saas.model.WsdlSaas;
-import org.netbeans.modules.websvc.saas.model.WsdlSaasMethod;
-import org.openide.util.lookup.InstanceContent;
+import java.awt.Image;
+import org.netbeans.modules.websvc.saas.model.SaasGroup;
+import org.netbeans.modules.websvc.saas.model.SaasServicesModel;
+import org.netbeans.modules.websvc.saas.model.jaxb.Group;
+import org.openide.nodes.AbstractNode;
+import org.openide.util.NbBundle;
 
 /**
  *
  * @author nam
  */
-public class WsdlSaasMethodNode extends WsdlMethodNode {
-    private WsdlSaasMethod saasMethod;
+public class SaasServicesRootNode extends AbstractNode {
+    static final SaasGroup PLACE_HOLDER_GROUP = new SaasGroup(null, new Group());
+    private SaasGroup root;
     
-    public WsdlSaasMethodNode(WsdlSaasMethod saasMethod) {
-        this(saasMethod, new InstanceContent());
-    }
-
-    public WsdlSaasMethodNode(WsdlSaasMethod saasMethod, InstanceContent content) {
-        super(saasMethod.getSaas(), saasMethod.getPort(), saasMethod.getWsdlOperation(), content);
-        this.saasMethod = saasMethod;
-        content.add(saasMethod);
+    public SaasServicesRootNode() {
+        super(new RootNodeChildren(PLACE_HOLDER_GROUP));
+        root = PLACE_HOLDER_GROUP;
     }
 
     @Override
+    public String getName() {
+        return "rootSaasGroup";
+    }
+    
+    @Override
     public String getDisplayName() {
-        return saasMethod.getName();
+        return NbBundle.getMessage(SaasServicesRootNode.class, "Web_Services");
+    }
+    
+    @Override
+    public String getShortDescription() {
+        return NbBundle.getMessage(SaasServicesRootNode.class, "Web_Services_Desc");
+    }
+    
+    static final java.awt.Image ICON =
+            org.openide.util.Utilities.loadImage( "org/netbeans/modules/websvc/saas/ui/resources/webservicegroup.png" ); //NOI18N
+    
+    @Override
+    public Image getIcon(int type){
+        return ICON;
+    }
+    
+    @Override
+    public Image getOpenedIcon(int type){
+        return ICON;
+    }
+    
+    static class RootNodeChildren extends SaasGroupNodeChildren {
+
+        public RootNodeChildren(SaasGroup group) {
+            super(group);
+        }
+        
+        @Override
+        protected void addNotify() {
+            if (group == PLACE_HOLDER_GROUP) {
+                group = SaasServicesModel.getInstance().getRootGroup();
+            }
+            super.addNotify();
+        }
     }
 }
