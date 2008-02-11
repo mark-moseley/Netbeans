@@ -144,12 +144,7 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
                                 if (toAdd == null) {
                                     toAdd = classPathRoots[i];
                                 }
-                                final File f;
-                                if (LibrariesSupport.isAbsoluteURL(toAdd)) {
-                                    f = FileUtil.normalizeFile( new File (URI.create(toAdd.toExternalForm())));
-                                } else {
-                                    f = LibrariesSupport.convertURLToFile(toAdd);
-                                }
+                                final String f = LibrariesSupport.convertURLToFilePath(toAdd);
                                 if (f == null ) {
                                     throw new IllegalArgumentException ("The file must exist on disk");     //NOI18N
                                 }
@@ -165,7 +160,7 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
                                     else {
                                         for (Iterator<ClassPathSupport.Item> it = resources.iterator(); it.hasNext();) {
                                             ClassPathSupport.Item _r = it.next();
-                                            if (_r.isBroken() && _r.getType() == ClassPathSupport.Item.TYPE_JAR && f.equals(_r.getFile())) {
+                                            if (_r.isBroken() && _r.getType() == ClassPathSupport.Item.TYPE_JAR && f.equals(_r.getFilePath())) {
                                                 it.remove();
                                                 changed = true;
                                             }
@@ -278,7 +273,8 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
                                 Library lib = libraries[i];
                                 if (project.getAntProjectHelper().isSharableProject()) {
                                     if (lib.getManager().getLocation() == null) {
-                                        LOG.log(Level.INFO, "Client is adding global library ["+lib+
+
+                                        LOG.log(Level.FINE, "Client is adding global library ["+lib+
                                                 "] to sharable project.", new Exception());
                                         // For backward compatibility just copy the library to shared one.
                                         Library l = refHelper.getProjectLibraryManager().getLibrary(lib.getName());
