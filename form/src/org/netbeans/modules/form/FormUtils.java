@@ -855,11 +855,8 @@ public class FormUtils
                 if (relativeProperties != null) {
                     Object value = prop.getValue();
                     if (value instanceof RADComponent
-                        || value instanceof RADComponent.ComponentReference
-                        || (value instanceof RADConnectionPropertyEditor.RADConnectionDesignValue
-                            && (((RADConnectionPropertyEditor.RADConnectionDesignValue)value).type
-                                == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_BEAN)))
-                    {
+                            || value instanceof RADComponent.ComponentReference
+                            || isRelativeConnectionValue(value)) {
                         relativeProperties.add(prop);
                         continue;
                     }
@@ -890,6 +887,17 @@ public class FormUtils
                 LOGGER.log(Level.INFO, null, ex); // NOI18N
             }
         }
+    }
+
+    static boolean isRelativeConnectionValue(Object value) {
+        if (value instanceof RADConnectionPropertyEditor.RADConnectionDesignValue) {
+            RADConnectionPropertyEditor.RADConnectionDesignValue conValue
+                = (RADConnectionPropertyEditor.RADConnectionDesignValue) value;
+            return conValue.type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_BEAN
+                    || conValue.type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_METHOD
+                    || conValue.type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_PROPERTY;
+        }
+        return false;
     }
 
     public static Method getPropertyWriteMethod(RADProperty property, Class targetClass) {
@@ -1720,15 +1728,33 @@ public class FormUtils
      * that may be broken or malformed. This is a replacement for Introspector.getBeanInfo().
      * @see java.beans.Introspector.getBeanInfo(Class)
      */
-    public static java.beans.BeanInfo getBeanInfo(Class clazz) throws java.beans.IntrospectionException {
+    public static BeanInfo getBeanInfo(Class clazz) throws IntrospectionException {
         try {
             return Utilities.getBeanInfo(clazz);//, java.beans.Introspector.USE_ALL_BEANINFO);
-        } catch (Error ex1) { // why is Error thrown instead of IntrospectionException?
+        } catch (Exception ex) {
+            org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+            return getBeanInfo(clazz, Introspector.IGNORE_IMMEDIATE_BEANINFO);
+        } catch (Error err) {
+            org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, err);
+            return getBeanInfo(clazz, Introspector.IGNORE_IMMEDIATE_BEANINFO);
+        }
+    }
+
+    // helper method for getBeanInfo(Class)
+    private static BeanInfo getBeanInfo(Class clazz, int mode) throws IntrospectionException {
+        if (mode == Introspector.IGNORE_IMMEDIATE_BEANINFO) {
             try {
-                return Introspector.getBeanInfo(clazz, java.beans.Introspector.IGNORE_IMMEDIATE_BEANINFO);
-            } catch (Error ex2) {
-                return Introspector.getBeanInfo(clazz, java.beans.Introspector.IGNORE_ALL_BEANINFO);
+                return Introspector.getBeanInfo(clazz, Introspector.IGNORE_IMMEDIATE_BEANINFO);
+            } catch (Exception ex) {
+                org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+                return getBeanInfo(clazz, Introspector.IGNORE_ALL_BEANINFO);
+            } catch (Error err) {
+                org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, err);
+                return getBeanInfo(clazz, Introspector.IGNORE_ALL_BEANINFO);
             }
+        } else {
+            assert mode == Introspector.IGNORE_ALL_BEANINFO;
+            return Introspector.getBeanInfo(clazz, Introspector.IGNORE_ALL_BEANINFO);
         }
     }
 }
