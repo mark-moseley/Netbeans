@@ -54,10 +54,18 @@ import java.security.Permission;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
+import org.openide.util.Lookup;
+import org.openide.util.Lookup.Item;
+import org.openide.util.NbPreferences;
 
 /** NetBeans security manager implementation.
 * @author Ales Novak, Jesse Glick
@@ -75,6 +83,7 @@ public class TopSecurityManager extends SecurityManager {
     private static final Class URLClass = URL.class;
     private static final Class runtimePermissionClass = RuntimePermission.class;
     private static final Class accessControllerClass = AccessController.class;
+    private static SecurityManager fsSecManager;
 
     private static List<SecurityManager> delegates = new ArrayList<SecurityManager>();
     /** Register a delegate security manager that can handle some checks for us.
@@ -99,6 +108,18 @@ public class TopSecurityManager extends SecurityManager {
         synchronized (delegates) {
             if (delegates.contains(sm)) throw new SecurityException();
             delegates.add(sm);
+            if (fsSecManager == null) {
+                Lookup.Result<SecurityManager> res = Lookup.getDefault().lookup(new Lookup.Template(SecurityManager.class));
+                Iterator<? extends Item<SecurityManager>> it = res.allItems().iterator();
+                for (; it.hasNext();) {
+                    Lookup.Item<SecurityManager> item = it.next();
+                    if (item != null && "org.netbeans.modules.masterfs.filebasedfs.utils.FileChangedManager".equals(item.getId())) {//NOI18N
+                        fsSecManager = item.getInstance();
+                        break;
+                    }
+                }
+                assert fsSecManager != null;
+            }            
         }
     }
     /** Unregister a delegate security manager.
@@ -138,7 +159,29 @@ public class TopSecurityManager extends SecurityManager {
         PrivilegedCheck.checkExit(status, this);
     }
 
+    SecurityManager getSecurityManager() {
+        if (fsSecManager == null) {
+            synchronized (delegates) {
+                return fsSecManager;
+            }        
+        }
+        return fsSecManager;
+    }
+    
+    private void notifyDelete(String file) {
+        SecurityManager s = getSecurityManager();
+        if (s != null) {
+            s.checkDelete(file);
+        }
+    }
 
+    private void notifyWrite(String file) {
+        SecurityManager s = getSecurityManager();
+        if (s != null) {
+            s.checkWrite(file);
+        }
+    }
+    
     private static boolean officialExit = false;
     /** Can be called from core classes to exit the system.
      * Direct calls to System.exit will not be honored, for safety.
@@ -266,11 +309,13 @@ public class TopSecurityManager extends SecurityManager {
     public @Override void checkRead(FileDescriptor fd) {
     }
 
+    
     public @Override void checkWrite(FileDescriptor fd) {
     }
 
     /** The method has awful performance in super class */
     public @Override void checkDelete(String file) {
+        notifyDelete(file);
         try {
             checkPermission(allPermission);
             return;
@@ -278,8 +323,10 @@ public class TopSecurityManager extends SecurityManager {
             super.checkDelete(file);
         }
     }
+           
     /** The method has awful performance in super class */
     public @Override void checkWrite(String file) {
+        notifyWrite(file);
         try {
             checkPermission(allPermission);
             return;
