@@ -70,9 +70,10 @@ public class FormModel
         BASIC, // form file version up to 1.2
         NB50, // form file verson 1.3
         NB60_PRE, // until NB 6.0 beta 1 (incl. 5.5 with 6.0 update), form file version 1.4
-        NB60 // since NB 6.0 beta1, form file version 1.5
+        NB60, // since NB 6.0 beta1, form file version 1.5
+        NB61 // since NB 6.1 milestone 2, for file version 1.6
     }
-    final static FormVersion LATEST_VERSION = FormVersion.NB60;
+    final static FormVersion LATEST_VERSION = FormVersion.NB61;
 
     private FormVersion currentVersionLevel;
     private FormVersion lastVersionLevel;
@@ -1071,13 +1072,14 @@ public class FormModel
     public FormModelEvent fireEventHandlerAdded(Event event,
                                                 String handler,
                                                 String bodyText,
+                                                String annotationText,
                                                 boolean createdNew)
     {
         t("event handler added: "+handler); // NOI18N
 
         FormModelEvent ev =
             new FormModelEvent(this, FormModelEvent.EVENT_HANDLER_ADDED);
-        ev.setEvent(event, handler, bodyText, createdNew);
+        ev.setEvent(event, handler, bodyText, annotationText, createdNew);
         sendEvent(ev);
 
         if (undoRedoRecording && event != null && handler != null)
@@ -1104,7 +1106,7 @@ public class FormModel
 
         FormModelEvent ev =
             new FormModelEvent(this, FormModelEvent.EVENT_HANDLER_REMOVED);
-        ev.setEvent(event, handler, null, handlerDeleted);
+        ev.setEvent(event, handler, null, null, handlerDeleted);
         sendEvent(ev);
 
         if (undoRedoRecording && event != null && handler != null)
