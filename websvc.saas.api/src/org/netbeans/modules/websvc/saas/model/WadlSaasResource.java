@@ -37,56 +37,55 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.websvc.saas.ui.nodes;
+package org.netbeans.modules.websvc.saas.model;
 
+import java.util.ArrayList;
 import java.util.Collections;
-import org.netbeans.modules.websvc.saas.model.Saas;
-import org.netbeans.modules.websvc.saas.model.WadlSaas;
-import org.netbeans.modules.websvc.saas.model.WadlSaasMethod;
-import org.netbeans.modules.websvc.saas.model.WadlSaasResource;
-import org.openide.nodes.Node;
-import org.openide.util.Exceptions;
+import java.util.List;
+import org.netbeans.modules.websvc.saas.model.wadl.Method;
+import org.netbeans.modules.websvc.saas.model.wadl.Resource;
 
 /**
  *
  * @author nam
  */
-public class WadlSaasNodeChildren extends SaasNodeChildren<Object> {
-    
-    public WadlSaasNodeChildren(WadlSaas wadlSaas) {
-        super(wadlSaas);
-    }
-    
-    @Override
-    public WadlSaas getSaas() {
-        return (WadlSaas) super.getSaas();
-    }
-    
-    @Override
-    protected void updateKeys() {
-        if (getSaas().getState() == Saas.State.READY) {
-            setKeys(getSaas().getResourcesOrMethods());
-        } else {
-            setKeys(Collections.emptyList());
-        }
-    }
-    
-    @Override
-    protected Node[] createNodes(Object key) {
-        if (needsWaiting()) {
-            return WAIT_NODES;
-        }
-        try {
-            if (key instanceof WadlSaasMethod) {
-                WadlSaasMethod wsm = (WadlSaasMethod) key;
-                return new Node[] { new WadlMethodNode(wsm) };
-            } else if (key instanceof WadlSaasResource) {
-                return new Node[] { new ResourceNode((WadlSaasResource)key) };
-            }
-        } catch(Exception ex) {
-            Exceptions.printStackTrace(ex);
-        }
-        return new Node[0];
+public class WadlSaasResource {
+    private final WadlSaas saas;
+    private final WadlSaasResource parent;
+    private final Resource resource;
+    private List<WadlSaasMethod> methods;
+    private List<WadlSaasResource> childResources;
+
+    public WadlSaasResource(WadlSaas saas, WadlSaasResource parent, Resource resource) {
+        this.saas = saas;
+        this.parent = parent;
+        this.resource = resource;
     }
 
+    public WadlSaasResource getParent() {
+        return parent;
+    }
+
+    public Resource getResource() {
+        return resource;
+    }
+
+    public WadlSaas getSaas() {
+        return saas;
+    }
+
+    public List<WadlSaasMethod> getMethods() {
+        if (methods == null) {
+            methods = new ArrayList<WadlSaasMethod>();
+            for (Object o : resource.getMethodOrResource()) {
+                if (o instanceof Method) {
+                    Method m = (Method) o;
+                    methods.add(new WadlSaasMethod(this, m));
+                }
+            }
+        }
+        return Collections.unmodifiableList(methods);
+    }
+    
+    
 }

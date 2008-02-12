@@ -39,27 +39,65 @@
 
 package org.netbeans.modules.websvc.saas.ui.nodes;
 
-import org.netbeans.modules.websvc.saas.model.WadlSaasMethod;
+import java.awt.Image;
+import java.util.Arrays;
+import org.netbeans.modules.websvc.saas.model.WadlSaas;
+import org.netbeans.modules.websvc.saas.model.WadlSaasResource;
+import org.netbeans.modules.websvc.saas.model.wadl.Resource;
+import org.openide.nodes.AbstractNode;
+import org.openide.util.lookup.AbstractLookup;
 import org.openide.util.lookup.InstanceContent;
 
 /**
  *
  * @author nam
  */
-public class WadlSaasMethodNode extends WadlMethodNode {
-    private WadlSaasMethod saasMethod;
+public class ResourceNode extends AbstractNode {
+    private final WadlSaasResource resource;
     
-    public WadlSaasMethodNode(WadlSaasMethod saasMethod) {
-        this(saasMethod, new InstanceContent());
+    public ResourceNode(WadlSaasResource resource) {
+        this(resource, new InstanceContent());
     }
 
-    public WadlSaasMethodNode(WadlSaasMethod saasMethod, InstanceContent content) {
-        super(saasMethod.getSaas(), saasMethod.getResourcePath(), saasMethod.getWadlMethod(), content);
-        this.saasMethod = saasMethod;
+    public ResourceNode(WadlSaasResource resource, InstanceContent content) {
+        super(new ResourceNodeChildren(resource), new AbstractLookup(content));
+        this.resource = resource;
+        content.add(resource);
     }
 
+    public Resource getResource() {
+        return resource.getResource();
+    }
+    
     @Override
     public String getDisplayName() {
-        return saasMethod.getName();
+        return "[" + getResource().getPath() + "]";
+    }
+    
+    @Override
+    public String getShortDescription() {
+        StringBuffer sb = new StringBuffer();
+        sb.append(resource.getSaas().getBaseURL());
+        sb.append('/');
+        WadlSaasResource r = resource;
+        while (r != null) {
+            sb.insert(0, '/');
+            sb.insert(0, r.getResource().getPath());
+            r = r.getParent();
+        }
+        return sb.toString();
+    }
+    
+    private static final java.awt.Image SERVICE_BADGE =
+            org.openide.util.Utilities.loadImage( "org/netbeans/modules/websvc/saas/ui/resources/restservice.png" ); //NOI18N
+    
+    @Override
+    public java.awt.Image getIcon(int type) {
+        return SERVICE_BADGE;
+    }
+    
+    @Override
+    public Image getOpenedIcon(int type){
+        return getIcon( type);
     }
 }
