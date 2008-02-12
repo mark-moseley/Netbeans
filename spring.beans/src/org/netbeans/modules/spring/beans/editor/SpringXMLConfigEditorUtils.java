@@ -40,27 +40,29 @@
  */
 package org.netbeans.modules.spring.beans.editor;
 
+import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
-import javax.lang.model.util.Elements;
+import javax.lang.model.util.SimpleElementVisitor6;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
+import javax.swing.text.StyledDocument;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.ElementHandle;
+import org.netbeans.api.java.source.ElementUtilities;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.Task;
@@ -78,9 +80,15 @@ import org.netbeans.modules.xml.text.syntax.dom.EmptyTag;
 import org.netbeans.modules.xml.text.syntax.dom.StartTag;
 import org.netbeans.modules.xml.text.syntax.dom.Tag;
 import org.openide.awt.StatusDisplayer;
+import org.openide.cookies.EditorCookie;
+import org.openide.cookies.LineCookie;
+import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.text.Line;
+import org.openide.text.NbDocument;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -93,6 +101,8 @@ import org.w3c.dom.Node;
  * @author Rohan Ranade (Rohan.Ranade@Sun.COM)
  */
 public final class SpringXMLConfigEditorUtils {
+
+    public static final String BEAN_NAME_DELIMITERS = ",; "; // NOI18N
 
     public enum Public {
         YES,
@@ -127,8 +137,68 @@ public final class SpringXMLConfigEditorUtils {
 
         return null;
     }
+    
+    public static TypeElement findClassElementByBinaryName(final String binaryName, CompilationController cc) {
+        if (!binaryName.contains("$")) { // NOI18N
+            // fast search based on fqn
+            return cc.getElements().getTypeElement(binaryName);
+        } else {
+            // get containing package
+            String packageName = ""; // NOI18N
+            int dotIndex = binaryName.lastIndexOf("."); // NOI18N
+            if (dotIndex != -1) {
+                packageName = binaryName.substring(0, dotIndex);
+            }
+            PackageElement packElem = cc.getElements().getPackageElement(packageName);
+            if (packElem == null) {
+                return null;
+            }
 
-    public static Node getBean(Tag tag) {
+            // scan for element matching the binaryName
+            return new BinaryNameTypeScanner().visit(packElem, binaryName);
+        }
+    }
+    
+    private static class BinaryNameTypeScanner extends SimpleElementVisitor6<TypeElement, String> {
+
+        @Override
+        public TypeElement visitPackage(PackageElement packElem, String binaryName) {
+            for(Element e : packElem.getEnclosedElements()) {
+                if(e.getKind().isClass()) {
+                    TypeElement ret = e.accept(this, binaryName);
+                    if(ret != null) {
+                        return ret;
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        @Override
+        public TypeElement visitType(TypeElement typeElement, String binaryName) {
+            String bName = ElementUtilities.getBinaryName(typeElement);
+            if(binaryName.equals(bName)) {
+                return typeElement;
+            } else if(binaryName.startsWith(bName)) {
+                for(Element child : typeElement.getEnclosedElements()) {
+                    if(!child.getKind().isClass()) {
+                        continue;
+                    }
+                    
+                    TypeElement retVal = child.accept(this, binaryName);
+                    if(retVal != null) {
+                        return retVal;
+                    }
+                }
+            }
+            
+            return null;
+        }
+        
+    }
+
+    public static Node getBean(Node tag) {
         if (tag == null) {
             return null;
         }
@@ -150,7 +220,7 @@ public final class SpringXMLConfigEditorUtils {
 
     }
 
-    public static String getBeanClassName(Tag tag) {
+    public static String getBeanClassName(Node tag) {
         Node bean = getBean(tag);
         if (bean != null) {
             NamedNodeMap attribs = bean.getAttributes();
@@ -180,19 +250,19 @@ public final class SpringXMLConfigEditorUtils {
         return null;
     }
 
-    public static void findAndOpenJavaClass(final String fqn, Document doc) {
+    public static void findAndOpenJavaClass(final String classBinaryName, Document doc) {
         final JavaSource js = getJavaSource(doc);
         if (js != null) {
             try {
                 js.runUserActionTask(new Task<CompilationController>() {
                     public void run(CompilationController cc) throws Exception {
                         boolean opened = false;
-                        TypeElement element = cc.getElements().getTypeElement(fqn.trim());
+                        TypeElement element = findClassElementByBinaryName(classBinaryName, cc);
                         if (element != null) {
-                            opened = !ElementOpen.open(js.getClasspathInfo(), element);
+                            opened = ElementOpen.open(js.getClasspathInfo(), element);
                         }
                         if (!opened) {
-                            String msg = NbBundle.getMessage(SpringXMLConfigEditorUtils.class, "LBL_SourceNotFound", fqn);
+                            String msg = NbBundle.getMessage(SpringXMLConfigEditorUtils.class, "LBL_SourceNotFound", classBinaryName);
                             StatusDisplayer.getDefault().setStatusText(msg);
                         }
                     }
@@ -203,12 +273,12 @@ public final class SpringXMLConfigEditorUtils {
         }
     }
 
-    public static ElementHandle<ExecutableElement> findMethod(Document doc, final String classFqn,
+    public static ElementHandle<ExecutableElement> findMethod(Document doc, final String classBinName,
             final String methodName, int argCount, Public publicFlag, Static staticFlag) {
         JavaSource js = getJavaSource(doc);
         if (js != null) {
             try {
-                MethodFinder methodFinder = new MethodFinder(classFqn, methodName, argCount, publicFlag, staticFlag);
+                MethodFinder methodFinder = new MethodFinder(classBinName, methodName, argCount, publicFlag, staticFlag);
                 js.runUserActionTask(methodFinder, false);
                 return methodFinder.getMethodHandle();
             } catch (IOException ex) {
@@ -223,15 +293,15 @@ public final class SpringXMLConfigEditorUtils {
      * Open the specified method of the specified class in the editor
      * 
      * @param doc The document on from which the java model context is to be created
-     * @param classFqn fully qualified name of the class whose method is to be opened in the editor
+     * @param classBinName binary name of the class whose method is to be opened in the editor
      * @param methodName name of the method
      * @param argCount number of arguments that the method has (-1 if caller doesn't care)
      * @param publicFlag YES if the method is public, NO if not, DONT_CARE if caller doesn't care
      * @param staticFlag YES if the method is static, NO if not, DONT_CARE if caller doesn't care
      */
-    public static void openMethodInEditor(Document doc, final String classFqn,
+    public static void openMethodInEditor(Document doc, final String classBinName,
             final String methodName, int argCount, Public publicFlag, Static staticFlag) {
-        if (classFqn == null || methodName == null || doc == null) {
+        if (classBinName == null || methodName == null || doc == null) {
             return;
         }
 
@@ -240,7 +310,7 @@ public final class SpringXMLConfigEditorUtils {
             return;
         }
 
-        final ElementHandle<ExecutableElement> eh = findMethod(doc, classFqn, methodName, argCount, publicFlag, staticFlag);
+        final ElementHandle<ExecutableElement> eh = findMethod(doc, classBinName, methodName, argCount, publicFlag, staticFlag);
         if (eh != null) {
             try {
                 js.runUserActionTask(new Task<CompilationController>() {
@@ -254,28 +324,6 @@ public final class SpringXMLConfigEditorUtils {
                 Logger.getLogger("global").log(Level.SEVERE, ex.getMessage(), ex);
             }
         }
-    }
-    
-    public static final Node getFirstReferenceableNodeById(Document document, String id) {
-        Map<String, Node> nodes = getReferenceableNodes(document);
-        for (Map.Entry<String, Node> node : nodes.entrySet()) {
-            if (node.getKey().equals(id)) {
-                return node.getValue();
-            }
-        }
-        return null;
-    }
-    
-    public static final Map<String, Node> getReferenceableNodes(Document document) {
-        Map<String, Node> nodes = new HashMap<String, Node>();
-        BeansReferenceableElementsLocator locator = new BeansReferenceableElementsLocator();
-
-        Map<String, Node> tempNodes = locator.getReferenceableElements(document);
-        if (tempNodes != null) {
-            nodes.putAll(tempNodes);
-        }
-
-        return nodes;
     }
     
     public static final Tag getDocumentRoot(Document doc) {
@@ -314,25 +362,70 @@ public final class SpringXMLConfigEditorUtils {
         return null;
     }
     
-    public static void openDocumentAtOffset(Document document, int offset) {
-        DataObject dataObject = NbEditorUtilities.getDataObject(document);
-        if (dataObject != null) {
-            Line line = NbEditorUtilities.getLine(document, offset, true);
-            line.show(Line.SHOW_GOTO);
+    public static boolean openFile(File file, int offset) {
+        FileObject fo = FileUtil.toFileObject(file);
+        if (fo != null) {
+            return openFile(fo, offset);
         }
+        return false;
     }
-
+    
+    public static boolean openFile(FileObject fo, int offset) {
+        DataObject dataObject;
+        boolean opened = false;
+        try {
+            dataObject = DataObject.find(fo);
+            if (offset > 0) {
+                opened = openFileAtOffset(dataObject, offset);
+            }
+        } catch (IOException e) {
+            Exceptions.printStackTrace(e);
+            return false;
+        }
+        if (opened) {
+            return true;
+        } else {
+            OpenCookie oc = dataObject.getCookie(org.openide.cookies.OpenCookie.class);
+            if (oc != null) {
+                oc.open();
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private static boolean openFileAtOffset(DataObject dataObject, int offset) throws IOException {
+        EditorCookie ec = dataObject.getCookie(EditorCookie.class);
+        LineCookie lc = dataObject.getCookie(LineCookie.class);
+        if (ec != null && lc != null) {
+            StyledDocument doc = ec.openDocument();
+            if (doc != null) {
+                int lineNumber = NbDocument.findLineNumber(doc, offset);
+                if (lineNumber != -1) {
+                    Line line = lc.getLineSet().getCurrent(lineNumber);
+                    if (line != null) {
+                        int lineOffset = NbDocument.findLineOffset(doc, lineNumber);
+                        int column = offset - lineOffset;
+                        line.show(Line.SHOW_GOTO, column);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    
     private static final class MethodFinder implements Task<CompilationController> {
 
-        private String classFqn;
+        private String classBinName;
         private String methodName;
         private int argCount;
         private Public publicFlag;
         private Static staticFlag;
         private ElementHandle<ExecutableElement> methodHandle;
 
-        public MethodFinder(String classFqn, String methodName, int argCount, Public publicFlag, Static staticFlag) {
-            this.classFqn = classFqn;
+        public MethodFinder(String classBinName, String methodName, int argCount, Public publicFlag, Static staticFlag) {
+            this.classBinName = classBinName;
             this.methodName = methodName;
             this.argCount = argCount;
             this.publicFlag = publicFlag;
@@ -341,8 +434,7 @@ public final class SpringXMLConfigEditorUtils {
 
         public void run(CompilationController cc) throws Exception {
             cc.toPhase(Phase.ELEMENTS_RESOLVED);
-            Elements elements = cc.getElements();
-            TypeElement element = elements.getTypeElement(classFqn.trim());
+            TypeElement element = findClassElementByBinaryName(classBinName, cc);
             while (element != null) {
                 List<ExecutableElement> methods = ElementFilter.methodsIn(element.getEnclosedElements());
                 for (ExecutableElement method : methods) {
