@@ -70,9 +70,9 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
         javaDb = NbBundle.getMessage(PanelOptionsVisual.class, "JavaDB");
         otherJdbc = NbBundle.getMessage(PanelOptionsVisual.class, "OtherJDBC");
 
-        dbCombo.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "mysql", javaDb, "oracle", "postgresql", "sqlite2", "sqlite3",
-            otherJdbc}));
-        dbCombo.addActionListener(this);
+//        dbCombo.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "mysql", javaDb, "oracle", "postgresql", "sqlite2", "sqlite3",
+//            otherJdbc}));
+//        dbCombo.addActionListener(this);
         this.panel = panel;
 
         interpreterChanged();
@@ -94,7 +94,7 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
                 break;
         }
         
-        jdbcCheckBox.addActionListener(this);
+//        jdbcCheckBox.addActionListener(this);
         warCheckBox.addActionListener(this);
         
         //this.mainClassTextField.getDocument().addDocumentListener( new DocumentListener () {
@@ -115,17 +115,17 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
     }
 
     public void actionPerformed( ActionEvent e ) {  
-        if (e.getSource() == jdbcCheckBox) {
-            this.panel.fireChangeEvent();
-        } else if (e.getSource() == warCheckBox) {
-            this.panel.fireChangeEvent();
-        } else if (e.getSource() == dbCombo) {
-            String db = (String)dbCombo.getSelectedItem();
-            if (db.equals(javaDb) || db.equals(otherJdbc)) {
-                jdbcCheckBox.setSelected(true);
-            }
-            this.panel.fireChangeEvent();
-        }
+//        if (e.getSource() == jdbcCheckBox) {
+//            this.panel.fireChangeEvent();
+//        } else if (e.getSource() == warCheckBox) {
+//            this.panel.fireChangeEvent();
+//        } else if (e.getSource() == dbCombo) {
+//            String db = (String)dbCombo.getSelectedItem();
+//            if (db.equals(javaDb) || db.equals(otherJdbc)) {
+//                jdbcCheckBox.setSelected(true);
+//            }
+//            this.panel.fireChangeEvent();
+//        }
         //if ( e.getSource() == createMainCheckBox ) {
         //    lastMainClassCheck = createMainCheckBox.isSelected();
         //    mainClassTextField.setEnabled( lastMainClassCheck );        
@@ -157,12 +157,8 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
     private void initComponents() {
 
         setAsMainCheckBox = new javax.swing.JCheckBox();
-        dbLabel = new javax.swing.JLabel();
-        dbCombo = new javax.swing.JComboBox();
-        jdbcCheckBox = new javax.swing.JCheckBox();
         jLabel1 = new javax.swing.JLabel();
         warCheckBox = new javax.swing.JCheckBox();
-        jSeparator1 = new javax.swing.JSeparator();
         rubyPlatformLabel = new javax.swing.JLabel();
         platforms = org.netbeans.modules.ruby.platform.PlatformComponentFactory.getRubyPlatformsComboxBox();
         manageButton = new javax.swing.JButton();
@@ -171,11 +167,6 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
 
         setAsMainCheckBox.setSelected(true);
         org.openide.awt.Mnemonics.setLocalizedText(setAsMainCheckBox, org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("LBL_setAsMainCheckBox")); // NOI18N
-
-        dbLabel.setLabelFor(dbCombo);
-        org.openide.awt.Mnemonics.setLocalizedText(dbLabel, org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "Database")); // NOI18N
-
-        org.openide.awt.Mnemonics.setLocalizedText(jdbcCheckBox, org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "UseJdbc")); // NOI18N
 
         org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "UsingRuby")); // NOI18N
 
@@ -196,7 +187,7 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
             }
         });
 
-        org.openide.awt.Mnemonics.setLocalizedText(serverLabel, org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "Server"));
+        org.openide.awt.Mnemonics.setLocalizedText(serverLabel, "Server:");
 
         serverComboBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -208,65 +199,46 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, jSeparator1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 657, Short.MAX_VALUE)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, setAsMainCheckBox)
+            .add(layout.createSequentialGroup()
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(setAsMainCheckBox)
                     .add(layout.createSequentialGroup()
                         .addContainerGap()
-                        .add(rubyPlatformLabel)
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(serverLabel)
+                            .add(rubyPlatformLabel))
+                        .add(20, 20, 20)
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(serverComboBox, 0, 452, Short.MAX_VALUE)
+                            .add(platforms, 0, 452, Short.MAX_VALUE))
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(platforms, 0, 459, Short.MAX_VALUE)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(manageButton)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED))
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(warCheckBox))
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(jdbcCheckBox))
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
+                        .add(manageButton))
+                    .add(layout.createSequentialGroup()
                         .addContainerGap()
                         .add(jLabel1))
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
+                    .add(layout.createSequentialGroup()
                         .addContainerGap()
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(dbLabel)
-                            .add(serverLabel))
-                        .add(47, 47, 47)
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(dbCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                            .add(serverComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 452, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                        .add(80, 80, 80)))
+                        .add(warCheckBox)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
                 .add(setAsMainCheckBox)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 24, Short.MAX_VALUE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 8, Short.MAX_VALUE)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(rubyPlatformLabel)
+                    .add(manageButton)
+                    .add(platforms, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(serverLabel)
                     .add(serverComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 22, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(dbLabel)
-                    .add(dbCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(19, 19, 19)
                 .add(jLabel1)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jdbcCheckBox)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(warCheckBox)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jSeparator1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 10, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(rubyPlatformLabel)
-                    .add(platforms, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                    .add(manageButton))
-                .add(22, 22, 22))
+                .add(101, 101, 101))
         );
 
         setAsMainCheckBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("ACSN_setAsMainCheckBox")); // NOI18N
@@ -298,17 +270,17 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
     }
     
     boolean valid(WizardDescriptor settings) {
-        if ((warCheckBox.isSelected() || jdbcCheckBox.isSelected()) && !getPlatform().isJRuby()) {
-            settings.putProperty( "WizardPanel_errorMessage", 
-                    NbBundle.getMessage(PanelOptionsVisual.class, "JRubyRequired") ); //NOI18N
-            return false;
-        }
-        String db = (String)dbCombo.getSelectedItem();
-        if ((!jdbcCheckBox.isSelected()) && (db.equals(javaDb) || db.equals(otherJdbc))) {
-            settings.putProperty( "WizardPanel_errorMessage", 
-                    NbBundle.getMessage(PanelOptionsVisual.class, "JdbcRequired", db) ); //NOI18N
-            return false;
-        }
+//        if ((warCheckBox.isSelected() || jdbcCheckBox.isSelected()) && !getPlatform().isJRuby()) {
+//            settings.putProperty( "WizardPanel_errorMessage", 
+//                    NbBundle.getMessage(PanelOptionsVisual.class, "JRubyRequired") ); //NOI18N
+//            return false;
+//        }
+//        String db = (String)dbCombo.getSelectedItem();
+//        if ((!jdbcCheckBox.isSelected()) && (db.equals(javaDb) || db.equals(otherJdbc))) {
+//            settings.putProperty( "WizardPanel_errorMessage", 
+//                    NbBundle.getMessage(PanelOptionsVisual.class, "JdbcRequired", db) ); //NOI18N
+//            return false;
+//        }
         //if (mainClassTextField.isVisible () && mainClassTextField.isEnabled ()) {
         //    if (!valid) {
         //        settings.putProperty( "WizardPanel_errorMessage", // NOI18N
@@ -332,26 +304,21 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
 
     void store(WizardDescriptor d) {
         d.putProperty( /*XXX Define somewhere */ "setAsMain", setAsMainCheckBox.isSelected() && setAsMainCheckBox.isVisible() ? Boolean.TRUE : Boolean.FALSE ); // NOI18N
-        //d.putProperty( /*XXX Define somewhere */ "mainClass", createMainCheckBox.isSelected() && createMainCheckBox.isVisible() ? mainClassTextField.getText() : null ); // NOI18N
-        String db = (String) dbCombo.getSelectedItem();
-        if (db.equals(javaDb)) {
-            db = JAVA_DB;
-        } else if (db.equals(otherJdbc)) {
-            db = JDBC;
-        }
-        d.putProperty(NewRailsProjectWizardIterator.RAILS_DB_WN, db);
-        d.putProperty(NewRailsProjectWizardIterator.JDBC_WN, jdbcCheckBox.isSelected() && jdbcCheckBox.isVisible() ? Boolean.TRUE : Boolean.FALSE ); // NOI18N
+//        String db = (String) dbCombo.getSelectedItem();
+//        if (db.equals(javaDb)) {
+//            db = JAVA_DB;
+//        } else if (db.equals(otherJdbc)) {
+//            db = JDBC;
+//        }
+//        d.putProperty(NewRailsProjectWizardIterator.RAILS_DB_WN, db);
+//        d.putProperty(NewRailsProjectWizardIterator.JDBC_WN, jdbcCheckBox.isSelected() && jdbcCheckBox.isVisible() ? Boolean.TRUE : Boolean.FALSE ); // NOI18N
         d.putProperty(NewRailsProjectWizardIterator.GOLDSPIKE_WN, warCheckBox.isSelected() && warCheckBox.isVisible() ? Boolean.TRUE : Boolean.FALSE ); // NOI18N
-        d.putProperty("platform", platforms.getModel().getSelectedItem());
+        d.putProperty(NewRailsProjectWizardIterator.PLATFORM, platforms.getModel().getSelectedItem());
         d.putProperty(NewRailsProjectWizardIterator.SERVER_INSTANCE, serverComboBox.getModel().getSelectedItem());
     }
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JComboBox dbCombo;
-    private javax.swing.JLabel dbLabel;
     private javax.swing.JLabel jLabel1;
-    private javax.swing.JSeparator jSeparator1;
-    private javax.swing.JCheckBox jdbcCheckBox;
     private javax.swing.JButton manageButton;
     private javax.swing.JComboBox platforms;
     private javax.swing.JLabel rubyPlatformLabel;
