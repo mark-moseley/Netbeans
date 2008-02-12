@@ -3,7 +3,7 @@
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
-            <code-name-base>org.netbeans.modules.websvc.saas.api</code-name-base>
+            <code-name-base>org.netbeans.modules.websvc.saas.codegen</code-name-base>
             <module-dependencies>
                 <dependency>
                     <code-name-base>org.netbeans.api.java</code-name-base>
@@ -15,20 +15,20 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.api.web.webmodule</code-name-base>
+                    <code-name-base>org.netbeans.libs.javacapi</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>1.11</specification-version>
+                        <specification-version>0.6</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.j2eeserver</code-name-base>
+                    <code-name-base>org.netbeans.modules.editor</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <release-version>4</release-version>
-                        <specification-version>1.37</specification-version>
+                        <release-version>3</release-version>
+                        <specification-version>1.36</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -41,12 +41,11 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.project.libraries</code-name-base>
+                    <code-name-base>org.netbeans.modules.java.source</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.16</specification-version>
+                        <specification-version>0.31</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -59,21 +58,11 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.websvc.jaxws21</code-name-base>
+                    <code-name-base>org.netbeans.modules.websvc.core</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.2</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.websvc.jaxws21api</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.2</specification-version>
+                        <specification-version>1.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -86,11 +75,27 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.netbeans.modules.websvc.saas.api</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>1.0</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.openide.filesystems</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <specification-version>7.6</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.openide.loaders</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>6.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -102,6 +107,14 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.openide.text</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>6.17</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.openide.util</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
@@ -110,41 +123,7 @@
                     </run-dependency>
                 </dependency>
             </module-dependencies>
-            <test-dependencies>
-                <test-type>
-                    <name>unit</name>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.websvc.saas.services.youtube</code-name-base>
-                        <compile-dependency/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.openide.dialogs</code-name-base>
-                        <compile-dependency/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.openide.modules</code-name-base>
-                        <compile-dependency/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.openide.util</code-name-base>
-                        <compile-dependency/>
-                    </test-dependency>
-                </test-type>
-            </test-dependencies>
-            <friend-packages>
-                <friend>org.netbeans.modules.visualweb.websvcmgr</friend>
-                <friend>org.netbeans.modules.websvc.manager</friend>
-                <friend>org.netbeans.modules.websvc.saas.ui</friend>
-                <friend>org.netbeans.modules.websvc.saas.codegen</friend>
-                <friend>org.netbeans.modules.websvc.components.strikeiron</friend>
-                <friend>org.netbeans.modules.websvc.kit</friend>
-                <package>org.netbeans.modules.websvc.saas.model</package>
-                <package>org.netbeans.modules.websvc.saas.model.jaxb</package>
-                <package>org.netbeans.modules.websvc.saas.model.wadl</package>
-                <package>org.netbeans.modules.websvc.saas.spi</package>
-                <package>org.netbeans.modules.websvc.saas.spi.websvcmgr</package>
-                <package>org.netbeans.modules.websvc.saas.util</package>
-            </friend-packages>
+            <public-packages/>
         </data>
     </configuration>
 </project>
