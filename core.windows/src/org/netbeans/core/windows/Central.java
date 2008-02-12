@@ -978,7 +978,7 @@ final class Central implements ControllerHandler {
      * @param closedTc TopComponent which is being closed in the given mode.
      * @return TopComponent to select or null (e.g. the mode will be empty after close)
      */
-    private TopComponent getRecentTopComponent( ModeImpl editorMode, TopComponent closedTc ) {
+    TopComponent getRecentTopComponent( ModeImpl editorMode, TopComponent closedTc ) {
         WindowManagerImpl wm = WindowManagerImpl.getInstance();
         TopComponent[] documents = wm.getRecentViewList();
         
@@ -1619,7 +1619,8 @@ final class Central implements ControllerHandler {
             for (int i = 0; i < tcs.length; i++) {
                 prevMode = (ModeImpl) wmi.findMode(tcs[i]);
                 tcID = wmi.findTopComponentID(tcs[i]);
-                if (prevMode.getState() == Constants.MODE_STATE_SEPARATED) {
+                if (prevMode.getState() == Constants.MODE_STATE_SEPARATED
+                        || prevMode.getKind() == Constants.MODE_KIND_SLIDING ) {
                     prevMode = model.getModeTopComponentPreviousMode(prevMode, tcID);
                 }
                 prevIndex = prevMode.getOpenedTopComponentsIDs().indexOf( tcID );
