@@ -71,7 +71,8 @@ import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 
 import org.netbeans.modules.web.project.UpdateHelper;
-import org.netbeans.modules.web.project.classpath.ClassPathSupport;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
+import org.netbeans.modules.web.project.classpath.ClassPathSupportCallbackImpl;
 import org.netbeans.modules.web.project.ui.customizer.WebProjectProperties;
 import org.openide.nodes.FilterNode.Children;
 import org.openide.util.Exceptions;
@@ -273,9 +274,8 @@ class ActionFilterNode extends FilterNode {
            
            this.cs = new ClassPathSupport( eval, refHelper, helper.getAntProjectHelper(), 
                                         WebProjectProperties.WELL_KNOWN_PATHS, 
-                                        WebProjectProperties.LIBRARY_PREFIX, 
-                                        WebProjectProperties.LIBRARY_SUFFIX, 
-                                        WebProjectProperties.ANT_ARTIFACT_PREFIX );        
+                                        WebProjectProperties.ANT_ARTIFACT_PREFIX,
+                                        new ClassPathSupportCallbackImpl(helper));        
 
        }
 
@@ -305,17 +305,14 @@ class ActionFilterNode extends FilterNode {
                 }
             }
             if (removed) {
-                String[] itemRefs = cs.encodeToStrings(resources.iterator(), webModuleElementName);
+                String[] itemRefs = cs.encodeToStrings(resources, webModuleElementName);
                 props = helper.getProperties (AntProjectHelper.PROJECT_PROPERTIES_PATH);    //Reread the properties, PathParser changes them
                 props.setProperty (classPathId, itemRefs);
-                helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, props);
-                //update lib references in private properties
-                EditableProperties privateProps = helper.getProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH);
                 ArrayList l = new ArrayList ();
                 l.addAll(resources);
                 l.addAll(cs.itemsList(props.getProperty(WebProjectProperties.WAR_CONTENT_ADDITIONAL),  WebProjectProperties.TAG_WEB_MODULE__ADDITIONAL_LIBRARIES));
-                WebProjectProperties.storeLibrariesLocations(l.iterator(), privateProps);
-                helper.putProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH, privateProps);
+                WebProjectProperties.storeLibrariesLocations(l.iterator(), props, helper.getAntProjectHelper().getProjectDirectory());
+                helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, props);
                return FileOwnerQuery.getOwner(helper.getAntProjectHelper().getProjectDirectory());
            } else {
                return null;

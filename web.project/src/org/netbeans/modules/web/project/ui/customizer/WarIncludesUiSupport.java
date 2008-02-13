@@ -56,7 +56,8 @@ import javax.swing.table.AbstractTableModel;
 
 import org.netbeans.api.project.libraries.Library;
 
-import org.netbeans.modules.web.project.classpath.ClassPathSupport;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
+import org.netbeans.modules.web.project.classpath.ClassPathSupportCallbackImpl;
 
 /**
  *
@@ -75,7 +76,7 @@ public class WarIncludesUiSupport {
         data = new Object[items.size()][2];
         for (int i = 0; i < items.size(); i++) {
             model.setValueAt((ClassPathSupport.Item) items.get(i), i, 0);
-            String pathInWAR = ((ClassPathSupport.Item) items.get(i)).getPathInWAR();
+            String pathInWAR = ((ClassPathSupport.Item) items.get(i)).getPathInDeployment();
             model.setValueAt(pathInWAR, i, 1);
         }
         
@@ -138,8 +139,10 @@ public class WarIncludesUiSupport {
                 for (int i = 0; i < n0; i++)
                     newData[i] = data[i];
                 for (int i = 0; i < n; i++) {
-                    newData[n0 + i][0] = ClassPathSupport.Item.create((Library) newLibList.get(i), null, ClassPathSupport.Item.PATH_IN_WAR_APPLET);
-                    newData[n0 + i][1] = ClassPathSupport.Item.PATH_IN_WAR_APPLET;
+                    ClassPathSupport.Item item = ClassPathSupport.Item.create((Library) newLibList.get(i), null);
+                    item.setPathInDeployment(ClassPathSupportCallbackImpl.PATH_IN_WAR_APPLET);
+                    newData[n0 + i][0] = item;
+                    newData[n0 + i][1] = ClassPathSupportCallbackImpl.PATH_IN_WAR_APPLET;
                 }
 
                 data = newData;
@@ -149,17 +152,19 @@ public class WarIncludesUiSupport {
         }
     }
 
-    public static void addJarFiles(File files[], ClasspathTableModel tableModel) {
-        Object[][] newData = new Object[data.length + files.length][2];
+    public static void addJarFiles(String filePaths[], File base, ClasspathTableModel tableModel) {
+        Object[][] newData = new Object[data.length + filePaths.length][2];
         for (int i = 0; i < data.length; i++)
             newData[i] = data[i];
-        for (int i = 0; i < files.length; i++) {
-            newData[data.length + i][0] = ClassPathSupport.Item.create (files[i], null, ClassPathSupport.Item.PATH_IN_WAR_APPLET);
-            newData[data.length + i][1] = ClassPathSupport.Item.PATH_IN_WAR_APPLET;
+        for (int i = 0; i < filePaths.length; i++) {
+            ClassPathSupport.Item item = ClassPathSupport.Item.create(filePaths[i], base, null);
+            item.setPathInDeployment(ClassPathSupportCallbackImpl.PATH_IN_WAR_APPLET);
+            newData[data.length + i][0] = item;
+            newData[data.length + i][1] = ClassPathSupportCallbackImpl.PATH_IN_WAR_APPLET;
         }
         
         data = newData;
-        tableModel.fireTableRowsInserted(data.length, data.length + files.length - 1);
+        tableModel.fireTableRowsInserted(data.length, data.length + filePaths.length - 1);
     }
     
     public static void addArtifacts(AntArtifactChooser.ArtifactItem artifactItems[], ClasspathTableModel tableModel) {
@@ -167,8 +172,10 @@ public class WarIncludesUiSupport {
         for (int i = 0; i < data.length; i++)
             newData[i] = data[i];
         for (int i = 0; i < artifactItems.length; i++) {
-            newData[data.length + i][0] = ClassPathSupport.Item.create (artifactItems[i].getArtifact(), artifactItems[i].getArtifactURI(), null, ClassPathSupport.Item.PATH_IN_WAR_APPLET);
-            newData[data.length + i][1] = ClassPathSupport.Item.PATH_IN_WAR_APPLET;
+            ClassPathSupport.Item item = ClassPathSupport.Item.create(artifactItems[i].getArtifact(), artifactItems[i].getArtifactURI(), null);
+            item.setPathInDeployment(ClassPathSupportCallbackImpl.PATH_IN_WAR_APPLET);
+            newData[data.length + i][0] = item;
+            newData[data.length + i][1] = ClassPathSupportCallbackImpl.PATH_IN_WAR_APPLET;
         }
         
         data = newData;
