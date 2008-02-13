@@ -41,6 +41,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Properties;
 
+import net.java.hulp.i18n.Logger;
+import org.netbeans.modules.etl.logger.Localizer;
+import org.netbeans.modules.etl.logger.LogUtil;
 import org.openide.nodes.BeanNode;
 import org.openide.util.NbBundle;
 
@@ -55,13 +58,15 @@ public class AxionDBConfiguration {
     public static final String PROP_DRIVER_LOC = "DriverLocation";
     public static final String PROP_LOC = "location";
     public static final String PROP_DRV_LOC = "driver";
-
+    private static transient final Logger mLogger = LogUtil.getLogger(FlatfileResulSetPanel.class.getName());
+    private static transient final Localizer mLoc = Localizer.get();
     public static AxionDBConfiguration getDefault() {
         return DEFAULT;
     }
 
     public String displayName() {
-        return NbBundle.getMessage(AxionDBConfiguration.class, "LBL_AxionConf");
+        String nbBundle4 = mLoc.t("PRSR001: MashupDB Configuration");
+        return Localizer.parse(nbBundle4);
     }
 
     protected final String putProperty(String key, String value, boolean notify) {
@@ -93,7 +98,7 @@ public class AxionDBConfiguration {
         } else {
             // Check for mashup driver under soa cluster.
             String nbHomeDir = System.getProperty("netbeans.home") + File.separator +
-                    ".." + File.separator + "soa1" + File.separator + "modules" + File.separator + "ext" + File.separator + "etl" + File.separator + "axiondb.jar";
+                    ".." + File.separator + "soa2" + File.separator + "modules" + File.separator + "ext" + File.separator + "etl" + File.separator + "axiondb.jar";
             File driver = new File(nbHomeDir);
             if (!driver.exists()) {
 
@@ -122,7 +127,8 @@ public class AxionDBConfiguration {
             Properties prop = new Properties();
             prop.setProperty(PROP_DRIVER_LOC, driver);
             prop.setProperty(PROP_DB_LOC, dbLoc);
-            prop.store(out, "MashupDB Configurations");
+            String nbBundle3 = mLoc.t("PRSR001: MashupDB Configurations");
+            prop.store(out, Localizer.parse(nbBundle3));
             out.close();
         } catch (FileNotFoundException ex) {
             //ignore
@@ -178,7 +184,8 @@ public class AxionDBConfiguration {
             Properties prop = new Properties();
             prop.setProperty(PROP_DB_LOC, location);
             prop.setProperty(PROP_DRIVER_LOC, drv);
-            prop.store(out, "MashupDB Configurations");
+            String nbBundle3 = mLoc.t("PRSR001: MashupDB Configurations");
+            prop.store(out,Localizer.parse(nbBundle3));
             out.close();
             File db = new File(location);
             if (!db.exists()) {
@@ -227,7 +234,8 @@ public class AxionDBConfiguration {
                 FileOutputStream out = null;
                 try {
                     out = new FileOutputStream(conf);
-                    prop.store(out, "Mashup Database Location");
+                    String nbBundle2 = mLoc.t("PRSR001: Mashup Database Location");
+                    prop.store(out, Localizer.parse(nbBundle2));
                     out.close();
                 } catch (FileNotFoundException ex) {
                     //ignore
@@ -243,7 +251,8 @@ public class AxionDBConfiguration {
 
     protected static BeanNode createViewNode() throws java.beans.IntrospectionException {
         BeanNode nd = new BeanNode(AxionDBConfiguration.getDefault());
-        nd.setName("Mashup Database");
+        String nbBundle1 = mLoc.t("PRSR001: Mashup Database");
+        nd.setName(Localizer.parse(nbBundle1));
         return nd;
     }
 }
