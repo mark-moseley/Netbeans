@@ -59,6 +59,7 @@ import javax.swing.event.ChangeListener;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.websphere6.WSDeploymentFactory;
 import org.netbeans.modules.j2ee.websphere6.WSURIManager;
+import org.netbeans.modules.j2ee.websphere6.WSVersion;
 import org.openide.WizardDescriptor;
 import org.openide.util.NbBundle;
 
@@ -84,10 +85,17 @@ public class WSInstantiatingIterator
      */
     private static final String DEFAULT_DEBUGGER_PORT = "8787"; // NOI18N
     
+    private final WSVersion version;
+    
     /**
      * The parent wizard descriptor
      */
     private WizardDescriptor wizardDescriptor;
+
+    public WSInstantiatingIterator(WSVersion version) {
+        assert version != null : "Version must not be null"; // NOI18N
+        this.version = version;
+    }
     
     /**
      * A misterious method whose purpose is obviously in freeing the resources 
@@ -131,18 +139,15 @@ public class WSInstantiatingIterator
         Set result = new HashSet();
         
         // build the URL
-        String url = WSURIManager.constructUrl(this.host, this.port, serverRoot, domainRoot);
-        
-        // build the display name
-        String displayName = getDisplayName() + " [" + this.host +     // NOI18N
-                ":" + this.port +"]";                                  // NOI18N
+        String url = WSURIManager.constructUrl(this.version,
+                this.host, this.port, serverRoot, domainRoot);
         
         // if all the data is normally validated - create the instance and 
         // attach the additional properties
         if (validate()) {
             InstanceProperties ip = InstanceProperties.
                     createInstanceProperties(url, username, password, 
-                    displayName);
+                    getDisplayName());
             ip.setProperty(WSDeploymentFactory.SERVER_ROOT_ATTR, serverRoot);
             ip.setProperty(WSDeploymentFactory.DOMAIN_ROOT_ATTR, domainRoot);
             ip.setProperty(WSDeploymentFactory.IS_LOCAL_ATTR, isLocal);
