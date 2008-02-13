@@ -56,13 +56,9 @@ import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
-import org.netbeans.modules.cnd.api.compilers.CompilerSet;
-import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
-import org.netbeans.modules.cnd.loaders.TemplateExtensionUtils;
 import org.netbeans.modules.cnd.makeproject.api.MakeArtifact;
 import org.netbeans.modules.cnd.makeproject.api.MakeArtifactProvider;
-import org.netbeans.modules.cnd.makeproject.api.configurations.CompilerSetConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
@@ -86,7 +82,6 @@ import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.PrivilegedTemplates;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.netbeans.spi.project.ui.RecommendedTemplates;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
@@ -212,17 +207,10 @@ public final class MakeProject implements Project, AntProjectListener {
 
         public String[] getPrivilegedTemplates() {
             if (CppSettings.getDefault().isFortranEnabled()) {
-                return checkNames(PRIVILEGED_NAMES_FORTRAN);
+                return PRIVILEGED_NAMES_FORTRAN;
             } else {
-                return checkNames(PRIVILEGED_NAMES);
+                return PRIVILEGED_NAMES;
             }
-        }
-
-        private String[] checkNames(String[] templates){
-            for(int i = 0; i < templates.length; i++){
-                templates[i] = TemplateExtensionUtils.checkTemplate(templates[i]);
-            }
-            return templates;
         }
     }
 
