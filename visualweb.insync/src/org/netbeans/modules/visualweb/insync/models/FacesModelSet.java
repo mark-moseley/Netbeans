@@ -396,7 +396,7 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
     private FacesContainer facesContainer;
 
     // Memory leak probing
-    private static final Logger TIMERS = Logger.getLogger("TIMER.facesModelSets"); // NOI18N
+    private static final Logger TIMERS = Logger.getLogger("TIMER.visualweb"); // NOI18N
     
     /**
      * @param project
@@ -405,8 +405,8 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
         super(project);
         getFacesContainer();
         
-        if (TIMERS.isLoggable(Level.FINE)) {
-            LogRecord rec = new LogRecord(Level.FINE, "FacesModelSet"); // NOI18N
+        if (TIMERS.isLoggable(Level.FINER)) {
+            LogRecord rec = new LogRecord(Level.FINER, "FacesModelSet"); // NOI18N
             rec.setParameters(new Object[]{this });
             TIMERS.log(rec);
         }
