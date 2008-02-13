@@ -52,15 +52,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.libraries.Library;
-import org.netbeans.api.project.libraries.LibraryManager;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.java.j2seproject.J2SEProject;
-import org.netbeans.modules.java.j2seproject.UpdateHelper;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
 import org.netbeans.spi.java.project.classpath.ProjectClassPathModifierImplementation;
 import org.netbeans.spi.project.libraries.support.LibrariesSupport;
@@ -79,8 +77,8 @@ import org.openide.util.MutexException;
  */
 public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplementation {
     
-    static final int ADD = 1;
-    static final int REMOVE = 2;
+    public static final int ADD = 1;
+    public static final int REMOVE = 2;
     
     private final J2SEProject project;
     private final UpdateHelper helper;
@@ -126,7 +124,7 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
         return handleRoots (classPathRoots, getClassPathProperty(sourceGroup, type), ADD);
     }
     
-    boolean handleRoots (final URL[] classPathRoots, final String classPathProperty, final int operation) throws IOException {
+    public boolean handleRoots (final URL[] classPathRoots, final String classPathProperty, final int operation) throws IOException {
         assert classPathRoots != null : "The classPathRoots cannot be null";      //NOI18N        
         assert classPathProperty != null;
         try {
@@ -144,12 +142,7 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
                                 if (toAdd == null) {
                                     toAdd = classPathRoots[i];
                                 }
-                                final File f;
-                                if (LibrariesSupport.isAbsoluteURL(toAdd)) {
-                                    f = FileUtil.normalizeFile( new File (URI.create(toAdd.toExternalForm())));
-                                } else {
-                                    f = LibrariesSupport.convertURLToFile(toAdd);
-                                }
+                                final String f = LibrariesSupport.convertURLToFilePath(toAdd);
                                 if (f == null ) {
                                     throw new IllegalArgumentException ("The file must exist on disk");     //NOI18N
                                 }
@@ -165,7 +158,7 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
                                     else {
                                         for (Iterator<ClassPathSupport.Item> it = resources.iterator(); it.hasNext();) {
                                             ClassPathSupport.Item _r = it.next();
-                                            if (_r.isBroken() && _r.getType() == ClassPathSupport.Item.TYPE_JAR && f.equals(_r.getFile())) {
+                                            if (_r.isBroken() && _r.getType() == ClassPathSupport.Item.TYPE_JAR && f.equals(_r.getFilePath())) {
                                                 it.remove();
                                                 changed = true;
                                             }
@@ -204,7 +197,7 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
         return handleAntArtifacts (artifacts, artifactElements, getClassPathProperty(sourceGroup, type), ADD);
     }
     
-    boolean handleAntArtifacts (final AntArtifact[] artifacts, final URI[] artifactElements, final String classPathProperty, final int operation) throws IOException {
+    public boolean handleAntArtifacts (final AntArtifact[] artifacts, final URI[] artifactElements, final String classPathProperty, final int operation) throws IOException {
         assert artifacts != null : "Artifacts cannot be null";    //NOI18N
         assert artifactElements != null : "ArtifactElements cannot be null";  //NOI18N
         assert artifacts.length == artifactElements.length : "Each artifact has to have corresponding artifactElement"; //NOI18N
@@ -262,7 +255,7 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
         return handleLibraries (libraries, getClassPathProperty(sourceGroup, type), ADD);
     }
     
-    boolean handleLibraries (final Library[] libraries, final String classPathProperty, final int operation) throws IOException {
+    public boolean handleLibraries (final Library[] libraries, final String classPathProperty, final int operation) throws IOException {
         assert libraries != null : "Libraries cannot be null";  //NOI18N
         assert classPathProperty != null;
         try {
@@ -278,7 +271,8 @@ public class J2SEProjectClassPathModifier extends ProjectClassPathModifierImplem
                                 Library lib = libraries[i];
                                 if (project.getAntProjectHelper().isSharableProject()) {
                                     if (lib.getManager().getLocation() == null) {
-                                        LOG.log(Level.INFO, "Client is adding global library ["+lib+
+
+                                        LOG.log(Level.FINE, "Client is adding global library ["+lib+
                                                 "] to sharable project.", new Exception());
                                         // For backward compatibility just copy the library to shared one.
                                         Library l = refHelper.getProjectLibraryManager().getLibrary(lib.getName());
