@@ -54,6 +54,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.Repository;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 import org.netbeans.modules.uml.core.coreapplication.ICodeGenerator;
@@ -636,22 +637,16 @@ public class JavaCodegen implements ICodeGenerator
                     }
                 }
 
+                boolean theSameSet = true;
+                int i = 0;
                 List<IElement> sourceFiles = classifier.getSourceFiles();
-                
-                if (sourceFiles != null)
+
+                if (sourceFiles == null || fmappings.size() != sourceFiles.size()) 
                 {
-                    for (IElement src : sourceFiles)
-                    {
-                        if (src instanceof ISourceFileArtifact)
-                        {
-                            classifier.removeSourceFile((
-                                (ISourceFileArtifact) src).getSourceFile());
-                        }
-                    }
+                    theSameSet = false;
                 }
-
-
-                for (FileMapping fmap : fmappings)
+                
+                for (FileMapping fmap : fmappings)                    
                 {
                     if (genToTmp)
                     {
@@ -665,23 +660,71 @@ public class JavaCodegen implements ICodeGenerator
                     if (fmap.existingSourcePath != null)
                     {
                         File exf = new File(fmap.existingSourcePath);
+                        FileObject fo = null;
                         if (!exf.equals(new File(fmap.targetFilePath)))
                         {
-                            exf.delete();
+                             fo  = FileUtil.toFileObject(exf);
+                             if (fo != null)
+                             {
+                                fo.delete();
+                             }
                         }
                         else
                         {
-
                             if ((!backup) && (fmap.merge) && 
                                 (fmap.existingSourceBackupPath != null))
                             {
-                                new File(fmap.existingSourceBackupPath).delete();
+                                fo = FileUtil.toFileObject(new File(fmap.existingSourceBackupPath));
+                                if (fo != null)
+                                {
+                                    fo.delete();
+                                }
                             }
                         }
                     }
-                    classifier.addSourceFileNotDuplicate(fmap.targetFilePath);
+                    
+                    if (theSameSet) 
+                    {                        
+                        IElement src = sourceFiles.get(i);
+                        if (src instanceof ISourceFileArtifact)
+                        {
+                            String srcPath = ((ISourceFileArtifact) src).getFileName();
+                            if (! (new File(fmap.targetFilePath).getCanonicalPath()
+                                   .equals(new File(srcPath).getCanonicalPath()))) 
+                            {
+                                theSameSet = false;
+                            }
+                        }
+                        else 
+                        {
+                            theSameSet = false;
+                        }
+                    }
+                    i++;
                 }
                     
+                if (! theSameSet) 
+                {
+                    sourceFiles = classifier.getSourceFiles();
+                
+                    if (sourceFiles != null)
+                    {
+                        for (IElement src : sourceFiles)
+                        {
+                            if (src instanceof ISourceFileArtifact)
+                            {
+                                classifier.removeSourceFile((
+                                    (ISourceFileArtifact) src).getSourceFile());
+                            }
+                        }
+                    }
+
+                    for (FileMapping fmap : fmappings)
+                    {                                     
+                        classifier.addSourceFileNotDuplicate(fmap.targetFilePath);
+                    }
+                }
+
                 if (genToTmp) 
                 {
                     for (FileMapping fmap : fmappings)
@@ -782,7 +825,8 @@ public class JavaCodegen implements ICodeGenerator
 	    +((int)(Math.random() * 100000));
 	
 	File newTargetFolder = new File(trg);
-	newTargetFolder.mkdirs();
+	//newTargetFolder.mkdirs();
+        FileUtil.createFolder(newTargetFolder);
 	return newTargetFolder.getCanonicalPath();
     }
 
@@ -800,14 +844,20 @@ public class JavaCodegen implements ICodeGenerator
             return;
         }
         boolean last = false;
+        FileObject fo = null;
         while(true) 
         {
             if (cur.exists()) 
             {
-                File[] children = cur.listFiles();
+                fo = FileUtil.toFileObject(cur);
+                FileObject[] children = fo.getChildren();
                 if (children == null || children.length == 0) 
                 {
-                    cur.delete();
+                    try {
+                        fo.delete();
+                    } catch (IOException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
                 } 
                 else 
                 {

@@ -40,8 +40,6 @@
  */
 
 
-
-
 package org.netbeans.modules.uml.ui.support.archivesupport;
 
 import java.io.IOException;
@@ -54,7 +52,6 @@ import org.dom4j.Element;
 import org.dom4j.Node;
 
 import org.netbeans.modules.uml.common.generics.ETPairT;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.UMLXMLManip;
 import org.netbeans.modules.uml.core.support.umlsupport.XMLManip;
 import org.netbeans.modules.uml.core.support.umlutils.ETArrayList;
 import org.netbeans.modules.uml.core.support.umlutils.ETList;
@@ -122,26 +119,18 @@ public class ProductArchiveImpl implements IProductArchive
 	public boolean save(String sFilename)
 	{
 		boolean retVal = false;
-
-		try
-		{
-			if ((sFilename != null) && (sFilename.length() > 0))
-			{
-				setArchiveFilename(sFilename);
-			}
-
-			if ((m_Document != null) && (m_Loaded))
-			{
-				XMLManip.savePretty(m_Document, m_ArchiveFilename);
-				retVal = true;
-			}
-		} catch (IOException e)
-		{
-			// TODO: Send a message to the message center.
-		}
-
+                if ((sFilename != null) && (sFilename.length() > 0))
+                {
+                    setArchiveFilename(sFilename);
+                    if ((m_Document != null) && (m_Loaded))
+                    {
+                            retVal = XMLManip.savePretty(m_Document, m_ArchiveFilename);
+                    }
+                }
 		return retVal;
 	}
+        
+        
 
 	/**
 	 * Temporarily loads the xml file sFilename and populates our list of archive elements.
