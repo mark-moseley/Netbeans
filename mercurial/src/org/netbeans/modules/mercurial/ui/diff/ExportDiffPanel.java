@@ -84,7 +84,11 @@ public class ExportDiffPanel extends javax.swing.JPanel implements ActionListene
     public String getSelectedRevision() {
         String revStr = (String) revisionsComboBox.getSelectedItem();
         if (revStr != null) {
-            revStr = revStr.substring(0, revStr.indexOf(" ")); // NOI18N
+            if (revStr.equals(NbBundle.getMessage(ExportDiffPanel.class, "MSG_Fetching_Revisions"))) { // NOI18N
+                revStr = "tip"; // NOI18N
+            } else {
+                revStr = revStr.substring(0, revStr.indexOf(" ")); // NOI18N
+            }
         }
         return revStr;
     }
@@ -155,8 +159,13 @@ public class ExportDiffPanel extends javax.swing.JPanel implements ActionListene
      */
     private void setupModels() {
         // XXX attach Cancelable hook
-        final ProgressHandle ph = ProgressHandleFactory.createHandle(NbBundle.getMessage(ExportDiffPanel.class, "MSG_Refreshing_Revisions")); // NOI18N
+        final ProgressHandle ph = ProgressHandleFactory.createHandle(NbBundle.getMessage(ExportDiffPanel.class, "MSG_Fetching_Revisions")); // NOI18N
         try {
+            Set<String>  initislRevsSet = new LinkedHashSet<String>();
+
+            initislRevsSet.add(NbBundle.getMessage(ExportDiffPanel.class, "MSG_Fetching_Revisions")); // NOI18N
+            ComboBoxModel targetsModel = new DefaultComboBoxModel(new Vector<String>(initislRevsSet));
+            revisionsComboBox.setModel(targetsModel);
             refreshViewThread = Thread.currentThread();
             Thread.interrupted();  // clear interupted status
             ph.start();
@@ -176,7 +185,7 @@ public class ExportDiffPanel extends javax.swing.JPanel implements ActionListene
     private void getDefaultOutputFile() {
         String folderName = HgModuleConfig.getDefault().getExportFolder();
         String fileName = HgModuleConfig.getDefault().getExportFilename();
-        File file = new File(folderName, fileName);
+        File file = new File(folderName, fileName + ".patch"); // ensure syntax highlighting of default patch on display in editor
         outputFileTextField.setText(file.getAbsolutePath());
     }
 
