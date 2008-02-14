@@ -42,11 +42,16 @@
 package org.netbeans.modules.spring.beans;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.spring.api.beans.SpringConstants;
 import org.openide.filesystems.FileUtil;
+import org.openide.text.CloneableEditorSupport;
 
 /**
  *
@@ -67,13 +72,31 @@ public class TestUtils {
                 "</beans>";
     }
 
+    public static BaseDocument createSpringXMLConfigDocument(String content) throws Exception {
+        Class<?> kitClass = CloneableEditorSupport.getEditorKit(SpringConstants.CONFIG_MIME_TYPE).getClass();
+        BaseDocument doc = new BaseDocument(kitClass, false);
+        doc.insertString(0, content, null);
+        return doc;
+    }
+
     public static void copyStringToFile(String string, File path) throws IOException {
-        InputStream inputStream = new ByteArrayInputStream(string.getBytes());
+        InputStream inputStream = new ByteArrayInputStream(string.getBytes("UTF-8"));
         try {
             copyStreamToFile(inputStream, path);
         } finally {
             inputStream.close();
         }
+    }
+
+    public static String copyFileToString(File path) throws IOException {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        FileInputStream inputStream = new FileInputStream(path);
+        try {
+            FileUtil.copy(inputStream, outputStream);
+        } finally {
+            inputStream.close();
+        }
+        return new String(outputStream.toByteArray(), "UTF-8");
     }
 
     private static void copyStreamToFile(InputStream inputStream, File path) throws IOException {
