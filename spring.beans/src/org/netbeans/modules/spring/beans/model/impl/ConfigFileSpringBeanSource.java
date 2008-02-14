@@ -41,102 +41,79 @@
 
 package org.netbeans.modules.spring.beans.model.impl;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.swing.text.BadLocationException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.text.Document;
-import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.spring.api.beans.model.Location;
 import org.netbeans.modules.spring.api.beans.model.SpringBean;
-import org.netbeans.modules.spring.beans.loader.SpringXMLConfigDataLoader;
 import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils;
 import org.netbeans.modules.spring.beans.model.SpringBeanSource;
 import org.netbeans.modules.spring.beans.utils.StringUtils;
 import org.netbeans.modules.xml.text.syntax.dom.Tag;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.text.CloneableEditorSupport;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 /**
  * An implementation of {@link SpringBeanSource} delegating to
- * a file.
+ * a file or a its document in the editor.
  *
  * @author Andrei Badea
  */
 public class ConfigFileSpringBeanSource implements SpringBeanSource {
 
-    public static final String BEAN_NAME_DELIMITERS = ",; "; // NOI18N
+    private static final Logger LOGGER = Logger.getLogger(ConfigFileSpringBeanSource.class.getName());
 
+    private final Map<String, ConfigFileSpringBean> id2Bean = new HashMap<String, ConfigFileSpringBean>();
     private final Map<String, ConfigFileSpringBean> name2Bean = new HashMap<String, ConfigFileSpringBean>();
     private final List<ConfigFileSpringBean> beans = new ArrayList<ConfigFileSpringBean>();
 
     /**
-     * Parses a given bean file.
-     *
-     * @param  file the file to parse.
-     * @throws java.io.IOException if an I/O error occured while parsing.
-     */
-    public void parse(File file) throws IOException {
-        // XXX This is just a very very ugly hack. We should be able to parse
-        // the file without going through a document. But we have to for
-        // now, since we need to use the XML parser in xml/text-edit.
-
-        FileObject fo = FileUtil.toFileObject(file);
-        if (fo == null) {
-            return;
-        }
-        StringBuilder builder = new StringBuilder();
-        Charset charset = FileEncodingQuery.getEncoding(fo);
-        BufferedReader reader = new BufferedReader(new InputStreamReader(fo.getInputStream(), charset));
-        try {
-            for (;;) {
-                String line = reader.readLine();
-                if (line != null) {
-                    builder.append(line).append('\n');
-                } else {
-                    break;
-                }
-            }
-        } finally {
-            reader.close();
-        }
-        Class<?> kitClass = CloneableEditorSupport.getEditorKit(SpringXMLConfigDataLoader.REQUIRED_MIME).getClass();
-        BaseDocument doc = new BaseDocument(kitClass, false);
-        try {
-            doc.insertString(0, builder.toString(), null);
-        } catch (BadLocationException e) {
-            // Should not happen.
-        }
-        parse(file, doc);
-    }
-
-    /**
-     * Parses a given document. Currently the implementation expects it to
-     * be a {@link BaseDocument}.
+     * Parses the given document.
+     * Currently the implementation expects it to be a {@link BaseDocument} or null.
      *
      * @param  document the document to parse.
      */
-    public void parse(File file, Document document) {
-        document.render(new DocumentParser(file, document));
+    public void parse(BaseDocument document) throws IOException {
+        FileObject fo = NbEditorUtilities.getFileObject(document);
+        if (fo == null) {
+            LOGGER.log(Level.WARNING, "Could not get a FileObject for document {0}", document);
+            return;
+        }
+        LOGGER.log(Level.FINE, "Parsing {0}", fo);
+        File file = FileUtil.toFile(fo);
+        if (file == null) {
+            LOGGER.log(Level.WARNING, "{0} resolves to a null File, aborting", fo);
+            return;
+        }
+        new DocumentParser(file, document).run();
+        LOGGER.log(Level.FINE, "Parsed {0}", fo);
     }
 
     public List<SpringBean> getBeans() {
         return Collections.<SpringBean>unmodifiableList(beans);
     }
 
-    public SpringBean findBean(String name) {
-        return name2Bean.get(name);
+    public SpringBean findBeanByID(String id) {
+        return id2Bean.get(id);
+    }
+
+    public SpringBean findBeanByIDOrName(String name) {
+        SpringBean bean = findBeanByID(name);
+        if (bean == null) {
+            bean = name2Bean.get(name);
+        }
+        return bean;
     }
 
     /**
@@ -153,6 +130,7 @@ public class ConfigFileSpringBeanSource implements SpringBeanSource {
         }
 
         public void run() {
+            id2Bean.clear();
             name2Bean.clear();
             beans.clear();
             Node rootNode = SpringXMLConfigEditorUtils.getDocumentRoot(document);
@@ -170,17 +148,31 @@ public class ConfigFileSpringBeanSource implements SpringBeanSource {
             String clazz = SpringXMLConfigEditorUtils.getAttribute(node, "class"); // NOI18N
             String id = SpringXMLConfigEditorUtils.getAttribute(node, "id"); // NOI18N
             String nameAttr = SpringXMLConfigEditorUtils.getAttribute(node, "name"); // NOI18N
-            List<String> names = (nameAttr != null) ? Collections.unmodifiableList(StringUtils.tokenize(nameAttr, BEAN_NAME_DELIMITERS)) : Collections.<String>emptyList();
+            List<String> names;
+            if (nameAttr != null) {
+                names = Collections.unmodifiableList(StringUtils.tokenize(nameAttr, SpringXMLConfigEditorUtils.BEAN_NAME_DELIMITERS));
+            } else {
+                names = Collections.<String>emptyList();
+            }
+            String parent = SpringXMLConfigEditorUtils.getAttribute(node, "parent"); // NOI18N
+            String factoryBean = SpringXMLConfigEditorUtils.getAttribute(node, "factory-bean"); // NOI18N
+            String factoryMethod = SpringXMLConfigEditorUtils.getAttribute(node, "factory-method"); // NOI18N
             Tag tag = (Tag)node;
             Location location = new ConfigFileLocation(file, tag.getElementOffset());
-            ConfigFileSpringBean bean = new ConfigFileSpringBean(id, names, clazz, location);
+            ConfigFileSpringBean bean = new ConfigFileSpringBean(id, names, clazz, parent, factoryBean, factoryMethod, location);
             if (id != null) {
-                addBeanName(id, bean);
+                addBeanID(id, bean);
             }
             for (String name : names) {
                 addBeanName(name, bean);
             }
             beans.add(bean);
+        }
+
+        private void addBeanID(String id, ConfigFileSpringBean bean) {
+            if (id2Bean.get(id) == null) {
+                id2Bean.put(id, bean);
+            }
         }
 
         private void addBeanName(String name, ConfigFileSpringBean bean) {
