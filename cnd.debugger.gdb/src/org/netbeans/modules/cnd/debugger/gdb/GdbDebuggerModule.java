@@ -41,8 +41,6 @@
 
 package org.netbeans.modules.cnd.debugger.gdb;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.netbeans.modules.cnd.debugger.gdb.actions.GdbActionHandlerProvider;
 import org.openide.modules.ModuleInstall;
 
@@ -50,7 +48,6 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.ui.CustomizerRoot
 import org.netbeans.modules.cnd.makeproject.api.configurations.ui.CustomizerNode;
 import org.netbeans.modules.cnd.makeproject.api.DefaultProjectActionHandler;
 
-import org.netbeans.modules.cnd.debugger.gdb.profiles.ui.ProfileNodeProvider;
 import org.netbeans.api.debugger.DebuggerManager;
 
 /**
@@ -61,41 +58,25 @@ import org.netbeans.api.debugger.DebuggerManager;
 public class GdbDebuggerModule extends ModuleInstall {
     
     private CustomizerNode debugCustomizerNode;
-    private boolean isDbxLoaded;
-    private static Logger log = Logger.getLogger("gdb.logger"); // NOI18N
     
     @Override
     public void restored() {
-        
-        // Setup to logger
-        String level = System.getProperty("gdb.logger.level"); // NOI18N
-        if (level != null) {
-            level = level.toLowerCase();
-            if (level.equals("fine")) { // NOI18N
-                log.setLevel(Level.FINE);
-            } else if (level.equals("finest")) { // NOI18N
-                log.setLevel(Level.FINEST);
-            }
-        }
-        
-        // Profiles
-        if (!isDbxGuiLoaded()) {
-            debugCustomizerNode = new ProfileNodeProvider().createDebugNode();
-            CustomizerRootNodeProvider.getInstance().addCustomizerNode(debugCustomizerNode);
+//        // Profiles
+//        // Moved to services
+//        debugCustomizerNode = new ProfileNodeProvider().createDebugNode();
+//        CustomizerRootNodeProvider.getInstance().addCustomizerNode(debugCustomizerNode);
 
-            // Set project action handler
-            DefaultProjectActionHandler.getInstance().setCustomDebugActionHandlerProvider(
-                        new GdbActionHandlerProvider());  
-        }
+        // Set project action handler
+        DefaultProjectActionHandler.getInstance().setCustomDebugActionHandlerProvider(
+                    new GdbActionHandlerProvider());  
     }
 
     @Override
     public void uninstalled() {
         // Profiles
-        if (!isDbxGuiLoaded()) {
-            CustomizerRootNodeProvider.getInstance().removeCustomizerNode(debugCustomizerNode);
-            DefaultProjectActionHandler.getInstance().setCustomDebugActionHandlerProvider(null);
-        }
+        // Moved to services
+//        CustomizerRootNodeProvider.getInstance().removeCustomizerNode(debugCustomizerNode);
+        DefaultProjectActionHandler.getInstance().setCustomDebugActionHandlerProvider(null);
     }
     
     @Override
@@ -103,9 +84,5 @@ public class GdbDebuggerModule extends ModuleInstall {
         // Kill all debug sessions
         DebuggerManager.getDebuggerManager().finishAllSessions();
         super.close();
-    }
-    
-    private boolean isDbxGuiLoaded() {
-        return false;
     }
 }
