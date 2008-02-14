@@ -42,27 +42,23 @@ Contributor(s):
 	    <file name="org.netbeans.modules.cnd.modelui.switcher.SwitchProjectAction.instance">
 		<attr name="instanceClass" stringvalue="org.netbeans.modules.cnd.modelui.switcher.SwitchProjectAction"/>
 	    </file>
-	</folder>
-    </folder>
-
-    <folder name="Actions">
-        <folder name="View">
 	    <file name="org.netbeans.modules.cnd.modelui.switcher.CodeAssistanceSubmenuAction.instance">
 		<attr name="instanceClass" stringvalue="org.netbeans.modules.cnd.modelui.switcher.CodeAssistanceSubmenuAction"/>
 	    </file>
 	</folder>
     </folder>
-    
+
     <folder name="NativeProjects">
         <folder name="Actions">
             <file name="org.netbeans.modules.cnd.modelui.switcher.SwitchProjectAction.shadow">
                 <attr name="originalFile" stringvalue="Actions/View/org.netbeans.modules.cnd.modelui.switcher.SwitchProjectAction.instance"/>
                 <attr name="position" intvalue="100"/>
             </file>
+	    <file name="org.netbeans.modules.cnd.modelui.switcher.TestProjectReferencesAction.instance">
+		<attr name="instanceClass" stringvalue="org.netbeans.modules.cnd.modelui.switcher.TestProjectReferencesAction"/>
+                <attr name="position" intvalue="1300"/>
+	    </file>            
         </folder>
-   </folder>     
-
-   <folder name="NativeProjects">
         <folder name="Menu">
             <file name="org.netbeans.modules.cnd.modelui.switcher.CodeAssistanceSubmenuAction.shadow">
                 <attr name="originalFile" stringvalue="Actions/View/org.netbeans.modules.cnd.modelui.switcher.CodeAssistanceSubmenuAction.instance"/>
@@ -70,5 +66,5 @@ Contributor(s):
             </file>
         </folder>
    </folder>     
-    
+
 </filesystem>
