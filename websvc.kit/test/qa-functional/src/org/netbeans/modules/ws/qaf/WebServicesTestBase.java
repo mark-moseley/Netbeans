@@ -546,6 +546,7 @@ public abstract class WebServicesTestBase extends JellyTestCase {
         String undeployLabel = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.sun.ide.j2ee.runtime.nodes.Bundle", "LBL_Undeploy");
         Node appsNode = null;
         switch (getProjectType()) {
+            case SAMPLE:
             case WEB:
                 if (ServerType.TOMCAT.equals(REGISTERED_SERVER)) {
                     appsNode = new Node(serverNode, webLabel);
@@ -654,5 +655,5 @@ public abstract class WebServicesTestBase extends JellyTestCase {
                 } catch (IOException ioe) {}
             }
         }
-    }    
+    }
 }
