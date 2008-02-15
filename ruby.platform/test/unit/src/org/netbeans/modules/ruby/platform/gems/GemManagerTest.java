@@ -112,22 +112,30 @@ public class GemManagerTest extends RubyTestBase {
     public void testGetRepositories() throws Exception {
         final RubyPlatform platform = RubyPlatformManager.getDefaultPlatform();
         GemManager gemManager = platform.getGemManager();
-        List<String> paths = gemManager.getRepositories();
+        Set<? extends File> paths = gemManager.getRepositories();
         assertEquals("one path element", 1, paths.size());
-        assertEquals("same as Gem Home", gemManager.getGemHome(), paths.get(0));
+        assertEquals("same as Gem Home", gemManager.getGemHomeF(), paths.iterator().next());
         assertEquals("same as Gem Home", gemManager.getGemHome(), platform.getInfo().getGemPath());
     }
     
     public void testAddRemoveRepository() throws Exception {
         final RubyPlatform platform = RubyPlatformManager.getDefaultPlatform();
         GemManager gemManager = platform.getGemManager();
-        String dummyRepo = getWorkDirPath() + "/a";
-        gemManager.addRepository(dummyRepo);
+        File dummyRepo = new File(getWorkDirPath(), "/a");
+        gemManager.addGemPath(dummyRepo);
         assertEquals("two repositories", 2, gemManager.getRepositories().size());
         assertTrue("two repositories in info's gempath", platform.getInfo().getGemPath().indexOf(File.pathSeparatorChar) != -1);
-        gemManager.removeRepository(dummyRepo);
+        gemManager.removeGemPath(dummyRepo);
         assertEquals("one repositories", 1, gemManager.getRepositories().size());
         assertTrue("one repositories in info's gempath", platform.getInfo().getGemPath().indexOf(File.pathSeparatorChar) == -1);
+    }
+    
+    public void testAddTheSameRepositoryTwice() {
+        final RubyPlatform platform = RubyPlatformManager.getDefaultPlatform();
+        GemManager gemManager = platform.getGemManager();
+        File dummyRepo = new File(getWorkDirPath(), "/a");
+        assertTrue("successfuly added", gemManager.addGemPath(dummyRepo));
+        assertFalse("failed to add second time", gemManager.addGemPath(dummyRepo));
     }
     
     public void testInitializeRepository() throws Exception {
@@ -216,6 +224,26 @@ public class GemManagerTest extends RubyTestBase {
         assertEquals("0.3.3", gemManager.getVersion("bar-baz"));
         assertEquals("0.1.1", gemManager.getVersion("pdf-writer"));
         assertEquals("1.15.3.6752", gemManager.getVersion("activerecord"));
+    }
+    
+    public void testInstallLocal() throws IOException {
+        final RubyPlatform platform = RubyPlatformManager.getDefaultPlatform();
+        GemManager gemManager = platform.getGemManager();
+        RubyPlatform jruby = RubyPlatformManager.getDefaultPlatform();
+        FileObject gemRepo = FileUtil.toFileObject(getWorkDir()).createFolder("gem-repo");
+        GemManager.initializeRepository(gemRepo);
+        jruby.setGemHome(FileUtil.toFile(gemRepo));
+        jruby.getInfo().setGemPath("");
+        File rakeGem = getRakeGem();
+        assertNull("rake is not installed", gemManager.getVersion("rake"));
+        gemManager.installLocal(rakeGem, null, false, false, false, null);
+        assertNotNull("rake is installed", gemManager.getVersion("rake"));
+    }
+
+    private File getRakeGem() throws IOException {
+        File rakeGem = new File(TestUtil.getXTestJRubyHome(), "lib/ruby/gems/1.8/cache/rake-0.7.3.gem");
+        assertNotNull("rake gem found", rakeGem);
+        return rakeGem;
     }
 
     // XXX
