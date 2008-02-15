@@ -42,9 +42,9 @@
 package org.netbeans.modules.spring.api.beans;
 
 import java.io.File;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.List;
+import org.openide.util.Parameters;
 
 /**
  * Encapsulates a group of Spring config files.
@@ -53,25 +53,67 @@ import java.util.TreeSet;
  */
 public final class ConfigFileGroup {
 
-    private final Set<File> configFiles = new TreeSet<File>();
+    private final String name;
+    // This needs to be a list to ensure the order is maintained.
+    private final List<File> files;
 
-    // XXX constructor should not be public.
-    public ConfigFileGroup() {
-    }
-
-    // XXX remove this constructor in final implementation.
-    public ConfigFileGroup(File file) {
-        configFiles.add(file);
+    /**
+     * Creates an unnamed group.
+     *
+     * @param  files the files to be put into this group.
+     * @return a new group; never null.
+     */
+    public static ConfigFileGroup create(List<File> files) {
+        return create(null, files);
     }
 
     /**
-     * Returns the set of beans configuration files in this group.
+     * Creates a group with the given name.
      *
-     * @return the set of beans configuration files; never null.
+     * @param  name the name or null.
+     * @param  files the files to be put into this group.
+     * @return a new group; never null.
      */
-    public synchronized Set<File> getConfigFiles() {
-        Set<File> result = new HashSet<File>(configFiles.size());
-        result.addAll(configFiles);
+    public static ConfigFileGroup create(String name, List<File> files) {
+        return new ConfigFileGroup(name, files);
+    }
+
+    private ConfigFileGroup(String name, List<File> files) {
+        Parameters.notNull("files", files);
+        this.name = name;
+        this.files = new ArrayList<File>(files.size());
+        this.files.addAll(files);
+    }
+
+    /**
+     * Returns the name, if any, of this group.
+     *
+     * @return the name or null.
+     */
+    public String getName() {
+        return name;
+    }
+
+    /**
+     * Returns the list of config files in this group. The list
+     * is modifiable and not live.
+     *
+     * @return the list of beans configuration files; never null.
+     */
+    public List<File> getFiles() {
+        List<File> result = new ArrayList<File>(files.size());
+        result.addAll(files);
         return result;
+    }
+
+    public boolean containsFile(File file) {
+        // Linear search, but we will hopefully only have a couple of
+        // files in the group.
+        return files.contains(file);
+    }
+
+    @Override
+    public String toString() {
+        return "ConfigFileGroup[name='" + name + "',files=" + files + "]"; // NOI18N
     }
 }
