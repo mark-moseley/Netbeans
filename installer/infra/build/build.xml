@@ -40,11 +40,88 @@
     
     <target name="build" depends="init,-build"/>
     
-    <target name="init" depends="-clean,-init-ml,-init,-init-properties,-post-init-clean"/>
+    <target name="init" depends="-clean,-init-ml,-init-sources,-get-sources,-init,-init-properties,-post-init-clean"/>
+
     
     <target name="-clean">
         <delete dir="${output.dir}"/>
     </target>
+
+
+    <target name="-init-sources">
+	<!-- use.hg.root property is set if hg.root is set and not empty -->
+	<condition property="use.hg.root">
+	    <and>
+	        <isset property="hg.root"/>
+	        <not>
+	            <equals arg1="${hg.root}" arg2=""/> 
+	         </not>
+	    </and>
+        </condition>
+
+        <!-- use.hg.root.translatedfiles property is set if ml.build is set and hg.root.translated is set and not empty -->
+	<condition property="use.hg.root.translatedfiles">
+	    <and>
+	        <isset property="hg.root.translatedfiles"/>
+	        <not>
+	            <equals arg1="${hg.root.translatedfiles}" arg2=""/> 
+	         </not>		
+		<isset property="ml.build"/>
+	    </and>
+        </condition>
+    </target>
+
+
+    <target name="-get-sources" depends="-init-working-dir,-get-installer-sources,-get-translatedfiles"/>
+
+    <target name="-init-working-dir" if="use.hg.root">
+	<delete dir="${nbi.all.dir}"/>
+    </target>
+    
+    <target name="-get-installer-sources" if="use.hg.root">
+        <copy todir="${nbi.core.dir}">
+            <fileset dir="${hg.root}/nbi">
+                <exclude name="infra/server/**/build/**/*.*"/>
+                <exclude name="infra/server/**/dist/**/*.*"/>
+                <exclude name="infra/server/**/private/**/*.*"/>
+            </fileset>
+        </copy>
+        <copy todir="${nbi.netbeans.dir}">
+            <fileset dir="${hg.root}/installer">
+                <exclude name="infra/server/**/build/**/*.*"/>
+                <exclude name="infra/server/**/dist/**/*.*"/>
+                <exclude name="infra/server/**/private/**/*.*"/>
+                <include name="components/**/*.*"/>
+                <include name="infra/**/*.*"/>
+                <include name="engine/**/*.*"/>
+            </fileset>
+        </copy>
+        <mkdir dir="${nbi.all.dir}/reglib"/>
+        <copy todir="${nbi.all.dir}/reglib">
+            <fileset dir="${hg.root}/reglib">
+		<include name="**/*.*"/>
+                <exclude name="build/**/*.*"/>
+                <exclude name="dist/**/*.*"/>                
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="-get-translatedfiles" if="use.hg.root.translatedfiles">
+	<copy todir="${nbi.all.dir}/translatedfiles/src/nbi">
+            <fileset dir="${hg.root.translatedfiles}/translatedfiles/src/nbi">
+                <include name="**/*.*"/>
+            </fileset>
+        </copy>
+        <copy todir="${nbi.all.dir}/translatedfiles/src/installer">
+            <fileset dir="${hg.root.translatedfiles}/translatedfiles/src/installer">
+                <include name="components/**/*.*"/>
+                <include name="infra/**/*.*"/>
+                <include name="engine/**/*.*"/>
+            </fileset>
+        </copy>
+    </target>
+
+
 
     <target name="-remove-wrong-locale-files" if="nb.locales.isset">
         <echo file="${nbi.all.dir}/locales.tmp">**/*_${nb.locales}.*</echo> 
@@ -101,7 +178,7 @@
         
         <!-- then compile all the custom ant tasks -->
         <javac 
-            srcdir="${custom.tasks.src.1}" 
+            srcdir="${custom.tasks.src.1}"
             destdir="${custom.tasks.cls}"
             classpath="${custom.tasks.cls}"
             debug="true"/>
@@ -197,6 +274,7 @@
 
         <set property="jdk.bundle.files.suffix"
              value="${nb.files.prefix}-${build.number}${nb.build.suffix}"/>
+	<!--
         <get
             src="${glassfish.builds.host}/java/re/glassfish/9.1_01/promoted/fcs/latest/bundles/"
             dest="${temp.file}"/>
@@ -206,17 +284,17 @@
         <glassfish-buildnumber 
             file="${temp.file}" 
             prefix="sjsas"/>
-	<!--
-        <set property="glassfish.milestone.number" value="58"/>
-        <set property="glassfish.milestone.number.real" value="58g"/>
+	-->
+        <set property="glassfish.milestone.number" value="09"/>
+        <set property="glassfish.milestone.number.real" value="09d"/>
         <set property="glassfish.build.type" value="fcs"/>
-        <set property="glassfish.build.number" value="20070907"/>
+        <set property="glassfish.build.number" value="20071206"/>
 
-	<set property="sjsas.milestone.number" value="58"/>
-        <set property="sjsas.milestone.number.real" value="58g"/>
+	<set property="sjsas.milestone.number" value="09"/>
+        <set property="sjsas.milestone.number.real" value="09d"/>
         <set property="sjsas.build.type" value="fcs"/>
-        <set property="sjsas.build.number" value="20070907"/>
-        
+        <set property="sjsas.build.number" value="20071206"/>
+        <!--
         -->
         <!--
         <set property="openesb.build.number" value="2008012302"/>                       
@@ -1231,7 +1309,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-javase" version="${nb.full.version}"/>
             <component uid="nb-javaee" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
 	    <bundleProperty name="${welcome.type}" value="javaee"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
@@ -1241,7 +1319,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-javase" version="${nb.full.version}"/>
             <component uid="nb-javaee" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
 	    <bundleProperty name="${welcome.type}" value="javaee"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
@@ -1251,7 +1329,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-javase" version="${nb.full.version}"/>
             <component uid="nb-javaee" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
 	    <bundleProperty name="${welcome.type}" value="javaee"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
@@ -1261,7 +1339,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-javase" version="${nb.full.version}"/>
             <component uid="nb-javaee" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
 	    <bundleProperty name="${welcome.type}" value="javaee"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
@@ -1271,7 +1349,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-javase" version="${nb.full.version}"/>
             <component uid="nb-javaee" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
 	    <bundleProperty name="${welcome.type}" value="javaee"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
@@ -1281,7 +1359,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-javase" version="${nb.full.version}"/>
             <component uid="nb-javaee" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
 	    <bundleProperty name="${welcome.type}" value="javaee"/>
         </create-bundle>
 	<antcall target="zip-to-tgz">
@@ -1452,7 +1530,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-cnd" version="${nb.full.version}"/>
             <component uid="nb-php" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
             <component uid="openesb" version="5.0.4.${glassfish.milestone.number}.${openesb.build.number}"/>
             <!--
             <component uid="sjsam" version="5.0.4.${glassfish.milestone.number}.${sjsam.build.number}"/>
@@ -1471,7 +1549,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-cnd" version="${nb.full.version}"/> 
             <component uid="nb-php" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
             <component uid="openesb" version="5.0.4.${glassfish.milestone.number}.${openesb.build.number}"/>
             <!--
             <component uid="sjsam" version="5.0.4.${glassfish.milestone.number}.${sjsam.build.number}"/>
@@ -1489,7 +1567,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-cnd" version="${nb.full.version}"/> 
             <component uid="nb-php" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
             <component uid="openesb" version="5.0.4.${glassfish.milestone.number}.${openesb.build.number}"/>
             <!--
             <component uid="sjsam" version="5.0.4.${glassfish.milestone.number}.${sjsam.build.number}"/>
@@ -1507,7 +1585,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-cnd" version="${nb.full.version}"/> 
             <component uid="nb-php" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
             <component uid="openesb" version="5.0.4.${glassfish.milestone.number}.${openesb.build.number}"/>
             <!--
             <component uid="sjsam" version="5.0.4.${glassfish.milestone.number}.${sjsam.build.number}"/>
@@ -1525,7 +1603,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-cnd" version="${nb.full.version}"/> 
             <component uid="nb-php" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
             <component uid="openesb" version="5.0.4.${glassfish.milestone.number}.${openesb.build.number}"/>
             <!--
             <component uid="sjsam" version="5.0.4.${glassfish.milestone.number}.${sjsam.build.number}"/>
@@ -1543,7 +1621,7 @@ jarsigner.storepass=${jarsigner.storepass}
             <component uid="nb-cnd" version="${nb.full.version}"/> 
             <component uid="nb-php" version="${nb.full.version}"/>
             <component uid="glassfish" version="2.0.1.${glassfish.milestone.number}.${glassfish.build.number}"/>
-            <component uid="tomcat" version="6.0.14.0.0"/>
+            <component uid="tomcat" version="6.0.16.0.0"/>
             <component uid="openesb" version="5.0.4.${glassfish.milestone.number}.${openesb.build.number}"/>
             <!--
             <component uid="sjsam" version="5.0.4.${glassfish.milestone.number}.${sjsam.build.number}"/>
@@ -1711,40 +1789,40 @@ jarsigner.storepass=${jarsigner.storepass}
         <mkdir dir="${output.dir}/bundles/jdk"/>
         <create-bundle root="${output.dir}/registry-temp" 
                        platform="windows" 
-                       target="${output.dir}/bundles/jdk/jdk-1_5_0_14-${jdk.bundle.files.suffix}-windows${nb.build.suffix}.exe">
+                       target="${output.dir}/bundles/jdk/jdk-1_5_0_15-${jdk.bundle.files.suffix}-windows${nb.build.suffix}.exe">
             <component uid="nb-base" version="${nb.full.version}"/>
             <component uid="nb-javase" version="${nb.full.version}"/>
-	    <component uid="jdk" version="1.5.0.14.3"/>
+	    <component uid="jdk" version="1.5.0.15.4"/>
 	    <bundleProperty name="${welcome.type}" value="javase.jdk"/>
             <bundleProperty name="nbi.overall.license.resource" value="$S{nbi.overall.license.jdk5.resource}"/>
 	    <property name="nbi.bundled.jvm.file" value="${basedir}/cache/jvm/jre-1_5_0_14-windows-i586.exe"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
                        platform="linux" 
-                       target="${output.dir}/bundles/jdk/jdk-1_5_0_14-${jdk.bundle.files.suffix}-linux${nb.build.suffix}.sh">
+                       target="${output.dir}/bundles/jdk/jdk-1_5_0_15-${jdk.bundle.files.suffix}-linux${nb.build.suffix}.sh">
             <component uid="nb-base" version="${nb.full.version}"/>
             <component uid="nb-javase" version="${nb.full.version}"/>
-	    <component uid="jdk" version="1.5.0.14.3"/>
+	    <component uid="jdk" version="1.5.0.15.4"/>
 	    <bundleProperty name="${welcome.type}" value="javase.jdk"/>
             <bundleProperty name="nbi.overall.license.resource" value="$S{nbi.overall.license.jdk5.resource}"/>
 	    <property name="nbi.bundled.jvm.file" value="${basedir}/cache/jvm/jre-1_5_0_14-linux-i586.bin"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
                        platform="solaris-x86" 
-                       target="${output.dir}/bundles/jdk/jdk-1_5_0_14-${jdk.bundle.files.suffix}-solaris-x86${nb.build.suffix}.sh">
+                       target="${output.dir}/bundles/jdk/jdk-1_5_0_15-${jdk.bundle.files.suffix}-solaris-x86${nb.build.suffix}.sh">
             <component uid="nb-base" version="${nb.full.version}"/>
             <component uid="nb-javase" version="${nb.full.version}"/>
-	    <component uid="jdk" version="1.5.0.14.3"/>
+	    <component uid="jdk" version="1.5.0.15.4"/>
 	    <bundleProperty name="${welcome.type}" value="javase.jdk"/>
             <bundleProperty name="nbi.overall.license.resource" value="$S{nbi.overall.license.jdk5.resource}"/>
 	    <property name="nbi.bundled.jvm.file" value="${basedir}/cache/jvm/jre-1_5_0_14-solaris-i586.sh"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
                        platform="solaris-sparc" 
-                       target="${output.dir}/bundles/jdk/jdk-1_5_0_14-${jdk.bundle.files.suffix}-solaris-sparc${nb.build.suffix}.sh">
+                       target="${output.dir}/bundles/jdk/jdk-1_5_0_15-${jdk.bundle.files.suffix}-solaris-sparc${nb.build.suffix}.sh">
             <component uid="nb-base" version="${nb.full.version}"/>
             <component uid="nb-javase" version="${nb.full.version}"/>
-	    <component uid="jdk" version="1.5.0.14.3"/>
+	    <component uid="jdk" version="1.5.0.15.4"/>
 	    <bundleProperty name="${welcome.type}" value="javase.jdk"/>
             <bundleProperty name="nbi.overall.license.resource" value="$S{nbi.overall.license.jdk5.resource}"/>
             <property name="nbi.bundled.jvm.file" value="${basedir}/cache/jvm/jre-1_5_0_14-solaris-sparc.sh"/>
@@ -1753,40 +1831,40 @@ jarsigner.storepass=${jarsigner.storepass}
         <!-- JavaSE + JDK6 bundles -->
         <create-bundle root="${output.dir}/registry-temp" 
                        platform="windows" 
-                       target="${output.dir}/bundles/jdk/jdk-6u4-${jdk.bundle.files.suffix}-windows${nb.build.suffix}.exe">
+                       target="${output.dir}/bundles/jdk/jdk-6u5-${jdk.bundle.files.suffix}-windows${nb.build.suffix}.exe">
             <component uid="nb-base" version="${nb.full.version}"/>
             <component uid="nb-javase" version="${nb.full.version}"/>
-	    <component uid="jdk" version="1.6.0.4.10"/>
+	    <component uid="jdk" version="1.6.0.5.12"/>
 	    <bundleProperty name="${welcome.type}" value="javase.jdk"/>
             <bundleProperty name="nbi.overall.license.resource" value="$S{nbi.overall.license.jdk6.resource}"/>
 	    <property name="nbi.bundled.jvm.file" value="${basedir}/cache/jvm/jre-1_5_0_14-windows-i586.exe"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
                        platform="linux" 
-                       target="${output.dir}/bundles/jdk/jdk-6u4-${jdk.bundle.files.suffix}-linux${nb.build.suffix}.sh">
+                       target="${output.dir}/bundles/jdk/jdk-6u5-${jdk.bundle.files.suffix}-linux${nb.build.suffix}.sh">
             <component uid="nb-base" version="${nb.full.version}"/>
             <component uid="nb-javase" version="${nb.full.version}"/>
-	    <component uid="jdk" version="1.6.0.4.10"/>
+	    <component uid="jdk" version="1.6.0.5.12"/>
 	    <bundleProperty name="${welcome.type}" value="javase.jdk"/>
             <bundleProperty name="nbi.overall.license.resource" value="$S{nbi.overall.license.jdk6.resource}"/>
 	    <property name="nbi.bundled.jvm.file" value="${basedir}/cache/jvm/jre-1_5_0_14-linux-i586.bin"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
                        platform="solaris-x86" 
-                       target="${output.dir}/bundles/jdk/jdk-6u4-${jdk.bundle.files.suffix}-solaris-x86${nb.build.suffix}.sh">
+                       target="${output.dir}/bundles/jdk/jdk-6u5-${jdk.bundle.files.suffix}-solaris-x86${nb.build.suffix}.sh">
             <component uid="nb-base" version="${nb.full.version}"/>
             <component uid="nb-javase" version="${nb.full.version}"/>
-	    <component uid="jdk" version="1.6.0.4.10"/>
+	    <component uid="jdk" version="1.6.0.5.12"/>
 	    <bundleProperty name="${welcome.type}" value="javase.jdk"/>
             <bundleProperty name="nbi.overall.license.resource" value="$S{nbi.overall.license.jdk6.resource}"/>
 	    <property name="nbi.bundled.jvm.file" value="${basedir}/cache/jvm/jre-1_5_0_14-solaris-i586.sh"/>
         </create-bundle>
         <create-bundle root="${output.dir}/registry-temp" 
                        platform="solaris-sparc" 
-                       target="${output.dir}/bundles/jdk/jdk-6u4-${jdk.bundle.files.suffix}-solaris-sparc${nb.build.suffix}.sh">
+                       target="${output.dir}/bundles/jdk/jdk-6u5-${jdk.bundle.files.suffix}-solaris-sparc${nb.build.suffix}.sh">
             <component uid="nb-base" version="${nb.full.version}"/>
             <component uid="nb-javase" version="${nb.full.version}"/>
-	    <component uid="jdk" version="1.6.0.4.10"/>
+	    <component uid="jdk" version="1.6.0.5.12"/>
 	    <bundleProperty name="${welcome.type}" value="javase.jdk"/>
             <bundleProperty name="nbi.overall.license.resource" value="$S{nbi.overall.license.jdk6.resource}"/>
 	    <property name="nbi.bundled.jvm.file" value="${basedir}/cache/jvm/jre-1_5_0_14-solaris-sparc.sh"/>
@@ -1988,7 +2066,7 @@ LANGUAGE_WEBPAGE_NAMES.push("${language.webpage.name}");
     <target name="generate-bundles">
 	<property name="welcome.type" value="NWP.welcome.page.type"/>
         <antcall target="generate-netbeans-bundles"/>
-        <!--<antcall target="generate-jdk-bundles"/>-->
+        <antcall target="generate-jdk-bundles"/>
         <!--<antcall target="generate-javatoolsbundle-bundles"/>-->
     </target>
 
@@ -2001,7 +2079,7 @@ LANGUAGE_WEBPAGE_NAMES.push("${language.webpage.name}");
         <antcall target="build-runtimes"/>
 	<!--<antcall target="build-wtk"/>-->
         <!--<antcall target="build-javaeesdk"/>-->
-        <!--<antcall target="build-jdk"/>-->
+        <antcall target="build-jdk"/>
 
         <!--<antcall target="export-temp-registry"/>-->
         
