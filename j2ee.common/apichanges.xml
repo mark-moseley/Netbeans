@@ -102,7 +102,6 @@ is the proper place.
 
     <!-- ACTUAL CHANGES BEGIN HERE: -->
 
-    <changes>
         <change id="J2eeProjectsConstants">
             <api name="j2ee-utilities"/>
             <summary>Removed J2eeProjectsConstants class.</summary>
@@ -168,6 +167,23 @@ is the proper place.
                 </p>
             </description>
             <class package="org.netbeans.modules.j2ee.common" name="DatasourceUIHelper"/>
+        </change>
+    </changes>
+
+        <change id="ProjectTypeRefactorings">
+            <api name="j2ee-utilities"/>
+            <summary></summary>
+            <version major="1" minor="21"/>
+            <date day="18" month="2" year="2008"/>
+            <author login="dkoencny"/>
+            <compatibility binary="compatible" source="compatible" semantic="compatible" addition="yes"/>
+            <description>
+                <p>
+                    Added project type implementastion classes which are same in j2ee project types.
+                    See <code>org.netbeans.modules.j2ee.common.project</code> packages and
+                    subpackages.
+                </p>
+            </description>
         </change>
     </changes>
 
