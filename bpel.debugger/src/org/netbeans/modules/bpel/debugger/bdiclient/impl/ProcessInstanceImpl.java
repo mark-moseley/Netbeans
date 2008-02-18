@@ -61,6 +61,7 @@ import org.netbeans.modules.bpel.debugger.api.CorrelationSet;
 import org.netbeans.modules.bpel.debugger.api.Fault;
 import org.netbeans.modules.bpel.debugger.api.RuntimePartnerLink;
 import org.netbeans.modules.bpel.debugger.api.pem.ProcessExecutionModel.Branch;
+import org.netbeans.modules.bpel.debugger.eventlog.ActivityTerminatedRecord;
 import org.netbeans.modules.bpel.debuggerbdi.rmi.api.BPELPartnerLink;
 import org.netbeans.modules.bpel.debuggerbdi.rmi.api.BPELProcessRef;
 import org.w3c.dom.Element;
@@ -432,23 +433,37 @@ public class ProcessInstanceImpl implements ProcessInstance {
         }
         
         synchronized (mySyncLock) {
+            final QName faultQName;
+            if ((strFaultQName == null) || strFaultQName.trim().equals("")) {
+                faultQName = null;
+            } else {
+                final String[] temp = strFaultQName.split("\n");
+                
+                faultQName = new QName(temp[0], temp[2], temp[1]);
+            }
+            
             // add the fault to the list, so it can be displayed by the 
             // processes view
-            if (faultData.isWSDLMessage()) {
+            if (faultData == null) {
                 myFaults.add(new FaultImpl(
-                        strFaultQName, 
+                        faultQName, 
+                        position.getXpath(), 
+                        null));
+            } else if (faultData.isWSDLMessage()) {
+                myFaults.add(new FaultImpl(
+                        faultQName, 
                         position.getXpath(), 
                         new WsdlMessageVariableImpl(
                                 "faultData", position, faultData)));
             } else if (faultData.isSimpleType()) {
                 myFaults.add(new FaultImpl(
-                        strFaultQName, 
+                        faultQName, 
                         position.getXpath(), 
                         new SimpleVariableImpl(
                                 "faultData", position, faultData)));
             } else {
                 myFaults.add(new FaultImpl(
-                        strFaultQName, 
+                        faultQName, 
                         position.getXpath(), 
                         new XmlElementVariableImpl(
                                 "faultData", position, faultData)));
@@ -465,13 +480,6 @@ public class ProcessInstanceImpl implements ProcessInstance {
             //breakpoints
             final Breakpoint[] nbBreakpoints =
                     DebuggerManager.getDebuggerManager().getBreakpoints();
-            
-            final QName faultQName;
-            if ((strFaultQName == null) || strFaultQName.trim().equals("")) {
-                faultQName = null;
-            } else {
-                faultQName = QName.valueOf(strFaultQName);
-            }
             
             boolean foundfb = false;
             for (Breakpoint nbBreakpoint : nbBreakpoints) {
@@ -531,12 +539,12 @@ public class ProcessInstanceImpl implements ProcessInstance {
     }
     
     protected void onTerminate(
-            final DebugFrame frame) {
-        
-//        if (getRootFrame() == frame) {
-//            setState(STATE_TERMINATED);
-//            mModel.processInstanceCompleted(this);
-//        }
+            final BreakPosition position) {
+        if (myEventLog != null) {
+            myEventLog.addRecord(new ActivityTerminatedRecord(
+                    position.getFrame().getId(),
+                    position.getXpath()));
+        }
     }
     
     protected void onExit(
