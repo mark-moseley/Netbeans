@@ -42,24 +42,21 @@
 
 package org.netbeans.modules.java.j2seproject.ui.wizards;
 
-import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
-import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.StringTokenizer;
-import javax.swing.JFileChooser;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
-import org.netbeans.api.project.ant.FileChooser;
+import org.netbeans.api.queries.CollocationQuery;
+import org.netbeans.spi.java.project.support.ui.SharableLibrariesUtils;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.openide.WizardDescriptor;
 import org.openide.WizardValidationException;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -80,7 +77,7 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
     public PanelOptionsVisual(PanelConfigureProject panel, NewJ2SEProjectWizardIterator.WizardType type) {
         initComponents();
         this.panel = panel;
-        currentLibrariesLocation = ".."+File.separatorChar+"libraries"; // NOI18N
+        currentLibrariesLocation = "libraries";   //#126366 ".."+File.separatorChar+"libraries"; // NOI18N
         librariesLocation.setText(currentLibrariesLocation);
 
         switch (type) {
@@ -116,6 +113,23 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
             }
             
         });
+        this.librariesLocation.getDocument().addDocumentListener( new DocumentListener () {
+            
+            public void insertUpdate(DocumentEvent e) {
+                librariesLocationChanged ();
+            }
+            
+            public void removeUpdate(DocumentEvent e) {
+                librariesLocationChanged ();
+            }
+            
+            public void changedUpdate(DocumentEvent e) {
+                librariesLocationChanged ();
+            }
+
+            
+        });
+        
     }
 
     public void actionPerformed( ActionEvent e ) {        
@@ -179,8 +193,6 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
 
         jLabel1.setText(org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "LBL_PanelOptions_Location_Label")); // NOI18N
 
-        librariesLocation.setEditable(false);
-
         browseLibraries.setMnemonic('B');
         browseLibraries.setText(org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "LBL_PanelOptions_Browse_Button")); // NOI18N
         browseLibraries.addActionListener(new java.awt.event.ActionListener() {
@@ -197,7 +209,7 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
             .add(layout.createSequentialGroup()
                 .add(createMainCheckBox)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(mainClassTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 307, Short.MAX_VALUE))
+                .add(mainClassTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 344, Short.MAX_VALUE))
             .add(layout.createSequentialGroup()
                 .add(sharableProject)
                 .addContainerGap())
@@ -251,7 +263,7 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
         // below folder is used just for relativization:
         File f = FileUtil.normalizeFile(new File(projectLocation + 
                 File.separatorChar + "project_folder")); // NOI18N
-        String curr = browseForLibraryLication(librariesLocation.getText().trim(), this, f);
+        String curr = SharableLibrariesUtils.browseForLibraryLocation(librariesLocation.getText().trim(), this, f);
         if (curr != null) {
             currentLibrariesLocation = curr;
             if (sharableProject.isSelected()) {
@@ -260,37 +272,26 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
         }
     }//GEN-LAST:event_browseLibrariesActionPerformed
     
-    
-    //TODO move to some api patkage to make reusable by all project types..
-    public static String browseForLibraryLication(String current, Component comp, File projectLocation) {
-        File lib = PropertyUtils.resolveFile(projectLocation, current);
-        if (!lib.exists()) {
-            lib = lib.getParentFile();
-        }
-        lib = FileUtil.normalizeFile(lib);
-        FileChooser chooser = new FileChooser(projectLocation, null);
-        chooser.setCurrentDirectory(lib);
-        chooser.setFileSelectionMode( JFileChooser.DIRECTORIES_ONLY );
-        chooser.setDialogTitle(NbBundle.getMessage(PanelOptionsVisual.class,"LBL_Browse_Libraries_Title"));
-        if (JFileChooser.APPROVE_OPTION == chooser.showOpenDialog(comp)) {
-            File[] files;
-            try {
-                files = chooser.getFiles();
-            } catch (IOException ex) {
-                Exceptions.printStackTrace(ex);
-                return null;
-            }
-            if (files.length == 1) {
-                String currentLibrariesLocation = (files[0]).getPath();
-                return currentLibrariesLocation;
-            }
-        }
-        return null;
-    }
+
     
     boolean valid(WizardDescriptor settings) {
         
         // TODO: check whether libraries file is property file and is collocated
+        if (sharableProject.isSelected()) {
+            String location = librariesLocation.getText();
+            if (new File(location).isAbsolute()) {
+                settings.putProperty( "WizardPanel_errorMessage", // NOI18N
+                    "<html>Please make sure the absolute path to library definitions is always accessible in the same way.<html>"); //NOI18N
+                
+            } else {
+                File projectLoc = FileUtil.normalizeFile(new File(projectLocation));
+                File libLoc = PropertyUtils.resolveFile(projectLoc, location);
+                if (!CollocationQuery.areCollocated(projectLoc, libLoc)) {
+                    settings.putProperty( "WizardPanel_errorMessage", // NOI18N
+                        "<html>Please make sure the relative path to library definitions is always accessible in the same way.<html>"); //NOI18N
+                }
+            }
+        }
         
         if (mainClassTextField.isVisible () && mainClassTextField.isEnabled ()) {
             if (!valid) {
@@ -342,5 +343,11 @@ public class PanelOptionsVisual extends SettingsPanel implements ActionListener,
         this.valid = valid;
         this.panel.fireChangeEvent();
     }
+    
+    private void librariesLocationChanged() {
+        this.panel.fireChangeEvent();
+        
+    }
+    
 }
 
