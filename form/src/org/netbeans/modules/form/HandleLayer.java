@@ -72,6 +72,7 @@ import org.netbeans.modules.form.fakepeer.FakePeerSupport;
 import org.netbeans.modules.form.layoutsupport.*;
 import org.netbeans.modules.form.layoutdesign.*;
 import org.netbeans.modules.form.menu.MenuEditLayer;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
 
 /**
@@ -493,7 +494,7 @@ public class HandleLayer extends JPanel implements MouseListener, MouseMotionLis
                                 formFile.getExt()); 
                     formDesigner.getLayoutDesigner().setModelCounter(0);
                     formDesigner.resetTopDesignComponent(true);
-                    StatusDisplayer.getDefault().setStatusText("The form was successfully copied to: " + copied.getPath()); // NOI18N
+                    StatusDisplayer.getDefault().setStatusText("The form was successfully copied to: " + FileUtil.getFileDisplayName(copied)); // NOI18N
                 } catch (IOException ioe) {
                     //TODO
                 }
@@ -1826,7 +1827,13 @@ public class HandleLayer extends JPanel implements MouseListener, MouseMotionLis
         {
             java.util.List<Component> subContainers = new ArrayList<Component>();
 
-            Component[] comps = cont.getComponents();
+            Component[] comps;
+            if (cont instanceof JTabbedPane) {
+                Component selectedTab = ((JTabbedPane)cont).getSelectedComponent();
+                comps = (selectedTab == null) ? new Component[0] : new Component[] {selectedTab};
+            } else {
+                comps = cont.getComponents();
+            }
             for (int i=0; i < comps.length; i++) {
                 Component comp = comps[i];
                 Rectangle bounds = convertRectangleFromComponent(
