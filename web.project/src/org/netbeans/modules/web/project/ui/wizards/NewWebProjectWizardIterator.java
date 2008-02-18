@@ -44,7 +44,6 @@ package org.netbeans.modules.web.project.ui.wizards;
 import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
-import java.lang.StringBuffer;
 import java.text.MessageFormat;
 import java.util.HashSet;
 import java.util.List;
@@ -71,19 +70,15 @@ import org.netbeans.spi.project.ui.support.ProjectChooser;
 import org.netbeans.api.progress.ProgressHandle;
 
 import org.netbeans.modules.j2ee.api.ejbjar.Ear;
-import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
-import org.netbeans.modules.j2ee.dd.api.web.WebApp;
-import org.netbeans.modules.j2ee.dd.api.web.WelcomeFileList;
+import org.netbeans.modules.j2ee.common.sharability.PanelSharability;
+import org.netbeans.modules.j2ee.common.sharability.SharabilityUtilities;
 import org.netbeans.modules.web.api.webmodule.WebFrameworks;
 import org.netbeans.modules.web.api.webmodule.WebModule;
-import org.netbeans.modules.web.spi.webmodule.WebFrameworkProvider;
 import org.netbeans.modules.web.project.WebProject;
 import org.netbeans.modules.web.project.api.WebProjectCreateData;
 import org.netbeans.modules.web.project.api.WebProjectUtilities;
 import org.netbeans.modules.web.project.ui.FoldersListSettings;
-import org.openide.filesystems.Repository;
-import org.openide.loaders.DataFolder;
-import org.openide.loaders.DataObject;
+import org.netbeans.modules.web.project.ui.customizer.WebProjectProperties;
 
 /**
  * Wizard to create a new Web project.
@@ -104,11 +99,13 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
 	if (WebFrameworks.getFrameworks().size() > 0)
 	    steps = new String[] {
 		NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectTitleName"), //NOI18N
+                //NbBundle.getMessage(NewWebProjectWizardIterator.class, "PanelShareabilityVisual.label"),
 		NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP2_Frameworks") //NOI18N
 	    };
 	else
 	    steps = new String[] {
 		NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectTitleName"), //NOI18N
+                //NbBundle.getMessage(NewWebProjectWizardIterator.class, "PanelShareabilityVisual.label")
 	    };
 	
         return steps;
@@ -144,6 +141,11 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
         createData.setContextPath((String) wiz.getProperty(WizardProperties.CONTEXT_PATH));
         createData.setJavaPlatformName((String) wiz.getProperty(WizardProperties.JAVA_PLATFORM));
         createData.setSourceLevel((String) wiz.getProperty(WizardProperties.SOURCE_LEVEL));
+        
+        createData.setLibrariesDefinition(
+                SharabilityUtilities.getLibraryLocation((String) wiz.getProperty(PanelSharability.WIZARD_SHARED_LIBRARIES)));
+        createData.setServerLibraryName((String) wiz.getProperty(PanelSharability.WIZARD_SERVER_LIBRARY));
+        
         AntProjectHelper h = WebProjectUtilities.createProject(createData);
         handle.progress(2);
         
@@ -232,12 +234,14 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
 	    //standard panels + configurable framework panel
 	    panels = new WizardDescriptor.Panel[] {
 		new PanelConfigureProject(),
+                //new PanelSharability(WizardProperties.PROJECT_DIR, WizardProperties.SERVER_INSTANCE_ID, true),
 		new PanelSupportedFrameworks()
 	    };
 	else
 	    //no framework available, don't show framework panel
 	    panels = new WizardDescriptor.Panel[] {
 		new PanelConfigureProject(),
+                //new PanelSharability(WizardProperties.PROJECT_DIR, WizardProperties.SERVER_INSTANCE_ID, true)
 	    };
         panelsCount = panels.length;
         
