@@ -42,7 +42,6 @@
 package org.netbeans.modules.web.project.api;
 
 import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.AntDeploymentHelper;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
@@ -58,7 +57,6 @@ import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.Repository;
@@ -69,6 +67,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
 import java.io.*;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -77,17 +76,21 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.java.project.classpath.ProjectClassPathModifier;
+import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.api.queries.FileEncodingQuery;
 
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
-import org.netbeans.modules.web.project.classpath.ClassPathSupport;
-import org.netbeans.modules.web.project.classpath.WebProjectClassPathExtender;
-import org.netbeans.modules.web.project.ui.customizer.PlatformUiSupport;
 import org.netbeans.modules.j2ee.common.FileSearchUtility;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectProperties;
 import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.j2ee.dd.api.web.WelcomeFileList;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.java.api.common.ui.PlatformUiSupport;
 import org.netbeans.modules.websvc.spi.webservices.WebServicesConstants;
+import org.openide.filesystems.URLMapper;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.modules.SpecificationVersion;
@@ -192,7 +195,7 @@ public class WebProjectUtilities {
         final boolean createBluePrintsStruct = SRC_STRUCT_BLUEPRINTS.equals(sourceStructure);
         final boolean createJakartaStructure = SRC_STRUCT_JAKARTA.equals(sourceStructure);
         
-        AntProjectHelper h = setupProject(projectDir, name, serverInstanceID, j2eeLevel);
+        final AntProjectHelper h = setupProject(projectDir, name, serverInstanceID, j2eeLevel, createData.getLibrariesDefinition());
         
         FileObject srcFO = projectDir.createFolder(DEFAULT_SRC_FOLDER);
         FileObject confFolderFO = null;
@@ -282,18 +285,29 @@ public class WebProjectUtilities {
         
         ep.setProperty(WebProjectProperties.WEBINF_DIR, DEFAULT_DOC_BASE_FOLDER + "/" + WEB_INF);
         
-        Project p = ProjectManager.getDefault().findProject(h.getProjectDirectory());
+        WebProject p = (WebProject)ProjectManager.getDefault().findProject(h.getProjectDirectory());
         UpdateHelper updateHelper = ((WebProject) p).getUpdateHelper();
         
         // #119052
         if (sourceLevel == null) {
             sourceLevel = "1.5"; // NOI18N
         }
-        PlatformUiSupport.storePlatform(ep, updateHelper, javaPlatformName, new SpecificationVersion(sourceLevel));
+        PlatformUiSupport.storePlatform(ep, updateHelper, WebProjectType.PROJECT_CONFIGURATION_NAMESPACE, javaPlatformName, new SpecificationVersion(sourceLevel));
         
         h.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         
         ProjectManager.getDefault().saveProject(p);
+        final ReferenceHelper refHelper = p.getReferenceHelper();
+        try {
+            ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<Void>() {
+                public Void run() throws Exception {
+                    copyRequiredLibraries(h, refHelper);
+                    return null;
+                }
+            });
+        } catch (MutexException ex) {
+            Exceptions.printStackTrace(ex.getException());
+        }
         
         ProjectWebModule pwm = (ProjectWebModule) p.getLookup().lookup(ProjectWebModule.class);
         if (pwm != null) //should not be null
@@ -432,7 +446,7 @@ public class WebProjectUtilities {
         assert serverInstanceID != null: "Server instance ID can't be null"; //NOI18N
         assert j2eeLevel != null: "Java EE version can't be null"; //NOI18N
         
-        final AntProjectHelper antProjectHelper = setupProject(projectDir, name, serverInstanceID, j2eeLevel);
+        final AntProjectHelper antProjectHelper = setupProject(projectDir, name, serverInstanceID, j2eeLevel, createData.getLibrariesDefinition());
         final WebProject p = (WebProject) ProjectManager.getDefault().findProject(antProjectHelper.getProjectDirectory());
         final ReferenceHelper referenceHelper = p.getReferenceHelper();
         EditableProperties ep = new EditableProperties(true);
@@ -505,6 +519,7 @@ public class WebProjectUtilities {
                     }
                     antProjectHelper.putPrimaryConfigurationData(data,true);
                     ProjectManager.getDefault().saveProject(p);
+                    copyRequiredLibraries(antProjectHelper, referenceHelper);
                     return null;
                 }
             });
@@ -520,15 +535,13 @@ public class WebProjectUtilities {
             //add libraries from the specified folder in the import wizard
             if (libFolder.isFolder()) {
                 FileObject children [] = libFolder.getChildren();
-                List libs = new LinkedList();
+                List<URL> libs = new LinkedList<URL>();
                 for (int i = 0; i < children.length; i++) {
-                    if (FileUtil.isArchiveFile(children[i]))
-                        libs.add(children[i]);
+                    if (FileUtil.isArchiveFile(children[i])) {
+                        libs.add(URLMapper.findURL(FileUtil.getArchiveRoot(children[i]), URLMapper.EXTERNAL));
+                    }
                 }
-                FileObject[] libsArray = new FileObject[libs.size()];
-                libs.toArray(libsArray);
-                WebProjectClassPathExtender classPathExtender = (WebProjectClassPathExtender) p.getLookup().lookup(WebProjectClassPathExtender.class);
-                classPathExtender.addArchiveFiles(WebProjectProperties.JAVAC_CLASSPATH, libsArray, ClassPathSupport.TAG_WEB_MODULE_LIBRARIES);
+                ProjectClassPathModifier.addRoots(libs.toArray(new URL[libs.size()]), p.getSourceRoots().getRoots()[0], ClassPath.COMPILE);
                 //do we really need to add the listener? commenting it out
                 //libFolder.addFileChangeListener(p);
             }
@@ -569,7 +582,7 @@ public class WebProjectUtilities {
         // #89131: these levels are not actually distinct from 1.5.
         if (sourceLevel != null && (sourceLevel.equals("1.6") || sourceLevel.equals("1.7")))
             sourceLevel = "1.5";
-        PlatformUiSupport.storePlatform(ep, updateHelper, javaPlatformName, sourceLevel != null ? new SpecificationVersion(sourceLevel) : null);
+        PlatformUiSupport.storePlatform(ep, updateHelper, WebProjectType.PROJECT_CONFIGURATION_NAMESPACE, javaPlatformName, sourceLevel != null ? new SpecificationVersion(sourceLevel) : null);
         
         // Utils.updateProperties() prevents problems caused by modification of properties in AntProjectHelper
         // (e.g. during createForeignFileReference()) when local copy of properties is concurrently modified
@@ -578,6 +591,18 @@ public class WebProjectUtilities {
         ProjectManager.getDefault().saveProject(p);
         
         return antProjectHelper;
+    }
+    
+    private static void copyRequiredLibraries(AntProjectHelper h, ReferenceHelper rh) throws IOException {
+        if (!h.isSharableProject()) {
+            return;
+        }
+        if (rh.getProjectLibraryManager().getLibrary("junit") == null) {
+            rh.copyLibrary(LibraryManager.getDefault().getLibrary("junit")); // NOI18N
+        }
+        if (rh.getProjectLibraryManager().getLibrary("junit_4") == null) {
+            rh.copyLibrary(LibraryManager.getDefault().getLibrary("junit_4")); // NOI18N
+        }
     }
     
     private static String createFileReference(ReferenceHelper refHelper, FileObject projectFO, FileObject sourceprojectFO, FileObject referencedFO) {
@@ -599,8 +624,9 @@ public class WebProjectUtilities {
         return child.getPath().substring(parent.getPath().length() + 1);
     }
     
-    private static AntProjectHelper setupProject(FileObject dirFO, String name, String serverInstanceID, String j2eeLevel) throws IOException {
-        AntProjectHelper h = ProjectGenerator.createProject(dirFO, WebProjectType.TYPE);
+    private static AntProjectHelper setupProject(FileObject dirFO, String name, 
+            String serverInstanceID, String j2eeLevel, String librariesDefinition) throws IOException {
+        AntProjectHelper h = ProjectGenerator.createProject(dirFO, WebProjectType.TYPE, librariesDefinition);
         Element data = h.getPrimaryConfigurationData(true);
         Document doc = data.getOwnerDocument();
         Element nameEl = doc.createElementNS(WebProjectType.PROJECT_CONFIGURATION_NAMESPACE, "name"); // NOI18N
@@ -623,7 +649,7 @@ public class WebProjectUtilities {
         ep.setProperty(WebProjectProperties.DIST_WAR, "${"+WebProjectProperties.DIST_DIR+"}/${" + WebProjectProperties.WAR_NAME + "}"); // NOI18N
         ep.setProperty(WebProjectProperties.DIST_WAR_EAR, "${" + WebProjectProperties.DIST_DIR+"}/${" + WebProjectProperties.WAR_EAR_NAME + "}"); //NOI18N
         
-        ep.setProperty(WebProjectProperties.JAVAC_CLASSPATH, ""); // NOI18N
+        ep.setProperty(ProjectProperties.JAVAC_CLASSPATH, ""); // NOI18N
         
         ep.setProperty(WebProjectProperties.JSPCOMPILATION_CLASSPATH, "${jspc.classpath}:${javac.classpath}");
         
@@ -648,13 +674,13 @@ public class WebProjectUtilities {
             "# " + NbBundle.getMessage(WebProjectUtilities.class, "COMMENT_javac.compilerargs"), // NOI18N
         }, false);
         
-        ep.setProperty(WebProjectProperties.JAVAC_TEST_CLASSPATH, new String[] {
+        ep.setProperty(ProjectProperties.JAVAC_TEST_CLASSPATH, new String[] {
             "${javac.classpath}:", // NOI18N
             "${build.classes.dir}:", // NOI18N
             "${libs.junit.classpath}:", // NOI18N
             "${libs.junit_4.classpath}", // NOI18N
         });
-        ep.setProperty(WebProjectProperties.RUN_TEST_CLASSPATH, new String[] {
+        ep.setProperty(ProjectProperties.RUN_TEST_CLASSPATH, new String[] {
             "${javac.test.classpath}:", // NOI18N
             "${build.test.classes.dir}", // NOI18N
         });
@@ -663,11 +689,11 @@ public class WebProjectUtilities {
         });
         
         ep.setProperty(WebProjectProperties.BUILD_DIR, DEFAULT_BUILD_DIR);
-        ep.setProperty(WebProjectProperties.BUILD_TEST_CLASSES_DIR, "${build.dir}/test/classes"); // NOI18N
+        ep.setProperty(ProjectProperties.BUILD_TEST_CLASSES_DIR, "${build.dir}/test/classes"); // NOI18N
         ep.setProperty(WebProjectProperties.BUILD_TEST_RESULTS_DIR, "${build.dir}/test/results"); // NOI18N
         ep.setProperty(WebProjectProperties.BUILD_WEB_DIR, "${"+WebProjectProperties.BUILD_DIR+"}/web"); // NOI18N
         ep.setProperty(WebProjectProperties.BUILD_GENERATED_DIR, "${"+WebProjectProperties.BUILD_DIR+"}/generated"); // NOI18N
-        ep.setProperty(WebProjectProperties.BUILD_CLASSES_DIR, "${"+WebProjectProperties.BUILD_WEB_DIR+"}/WEB-INF/classes"); // NOI18N
+        ep.setProperty(ProjectProperties.BUILD_CLASSES_DIR, "${"+WebProjectProperties.BUILD_WEB_DIR+"}/WEB-INF/classes"); // NOI18N
         ep.setProperty(WebProjectProperties.BUILD_CLASSES_EXCLUDES, "**/*.java,**/*.form"); // NOI18N
         ep.setProperty(WebProjectProperties.BUILD_WEB_EXCLUDES, "${"+ WebProjectProperties.BUILD_CLASSES_EXCLUDES +"}"); //NOI18N
         ep.setProperty(WebProjectProperties.DIST_JAVADOC_DIR, "${"+WebProjectProperties.DIST_DIR+"}/javadoc"); // NOI18N
