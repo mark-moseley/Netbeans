@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,13 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
+ * Contributor(s):
+ *
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,67 +37,57 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
- * Contributor(s):
- * 
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.websvc.saas.ui.nodes;
+package org.netbeans.modules.websvc.saas.ui.actions;
 
-import java.util.ArrayList;
-import java.util.List;
-import javax.swing.Action;
-import org.netbeans.modules.websvc.saas.model.Saas;
-import org.netbeans.modules.websvc.saas.spi.SaasNodeActionsProvider;
-import org.netbeans.modules.websvc.saas.ui.actions.DeleteServiceAction;
-import org.netbeans.modules.websvc.saas.ui.actions.RefreshServiceAction;
-import org.netbeans.modules.websvc.saas.ui.actions.ViewApiDocAction;
-import org.netbeans.modules.websvc.saas.util.SaasUtil;
-import org.openide.nodes.AbstractNode;
-import org.openide.util.actions.SystemAction;
-import org.openide.util.lookup.AbstractLookup;
+import org.netbeans.modules.websvc.saas.model.SaasGroup;
+import org.netbeans.modules.websvc.saas.ui.wizards.AddWebServiceDlg;
+import org.openide.nodes.Node;
+import org.openide.util.actions.NodeAction;
+import org.openide.util.*;
 
 /**
- *
- * @author nam
+ * 
+ * @author  nam
  */
-public abstract class SaasNode extends AbstractNode {
-    protected Saas saas;
+public class AddServiceAction extends NodeAction {
     
-    public SaasNode(SaasNodeChildren nodeChildren, AbstractLookup lookup, Saas saas) {
-        super(nodeChildren, lookup);
-        this.saas = saas;
-    }
-
-    public Saas getSaas() {
-        return saas;
-    }
-    
-    @Override
-    public String getDisplayName() {
-        return saas.getDisplayName();
-    }
-    
-    @Override
-    public String getShortDescription() {
-        return saas.getDescription();
-    }
-    
-    @Override
-    public Action[] getActions(boolean context) {
-        saas.toStateReady();
-        
-        List<Action> actions = new ArrayList<Action>();
-        for (SaasNodeActionsProvider ext : SaasUtil.getSaasNodeActionsProviders()) {
-            for (Action a : ext.getSaasActions(this.getLookup())) {
-                actions.add(a);
-            }
+    protected boolean enable(org.openide.nodes.Node[] nodes) {
+        if (nodes != null && nodes.length == 1) {
+            SaasGroup g = nodes[0].getLookup().lookup(SaasGroup.class);
+            return g != null;
         }
-        actions.add(SystemAction.get(ViewApiDocAction.class));
-        actions.add(SystemAction.get(DeleteServiceAction.class));
-        actions.add(SystemAction.get(RefreshServiceAction.class));
-
-        return actions.toArray(new Action[actions.size()]);
+        return true;
     }
+    
+    public org.openide.util.HelpCtx getHelpCtx() {
+        return new HelpCtx(AddServiceAction.class);
+    }
+    
+    public String getName() {
+        return NbBundle.getMessage(AddServiceAction.class, "ADD_WEB_SERVICE_Action");
+    }
+    
+    protected void performAction(Node[] nodes) {
+        if (nodes == null || nodes.length != 1) {
+            return;
+        }
+
+        SaasGroup g = nodes[0].getLookup().lookup(SaasGroup.class);
+        if (g == null) {
+            throw new IllegalArgumentException("Node has no SaasGroup in lookup");
+        }
+
+        new AddWebServiceDlg(g).displayDialog();
+    }
+    
+    protected boolean asynchronous() {
+        return false;
+    }
+    
+    protected String iconResource() {
+        return "org/netbeans/modules/websvc/manager/resources/webservice.png"; // NOI18N
+    }
+    
 }
