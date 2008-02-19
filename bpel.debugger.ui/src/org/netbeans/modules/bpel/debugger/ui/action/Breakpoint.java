@@ -87,9 +87,31 @@ public class Breakpoint extends ActionsProviderSupport
     public void propertyChange(
             final PropertyChangeEvent event) {
         
-        setEnabled(
-                ActionsManager.ACTION_TOGGLE_BREAKPOINT, 
-                EditorUtil.getCurrentLine() != null);
+        final String currentViewName = EditorUtil.getOpenedDocumentViewName();
+        
+        boolean enabled = (EditorUtil.getCurrentLine() != null) &&
+                ("orch-designer".equals(currentViewName) || 
+                "bpelsource".equals(currentViewName));
+        
+//        if (enabled) {
+//            final Node node = getCurrentNode();
+//            
+//            if (node != null) {
+//                final javax.swing.Action[] actions = node.getActions(false);
+//                
+//                if (actions != null) {
+//                    enabled = false;
+//                
+//                    for (javax.swing.Action action: actions) {
+//                        if (action.equals(this)) {
+//                            enabled = true;
+//                        }
+//                    }
+//                }
+//            }
+//        }
+        
+        setEnabled(ActionsManager.ACTION_TOGGLE_BREAKPOINT, enabled);
     }
     
     // Private /////////////////////////////////////////////////////////////////
@@ -126,6 +148,12 @@ public class Breakpoint extends ActionsProviderSupport
             
             bpelEntityId = bpelEntity.getUID();
             lineNumber = ModelUtil.getLineNumber(bpelEntityId);
+            
+            final int translatedLineNumber = EditorContextBridge.
+                    translateBreakpointLine(url, lineNumber);
+            if ((translatedLineNumber != -1)) {
+                lineNumber = translatedLineNumber;
+            }
         } else {
             lineNumber = EditorUtil.getLineNumber(node);
             
