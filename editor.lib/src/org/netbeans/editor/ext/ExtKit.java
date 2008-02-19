@@ -536,10 +536,12 @@ public class ExtKit extends BaseKit {
         }
 
         public boolean gotoDeclaration(JTextComponent target) {
+            BaseDocument doc = Utilities.getDocument(target);
+            if (doc == null)
+                return false;
             try {
                 Caret caret = target.getCaret();
                 int dotPos = caret.getDot();
-                BaseDocument doc = (BaseDocument)target.getDocument();
                 int[] idBlk = Utilities.getIdentifierBlock(doc, dotPos);
                 ExtSyntaxSupport extSup = (ExtSyntaxSupport)doc.getSyntaxSupport();
                 if (idBlk != null) {
@@ -885,7 +887,7 @@ public class ExtKit extends BaseKit {
                         int startPos;
                         int endPos;
                         
-                        if (caret.isSelectionVisible()) {
+                        if (Utilities.isSelectionShowing(caret)) {
                             startPos = Utilities.getRowStart(doc, target.getSelectionStart());
                             endPos = target.getSelectionEnd();
                             if (endPos > 0 && Utilities.getRowStart(doc, endPos) == endPos) {
