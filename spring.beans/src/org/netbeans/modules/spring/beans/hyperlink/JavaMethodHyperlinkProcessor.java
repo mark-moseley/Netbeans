@@ -49,7 +49,7 @@ import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils.Stati
  *
  * @author Rohan Ranade (Rohan.Ranade@Sun.COM)
  */
-public class JavaMethodHyperlinkProcessor implements HyperlinkProcessor {
+public class JavaMethodHyperlinkProcessor extends HyperlinkProcessor {
 
     private int argCount = -1;
     private SpringXMLConfigEditorUtils.Public publicFlag = SpringXMLConfigEditorUtils.Public.DONT_CARE;
@@ -62,8 +62,11 @@ public class JavaMethodHyperlinkProcessor implements HyperlinkProcessor {
     }
     
     public void process(HyperlinkEnv env) {
-        String classFqn = SpringXMLConfigEditorUtils.getBeanClassName(env.getCurrentTag());
-        SpringXMLConfigEditorUtils.openMethodInEditor(env.getDocument(), classFqn, env.getValueString(), 0,
-                            SpringXMLConfigEditorUtils.Public.DONT_CARE, SpringXMLConfigEditorUtils.Static.NO);
+        String className = SpringXMLConfigEditorUtils.getBeanClassName(env.getCurrentTag());
+        if(className == null) {
+            return;
+        }
+        SpringXMLConfigEditorUtils.openMethodInEditor(env.getDocument(), className, env.getValueString(), argCount,
+                            publicFlag, staticFlag);
     }
 }

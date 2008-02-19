@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,6 +31,10 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.spring.beans.hyperlink;
@@ -47,53 +45,59 @@ import org.netbeans.modules.spring.api.Action;
 import org.netbeans.modules.spring.api.beans.model.SpringBean;
 import org.netbeans.modules.spring.api.beans.model.SpringBeans;
 import org.netbeans.modules.spring.api.beans.model.SpringConfigModel;
-import org.netbeans.modules.spring.util.SpringBeansUIs;
-import org.netbeans.modules.spring.util.SpringBeansUIs.GoToBeanAction;
+import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils;
+import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils.Public;
+import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils.Static;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
+import org.w3c.dom.Node;
 
 /**
- *
+ * Hyperlink Processor for factory-method attribute of a bean
+ * 
  * @author Rohan Ranade (Rohan.Ranade@Sun.COM)
  */
-public class BeansRefHyperlinkProcessor extends HyperlinkProcessor {
+public class FactoryMethodHyperlinkProcessor extends HyperlinkProcessor {
 
-    private boolean globalSearch;
-
-    public BeansRefHyperlinkProcessor(boolean globalSearch) {
-        this.globalSearch = globalSearch;
-    }
-
+    private static final String FACTORY_BEAN_ATTRIB = "factory-bean"; // NOI18N
+    private static final String FACTORY_METHOD_ATTRIB = "factory-method"; // NOI18N
+    
     public void process(HyperlinkEnv env) {
-        final FileObject fileObject = NbEditorUtilities.getFileObject(env.getDocument());
-        if (fileObject == null) {
-            return;
-        }
-        SpringConfigModel model = SpringConfigModel.forFileObject(fileObject);
-        final String beanName = env.getValueString();
-        final GoToBeanAction[] action = { null };
-        try {
-            model.runReadAction(new Action<SpringBeans>() {
-                public void run(SpringBeans beans) {
-                    SpringBean bean;
-                    if(globalSearch) {
-                        bean = beans.findBean(beanName);
-                    } else {
-                        bean = beans.findBean(FileUtil.toFile(fileObject), beanName);
+        Node tag = env.getCurrentTag();
+        Static staticFlag = Static.YES;
+        final String[] className = { SpringXMLConfigEditorUtils.getBeanClassName(tag) };
+        
+        // if factory-bean has been defined, resolve it and get it's class name
+        if(SpringXMLConfigEditorUtils.hasAttribute(tag, FACTORY_BEAN_ATTRIB)) { 
+            final String factoryBeanName = SpringXMLConfigEditorUtils.getAttribute(tag, FACTORY_BEAN_ATTRIB);
+            FileObject fo = NbEditorUtilities.getFileObject(env.getDocument());
+            if(fo == null) {
+                return;
+            }
+            SpringConfigModel model = SpringConfigModel.forFileObject(fo);
+            try {
+                model.runReadAction(new Action<SpringBeans>() {
+                    public void run(SpringBeans beans) {
+                        SpringBean bean = beans.findBean(factoryBeanName);
+                        if (bean == null) {
+                            className[0] = null;
+                            return;
+                        }
+                        className[0] = bean.getClassName();
                     }
-                    
-                    if (bean == null) {
-                        return;
-                    }
-                    action[0] = SpringBeansUIs.createGoToBeanAction(bean);
-                }
-            });
-        } catch (IOException e) {
-            Exceptions.printStackTrace(e);
+                });
+            } catch (IOException ioe) {
+                Exceptions.printStackTrace(ioe);
+                className[0] = null;
+            }
+
+            staticFlag = Static.NO;
         }
-        if (action[0] != null) {
-            action[0].invoke();
+        
+        if (className[0] != null) {
+            String methodName = SpringXMLConfigEditorUtils.getAttribute(tag, FACTORY_METHOD_ATTRIB);
+            SpringXMLConfigEditorUtils.openMethodInEditor(env.getDocument(), className[0], methodName, -1,
+                    Public.DONT_CARE, staticFlag);
         }
     }
 }
