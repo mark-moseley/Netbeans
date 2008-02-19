@@ -52,6 +52,7 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.api.queries.CollocationQuery;
 import org.netbeans.api.queries.SharabilityQuery;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.libraries.ArealLibraryProvider;
@@ -96,6 +97,10 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
     private AntProjectListener apl;
 
     public static ProjectLibraryProvider INSTANCE;
+    
+    private volatile boolean listening = true;
+    private final Map<ProjectLibraryArea,Reference<LP>> providers = new HashMap<ProjectLibraryArea,Reference<LP>>();
+    
     /**
      * Default constructor for lookup.
      */
@@ -198,8 +203,6 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
 
     // ---- management of libraries ----
 
-    private boolean listening = true;
-    private final Map<ProjectLibraryArea,Reference<LP>> providers = new HashMap<ProjectLibraryArea,Reference<LP>>();
 
     private final class LP implements LibraryProvider<ProjectLibraryImplementation>, FileChangeSupportListener {
 
@@ -243,8 +246,12 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
             recalculate();
         }
 
-        private synchronized void recalculate() {
-            if (delta(libraries, calculate(area))) {
+        private void recalculate() {
+            boolean fire;
+            synchronized (this) {
+                fire = delta(libraries, calculate(area));
+            }
+            if (fire) {
                 pcs.firePropertyChange(LibraryProvider.PROP_LIBRARIES, null, null);
             }
         }
@@ -394,7 +401,9 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
         }
     }
 
-    private static final Pattern LIBS_LINE = Pattern.compile("libs\\.([^.]+)\\.([^.]+)"); // NOI18N
+    //non private for test usage
+    static final Pattern LIBS_LINE = Pattern.compile("libs\\.([^${}]+)\\.([^${}.]+)"); // NOI18N
+    
     private static Map<String,ProjectLibraryImplementation> calculate(ProjectLibraryArea area) {
         Map<String,ProjectLibraryImplementation> libs = new HashMap<String,ProjectLibraryImplementation>();
         Definitions def = new Definitions(area.mainPropertiesFile);
@@ -429,12 +438,22 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
                     String[] path = PropertyUtils.tokenizePath(subentry.getValue());
                     List<URL> volume = new ArrayList<URL>(path.length);
                     for (String component : path) {
-                        File f = new File(component.replace('/', File.separatorChar).replace('\\', File.separatorChar).replace("${base}"+File.separatorChar, ""));
+                        String jarFolder = null;
+                        // "!/" was replaced in def.properties() with "!"+File.separatorChar
+                        int index = component.indexOf("!"+File.separatorChar); //NOI18N
+                        if (index != -1) {
+                            jarFolder = component.substring(index+2);
+                            component = component.substring(0, index);
+                        }
+                        String f = component.replace('/', File.separatorChar).replace('\\', File.separatorChar).replace("${base}"+File.separatorChar, "");
                         File normalizedFile = FileUtil.normalizeFile(new File(component.replace('/', File.separatorChar).replace('\\', File.separatorChar).replace("${base}", area.mainPropertiesFile.getParent())));
                         try {
-                            URL u = LibrariesSupport.convertFileToURL(f);
+                            URL u = LibrariesSupport.convertFilePathToURL(f);
                             if (FileUtil.isArchiveFile(normalizedFile.toURI().toURL())) {
                                 u = FileUtil.getArchiveRoot(u);
+                                if (jarFolder != null) {
+                                    u = appendJarFolder(u, jarFolder);
+                                }
                             } else if (!u.toExternalForm().endsWith("/")) {
                                 u = new URL(u.toExternalForm() + "/");
                             }
@@ -451,7 +470,7 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
         return libs;
     }
 
-    private synchronized boolean delta(Map<String,ProjectLibraryImplementation> libraries, Map<String,ProjectLibraryImplementation> newLibraries) {
+    private boolean delta(Map<String,ProjectLibraryImplementation> libraries, Map<String,ProjectLibraryImplementation> newLibraries) {
         if (!listening) {
             return false;
         }
@@ -492,6 +511,27 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
         return !added.isEmpty() || !removed.isEmpty();
     }
 
+    /** for jar url this method returns path wihtin jar or null*/
+    private static String getJarFolder(URL url) {
+        assert "jar".equals(url.getProtocol()) : url;
+        String u = url.toExternalForm();
+        int index = u.indexOf("!/"); //NOI18N
+        if (index != -1 && index + 2 < u.length()) {
+            return u.substring(index+2);
+        }
+        return null;
+    }
+    
+    /** append path to given jar root url */
+    private static URL appendJarFolder(URL u, String jarFolder) {
+        assert "jar".equals(u.getProtocol()) && u.toExternalForm().endsWith("!/") : u;
+        try {
+            return new URL(u + jarFolder.replace('\\', '/')); //NOI18N
+        } catch (MalformedURLException e) {
+            throw new AssertionError(e);
+        }
+    }
+    
     static final class ProjectLibraryImplementation implements LibraryImplementation {
 
         final File mainPropertiesFile, privatePropertiesFile;
@@ -550,26 +590,32 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
             }
             List<String> value = new ArrayList<String>();
             for (URL entry : path) {
+                String jarFolder = null;
                 if ("jar".equals(entry.getProtocol())) { // NOI18N
-                    if (!entry.toExternalForm().endsWith("!/")) { // NOI18N
-                        throw new IllegalArgumentException("Non-root folders in JARs not permitted"); // NOI18N
-                    }
+                    jarFolder = getJarFolder(entry);
                     entry = FileUtil.getArchiveFile(entry);
                 } else if (!"file".equals(entry.getProtocol())) { // NOI18N
-                    throw new IllegalArgumentException(entry.toExternalForm());
+                    value.add(entry.toString());
+                    Logger.getLogger(ProjectLibraryProvider.class.getName()).fine("Setting url=" + entry + " as content for library volume type: " + volumeType);
+                    continue;
                 }
-                File f = LibrariesSupport.convertURLToFile(entry);
+                String p = LibrariesSupport.convertURLToFilePath(entry);
+                File f = new File(p);
                 // store properties always separated by '/' for consistency
-                String s;
+                StringBuilder s = new StringBuilder();
                 if (f.isAbsolute()) {
-                    s = f.getAbsolutePath().replace('\\', '/');
+                    s.append(f.getAbsolutePath().replace('\\', '/')); //NOI18N
                 } else {
-                    s = "${base}/" + f.getPath().replace('\\', '/'); // NOI18N
+                    s.append("${base}/" + p.replace('\\', '/')); // NOI18N
+                }
+                if (jarFolder != null) {
+                    s.append("!/"); // NOI18N
+                    s.append(jarFolder);
                 }
                 if (value.size()+1 != path.size()) {
-                    s += File.pathSeparatorChar;
+                    s.append(File.pathSeparatorChar);
                 }
-                value.add(s);
+                value.add(s.toString());
             }
             String key = "libs." + name + "." + volumeType; // NOI18N
             try {
@@ -861,7 +907,8 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
      */
     public static Library copyLibrary(final Library lib, final URL location, 
             final boolean generateLibraryUniqueName) throws IOException {
-        final File libBaseFolder = LibrariesSupport.convertURLToFile(location).getParentFile();
+        assert LibrariesSupport.isAbsoluteURL(location);
+        final File libBaseFolder = new File(LibrariesSupport.convertURLToFilePath(location)).getParentFile();
         FileObject sharedLibFolder;
         try {
             sharedLibFolder = ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<FileObject>() {
@@ -878,14 +925,17 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
         for (String volume : volumes) {
             List<URL> volumeContent = new ArrayList<URL>();
             for (URL libEntry : lib.getContent(volume)) {
+                String jarFolder = null;
                 if ("jar".equals(libEntry.getProtocol())) { // NOI18N
+                    jarFolder = getJarFolder(libEntry);
                     libEntry = FileUtil.getArchiveFile(libEntry);
                 }
                 FileObject libEntryFO = URLMapper.findFileObject(libEntry);
                 if (libEntryFO == null) {
                     if (!"file".equals(libEntry.getProtocol()) && // NOI18N
                         !"nbinst".equals(libEntry.getProtocol())) { // NOI18N
-                        Logger.getLogger(ProjectLibraryProvider.class.getName()).warning("copyLibrary is ignoring entry "+libEntry);
+                        Logger.getLogger(ProjectLibraryProvider.class.getName()).info("copyLibrary is ignoring entry "+libEntry);
+                        //this is probably exclusively urls to maven poms.
                         continue;
                     } else {
                         Logger.getLogger(ProjectLibraryProvider.class.getName()).warning("Library '"+lib.getDisplayName()+ // NOI18N
@@ -893,17 +943,31 @@ public class ProjectLibraryProvider implements ArealLibraryProvider<ProjectLibra
                         continue;
                     }
                 }
-                FileObject newFO;
-                String name;
-                if (libEntryFO.isFolder()) {
-                    newFO = FileChooserAccessory.copyFolderRecursively(libEntryFO, sharedLibFolder);
-                    name = sharedLibFolder.getName()+File.separatorChar+newFO.getName()+File.separatorChar;
+                URL u;
+                if (CollocationQuery.areCollocated(libBaseFolder, FileUtil.toFile(libEntryFO))) {
+                    // if the jar/folder is in relation to the library folder (parent+child/same vcs)
+                    // don't replicate it but reference the original file.
+                    u = libEntry;
                 } else {
-                    String libEntryName = getUniqueName(sharedLibFolder, libEntryFO.getName(), libEntryFO.getExt());
-                    newFO = FileUtil.copyFile(libEntryFO, sharedLibFolder, libEntryName);
-                    name = sharedLibFolder.getName()+File.separatorChar+newFO.getNameExt();
+                    FileObject newFO;
+                    String name;
+                    if (libEntryFO.isFolder()) {
+                        newFO = FileChooserAccessory.copyFolderRecursively(libEntryFO, sharedLibFolder);
+                        name = sharedLibFolder.getNameExt()+File.separatorChar+newFO.getName()+File.separatorChar;
+                    } else {
+                        String libEntryName = getUniqueName(sharedLibFolder, libEntryFO.getName(), libEntryFO.getExt());
+                        newFO = FileUtil.copyFile(libEntryFO, sharedLibFolder, libEntryName);
+                        name = sharedLibFolder.getNameExt()+File.separatorChar+newFO.getNameExt();
+                    }
+                    u = LibrariesSupport.convertFilePathToURL(name);
+                    if (FileUtil.isArchiveFile(newFO)) {
+                        u = FileUtil.getArchiveRoot(u);
+                    }
+                    if (jarFolder != null) {
+                        u = appendJarFolder(u, jarFolder);
+                    }
                 }
-                volumeContent.add(LibrariesSupport.convertFileToURL(new File(name)));
+                volumeContent.add(u);
             }
             content.put(volume, volumeContent);
         }
