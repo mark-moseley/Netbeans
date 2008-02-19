@@ -4,12 +4,14 @@
  */
 package org.netbeans.modules.bpel.design;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.dnd.Autoscroll;
 import java.awt.event.MouseEvent;
 import java.util.Iterator;
 import java.util.List;
@@ -48,7 +50,7 @@ import org.openide.util.NbBundle;
  *
  * @author Alexey
  */
-public abstract class DiagramView extends JPanel {
+public abstract class DiagramView extends JPanel implements Autoscroll {
 
     private DesignView designView;
     private PlaceHolderManager placeholderManager;
@@ -58,7 +60,7 @@ public abstract class DiagramView extends JPanel {
     public DiagramView(DesignView designView) {
         super(new DiagramViewLayout());
         this.designView = designView;
-
+        setBackground(BACKGROUND_COLOR);
 
         placeholderManager =
                 new PlaceHolderManager(this);
@@ -88,8 +90,10 @@ public abstract class DiagramView extends JPanel {
     }
 
     protected void paintComponent(Graphics g) {
+       // long start = System.currentTimeMillis();
         super.paintComponent(g);
         paintContent(g, getDesignView().getCorrectedZoom(), false);
+       // System.out.println("Paint (" + (System.currentTimeMillis() - start) + " ms):" + this );
     }
 
    
@@ -420,5 +424,7 @@ public abstract class DiagramView extends JPanel {
         return null;
 
     }
+    
+    private static final Color BACKGROUND_COLOR = new Color(0xFCFAF5);
     private static int AUTOSCROLL_INSETS = 20;
 }
