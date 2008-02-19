@@ -73,9 +73,6 @@ import org.rubyforge.debugcommons.RubyDebugEventListener;
 import org.rubyforge.debugcommons.RubyDebuggerException;
 import org.rubyforge.debugcommons.RubyDebuggerProxy;
 
-/**
- * @author Martin Krauskopf
- */
 public abstract class TestBase extends RubyTestBase {
 
     static {
@@ -103,7 +100,7 @@ public abstract class TestBase extends RubyTestBase {
         super.setUp();
         platform = RubyPlatformManager.addPlatform(TestBase.getFile("ruby.executable", true));
         assertTrue(platform.getInterpreter() + " has RubyGems installed", platform.hasRubyGemsInstalled());
-        String problems = platform.getFastDebuggerProblems();
+        String problems = platform.getFastDebuggerProblemsInHTML();
         assertNull("fast debugger installed: " + problems, problems);
         
         engines = new Stack<Engine>();
