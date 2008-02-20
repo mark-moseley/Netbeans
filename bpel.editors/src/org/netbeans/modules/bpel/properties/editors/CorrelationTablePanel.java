@@ -107,6 +107,7 @@ public class CorrelationTablePanel extends BaseTablePanel
             column.setIdentifier(PropertyType.CORRELATION_SET);
             column.setHeaderValue(PropertyType.CORRELATION_SET.getDisplayName());
             column.setCellRenderer(new DefaultTableCellRenderer() {
+                @Override
                 public Component getTableCellRendererComponent(
                         JTable table, Object value, boolean isSelected,
                         boolean hasFocus, int row, int column) {
@@ -194,7 +195,8 @@ public class CorrelationTablePanel extends BaseTablePanel
             }
             return null;
         }
-        
+
+        @Override
         public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
             CorrelationLocal pCorrLocal = getRowObject(rowIndex);
             TableColumn column = columnModel.getColumn(columnIndex);
@@ -286,6 +288,7 @@ public class CorrelationTablePanel extends BaseTablePanel
         }
     }
     
+    @Override
     public void createContent() {
         super.createContent();
         //
@@ -310,8 +313,12 @@ public class CorrelationTablePanel extends BaseTablePanel
         // tableView.setPreferredSize(new Dimension(400, 200));
         //
         setTableView(tableView);
+
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_Correlations_Tab")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_Correlations_Tab")); // NOI18N
     }
-    
+
+    @Override
     protected void addRow(ActionEvent event) {
         Set<CorrelationSet> csSet = chooseCorrelationSet(tableModel.getRowsList());
         if (csSet != null) {
@@ -337,11 +344,11 @@ public class CorrelationTablePanel extends BaseTablePanel
             public Validator getExtensionValidator() {
                 Validator validator = new DefaultValidator(
                         csChooser, ErrorMessagesBundle.class) {
-                    public boolean doFastValidation() {
-                        return true;
+                    public void doFastValidation() {
                     }
                     
-                    public boolean doDetailedValidation() {
+                    @Override
+                    public void doDetailedValidation() {
                         Set<CorrelationSet> newCsSet = csChooser.getSelectedValue();
                         //
                         for (CorrelationSet newCs : newCsSet) {
@@ -352,13 +359,12 @@ public class CorrelationTablePanel extends BaseTablePanel
                             for (CorrelationLocal corr : currCorrLocalList) {
                                 CorrelationSet cs = corr.getSet();
                                 if (newCs.equals(cs)) {
-                                    addReasonKey("ERR_NOT_UNIQUE_CORR_SET", cs.getName()); // NOI18N
-                                    return false;
+                                    addReasonKey(Severity.ERROR, 
+                                            "ERR_NOT_UNIQUE_CORR_SET", 
+                                            cs.getName()); // NOI18N
                                 }
                             }
                         }
-                        //
-                        return true;
                     }
                     
                 };
@@ -386,6 +392,7 @@ public class CorrelationTablePanel extends BaseTablePanel
 //        csChooser.afterClose();
     }
     
+    @Override
     protected void editRow(ActionEvent event) {
         int rowIndex = getTableView().getSelectedRow();
         if (rowIndex == -1) return; // Nothing to edit because of nothing is selected
@@ -432,7 +439,8 @@ public class CorrelationTablePanel extends BaseTablePanel
         //
         return false;
     }
-    
+
+    @Override
     protected void deleteRowImpl(ActionEvent event) {
         int[] rows2delete = getTableView().getSelectedRows();
         //
@@ -447,7 +455,8 @@ public class CorrelationTablePanel extends BaseTablePanel
         Lookup lookup = myEditor.getLookup();
         return (BpelModel)lookup.lookup(BpelModel.class);
     }
-    
+
+    @Override
     public boolean applyNewValues() {
         CorrelationsHolder corrHolder = myEditor.getEditedObject();
         CorrelationContainer cc = corrHolder.getCorrelationContainer();
@@ -488,23 +497,22 @@ public class CorrelationTablePanel extends BaseTablePanel
         if (myValidator == null) {
             myValidator = new DefaultValidator(myEditor, ErrorMessagesBundle.class) {
                 
-                public boolean doFastValidation() {
-                    return true;
+                public void doFastValidation() {
                 }
                 
-                public boolean doDetailedValidation() {
+                @Override
+                public void doDetailedValidation() {
                     List<CorrelationLocal> corrLocalList = tableModel.getRowsList();
                     if (corrLocalList != null && corrLocalList.size() != 0) {
                         for (CorrelationLocal corrLocal : corrLocalList) {
                             CorrelationSet cSet = corrLocal.getSet();
                             if (cSet == null) {
-                                addReasonKey("ERR_INVALID_REF_CORR_TO_SET"); //NOI18N
+                                addReasonKey(Severity.ERROR, 
+                                        "ERR_INVALID_REF_CORR_TO_SET"); //NOI18N
                                 break;
                             }
                         }
                     }
-                    //
-                    return isReasonsListEmpty();
                 }
                 
             };
