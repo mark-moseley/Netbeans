@@ -64,6 +64,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
+import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
 
 /**
@@ -79,26 +80,34 @@ public final class FileBasedFileSystem extends FileSystem {
 
     public boolean isWarningEnabled() {
         Boolean isRefreshOn = refreshIsOn.get();
-        return WARNINGS && (isRefreshOn == null || !isRefreshOn.booleanValue());
+        return WARNINGS && !Utilities.isMac() &&(isRefreshOn == null || !isRefreshOn.booleanValue());
     }    
 
     //only for tests purposes
     public static void reinitForTests() {
         FileBasedFileSystem.allInstances = new HashMap();
     }
-    
+
     public static FileBasedFileSystem getInstance(final File file) {
-        FileBasedFileSystem retVal;
-        final FileInfo fInfo = new FileInfo(file);
-        final FileInfo rootInfo = fInfo.getRoot();
+        return getInstance(file, true);
+    }
+    
+    public static FileBasedFileSystem getInstance(final File file, boolean addMising) {
+        FileBasedFileSystem retVal = null;
+        final FileInfo rootInfo = new FileInfo(file).getRoot();
+        final File rootFile = rootInfo.getFile();
 
         synchronized (FileBasedFileSystem.allInstances) {
-            final File rootFile = rootInfo.getFile();
             retVal = (FileBasedFileSystem) FileBasedFileSystem.allInstances.get(rootFile);
-            if (retVal == null) {
-                if (rootInfo.isConvertibleToFileObject()) {
-                    retVal = new FileBasedFileSystem(rootFile);
-                    FileBasedFileSystem.allInstances.put(rootFile, retVal);
+        }
+        if (retVal == null && addMising) {
+            if (rootInfo.isConvertibleToFileObject()) {           
+                synchronized (FileBasedFileSystem.allInstances) {
+                    retVal = (FileBasedFileSystem) FileBasedFileSystem.allInstances.get(rootFile);
+                    if (retVal == null) {
+                        retVal = new FileBasedFileSystem(rootFile);
+                        FileBasedFileSystem.allInstances.put(rootFile, retVal);
+                    }
                 }
             }
         }
