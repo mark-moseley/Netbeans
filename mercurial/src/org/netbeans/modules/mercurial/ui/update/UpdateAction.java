@@ -46,6 +46,7 @@ import org.netbeans.modules.mercurial.HgException;
 import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.util.HgUtils;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
@@ -56,7 +57,6 @@ import org.openide.NotifyDescriptor;
 import org.openide.util.NbBundle;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import javax.swing.AbstractAction;
 
 /**
  * Update action for mercurial: 
@@ -64,7 +64,7 @@ import javax.swing.AbstractAction;
  * 
  * @author John Rice
  */
-public class UpdateAction extends AbstractAction {
+public class UpdateAction extends ContextAction {
     
     private final VCSContext context;
 
@@ -73,15 +73,23 @@ public class UpdateAction extends AbstractAction {
         putValue(Action.NAME, name);
     }
     
-    public void actionPerformed(ActionEvent e) {
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()) return;
-        update(context, null);
+    public void performAction(ActionEvent e) {
+        update(context);
     }
     
-    public static void update(final VCSContext ctx, final String revision){
+    public static void update(final VCSContext ctx){
         final File root = HgUtils.getRootFile(ctx);
         if (root == null) return;
         String repository = root.getAbsolutePath();
+        String rev = null;
+
+        final Update update = new Update(root);
+        if (!update.showDialog()) {
+            return;
+        }
+        rev = update.getSelectionRevision();
+        final boolean doForcedUpdate = update.isForcedUpdateRequested();
+        final String revStr = rev;
         
         RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(repository);
         HgProgressSupport support = new HgProgressSupport() {
@@ -94,7 +102,10 @@ public class UpdateAction extends AbstractAction {
                     HgUtils.outputMercurialTabInRed(
                             NbBundle.getMessage(UpdateAction.class,
                             "MSG_UPDATE_TITLE_SEP")); // NOI18N
-                    List<String> list = HgCommand.doUpdateAll(root, false, revision);
+                    HgUtils.outputMercurialTab(
+                                NbBundle.getMessage(UpdateAction.class,
+                                "MSG_UPDATE_INFO_SEP", revStr, root.getAbsolutePath())); // NOI18N
+                    List<String> list = HgCommand.doUpdateAll(root, doForcedUpdate, revStr);
                     
                     if (list != null && !list.isEmpty()){
                         bNoUpdates = HgCommand.isNoUpdates(list.get(0));
@@ -121,17 +132,13 @@ public class UpdateAction extends AbstractAction {
                 HgUtils.outputMercurialTabInRed(
                         NbBundle.getMessage(UpdateAction.class,
                         "MSG_UPDATE_DONE")); // NOI18N
+                HgUtils.outputMercurialTab(""); // NOI18N
             }
         };
         support.start(rp, repository, org.openide.util.NbBundle.getMessage(UpdateAction.class, "MSG_Update_Progress")); // NOI18N
     }
     
     public boolean isEnabled() {
-        // If it's a mercurial managed repository enable Update action
-        File root = HgUtils.getRootFile(context);
-        if (root == null)
-            return false;
-        else
-            return true;
+        return HgUtils.getRootFile(context) != null;
     }     
 }

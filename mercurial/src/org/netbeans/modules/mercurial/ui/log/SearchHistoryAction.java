@@ -49,6 +49,8 @@ import javax.swing.*;
 import java.io.File;
 import java.util.*;
 import org.netbeans.modules.mercurial.FileInformation;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
+import org.netbeans.modules.mercurial.util.HgUtils;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import org.openide.windows.TopComponent;
 
@@ -57,7 +59,7 @@ import org.openide.windows.TopComponent;
  * 
  * @author Maros Sandor
  */
-public class SearchHistoryAction extends AbstractAction {
+public class SearchHistoryAction extends ContextAction {
     private final VCSContext context;
     static final int DIRECTORY_ENABLED_STATUS = FileInformation.STATUS_MANAGED & ~FileInformation.STATUS_NOTVERSIONED_EXCLUDED & ~FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY;
     static final int FILE_ENABLED_STATUS = FileInformation.STATUS_MANAGED & ~FileInformation.STATUS_NOTVERSIONED_EXCLUDED & ~FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY;
@@ -83,7 +85,7 @@ public class SearchHistoryAction extends AbstractAction {
         return false;
     }
 
-    public void actionPerformed(ActionEvent e) {
+    public void performAction(ActionEvent e) {
         String title = NbBundle.getMessage(SearchHistoryAction.class, "CTL_SearchHistory_Title", Utils.getContextDisplayName(context)); // NOI18N
         openHistory(context, title ); 
     }
@@ -91,14 +93,71 @@ public class SearchHistoryAction extends AbstractAction {
     public static void openHistory(final VCSContext context, final String title) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
+                if (context == null) return;
+                HgUtils.outputMercurialTabInRed(
+                        NbBundle.getMessage(SearchHistoryAction.class,
+                        "MSG_Log_Title")); // NOI18N
+                HgUtils.outputMercurialTabInRed(
+                        NbBundle.getMessage(SearchHistoryAction.class,
+                        "MSG_Log_Title_Sep")); // NOI18N
+                File[] files = context.getFiles().toArray(new File[0]);
+                HgUtils.outputMercurialTab(
+                        NbBundle.getMessage(SearchHistoryAction.class,
+                        "MSG_LOG_CONTEXT_SEP")); // NOI18N
+                for(File f: files){
+                    HgUtils.outputMercurialTab(f.getAbsolutePath());
+                }
+                HgUtils.outputMercurialTabInRed(""); // NOI18N
+                 SearchHistoryTopComponent tc = new SearchHistoryTopComponent(context);
+                tc.setDisplayName(title);
+                tc.open();
+                tc.requestActive();
+                /* Stub out for now - on Large Repositories this initial search of the whole
+                 * repo can take some time, better for user to initiate search
+                File [] files = context.getRootFiles().toArray(new File[0]);
+                if (files != null && files.length > 0) {
+                    tc.search();
+                }*/
+            }
+        });
+    }
+    /**
+     * Opens the Seach History panel to view Mercurial Incoming Changesets that will be sent on next Pull from remote repo
+     * using: hg incoming - to get the data
+     * 
+     * @param title title of the search
+     * @param commitMessage commit message to search for
+     * @param username user name to search for
+     * @param date date of the change in question
+     */ 
+    public static void openIncoming(final VCSContext context, final String title) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
                 SearchHistoryTopComponent tc = new SearchHistoryTopComponent(context);
                 tc.setDisplayName(title);
                 tc.open();
                 tc.requestActive();
-                File [] files = context.getRootFiles().toArray(new File[0]);
-                if (files != null && files.length > 0) {
-                    tc.search();
-                }
+                tc.searchIncoming();
+            }
+        });
+    }
+    /**
+     * Opens the Seach History panel to view Mercurial Out Changesets that will be sent on next Push to remote repo
+     * using: hg out - to get the data
+     * 
+     * @param title title of the search
+     * @param commitMessage commit message to search for
+     * @param username user name to search for
+     * @param date date of the change in question
+     */ 
+    public static void openOut(final VCSContext context, final String title) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                SearchHistoryTopComponent tc = new SearchHistoryTopComponent(context);
+                tc.setDisplayName(title);
+                tc.open();
+                tc.requestActive();
+                tc.searchOut();
             }
         });
     }

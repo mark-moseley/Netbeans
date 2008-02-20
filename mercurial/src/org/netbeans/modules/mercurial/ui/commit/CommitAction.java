@@ -50,6 +50,7 @@ import org.netbeans.modules.mercurial.FileStatusCache;
 import org.netbeans.modules.mercurial.FileInformation;
 import org.netbeans.modules.mercurial.HgFileNode;
 import org.netbeans.modules.mercurial.HgModuleConfig;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.netbeans.modules.mercurial.util.HgUtils;
 import org.netbeans.modules.mercurial.util.HgRepositoryContextCache;
 import org.netbeans.modules.mercurial.util.HgProjectUtils;
@@ -85,7 +86,7 @@ import org.openide.NotifyDescriptor;
  * 
  * @author John Rice
  */
-public class CommitAction extends AbstractAction {
+public class CommitAction extends ContextAction {
     
     static final String RECENT_COMMIT_MESSAGES = "recentCommitMessage"; // NOI18N
 
@@ -101,8 +102,7 @@ public class CommitAction extends AbstractAction {
         return cache.containsFileOfStatus(context, FileInformation.STATUS_LOCAL_CHANGE);
     }
 
-    public void actionPerformed(ActionEvent e) {
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()) return;
+    public void performAction(ActionEvent e) {
         final File root = HgUtils.getRootFile(context);
         if (root == null) {
             HgUtils.outputMercurialTabInRed( NbBundle.getMessage(CommitAction.class,"MSG_COMMIT_TITLE")); // NOI18N
@@ -313,7 +313,8 @@ public class CommitAction extends AbstractAction {
         commit.setEnabled(enabled && containsCommitable(table));
     }
     
-    private static void performCommit(String message, Map<HgFileNode, CommitOptions> commitFiles, VCSContext ctx, HgProgressSupport support, String prjName) {
+    private static void performCommit(String message, Map<HgFileNode, CommitOptions> commitFiles, 
+            VCSContext ctx, HgProgressSupport support, String prjName) {
         FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();
         final File repository = HgUtils.getRootFile(ctx);
         List<File> addCandidates = new ArrayList<File>();
@@ -356,6 +357,7 @@ public class CommitAction extends AbstractAction {
             HgUtils.outputMercurialTabInRed(
                     NbBundle.getMessage(CommitAction.class,
                     "MSG_COMMIT_TITLE_SEP")); // NOI18N
+            HgUtils.outputMercurialTab(message); // NOI18N
             if (addCandidates.size() > 0 ) {
                 HgCommand.doAdd(repository, addCandidates);
                 for (File f : addCandidates) {

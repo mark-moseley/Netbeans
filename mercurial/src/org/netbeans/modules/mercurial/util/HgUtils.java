@@ -46,10 +46,12 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -58,6 +60,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.regex.Pattern;
@@ -79,8 +82,10 @@ import org.openide.windows.IOProvider;
 import org.openide.windows.InputOutput;
 import org.openide.windows.OutputWriter;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.logging.Level;
+import java.util.regex.Matcher;
 import javax.swing.JOptionPane;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileUtil;
@@ -91,8 +96,11 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.queries.SharabilityQuery;
+import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.openide.awt.HtmlBrowser;
+import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 import org.openide.windows.OutputListener;
 
@@ -101,11 +109,19 @@ import org.openide.windows.OutputListener;
  * @author jrice
  */
 public class HgUtils {    
+    private static final Pattern httpPasswordPattern = Pattern.compile("(https*://)(\\w+\\b):(\\b\\S*)@"); //NOI18N
+    private static final String httpPasswordReplacementStr = "$1$2:\\*\\*\\*\\*@"; //NOI18N
+    
     private static final Pattern metadataPattern = Pattern.compile(".*\\" + File.separatorChar + "(\\.)hg(\\" + File.separatorChar + ".*|$)"); // NOI18N
     
     // IGNORE SUPPORT HG: following file patterns are added to {Hg repos}/.hgignore and Hg will ignore any files
     // that match these patterns, reporting "I"status for them // NOI18N
-    private static final String [] HG_IGNORE_FILES = { "\\.orig$", "\\.orig\\..*$", "\\.chg\\..*$", "\\.rej$"}; // NOI18N
+    private static final String [] HG_IGNORE_FILES = { "\\.orig$", "\\.orig\\..*$", "\\.chg\\..*$", "\\.rej$", "\\.conflict\\~$"}; // NOI18N
+    private static final String HG_IGNORE_ORIG_FILES = "\\.orig$"; // NOI18N
+    private static final String HG_IGNORE_ORIG_ANY_FILES = "\\.orig\\..*$"; // NOI18N
+    private static final String HG_IGNORE_CHG_ANY_FILES = "\\.chg\\..*$"; // NOI18N
+    private static final String HG_IGNORE_REJ_ANY_FILES = "\\.rej$"; // NOI18N
+    private static final String HG_IGNORE_CONFLICT_ANY_FILES = "\\.conflict\\~$"; // NOI18N
     
     private static final String FILENAME_HGIGNORE = ".hgignore"; // NOI18N
 
@@ -113,7 +129,39 @@ public class HgUtils {
 
     private static final String MSG_TOO_MANY_LINES = "The number of output lines is greater than 500; see message log for complete output";
 
+    private static HashMap<String, Set<Pattern>> ignorePatterns;
 
+    /**
+     * addDaysToDate - add days (+days) or subtract (-days) from the given date
+     *
+     * @param int days to add or substract
+     * @return Date new date that has been calculated
+     */
+    public static Date addDaysToDate(Date date, int days) {
+        Calendar c = Calendar.getInstance();
+        c.setTime(date);
+        c.add(Calendar.DATE, days);
+        return c.getTime();
+    }   
+    /**
+     * getTodaysDateStr - return todays date as a YYYY-MM-DD string
+     *
+     * @return String todays date YYYY-MM-DD string
+     */
+    public static String getTodaysDateStr() {
+        Date todaysDate = new Date();
+        return new SimpleDateFormat("yyyy-MM-dd").format(todaysDate); // NOI18N
+    }   
+    /**
+     * getLastWeeksDateStr - return last weeks date as a YYYY-MM-DD string
+     *
+     * @return String last weeks YYYY-MM-DD date string
+     */
+    public static String getLastWeeksDateStr() {
+        Date lastWeeksDate = HgUtils.addDaysToDate(new Date(), -7);
+        return new SimpleDateFormat("yyyy-MM-dd").format(lastWeeksDate); // NOI18N
+    }   
+    
     /**
      * isSolaris - check you are running onthe Solaris OS
      *
@@ -121,6 +169,31 @@ public class HgUtils {
      */
     public static boolean isSolaris(){
         return System.getProperty("os.name").equals("SunOS"); // NOI18N
+    }
+
+    /**
+     * replaceHttpPassword - replace any http or https passwords in the string
+     *
+     * @return String modified string with **** instead of passwords
+     */
+    public static String replaceHttpPassword(String s){
+        Matcher m = httpPasswordPattern.matcher(s);
+        return m.replaceAll(httpPasswordReplacementStr); 
+    }
+    
+    /**
+     * replaceHttpPassword - replace any http or https passwords in the List<String>
+     *
+     * @return List<String> containing modified strings with **** instead of passwords
+     */
+    public static List<String> replaceHttpPassword(List<String> list){
+        if(list == null) return null;
+
+        List<String> out = new ArrayList<String>(list.size());
+        for(String s: list){
+            out.add(replaceHttpPassword(s));
+        } 
+        return out;
     }
 
     /**
@@ -209,6 +282,28 @@ public class HgUtils {
             return false;
     }
     
+    private static void resetIgnorePatterns(File file) {
+        if (ignorePatterns == null) {
+            return;
+        }
+        String key = file.getAbsolutePath();
+        ignorePatterns.remove(key);
+    }
+
+    private static Set<Pattern> getIgnorePatterns(File file) {
+        if (ignorePatterns == null) {
+            ignorePatterns = new HashMap<String, Set<Pattern>>();
+        }
+        String key = file.getAbsolutePath();
+        Set<Pattern> patterns = ignorePatterns.get(key);
+        if (patterns == null) {
+            patterns = new HashSet<Pattern>(5);
+            addIgnorePatterns(patterns, file);
+            ignorePatterns.put(key, patterns);
+        }
+        return patterns;
+    }
+
     /**
      * isIgnored - checks to see if this is a file Hg should ignore
      *
@@ -216,28 +311,42 @@ public class HgUtils {
      * @return boolean true - ignore, false - not ignored
      */
     public static boolean isIgnored(File file){
-        if (file == null) return true;
-        String name = file.getPath();
+        return isIgnored(file, true);
+    }
+
+    public static boolean isIgnored(File file, boolean checkSharability){
+        if (file == null) return false;
+        String path = file.getPath();
+        String name = file.getName();
         File topFile = Mercurial.getInstance().getTopmostManagedParent(file);
         
         // We assume that the toplevel directory should not be ignored.
         if (topFile == null || topFile.equals(file)) {
             return false;
         }
+        
+        // We assume that the Project should not be ignored.
+        if(file.isDirectory()){
+            ProjectManager projectManager = ProjectManager.getDefault();
+            if (projectManager.isProject(FileUtil.toFileObject(file))) {
+                return false;
+            }
+        }
 
-        Set<Pattern> patterns = new HashSet<Pattern>(5);
-        addIgnorePatterns(patterns, topFile);
+        Set<Pattern> patterns = getIgnorePatterns(topFile);
 
         for (Iterator i = patterns.iterator(); i.hasNext();) {
             Pattern pattern = (Pattern) i.next();
-            if (pattern.matcher(name).find()) {
+            if (pattern.matcher(path).find()) {
                 return true;
             }
         }
 
         if (FILENAME_HGIGNORE.equals(name)) return false;
-        int sharability = SharabilityQuery.getSharability(file);
-        if (sharability == SharabilityQuery.NOT_SHARABLE) return true;
+        if (checkSharability) {
+            int sharability = SharabilityQuery.getSharability(file);
+            if (sharability == SharabilityQuery.NOT_SHARABLE) return true;
+            }
         return false;
     }
 
@@ -255,28 +364,115 @@ public class HgUtils {
         File root = hg.getTopmostManagedParent(path);
         if( root == null) return;
         File ignore = new File(root, FILENAME_HGIGNORE);
-        if (ignore.exists()) {
-            if (!confirmDialog(HgUtils.class, "MSG_IGNORE_FILES_TITLE", "MSG_IGNORE_FILES")) { // NOI18N 
-                return;
-            }
-        }
-           
+        
         try     {
-            fileWriter = new BufferedWriter(
-                    new OutputStreamWriter(new FileOutputStream(ignore, true)));
-            for (String name : HG_IGNORE_FILES) {
-                fileWriter.write(name + "\n"); // NOI18N
+            if (!ignore.exists()) {
+                fileWriter = new BufferedWriter(
+                        new OutputStreamWriter(new FileOutputStream(ignore)));
+                for (String name : HG_IGNORE_FILES) {
+                    fileWriter.write(name + "\n"); // NOI18N
+                }
+            }else{
+                addToExistingIgnoredFile(ignore);
             }
         } catch (IOException ex) {
             Mercurial.LOG.log(Level.FINE, "createIgnored(): File {0} - {1}",  // NOI18N
                     new Object[] {ignore.getAbsolutePath(), ex.toString()});
         }finally {
             try {
-                fileWriter.close();
+                if(fileWriter != null) fileWriter.close();
                 hg.getFileStatusCache().refresh(ignore, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
             } catch (IOException ex) {
                 Mercurial.LOG.log(Level.FINE, "createIgnored(): File {0} - {1}",  // NOI18N
                         new Object[] {ignore.getAbsolutePath(), ex.toString()});
+            }
+        }
+    }
+    
+    private static int HG_NUM_PATTERNS_TO_CHECK = 5;
+    private static void addToExistingIgnoredFile(File hgignoreFile) {
+        if(hgignoreFile == null || !hgignoreFile.exists() || !hgignoreFile.canWrite()) return;
+        File tempFile = null;
+        BufferedReader br = null;
+        PrintWriter pw = null;
+        boolean bOrigAnyPresent = false;
+        boolean bOrigPresent = false;
+        boolean bChgAnyPresent = false;
+        boolean bRejAnyPresent = false;
+        boolean bConflictAnyPresent = false;
+        
+        // If new patterns are added to HG_IGNORE_FILES, following code needs to
+        // check for these new patterns
+        assert( HG_IGNORE_FILES.length == HG_NUM_PATTERNS_TO_CHECK);
+        
+        try {
+            tempFile = new File(hgignoreFile.getAbsolutePath() + ".tmp"); // NOI18N
+            if (tempFile == null) return;
+            
+            br = new BufferedReader(new FileReader(hgignoreFile));
+            pw = new PrintWriter(new FileWriter(tempFile));
+
+            String line = null;            
+            while ((line = br.readLine()) != null) {
+                if(!bOrigAnyPresent && line.equals(HG_IGNORE_ORIG_ANY_FILES)){
+                    bOrigAnyPresent = true;
+                }else if (!bOrigPresent && line.equals(HG_IGNORE_ORIG_FILES)){
+                    bOrigPresent = true;
+                }else if (!bChgAnyPresent && line.equals(HG_IGNORE_CHG_ANY_FILES)){
+                    bChgAnyPresent = true;
+                }else if (!bRejAnyPresent && line.equals(HG_IGNORE_REJ_ANY_FILES)){
+                    bRejAnyPresent = true;
+                }else if (!bConflictAnyPresent && line.equals(HG_IGNORE_CONFLICT_ANY_FILES)){
+                    bConflictAnyPresent = true;
+                }
+                pw.println(line);
+                pw.flush();
+            }
+            // If not found add as required
+            if (!bOrigAnyPresent) {
+                pw.println(HG_IGNORE_ORIG_ANY_FILES );
+                pw.flush();
+            }
+            if (!bOrigPresent) {
+                pw.println(HG_IGNORE_ORIG_FILES );
+                pw.flush();
+            }
+            if (!bChgAnyPresent) {
+                pw.println(HG_IGNORE_CHG_ANY_FILES );
+                pw.flush();
+            }
+            if (!bRejAnyPresent) {
+                pw.println(HG_IGNORE_REJ_ANY_FILES );
+                pw.flush();
+            }     
+            if (!bConflictAnyPresent) {
+                pw.println(HG_IGNORE_CONFLICT_ANY_FILES );
+                pw.flush();
+            }     
+            
+        } catch (IOException ex) {
+            // Ignore
+        } finally {
+            try {
+                if(pw != null) pw.close();
+                if(br != null) br.close();
+
+                boolean bAnyAdditions = !bOrigAnyPresent || !bOrigPresent  || 
+                        !bChgAnyPresent || !bRejAnyPresent || !bConflictAnyPresent;               
+                if(bAnyAdditions){
+                    if (!confirmDialog(HgUtils.class, "MSG_IGNORE_FILES_TITLE", "MSG_IGNORE_FILES")) { // NOI18N 
+                        tempFile.delete();
+                        return;
+                    }
+                    if(tempFile != null && tempFile.isFile() && tempFile.canWrite() && hgignoreFile != null){ 
+                        hgignoreFile.delete();
+                        tempFile.renameTo(hgignoreFile);
+                    }
+                }else{
+                    tempFile.delete();
+                }
+            } catch (IOException ex) {
+            // Ignore
             }
         }
     }
@@ -390,6 +586,7 @@ public class HgUtils {
         } finally {
             lock.releaseLock();
             if (w != null) w.close();
+            resetIgnorePatterns(directory);
         }
     }
 
