@@ -11,7 +11,7 @@ import org.netbeans.modules.soa.mappercore.event.MapperSelectionListener;
 
 /**
  *
- * @author alex02
+ * @author AlexanderPermyacov
  */
 public class AutoScrollSelectionRightTree implements MapperSelectionListener {
     private RightTree rightTree;
@@ -25,9 +25,11 @@ public class AutoScrollSelectionRightTree implements MapperSelectionListener {
 
     public void mapperSelectionChanged(MapperSelectionEvent event) {
         TreePath treePath = rightTree.getSelectionModel().getSelectedPath();
-        if (treePath == currentPath) return; 
+        if (treePath == currentPath) { return; }
         
         currentPath = treePath;
+        if (treePath == null) { return; }
+        
         MapperNode node = rightTree.getMapper().getNode(treePath, true);
         int h = node.getContentHeight();
         int y = node.getContentCenterY();
