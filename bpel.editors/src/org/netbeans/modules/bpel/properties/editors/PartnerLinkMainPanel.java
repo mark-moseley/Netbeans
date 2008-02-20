@@ -27,7 +27,6 @@ import java.awt.event.FocusListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.StringTokenizer;
@@ -51,7 +50,6 @@ import org.netbeans.modules.bpel.properties.ImportRegistrationHelper;
 import org.netbeans.modules.bpel.properties.Util;
 import org.netbeans.modules.soa.ui.form.CustomNodeEditor;
 import org.netbeans.modules.soa.ui.form.valid.Validator;
-import org.netbeans.modules.xml.wsdl.model.WSDLModelFactory;
 import org.openide.ErrorManager;
 import static org.netbeans.modules.bpel.properties.PropertyType.*;
 import org.netbeans.modules.soa.ui.form.EditorLifeCycleAdapter;
@@ -63,7 +61,6 @@ import org.netbeans.modules.soa.ui.form.valid.ValidStateManager.ValidStateListen
 import org.netbeans.modules.bpel.properties.Constants;
 import org.netbeans.modules.bpel.properties.ResolverUtility;
 import org.netbeans.modules.bpel.properties.editors.controls.EmptyComboBoxModel;
-import org.netbeans.modules.xml.retriever.catalog.Utilities;
 import org.netbeans.modules.xml.wsdl.model.Definitions;
 import org.netbeans.modules.xml.wsdl.model.PortType;
 import org.netbeans.modules.xml.wsdl.model.Import;
@@ -73,12 +70,9 @@ import org.netbeans.modules.xml.wsdl.model.extensions.bpel.PartnerLinkType;
 import org.netbeans.modules.xml.wsdl.model.extensions.bpel.Role;
 import org.netbeans.modules.xml.wsdl.model.visitor.WSDLUtilities;
 import org.netbeans.modules.xml.wsdl.model.visitor.WSDLModelVisitor;
-import org.netbeans.modules.xml.xam.Model;
-import org.netbeans.modules.xml.xam.ModelSource;
 import org.netbeans.modules.xml.xam.dom.NamedComponentReference;
 import org.openide.filesystems.FileObject;
 import org.openide.util.HelpCtx;
-import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.netbeans.modules.bpel.properties.importchooser.WSDLFileImportDialog;
 import org.netbeans.modules.xml.catalogsupport.util.ProjectUtilities;
@@ -86,7 +80,6 @@ import org.netbeans.modules.xml.catalogsupport.util.ProjectWSDL;
 import org.netbeans.modules.xml.schema.ui.basic.UIUtilities;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
-import org.openide.filesystems.FileUtil;
 
 /**
  * @author nk160297
@@ -121,6 +114,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
       return FileOwnerQuery.getOwner(((DataObject) myEditor.getLookup().lookup(DataObject.class)).getPrimaryFile());
     }
     
+    @Override
     public void createContent() {
         initComponents();
         bindControls2PropertyNames();
@@ -147,6 +141,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
         //
         cbxPartnerLinkType.setRenderer(new DefaultListCellRenderer() {
             static final long serialVersionUID = 1L;
+            @Override
             public Component getListCellRendererComponent(
                     JList list, Object value, int index,
                     boolean isSelected, boolean cellHasFocus) {
@@ -232,6 +227,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
         fldNewPLTName.getDocument().addDocumentListener(docListener);
         //
         FocusListener fl = new FocusAdapter() {
+            @Override
             public void focusLost(FocusEvent e) {
                 inputDelayTimer.stop();
                 getValidator().revalidate(true);
@@ -297,7 +293,8 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
             }
         }
     }
-    
+
+    @Override
     public boolean initControls() {
         try {
             // remove selection to guarantee that selection will always send event
@@ -330,7 +327,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                     wsdlFileWasSpecified = true;
                 } else if (cookieObj != null && cookieObj instanceof FileObject){
                     resultWsdlFile = (FileObject)cookieObj;
-                    wsdlModel = getWsdlModel(resultWsdlFile);
+                    wsdlModel = PartnerLinkHelper.getWSDLModel(resultWsdlFile);
                     wsdlFileWasSpecified = true;
                 }
             }
@@ -369,6 +366,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
         // vlv
         setWrapper(getCurrentWsdlFile());
         myWsdlWrapperName.addFocusListener(new FocusAdapter() {
+            @Override
             public void focusLost(FocusEvent e) {
                 getValidator().revalidate(true);
             }
@@ -559,7 +557,8 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
         }
         getValidator().revalidate(true);
     }
-    
+
+    @Override
     public boolean applyNewValues() {
         try {
             PartnerLink pLink = myEditor.getEditedObject();
@@ -584,7 +583,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
     // vlv
     private WSDLModel getCurrentWsdlModel(boolean isWsdlWrapperSet, boolean isCreate) {
         FileObject currentFile = getCurrentWsdlFile();
-        WSDLModel currentModel = getWsdlModel(currentFile);
+        WSDLModel currentModel = PartnerLinkHelper.getWSDLModel(currentFile);
         
         if (isWsdlWrapperSet) {
             WsdlWrapper wsdlWrapper =
@@ -783,20 +782,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
         return plType;
     }
     
-    private WSDLModel getWsdlModel(FileObject wsdlFile) {
-        if (wsdlFile != null) {
-            ModelSource modelSource = Utilities.getModelSource(wsdlFile, true);
-            if (modelSource != null) {
-                WSDLModel wsdlModel =
-                        WSDLModelFactory.getDefault().getModel(modelSource);
-                if (wsdlModel.getState() != Model.State.NOT_WELL_FORMED) {
-                    return wsdlModel;
-                }
-            }
-        }
-        //
-        return null;
-    }
+
     
     private PartnerLinkType tuneForExistingPLT(final PartnerLink pLink) {
         PartnerLinkType plType =
@@ -831,7 +817,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
         if (myValidator == null) {
             myValidator = new DefaultValidator(myEditor, ErrorMessagesBundle.class) {
                 
-                public boolean doFastValidation() {
+                public void doFastValidation() {
                     // vlv
                     WsdlWrapper wrapper =
                        new WsdlWrapper(
@@ -841,35 +827,41 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                     FileObject file = wrapper.getFile();
 
                     if (file != null && !file.canWrite()) {
-                        addReasonKey("ERR_FILE_IS_READ_ONLY", myWsdlWrapperName.getText()); //NOI18N
+                        addReasonKey(Severity.ERROR, 
+                                "ERR_FILE_IS_READ_ONLY", 
+                                myWsdlWrapperName.getText()); //NOI18N
                     }
 
                     String plName = fldPartnerLinkName.getText();
                     //
                     if (plName == null || plName.length() == 0) {
-                        addReasonKey("ERR_NAME_EMPTY"); //NOI18N
+                        addReasonKey(Severity.ERROR, "ERR_NAME_EMPTY"); //NOI18N
                     }
                     //
                     if (cbxWsdlFile.getSelectedIndex() == -1) {
-                        addReasonKey("ERR_WSDL_FILE_NOT_SPECIFIED"); //NOI18N
+                        addReasonKey(Severity.ERROR, 
+                                "ERR_WSDL_FILE_NOT_SPECIFIED"); //NOI18N
                     }
                     //
                     if (rbtnUseExistingPLT.isSelected()) {
                         if (cbxPartnerLinkType.getSelectedIndex() == -1) {
-                            addReasonKey("ERR_PL_TYPE_NOT_SPECIFIED"); //NOI18N
+                            addReasonKey(Severity.ERROR, 
+                                    "ERR_PL_TYPE_NOT_SPECIFIED"); //NOI18N
                         }
                         //
                         if (myRole == null && partnerRole == null) {
-                            addReasonKey("ERR_PL_TYPE_WITHOUT_ROLES"); //NOI18N
+                            addReasonKey(Severity.ERROR, 
+                                    "ERR_PL_TYPE_WITHOUT_ROLES"); //NOI18N
                         }
                     } else {
                         String pltName = fldNewPLTName.getText();
                         if (pltName == null || pltName.length() == 0) {
-                            addReasonKey("ERR_PLT_NAME_EMPTY"); //NOI18N
+                            addReasonKey(Severity.ERROR, "ERR_PLT_NAME_EMPTY"); //NOI18N
                         } else {
                             boolean isCorrectPLTName = Util.isNCName(pltName);
                             if (!isCorrectPLTName) {
-                                addReasonKey("ERR_PLT_NAME_INVALID"); //NOI18N
+                                addReasonKey(Severity.ERROR, 
+                                        "ERR_PLT_NAME_INVALID"); //NOI18N
                             } else {
                                 // vlv
                                 WSDLModel wsdlModel = getCurrentWsdlModel(true, false);
@@ -877,7 +869,8 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                                 if (wsdlModel != null) {
                                     isCorrectPLTName = Util.isUniquePartnerLinkTypeName(wsdlModel, pltName);
                                     if (!isCorrectPLTName) {
-                                        addReasonKey("ERR_PLT_NAME_NOT_UNIQUE"); //NOI18N
+                                        addReasonKey(Severity.ERROR, 
+                                                "ERR_PLT_NAME_NOT_UNIQUE"); //NOI18N
                                     }
                                 }
                             }
@@ -885,42 +878,49 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                         //
                         if (!chbxProcessWillImplement.isSelected() &&
                                 !chbxPartnerWillImpement.isSelected()) {
-                            addReasonKey("ERR_NEW_PLT_ROLES_NOT_SPECIFIED"); //NOI18N
+                            addReasonKey(Severity.ERROR, 
+                                    "ERR_NEW_PLT_ROLES_NOT_SPECIFIED"); //NOI18N
                         }
                         //
                         if (chbxProcessWillImplement.isSelected()) {
                             String myRoleName = fldProcessRoleName.getText();
                             if (myRoleName == null || myRoleName.length() == 0) {
-                                addReasonKey("ERR_PLT_MY_ROLE_NAME_EMPTY"); //NOI18N
+                                addReasonKey(Severity.ERROR, 
+                                        "ERR_PLT_MY_ROLE_NAME_EMPTY"); //NOI18N
                             } else {
                                 boolean isCorrectMyRoleName = Util.isNCName(myRoleName);
                                 if (!isCorrectMyRoleName) {
-                                    addReasonKey("ERR_PLT_MY_ROLE_NAME_INVALID"); //NOI18N
+                                    addReasonKey(Severity.ERROR, 
+                                            "ERR_PLT_MY_ROLE_NAME_INVALID"); //NOI18N
                                 }
                             }
                             //
                             int processPortTypeIndex =
                                     cbxProcessPortType.getSelectedIndex();
                             if (processPortTypeIndex == -1) {
-                                addReasonKey("ERR_PLT_MY_ROLE_PORT_TYPE_EMPTY"); //NOI18N
+                                addReasonKey(Severity.ERROR, 
+                                        "ERR_PLT_MY_ROLE_PORT_TYPE_EMPTY"); //NOI18N
                             }
                         }
                         //
                         if (chbxPartnerWillImpement.isSelected()) {
                             String myRoleName = fldPartnerRoleName.getText();
                             if (myRoleName == null || myRoleName.length() == 0) {
-                                addReasonKey("ERR_PLT_PARTNER_ROLE_NAME_EMPTY"); //NOI18N
+                                addReasonKey(Severity.ERROR, 
+                                        "ERR_PLT_PARTNER_ROLE_NAME_EMPTY"); //NOI18N
                             } else {
                                 boolean isCorrectPartnerRoleName = Util.isNCName(myRoleName);
                                 if (!isCorrectPartnerRoleName) {
-                                    addReasonKey("ERR_PLT_PARTNER_ROLE_NAME_INVALID"); //NOI18N
+                                    addReasonKey(Severity.ERROR, 
+                                            "ERR_PLT_PARTNER_ROLE_NAME_INVALID"); //NOI18N
                                 }
                             }
                             //
                             int partnerPortTypeIndex =
                                     cbxPartnerPortType.getSelectedIndex();
                             if (partnerPortTypeIndex == -1) {
-                                addReasonKey("ERR_PLT_PARTNER_ROLE_PORT_TYPE_EMPTY"); //NOI18N
+                                addReasonKey(Severity.ERROR, 
+                                        "ERR_PLT_PARTNER_ROLE_PORT_TYPE_EMPTY"); //NOI18N
                             }
                         }
                         //
@@ -931,15 +931,12 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                             if (myRoleName != null
                                     && myRoleName.length() > 0
                                     && myRoleName.equals(partnerRoleName)) {
-                                addReasonKey("ERR_PLT_ROLES_NOT_UNIQUE"); //NOI18N
+                                addReasonKey(Severity.ERROR, 
+                                        "ERR_PLT_ROLES_NOT_UNIQUE"); //NOI18N
                             }
                         }
                     }
-                    //
-                    //
-                    return isReasonsListEmpty();
                 }
-                
             };
         }
         return myValidator;
@@ -959,6 +956,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
             setIcon(new ImageIcon(NodeType.WSDL_FILE.getImage()));
         }
         
+        @Override
         public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 
@@ -972,6 +970,7 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
     private class PortTypeRenderer extends DefaultListCellRenderer {
         static final long serialVersionUID = 1L;
         
+        @Override
         public Component getListCellRendererComponent(
                 JList list, Object value, int index,
                 boolean isSelected, boolean cellHasFocus) {
@@ -991,8 +990,9 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
+
         btngrPLT = new javax.swing.ButtonGroup();
         lblName = new javax.swing.JLabel();
         fldPartnerLinkName = new javax.swing.JTextField();
@@ -1024,130 +1024,69 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
         myWsdlWrapperName = new javax.swing.JTextField();
         myBrowseButton = new javax.swing.JButton();
 
-        getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_PNL_PartnerLinkMain"));
-        getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_PNL_PartnerLinkMain"));
         lblName.setLabelFor(fldPartnerLinkName);
-        lblName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_Name"));
-        lblName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_Name"));
-        lblName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_Name"));
+        lblName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_Name")); // NOI18N
 
         fldPartnerLinkName.setColumns(30);
-        fldPartnerLinkName.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_INP_Name"));
-        fldPartnerLinkName.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_INP_Name"));
 
         lblWsdlFile.setLabelFor(cbxWsdlFile);
-        lblWsdlFile.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_WsdlFile"));
-        lblWsdlFile.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_WsdlFile"));
-        lblWsdlFile.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_WsdlFile"));
+        lblWsdlFile.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_WsdlFile")); // NOI18N
 
         lblPartnerLinkType.setLabelFor(cbxPartnerLinkType);
-        lblPartnerLinkType.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_PartnerLinkType"));
-        lblPartnerLinkType.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_PartnerLinkType"));
-        lblPartnerLinkType.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_PartnerLinkType"));
+        lblPartnerLinkType.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_PartnerLinkType")); // NOI18N
 
         lblMyRole.setLabelFor(fldMyRole);
-        lblMyRole.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_MyRole"));
-        lblMyRole.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_MyRole"));
-        lblMyRole.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_MyRole"));
+        lblMyRole.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_MyRole")); // NOI18N
 
         lblPartnerRole.setLabelFor(fldPartnerRole);
-        lblPartnerRole.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_PartnerRole"));
-        lblPartnerRole.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_PartnerRole"));
-        lblPartnerRole.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_PartnerRole"));
-
-        cbxPartnerLinkType.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_CMB_PartnerLinkType"));
-        cbxPartnerLinkType.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_CMB_PartnerLinkType"));
-
-        cbxWsdlFile.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_CMB_WsdlFile"));
-        cbxWsdlFile.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_CMB_WsdlFile"));
+        lblPartnerRole.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_PartnerRole")); // NOI18N
 
         lblErrorMessage.setForeground(new java.awt.Color(255, 0, 0));
-        lblErrorMessage.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_ErrorLabel"));
-        lblErrorMessage.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_ErrorLabel"));
 
         btngrPLT.add(rbtnUseExistingPLT);
         rbtnUseExistingPLT.setSelected(true);
-        rbtnUseExistingPLT.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"RBTN_UseExisingPLType"));
+        rbtnUseExistingPLT.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"RBTN_UseExisingPLType")); // NOI18N
         rbtnUseExistingPLT.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         rbtnUseExistingPLT.setMargin(new java.awt.Insets(0, 0, 0, 0));
-        rbtnUseExistingPLT.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_RBTN_UseExisingPLType"));
-        rbtnUseExistingPLT.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_RBTN_UseExisingPLType"));
 
         btngrPLT.add(rbtnCreateNewPLT);
-        rbtnCreateNewPLT.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"RBTN_CreateNewPLType"));
+        rbtnCreateNewPLT.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"RBTN_CreateNewPLType")); // NOI18N
         rbtnCreateNewPLT.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         rbtnCreateNewPLT.setMargin(new java.awt.Insets(0, 0, 0, 0));
-        rbtnCreateNewPLT.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_RBTN_CreateNewPLType"));
-        rbtnCreateNewPLT.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_RBTN_CreateNewPLType"));
 
         lblNewPLTypeName.setLabelFor(fldNewPLTName);
-        lblNewPLTypeName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_NewPLTypeName"));
-        lblNewPLTypeName.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_LBL_NewPLTypeName"));
-        lblNewPLTypeName.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_LBL_NewPLTypeName"));
+        lblNewPLTypeName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_NewPLTypeName")); // NOI18N
 
-        chbxProcessWillImplement.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"CHBX_ProcessWillImpement"));
+        chbxProcessWillImplement.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"CHBX_ProcessWillImpement")); // NOI18N
         chbxProcessWillImplement.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         chbxProcessWillImplement.setMargin(new java.awt.Insets(0, 0, 0, 0));
-        chbxProcessWillImplement.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_CHBX_ProcessWillImpement"));
-        chbxProcessWillImplement.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_CHBX_ProcessWillImpement"));
 
         lblProcessRoleName.setLabelFor(fldProcessRoleName);
-        lblProcessRoleName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_ProcessRoleName"));
-        lblProcessRoleName.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_LBL_ProcessRoleName"));
-        lblProcessRoleName.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_LBL_ProcessRoleName"));
+        lblProcessRoleName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_ProcessRoleName")); // NOI18N
 
         lblProcessPortType.setLabelFor(cbxProcessPortType);
-        lblProcessPortType.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_ProcessProtType"));
-        lblProcessPortType.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_LBL_ProcessProtType"));
-        lblProcessPortType.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_LBL_ProcessProtType"));
+        lblProcessPortType.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_ProcessProtType")); // NOI18N
 
-        chbxPartnerWillImpement.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"CHBX_PartnerWillImplement"));
+        chbxPartnerWillImpement.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"CHBX_PartnerWillImplement")); // NOI18N
         chbxPartnerWillImpement.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         chbxPartnerWillImpement.setMargin(new java.awt.Insets(0, 0, 0, 0));
-        chbxPartnerWillImpement.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_CHBX_PartnerWillImplement"));
-        chbxPartnerWillImpement.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_CHBX_PartnerWillImplement"));
 
         lblPartnerRoleName.setLabelFor(fldPartnerRoleName);
-        lblPartnerRoleName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_PartnerRoleName"));
-        lblPartnerRoleName.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_LBL_PartnerRoleName"));
-        lblPartnerRoleName.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_LBL_PartnerRoleName"));
+        lblPartnerRoleName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_PartnerRoleName")); // NOI18N
 
         lblPartnerPortType.setLabelFor(cbxPartnerPortType);
-        lblPartnerPortType.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_PartnerPortType"));
-        lblPartnerPortType.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_LBL_PartnerPortType"));
-        lblPartnerPortType.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_LBL_PartnerPortType"));
+        lblPartnerPortType.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_PartnerPortType")); // NOI18N
 
-        fldNewPLTName.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_INP_NewPLTypeName"));
-        fldNewPLTName.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_INP_NewPLTypeName"));
-
-        fldProcessRoleName.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_INP_ProcessRoleName"));
-        fldProcessRoleName.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_INP_ProcessRoleName"));
-
-        cbxProcessPortType.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_CMB_ProcessProtType"));
-        cbxProcessPortType.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_CMB_ProcessProtType"));
-
-        fldPartnerRoleName.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_INP_PartnerRoleName"));
-        fldPartnerRoleName.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_INP_PartnerRoleName"));
-
-        cbxPartnerPortType.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_CMB_PartnerPortType"));
-        cbxPartnerPortType.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_CMB_PartnerPortType"));
-
-        btnSwapRoles.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"BTN_SwapRoles"));
-        btnSwapRoles.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_BTN_SwapRoles"));
-        btnSwapRoles.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_BTN_SwapRoles"));
+        btnSwapRoles.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"BTN_SwapRoles")); // NOI18N
 
         fldMyRole.setEditable(false);
-        fldMyRole.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_INP_MyRole"));
-        fldMyRole.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_INP_MyRole"));
 
         fldPartnerRole.setEditable(false);
-        fldPartnerRole.getAccessibleContext().setAccessibleName(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSN_INP_PartnerRole"));
-        fldPartnerRole.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle").getString("ACSD_INP_PartnerRole"));
 
         lblNewPLTypeName1.setLabelFor(myWsdlWrapperName);
-        lblNewPLTypeName1.setText(org.openide.util.NbBundle.getMessage(PartnerLinkMainPanel.class, "LBL_Create_In_File")); // NOI18N
+        lblNewPLTypeName1.setText("Create in &File:");
 
-        myBrowseButton.setText(org.openide.util.NbBundle.getMessage(PartnerLinkMainPanel.class, "LBL_Browse")); // NOI18N
+        myBrowseButton.setText("&Browse");
         myBrowseButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 browseWsdlFile(evt);
@@ -1165,10 +1104,10 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                         .add(17, 17, 17)
                         .add(lblNewPLTypeName1)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(myWsdlWrapperName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 331, Short.MAX_VALUE)
+                        .add(myWsdlWrapperName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 373, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(myBrowseButton))
-                    .add(lblErrorMessage, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 509, Short.MAX_VALUE)
+                    .add(lblErrorMessage, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 577, Short.MAX_VALUE)
                     .add(rbtnUseExistingPLT)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
@@ -1178,8 +1117,8 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                                     .add(lblWsdlFile))
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                                    .add(fldPartnerLinkName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 447, Short.MAX_VALUE)
-                                    .add(org.jdesktop.layout.GroupLayout.LEADING, cbxWsdlFile, 0, 447, Short.MAX_VALUE)))
+                                    .add(fldPartnerLinkName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 500, Short.MAX_VALUE)
+                                    .add(org.jdesktop.layout.GroupLayout.LEADING, cbxWsdlFile, 0, 500, Short.MAX_VALUE)))
                             .add(layout.createSequentialGroup()
                                 .add(17, 17, 17)
                                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -1188,12 +1127,12 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                                     .add(lblPartnerLinkType))
                                 .add(0, 0, 0)
                                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                                    .add(org.jdesktop.layout.GroupLayout.TRAILING, cbxPartnerLinkType, 0, 397, Short.MAX_VALUE)
+                                    .add(org.jdesktop.layout.GroupLayout.TRAILING, cbxPartnerLinkType, 0, 446, Short.MAX_VALUE)
                                     .add(layout.createSequentialGroup()
                                         .add(btnSwapRoles)
-                                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 300, Short.MAX_VALUE))
-                                    .add(org.jdesktop.layout.GroupLayout.TRAILING, fldMyRole, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 397, Short.MAX_VALUE)
-                                    .add(org.jdesktop.layout.GroupLayout.TRAILING, fldPartnerRole, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 397, Short.MAX_VALUE))))
+                                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 335, Short.MAX_VALUE))
+                                    .add(org.jdesktop.layout.GroupLayout.TRAILING, fldMyRole, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 446, Short.MAX_VALUE)
+                                    .add(org.jdesktop.layout.GroupLayout.TRAILING, fldPartnerRole, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 446, Short.MAX_VALUE))))
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED))
                     .add(rbtnCreateNewPLT)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
@@ -1207,8 +1146,8 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                                     .add(lblProcessPortType))
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                                    .add(cbxProcessPortType, 0, 409, Short.MAX_VALUE)
-                                    .add(fldProcessRoleName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 409, Short.MAX_VALUE)))
+                                    .add(cbxProcessPortType, 0, 462, Short.MAX_VALUE)
+                                    .add(fldProcessRoleName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 462, Short.MAX_VALUE)))
                             .add(chbxPartnerWillImpement)
                             .add(layout.createSequentialGroup()
                                 .add(17, 17, 17)
@@ -1217,12 +1156,12 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                                     .add(lblPartnerPortType))
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                                    .add(cbxPartnerPortType, 0, 409, Short.MAX_VALUE)
-                                    .add(fldPartnerRoleName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 409, Short.MAX_VALUE)))
+                                    .add(cbxPartnerPortType, 0, 462, Short.MAX_VALUE)
+                                    .add(fldPartnerRoleName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 462, Short.MAX_VALUE)))
                             .add(layout.createSequentialGroup()
                                 .add(lblNewPLTypeName)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                                .add(fldNewPLTName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 363, Short.MAX_VALUE)))))
+                                .add(fldNewPLTName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 404, Short.MAX_VALUE)))))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -1287,6 +1226,65 @@ public class PartnerLinkMainPanel extends EditorLifeCycleAdapter
                 .add(lblErrorMessage, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addContainerGap())
         );
+
+        lblName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_Name")); // NOI18N
+        lblName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_Name")); // NOI18N
+        java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/bpel/properties/editors/Bundle"); // NOI18N
+        fldPartnerLinkName.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_INP_Name")); // NOI18N
+        fldPartnerLinkName.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_INP_Name")); // NOI18N
+        lblWsdlFile.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_WsdlFile")); // NOI18N
+        lblWsdlFile.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_WsdlFile")); // NOI18N
+        lblPartnerLinkType.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_PartnerLinkType")); // NOI18N
+        lblPartnerLinkType.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_PartnerLinkType")); // NOI18N
+        lblMyRole.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_MyRole")); // NOI18N
+        lblMyRole.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_MyRole")); // NOI18N
+        lblPartnerRole.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_PartnerRole")); // NOI18N
+        lblPartnerRole.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_PartnerRole")); // NOI18N
+        cbxPartnerLinkType.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_CMB_PartnerLinkType")); // NOI18N
+        cbxPartnerLinkType.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_CMB_PartnerLinkType")); // NOI18N
+        cbxWsdlFile.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_CMB_WsdlFile")); // NOI18N
+        cbxWsdlFile.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_CMB_WsdlFile")); // NOI18N
+        lblErrorMessage.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_ErrorLabel")); // NOI18N
+        lblErrorMessage.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_ErrorLabel")); // NOI18N
+        rbtnUseExistingPLT.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_RBTN_UseExisingPLType")); // NOI18N
+        rbtnUseExistingPLT.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_RBTN_UseExisingPLType")); // NOI18N
+        rbtnCreateNewPLT.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_RBTN_CreateNewPLType")); // NOI18N
+        rbtnCreateNewPLT.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_RBTN_CreateNewPLType")); // NOI18N
+        lblNewPLTypeName.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_LBL_NewPLTypeName")); // NOI18N
+        lblNewPLTypeName.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_LBL_NewPLTypeName")); // NOI18N
+        chbxProcessWillImplement.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_CHBX_ProcessWillImpement")); // NOI18N
+        chbxProcessWillImplement.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_CHBX_ProcessWillImpement")); // NOI18N
+        lblProcessRoleName.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_LBL_ProcessRoleName")); // NOI18N
+        lblProcessRoleName.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_LBL_ProcessRoleName")); // NOI18N
+        lblProcessPortType.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_LBL_ProcessProtType")); // NOI18N
+        lblProcessPortType.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_LBL_ProcessProtType")); // NOI18N
+        chbxPartnerWillImpement.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_CHBX_PartnerWillImplement")); // NOI18N
+        chbxPartnerWillImpement.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_CHBX_PartnerWillImplement")); // NOI18N
+        lblPartnerRoleName.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_LBL_PartnerRoleName")); // NOI18N
+        lblPartnerRoleName.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_LBL_PartnerRoleName")); // NOI18N
+        lblPartnerPortType.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_LBL_PartnerPortType")); // NOI18N
+        lblPartnerPortType.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_LBL_PartnerPortType")); // NOI18N
+        fldNewPLTName.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_INP_NewPLTypeName")); // NOI18N
+        fldNewPLTName.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_INP_NewPLTypeName")); // NOI18N
+        fldProcessRoleName.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_INP_ProcessRoleName")); // NOI18N
+        fldProcessRoleName.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_INP_ProcessRoleName")); // NOI18N
+        cbxProcessPortType.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_CMB_ProcessProtType")); // NOI18N
+        cbxProcessPortType.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSN_CMB_ProcessProtType")); // NOI18N
+        fldPartnerRoleName.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_INP_PartnerRoleName")); // NOI18N
+        fldPartnerRoleName.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_INP_PartnerRoleName")); // NOI18N
+        cbxPartnerPortType.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_CMB_PartnerPortType")); // NOI18N
+        cbxPartnerPortType.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_CMB_PartnerPortType")); // NOI18N
+        btnSwapRoles.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_BTN_SwapRoles")); // NOI18N
+        btnSwapRoles.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_BTN_SwapRoles")); // NOI18N
+        fldMyRole.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_INP_MyRole")); // NOI18N
+        fldMyRole.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_INP_MyRole")); // NOI18N
+        fldPartnerRole.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_INP_PartnerRole")); // NOI18N
+        fldPartnerRole.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_INP_PartnerRole")); // NOI18N
+        lblNewPLTypeName1.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(PartnerLinkMainPanel.class, "ACSN_LBL_CreateInFile")); // NOI18N
+        lblNewPLTypeName1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(PartnerLinkMainPanel.class, "ACSD_LBL_CreateInFile")); // NOI18N
+
+        getAccessibleContext().setAccessibleName(bundle.getString("ACSN_PNL_PartnerLinkMain")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(bundle.getString("ACSN_PNL_PartnerLinkMain")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     
     // vlv
