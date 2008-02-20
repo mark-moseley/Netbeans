@@ -71,23 +71,23 @@ class EditJarPanel extends javax.swing.JPanel {
         this();
         this.item = item;
         this.helper = helper;
-        txtJar.setText(item.getJarFile().getPath());
+        txtJar.setText(item.getJarFile());
         if (item.getSourceFile() != null) {
-            txtSource.setText(item.getSourceFile().getPath());
+            txtSource.setText(item.getSourceFile());
         }
         if (item.getJavadocFile() != null) {
-            txtJavadoc.setText(item.getJavadocFile().getPath());
+            txtJavadoc.setText(item.getJavadocFile());
         }
     }
 
     EditJarSupport.Item assignValues() {
         if (txtSource.getText() != null && txtSource.getText().trim().length() > 0) {
-            item.setSourceFile(new File(txtSource.getText().trim()));
+            item.setSourceFile(txtSource.getText().trim());
         } else {
             item.setSourceFile(null);
         }
         if (txtJavadoc.getText() != null && txtJavadoc.getText().trim().length() > 0) {
-            item.setJavadocFile(new File(txtJavadoc.getText().trim()));
+            item.setJavadocFile(txtJavadoc.getText().trim());
         } else {
             item.setJavadocFile(null);
         }
@@ -156,7 +156,7 @@ class EditJarPanel extends javax.swing.JPanel {
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                             .add(btnSource)
                             .add(btnJavadoc)))
-                    .add(txtJar, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 407, Short.MAX_VALUE))
+                    .add(txtJar, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 425, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -178,6 +178,11 @@ class EditJarPanel extends javax.swing.JPanel {
                     .add(txtSource, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
+
+        lblJavadoc.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(EditJarPanel.class, "ACSD_lblJavadoc")); // NOI18N
+        btnJavadoc.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(EditJarPanel.class, "ACSD_btnJavadoc")); // NOI18N
+        lblSource.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(EditJarPanel.class, "ACSD_lblSource")); // NOI18N
+        btnSource.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(EditJarPanel.class, "ACSD_btnSource")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     private void btnJavadocActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnJavadocActionPerformed
         // Let user search for the Jar file
@@ -191,20 +196,20 @@ class EditJarPanel extends javax.swing.JPanel {
         chooser.setFileFilter(new SimpleFileFilter(
                 "Javadoc Entry (folder, ZIP or JAR file)", 
                 new String[]{"ZIP", "JAR"}));   // NOI18N 
-        File curDir = helper.resolveFile(item.getJarFile().getPath());
+        File curDir = helper.resolveFile(item.getJarFile());
         chooser.setCurrentDirectory(curDir);
         int option = chooser.showOpenDialog(SwingUtilities.getWindowAncestor(this)); // Sow the chooser
 
         if (option == JFileChooser.APPROVE_OPTION) {
-            File files[];
+            String files[];
             try {
-                files = chooser.getFiles();
+                files = chooser.getSelectedPaths();
             } catch (IOException ex) {
                 // TODO: add localized message
                 Exceptions.printStackTrace(ex);
                 return;
             }
-            txtJavadoc.setText(files[0].getPath());
+            txtJavadoc.setText(files[0]);
         }
         
     }//GEN-LAST:event_btnJavadocActionPerformed
@@ -220,20 +225,20 @@ class EditJarPanel extends javax.swing.JPanel {
         chooser.setFileFilter(new SimpleFileFilter(
                 "Source Entry (folder, ZIP or JAR file)", 
                 new String[]{"ZIP", "JAR"}));   // NOI18N 
-        File curDir = helper.resolveFile(item.getJarFile().getPath());
+        File curDir = helper.resolveFile(item.getJarFile());
         chooser.setCurrentDirectory(curDir);
         int option = chooser.showOpenDialog(SwingUtilities.getWindowAncestor(this)); // Sow the chooser
 
         if (option == JFileChooser.APPROVE_OPTION) {
-            File files[];
+            String files[];
             try {
-                files = chooser.getFiles();
+                files = chooser.getSelectedPaths();
             } catch (IOException ex) {
                 // TODO: add localized message
                 Exceptions.printStackTrace(ex);
                 return;
             }
-            txtSource.setText(files[0].getPath());
+            txtSource.setText(files[0]);
         }
 
     }//GEN-LAST:event_btnSourceActionPerformed
