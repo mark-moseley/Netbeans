@@ -56,6 +56,7 @@ import org.netbeans.modules.soa.mappercore.model.Link;
 import org.netbeans.modules.soa.mappercore.model.Graph;
 import org.netbeans.modules.soa.mappercore.model.MapperModel;
 import org.netbeans.modules.soa.mappercore.model.TreeSourcePin;
+import org.netbeans.modules.soa.mappercore.search.Navigation;
 import org.netbeans.modules.soa.mappercore.utils.ScrollPaneWrapper;
 import org.netbeans.modules.soa.mappercore.utils.Utils;
 
@@ -81,7 +82,10 @@ public class LeftTree extends JTree implements
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
         scrollPane.getVerticalScrollBar().addAdjustmentListener(this);
-        scrollPaneWrapper = new ScrollPaneWrapper(scrollPane);
+
+        // vlv
+        //scrollPaneWrapper = new ScrollPaneWrapper(scrollPane);
+        scrollPaneWrapper = new Navigation(this, scrollPane, new ScrollPaneWrapper(scrollPane));
         
         addTreeExpansionListener(this);
         setCellRenderer(new DefaultLeftTreeCellRenderer(mapper));
@@ -131,11 +135,25 @@ public class LeftTree extends JTree implements
         InputMap iMap = getInputMap();
         ActionMap aMap = getActionMap();
         
-        iMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 2),
+        iMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, KeyEvent.CTRL_DOWN_MASK),
                 "press-right-control");
         aMap.put("press-right-control", new RightControlAction());
     }
     
+    public void registrAction(MapperKeyboardAction action) {
+        InputMap iMap = getInputMap();
+        ActionMap aMap = getActionMap();
+
+        String actionKey = action.getActionKey();
+        aMap.put(actionKey, action);
+
+        KeyStroke[] shortcuts = action.getShortcuts();
+        if (shortcuts != null) {
+            for (KeyStroke s : shortcuts) {
+                iMap.put(s, actionKey);
+            }
+        }
+    }
     
     @Override
     public String getToolTipText(MouseEvent event) {
@@ -472,14 +490,13 @@ public class LeftTree extends JTree implements
             Mapper mapper = LeftTree.this.getMapper();
             TreePath path = LeftTree.this.getSelectionPath();
             
+            mapper.getCanvas().requestFocusInWindow();
+            
             Link link = LeftTree.this.getOutgoingLinkForPath(path);
             if (link == null) return;
             
             path = mapper.getRightTreePathForLink(link);
-            mapper.getCanvas().requestFocus();
             mapper.getSelectionModel().setSelected(path, link);    
-            
         }
     }
-
 }
