@@ -49,7 +49,9 @@ import java.text.MessageFormat;
 import java.util.StringTokenizer;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
+import org.netbeans.modules.ruby.platform.PlatformComponentFactory;
 import org.netbeans.modules.ruby.platform.RubyPlatformCustomizer;
+import org.netbeans.modules.ruby.rubyproject.Util;
 import org.openide.WizardDescriptor;
 import org.openide.WizardValidationException;
 import org.openide.util.NbBundle;
@@ -62,11 +64,17 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
     private PanelConfigureProject panel;
     private boolean valid;
     
-    /** Creates new form PanelOptionsVisual */
-    public PanelOptionsVisual( PanelConfigureProject panel, int type ) {
+    public PanelOptionsVisual(PanelConfigureProject panel, int type) {
         initComponents();
+        Util.preselectWizardPlatform(platforms);
         this.panel = panel;
-        interpreterChanged();
+        fireChangeEvent();
+        
+        PlatformComponentFactory.addPlatformChangeListener(platforms, new PlatformComponentFactory.PlatformChangeListener() {
+            public void platformChanged() {
+                fireChangeEvent();
+            }
+        });
 
         switch (type) {
 //            case NewRubyProjectWizardIterator.TYPE_LIB:
@@ -103,17 +111,22 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
         });
     }
 
+    public @Override void removeNotify() {
+        Util.storeWizardPlatform(platforms);
+        super.removeNotify();
+    }
+    
     public void actionPerformed( ActionEvent e ) {        
         if ( e.getSource() == createMainCheckBox ) {
             lastMainClassCheck = createMainCheckBox.isSelected();
             mainClassTextField.setEnabled( lastMainClassCheck );        
-            this.panel.fireChangeEvent();
+            fireChangeEvent();
         }                
     }
     
     public void propertyChange (PropertyChangeEvent event) {
         if ("roots".equals(event.getPropertyName())) {
-            interpreterChanged();
+            fireChangeEvent();
         }
         if (PanelProjectLocationVisual.PROP_PROJECT_NAME.equals(event.getPropertyName())) {
             String newProjectName = NewRubyProjectWizardIterator.getPackageName((String) event.getNewValue());
@@ -124,6 +137,10 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
                 NbBundle.getMessage (PanelOptionsVisual.class,"TXT_ClassName"), new Object[] {newProjectName}
             ));
         }
+    }
+
+    private void fireChangeEvent() {
+        this.panel.fireChangeEvent();
     }
     
     /** This method is called from within the constructor to
@@ -149,6 +166,7 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
         org.openide.awt.Mnemonics.setLocalizedText(createMainCheckBox, org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("LBL_createMainCheckBox")); // NOI18N
         createMainCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
+        rubyPlatformLabel.setLabelFor(platforms);
         org.openide.awt.Mnemonics.setLocalizedText(rubyPlatformLabel, org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "RubyPlatformLabel")); // NOI18N
 
         org.openide.awt.Mnemonics.setLocalizedText(manageButton, org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "RubyHomeBrowse")); // NOI18N
@@ -176,7 +194,7 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
                     .add(layout.createSequentialGroup()
                         .add(createMainCheckBox)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(mainClassTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 410, Short.MAX_VALUE)))
+                        .add(mainClassTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 419, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -211,21 +229,21 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
     }//GEN-LAST:event_manageButtonActionPerformed
     
     boolean valid(WizardDescriptor settings) {
-        if (mainClassTextField.isVisible () && mainClassTextField.isEnabled ()) {
+        if (PlatformComponentFactory.getPlatform(platforms) == null) {
+            return false;
+        }
+        if (mainClassTextField.isVisible() && mainClassTextField.isEnabled()) {
             if (!valid) {
-                settings.putProperty( "WizardPanel_errorMessage", // NOI18N
-                    NbBundle.getMessage(PanelOptionsVisual.class,"ERROR_IllegalMainClassName")); //NOI18N
+                settings.putProperty("WizardPanel_errorMessage", // NOI18N
+                        NbBundle.getMessage(PanelOptionsVisual.class, "ERROR_IllegalMainClassName")); //NOI18N
             }
             return this.valid;
-        }
-        else {
+        } else {
             return true;
         }
     }
     
     void read(WizardDescriptor d) {
-        // XXX
-//        RubyInstallation.getInstance().addPropertyChangeListener(this);
     }
     
     void validate (WizardDescriptor d) throws WizardValidationException {
@@ -235,11 +253,11 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
     void store( WizardDescriptor d ) {
         d.putProperty( /*XXX Define somewhere */ "setAsMain", setAsMainCheckBox.isSelected() && setAsMainCheckBox.isVisible() ? Boolean.TRUE : Boolean.FALSE ); // NOI18N
         d.putProperty( /*XXX Define somewhere */ "mainClass", createMainCheckBox.isSelected() && createMainCheckBox.isVisible() ? mainClassTextField.getText() : null ); // NOI18N
-        d.putProperty("platform", platforms.getModel().getSelectedItem());
+        d.putProperty("platform", PlatformComponentFactory.getPlatform(platforms));
         // XXX
 //        RubyInstallation.getInstance().removePropertyChangeListener(this);
     }
-    
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JCheckBox createMainCheckBox;
     private javax.swing.JTextField mainClassTextField;
@@ -252,7 +270,7 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
     private void mainClassChanged () {
         String mainClassName = this.mainClassTextField.getText ();
         StringTokenizer tk = new StringTokenizer (mainClassName, "."); //NOI18N
-        boolean valid = true;
+        valid = true;
         while (tk.hasMoreTokens()) {
             String token = tk.nextToken();
             if (token.length() == 0 || /* !Utilities.isJavaIdentifier(token)*/ token.equals(" ")) {
@@ -260,12 +278,8 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
                 break;
             }            
         }
-        this.valid = valid;
-        this.panel.fireChangeEvent();
+        fireChangeEvent();
     }
 
-    public void interpreterChanged() {
-        this.panel.fireChangeEvent();
-    }    
 }
 
