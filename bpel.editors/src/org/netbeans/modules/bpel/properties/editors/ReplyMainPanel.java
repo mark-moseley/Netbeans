@@ -25,18 +25,15 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.MissingResourceException;
-import java.util.concurrent.Callable;
 import javax.xml.namespace.QName;
 import org.netbeans.modules.bpel.model.api.BPELElementsBuilder;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.api.Process;
 import org.netbeans.modules.bpel.model.api.Reply;
-import org.netbeans.modules.bpel.model.api.Variable;
 import org.netbeans.modules.bpel.model.api.VariableDeclaration;
 import org.netbeans.modules.bpel.model.api.events.VetoException;
 import org.netbeans.modules.bpel.model.api.references.BpelReference;
-import org.netbeans.modules.bpel.model.api.references.WSDLReference;
 import org.netbeans.modules.bpel.nodes.VariableNode;
 import org.netbeans.modules.bpel.properties.Constants;
 import org.netbeans.modules.bpel.properties.PropertyType;
@@ -47,12 +44,10 @@ import org.netbeans.modules.bpel.properties.ResolverUtility;
 import org.netbeans.modules.soa.ui.UserNotification;
 import org.netbeans.modules.bpel.properties.choosers.VariableChooserPanel;
 import org.netbeans.modules.soa.ui.form.CustomNodeEditor;
-import org.netbeans.modules.soa.ui.form.CustomNodeEditor.EditingMode;
 import org.netbeans.modules.soa.ui.form.EditorLifeCycleAdapter;
 import org.netbeans.modules.bpel.properties.editors.controls.MessageConfigurationController;
 import org.netbeans.modules.bpel.properties.editors.controls.MessageExchangeController;
 import org.netbeans.modules.soa.ui.nodes.NodesTreeParams;
-import org.netbeans.modules.bpel.properties.editors.controls.SimpleCustomEditor;
 import org.netbeans.modules.bpel.properties.editors.controls.TreeNodeChooser;
 import org.netbeans.modules.bpel.properties.editors.controls.filter.PreferredFaultFilter;
 import org.netbeans.modules.bpel.properties.editors.controls.filter.VariableTypeFilter;
@@ -60,7 +55,6 @@ import org.netbeans.modules.bpel.model.api.support.VisibilityScope;
 import org.netbeans.modules.soa.ui.form.valid.SoaDialogDisplayer;
 import org.netbeans.modules.soa.ui.form.valid.DefaultValidator;
 import org.netbeans.modules.bpel.editors.api.ui.valid.ErrorMessagesBundle;
-import org.netbeans.modules.bpel.editors.api.ui.valid.NodeEditorDescriptor;
 import org.netbeans.modules.soa.ui.form.valid.ValidStateManager;
 import org.netbeans.modules.soa.ui.form.valid.ValidStateManager.ValidStateListener;
 import org.netbeans.modules.soa.ui.form.valid.Validator;
@@ -103,6 +97,7 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
         createContent();
     }
     
+    @Override
     public void createContent() {
         mcc = new MessageConfigurationController(myEditor);
         mcc.createContent();
@@ -196,6 +191,7 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
                 CustomNodeEditor.PROPERTY_BINDER, PropertyType.NAME);
     }
     
+    @Override
     public boolean initControls() {
         Reply reply = myEditor.getEditedObject();
         if (reply != null) {
@@ -230,18 +226,21 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
         return true;
     }
     
+    @Override
     public boolean subscribeListeners() {
         mcc.subscribeListeners();
         mec.subscribeListeners();
         return true;
     }
     
+    @Override
     public boolean unsubscribeListeners() {
         mcc.unsubscribeListeners();
         mec.unsubscribeListeners();
         return true;
     }
-    
+
+    @Override
     public boolean applyNewValues() throws VetoException {
         mcc.applyNewValues();
         mec.applyNewValues();
@@ -268,6 +267,7 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
         return true;
     }
     
+    @Override
     public boolean afterClose() {
         mcc.afterClose();
         mec.afterClose();
@@ -547,29 +547,27 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
         if (myValidator == null) {
             myValidator = new DefaultValidator(myEditor, ErrorMessagesBundle.class) {
                 
-                public boolean doFastValidation() {
-                    
+                public void doFastValidation() {
                     if (rbtnNormalResponse.isSelected()){
                         Object item = cbxOperation.getSelectedItem();
                         if (item instanceof Operation &&
                                 ((Operation) item).getOutput() == null) {
-                            addReasonKey("ERR_OPERATION_NO_OUTPUT",
-                                    ((Operation) item).getName());
-                            return false;
+                            addReasonKey(Severity.ERROR, 
+                                    "ERR_OPERATION_NO_OUTPUT",
+                                    ((Operation) item).getName()); // NOI18N
                         }
                     }
-                    return true;
                 }
                 
-                public boolean doDetailedValidation() {
+                @Override
+                public void doDetailedValidation() {
                     if (rbtnFaultResponse.isSelected()) {
                         if (myFaultName == null) {
-                            addReasonKey("ERR_FAULT_NAME_EMPTY"); //NOI18N
+                            addReasonKey(Severity.ERROR, "ERR_FAULT_NAME_EMPTY"); //NOI18N
                         }
                         //
                         isCorrectFaultType(currFaultVar);
                     }
-                    return isReasonsListEmpty();
                 }
                 
                 /**
@@ -585,14 +583,16 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
                             varMsg = vcc.getType().getMessage();
                         }
                         if (varMsg == null) {
-                            addReasonKey("ERR_FAULT_VAR_EMPTY"); //NOI18N
+                            addReasonKey(Severity.ERROR, "ERR_FAULT_VAR_EMPTY"); //NOI18N
                             return false;
                         } else if (!requiredMessageRef.get().equals(varMsg)) {
                             String required = ResolverUtility.
                                     qName2DisplayText(requiredMessageRef.getQName());
                             String current = ResolverUtility.
                                     qName2DisplayText(vcc.getType().getTypeQName());
-                            addReasonKey("ERR_FAULT_VAR_WRONG_TYPE", required, current); //NOI18N
+                            addReasonKey(Severity.ERROR, 
+                                    "ERR_FAULT_VAR_WRONG_TYPE", 
+                                    required, current); //NOI18N
                             return false;
                         }
                     }
@@ -693,8 +693,9 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
+
         buttonGroup1 = new javax.swing.ButtonGroup();
         lblName = new javax.swing.JLabel();
         fldName = new javax.swing.JTextField();
@@ -721,91 +722,64 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
         lblErrorMessage = new javax.swing.JLabel();
 
         lblName.setLabelFor(fldName);
-        lblName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_Name"));
-        lblName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_Name"));
-        lblName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_Name"));
+        lblName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_Name")); // NOI18N
 
         fldName.setColumns(40);
-        fldName.setName("");
+        fldName.setName(""); // NOI18N
 
         lblMessageExchange.setLabelFor(fldMessageExchange);
-        lblMessageExchange.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_MessageExchange"));
-        lblMessageExchange.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_MessageExchange"));
-        lblMessageExchange.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_MessageExchange"));
+        lblMessageExchange.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_MessageExchange")); // NOI18N
 
-        btnChooseMessEx.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"BTN_ChooseMessageExchange"));
+        btnChooseMessEx.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"BTN_ChooseMessageExchange")); // NOI18N
         btnChooseMessEx.setMargin(new java.awt.Insets(0, 4, 0, 4));
-        btnChooseMessEx.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_ChooseMessageExchange"));
-        btnChooseMessEx.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_ChooseMessageExchange"));
 
         lblFaultName.setLabelFor(fldFaultName);
-        lblFaultName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_FaultName"));
-        lblFaultName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_FaultName"));
-        lblFaultName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_FaultName"));
+        lblFaultName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"LBL_FaultName")); // NOI18N
 
         fldFaultName.setEditable(false);
 
-        btnChooseFaultName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"BNT_ChooseFaultName"));
+        btnChooseFaultName.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"BNT_ChooseFaultName")); // NOI18N
         btnChooseFaultName.setMargin(new java.awt.Insets(0, 4, 0, 4));
-        btnChooseFaultName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BNT_ChooseFaultName"));
-        btnChooseFaultName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BNT_ChooseFaultName"));
 
-        lblPartnerLink.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_PartnerLink"));
-        lblPartnerLink.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_PartnerLink"));
-        lblPartnerLink.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_PartnerLink"));
+        lblPartnerLink.setLabelFor(cbxPartnerLink);
+        lblPartnerLink.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_PartnerLink")); // NOI18N
 
-        lblOperation.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_Operation"));
-        lblOperation.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_Operation"));
-        lblOperation.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_Operation"));
+        lblOperation.setLabelFor(cbxOperation);
+        lblOperation.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_Operation")); // NOI18N
 
-        lblOutputVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_OutputVariable"));
-        lblOutputVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_OutputVariable"));
-        lblOutputVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_OutputVariable"));
+        lblOutputVariable.setLabelFor(fldOutputVariable);
+        lblOutputVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_OutputVariable")); // NOI18N
 
         fldOutputVariable.setColumns(30);
         fldOutputVariable.setEditable(false);
 
-        btnNewOutputVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "BTN_CreateOutputVariable"));
+        btnNewOutputVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "BTN_CreateOutputVariable")); // NOI18N
         btnNewOutputVariable.setMargin(new java.awt.Insets(0, 4, 0, 4));
-        btnNewOutputVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_CreateOutputVariable"));
-        btnNewOutputVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_CreateOutputVariable"));
 
-        btnChooseOutputVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "BTN_BrowseOutputVarible"));
+        btnChooseOutputVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "BTN_BrowseOutputVarible")); // NOI18N
         btnChooseOutputVariable.setMargin(new java.awt.Insets(0, 2, 0, 2));
-        btnChooseOutputVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_BrowseOutputVarible"));
-        btnChooseOutputVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_BrowseOutputVarible"));
 
         buttonGroup1.add(rbtnNormalResponse);
-        rbtnNormalResponse.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"RBTN_NormalResponse"));
+        rbtnNormalResponse.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"RBTN_NormalResponse")); // NOI18N
         rbtnNormalResponse.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         rbtnNormalResponse.setMargin(new java.awt.Insets(0, 0, 0, 0));
-        rbtnNormalResponse.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_RBTN_NormalResponse"));
-        rbtnNormalResponse.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_RBTN_NormalResponse"));
 
         buttonGroup1.add(rbtnFaultResponse);
-        rbtnFaultResponse.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"RBTN_FaultResponse"));
+        rbtnFaultResponse.setText(org.openide.util.NbBundle.getMessage(FormBundle.class,"RBTN_FaultResponse")); // NOI18N
         rbtnFaultResponse.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         rbtnFaultResponse.setMargin(new java.awt.Insets(0, 0, 0, 0));
-        rbtnFaultResponse.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_RBTN_FaultResponse"));
-        rbtnFaultResponse.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_RBTN_FaultResponse"));
 
         lblFaultVariable.setLabelFor(fldFaultVariable);
-        lblFaultVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_FaultVariable"));
-        lblFaultVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_FaultVariable"));
-        lblFaultVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_FaultVariable"));
+        lblFaultVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "LBL_FaultVariable")); // NOI18N
 
         fldFaultVariable.setColumns(30);
         fldFaultVariable.setEditable(false);
 
-        btnNewFaultVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "BTN_CreateFaultVariable"));
+        btnNewFaultVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "BTN_CreateFaultVariable")); // NOI18N
         btnNewFaultVariable.setMargin(new java.awt.Insets(0, 4, 0, 4));
-        btnNewFaultVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_CreateFaultVariable"));
-        btnNewFaultVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_CreateFaultVariable"));
 
-        btnChooseFaultVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "BTN_BrowseFaultVarible"));
+        btnChooseFaultVariable.setText(org.openide.util.NbBundle.getMessage(FormBundle.class, "BTN_BrowseFaultVarible")); // NOI18N
         btnChooseFaultVariable.setMargin(new java.awt.Insets(0, 2, 0, 2));
-        btnChooseFaultVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_BrowseFaultVarible"));
-        btnChooseFaultVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_BrowseFaultVarible"));
 
         lblErrorMessage.setForeground(new java.awt.Color(255, 0, 0));
         lblErrorMessage.setAlignmentX(0.5F);
@@ -817,18 +791,16 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(lblErrorMessage, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 470, Short.MAX_VALUE)
+                    .add(lblErrorMessage, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 483, Short.MAX_VALUE)
                     .add(layout.createSequentialGroup()
                         .add(17, 17, 17)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-
-
                             .add(lblFaultName)
                             .add(lblFaultVariable))
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                             .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                                .add(fldFaultVariable, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 196, Short.MAX_VALUE)
+                                .add(fldFaultVariable, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 200, Short.MAX_VALUE)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                                 .add(btnNewFaultVariable)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
@@ -845,14 +817,14 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
                             .add(lblName))
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(cbxOperation, 0, 383, Short.MAX_VALUE)
-                            .add(cbxPartnerLink, 0, 383, Short.MAX_VALUE)
-                            .add(fldName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 383, Short.MAX_VALUE)))
+                            .add(cbxOperation, 0, 396, Short.MAX_VALUE)
+                            .add(cbxPartnerLink, 0, 396, Short.MAX_VALUE)
+                            .add(fldName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 396, Short.MAX_VALUE)))
                     .add(layout.createSequentialGroup()
                         .add(17, 17, 17)
                         .add(lblOutputVariable)
                         .add(7, 7, 7)
-                        .add(fldOutputVariable, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 184, Short.MAX_VALUE)
+                        .add(fldOutputVariable, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 188, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(btnNewOutputVariable)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
@@ -862,7 +834,7 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
                     .add(layout.createSequentialGroup()
                         .add(lblMessageExchange)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(fldMessageExchange, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 259, Short.MAX_VALUE)
+                        .add(fldMessageExchange, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 268, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(btnChooseMessEx)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)))
@@ -913,6 +885,54 @@ public class ReplyMainPanel extends EditorLifeCycleAdapter
                 .add(lblErrorMessage, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 27, Short.MAX_VALUE)
                 .addContainerGap())
         );
+
+        lblName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_Name")); // NOI18N
+        lblName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_Name")); // NOI18N
+        fldName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSN_TXTFLD_ReplyName")); // NOI18N
+        fldName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSD_TXTFLD_ReplyName")); // NOI18N
+        lblMessageExchange.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_MessageExchange")); // NOI18N
+        lblMessageExchange.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_MessageExchange")); // NOI18N
+        fldMessageExchange.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSN_TXTFLD_MessageExchange")); // NOI18N
+        fldMessageExchange.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSD_TXTFLD_MessageExchange")); // NOI18N
+        btnChooseMessEx.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_ChooseMessageExchange")); // NOI18N
+        btnChooseMessEx.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_ChooseMessageExchange")); // NOI18N
+        lblFaultName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_FaultName")); // NOI18N
+        lblFaultName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_FaultName")); // NOI18N
+        fldFaultName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSN_TXTFLD_FaultName")); // NOI18N
+        fldFaultName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSD_TXTFLD_FaultName")); // NOI18N
+        btnChooseFaultName.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BNT_ChooseFaultName")); // NOI18N
+        btnChooseFaultName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BNT_ChooseFaultName")); // NOI18N
+        lblPartnerLink.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_PartnerLink")); // NOI18N
+        lblPartnerLink.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_PartnerLink")); // NOI18N
+        cbxPartnerLink.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSN_CBX_PartnerLink")); // NOI18N
+        cbxPartnerLink.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSD_CBX_PartnerLink")); // NOI18N
+        lblOperation.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_Operation")); // NOI18N
+        lblOperation.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_Operation")); // NOI18N
+        cbxOperation.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSN_CBX_Operation")); // NOI18N
+        cbxOperation.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSD_CBX_Operation")); // NOI18N
+        lblOutputVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_OutputVariable")); // NOI18N
+        lblOutputVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_OutputVariable")); // NOI18N
+        fldOutputVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSN_TXTFLD_OutputVariable")); // NOI18N
+        fldOutputVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSD_TXTFLD_OutputVariable")); // NOI18N
+        btnNewOutputVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_CreateOutputVariable")); // NOI18N
+        btnNewOutputVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_CreateOutputVariable")); // NOI18N
+        btnChooseOutputVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_BrowseOutputVarible")); // NOI18N
+        btnChooseOutputVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_BrowseOutputVarible")); // NOI18N
+        rbtnNormalResponse.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_RBTN_NormalResponse")); // NOI18N
+        rbtnNormalResponse.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_RBTN_NormalResponse")); // NOI18N
+        rbtnFaultResponse.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_RBTN_FaultResponse")); // NOI18N
+        rbtnFaultResponse.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_RBTN_FaultResponse")); // NOI18N
+        lblFaultVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_LBL_FaultVariable")); // NOI18N
+        lblFaultVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_LBL_FaultVariable")); // NOI18N
+        fldFaultVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSN_TXTFLD_FaultVariable")); // NOI18N
+        fldFaultVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSD_TXTFLD_FaultVariable")); // NOI18N
+        btnNewFaultVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_CreateFaultVariable")); // NOI18N
+        btnNewFaultVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_CreateFaultVariable")); // NOI18N
+        btnChooseFaultVariable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSN_BTN_BrowseFaultVarible")); // NOI18N
+        btnChooseFaultVariable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FormBundle.class,"ACSD_BTN_BrowseFaultVarible")); // NOI18N
+
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSN_LBL_Main_Tab")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ReplyMainPanel.class, "ACSD_LBL_Main_Tab")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
