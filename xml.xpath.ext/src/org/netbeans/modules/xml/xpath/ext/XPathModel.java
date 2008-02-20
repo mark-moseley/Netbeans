@@ -20,6 +20,7 @@
 package org.netbeans.modules.xml.xpath.ext;
 
 import javax.xml.namespace.NamespaceContext;
+import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.xpath.ext.spi.ExtensionFunctionResolver;
 import org.netbeans.modules.xml.xpath.ext.spi.ExternalModelResolver;
 import org.netbeans.modules.xml.xpath.ext.spi.VariableResolver;
@@ -67,7 +68,7 @@ public interface XPathModel extends XPathSchemaContextHolder {
     void discardResolvedStatus();
     
     /**
-     * Tries to resolve all external references: variable, schema elements 
+     * Tries resolving all external references: variable, schema elements 
      * and attributes. Assigns schema contexts for all context holders.
      * 
      * Only the model's root expression is processed here. 
@@ -142,4 +143,5 @@ public interface XPathModel extends XPathSchemaContextHolder {
     
     void setExtensionFunctionResolver(ExtensionFunctionResolver extFuncResolver);
         
+    SchemaComponent getLastSchemaComponent();
 }
