@@ -36,7 +36,6 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.netbeans.modules.soa.ui.form.ValidablePropertyCustomizer;
 import org.netbeans.modules.bpel.properties.Constants;
-import org.netbeans.modules.bpel.properties.Util;
 import org.netbeans.modules.bpel.properties.editors.FormBundle;
 import org.netbeans.modules.soa.ui.form.RangeIntegerDocument;
 import org.netbeans.modules.soa.ui.form.valid.DefaultValidator;
@@ -46,6 +45,7 @@ import org.netbeans.modules.soa.ui.form.valid.ValidStateManager.ValidStateListen
 import org.netbeans.modules.soa.ui.form.valid.Validator;
 import org.netbeans.modules.bpel.properties.props.PropertyVetoError;
 import org.netbeans.modules.bpel.editors.api.utils.TimeEventUtil;
+import org.netbeans.modules.soa.ui.SoaUiUtil;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.util.HelpCtx;
 
@@ -56,6 +56,7 @@ import org.openide.util.HelpCtx;
 public class DeadlinePropertyCustomizer extends ValidablePropertyCustomizer
         implements PropertyChangeListener {
     
+    private static final long serialVersionUID = 1L;
     private Timer inputDelayTimer;
     
     private PropertyEditor myPropertyEditor;
@@ -113,6 +114,7 @@ public class DeadlinePropertyCustomizer extends ValidablePropertyCustomizer
         fldSecond.getDocument().addDocumentListener(docListener);
         //
         FocusListener fl = new FocusAdapter() {
+            @Override
             public void focusLost(FocusEvent e) {
                 inputDelayTimer.stop();
                 revalidate(true);
@@ -128,9 +130,10 @@ public class DeadlinePropertyCustomizer extends ValidablePropertyCustomizer
         //
         HelpCtx.setHelpIDString(this, this.getClass().getName());
         //
-        Util.activateInlineMnemonics(this);
+        SoaUiUtil.activateInlineMnemonics(this);
     }
     
+    @Override
     public synchronized void init(
             PropertyEnv propertyEnv, PropertyEditor propertyEditor) {
         assert propertyEnv != null && propertyEditor != null : "Wrong params"; // NOI18N
@@ -233,7 +236,7 @@ public class DeadlinePropertyCustomizer extends ValidablePropertyCustomizer
             super(vsmProvider, ErrorMessagesBundle.class);
         }
         
-        public boolean doFastValidation() {
+        public void doFastValidation() {
             String param = TimeEventUtil.getParseText(
                     fldYear.getText().trim(),
                     fldMonth.getText().trim(),
@@ -246,11 +249,8 @@ public class DeadlinePropertyCustomizer extends ValidablePropertyCustomizer
             try {
                 parseDate(param);
             } catch (ParseException e) {
-                addReasonKey("ERR_INCORRECT_DATE_TIME", param); // NOI18N
-                return false;
+                addReasonKey(Severity.ERROR, "ERR_INCORRECT_DATE_TIME", param); // NOI18N
             }
-            //
-            return true;
         }
     }
     

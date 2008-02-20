@@ -21,8 +21,6 @@ package org.netbeans.modules.bpel.properties.editors.controls;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
@@ -39,13 +37,13 @@ import org.netbeans.modules.bpel.model.api.events.VetoException;
 import org.netbeans.modules.bpel.model.api.support.TBoolean;
 import org.netbeans.modules.bpel.properties.Constants;
 import org.netbeans.modules.bpel.properties.PropertyType;
-import org.netbeans.modules.bpel.properties.Util;
 import org.netbeans.modules.soa.ui.form.CustomNodeEditor.EditingMode;
 import org.netbeans.modules.soa.ui.form.valid.DefaultValidStateManager;
 import org.netbeans.modules.soa.ui.form.valid.ValidStateManager;
 import org.netbeans.modules.bpel.nodes.BpelNode;
+import org.netbeans.modules.soa.ui.SoaUiUtil;
 import org.netbeans.modules.soa.ui.UserNotification;
-import org.openide.DialogDescriptor;
+import org.netbeans.modules.soa.ui.form.valid.Validator.Reason;
 import org.openide.ErrorManager;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
@@ -75,7 +73,7 @@ import org.openide.util.Lookup;
 public class AbstractCustomNodeEditor<T> extends JPanel
         implements CustomNodeEditor<T> {
     
-    static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
     
     // This Validation State Manager intended to be used when anything changed
     // by the user.
@@ -200,8 +198,10 @@ public class AbstractCustomNodeEditor<T> extends JPanel
             //
         } else {
             if (finalValidationState != null) {
-                String reason = finalValidationState.getReason();
-                UserNotification.showMessage(reason);
+                Reason reason = finalValidationState.getFistReason(null);
+                if (reason != null) {
+                    UserNotification.showMessage(reason.getText());
+                }
             }
         }
         //
@@ -489,6 +489,6 @@ public class AbstractCustomNodeEditor<T> extends JPanel
     }
     
     protected void fireHelpContextChange() {
-        Util.fireHelpContextChange(this, this.getHelpCtx());
+        SoaUiUtil.fireHelpContextChange(this, this.getHelpCtx());
     }
 }

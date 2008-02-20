@@ -34,7 +34,6 @@ import javax.swing.event.DocumentListener;
 import org.netbeans.modules.soa.ui.form.ValidablePropertyCustomizer;
 import org.netbeans.modules.bpel.properties.Constants;
 import org.netbeans.modules.bpel.properties.PropertyType;
-import org.netbeans.modules.bpel.properties.Util;
 import org.netbeans.modules.bpel.properties.editors.FormBundle;
 import org.netbeans.modules.soa.ui.form.RangeIntegerDocument;
 import org.netbeans.modules.soa.ui.form.valid.DefaultValidator;
@@ -44,6 +43,7 @@ import org.netbeans.modules.soa.ui.form.valid.ValidStateManager.ValidStateListen
 import org.netbeans.modules.soa.ui.form.valid.Validator;
 import org.netbeans.modules.bpel.properties.props.PropertyVetoError;
 import org.netbeans.modules.bpel.editors.api.utils.TimeEventUtil;
+import org.netbeans.modules.soa.ui.SoaUiUtil;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.util.HelpCtx;
 
@@ -53,6 +53,8 @@ import org.openide.util.HelpCtx;
  */
 public class DurationPropertyCustomizer extends ValidablePropertyCustomizer
         implements PropertyChangeListener {
+
+    private static final long serialVersionUID = 1L;
     
     private Timer inputDelayTimer;
     
@@ -110,6 +112,7 @@ public class DurationPropertyCustomizer extends ValidablePropertyCustomizer
         fldSecond.getDocument().addDocumentListener(docListener);
         //
         FocusListener fl = new FocusAdapter() {
+            @Override
             public void focusLost(FocusEvent e) {
                 inputDelayTimer.stop();
                 revalidate(true);
@@ -125,9 +128,10 @@ public class DurationPropertyCustomizer extends ValidablePropertyCustomizer
         //
         HelpCtx.setHelpIDString(this, this.getClass().getName());
         //
-        Util.activateInlineMnemonics(this);
+        SoaUiUtil.activateInlineMnemonics(this);
     }
     
+    @Override
     public synchronized void init(
             PropertyEnv propertyEnv, PropertyEditor propertyEditor) {
         assert propertyEnv != null && propertyEditor != null : "Wrong params"; // NOI18N
@@ -170,7 +174,7 @@ public class DurationPropertyCustomizer extends ValidablePropertyCustomizer
         }
         if (newHelpCtxID != null && newHelpCtxID.length() != 0) {
             HelpCtx.setHelpIDString(this, newHelpCtxID); // NOI18N
-            Util.fireHelpContextChange(this, new HelpCtx(newHelpCtxID));
+            SoaUiUtil.fireHelpContextChange(this, new HelpCtx(newHelpCtxID));
         }
     }
     
@@ -257,34 +261,25 @@ public class DurationPropertyCustomizer extends ValidablePropertyCustomizer
             super(vsmProvider, ErrorMessagesBundle.class);
         }
         
-        public boolean doFastValidation() {
-            boolean result = true;
-            //
+        public void doFastValidation() {
             if ( !check(fldYear)) {
-                addReasonKey("ERR_INVALID_YEARS"); // NOI18N
-                result = false;
+                addReasonKey(Severity.ERROR, "ERR_INVALID_YEARS"); // NOI18N
             }
             if ( !check(fldMonth)) {
-                addReasonKey("ERR_INVALID_MONTHS"); // NOI18N
-                result = false;
+                addReasonKey(Severity.ERROR, "ERR_INVALID_MONTHS"); // NOI18N
             }
             if ( !check(fldDay)) {
-                addReasonKey("ERR_INVALID_DAYS"); // NOI18N
-                result = false;
+                addReasonKey(Severity.ERROR, "ERR_INVALID_DAYS"); // NOI18N
             }
             if ( !check(fldHour)) {
-                addReasonKey("ERR_INVALID_HOURS"); // NOI18N
-                result = false;
+                addReasonKey(Severity.ERROR, "ERR_INVALID_HOURS"); // NOI18N
             }
             if ( !check(fldMinute)) {
-                addReasonKey("ERR_INVALID_MINUTES"); // NOI18N
-                result = false;
+                addReasonKey(Severity.ERROR, "ERR_INVALID_MINUTES"); // NOI18N
             }
             if ( !check(fldSecond)) {
-                addReasonKey("ERR_INVALID_SECONDS"); // NOI18N
-                result = false;
+                addReasonKey(Severity.ERROR, "ERR_INVALID_SECONDS"); // NOI18N
             }
-            return result;
         }
         
         private boolean check(JTextField field) {

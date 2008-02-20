@@ -33,7 +33,6 @@ import org.netbeans.modules.bpel.model.api.Variable;
 import org.netbeans.modules.bpel.model.api.VariableContainer;
 import org.netbeans.modules.bpel.model.spi.FindHelper;
 import org.netbeans.modules.bpel.properties.TypeContainer;
-import org.netbeans.modules.bpel.properties.Util;
 import org.netbeans.modules.soa.ui.form.CustomNodeEditor;
 import org.netbeans.modules.soa.ui.form.valid.DefaultValidator;
 import org.netbeans.modules.bpel.editors.api.ui.valid.ErrorMessagesBundle;
@@ -42,6 +41,7 @@ import org.netbeans.modules.bpel.properties.Constants;
 import org.netbeans.modules.bpel.properties.VirtualVariableContainer;
 import org.netbeans.modules.bpel.properties.ResolverUtility;
 import org.netbeans.modules.bpel.properties.editors.FormBundle;
+import org.netbeans.modules.soa.ui.SoaUiUtil;
 import org.netbeans.modules.soa.ui.form.ChooserLifeCycle;
 import org.netbeans.modules.xml.wsdl.model.Message;
 import org.openide.util.Lookup;
@@ -54,7 +54,7 @@ public class NewMessageVarChooser extends JPanel
         implements ChooserLifeCycle<VirtualVariableContainer>,
         Validator.Provider, CustomNodeEditor.Owner {
     
-    static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
     
     private CustomNodeEditor myEditor;
     private DefaultValidator myValidator;
@@ -82,6 +82,7 @@ public class NewMessageVarChooser extends JPanel
         //
         cbxScope.setRenderer(new DefaultListCellRenderer() {
             static final long serialVersionUID = 1L;
+            @Override
             public Component getListCellRendererComponent(
                     JList list, Object value, int index,
                     boolean isSelected, boolean cellHasFocus) {
@@ -96,7 +97,7 @@ public class NewMessageVarChooser extends JPanel
             }
         });
         //
-        Util.activateInlineMnemonics(this);
+        SoaUiUtil.activateInlineMnemonics(this);
     }
     
     public boolean initControls() {
@@ -112,8 +113,7 @@ public class NewMessageVarChooser extends JPanel
         }
         //
         // Populate scope combo-box
-        FindHelper helper =
-                (FindHelper)Lookup.getDefault().lookup(FindHelper.class);
+        FindHelper helper = Lookup.getDefault().lookup(FindHelper.class);
         if (helper != null) {
             Iterator<BaseScope> scopeIterator = helper.scopeIterator(myTargetEntity);
             //
@@ -201,8 +201,7 @@ public class NewMessageVarChooser extends JPanel
     }
     
     private Iterator<BaseScope> getScopeIterator() {
-        FindHelper helper =
-                (FindHelper)Lookup.getDefault().lookup(FindHelper.class);
+        FindHelper helper = Lookup.getDefault().lookup(FindHelper.class);
         if (helper != null) {
             Iterator<BaseScope> iterator = helper.scopeIterator(myTargetEntity);
             return iterator;
@@ -237,18 +236,17 @@ public class NewMessageVarChooser extends JPanel
         if (myValidator == null && myEditor != null) {
             myValidator = new DefaultValidator(myEditor, ErrorMessagesBundle.class) {
                 
-                public boolean doFastValidation() {
+                public void doFastValidation() {
                     Object item = cbxScope.getSelectedItem();
                     if (item == null) {
-                        addReasonKey("ERR_SCOPE_NOT_SPECIFIED"); // NOI18N
-                        return false;
-                    } else {
-                        return true;
+                        addReasonKey(Severity.ERROR,
+                                "ERR_SCOPE_NOT_SPECIFIED"); // NOI18N
                     }
                 }
                 
-                public boolean doDetailedValidation() {
-                    boolean isValid = super.doDetailedValidation();
+                @Override
+                public void doDetailedValidation() {
+                    super.doDetailedValidation();
                     //
                     // Check that the variable name is unique
                     BaseScope scope = (BaseScope)cbxScope.getSelectedItem();
@@ -259,14 +257,12 @@ public class NewMessageVarChooser extends JPanel
                             Variable[] variables = vc.getVariables();
                             for (Variable variable : variables) {
                                 if (varName.equals( variable.getName())){
-                                    addReasonKey("ERR_NOT_UNIQUE_VARIABLE_NAME"); //NOI18N
-                                    isValid = false;
+                                    addReasonKey(Severity.ERROR,
+                                            "ERR_NOT_UNIQUE_VARIABLE_NAME"); //NOI18N
                                 }
                             }
                         }
                     }
-                    //
-                    return isValid;
                 }
                 
             };
