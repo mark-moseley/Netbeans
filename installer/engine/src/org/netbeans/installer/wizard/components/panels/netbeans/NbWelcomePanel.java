@@ -48,7 +48,6 @@ import java.util.List;
 import javax.swing.ImageIcon;
 import javax.swing.JScrollPane;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import org.netbeans.installer.Installer;
 import org.netbeans.installer.product.Registry;
 import org.netbeans.installer.product.RegistryNode;
@@ -60,7 +59,6 @@ import org.netbeans.installer.product.filters.OrFilter;
 import org.netbeans.installer.product.filters.ProductFilter;
 import org.netbeans.installer.product.filters.RegistryFilter;
 import org.netbeans.installer.utils.ErrorManager;
-import org.netbeans.installer.utils.FileProxy;
 import org.netbeans.installer.utils.LogManager;
 import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StringUtils;
@@ -68,6 +66,7 @@ import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.applications.JavaUtils;
 import org.netbeans.installer.utils.exceptions.InitializationException;
 import org.netbeans.installer.utils.exceptions.NativeException;
+import org.netbeans.installer.utils.helper.ExecutionMode;
 import org.netbeans.installer.utils.helper.Status;
 import org.netbeans.installer.utils.helper.swing.NbiButton;
 import org.netbeans.installer.utils.helper.swing.NbiCheckBox;
@@ -248,7 +247,8 @@ public class NbWelcomePanel extends ErrorMessagePanel {
                         product.setStatus(Status.NOT_INSTALLED);
                     }
                 } else if(type.isJDKBundle() && product.getUid().equals("jdk")) { // current checking product in global registry is jdk
-                    if(product.getStatus() == Status.TO_BE_INSTALLED){
+                    if(product.getStatus() == Status.TO_BE_INSTALLED && 
+                        ExecutionMode.getCurrentExecutionMode() == ExecutionMode.NORMAL) {
                         // check if jdk is already installed                        
                         if(JavaUtils.findJDKHome(product.getVersion())!=null) {
                             product.setStatus(Status.NOT_INSTALLED);
@@ -527,21 +527,23 @@ public class NbWelcomePanel extends ErrorMessagePanel {
                 }
             }
             
-            try {
-                final long availableSize = SystemUtils.getFreeSpace(
-                        Installer.getInstance().getLocalDirectory());
-                
-                long requiredSize = 0;
-                for (Product product: products) {
-                    requiredSize += product.getDownloadSize();
-                }
-                requiredSize += REQUIRED_SPACE_ADDITION;
-                
-                if (availableSize < requiredSize) {
-                    return StringUtils.format(
-                            template,
-                            Installer.getInstance().getLocalDirectory(),
-                            StringUtils.formatSize(requiredSize - availableSize));
+            try {                
+                if(!Boolean.getBoolean(SystemUtils.NO_SPACE_CHECK_PROPERTY)) {                     
+                    final long availableSize = SystemUtils.getFreeSpace(
+                            Installer.getInstance().getLocalDirectory());
+                    
+                    long requiredSize = 0;
+                    for (Product product: products) {
+                        requiredSize += product.getDownloadSize();
+                    }
+                    requiredSize += REQUIRED_SPACE_ADDITION;
+                    
+                    if (availableSize < requiredSize) {
+                        return StringUtils.format(
+                                template,
+                                Installer.getInstance().getLocalDirectory(),
+                                StringUtils.formatSize(requiredSize - availableSize));
+                    }
                 }
             } catch (NativeException e) {
                 ErrorManager.notifyError(
@@ -587,15 +589,20 @@ public class NbWelcomePanel extends ErrorMessagePanel {
             leftImagePanel = new NbiPanel();
             int width = 0;
             int height = 0;
-            if(ResourceUtils.getResource(WELCOME_PAGE_LEFT_TOP_IMAGE)!=null) {
-                leftImagePanel.setBackgroundImage(WELCOME_PAGE_LEFT_TOP_IMAGE_RESOURCE,
-                        ANCHOR_TOP_LEFT);
+            final String topLeftImage = SystemUtils.resolveString(
+                    System.getProperty(
+                    WELCOME_PAGE_LEFT_TOP_IMAGE_PROPERTY));
+            final String bottomLeftImage = SystemUtils.resolveString(
+                    System.getProperty(
+                    WELCOME_PAGE_LEFT_BOTTOM_IMAGE_PROPERTY));
+            
+            if(topLeftImage!=null) {
+                leftImagePanel.setBackgroundImage(topLeftImage,ANCHOR_TOP_LEFT);
                 width   = leftImagePanel.getBackgroundImage(NbiPanel.ANCHOR_TOP_LEFT).getIconWidth();
                 height += leftImagePanel.getBackgroundImage(NbiPanel.ANCHOR_TOP_LEFT).getIconHeight();
             }
-            if(ResourceUtils.getResource(WELCOME_PAGE_LEFT_BOTTOM_IMAGE)!=null) {
-                leftImagePanel.setBackgroundImage(WELCOME_PAGE_LEFT_BOTTOM_IMAGE_RESOURCE,
-                        ANCHOR_BOTTOM_LEFT);
+            if(bottomLeftImage!=null) {
+                leftImagePanel.setBackgroundImage(bottomLeftImage,ANCHOR_BOTTOM_LEFT);
                 width   = leftImagePanel.getBackgroundImage(NbiPanel.ANCHOR_BOTTOM_LEFT).getIconWidth();
                 height += leftImagePanel.getBackgroundImage(NbiPanel.ANCHOR_BOTTOM_LEFT).getIconHeight();
             }
@@ -644,7 +651,8 @@ public class NbWelcomePanel extends ErrorMessagePanel {
             NbiTextPane separatorPane =  new NbiTextPane();
             BundleType type = BundleType.getType(
                     System.getProperty(WELCOME_PAGE_TYPE_PROPERTY));
-            if(!type.equals(BundleType.JAVAEE) && !type.equals(BundleType.JAVAEE_JDK)) {
+            if(!type.equals(BundleType.JAVAEE) && !type.equals(BundleType.JAVAEE_JDK) && 
+                    !type.equals(BundleType.JAVA_TOOLS)) {
                 add(scrollPane, new GridBagConstraints(
                         1, dy++,                           // x, y
                         4, 1,                              // width, height
@@ -771,7 +779,8 @@ public class NbWelcomePanel extends ErrorMessagePanel {
                 customizeButton.setOpaque(false);
             }
             
-            if(type.equals(BundleType.CUSTOMIZE) || type.equals(BundleType.CUSTOMIZE_JDK)) {
+            if(type.equals(BundleType.CUSTOMIZE) || type.equals(BundleType.CUSTOMIZE_JDK) ||
+                    type.equals(BundleType.JAVA_TOOLS)) {
                 customizeButton.setVisible(true);
             } else {
                 customizeButton.setVisible(false);
@@ -846,7 +855,8 @@ public class NbWelcomePanel extends ErrorMessagePanel {
         JAVAME_JDK("javame.jdk"),
         RUBY_JDK("ruby.jdk"),
         CND_JDK("cnd.jdk"),
-        CUSTOMIZE_JDK("customize.jdk");
+        CUSTOMIZE_JDK("customize.jdk"),
+        JAVA_TOOLS("java.tools");
         
         private String name;
         private BundleType(String s) {
@@ -989,16 +999,10 @@ public class NbWelcomePanel extends ErrorMessagePanel {
             "cancel.button.text"; // NOI18N
     public static final String DEFAULT_COMPONENT_DESCRIPTION_PROPERTY =
             "default.component.description";
-    public static final String WELCOME_PAGE_LEFT_TOP_IMAGE =
-            "org/netbeans/installer/wizard/components/panels/netbeans/resources/welcome-left-top.png";
-    public static final String WELCOME_PAGE_LEFT_TOP_IMAGE_RESOURCE =
-            FileProxy.RESOURCE_SCHEME_PREFIX +
-            WELCOME_PAGE_LEFT_TOP_IMAGE;
-    public static final String WELCOME_PAGE_LEFT_BOTTOM_IMAGE =
-            "org/netbeans/installer/wizard/components/panels/netbeans/resources/welcome-left-bottom.png";
-    public static final String WELCOME_PAGE_LEFT_BOTTOM_IMAGE_RESOURCE =
-            FileProxy.RESOURCE_SCHEME_PREFIX +
-            WELCOME_PAGE_LEFT_BOTTOM_IMAGE;
+    public static final String WELCOME_PAGE_LEFT_TOP_IMAGE_PROPERTY =
+            "nbi.wizard.ui.swing.welcome.left.top.image";//NOI18N
+    public static final String WELCOME_PAGE_LEFT_BOTTOM_IMAGE_PROPERTY =
+            "nbi.wizard.ui.swing.welcome.left.bottom.image";//NOI18N
     public static final String DEFAULT_CUSTOMIZE_TITLE =
             ResourceUtils.getString(NbWelcomePanel.class,
             "NWP.customize.title"); // NOI18N
