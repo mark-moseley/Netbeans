@@ -46,11 +46,11 @@ import javax.swing.text.JTextComponent;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.editor.NbEditorUtilities;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo;
-import org.netbeans.modules.websvc.saas.codegen.java.model.WsdlSaasBean;
 import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
-import org.netbeans.modules.websvc.saas.model.WsdlSaasMethod;
+import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo;
+import org.netbeans.modules.websvc.saas.codegen.java.model.WadlSaasBean;
+import org.netbeans.modules.websvc.saas.model.WadlSaasMethod;
+import org.netbeans.modules.websvc.saas.model.wadl.Method;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -62,17 +62,17 @@ import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
-/** JaxWsEditorDrop
+/** JaxRsEditorDrop
  *
  * @author Ayub Khan, Nam Nguyen
  */
-public class JaxWsEditorDrop implements ActiveEditorDrop {
+public class JaxRsEditorDrop implements ActiveEditorDrop {
 
-    private WsdlSaasMethod method;
+    private WadlSaasMethod method;
     private FileObject targetFO;
     private RequestProcessor.Task generatorTask;
 
-    public JaxWsEditorDrop(WsdlSaasMethod method) {
+    public JaxRsEditorDrop(WadlSaasMethod method) {
         this.method = method;
     }
 
@@ -93,8 +93,8 @@ public class JaxWsEditorDrop implements ActiveEditorDrop {
     private boolean doHandleTransfer(final JTextComponent targetComponent) {
         FileObject targetSource = NbEditorUtilities.getFileObject(targetComponent.getDocument());
         Project targetProject = FileOwnerQuery.getOwner(targetSource);
-        WsdlOperation op = method.getWsdlOperation();
-        final String displayName = op.getName();
+        Method m = method.getWadlMethod();
+        final String displayName = m.getName();
         
         targetFO = getTargetFile(targetComponent);
 
@@ -105,16 +105,16 @@ public class JaxWsEditorDrop implements ActiveEditorDrop {
         final List<Exception> errors = new ArrayList<Exception>();
        
         final ProgressDialog dialog = new ProgressDialog(
-                NbBundle.getMessage(JaxWsEditorDrop.class, "LBL_CodeGenProgress", 
+                NbBundle.getMessage(JaxRsEditorDrop.class, "LBL_CodeGenProgress", 
                 displayName));
 
         generatorTask = RequestProcessor.getDefault().create(new Runnable() {
             public void run() {
                 try {
-                    JaxWsCodeGenerator codegen = 
-                        JaxWsCodeGeneratorFactory.create(targetComponent, targetFO, method);
+                    JaxRsCodeGenerator codegen = codegen = 
+                        JaxRsCodeGeneratorFactory.create(targetComponent, targetFO, method);
                 
-                    WsdlSaasBean bean = codegen.getBean();
+                    WadlSaasBean bean = codegen.getBean();
                     boolean showParams = codegen.showParams();
                     List<ParameterInfo> allParams = new ArrayList<ParameterInfo>(bean.getHeaderParameters());
                     if (showParams) {
@@ -127,7 +127,7 @@ public class JaxWsEditorDrop implements ActiveEditorDrop {
                             !showParams);
 
                     DialogDescriptor desc = new DialogDescriptor(panel, 
-                            NbBundle.getMessage(JaxWsEditorDrop.class,
+                            NbBundle.getMessage(JaxRsEditorDrop.class,
                             "LBL_CustomizeSaasService", displayName));
                     Object response = DialogDisplayer.getDefault().notify(desc);
                     
