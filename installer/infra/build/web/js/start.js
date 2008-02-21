@@ -216,19 +216,21 @@ function write_download_info() {
 
 function omniture_download_link() {
     var anchorElement = document.getElementById("download_link_p").getElementsByTagName("a")[0];//there is only one anchor in that paragraph
+    if(option_id!="" && platform_id!="" && lang_id!="") {
     if(s_siteid) { // this variable is defined only if s_code_remote.js was downloaded
         s_linkType = "d";
         s_linkName = s_siteid + option_id;
         s_events   = "event7";
-        s_products = "Downloaded Products;NetBeans IDE";
+        s_products = "Downloaded Products;NetBeans IDE " + BUILD_DISPLAY_VERSION_SHORT + " | " + platform_id + " | " + option_id;
         s_eVar3    = "netbeans";
         s_eVar8    = option_id;
         s_prop19   = platform_id;
         s_prop20   = lang_id;
-        s_prop21   = BUILD_DISPLAY_VERSION;
+        s_prop21   = BUILD_DISPLAY_VERSION_SHORT;
         s_linkTrackVars   = "events,products,eVar3,eVar8,prop19,prop20,prop21";
         s_linkTrackEvents = "event7";
         s_lnk=s_co(anchorElement);
         s_gs(s_account); 
+    }
     }
 }
