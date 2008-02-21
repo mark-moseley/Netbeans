@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,37 +31,74 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.spring.beans.hyperlink;
 
-import org.netbeans.modules.spring.beans.editor.BeanClassFinder;
+import java.io.IOException;
+import org.netbeans.modules.editor.NbEditorUtilities;
+import org.netbeans.modules.spring.api.Action;
+import org.netbeans.modules.spring.api.beans.model.SpringBean;
+import org.netbeans.modules.spring.api.beans.model.SpringBeans;
+import org.netbeans.modules.spring.api.beans.model.SpringConfigModel;
 import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils;
 import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils.Public;
 import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils.Static;
+import org.openide.filesystems.FileObject;
+import org.openide.util.Exceptions;
+import org.w3c.dom.Node;
 
 /**
- *
+ * Hyperlink Processor for factory-method attribute of a bean
+ * 
  * @author Rohan Ranade (Rohan.Ranade@Sun.COM)
  */
-public class JavaMethodHyperlinkProcessor extends HyperlinkProcessor {
+public class FactoryMethodHyperlinkProcessor extends HyperlinkProcessor {
 
-    private int argCount = -1;
-    private SpringXMLConfigEditorUtils.Public publicFlag = SpringXMLConfigEditorUtils.Public.DONT_CARE;
-    private SpringXMLConfigEditorUtils.Static staticFlag = SpringXMLConfigEditorUtils.Static.DONT_CARE;
-
-    public JavaMethodHyperlinkProcessor(Public publicFlag, Static staticFlag, int argCount) {
-        this.publicFlag = publicFlag;
-        this.staticFlag = staticFlag;
-        this.argCount = argCount;
-    }
-    
     public void process(HyperlinkEnv env) {
-        String className = new BeanClassFinder(env.getCurrentTag(), env.getDocument()).findImplementationClass();
-        if(className == null) {
+        Node tag = env.getCurrentTag();
+        SpringBean mergedBean = SpringXMLConfigEditorUtils.getMergedBean(tag, env.getDocument());
+        if(mergedBean == null) {
             return;
         }
-        SpringXMLConfigEditorUtils.openMethodInEditor(env.getDocument(), className, env.getValueString(), argCount,
-                            publicFlag, staticFlag);
+        Static staticFlag = Static.YES;
+        final String[] className = { mergedBean.getClassName() };
+        
+        // if factory-bean has been defined, resolve it and get it's class name
+        if(mergedBean.getFactoryBean() != null) { 
+            final String factoryBeanName = mergedBean.getFactoryBean();
+            FileObject fo = NbEditorUtilities.getFileObject(env.getDocument());
+            if(fo == null) {
+                return;
+            }
+            SpringConfigModel model = SpringConfigModel.forFileObject(fo);
+            try {
+                model.runReadAction(new Action<SpringBeans>() {
+                    public void run(SpringBeans beans) {
+                        SpringBean bean = beans.findBean(factoryBeanName);
+                        if (bean == null) {
+                            className[0] = null;
+                            return;
+                        }
+                        className[0] = bean.getClassName();
+                    }
+                });
+            } catch (IOException ioe) {
+                Exceptions.printStackTrace(ioe);
+                className[0] = null;
+            }
+
+            staticFlag = Static.NO;
+        }
+        
+        if (className[0] != null) {
+            String methodName = mergedBean.getFactoryMethod();
+            SpringXMLConfigEditorUtils.openMethodInEditor(env.getDocument(), className[0], methodName, -1,
+                    Public.DONT_CARE, staticFlag);
+        }
     }
 }
