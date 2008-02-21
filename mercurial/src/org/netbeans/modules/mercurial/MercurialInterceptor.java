@@ -57,6 +57,9 @@ import java.util.Collection;
 import java.util.Calendar;
 import org.netbeans.modules.mercurial.util.HgUtils;
 import org.netbeans.api.queries.SharabilityQuery;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentHashMap;
+
 
 /**
  * Listens on file system changes and reacts appropriately, mainly refreshing affected files' status.
@@ -67,11 +70,17 @@ public class MercurialInterceptor extends VCSInterceptor {
 
     private final FileStatusCache   cache;
 
-    private List<File> dirsToDelete; 
+    private ConcurrentHashMap<File, File> dirsToDelete = new ConcurrentHashMap<File,File>(); 
+
+    private ConcurrentLinkedQueue<File> filesToRefresh = new ConcurrentLinkedQueue<File>();
+
+    private RequestProcessor.Task refreshTask;
+
+    private static final RequestProcessor rp = new RequestProcessor("MercurialRefresh", 1, true);
 
     public MercurialInterceptor() {
         cache = Mercurial.getInstance().getFileStatusCache();
-        dirsToDelete = new ArrayList<File>();
+        refreshTask = rp.create(new RefreshTask());
     }
 
     public boolean beforeDelete(File file) {
@@ -80,14 +89,13 @@ public class MercurialInterceptor extends VCSInterceptor {
         
         // We track the deletion of top level directories
         if (file.isDirectory()) {
-            for (Iterator i = dirsToDelete.iterator(); i.hasNext();) {
-                File dir = (File) i.next();
+            for (File dir : dirsToDelete.keySet()) {
                 if (file.equals(dir.getParentFile())) {
-                    i.remove();
+                    dirsToDelete.remove(dir);
                 }
             }
             if (SharabilityQuery.getSharability(file) != SharabilityQuery.NOT_SHARABLE) {
-                dirsToDelete.add(file);
+                dirsToDelete.put(file, file);
             }
         }
         return true;
@@ -116,12 +124,12 @@ public class MercurialInterceptor extends VCSInterceptor {
         if (file.exists()) {
             if (file.isDirectory()) {
                 file.delete();
-                if (!dirsToDelete.remove(file)) return;
+                if (!dirsToDelete.remove(file, file)) return;
                 if (root == null) return;
                 HgProgressSupport support = new HgProgressSupport() {
                     public void perform() {
                         try {
-                            HgCommand.doRemove(root, file);
+                            HgCommand.doRemove(root, file, this.getLogger());
                             // We need to cache the status of all deleted files
                             Map<File, FileInformation> interestingFiles = HgCommand.getInterestingStatus(root, file);
                             if (!interestingFiles.isEmpty()){
@@ -155,7 +163,7 @@ public class MercurialInterceptor extends VCSInterceptor {
                 // skip the call to hg remove as we will do it for the directory
                 file.delete();
                 if (root == null) return;
-                for (File dir : dirsToDelete) {
+                for (File dir : dirsToDelete.keySet()) {
                     File tmpFile = file.getParentFile();
                     while (tmpFile != null) {
                         if (tmpFile.equals(dir)) return;
@@ -165,7 +173,7 @@ public class MercurialInterceptor extends VCSInterceptor {
                 HgProgressSupport support = new HgProgressSupport() {
                     public void perform() {
                         try {
-                            HgCommand.doRemove(root, file);
+                            HgCommand.doRemove(root, file, this.getLogger());
                             cache.refresh(file, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
                         } catch (HgException ex) {
                             Mercurial.LOG.log(Level.FINE, "fileDeletedImpl(): File: {0} {1}", new Object[] {file.getAbsolutePath(), ex.toString()}); // NOI18N
@@ -232,26 +240,36 @@ public class MercurialInterceptor extends VCSInterceptor {
 
         RequestProcessor rp = hg.getRequestProcessor(root.getAbsolutePath());
 
+        Mercurial.LOG.log(Level.FINE, "hgMoveImplementation(): File: {0} {1}", new Object[] {srcFile, dstFile}); // NOI18N
+
+        srcFile.renameTo(dstFile);
         Runnable moveImpl = new Runnable() {
             public void run() {
+                OutputLogger logger = OutputLogger.getLogger(root.getAbsolutePath());
                 try {
-                    int status = hg.getFileStatusCache().getStatus(srcFile).getStatus();
-                    if (status == FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY) {
-                        srcFile.renameTo(dstFile);
+                    if (dstFile.isDirectory()) {
+                        HgCommand.doRenameAfter(root, srcFile, dstFile, logger);
+                        return;
+                    }
+                    int status = HgCommand.getSingleStatus(root, srcFile.getParent(), srcFile.getName()).getStatus();
+                    Mercurial.LOG.log(Level.FINE, "hgMoveImplementation(): Status: {0} {1}", new Object[] {srcFile, status}); // NOI18N
+                    if (status == FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY ||
+                        status == FileInformation.STATUS_NOTVERSIONED_EXCLUDED) {
                     } else if (status == FileInformation.STATUS_VERSIONED_ADDEDLOCALLY) {
-                        srcFile.renameTo(dstFile);
-                        HgCommand.doRemove(root, srcFile);
-                        HgCommand.doAdd(root, dstFile);
+                        HgCommand.doRemove(root, srcFile, logger);
+                        HgCommand.doAdd(root, dstFile, logger);
                     } else {
-                        HgCommand.doRename(root, srcFile, dstFile);
+                        HgCommand.doRenameAfter(root, srcFile, dstFile, logger);
                     }
                 } catch (HgException e) {
                     Mercurial.LOG.log(Level.FINE, "Mercurial failed to rename: File: {0} {1}", new Object[] {srcFile.getAbsolutePath(), dstFile.getAbsolutePath()}); // NOI18N
+                } finally {
+                    logger.closeLog();
                 }
             }
         };
 
-        rp.post(moveImpl).waitFinished();
+        rp.post(moveImpl);
     }
 
     public void afterMove(final File from, final File to) {
@@ -308,7 +326,10 @@ public class MercurialInterceptor extends VCSInterceptor {
 
         HgProgressSupport supportCreate = new HgProgressSupport() {
             public void perform() {
-                cache.refresh(file, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
+                // There is no point in refreshing the cache for ignored files.
+                if (!HgUtils.isIgnored(file, false)) {
+                    reScheduleRefresh(1000, file);
+                }
             }
         };
 
@@ -334,11 +355,41 @@ public class MercurialInterceptor extends VCSInterceptor {
 
         HgProgressSupport supportCreate = new HgProgressSupport() {
             public void perform() {
-                cache.refresh(file, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
+                Mercurial.LOG.log(Level.FINE, "fileChangedImpl(): File: {0}", file); // NOI18N
+                // There is no point in refreshing the cache for ignored files.
+                if (!HgUtils.isIgnored(file, false)) {
+                    reScheduleRefresh(1000, file);
+                }
             }
         };
 
         supportCreate.start(rp, root.getAbsolutePath(), 
                 org.openide.util.NbBundle.getMessage(MercurialInterceptor.class, "MSG_Change_Progress")); // NOI18N
-   }
+    }
+
+    private void reScheduleRefresh(int delayMillis, File fileToRefresh) {
+        if (!filesToRefresh.contains(fileToRefresh)) {
+            if (!filesToRefresh.offer(fileToRefresh)) {
+                Mercurial.LOG.log(Level.FINE, "reScheduleRefresh failed to add to filesToRefresh queue {0}", fileToRefresh);
+            }
+        }
+        refreshTask.schedule(delayMillis);
+    }
+
+    private class RefreshTask implements Runnable {
+        public void run() {
+            Thread.interrupted();
+            File fileToRefresh = filesToRefresh.poll();
+            if (fileToRefresh != null) {
+                cache.refresh(fileToRefresh, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
+                fileToRefresh = filesToRefresh.peek();
+                if (fileToRefresh != null) {
+                    refreshTask.schedule(0);
+                }
+            }
+        }
+    }
+
+        
+
 }

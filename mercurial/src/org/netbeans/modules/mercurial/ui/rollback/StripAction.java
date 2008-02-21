@@ -67,24 +67,35 @@ import org.openide.NotifyDescriptor;
  * 
  * @author John Rice
  */
-public class RollbackAction extends ContextAction {
+public class StripAction extends ContextAction {
     
     private final VCSContext context;
+    private static String HG_STIP_SAVE_BUNDLE = "saving bundle to ";
             
-    public RollbackAction(String name, VCSContext context) {
+    public StripAction(String name, VCSContext context) {
         this.context = context;
         putValue(Action.NAME, name);
     }
     
     public void performAction(ActionEvent e) {
-        rollback(context);
+        strip(context);
     }
     
-    public static void rollback(final VCSContext ctx){
+    public static void strip(final VCSContext ctx){
         final File root = HgUtils.getRootFile(ctx);
         if (root == null) return;
         String repository = root.getAbsolutePath();
          
+        String rev = null;
+
+        final Strip strip = new Strip(root);
+        if (!strip.showDialog()) {
+            return;
+        }
+        rev = strip.getSelectionRevision();
+        final boolean doBackup = strip.isBackupRequested();
+        final String revStr = rev;
+
         RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(repository);
         HgProgressSupport support = new HgProgressSupport() {
             public void perform() {
@@ -92,87 +103,65 @@ public class RollbackAction extends ContextAction {
                 OutputLogger logger = getLogger();
                 try {
                     logger.outputInRed(
-                                NbBundle.getMessage(RollbackAction.class,
-                                "MSG_ROLLBACK_TITLE")); // NOI18N
+                                NbBundle.getMessage(StripAction.class,
+                                "MSG_STRIP_TITLE")); // NOI18N
                     logger.outputInRed(
-                                NbBundle.getMessage(RollbackAction.class,
-                                "MSG_ROLLBACK_TITLE_SEP")); // NOI18N
+                                NbBundle.getMessage(StripAction.class,
+                                "MSG_STRIP_TITLE_SEP")); // NOI18N
                     logger.output(
                                 NbBundle.getMessage(StripAction.class,
-                                "MSG_ROLLBACK_INFO_SEP", root.getAbsolutePath())); // NOI18N
-                    int response = JOptionPane.showOptionDialog(null,
-                            NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_CONFIRM_QUERY"), // NOI18N
-                            NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_CONFIRM"), // NOI18N
-                            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, null, null);
-
-                    if (response == JOptionPane.NO_OPTION) {
-                        logger.outputInRed(
-                                NbBundle.getMessage(RollbackAction.class,
-                                "MSG_ROLLBACK_CANCELED", root.getAbsolutePath())); // NOI18N
-                        return;
-                    }
-                    List<String> list = HgCommand.doRollback(root, logger);
-                    
+                                "MSG_STRIP_INFO_SEP", revStr, root.getAbsolutePath())); // NOI18N
+                    List<String> list = HgCommand.doStrip(root, revStr, false, doBackup, logger);
                     
                     if(list != null && !list.isEmpty()){                      
-                        //logger.clearOutput();
+                        logger.output(list);
                         
-                        if(HgCommand.isNoRollbackPossible(list.get(0))){
-                            logger.output(
-                                    NbBundle.getMessage(RollbackAction.class,
-                                    "MSG_NO_ROLLBACK"));     // NOI18N                       
+                        if(HgCommand.isNoRevStrip(list.get(0))){
+                            logger.outputInRed(
+                                    NbBundle.getMessage(StripAction.class,
+                                    "MSG_NO_REV_STRIP",revStr));     // NOI18N                       
+                        }else if(HgCommand.isLocalChangesStrip(list.get(0))){
+                            logger.outputInRed(
+                                    NbBundle.getMessage(StripAction.class,
+                                    "MSG_LOCAL_CHANGES_STRIP"));     // NOI18N                       
+                        }else if(HgCommand.isMultipleHeadsStrip(list.get(0))){
+                            logger.outputInRed(
+                                    NbBundle.getMessage(StripAction.class,
+                                    "MSG_MULTI_HEADS_STRIP"));     // NOI18N                       
                         }else{
-                            logger.output(list.get(0));
                             if (HgCommand.hasHistory(root)) {
-                                response = JOptionPane.showOptionDialog(null,
-                                        NbBundle.getMessage(RollbackAction.class,"MSG_ROLLBACK_CONFIRM_UPDATE_QUERY") ,  // NOI18N
-                                        NbBundle.getMessage(RollbackAction.class,"MSG_ROLLBACK_CONFIRM_UPDATE"), // NOI18N
-                                        JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,null, null, null);
-                            
-                                if( response == JOptionPane.YES_OPTION){
-                                    logger.output(
-                                            NbBundle.getMessage(RollbackAction.class,
-                                            "MSG_ROLLBACK_FORCE_UPDATE", root.getAbsolutePath())); // NOI18N
-                                    list = HgCommand.doUpdateAll(root, true, null);
-                                    
-                                    FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();        
-                                    if(cache.listFiles(ctx, FileInformation.STATUS_VERSIONED_CONFLICT).length != 0){
-                                        ConflictResolvedAction.resolved(ctx);                                       
-                                    }
-                                    HgUtils.forceStatusRefreshProject(ctx);
-                                    Mercurial.getInstance().changesetChanged(root);
-
-                                    if (list != null && !list.isEmpty()){
-                                        logger.output(list);
-                                    }
-                                } else {
-                                    HgUtils.forceStatusRefreshProject(ctx);
-                                    Mercurial.getInstance().changesetChanged(root);
+                                FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();
+                                if (cache.listFiles(ctx, FileInformation.STATUS_VERSIONED_CONFLICT).length != 0) {
+                                    ConflictResolvedAction.resolved(ctx);
                                 }
-                            } else {
-                                JOptionPane.showMessageDialog(null,
-                                        NbBundle.getMessage(RollbackAction.class,"MSG_ROLLBACK_MESSAGE_NOHISTORY") ,  // NOI18N
-                                        NbBundle.getMessage(RollbackAction.class,"MSG_ROLLBACK_MESSAGE"), // NOI18N
-                                        JOptionPane.INFORMATION_MESSAGE,null);
-                            
+                                HgUtils.forceStatusRefreshProject(ctx);
+                                Mercurial.getInstance().changesetChanged(root);
+                            }
+                            String savingTo = list.get(list.size()-1);
+                            savingTo = savingTo != null? savingTo.substring(HG_STIP_SAVE_BUNDLE.length()): null;
+                            File savingFile = new File(savingTo);
+                            if(savingFile != null && savingFile.exists() && savingFile.canRead()){
+                                logger.outputInRed(
+                                        NbBundle.getMessage(StripAction.class,
+                                        "MSG_STRIP_RESTORE_INFO")); // NOI18N                                
+                                logger.output(
+                                        NbBundle.getMessage(StripAction.class,
+                                        "MSG_STRIP_RESTORE_INFO2", savingFile.getAbsoluteFile())); // NOI18N                                
                             }
                         }
-                        logger.outputInRed(
-                                    NbBundle.getMessage(RollbackAction.class,
-                                    "MSG_ROLLBACK_INFO")); // NOI18N
                     }
                 } catch (HgException ex) {
                     NotifyDescriptor.Exception e = new NotifyDescriptor.Exception(ex);
                     DialogDisplayer.getDefault().notifyLater(e);
                 } finally {
                     logger.outputInRed(
-                                NbBundle.getMessage(RollbackAction.class,
-                                "MSG_ROLLBACK_DONE")); // NOI18N
+                                NbBundle.getMessage(StripAction.class,
+                                "MSG_STRIP_DONE")); // NOI18N
                     logger.output(""); // NOI18N
                 }
             }
         };
-        support.start(rp, repository,org.openide.util.NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_PROGRESS")); // NOI18N
+        support.start(rp, repository,org.openide.util.NbBundle.getMessage(StripAction.class, "MSG_STRIP_PROGRESS")); // NOI18N
     }
     
     public boolean isEnabled() {

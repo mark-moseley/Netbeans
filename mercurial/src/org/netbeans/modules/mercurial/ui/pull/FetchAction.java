@@ -38,83 +38,86 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.mercurial.ui.diff;
+package org.netbeans.modules.mercurial.ui.pull;
 
+import org.netbeans.modules.mercurial.ui.view.*;
 import org.netbeans.modules.versioning.spi.VCSContext;
-import org.netbeans.modules.versioning.util.Utils;
-
-import javax.swing.*;
-import java.awt.event.ActionEvent;
-import java.io.File;
-
-import org.netbeans.modules.mercurial.FileInformation;
-import org.netbeans.modules.mercurial.FileStatusCache;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.OutputLogger;
+import org.netbeans.modules.mercurial.HgException;
+import org.netbeans.modules.mercurial.util.HgCommand;
 import org.netbeans.modules.mercurial.util.HgUtils;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
+import org.openide.util.RequestProcessor;
+
+import java.io.File;
+import javax.swing.*;
+import java.awt.event.ActionEvent;
+import java.util.List;
+import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.ui.actions.ContextAction;
-import org.openide.nodes.Node;
+import org.netbeans.modules.mercurial.config.HgConfigFiles;
 import org.openide.util.NbBundle;
 
 /**
- * Diff action for mercurial: 
- * hg diff - diff repository (or selected files)
+ * Fetch action for mercurial: 
+ * hg fetch - launch hg view to view the dependency tree for the repository
+ * Pull changes from a remote repository, merge new changes if needed.
+ * This finds all changes from the repository at the specified path
+ * or URL and adds them to the local repository.
+ * 
+ * If the pulled changes add a new head, the head is automatically
+ * merged, and the result of the merge is committed.  Otherwise, the
+ * working directory is updated.
  * 
  * @author John Rice
  */
-public class DiffAction extends ContextAction {
+public class FetchAction extends ContextAction {
     
     private final VCSContext context;
 
-    public DiffAction(String name, VCSContext context) {
+    public FetchAction(String name, VCSContext context) {
         this.context = context;
         putValue(Action.NAME, name);
     }
     
     public void performAction(ActionEvent e) {
-        String contextName = Utils.getContextDisplayName(context);
-                
-        File root = HgUtils.getRootFile(context);
-        File [] files = context.getRootFiles().toArray(new File[context.getRootFiles().size()]);
-        boolean bNotManaged = (root == null) || ( files == null || files.length == 0);
+        final File root = HgUtils.getRootFile(context);
+        if (root == null) return;
+        
+        RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(root);
+        HgProgressSupport support = new HgProgressSupport() {
+            OutputLogger logger = getLogger();
+            public void perform() { performFetch(root, logger); } };
 
-        if (bNotManaged) {
-            OutputLogger logger = OutputLogger.getLogger(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE);
-            logger.outputInRed( NbBundle.getMessage(DiffAction.class,"MSG_DIFF_TITLE")); // NOI18N
-            logger.outputInRed( NbBundle.getMessage(DiffAction.class,"MSG_DIFF_TITLE_SEP")); // NOI18N
-            logger.outputInRed(
-                    NbBundle.getMessage(DiffAction.class, "MSG_DIFF_NOT_SUPPORTED_INVIEW_INFO")); // NOI18N
+        support.start(rp, root.getAbsolutePath(), org.openide.util.NbBundle.getMessage(FetchAction.class, "MSG_FETCH_PROGRESS")); // NOI18N
+    }
+
+    static void performFetch(File root, OutputLogger logger) {
+        try {
+            logger.outputInRed(NbBundle.getMessage(FetchAction.class, "MSG_FETCH_TITLE")); // NOI18N
+            logger.outputInRed(NbBundle.getMessage(FetchAction.class, "MSG_FETCH_TITLE_SEP")); // NOI18N
+            
+            logger.outputInRed(NbBundle.getMessage(FetchAction.class, 
+                    "MSG_FETCH_LAUNCH_INFO", root.getAbsolutePath())); // NOI18N
+            
+            List<String> list;
+            list = HgCommand.doFetch(root, logger);
+            
+            if (list != null && !list.isEmpty()) {
+                logger.output(HgUtils.replaceHttpPassword(list));
+            }
+        } catch (HgException ex) {
+            NotifyDescriptor.Exception e = new NotifyDescriptor.Exception(ex);
+            DialogDisplayer.getDefault().notifyLater(e);
+        }finally{
+            logger.outputInRed(NbBundle.getMessage(FetchAction.class, "MSG_FETCH_DONE")); // NOI18N
             logger.output(""); // NOI18N
-            logger.closeLog();
-            JOptionPane.showMessageDialog(null,
-                    NbBundle.getMessage(DiffAction.class, "MSG_DIFF_NOT_SUPPORTED_INVIEW"),// NOI18N
-                    NbBundle.getMessage(DiffAction.class, "MSG_DIFF_NOT_SUPPORTED_INVIEW_TITLE"),// NOI18N
-                    JOptionPane.INFORMATION_MESSAGE);
-            return;
         }
-
-        diff(context, Setup.DIFFTYPE_LOCAL, contextName);
     }
-    
+
     public boolean isEnabled() {
-        FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();
-        return cache.containsFileOfStatus(context, FileInformation.STATUS_LOCAL_CHANGE);
+        return HgUtils.getRootFile(context) != null;
     } 
-
-    public static void diff(VCSContext ctx, int type, String contextName) {
-
-        MultiDiffPanel panel = new MultiDiffPanel(ctx, type, contextName); // spawns background DiffPrepareTask
-        DiffTopComponent tc = new DiffTopComponent(panel);
-        tc.setName(NbBundle.getMessage(DiffAction.class, "CTL_DiffPanel_Title", contextName)); // NOI18N
-        tc.open();
-        tc.requestActive();
-    }
-
-    public static void diff(File file, String rev1, String rev2) {
-        MultiDiffPanel panel = new MultiDiffPanel(file, rev1, rev2); // spawns background DiffPrepareTask
-        DiffTopComponent tc = new DiffTopComponent(panel);
-        tc.setName(NbBundle.getMessage(DiffAction.class, "CTL_DiffPanel_Title", file.getName())); // NOI18N
-        tc.open();
-        tc.requestActive();
-    }
 }
