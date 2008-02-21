@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,96 +41,138 @@
 
 package org.netbeans.modules.web.jspparser;
 
-import java.beans.PropertyVetoException;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.StringTokenizer;
-import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.junit.Manager;
+import java.io.InputStream;
+import java.util.Enumeration;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.modules.java.project.JavaAntLogger;
 import org.netbeans.modules.web.api.webmodule.WebModule;
-import org.netbeans.modules.web.spi.webmodule.WebModuleImplementation;
-import org.netbeans.modules.web.core.jsploader.JspParserAccess;
-import org.netbeans.modules.web.jsps.parserapi.JspParserAPI;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
+import org.openide.modules.ModuleInfo;
+import org.openide.util.Lookup;
 
 /**
  *
- * @author  pj97932
+ * @author  pj97932, Tomas Mysik
  */
-class TestUtil {
-    
-    static FileObject getFileInWorkDir(String path, NbTestCase test) throws Exception {
-        File f = new File(Manager.getWorkDirPath());
-        FileObject workDirFO = FileUtil.fromFile(f)[0];
-        StringTokenizer st = new StringTokenizer(path, "/");
-        FileObject tempFile = workDirFO;
-        while (st.hasMoreTokens()) {
-            tempFile = tempFile.getFileObject(st.nextToken());
-        }
-        return tempFile;
+final class TestUtil {
+
+    private TestUtil() {
     }
-    
-     static JspParserAPI.WebModule getWebModule(FileObject fo){
+
+    static void setup(NbTestCase test) throws Exception {
+
+        test.clearWorkDir();
+
+        File javaCluster = new File(JavaAntLogger.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+                .getParentFile().getParentFile();
+        File enterCluster = new File(WebModule.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+                .getParentFile().getParentFile();
+        System.setProperty("netbeans.dirs", javaCluster.getPath() + File.pathSeparator + enterCluster.getPath());
+
+        Logger.getLogger("org.netbeans.core.startup.ModuleList").setLevel(Level.OFF);
+
+        Logger.getLogger("org.netbeans.modules.web.jspparser_ext").setLevel(Level.FINE);
+
+        // module system
+        Lookup.getDefault().lookup(ModuleInfo.class);
+
+        // unzip test project
+        TestUtil.getProject(test, "project3");
+    }
+
+    static FileObject getFileInWorkDir(String path, NbTestCase test) throws Exception {
+        File f = test.getDataDir();
+        FileObject workDirFO = FileUtil.toFileObject(f);
+        return FileUtil.createData(workDirFO, path);
+    }
+
+    static WebModule getWebModule(FileObject fo) {
         WebModule wm =  WebModule.getWebModule(fo);
         if (wm == null) {
             return null;
         }
         FileObject wmRoot = wm.getDocumentBase();
         if (fo == wmRoot || FileUtil.isParentOf(wmRoot, fo)) {
-            return JspParserAccess.getJspParserWM(WebModule.getWebModule(fo));
+            return WebModule.getWebModule(fo);
         }
         return null;
     }
-     
-    /*static JspParserAPI.WebModule getWebModule(FileObject wmRoot, FileObject jspFile) throws Exception {
-        WebModule wm = createWebModule(new UnpWarWebModuleImplementation(wmRoot));
-        return JspParserAccess.getJspParserWM(wm);
-    }
-    
-    private static WebModule createWebModule(WebModuleImplementation impl) throws Exception {
-        java.lang.reflect.Constructor c = WebModule.class.getDeclaredConstructor(
-            new Class[] {WebModuleImplementation.class});
-        c.setAccessible(true);
-        return (WebModule)c.newInstance(new Object[] {impl});
-    }
-    
-    static class UnpWarWebModuleImplementation implements WebModuleImplementation {
-        
-        private FileObject docBase;
-        private String contextPath;
-        
-        public UnpWarWebModuleImplementation(FileObject docBase) {
-            this.docBase = docBase;
-            contextPath = "";
-        }
 
-        public FileObject getDocumentBase () {
-            return docBase;
+    static Project getProject(NbTestCase test, String projectFolderName) throws Exception {
+        File f = getProjectAsFile(test, projectFolderName);
+        FileObject projectPath = FileUtil.toFileObject(f);
+        Project project = ProjectManager.getDefault().findProject(projectPath);
+        NbTestCase.assertNotNull("Project should exist", project);
+        return project;
+    }
+
+    static FileObject getProjectFile(NbTestCase test, String projectFolderName, String filePath) throws Exception {
+        Project project = getProject(test, projectFolderName);
+        FileObject fo = project.getProjectDirectory().getFileObject(filePath);
+        NbTestCase.assertNotNull("Project file should exist: " + filePath, fo);
+
+        return fo;
+    }
+
+    private static File getProjectAsFile(NbTestCase test, String projectFolderName) throws Exception {
+        File f = new File(test.getDataDir(), projectFolderName);
+        if (!f.exists()) {
+            // maybe it's zipped
+            File archive = new File(test.getDataDir(), projectFolderName + ".zip");
+            unZip(archive, test.getDataDir());
         }
-    
-        public FileObject getJavaSourcesFolder () {
-            return docBase.getFileObject("WEB-INF/classes");
+        NbTestCase.assertTrue("project directory has to exists: " + f, f.exists());
+        return f;
+    }
+
+    private static void unZip(File archive, File destination) throws Exception {
+        if (!archive.exists()) {
+            throw new FileNotFoundException(archive + " does not exist.");
         }
-    
-        public String getContextPath () {
-            return contextPath;
+        ZipFile zipFile = new ZipFile(archive);
+        Enumeration<? extends ZipEntry> all = zipFile.entries();
+        while (all.hasMoreElements()) {
+            extractFile(zipFile, all.nextElement(), destination);
         }
-    
-        public void setContextPath (String path) {
-            this.contextPath = path;
+    }
+
+    private static void extractFile(ZipFile zipFile, ZipEntry e, File destination) throws IOException {
+        String zipName = e.getName();
+        if (zipName.startsWith("/")) {
+            zipName = zipName.substring(1);
         }
-        
-        public String getJ2eePlatformVersion (){
-            return "";
+        if (zipName.endsWith("/")) {
+            return;
         }
-        
-        public ClassPath getJavaSources (){
-            return null;
+        int ix = zipName.lastIndexOf('/');
+        if (ix > 0) {
+            String dirName = zipName.substring(0, ix);
+            File d = new File(destination, dirName);
+            if (!(d.exists() && d.isDirectory())) {
+                if (!d.mkdirs()) {
+                    NbTestCase.fail("Warning: unable to mkdir " + dirName);
+                }
+            }
         }
-    }*/
-    
+        FileOutputStream os = new FileOutputStream(destination.getAbsolutePath() + "/" + zipName);
+        InputStream is = zipFile.getInputStream(e);
+        int n = 0;
+        byte[] buff = new byte[8192];
+        while ((n = is.read(buff)) > 0) {
+            os.write(buff, 0, n);
+        }
+        is.close();
+        os.close();
+    }
 }

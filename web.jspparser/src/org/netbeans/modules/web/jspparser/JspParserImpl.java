@@ -55,6 +55,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.modules.web.jsps.parserapi.JspParserAPI;
 
 import org.openide.filesystems.FileObject;
@@ -69,7 +70,7 @@ import org.openide.util.NbBundle;
  */
 public class JspParserImpl implements JspParserAPI {
     
-    private HashMap<JspParserImpl.WAParseSupportKey, WebAppParseProxy> parseSupports;
+    HashMap<JspParserImpl.WAParseSupportKey, WebAppParseProxy> parseSupports;
     
     private static Constructor webAppParserImplConstructor;
     
@@ -102,7 +103,6 @@ public class JspParserImpl implements JspParserAPI {
                 }
                 ExtClassLoader urlCL = new ExtClassLoader(urls, JspParserImpl.class.getClassLoader());
                 Class<?> cl = urlCL.loadClass("org.netbeans.modules.web.jspparser_ext.WebAppParseSupport");
-                
                 webAppParserImplConstructor = cl.getDeclaredConstructor(new Class[] {WebModule.class});
             } catch (NoSuchMethodException e) {
                 Logger.getLogger("global").log(Level.INFO, null, e);
@@ -179,7 +179,7 @@ public class JspParserImpl implements JspParserAPI {
             throw new IOException();
         }
         WebAppParseProxy pp = getParseProxy(wm);
-                return pp.getTaglibMap(true);
+        return pp.getTaglibMap(true);
     }
     
     private synchronized WebAppParseProxy getParseProxy(WebModule wm) {
@@ -308,5 +308,18 @@ public class JspParserImpl implements JspParserAPI {
             perms.add(ALL_PERM);
             return perms;
         }
+
+        @Override
+        protected synchronized Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            // this is because debugger adds ant on cp but this classloader needs ant as well
+            //  - so let this class loader find the class
+            if (name.startsWith("org.apache.tools.ant.")) { // NOI18N
+                Class<?> clazz = findClass(name);
+                return clazz;
+            }
+            return super.loadClass(name, resolve);
+        }
+        
+        
     }
 }
