@@ -73,7 +73,7 @@ public class HgModuleConfig {
     public static final String KEY_ANNOTATION_FORMAT        = "annotationFormat";                           // NOI18N
     public static final String SAVE_PASSWORD                = "savePassword";                               // NOI18N
     public static final String KEY_BACKUP_ON_REVERTMODS = "backupOnRevert";                               // NOI18N
-                            // NOI18N
+    public static final String KEY_SHOW_HITORY_MERGES = "showHistoryMerges";                               // NOI18N
 
     private static final String RECENT_URL = "repository.recentURL";                                        // NOI18N
     private static final String SHOW_CLONE_COMPLETED = "cloneCompleted.showCloneCompleted";        // NOI18N  
@@ -144,9 +144,17 @@ public class HgModuleConfig {
     public boolean getBackupOnRevertModifications() {
         return getPreferences().getBoolean(KEY_BACKUP_ON_REVERTMODS, true);
     }
-
+    
     public void setBackupOnRevertModifications(boolean bBackup) {
         getPreferences().putBoolean(KEY_BACKUP_ON_REVERTMODS, bBackup);
+    }
+    
+    public boolean getShowHistoryMerges() {
+        return getPreferences().getBoolean(KEY_SHOW_HITORY_MERGES, true);
+    }
+
+    public void setShowHistoryMerges(boolean bShowMerges) {
+        getPreferences().putBoolean(KEY_SHOW_HITORY_MERGES, bShowMerges);
     }
     
     public void setExecutableBinaryPath(String path) {
@@ -231,12 +239,18 @@ public class HgModuleConfig {
             name = getUserName();
         if (name.length() > 0) 
             props.setProperty("username", name); // NOI18N
+        else
+            props.setProperty("username", ""); // NOI18N
         name = hgconfig.getDefaultPull(false);
         if (name.length() > 0) 
             props.setProperty("default-pull", name); // NOI18N
+        else
+            props.setProperty("default-pull", ""); // NOI18N
         name = hgconfig.getDefaultPush(false);
         if (name.length() > 0) 
             props.setProperty("default-push", name); // NOI18N
+        else
+            props.setProperty("default-push", ""); // NOI18N
         return props;
     }
 
