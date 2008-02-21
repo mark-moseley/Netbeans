@@ -160,7 +160,7 @@ public class SQLStatementPanel extends JPanel implements IMessageView, ETLOutput
                 StatementContext context = new StatementContext();
 
                 if (sqlObjectLocalRef.getObjectType() == SQLConstants.SOURCE_TABLE) {
-                    String nbBundle3 = mLoc.t("PRSR001: -- Select statement for Source Table\n");
+                    String nbBundle3 = mLoc.t("PRSR001: -- Select statement for Source Table {0}", NL);
                     sql = Localizer.parse(nbBundle3);
                     sql += db.getStatements().getSelectStatement((SourceTable) sqlObj, context).getSQL();
                 } else {
@@ -174,7 +174,7 @@ public class SQLStatementPanel extends JPanel implements IMessageView, ETLOutput
 
             } catch (Exception exp) {
                 this.ex = exp;
-                String nbBundle4 = mLoc.t("PRSR001: Cannot evaluate SQL:\n{0}", sqlObj.getDisplayName());
+                String nbBundle4 = mLoc.t("PRSR001: Cannot evaluate SQL:{0}", sqlObj.getDisplayName());
                 sqlText = Localizer.parse(nbBundle4);
                 mLogger.errorNoloc(mLoc.t("PRSR151: Cannot evaluate SQL for{0}", sqlObj.getDisplayName()), ex);
                 mLogger.errorNoloc(mLoc.t("PRSR152: Can't get contents for table{0}", (sqlObj != null) ? sqlObj.getDisplayName() : ""), ex);
@@ -189,7 +189,7 @@ public class SQLStatementPanel extends JPanel implements IMessageView, ETLOutput
             SQLStatementPanel.this.textArea.setText(this.sqlText);
             stopProgressBar();
             if (this.ex != null) {
-                String nbBundle5 = mLoc.t("PRSR001: Error fetching data for table {0}.\nCause: {1}", sqlObj.getDisplayName(), this.ex.getMessage());
+                String nbBundle5 = mLoc.t("PRSR001: Error fetching data for table {0}.Cause: {1}", sqlObj.getDisplayName(), this.ex.getMessage());
                 String errorMsg = Localizer.parse(nbBundle5);
                 DialogDisplayer.getDefault().notify(new Message(errorMsg, NotifyDescriptor.ERROR_MESSAGE));
             }
@@ -236,6 +236,7 @@ public class SQLStatementPanel extends JPanel implements IMessageView, ETLOutput
 
         String nbBundle7 = mLoc.t("PRSR001: Database Type:");
         JLabel dbTypeLabel = new JLabel(Localizer.parse(nbBundle7));
+        dbTypeLabel.getAccessibleContext().setAccessibleName(Localizer.parse(nbBundle7));
         dbTypeLabel.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 8));
         toolbar.add(dbTypeLabel);
 
@@ -256,6 +257,7 @@ public class SQLStatementPanel extends JPanel implements IMessageView, ETLOutput
         //add refresh button
         URL url = getClass().getResource("/org/netbeans/modules/sql/framework/ui/resources/images/refresh.png");
         refreshButton = new JButton(new ImageIcon(url));
+        refreshButton.setMnemonic('R');
         refreshButton.setToolTipText("Refresh SQL");
         refreshButton.addActionListener(aListener);
         btn[0] = refreshButton;
