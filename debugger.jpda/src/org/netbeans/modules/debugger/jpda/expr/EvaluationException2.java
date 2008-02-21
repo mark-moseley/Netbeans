@@ -134,6 +134,10 @@ public class EvaluationException2 extends RuntimeException {
             msgParams = new String [] { params[0].toString(),  params[1].toString() };
         else if (reason.equals("noSuchMethod"))
             msgParams = new String [] { (String) params[0], (String) params[1] };
+        else if (reason.equals("noSuchMethodWithArgs"))
+            msgParams = new String [] { (String) params[0], (String) params[1], (String) params[2] };
+        else if (reason.equals("noSuchConstructorWithArgs"))
+            msgParams = new String [] { (String) params[0], (String) params[1] };
         else if (reason.equals("callException"))
             msgParams = new String [] { params[1].toString(), params[0].toString() };
         else if (reason.equals("calleeException"))
@@ -161,7 +165,7 @@ public class EvaluationException2 extends RuntimeException {
         else if (reason.equals("notEnclosingType"))
             msgParams = new String [] { ((Identifier)params[0]).typeContext.name(),  ((Identifier)params[0]).superQualifier };
         else if (reason.equals("accessInstanceVariableFromStaticContext"))
-            msgParams = new String [] { ((Identifier)params[0]).identifier };
+            msgParams = new String [] { params[0].toString() };
         else if (reason.equals("methodCallOnNull"))
             msgParams = new String[] { params[0].toString() };
         else if (reason.equals("fieldOnNull"))
@@ -174,6 +178,10 @@ public class EvaluationException2 extends RuntimeException {
             msgParams = new String [] { params[0].toString() };
         else if (reason.equals("unknownOuterClass"))
             msgParams = new String [] { params[0].toString() };
+        else if (reason.equals("notExpression"))
+            msgParams = new String [] {  };
+        else if (reason.equals("methOnArray"))
+            msgParams = new String [] {  };
         else {
             msgParams = new String [] { reason };
             reason = "unknownInternalError";
