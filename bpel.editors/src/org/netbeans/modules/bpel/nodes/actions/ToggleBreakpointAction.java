@@ -18,6 +18,8 @@
  */
 package org.netbeans.modules.bpel.nodes.actions;
 
+import org.netbeans.modules.bpel.nodes.actions.BpelNodeAction;
+import org.netbeans.modules.bpel.editors.api.nodes.actions.ActionType;
 import java.util.concurrent.Callable;
 import javax.swing.KeyStroke;
 import javax.swing.text.StyledDocument;
@@ -61,16 +63,14 @@ public class ToggleBreakpointAction extends BpelNodeAction {
         return NbBundle.getMessage(getClass(), "CTL_ToggleBreakpointAction"); // NOI18N
     }
     
-    
     public ActionType getType() {
         return ActionType.TOGGLE_BREAKPOINT;
     }
     
-    
+    @Override
     public boolean isChangeAction() {
         return false;
     }
-    
     
     protected void performAction(BpelEntity[] bpelEntities) {
         DebuggerManager.getDebuggerManager().getActionsManager().doAction(
