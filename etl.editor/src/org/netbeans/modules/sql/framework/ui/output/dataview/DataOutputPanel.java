@@ -623,9 +623,8 @@ public abstract class DataOutputPanel extends JPanel implements ETLOutputPanel {
             DialogDisplayer.getDefault().notify(new Message(msg, NotifyDescriptor.INFORMATION_MESSAGE));
         } else {
             try {
-                for (int i = 0; i < queryView.table.getSelectedRowCount(); i++) {
+                int i = queryView.table.getSelectedRow();
                     queryView.executeDeleteRow(meta, i);
-                }
                 refreshActionPerformed();
             } catch (Exception ex) {
                 String msg = "Error Deleting Row(s): " + ex.getMessage();
@@ -697,6 +696,7 @@ public abstract class DataOutputPanel extends JPanel implements ETLOutputPanel {
 
         DialogDescriptor desc = new DialogDescriptor(panel, "Enter the Values");
         Dialog dialog = DialogDisplayer.getDefault().createDialog(desc);
+        dialog.getAccessibleContext().setAccessibleDescription("This is the dialog which helps user input records into database");
         dialog.setModal(true);
         dialog.pack();
         dialog.setVisible(true);
