@@ -293,6 +293,8 @@ implements DocumentListener, KeyListener {
         nestedTemplateExpanding = (Boolean.TRUE.equals(doc.getProperty(
                 EDITING_TEMPLATE_DOC_PROPERTY)));
         
+        doc.putProperty(EDITING_TEMPLATE_DOC_PROPERTY, Boolean.TRUE);
+        
         String completeInsertString = getInsertText();
 
         BaseDocument bdoc = (doc instanceof BaseDocument)
@@ -310,7 +312,7 @@ implements DocumentListener, KeyListener {
         try {
             // First check if there is a caret selection and if so remove it
             Caret caret = component.getCaret();
-            if (caret.isSelectionVisible()) {
+            if (Utilities.isSelectionShowing(caret)) {
                 int removeOffset = component.getSelectionStart();
                 int removeLength = component.getSelectionEnd() - removeOffset;
                 doc.remove(removeOffset, removeLength);
@@ -371,8 +373,6 @@ implements DocumentListener, KeyListener {
     
     public void installActions() {
         if (!nestedTemplateExpanding && editableMasters.size() > 0) {
-            doc.putProperty(EDITING_TEMPLATE_DOC_PROPERTY, Boolean.TRUE);
-
             // Install the post modification document listener to sync regions
             if (doc instanceof BaseDocument) {
                 ((BaseDocument)doc).setPostModificationDocumentListener(this);
@@ -443,7 +443,7 @@ implements DocumentListener, KeyListener {
         checkNotifyParameterUpdate();
 
         activeMasterIndex++;
-        if (activeMasterIndex == editableMasters.size()) { 
+        if (activeMasterIndex >= editableMasters.size()) { 
             forceCaretPosition();
             release();
             if (completionInvoke) {
@@ -467,11 +467,11 @@ implements DocumentListener, KeyListener {
     }
     
     public String getDocParameterValue(CodeTemplateParameterImpl paramImpl) {
-        MutablePositionRegion positionRegion = paramImpl.getPositionRegion();
-        int offset = positionRegion.getStartOffset();
+        MutablePositionRegion preg = paramImpl.getPositionRegion();
+        int offset = preg.getStartOffset();
         String parameterText;
         try {
-            parameterText = doc.getText(offset, positionRegion.getEndOffset() - offset);
+            parameterText = doc.getText(offset, preg.getEndOffset() - offset);
         } catch (BadLocationException e) {
             ErrorManager.getDefault().notify(e);
             parameterText = ""; //NOI18N
@@ -613,10 +613,12 @@ implements DocumentListener, KeyListener {
     
     private void tabUpdate() {
         updateLastRegionBounds();
-        SyncDocumentRegion active = getActiveMasterImpl().getRegion();
-        component.select(active.getFirstRegionStartOffset(),
-                active.getFirstRegionEndOffset());
-        
+        CodeTemplateParameterImpl activeMasterImpl = getActiveMasterImpl();
+        if (activeMasterImpl != null) {
+            SyncDocumentRegion active = activeMasterImpl.getRegion();
+            component.select(active.getFirstRegionStartOffset(),
+                    active.getFirstRegionEndOffset());
+        }
         // Repaint the selected blocks according to the current master
         requestRepaint();
     }
@@ -631,9 +633,9 @@ implements DocumentListener, KeyListener {
             endOffset = Math.max(endOffset, region.getSortedRegion(
                     region.getRegionCount() - 1).getEndOffset());
         }
-        JTextComponent component = getComponent();
+        JTextComponent c = getComponent();
         if (endOffset != 0) {
-            component.getUI().damageRange(component, startOffset, endOffset);
+            c.getUI().damageRange(c, startOffset, endOffset);
         }
     }
 
@@ -649,26 +651,26 @@ implements DocumentListener, KeyListener {
             if (doc instanceof BaseDocument) {
                 ((BaseDocument)doc).setPostModificationDocumentListener(null);
             }
-            doc.putProperty(EDITING_TEMPLATE_DOC_PROPERTY, Boolean.FALSE);
 
             component.removeKeyListener(this);
 
             // Restore original action map
-            JTextComponent component = getComponent();
-            component.setActionMap(componentOrigActionMap);
+            JTextComponent c = getComponent();
+            c.setActionMap(componentOrigActionMap);
 
             // Free the draw layers
-            EditorUI editorUI = Utilities.getEditorUI(component);
+            EditorUI editorUI = Utilities.getEditorUI(c);
             if (editorUI != null) {
                 for (DrawLayer drawLayer : drawLayers) {
                     editorUI.removeLayer(drawLayer.getName());
                 }
             }
-            component.putClientProperty(DrawLayer.TEXT_FRAME_START_POSITION_COMPONENT_PROPERTY, null);
-            component.putClientProperty(DrawLayer.TEXT_FRAME_END_POSITION_COMPONENT_PROPERTY, null);
+            c.putClientProperty(DrawLayer.TEXT_FRAME_START_POSITION_COMPONENT_PROPERTY, null);
+            c.putClientProperty(DrawLayer.TEXT_FRAME_END_POSITION_COMPONENT_PROPERTY, null);
 
             requestRepaint();
         }
+        doc.putProperty(EDITING_TEMPLATE_DOC_PROPERTY, Boolean.FALSE);
 
         // Notify processors
         for (CodeTemplateProcessor processor : processors) {
