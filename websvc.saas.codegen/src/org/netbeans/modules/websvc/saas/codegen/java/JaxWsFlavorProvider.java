@@ -57,14 +57,16 @@ public class JaxWsFlavorProvider implements ConsumerFlavorProvider {
 
     public Transferable addDataFlavors(Transferable transferable) {
         try {
-            Object data = transferable.getTransferData(ConsumerFlavorProvider.WSDL_METHOD_FLAVOR);
-            if (data instanceof WsdlSaasMethod) {
-                WsdlSaasMethod method = (WsdlSaasMethod) data;
-                ExTransferable t = ExTransferable.create(transferable);
-                JaxWsEditorDrop editorDrop = new JaxWsEditorDrop(method);
-                ActiveEditorDropTransferable s = new ActiveEditorDropTransferable(editorDrop);
-                t.put(s);
-                return t;
+            if (transferable.isDataFlavorSupported(ConsumerFlavorProvider.WSDL_METHOD_FLAVOR)) {
+                Object data = transferable.getTransferData(ConsumerFlavorProvider.WSDL_METHOD_FLAVOR);
+                if (data instanceof WsdlSaasMethod) {
+                    WsdlSaasMethod method = (WsdlSaasMethod) data;
+                    ExTransferable t = ExTransferable.create(transferable);
+                    JaxWsEditorDrop editorDrop = new JaxWsEditorDrop(method);
+                    ActiveEditorDropTransferable s = new ActiveEditorDropTransferable(editorDrop);
+                    t.put(s);
+                    return t;
+                }
             }
         } catch (Exception ex) {
             Exceptions.printStackTrace(ex);
