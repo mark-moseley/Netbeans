@@ -123,7 +123,7 @@ made subject to such option by the copyright holder.
             </not>
         </condition>
         You have stray *.class files in ${basedir}/antsrc which you must remove.
-        Probably you failed to clean your sources before updating them from CVS.
+        Probably you failed to clean your sources before updating. Try: ant hg-clean
     </fail>
     <!-- OK, continue: -->
     <available property="have.javahelp" file="../apisupport.harness/external" type="dir"/>
@@ -182,6 +182,10 @@ made subject to such option by the copyright holder.
     <taskdef name="insert-module-all-targets" classname="org.netbeans.nbbuild.InsertModuleAllTargets" classpath="nbantext.jar"/>
     <property name="verify.checkout" value="true"/> 
     <insert-module-all-targets checkModules="${verify.checkout}"/>
+    <property environment="env"/>
+    <condition property="run.env.display" value="${env.NBDISPLAY}" else="${env.DISPLAY}">
+	<isset property="env.NBDISPLAY"/>
+    </condition>
   </target>
   
   <target name="all-installer" description="Dummy target for build system compatibility"/>
@@ -1308,6 +1312,7 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
       <arg file="${test.user.dir}"/>
       <arg line="${tryme.args}"/>
       <arg line="${tryme.debug.args}" />
+      <env key="DISPLAY" value="${run.env.display}"/>
     </exec>
   </target>
   
@@ -1427,6 +1432,18 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
     <antcall target="real-clean"/>
   </target>
   <target name="hg-clean" depends="-hg-clean-alternative" if="can.hg.clean">
+    <exec executable="hg" failonerror="yes" dir=".." outputproperty="hg.unknown.files">
+      <arg value="status"/>
+      <arg value="--unknown"/>
+      <arg value="--no-status"/>
+    </exec>
+    <fail message="Will not run clean; checkout contains unknown and not ignored files (did you forget to hg add?):&#10;${hg.unknown.files}">
+        <condition>
+            <not>
+                <equals arg1="${hg.unknown.files}" arg2=""/>
+            </not>
+        </condition>
+    </fail>
     <exec executable="hg" failonerror="yes" dir="..">
       <arg value="--config"/>
       <arg value="extensions.purge="/>
@@ -1515,9 +1532,10 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
   </target>
 
   <target name="clean-cluster" description="Clean only one cluster - takes clean.cluster.name as parameters">
+    <fail message="specify -Dclean.cluster.name= property" unless="clean.cluster.name"/>
     <resolve name="modules.to.clean" value="${clean.cluster.name}"/>
     <antcall target="cleanall" inheritAll="false">
-      <param name="allmodules" value="${nb.cluster.visualweb}"/>
+      <param name="allmodules" value="${modules.to.clean}"/>
     </antcall>
     <delete file="netbeans/${clean.cluster.name}.built" failonerror="false"/>
   </target>
@@ -1527,7 +1545,6 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
     <antcall target="cleanall" inheritAll="false">
       <param name="allmodules" value="${nb.cluster.visualweb}"/>
     </antcall>
-<!--    <delete dir="netbeans/visualweb1"/>-->
   </target>
 
 
@@ -1630,10 +1647,6 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
   <target name="check-commit-validation">
     <condition property="run.validation" >
         <and>
-          <available file="../ide.kit/test/build.xml" />
-          <available file="../jemmy/build.xml" />
-          <available file="../jellytools/build.xml" />
-          <available file="../xtest/build.xml" />
           <or>
             <not>
               <isset property="nb.run.validation"/>
@@ -1694,8 +1707,7 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
   <target name="no-commit-validation" depends="check-commit-validation" unless="run.validation">
     <echo>
         *** WARNING ***
-        You do not seem to have the modules needed to run the commit validation test suite. 
-        You may not commit any changes into the CVS repository without running these tests.
+        You may not commit any changes into the repository without running the commit validation test suite.
         For more information: http://www.netbeans.org/community/guidelines/commit.html
     </echo>
   </target>
@@ -1743,13 +1755,17 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
     <echo message="Packaging sources of ${cluster.name} modules"/>
     <resolve name="cluster-modules" value="${cluster.name}"/>
     <resolve name="harness-modules" value="nb.cluster.harness"/>
+    
     <mkdir dir="${netbeans.build.dir}"/>
-    <taskdef name="definefileset" classname="org.netbeans.nbbuild.PrintCvsModules" classpath="nbantext.jar"/>
-    <definefileset modules="${cluster-modules}" id="source-modules" dir=".."/>
-    <definefileset modules="${harness-modules}" id="harness-source-modules" dir=".."/>
+    <dirset id="source.dirset" dir="${nb_all}" includes="${cluster-modules},${harness-modules},nbbuild"/>
+    <pathconvert property="source.dirs" pathsep="," refid="source.dirset">
+      <regexpmapper from="${nb_all}/(.*)$" to="\1/**/*" handledirsep="yes"/>
+    </pathconvert>
     <zip zipfile="${netbeans.build.dir}/${cluster.name}-src-${buildnum}.zip" duplicate="preserve">
-      <fileset refid="source-modules" />
-      <fileset refid="harness-source-modules" />
+      <zipfileset dir="${nb_all}" includes="${source.dirs}">
+          <exclude name="*/build/**/*"/>
+          <exclude name="nbbuild/netbeans/**"/>
+      </zipfileset>
     </zip>
   </target>
 
@@ -1761,16 +1777,18 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
 
     <taskdef name="resolvelist" classname="org.netbeans.nbbuild.ResolveList" classpath="nbantext.jar"/>
     <resolvelist name="modules.for.checkout.list" list="${nb.clusters.list}"/>
-
     <resolve name="harness-modules" value="nb.cluster.harness"/>
+    
     <mkdir dir="${netbeans.build.dir}"/>
-    <property name="source.zip.filename" location="${netbeans.build.dir}/${cluster.config}-src-${buildnum}.zip"/>
-    <taskdef name="definefileset" classname="org.netbeans.nbbuild.PrintCvsModules" classpath="nbantext.jar"/>
-    <definefileset modules="${modules.for.checkout.list}" id="source-modules" dir=".."/>
-    <definefileset modules="${harness-modules}" id="harness-source-modules" dir=".."/>
+    <dirset id="source.dirset" dir="${nb_all}" includes="${modules.for.checkout.list},${harness-modules},nbbuild"/>
+    <pathconvert property="source.dirs" pathsep="," refid="source.dirset">
+      <regexpmapper from="${nb_all}/(.*)$" to="\1/**/*" handledirsep="yes"/>
+    </pathconvert>
     <zip zipfile="${netbeans.build.dir}/${cluster.config}-src-${buildnum}.zip" duplicate="preserve">
-      <fileset refid="source-modules"/>
-      <fileset refid="harness-source-modules"/>
+      <zipfileset dir="${nb_all}" includes="${source.dirs}">
+          <exclude name="*/build/**/*"/>
+          <exclude name="nbbuild/netbeans/**"/>
+      </zipfileset>
     </zip>
   </target>
 
