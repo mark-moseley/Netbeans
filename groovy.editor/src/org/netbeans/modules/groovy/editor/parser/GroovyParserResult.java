@@ -41,10 +41,13 @@
 
 package org.netbeans.modules.groovy.editor.parser;
 
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.api.gsf.ParserFile;
-import org.netbeans.api.gsf.ParserResult;
+import org.netbeans.fpi.gsf.ElementHandle;
+import org.netbeans.fpi.gsf.OffsetRange;
+import org.netbeans.fpi.gsf.ParserFile;
+import org.netbeans.fpi.gsf.ParserResult;
+import org.netbeans.fpi.gsf.ParserResult.AstTreeNode;
+import org.netbeans.fpi.gsf.annotations.NonNull;
+import org.netbeans.modules.groovy.editor.StructureAnalyzer;
 import org.netbeans.modules.groovy.editor.elements.AstRootElement;
 
 /**
@@ -57,16 +60,21 @@ public class GroovyParserResult extends ParserResult {
     private AstTreeNode ast;
     private OffsetRange sanitizedRange = OffsetRange.NONE;
     private String sanitizedContents;
+    private StructureAnalyzer.AnalysisResult analysisResult;
     private GroovyParser.Sanitize sanitized;
 
-    public GroovyParserResult(ParserFile parserFile, AstRootElement rootElement, AstTreeNode ast) {
-        super(parserFile);
+    public GroovyParserResult(GroovyParser parser, ParserFile parserFile, AstRootElement rootElement, AstTreeNode ast) {
+        super(parser, parserFile, "text/x-groovy");
         this.rootElement = rootElement;
         this.ast = ast;
     }
 
     @Override
-    public Element getRoot() {
+    public ElementHandle getRoot() {
+        return GroovyParser.createHandle(this, rootElement);
+    }
+
+    public AstRootElement getRootElement() {
         return rootElement;
     }
 
@@ -101,5 +109,17 @@ public class GroovyParserResult extends ParserResult {
     public GroovyParser.Sanitize getSanitized() {
         return sanitized;
     }    
+
+    public void setStructure(@NonNull StructureAnalyzer.AnalysisResult result) {
+        this.analysisResult = result;
+    }
+
+    @NonNull
+    public StructureAnalyzer.AnalysisResult getStructure() {
+        if (analysisResult == null) {
+            analysisResult = new StructureAnalyzer().analyze(this);
+        }
+        return analysisResult;
+    }
 
 }

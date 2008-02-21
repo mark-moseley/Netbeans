@@ -41,13 +41,15 @@
 
 package org.netbeans.modules.groovy.editor.elements;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import org.codehaus.groovy.ast.ASTNode;
 import org.codehaus.groovy.ast.MethodNode;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Modifier;
+import org.netbeans.fpi.gsf.Element;
+import org.netbeans.fpi.gsf.ElementKind;
+import org.netbeans.fpi.gsf.Modifier;
 
 /**
  *
@@ -56,6 +58,7 @@ import org.netbeans.api.gsf.Modifier;
 public abstract class AstElement implements Element {
 
     protected final ASTNode node;
+    protected List<AstElement> children;
     protected String name;
     protected Set<Modifier> modifiers;
     private String in;
@@ -64,6 +67,22 @@ public abstract class AstElement implements Element {
         this.node = node;
     }
     
+    public List<AstElement> getChildren() {
+        if (children == null) {
+            return Collections.<AstElement>emptyList();
+        }
+
+        return children;
+    }
+
+    public void addChild(AstElement child) {
+        if (children == null) {
+            children = new ArrayList<AstElement>();
+        }
+
+        children.add(child);
+    }
+
     public abstract String getName();
 
     public ASTNode getNode() {
