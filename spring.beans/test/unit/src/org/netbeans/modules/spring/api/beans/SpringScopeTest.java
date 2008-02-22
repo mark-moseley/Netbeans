@@ -41,9 +41,17 @@
 
 package org.netbeans.modules.spring.api.beans;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import org.netbeans.modules.spring.api.Action;
+import org.netbeans.modules.spring.api.beans.model.SpringBean;
 import org.netbeans.modules.spring.api.beans.model.SpringBeans;
 import org.netbeans.modules.spring.api.beans.model.SpringConfigModel;
+import org.netbeans.modules.spring.beans.ConfigFileManagerAccessor;
 import org.netbeans.modules.spring.beans.ConfigFileTestCase;
 import org.netbeans.modules.spring.beans.SpringScopeAccessor;
 import org.netbeans.modules.spring.beans.TestUtils;
@@ -61,21 +69,22 @@ public class SpringScopeTest extends ConfigFileTestCase {
         super(testName);
     }
 
-    public void testGetConfigModel() throws Exception {
+    public void testGetConfigModelAdHoc() throws Exception {
         String contents = TestUtils.createXMLConfigText("<bean id='foo' name='bar baz' class='org.example.Foo'/>");
         TestUtils.copyStringToFile(contents, configFile);
-        FileObject configFO = FileUtil.toFileObject(configFile);
-        SpringScope scope = SpringScopeAccessor.DEFAULT.createSpringScope();
+        ConfigFileManager manager = ConfigFileManagerAccessor.DEFAULT.createConfigFileManager(new DefaultConfigFileManagerImpl());
+        SpringScope scope = SpringScopeAccessor.DEFAULT.createSpringScope(manager);
 
+        FileObject configFO = FileUtil.toFileObject(configFile);
         SpringConfigModel model = SpringScopeAccessor.DEFAULT.getConfigModel(scope, configFO);
         final int[] beanCount = { 0 };
         model.runReadAction(new Action<SpringBeans>() {
-            public void run(SpringBeans parameter) {
-                beanCount[0] = parameter.getBeans(configFile).size();
+            public void run(SpringBeans beans) {
+                beanCount[0] = beans.getBeans(configFile).size();
             }
         });
         assertEquals(1, beanCount[0]);
-        assertEquals(1, scope.file2AdHocModel.size());
+        assertEquals(1, scope.file2Model.size());
 
         SpringConfigModel anotherModel = SpringScopeAccessor.DEFAULT.getConfigModel(scope, configFO);
         assertSame(model, anotherModel);
@@ -86,6 +95,67 @@ public class SpringScopeTest extends ConfigFileTestCase {
         } finally {
             lock.releaseLock();
         }
-        assertEquals(0, scope.file2AdHocModel.size());
+        assertEquals(0, scope.file2Model.size());
+    }
+
+    public void testGetConfigModel() throws IOException {
+        TestUtils.copyStringToFile(TestUtils.createXMLConfigText("<bean id='foo' class='org.example.Foo'/>"), configFile);
+        final File configFile2 = createConfigFileName("anotherContext.xml");
+        TestUtils.copyStringToFile(TestUtils.createXMLConfigText("<bean id='bar' class='org.example.Bar'/>"), configFile2);
+        ConfigFileGroup group = ConfigFileGroup.create(Arrays.asList(configFile, configFile2));
+        final ConfigFileManager manager = ConfigFileManagerAccessor.DEFAULT.createConfigFileManager(new DefaultConfigFileManagerImpl(group));
+        SpringScope scope = SpringScopeAccessor.DEFAULT.createSpringScope(manager);
+
+        FileObject configFO = FileUtil.toFileObject(configFile);
+        SpringConfigModel model = SpringScopeAccessor.DEFAULT.getConfigModel(scope, configFO);
+        final Set<String> beanNames = new HashSet<String>();
+        model.runReadAction(new Action<SpringBeans>() {
+            public void run(SpringBeans beans) {
+                for (SpringBean bean : beans.getBeans(configFile)) {
+                    beanNames.add(bean.getId());
+                }
+            }
+        });
+        assertEquals(1, beanNames.size());
+        assertTrue(beanNames.contains("foo"));
+
+        beanNames.clear();
+        model.runReadAction(new Action<SpringBeans>() {
+            public void run(SpringBeans beans) {
+                for (SpringBean bean : beans.getBeans(configFile2)) {
+                    beanNames.add(bean.getId());
+                }
+            }
+        });
+        assertEquals(1, beanNames.size());
+        assertTrue(beanNames.contains("bar"));
+
+        beanNames.clear();
+        model.runReadAction(new Action<SpringBeans>() {
+            public void run(SpringBeans beans) {
+                for (SpringBean bean : beans.getBeans()) {
+                    beanNames.add(bean.getId());
+                }
+            }
+        });
+        assertEquals(2, beanNames.size());
+        assertTrue(beanNames.contains("foo"));
+        assertTrue(beanNames.contains("bar"));
+
+        assertEquals(1, scope.group2Model.size());
+
+        SpringConfigModel anotherModel = SpringScopeAccessor.DEFAULT.getConfigModel(scope, configFO);
+        assertSame(model, anotherModel);
+
+        FileObject configFO2 = FileUtil.toFileObject(configFile2);
+        anotherModel = SpringScopeAccessor.DEFAULT.getConfigModel(scope, configFO2);
+        assertSame(model, anotherModel);
+
+        manager.mutex().writeAccess(new Runnable() {
+            public void run() {
+                manager.putConfigFilesAndGroups(Collections.<File>emptyList(), Collections.<ConfigFileGroup>emptyList());
+            }
+        });
+        assertEquals(0, scope.group2Model.size());
     }
 }
