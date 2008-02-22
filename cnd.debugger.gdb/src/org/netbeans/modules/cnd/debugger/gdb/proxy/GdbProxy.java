@@ -56,6 +56,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.util.Utilities;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
+import org.netbeans.modules.cnd.debugger.gdb.utils.CommandBuffer;
 import org.netbeans.modules.cnd.debugger.gdb.utils.GdbUtils;
 
 /**
@@ -120,9 +121,9 @@ public class GdbProxy implements GdbMiDefinitions {
     }
     
     /** Attach to a running program */
-    public int target_attach(String pid) {
+    public int target_attach(CommandBuffer cb, String pid) {
 //        return engine.sendCommand("-target-attach " + pid); // NOI18N - no implementaion
-        return engine.sendCommand("attach " + pid); // NOI18N
+        return engine.sendCommand(cb, "attach " + pid); // NOI18N
     }
     
     /** Detach from a running program */
@@ -198,12 +199,16 @@ public class GdbProxy implements GdbMiDefinitions {
      *  Note: In gdb 6.5.50 the -threads-list-all-threads command isn't implemented so we
      *  revert to the gdb command "info threads".
      */
+    public int info_threads(CommandBuffer cb) {
+        return engine.sendCommand(cb, "info threads"); // NOI18N;
+    }
+    
     public int info_threads() {
         return engine.sendCommand("info threads"); // NOI18N;
     }
     
-    public int info_files() {
-        return engine.sendCommand("info files"); // NOI18N
+    public int info_files(CommandBuffer cb) {
+        return engine.sendCommand(cb, "info files"); // NOI18N
     }
 
     /** Set the current thread */
@@ -218,12 +223,50 @@ public class GdbProxy implements GdbMiDefinitions {
     public int info_proc() {
         return engine.sendCommand("info proc"); // NOI18N
     }
+    
+    public int info_share() {
+        return engine.sendCommand("info share"); // NOI18N
+    }
+    
+    public int info_share(CommandBuffer cb) {
+        return engine.sendCommand(cb, "info share"); // NOI18N
+    }
+
+    /**
+     *  Use this to call _CndSigInit() to initialize signals in Cygwin processes.
+     */
+    public int data_evaluate_expression(CommandBuffer cb, String string) {
+        return engine.sendCommand(cb, "-data-evaluate-expression " + string); // NOI18N
+    }
 
     /**
      *  Use this to call _CndSigInit() to initialize signals in Cygwin processes.
      */
     public int data_evaluate_expression(String string) {
         return engine.sendCommand("-data-evaluate-expression " + string); // NOI18N
+    }
+    
+    /**
+     */
+    public int data_list_register_names(CommandBuffer cb, String regIds) {
+        return engine.sendCommand(cb, "-data-list-register-names " + regIds); // NOI18N
+    }
+    
+    /**
+     */
+    public int data_list_register_values(CommandBuffer cb, String regIds) {
+        return engine.sendCommand(cb, "-data-list-register-values r " + regIds); // NOI18N
+    }
+    
+    /*
+     * @param filename - source file to disassemble
+     */
+    public int data_disassemble(String filename, int line) {
+        return engine.sendCommand("-data-disassemble -f " + filename + " -l " + line + " -- 0"); // NOI18N
+    }
+    
+    public int print(CommandBuffer cb, String expression) {
+        return engine.sendCommand(cb, "print " + expression); // NOI18N
     }
 
     /**
@@ -277,6 +320,13 @@ public class GdbProxy implements GdbMiDefinitions {
      */
     public int exec_next() {
         return engine.sendCommand("-exec-next"); // NOI18N
+    }
+    
+    /**
+     * Execute single instruction
+     */
+    public int exec_instruction() {
+        return engine.sendCommand("-exec-step-instruction"); // NOI18N
     }
 
     /**
@@ -487,8 +537,8 @@ public class GdbProxy implements GdbMiDefinitions {
      * Request the type of a symbol. As of gdb 6.6, this is unimplemented so we send a
      * non-mi command "ptype". We should only be called when symbol is in scope.
      */
-    public int symbol_type(String symbol) {
-        return engine.sendCommand("ptype " + symbol); // NOI18N
+    public int symbol_type(CommandBuffer cb, String symbol) {
+        return engine.sendCommand(cb, "ptype " + symbol); // NOI18N
     }
 
     /**
@@ -496,8 +546,8 @@ public class GdbProxy implements GdbMiDefinitions {
      * so we send a gdb "whatis" command. This is different from -system-type in the case
      * of abstract data structures (structs and classes). Its the same for other types.
      */
-    public int whatis(String symbol) {
-        return engine.sendCommand("whatis " + symbol); // NOI18N
+    public int whatis(CommandBuffer cb, String symbol) {
+        return engine.sendCommand(cb, "whatis " + symbol); // NOI18N
     }
 
     /**
