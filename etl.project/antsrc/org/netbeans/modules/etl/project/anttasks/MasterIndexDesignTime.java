@@ -63,7 +63,7 @@ import org.netbeans.modules.etl.logger.LogUtil;
  *
  * @author Manish
  */
-public class EViewDesignTime extends Task {
+public class MasterIndexDesignTime extends Task {
 
     private static String USER_DIR = System.getProperty("user.dir");
     private static String fs = System.getProperty("file.separator");
@@ -79,11 +79,11 @@ public class EViewDesignTime extends Task {
     String parentPrimaryKey = null;
     ArrayList childrenForeignKey = new ArrayList();
     ArrayList orderByFields = new ArrayList();
-    private static transient final Logger mLogger = LogUtil.getLogger(EViewDesignTime.class.getName());
+    private static transient final Logger mLogger = LogUtil.getLogger(MasterIndexDesignTime.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
 
     /** Creates a new instance of Main */
-    public EViewDesignTime() {
+    public MasterIndexDesignTime() {
     }
 
     private void parseObjectDef() {
@@ -195,24 +195,29 @@ public class EViewDesignTime extends Task {
         mLogger.infoNoloc(mLoc.t("eTLeView Design Time - Query Builder [START] ...\n"));
         ChooseLocationDialog dialog = new ChooseLocationDialog(new JFrame(), true);
         dialog.setVisible(true);
-        TargetDBSchemaGenerator dbgen = TargetDBSchemaGenerator.getTargetDBSchemaGenerator();
-        objDefn = dialog.getObjectDefinition();
-        boolean fileIsValid = dbgen.setEViewConfigFilePath(dialog.getObjectDefinition(), "object.xml");//("C:/temp/eviewconfig", "objectdef.xml");
-        if (fileIsValid) {
-            File file = new File(dialog.getDBLocation());
-            if (!file.exists()) {
-                file.mkdirs();
+        if ((dialog.getDBLocation()) != null && (dialog.getDBName()) != null && (dialog.getObjectDefinition()) != null) {
+            TargetDBSchemaGenerator dbgen = TargetDBSchemaGenerator.getTargetDBSchemaGenerator();
+            objDefn = dialog.getObjectDefinition();
+            boolean fileIsValid = dbgen.setEViewConfigFilePath(dialog.getObjectDefinition(), "object.xml");//("C:/temp/eviewconfig", "objectdef.xml");
+            if (fileIsValid) {
+                File file = new File(dialog.getDBLocation());
+                if (!file.exists()) {
+                    file.mkdirs();
+                }
+                dbgen.createTargetDB(dialog.getDBLocation(), dialog.getDBName());//C:\temp\AAADB 
             }
-            dbgen.createTargetDB(dialog.getDBLocation(), dialog.getDBName());//C:\temp\AAADB 
+            System.out.println("\neTLeView Design Time - Query Builder [END].");
+            mLogger.infoNoloc(mLoc.t("\neTLeView Design Time - Query Builder [END]."));
+        }else{
+            mLogger.infoNoloc(mLoc.t("The dialog is cancelled or any one of the fields are empty"));
         }
-        mLogger.infoNoloc(mLoc.t("\neTLeView Design Time - Query Builder [END]."));
     }
 
     /**
      * @param args the command line arguments
      */
-    public static void main(String[] args) {        
-        EViewDesignTime main = new EViewDesignTime();
+    public static void main(String[] args) {
+        MasterIndexDesignTime main = new MasterIndexDesignTime();
         main.execute();
     }
 }
