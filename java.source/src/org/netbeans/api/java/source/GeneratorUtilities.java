@@ -56,10 +56,13 @@ import com.sun.source.tree.Tree;
 import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.SourcePositions;
+import com.sun.tools.javac.code.Flags;
+import com.sun.tools.javac.code.Symbol.ClassSymbol;
+import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
-import java.io.IOException;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -70,13 +73,14 @@ import java.util.Set;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
 import javax.swing.text.Document;
 
 import org.netbeans.api.java.lexer.JavaTokenId;
@@ -84,7 +88,6 @@ import org.netbeans.api.java.queries.SourceLevelQuery;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.GuardedDocument;
 import org.netbeans.modules.java.source.parsing.SourceFileObject;
-import org.openide.filesystems.FileObject;
 import org.openide.modules.SpecificationVersion;
 import org.openide.util.Exceptions;
 
@@ -251,10 +254,17 @@ public final class GeneratorUtilities {
         List<StatementTree> statements = new ArrayList<StatementTree>();
         ModifiersTree parameterModifiers = make.Modifiers(EnumSet.noneOf(Modifier.class));        
         if (constructor != null && !constructor.getParameters().isEmpty()) {
+            ExecutableType constructorType = clazz.getSuperclass().getKind() == TypeKind.DECLARED ? (ExecutableType) copy.getTypes().asMemberOf((DeclaredType) clazz.getSuperclass(), constructor) : null;
             List<ExpressionTree> arguments = new ArrayList<ExpressionTree>();
-            for (VariableElement ve : constructor.getParameters()) {
-                parameters.add(make.Variable(parameterModifiers, ve.getSimpleName(), make.Type(ve.asType()), null));
-                arguments.add(make.Identifier(ve.getSimpleName())); //NOI18N
+            Iterator<? extends VariableElement> parameterElements = constructor.getParameters().iterator();
+            Iterator<? extends TypeMirror> parameterTypes = constructorType != null ? constructorType.getParameterTypes().iterator() : null;
+            while (parameterElements.hasNext()) {
+                VariableElement ve = parameterElements.next();
+                Name simpleName = ve.getSimpleName();
+                TypeMirror type = parameterTypes != null ? parameterTypes.next() : ve.asType();
+                
+                parameters.add(make.Variable(parameterModifiers, simpleName, make.Type(type), null));
+                arguments.add(make.Identifier(simpleName));
             }
             statements.add(make.ExpressionStatement(make.MethodInvocation(Collections.<ExpressionTree>emptyList(), make.Identifier("super"), arguments))); //NOI18N
         }
@@ -423,16 +433,26 @@ public final class GeneratorUtilities {
             et = (ExecutableType)copy.getTypes().asMemberOf(type, element);
         } catch (IllegalArgumentException iae) {}
         List<TypeParameterTree> typeParams = new ArrayList<TypeParameterTree>();
-        for (TypeParameterElement tpe: element.getTypeParameters()) {
+        for (TypeVariable typeVariable : et.getTypeVariables()) {
             List<ExpressionTree> bounds = new ArrayList<ExpressionTree>();
-            for (TypeMirror bound : tpe.getBounds()) {
-                if (bound.getKind() != TypeKind.NULL) {
-                    //if the bound is java.lang.Object, do not generate the extends clause:
-                    if (bound.getKind() != TypeKind.DECLARED || !"java.lang.Object".contentEquals(((TypeElement)((DeclaredType)bound).asElement()).getQualifiedName())) //NOI18N
+            TypeMirror bound = typeVariable.getUpperBound();
+            if (bound.getKind() != TypeKind.NULL) {
+                if (bound.getKind() == TypeKind.DECLARED) {
+                    ClassSymbol boundSymbol = (ClassSymbol)((DeclaredType)bound).asElement();
+                    if (boundSymbol.getSimpleName().length() == 0 && (boundSymbol.flags() & Flags.COMPOUND) != 0) {
+                        bounds.add((ExpressionTree)make.Type(boundSymbol.getSuperclass()));
+                        for (Type iface : boundSymbol.getInterfaces()) {
+                            bounds.add((ExpressionTree)make.Type(iface));
+                        }
+                    } else if (!boundSymbol.getQualifiedName().contentEquals("java.lang.Object")) { //NOI18N
+                        //if the bound is java.lang.Object, do not generate the extends clause:
                         bounds.add((ExpressionTree)make.Type(bound));
+                    }
+                } else {
+                    bounds.add((ExpressionTree)make.Type(bound));
                 }
-            }            
-            typeParams.add(make.TypeParameter(tpe.getSimpleName(), bounds));
+            }
+            typeParams.add(make.TypeParameter(typeVariable.asElement().getSimpleName(), bounds));
         }
 
         Tree returnType = make.Type(et.getReturnType());
@@ -475,20 +495,25 @@ public final class GeneratorUtilities {
             StatementTree statement = copy.getTypes().getNoType(TypeKind.VOID) == element.getReturnType() ?
                 make.ExpressionStatement(inv) : make.Return(inv);
             body = make.Block(Collections.singletonList(statement), false);
+        }
+
+        //add @Override annotation:
+        SpecificationVersion thisFOVersion = new SpecificationVersion(SourceLevelQuery.getSourceLevel(copy.getFileObject()));
+        SpecificationVersion version15 = new SpecificationVersion("1.5"); //NOI18N
+
+        if (thisFOVersion.compareTo(version15) >= 0) {
+            boolean generate = true;
             
-            //add @Override annotation if developing for 1.5:
-            if (supportsOverride(copy.getFileObject())) {
+            if (thisFOVersion.compareTo(version15) == 0) {
+                generate = !element.getEnclosingElement().getKind().isInterface();
+            }
+            
+            if (generate) {
                 annotations.add(make.Annotation(make.Identifier("Override"), Collections.<ExpressionTree>emptyList())); //NOI18N
             }
         }
-
+        
         return make.Method(make.Modifiers(flags, annotations), element.getSimpleName(), returnType, typeParams, params, throwsList, body, null);
-    }
-    
-    private static boolean supportsOverride(FileObject fo) {
-        SpecificationVersion myVersion = new SpecificationVersion(SourceLevelQuery.getSourceLevel(fo));
-        SpecificationVersion version = new SpecificationVersion("1.5"); //NOI18N
-        return myVersion.compareTo(version) >= 0;
     }
     
     private static class ClassMemberComparator {
