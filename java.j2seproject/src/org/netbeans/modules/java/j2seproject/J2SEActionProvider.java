@@ -49,6 +49,7 @@ import java.net.URL;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,6 +60,8 @@ import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.util.Elements;
 import javax.swing.JButton;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -67,12 +70,16 @@ import org.netbeans.api.fileinfo.NonRecursiveFolder;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.java.queries.UnitTestForSourceQuery;
+import org.netbeans.api.java.source.CompilationController;
+import org.netbeans.api.java.source.ElementHandle;
+import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.ui.ScanDialog;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.java.j2seproject.applet.AppletSupport;
 import org.netbeans.modules.java.j2seproject.classpath.ClassPathProviderImpl;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
@@ -214,14 +221,16 @@ class J2SEActionProvider implements ActionProvider {
     private final ChangeListener sourcesChangeListener = new ChangeListener() {
 
         public void stateChanged(ChangeEvent e) {
-            synchronized (this) {
+            synchronized (J2SEActionProvider.this) {
                 J2SEActionProvider.this.roots = null;
             }
         }
     };
 
     private void modification(FileObject f) {
-        for (FileObject root : getRoots()) {
+        final Iterable <? extends FileObject> roots = getRoots();
+        assert roots != null;
+        for (FileObject root : roots) {
             String path = FileUtil.getRelativePath(root, f);
             if (path != null) {
                 synchronized (this) {
@@ -382,9 +391,37 @@ class J2SEActionProvider implements ActionProvider {
         else if ( command.equals( JavaProjectConstants.COMMAND_DEBUG_FIX ) ) {
             FileObject[] files = findSources( context );
             String path = null;
+            final String[] classes = { "" };
             if (files != null) {
                 path = FileUtil.getRelativePath(getRoot(project.getSourceRoots().getRoots(),files[0]), files[0]);
                 targetNames = new String[] {"debug-fix"}; // NOI18N
+                JavaSource js = JavaSource.forFileObject(files[0]);
+                if (js != null) {
+                    try {
+                        js.runUserActionTask(new org.netbeans.api.java.source.Task<CompilationController>() {
+                            public void run(CompilationController ci) throws Exception {
+                                if (ci.toPhase(JavaSource.Phase.ELEMENTS_RESOLVED).compareTo(JavaSource.Phase.ELEMENTS_RESOLVED) < 0) {
+                                    ErrorManager.getDefault().log(ErrorManager.WARNING,
+                                            "Unable to resolve "+ci.getFileObject()+" to phase "+JavaSource.Phase.RESOLVED+", current phase = "+ci.getPhase()+
+                                            "\nDiagnostics = "+ci.getDiagnostics()+
+                                            "\nFree memory = "+Runtime.getRuntime().freeMemory());
+                                    return;
+                                }
+                                List<? extends TypeElement> types = ci.getTopLevelElements();
+                                if (types.size() > 0) {
+                                    for (TypeElement type : types) {
+                                        if (classes[0].length() > 0) {
+                                            classes[0] = classes[0] + " ";            // NOI18N
+                                        }
+                                        classes[0] = classes[0] + type.getQualifiedName().toString().replace('.', '/') + "*.class";  // NOI18N
+                                    }
+                                }
+                            }
+                        }, true);
+                    } catch (java.io.IOException ioex) {
+                        Exceptions.printStackTrace(ioex);
+                    }
+                }
             } else {
                 files = findTestSources(context, false);
                 path = FileUtil.getRelativePath(getRoot(project.getTestSourceRoots().getRoots(),files[0]), files[0]);
@@ -395,6 +432,7 @@ class J2SEActionProvider implements ActionProvider {
                 path = path.substring(0, path.length() - 5);
             }
             p.setProperty("fix.includes", path); // NOI18N
+            p.setProperty("fix.classes", classes[0]); // NOI18N
         }
         else if (command.equals (COMMAND_RUN) || command.equals(COMMAND_DEBUG) || command.equals(COMMAND_DEBUG_STEP_INTO)) {
             String config = project.evaluator().getProperty(J2SEConfigurationProvider.PROP_CONFIG);
@@ -431,7 +469,7 @@ class J2SEActionProvider implements ActionProvider {
                     result=isSetMainClass (project.getSourceRoots().getRoots(), mainClass);
                 } while (result != MainClassStatus.SET_AND_VALID);
                 try {
-                    if (updateHelper.requestSave()) {
+                    if (updateHelper.requestUpdate()) {
                         updateHelper.putProperties(path, ep);
                         ProjectManager.getDefault().saveProject(project);
                     }
@@ -468,8 +506,8 @@ class J2SEActionProvider implements ActionProvider {
                     clazz = clazz.substring(0, clazz.length() - 5);
                 }
                 clazz = clazz.replace('/','.');
-
-                if (!J2SEProjectUtil.hasMainMethod (file)) {
+                final Collection<ElementHandle<TypeElement>> mainClasses = J2SEProjectUtil.getMainMethods (file);
+                if (mainClasses.isEmpty()) {
                     if (AppletSupport.isApplet(file)) {
 
                         EditableProperties ep = updateHelper.getProperties (AntProjectHelper.PROJECT_PROPERTIES_PATH);
@@ -514,6 +552,17 @@ class J2SEActionProvider implements ActionProvider {
                         return null;
                     }
                 } else {
+                    if (mainClasses.size() == 1) {
+                        //Just one main class
+                        clazz = mainClasses.iterator().next().getBinaryName();
+                    }
+                    else {
+                        //Several main classes, let the user choose
+                        clazz = showMainClassWarning(file, mainClasses);
+                        if (clazz == null) {
+                            return null;
+                        }
+                    }
                     if (command.equals (COMMAND_RUN_SINGLE)) {
                         p.setProperty("run.class", clazz); // NOI18N
                         String[] targets = targetsFromConfig.get(command);
@@ -900,6 +949,41 @@ class J2SEActionProvider implements ActionProvider {
         dlg.dispose();
 
         return canceled;
+    }
+    
+    private String showMainClassWarning (final FileObject file, final Collection<ElementHandle<TypeElement>> mainClasses) {
+        assert mainClasses != null;
+        String mainClass = null;
+        final JButton okButton = new JButton (NbBundle.getMessage (MainClassWarning.class, "LBL_MainClassWarning_ChooseMainClass_OK")); // NOI18N
+        okButton.getAccessibleContext().setAccessibleDescription (NbBundle.getMessage (MainClassWarning.class, "AD_MainClassWarning_ChooseMainClass_OK"));
+        
+        final MainClassWarning panel = new MainClassWarning (NbBundle.getMessage(MainClassWarning.class, "CTL_FileMultipleMain", file.getNameExt()),mainClasses);
+        Object[] options = new Object[] {
+            okButton,
+            DialogDescriptor.CANCEL_OPTION
+        };
+
+        panel.addChangeListener (new ChangeListener () {
+           public void stateChanged (ChangeEvent e) {
+               if (e.getSource () instanceof MouseEvent && MouseUtils.isDoubleClick (((MouseEvent)e.getSource ()))) {
+                   // click button and the finish dialog with selected class
+                   okButton.doClick ();
+               } else {
+                   okButton.setEnabled (panel.getSelectedMainClass () != null);
+               }
+           }
+        });
+        DialogDescriptor desc = new DialogDescriptor (panel,
+            NbBundle.getMessage (MainClassWarning.class, "CTL_FileMainClass_Title"), // NOI18N
+            true, options, options[0], DialogDescriptor.BOTTOM_ALIGN, null, null);
+        desc.setMessageType (DialogDescriptor.INFORMATION_MESSAGE);
+        Dialog dlg = DialogDisplayer.getDefault ().createDialog (desc);
+        dlg.setVisible (true);
+        if (desc.getValue() == options[0]) {
+            mainClass = panel.getSelectedMainClass ();
+        }
+        dlg.dispose();
+        return mainClass;
     }
 
     private void showPlatformWarning () {
