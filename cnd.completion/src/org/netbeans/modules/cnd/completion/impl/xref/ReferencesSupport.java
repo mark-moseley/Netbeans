@@ -46,6 +46,9 @@ import java.io.IOException;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.StyledDocument;
+import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.cnd.api.lexer.CndLexerUtilities;
+import org.netbeans.cnd.api.lexer.CppTokenId;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.SyntaxSupport;
 import org.netbeans.editor.TokenItem;
@@ -60,6 +63,7 @@ import org.netbeans.modules.cnd.api.model.CsmScope;
 import org.netbeans.modules.cnd.api.model.CsmScopeElement;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceKind;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceResolver.Scope;
 import org.netbeans.modules.cnd.completion.cplusplus.CsmCompletionProvider;
 import org.netbeans.modules.cnd.completion.cplusplus.hyperlink.CsmHyperlinkProvider;
@@ -302,6 +306,7 @@ public final class ReferencesSupport {
             return doc instanceof BaseDocument ? (BaseDocument)doc : null;
         }
     }
+    
     private static int getRefOffset(CsmReference ref) {
         if (ref instanceof ReferenceImpl) {
             return ((ReferenceImpl)ref).getOffset();
@@ -342,5 +347,49 @@ public final class ReferencesSupport {
             ex.printStackTrace(System.err);
         }
         return doc;
+    }
+    
+    static CsmReferenceKind getReferenceKind(CsmReference ref) {
+        CsmReferenceKind kind = CsmReferenceKind.UNKNOWN;
+        CsmObject owner = ref.getOwner();
+        if (CsmKindUtilities.isType(owner)) {
+            kind = getReferenceUsageKind(ref);
+        }
+        return kind;
+    }
+    
+    static CsmReferenceKind getReferenceUsageKind(CsmReference ref) {
+        CsmReferenceKind kind = CsmReferenceKind.DIRECT_USAGE;
+        if (ref instanceof ReferenceImpl) {
+            Document doc = getRefDocument(ref);
+            int offset = ref.getStartOffset();
+            // check previous token
+            TokenSequence<CppTokenId> ts = CndLexerUtilities.getCppTokenSequence(doc, offset);
+            if (ts != null && ts.isValid()) {
+                ts.move(offset);
+                org.netbeans.api.lexer.Token<CppTokenId> token = null;
+                if (ts.movePrevious()) {
+                    token = ts.offsetToken();
+                }
+                while (token != null && CppTokenId.WHITESPACE_CATEGORY.equals(token.id().primaryCategory())) {
+                    if (ts.movePrevious()) {
+                        token = ts.offsetToken();
+                    } else {
+                        token = null;
+                    }
+                }
+                if (token != null) {
+                    switch (token.id()) {
+                        case DOT:
+                        case DOTMBR:
+                        case ARROW:
+                        case ARROWMBR:
+                        case SCOPE:
+                            kind = CsmReferenceKind.AFTER_DEREFERENCE_USAGE;
+                    }
+                }
+            }
+        }
+        return kind;
     }
 }

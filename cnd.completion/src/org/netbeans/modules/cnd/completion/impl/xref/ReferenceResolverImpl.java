@@ -43,10 +43,13 @@ package org.netbeans.modules.cnd.completion.impl.xref;
 
 import java.io.IOException;
 import javax.swing.JEditorPane;
+import javax.swing.text.Caret;
 import javax.swing.text.StyledDocument;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceKind;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceResolver;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
 import org.openide.cookies.EditorCookie;
@@ -89,7 +92,8 @@ public class ReferenceResolverImpl extends CsmReferenceResolver {
         if (cookie != null) {
             JEditorPane[] panes = CsmUtilities.getOpenedPanesInEQ(cookie);
             if (panes != null && panes.length>0) {
-                int offset = panes[0].getCaret().getMark();
+                Caret caret = panes[0].getCaret();
+                int offset = Math.min(caret.getMark(), caret.getDot());
                 CsmFile file = CsmUtilities.getCsmFile(activatedNode,false);
                 StyledDocument doc = null;
                 try {
@@ -111,4 +115,23 @@ public class ReferenceResolverImpl extends CsmReferenceResolver {
         return ReferencesSupport.fastCheckScope(ref);
     }
     
+    @Override
+    public CsmReferenceKind getReferenceKind(CsmReference ref) {
+        CsmReferenceKind kind = ReferencesSupport.getReferenceKind(ref);
+        if (kind == CsmReferenceKind.UNKNOWN) {
+            kind = super.getReferenceKind(ref);
+        }
+        return kind;
+    }
+
+    @Override
+    public CsmReferenceKind getReferenceKind(CsmReference ref, CsmObject targetDecl, CsmObject targetDef) {
+        // default implementation
+        assert targetDecl != null;
+        CsmReferenceKind kind = super.getReferenceKind(ref, targetDecl, targetDef);
+        if (kind == CsmReferenceKind.DIRECT_USAGE) {
+            kind = ReferencesSupport.getReferenceUsageKind(ref);
+        }
+        return kind;
+    }    
 }
