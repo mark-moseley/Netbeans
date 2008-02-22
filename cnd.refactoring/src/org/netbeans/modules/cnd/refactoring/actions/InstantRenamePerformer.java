@@ -64,12 +64,9 @@ import org.netbeans.editor.BaseKit;
 import org.netbeans.editor.Utilities;
 import org.netbeans.lib.editor.util.swing.MutablePositionRegion;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmObject;
-import org.netbeans.modules.cnd.api.model.CsmScope;
-import org.netbeans.modules.cnd.api.model.CsmScopeElement;
-import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceKind;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceRepository;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceResolver;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
@@ -221,7 +218,7 @@ public class InstantRenamePerformer implements DocumentListener, KeyListener {
             return Collections.<CsmReference>emptyList();
         }
         CsmFile file = ref.getContainingFile();
-        Collection<CsmReference> out = CsmReferenceRepository.getDefault().getReferences(resolved, file, true);
+        Collection<CsmReference> out = CsmReferenceRepository.getDefault().getReferences(resolved, file, CsmReferenceKind.ALL);
         return out;
     }
     
