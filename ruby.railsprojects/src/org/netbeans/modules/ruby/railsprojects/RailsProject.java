@@ -48,15 +48,15 @@ import java.io.IOException;
 import java.util.Collections;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
-import org.netbeans.api.gsfpath.classpath.ClassPath;
-import org.netbeans.api.gsfpath.classpath.GlobalPathRegistry;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
+import org.netbeans.modules.gsfpath.api.classpath.GlobalPathRegistry;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.ruby.platform.RubyPlatformProvider;
 import org.netbeans.modules.ruby.railsprojects.classpath.ClassPathProviderImpl;
 import org.netbeans.modules.ruby.railsprojects.queries.RailsProjectEncodingQueryImpl;
-import org.netbeans.modules.ruby.railsprojects.server.RailsServer;
+import org.netbeans.modules.ruby.railsprojects.server.RailsServerManager;
 import org.netbeans.modules.ruby.railsprojects.ui.RailsLogicalViewProvider;
 import org.netbeans.modules.ruby.railsprojects.ui.customizer.CustomizerProviderImpl;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
@@ -228,7 +228,7 @@ public class RailsProject implements Project, RakeProjectListener {
             LookupProviderSupport.createSourcesMerger(),
             new RailsProjectEncodingQueryImpl(evaluator()),
             evaluator(),
-            new RailsServer(this),
+            new RailsServerManager(this),
             new RailsFileLocator(null, this),
             new RubyPlatformProvider(evaluator())
         });
@@ -490,7 +490,7 @@ public class RailsProject implements Project, RakeProjectListener {
             "Templates/Ruby/test.rb", // NOI18N
             "Templates/Ruby/class.rb", // NOI18N
             "Templates/Ruby/module.rb", // NOI18N
-            "Templates/Ruby/rakefile.rb", // NOI18N
+            "Templates/Ruby/Rakefile", // NOI18N
             "Templates/Ruby/rspec.rb", // NOI18N
             "Templates/Ruby/empty.rjs", // NOI18N
         };
