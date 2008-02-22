@@ -67,6 +67,14 @@ public final class LocalsColumnModel_Type extends AbstractColumn {
         
         @Override
         public String getAsText() {
+            if (getValue() instanceof LocalsTreeModel.Dummy) {
+                return "";
+            }
+            
+            if (getValue() == null) {
+                return "";
+            }
+            
             return myHelper.getType(getValue());
         }
         
