@@ -45,42 +45,27 @@ import org.netbeans.modules.websvc.saas.model.jaxb.Method.Output;
 
 /**
  *
- * @author nam
+ * @author ayub khan
  */
-public class SaasMethod {
-    private final Method method;
-    private final Saas saas;
+public class CustomSaasMethod extends SaasMethod {
     
-    public SaasMethod(Saas saas, Method method) {
-        this.saas = saas;
-        this.method = method;
+    public CustomSaasMethod(Saas saas, Method method) {
+        super(saas, method);
     }
 
-    public Saas getSaas() {
-        return saas;
-    }
-    
-    public Method getMethod() {
-        return method;
+    @Override
+    public String getHref() {
+        return super.getHref();
     }
 
-    protected Output getOutput() {
-        return method.getOutput();
+    @Override
+    public Input getInput() {
+        return super.getInput();
     }
 
-    public String getName() {
-        return method.getName();
+    @Override
+    public Output getOutput() {
+        return super.getOutput();
     }
 
-    protected Input getInput() {
-        return method.getInput();
-    }
-
-    protected String getHref() {
-        return method.getHref();
-    }
-
-    public String getDocumentation() {
-        return method.getDocumentation();
-    }
 }
