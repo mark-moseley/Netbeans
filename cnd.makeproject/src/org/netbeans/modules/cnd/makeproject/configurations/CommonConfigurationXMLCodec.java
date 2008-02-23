@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.makeproject.configurations;
 
+import java.util.List;
 import org.netbeans.modules.cnd.makeproject.api.MakeArtifact;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ArchiverConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.CCCompilerConfiguration;
@@ -68,7 +69,11 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.RequiredProjectsC
  */
 
 /**
- * History:
+ * Change History:
+ * V41:
+ *   Added SOURCE_ROOT_LIST_ELEMENT
+ * V40:
+ *   Added PREPROCESSOR_LIST_ELEMENT and LIST_ELEMENT and saving preprocessor symbols as a list
  * V39:
  *   Added Required Projects for unmanaged projects (REQUIRED_PROJECTS_ELEMENT)
  * V38:
@@ -99,7 +104,7 @@ public abstract class CommonConfigurationXMLCodec
     extends XMLDecoder
     implements XMLEncoder {
 
-    public final static int CURRENT_VERSION = 39;
+    public final static int CURRENT_VERSION = 41;
 
     // Generic
     protected final static String PROJECT_DESCRIPTOR_ELEMENT = "projectDescriptor"; // NOI18N
@@ -116,6 +121,7 @@ public abstract class CommonConfigurationXMLCodec
     protected final static String ITEM_PATH_ELEMENT = "itemPath"; // NOI18N
     protected final static String PROJECT_MAKEFILE_ELEMENT = "projectmakefile"; // NOI18N
     protected final static String REQUIRED_PROJECTS_ELEMENT = "requiredProjects"; // NOI18N
+    protected final static String SOURCE_ROOT_LIST_ELEMENT = "sourceRootList"; // NOI18N
     // Tools Set (Compiler set and platform)
     protected final static String TOOLS_SET_ELEMENT = "toolsSet"; // NOI18N
     protected final static String COMPILER_SET_ELEMENT = "compilerSet"; // NOI18N
@@ -152,6 +158,7 @@ public abstract class CommonConfigurationXMLCodec
     protected final static String SIXTYFOUR_BITS_ELEMENT = "sixtyfourBits"; // NOI18N
     protected final static String ARCHITECTURE_ELEMENT = "architecture"; // NOI18N
     protected final static String PREPROCESSOR_ELEMENT = "preprocessor"; // NOI18N
+    protected final static String PREPROCESSOR_LIST_ELEMENT = "preprocessorList"; // NOI18N
     protected final static String SUPRESS_WARNINGS_ELEMENT = "supressWarnings"; // NOI18N
     protected final static String WARNING_LEVEL_ELEMENT = "warningLevel"; // NOI18N
     protected final static String MT_LEVEL_ELEMENT = "mtLevel"; // NOI18N
@@ -215,6 +222,7 @@ public abstract class CommonConfigurationXMLCodec
 
     protected final static String TRUE_VALUE = "true"; // NOI18N
     protected final static String FALSE_VALUE = "false"; // NOI18N
+    protected final static String LIST_ELEMENT = "Elem"; // NOI18N
 
 
     private ConfigurationDescriptor projectDescriptor;
@@ -231,6 +239,7 @@ public abstract class CommonConfigurationXMLCodec
 	xes.elementOpen(CONFIGURATION_DESCRIPTOR_ELEMENT, CURRENT_VERSION);
 	    if (publicLocation) {
 		writeLogicalFolders(xes);
+                writeSourceRoots(xes);
 	    }
 	    xes.element(PROJECT_MAKEFILE_ELEMENT, ((MakeConfigurationDescriptor)projectDescriptor).getProjectMakefileName());
 	    if (!publicLocation) {
@@ -288,6 +297,7 @@ public abstract class CommonConfigurationXMLCodec
     private void writeToolsSetBlock(XMLEncoderStream xes, MakeConfiguration makeConfiguration) {
 	xes.elementOpen(TOOLS_SET_ELEMENT);
         xes.element(COMPILER_SET_ELEMENT, "" + makeConfiguration.getCompilerSet().getOption());
+        xes.element(COMPILER_SET_ELEMENT+"2", "" + makeConfiguration.getCompilerSet2().getOption());
         xes.element(C_REQUIRED_ELEMENT, "" + makeConfiguration.getCRequired().getValue());
         xes.element(CPP_REQUIRED_ELEMENT, "" + makeConfiguration.getCppRequired().getValue());
         xes.element(FORTRAN_REQUIRED_ELEMENT, "" + makeConfiguration.getFortranRequired().getValue());
@@ -352,6 +362,21 @@ public abstract class CommonConfigurationXMLCodec
 	xes.elementClose(LOGICAL_FOLDER_ELEMENT);
     }
 
+    
+    private void writeSourceRoots(XMLEncoderStream xes) {
+	writeSourceRoots(xes, ((MakeConfigurationDescriptor)projectDescriptor).getSourceRoots());
+    }
+    
+    private void writeSourceRoots(XMLEncoderStream xes, List<String> list) {
+        if (list.size() > 0) {
+            xes.elementOpen(SOURCE_ROOT_LIST_ELEMENT);
+            for (String l : list) {
+                xes.element(LIST_ELEMENT, l);
+            }
+            xes.elementClose(SOURCE_ROOT_LIST_ELEMENT);
+        }
+    }
+    
     public static void writeCCompilerConfiguration(XMLEncoderStream xes, CCompilerConfiguration cCompilerConfiguration) {
         if (!cCompilerConfiguration.getModified())
             return;
@@ -375,7 +400,7 @@ public abstract class CommonConfigurationXMLCodec
 	if (cCompilerConfiguration.getCommandLineConfiguration().getModified())
 	    xes.element(COMMAND_LINE_ELEMENT, "" + cCompilerConfiguration.getCommandLineConfiguration().getValue()); // NOI18N
 	if (cCompilerConfiguration.getPreprocessorConfiguration().getModified())
-	    xes.element(PREPROCESSOR_ELEMENT, "" + cCompilerConfiguration.getPreprocessorConfiguration().getValue()); // NOI18N
+	    writeList(xes, PREPROCESSOR_LIST_ELEMENT, cCompilerConfiguration.getPreprocessorConfiguration().getValueAsArray());
 	if (cCompilerConfiguration.getInheritPreprocessor().getModified())
 	    xes.element(INHERIT_PRE_VALUES_ELEMENT, "" + cCompilerConfiguration.getInheritPreprocessor().getValue()); // NOI18N
 	if (cCompilerConfiguration.getWarningLevel().getModified())
@@ -410,7 +435,7 @@ public abstract class CommonConfigurationXMLCodec
 	if (ccCompilerConfiguration.getCommandLineConfiguration().getModified())
 	    xes.element(COMMAND_LINE_ELEMENT, "" + ccCompilerConfiguration.getCommandLineConfiguration().getValue()); // NOI18N
 	if (ccCompilerConfiguration.getPreprocessorConfiguration().getModified())
-	    xes.element(PREPROCESSOR_ELEMENT, "" + ccCompilerConfiguration.getPreprocessorConfiguration().getValue()); // NOI18N
+	    writeList(xes, PREPROCESSOR_LIST_ELEMENT, ccCompilerConfiguration.getPreprocessorConfiguration().getValueAsArray());
 	if (ccCompilerConfiguration.getInheritPreprocessor().getModified())
 	    xes.element(INHERIT_PRE_VALUES_ELEMENT, "" + ccCompilerConfiguration.getInheritPreprocessor().getValue()); // NOI18N
 	if (ccCompilerConfiguration.getWarningLevel().getModified())
@@ -567,13 +592,21 @@ public abstract class CommonConfigurationXMLCodec
 	//xes.element(DEBUGGING_ELEMENT, "" + archiverConfiguration.getTool().getValue() + " " + archiverConfiguration.getOptions()); // NOI18N
 	xes.elementClose(ARCHIVERTOOL_ELEMENT);
     }
-
+    
+    public static void writeList(XMLEncoderStream xes, String tag, String[] list) {
+        writeList(xes, tag, LIST_ELEMENT, list);
+    }
+    
     public static void writeDirectories(XMLEncoderStream xes, String tag, String[] directories) {
+        writeList(xes, tag, DIRECTORY_PATH_ELEMENT, directories);
+    }
+
+    public static void writeList(XMLEncoderStream xes, String tag, String listTag, String[] directories) {
 	if (directories.length == 0)
 	    return;
 	xes.elementOpen(tag);
 	for (int i = 0; i < directories.length; i++)
-	    xes.element(DIRECTORY_PATH_ELEMENT, directories[i]);
+	    xes.element(listTag, directories[i]);
 	xes.elementClose(tag);
     }
 }
