@@ -60,33 +60,32 @@ import javax.xml.namespace.QName;
  * @author jqian
  */
 public class JBIComponentConfigurationDescriptor {
+
+    public static final String XSD_NS = "http://www.w3.org/2001/XMLSchema"; // NOI18N
     
     // currently supported xsd types
-    public static final QName XSD_INT = 
-            new QName("http://www.w3.org/2001/XMLSchema", "int"); // NOI18N
-    public static final QName XSD_POSITIVE_INTEGER = 
-            new QName("http://www.w3.org/2001/XMLSchema", "positiveInteger"); // NOI18N
-    public static final QName XSD_NEGATIVE_INTEGER = 
-            new QName("http://www.w3.org/2001/XMLSchema", "negativeInteger"); // NOI18N
-    public static final QName XSD_NON_POSITIVE_INTEGER = 
-            new QName("http://www.w3.org/2001/XMLSchema", "nonPositiveInteger"); // NOI18N
-    public static final QName XSD_NON_NEGATIVE_INTEGER = 
-            new QName("http://www.w3.org/2001/XMLSchema", "nonNegativeInteger"); // NOI18N
-    public static final QName XSD_STRING = 
-            new QName("http://www.w3.org/2001/XMLSchema", "string"); // NOI18N
-    public static final QName XSD_BOOLEAN = 
-            new QName("http://www.w3.org/2001/XMLSchema", "boolean"); // NOI18N
-   
+    public static final QName XSD_BYTE = new QName(XSD_NS, "byte"); // NOI18N
+    public static final QName XSD_SHORT = new QName(XSD_NS, "short"); // NOI18N
+    public static final QName XSD_INT = new QName(XSD_NS, "int"); // NOI18N
+//    public static final QName XSD_LONG = new QName(XSD_NS, "long"); // NOI18N
+//    public static final QName XSD_FLOAT = new QName(XSD_NS, "float"); // NOI18N
+//    public static final QName XSD_DOUBLE = new QName(XSD_NS, "double"); // NOI18N
+//    public static final QName XSD_DECIMAL = new QName(XSD_NS, "decimal"); // NOI18N
+//    public static final QName XSD_INTEGER = new QName(XSD_NS, "integer"); // NOI18N
+    public static final QName XSD_POSITIVE_INTEGER = new QName(XSD_NS, "positiveInteger"); // NOI18N
+    public static final QName XSD_NEGATIVE_INTEGER = new QName(XSD_NS, "negativeInteger"); // NOI18N
+    public static final QName XSD_NON_POSITIVE_INTEGER = new QName(XSD_NS, "nonPositiveInteger"); // NOI18N
+    public static final QName XSD_NON_NEGATIVE_INTEGER = new QName(XSD_NS, "nonNegativeInteger"); // NOI18N
+    public static final QName XSD_STRING = new QName(XSD_NS, "string"); // NOI18N
+    public static final QName XSD_BOOLEAN = new QName(XSD_NS, "boolean"); // NOI18N
+    
     private static final String SHOWDISPLAY_INSTALLATION = "install"; // NOI18N
     private static final String SHOWDISPLAY_RUNTIME = "runtime"; // NOI18N
     private static final String SHOWDISPLAY_ALL = "all"; // NOI18N
-    
     private static final String PROPERTY = "Property"; // NOI18N
     private static final String PROPERTY_GROUP = "PropertyGroup"; // NOI18N
-    private static final String APPLICATION_VARIABLE = "ApplicationVariable"; // NOI18N
-    private static final String APPLICATION_CONFIGURATION = "ApplicationConfiguration"; // NOI18N
-    
-        
+//    private static final String APPLICATION_VARIABLE = "ApplicationVariable"; // NOI18N
+//    private static final String APPLICATION_CONFIGURATION = "ApplicationConfiguration"; // NOI18N
     private String name;
     private String displayName;
     private String description;
@@ -100,7 +99,7 @@ public class JBIComponentConfigurationDescriptor {
     private QName typeQName;
     private String defaultValue;
     private String propertyType;
-    private JBIComponentConfigurationConstraint constraint; 
+    private JBIComponentConfigurationConstraint constraint;
     private Map<String, JBIComponentConfigurationDescriptor> children;
 
     public JBIComponentConfigurationDescriptor() {
@@ -109,64 +108,57 @@ public class JBIComponentConfigurationDescriptor {
     public String getName() {
         return name;
     }
-    
+
     public String getDefaultValue() {
         return defaultValue;
     }
-    
+
     public QName getTypeQName() {
         return typeQName;
     }
 
     public String getDisplayName() {
-        if (isApplicationVariable()) {
-            return "Application Variables";
-        } else if (isApplicationConfiguration()) {
-            return "Application Configuration";
-        } else {
-            return displayName;
-        }
+        return displayName;
     }
 
     public String getDescription() {
         return description; //Utils.getTooltip(description);
     }
-    
+
     /**
      * Gets all configuration constraints. Composite constraints are de-composed.
      * @return
      */
     public List<JBIComponentConfigurationConstraint> getConstraints() {
-        List<JBIComponentConfigurationConstraint> ret = 
+        List<JBIComponentConfigurationConstraint> ret =
                 new ArrayList<JBIComponentConfigurationConstraint>();
-        
-        addConstraint(ret, constraint);       
-        
+
+        addConstraint(ret, constraint);
+
         return ret;
     }
-    
+
     private void addConstraint(List<JBIComponentConfigurationConstraint> list,
             JBIComponentConfigurationConstraint constraint) {
         if (constraint instanceof CompositeConstraint) {
-            for (JBIComponentConfigurationConstraint childConstraint : 
-                ((CompositeConstraint)constraint).getConstraints()) {
+            for (JBIComponentConfigurationConstraint childConstraint : ((CompositeConstraint) constraint).getConstraints()) {
                 addConstraint(list, childConstraint);
             }
         } else {
             list.add(constraint);
         }
     }
-    
+
     public boolean showDisplayAtInstallation() {
-        return SHOWDISPLAY_INSTALLATION.equals(showDisplay) || 
+        return SHOWDISPLAY_INSTALLATION.equals(showDisplay) ||
                 SHOWDISPLAY_ALL.equals(showDisplay);
     }
-    
+
     public boolean showDisplayAtRuntime() {
-        return SHOWDISPLAY_RUNTIME.equals(showDisplay) || 
+        return SHOWDISPLAY_RUNTIME.equals(showDisplay) ||
                 SHOWDISPLAY_ALL.equals(showDisplay);
-    }   
-    
+    }
+
     public String getOnChangeMessage() {
         return onChangeMessage;
     }
@@ -190,23 +182,25 @@ public class JBIComponentConfigurationDescriptor {
     public boolean isRequired() {
         return required;
     }
-    
+
+    // REMOVE ME
     public boolean isApplicationVariable() {
-        return APPLICATION_VARIABLE.equals(propertyType);
+        return this instanceof ApplicationVariable;
     }
-    
+
+    // REMOVE ME
     public boolean isApplicationConfiguration() {
-        return APPLICATION_CONFIGURATION.equals(propertyType);        
+        return this instanceof ApplicationConfiguration;
     }
-    
+
     public boolean isProperty() {
-        return PROPERTY.equals(propertyType);        
+        return PROPERTY.equals(propertyType);
     }
-    
+
     public boolean isPropertyGroup() {
-        return PROPERTY_GROUP.equals(propertyType);        
+        return PROPERTY_GROUP.equals(propertyType);
     }
-    
+
     public void addChild(JBIComponentConfigurationDescriptor descriptor) {
         if (children == null) {
             children = new LinkedHashMap<String, JBIComponentConfigurationDescriptor>();
@@ -221,11 +215,11 @@ public class JBIComponentConfigurationDescriptor {
     public JBIComponentConfigurationDescriptor getChild(String name) {
         return children == null ? null : children.get(name);
     }
-    
-    public Collection<JBIComponentConfigurationDescriptor> getChildren(){
+
+    public Collection<JBIComponentConfigurationDescriptor> getChildren() {
         return children.values();
     }
-    
+
     public void setApplicationRestartRequired(boolean applicationRestartRequired) {
         this.applicationRestartRequired = applicationRestartRequired;
     }
@@ -285,9 +279,51 @@ public class JBIComponentConfigurationDescriptor {
     public void setTypeQName(QName typeQName) {
         this.typeQName = typeQName;
     }
-    
+
     public String validate(Object value) {
         return constraint.validate(value);
     }
+}
 
+class ApplicationVariable extends JBIComponentConfigurationDescriptor {
+
+    ApplicationVariable() {
+        setName("ApplicationVariable");
+        setDisplayName("Application Variables");
+        setDescription("Application Variables");
+        
+        JBIComponentConfigurationDescriptor name = 
+                new JBIComponentConfigurationDescriptor();
+        name.setName("name");
+        name.setDisplayName("Name");
+        name.setDescription("Application Variable Name");
+        name.setTypeQName(XSD_STRING);
+        
+        JBIComponentConfigurationDescriptor type = 
+                new JBIComponentConfigurationDescriptor();
+        type.setName("type");
+        type.setDisplayName("Type");
+        type.setDescription("Application Variable Type");   
+        type.setTypeQName(XSD_STRING);
+        
+        JBIComponentConfigurationDescriptor value = 
+                new JBIComponentConfigurationDescriptor();
+        value.setName("value");
+        value.setDisplayName("Value");
+        value.setDescription("Application Variable Value");   
+        value.setTypeQName(XSD_STRING);
+        
+        addChild(name);
+        addChild(type);
+        addChild(value);
+    }
+}
+
+class ApplicationConfiguration extends JBIComponentConfigurationDescriptor {
+
+    ApplicationConfiguration() {
+        setName("ApplicationConfiguration");
+        setDisplayName("Application Configuration");
+        setDescription("Application Configuration");
+    }
 }
