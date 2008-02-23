@@ -107,7 +107,7 @@ public class CompilerSetManager {
 	return getDefault(true);
     }
     
-    public static CompilerSetManager getDefault(boolean doCreate) {
+    public static synchronized CompilerSetManager getDefault(boolean doCreate) {
         if (instance == null && doCreate) {
             instance = new CompilerSetManager();
         }
@@ -117,7 +117,7 @@ public class CompilerSetManager {
     /**
      * Replace the default CompilerSetManager. Let registered listeners know its been updated.
      */
-    public static void setDefault(CompilerSetManager csm) {
+    public static synchronized void setDefault(CompilerSetManager csm) {
         instance = csm;
         fireCompilerSetChangeNotification(csm);
     }
@@ -271,6 +271,15 @@ public class CompilerSetManager {
         }
         return null;
     }
+    
+    public CompilerSet getCompilerSetByDisplayName(String name) {
+        for (CompilerSet cs : sets) {
+            if (cs.getDisplayName().equals(name)) {
+                return cs;
+            }
+        }
+        return null;
+    }
         
     public CompilerSet getCompilerSet(String name, String dname) {
         for (CompilerSet cs : sets) {
@@ -288,6 +297,22 @@ public class CompilerSetManager {
     
     public List<CompilerSet> getCompilerSets() {
         return sets;
+    }
+    
+    public List<String> getCompilerSetDisplayNames() {
+        ArrayList<String> names = new ArrayList();
+        for (CompilerSet cs : getCompilerSets()) {
+            names.add(cs.getDisplayName());
+        }
+        return names;
+    }
+    
+    public List<String> getCompilerSetNames() {
+        ArrayList<String> names = new ArrayList();
+        for (CompilerSet cs : getCompilerSets()) {
+            names.add(cs.getName());
+        }
+        return names;
     }
     
     /**
