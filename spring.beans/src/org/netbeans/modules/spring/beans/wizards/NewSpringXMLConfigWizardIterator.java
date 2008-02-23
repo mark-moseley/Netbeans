@@ -37,21 +37,23 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
-  *
+ *
  * Portions Copyrighted 2008 Craig MacKay.
-*/
+ */
 
 package org.netbeans.modules.spring.beans.wizards;
 
 import java.awt.Component;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import javax.swing.JComponent;
-import javax.swing.JEditorPane;
 import javax.swing.event.ChangeListener;
 import javax.swing.text.BadLocationException;
 import org.netbeans.api.project.Project;
@@ -60,18 +62,21 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Formatter;
+import org.netbeans.modules.spring.api.beans.ConfigFileGroup;
+import org.netbeans.modules.spring.api.beans.ConfigFileManager;
+import org.netbeans.modules.spring.api.beans.SpringConstants;
+import org.netbeans.modules.spring.beans.ProjectSpringScopeProvider;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.WizardDescriptor;
-import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileAlreadyLockedException;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
-import org.openide.loaders.DataFolder;
-import org.openide.loaders.DataObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.text.CloneableEditorSupport;
 import org.openide.util.Exceptions;
 
-public final class NewSpringXMLConfigWizardIterator implements WizardDescriptor.InstantiatingIterator {
+public final class NewSpringXMLConfigWizardIterator implements WizardDescriptor.AsynchronousInstantiatingIterator {
 
     private int index;
     private WizardDescriptor wizard;
@@ -85,11 +90,11 @@ public final class NewSpringXMLConfigWizardIterator implements WizardDescriptor.
         if (panels == null) {
             Project p = Templates.getProject(wizard);
             SourceGroup[] groups = ProjectUtils.getSources(p).getSourceGroups(Sources.TYPE_GENERIC);
-            WizardDescriptor.Panel targetChooser = Templates.createSimpleTargetChooser(p, groups);
+            WizardDescriptor.Panel targetChooser = Templates.createSimpleTargetChooser(p, groups, new SpringXMLConfigGroupPanel(p));
 
             panels = new WizardDescriptor.Panel[]{
                 targetChooser,
-                new BeansConfigNamespacesWizardPanel(),
+                new SpringXMLConfigNamespacesPanel(),
             };
             String[] steps = createSteps();
             for (int i = 0; i < panels.length; i++) {
@@ -119,40 +124,61 @@ public final class NewSpringXMLConfigWizardIterator implements WizardDescriptor.
     }
 
     public Set instantiate() throws IOException {
-        FileObject targetFolder = Templates.getTargetFolder(wizard);
-        DataFolder targetDataFolder = DataFolder.findFolder(targetFolder);
-        String targetName = Templates.getTargetName(wizard);
-        FileObject templateFileObject = Templates.getTemplate(wizard);
-        DataObject templateDataObject = DataObject.find(templateFileObject);
+        final FileObject targetFolder = Templates.getTargetFolder(wizard);
+        final String targetName = Templates.getTargetName(wizard);
 
-        final String extension = "xml"; // NOI18N
+        final FileObject[] createdFile = { null };
 
-        if (targetName == null || "null".equals(targetName)) { // NOI18N
-            targetName = "XMLDocument"; // NOI18N
+        FileUtil.runAtomicAction(new FileSystem.AtomicAction() {
+
+            public void run() throws IOException {
+                createdFile[0] = targetFolder.createData(targetName, Templates.getTemplate(wizard).getExt());
+                String[] incNamespaces = (String[]) wizard.getProperty(SpringXMLConfigNamespacesPanel.INCLUDED_NAMESPACES);
+                generateFileContents(createdFile[0], incNamespaces);
+            }
+        });
+        
+        Set<ConfigFileGroup> selectedGroups = (Set<ConfigFileGroup>) wizard.getProperty(SpringXMLConfigGroupPanel.CONFIG_FILE_GROUPS);
+        if(selectedGroups.size() > 0) {
+            addFileToSelectedGroups(selectedGroups, FileUtil.toFile(createdFile[0]));
         }
-
-        String uniqueTargetName = targetName;
-        int i = 2;
-
-        while (targetFolder.getFileObject(uniqueTargetName, extension) != null) {
-            uniqueTargetName = targetName + i;
-            i++;
+        
+        return Collections.singleton(createdFile[0]);
+    }
+    
+    private void addFileToSelectedGroups(Set<ConfigFileGroup> selectedGroups, File file) {
+        final ConfigFileManager manager = getConfigFileManager(Templates.getProject(wizard));
+        final List<File> origFiles = manager.getConfigFiles();
+        final List<File> newFiles = new ArrayList<File>(origFiles);
+        newFiles.add(file);
+        final List<ConfigFileGroup> origGroups = manager.getConfigFileGroups();
+        final List<ConfigFileGroup> newGroups = new ArrayList<ConfigFileGroup>(origGroups.size());
+        
+        for(ConfigFileGroup grp : origGroups) {
+            if(selectedGroups.contains(grp)) {
+                ConfigFileGroup nGrp = addFileToConfigGroup(grp, file);
+                newGroups.add(nGrp);
+            } else {
+                newGroups.add(grp);
+            }
         }
-        final String name = uniqueTargetName;
-
-        DataObject newOne = templateDataObject.createFromTemplate(targetDataFolder, name);
-        FileObject createdFile = newOne.getPrimaryFile();
-
-        String[] incNamespaces = (String[]) wizard.getProperty(BeansConfigNamespacesWizardPanel.INCLUDED_NAMESPACES);
-
-        generateFileContents(createdFile, incNamespaces);
-
-        OpenCookie open = (OpenCookie) newOne.getCookie(OpenCookie.class);
-        if (open != null) {
-            open.open();
-        }
-
-        return Collections.singleton(createdFile);
+        
+        manager.mutex().postWriteRequest(new Runnable() {
+            public void run() {
+                try {
+                    manager.putConfigFilesAndGroups(newFiles, newGroups);
+                    manager.save();
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        });
+    }
+    
+    private ConfigFileGroup addFileToConfigGroup(ConfigFileGroup cfg, File file) {
+        List<File> files = cfg.getFiles();
+        files.add(file);
+        return ConfigFileGroup.create(cfg.getName(), files);
     }
 
     public void initialize(WizardDescriptor wizard) {
@@ -230,9 +256,9 @@ public final class NewSpringXMLConfigWizardIterator implements WizardDescriptor.
         StringBuilder sb = generateXML(incNamespaces);
 
         try {
-            JEditorPane ep = new JEditorPane("text/x-springconfig+xml", ""); // NOI18N
-            BaseDocument doc = new BaseDocument(ep.getEditorKit().getClass(), false);
-            Formatter f = Formatter.getFormatter(ep.getEditorKit().getClass());
+            Class<?> kitClass = CloneableEditorSupport.getEditorKit(SpringConstants.CONFIG_MIME_TYPE).getClass();
+            BaseDocument doc = new BaseDocument(kitClass, false);
+            Formatter f = Formatter.getFormatter(kitClass);
             
             doc.remove(0, doc.getLength());
             doc.insertString(0, sb.toString(), null);
@@ -251,21 +277,15 @@ public final class NewSpringXMLConfigWizardIterator implements WizardDescriptor.
             sb.replace(0, sb.length(), doc.getText(0, doc.getLength()));
             final String text = sb.toString();
 
-            FileSystem fs = targetFile.getFileSystem();
-            fs.runAtomicAction(new FileSystem.AtomicAction() {
-                public void run() throws IOException {
-                    FileLock lock = targetFile.lock();
-                    try {
-                        BufferedWriter bw 
-                                = new BufferedWriter(new OutputStreamWriter(
-                                targetFile.getOutputStream(lock)));
-                        bw.write(text);
-                        bw.close();
-                    } finally {
-                        lock.releaseLock();
-                    }
-                }
-            });
+            FileLock lock = targetFile.lock();
+            try {
+                BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(
+                        targetFile.getOutputStream(lock)));
+                bw.write(text);
+                bw.close();
+            } finally {
+                lock.releaseLock();
+            }
         } catch (FileAlreadyLockedException ex) {
             Exceptions.printStackTrace(ex);
         } catch (IOException ex) {
@@ -303,5 +323,11 @@ public final class NewSpringXMLConfigWizardIterator implements WizardDescriptor.
         sb.append("</beans>"); // NOI18N
 
         return sb;
+    }
+    
+    static ConfigFileManager getConfigFileManager(Project p) {
+        ProjectSpringScopeProvider scopeProvider = p.getLookup().lookup(ProjectSpringScopeProvider.class);
+        ConfigFileManager manager = scopeProvider.getSpringScope().getConfigFileManager();
+        return manager;
     }
 }
