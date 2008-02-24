@@ -25,7 +25,7 @@
  *
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.javascript.editing;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,7 +33,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map;
 import javax.swing.text.Document;
 import org.netbeans.modules.gsf.api.CompilationInfo;
@@ -47,8 +46,6 @@ import org.netbeans.modules.gsf.api.TranslatedSource;
 import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.netbeans.napi.gsfret.source.Source;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.gsf.Language;
-import org.netbeans.modules.gsf.LanguageRegistry;
 import org.netbeans.modules.gsf.spi.DefaultParserFile;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
@@ -62,9 +59,9 @@ class TestCompilationInfo extends CompilationInfo {
     private Document doc;
     private Source source;
     private int caretOffset = -1;
-    private RubyTestBase test;
+    private JsTestBase test;
     
-    public TestCompilationInfo(RubyTestBase test, FileObject fileObject, BaseDocument doc, String text) throws IOException {
+    public TestCompilationInfo(JsTestBase test, FileObject fileObject, BaseDocument doc, String text) throws IOException {
         super(fileObject);
         this.test = test;
         this.text = text;
@@ -117,10 +114,11 @@ class TestCompilationInfo extends CompilationInfo {
     
     @Override
     public ParserResult getEmbeddedResult(String embeddedMimeType, int offset) {
-        assert embeddedMimeType.equals(RubyMimeResolver.RUBY_MIME_TYPE);
+        assert embeddedMimeType.equals(JsMimeResolver.JAVASCRIPT_MIME_TYPE);
         
         if (embeddedResults.size() == 0) {
             final List<Error> errors = new ArrayList<Error>();
+
             ParseListener listener =
                 new ParseListener() {
 
@@ -145,23 +143,23 @@ class TestCompilationInfo extends CompilationInfo {
             sourceFiles.add(file);
             
 TranslatedSource translatedSource = null; // TODO            
-            RubyParser.Context context = new RubyParser.Context(file, listener, text, caretOffset, translatedSource);
-            RubyParser parser = new RubyParser();
-            ParserResult parserResult = ((RubyParser)parser).parseBuffer(context, RubyParser.Sanitize.NONE);
+            JsParser.Context context = new JsParser.Context(file, listener, text, caretOffset, translatedSource);
+            JsParser parser = new JsParser();
+            ParserResult parserResult = ((JsParser)parser).parseBuffer(context, JsParser.Sanitize.NONE);
             for (Error error : errors) {
                 parserResult.addError(error);
             }
-            embeddedResults.put(RubyMimeResolver.RUBY_MIME_TYPE, parserResult);
+            embeddedResults.put(JsMimeResolver.JAVASCRIPT_MIME_TYPE, parserResult);
             parserResult.setInfo(this);
         }
         
         return embeddedResults.get(embeddedMimeType);
     }
-
+    
     @Override
     public List<Error> getErrors() {
         // Force initialization
-        getEmbeddedResult(RubyMimeResolver.RUBY_MIME_TYPE, 0);
+        getEmbeddedResult(JsMimeResolver.JAVASCRIPT_MIME_TYPE, 0);
 
         List<Error> errors = new ArrayList<Error>();
         for (ParserResult result : embeddedResults.values()) {
@@ -170,11 +168,4 @@ TranslatedSource translatedSource = null; // TODO
 
         return errors;
     }
-//    
-//    @Override
-//    public void setParserResult(final ParserResult parserResult) {
-//        parserResult = parserResult;
-//        
-//        embeddedResults.put(getFileObject().getMIMEType(), parserResult);
-//    }
 }
