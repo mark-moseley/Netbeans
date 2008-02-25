@@ -54,6 +54,7 @@ import java.net.URL;
 import org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObjectFactory;
 import org.netbeans.modules.masterfs.filebasedfs.fileobjects.FolderObj;
 import org.netbeans.modules.masterfs.filebasedfs.fileobjects.RootObj;
+import org.netbeans.modules.masterfs.filebasedfs.utils.FileChangedManager;
 import org.openide.util.Exceptions;
 
 //TODO: JDK problems with URL, URI, File conversion for UNC
@@ -126,18 +127,14 @@ public final class FileBasedURLMapper extends URLMapper {
             }
         } catch (URISyntaxException e) {
             file = new File(url.getFile());
-            if (!file.exists()) {
+            if (!FileChangedManager.getInstance().exists(file)) {
                 final StringBuffer sb = new StringBuffer();
                 sb.append(e.getLocalizedMessage()).append(" [").append(url.toExternalForm()).append(']');//NOI18N
                 Exceptions.printStackTrace(new IllegalArgumentException(sb.toString()));
                 return null;
             }
         }
-        final FileBasedFileSystem instance = FileBasedFileSystem.getInstance(file);
-        if (instance != null) {
-            retVal = instance.getFactory().findFileObject(file, instance, FileObjectFactory.Caller.ToFileObject);
-        }
-
+        retVal = FileBasedFileSystem.getInstance().getFileObject(file, FileObjectFactory.Caller.ToFileObject);
         return new FileObject[]{retVal};
     }
 
