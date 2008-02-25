@@ -68,8 +68,8 @@ import javax.swing.text.Document;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.HgModuleConfig;
-import org.netbeans.modules.mercurial.ui.properties.PropertiesPanel;
-import org.netbeans.modules.mercurial.ui.properties.PropertiesTable;
+import org.netbeans.modules.mercurial.options.PropertiesPanel;
+import org.netbeans.modules.mercurial.options.PropertiesTable;
 import org.netbeans.modules.mercurial.ui.properties.HgPropertiesNode;
 import org.netbeans.modules.versioning.util.AccessibleJFileChooser;
 import org.netbeans.modules.versioning.util.Utils;
@@ -232,6 +232,8 @@ public class HgExtProperties implements ActionListener, DocumentListener {
 
     public void removeProperties() {
         final int[] rows = propTable.getSelectedItems();
+        // No rows selected
+        if (rows.length == 0) return;
         HgPropertiesNode[] hgPropertiesNodes = propTable.getNodes();
         HgPropertiesNode[] hgProps = new HgPropertiesNode[hgPropertiesNodes.length - rows.length];
         int j = 0;
