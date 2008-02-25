@@ -96,15 +96,21 @@ public final class NamingFactory {
         return rename(fNaming, newName, null);
     }
     
-    public static synchronized FileNaming[] rename (FileNaming fNaming, String newName, ProvidedExtensions.IOHandler handler) {
+    public static FileNaming[] rename (FileNaming fNaming, String newName, ProvidedExtensions.IOHandler handler) {
         final ArrayList all = new ArrayList();
         boolean retVal = false;
-        remove(fNaming, null);
+        synchronized(NamingFactory.class) {
+            remove(fNaming, null);
+        }
+        
         retVal = fNaming.rename(newName, handler);
-        all.add(fNaming);
-        NamingFactory.registerInstanceOfFileNaming(fNaming.getParent(), fNaming.getFile(), fNaming,true, FileType.unknown);
-        renameChildren(all);
-        return (retVal) ? ((FileNaming[])all.toArray(new FileNaming[all.size()])) : null;
+        
+        synchronized(NamingFactory.class) {        
+            all.add(fNaming);
+            NamingFactory.registerInstanceOfFileNaming(fNaming.getParent(), fNaming.getFile(), fNaming, true, FileType.unknown);
+            renameChildren(all);
+            return (retVal) ? ((FileNaming[]) all.toArray(new FileNaming[all.size()])) : null;
+        }
     }
 
     private static void renameChildren(final ArrayList all) {
@@ -146,7 +152,7 @@ public final class NamingFactory {
         }
     }
 
-    private static void remove(final FileNaming fNaming, Integer id) {
+    public static void remove(final FileNaming fNaming, Integer id) {
         id = (id != null) ? id : fNaming.getId();         
         Object value = NamingFactory.nameMap.get(id);
         if (value instanceof List) {
@@ -283,8 +289,6 @@ public final class NamingFactory {
                 break;
                                 
         }
-
-        assert retVal != null /*|| !fInfo.isConvertibleToFileObject()*/ : f.getAbsolutePath() + " isDirectory: " + f.isDirectory() + " isFile: " + f.isFile() + " exists: " + f.exists();//NOI18N
         return retVal;
     }
 
