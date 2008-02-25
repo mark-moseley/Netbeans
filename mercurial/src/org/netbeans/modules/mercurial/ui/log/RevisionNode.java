@@ -115,12 +115,8 @@ class RevisionNode extends AbstractNode {
             return new Action [] {
                 SystemAction.get(RevertModificationsAction.class)
             };
-        } else {
-            return new Action [] {
-                new RollbackAction(),
-                SystemAction.get(RevertModificationsAction.class)
-            };
-        }
+        } 
+        return null;
     }
     
     private void initProperties() {
@@ -161,6 +157,7 @@ class RevisionNode extends AbstractNode {
     
     private class UsernameProperty extends CommitNodeProperty {
 
+        @SuppressWarnings("unchecked")
         public UsernameProperty() {
             super(COLUMN_NAME_USERNAME, String.class, COLUMN_NAME_USERNAME, COLUMN_NAME_USERNAME);
         }
@@ -176,6 +173,7 @@ class RevisionNode extends AbstractNode {
 
     private class DateProperty extends CommitNodeProperty {
 
+        @SuppressWarnings("unchecked")
         public DateProperty() {
             super(COLUMN_NAME_DATE, String.class, COLUMN_NAME_DATE, COLUMN_NAME_DATE);
         }
@@ -190,7 +188,8 @@ class RevisionNode extends AbstractNode {
     }
 
     private class MessageProperty extends CommitNodeProperty {
-
+        
+        @SuppressWarnings("unchecked")
         public MessageProperty() {
             super(COLUMN_NAME_MESSAGE, String.class, COLUMN_NAME_MESSAGE, COLUMN_NAME_MESSAGE);
         }
@@ -204,17 +203,6 @@ class RevisionNode extends AbstractNode {
         }
     }
 
-    private class RollbackAction extends AbstractAction {
-
-        public RollbackAction() {
-            putValue(Action.NAME, NbBundle.getMessage(RevisionNode.class, "CTL_Action_RollbackTo", // NOI18N
-                    event.getLogInfoHeader().getLog().getRevision()));
-        }
-
-        public void actionPerformed(ActionEvent e) {
-            SummaryView.rollback(event);
-        }
-    }
 
     private static class RevertModificationsAction extends NodeAction {
 
