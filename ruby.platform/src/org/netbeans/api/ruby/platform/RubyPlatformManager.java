@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -22,7 +22,7 @@
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,6 +38,9 @@
  */
 package org.netbeans.api.ruby.platform;
 
+import java.beans.PropertyVetoException;
+import java.beans.VetoableChangeListener;
+import java.beans.VetoableChangeSupport;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -56,6 +59,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.ruby.platform.RubyPlatform.Info;
+import org.netbeans.modules.ruby.platform.Util;
 import org.netbeans.modules.ruby.platform.execution.ExecutionService;
 import org.netbeans.modules.ruby.spi.project.support.rake.EditableProperties;
 import org.netbeans.modules.ruby.spi.project.support.rake.PropertyUtils;
@@ -70,6 +74,7 @@ import org.openide.util.Utilities;
  * Represents one Ruby platform, i.e. installation of a Ruby interpreter.
  */
 public final class RubyPlatformManager {
+    public static final boolean PREINDEXING = Boolean.getBoolean("gsf.preindexing");
     
     private static final String[] RUBY_EXECUTABLE_NAMES = { "ruby", "jruby" }; // NOI18N
     
@@ -83,6 +88,11 @@ public final class RubyPlatformManager {
     private static final Logger LOGGER = Logger.getLogger(RubyPlatformManager.class.getName());
     
     private static Set<RubyPlatform> platforms;
+    /**
+     * Change support for notifying of platform changes, using vetoable for 
+     * making it possible to prevent removing of a used platform.
+     */
+    private static final VetoableChangeSupport vetoableChangeSupport = new VetoableChangeSupport(RubyPlatformManager.class);
 
     private RubyPlatformManager() {
         // static methods only
@@ -95,6 +105,7 @@ public final class RubyPlatformManager {
      */
     static void resetPlatforms() {
         platforms = null;
+        firePlatformsChanged();
     }
     /**
      * Get a set of all registered platforms.
@@ -104,6 +115,9 @@ public final class RubyPlatformManager {
     }
 
     public static void performPlatformDetection() {
+        if (PREINDEXING) {
+            return;
+        }
         // Check the path to see if we find any other Ruby installations
         String path = System.getenv("PATH"); // NOI18N
         if (path == null) {
@@ -133,8 +147,17 @@ public final class RubyPlatformManager {
                 }
             }
         }
+        Util.setFirstPlatformTouch(false);
+        
     }
 
+    private static void firePlatformsChanged() {
+        try {
+            vetoableChangeSupport.fireVetoableChange("platforms", null, null); //NOI18N
+        } catch (PropertyVetoException ex) {
+            // do nothing, vetoing not implemented yet
+        }
+    }
     private static File findPlatform(final String dir, final String ruby) {
         File f = null;
         if (Utilities.isWindows()) {
@@ -161,7 +184,7 @@ public final class RubyPlatformManager {
         return null;
     }
 
-    private static Set<RubyPlatform> getPlatformsInternal() {
+    private static synchronized Set<RubyPlatform> getPlatformsInternal() {
         if (platforms == null) {
             platforms = new HashSet<RubyPlatform>();
 
@@ -306,6 +329,7 @@ public final class RubyPlatformManager {
         synchronized (RubyPlatform.class) {
             getPlatformsInternal().add(plaf);
         }
+        firePlatformsChanged();
         LOGGER.fine("RubyPlatform added: " + plaf);
         return plaf;
     }
@@ -326,6 +350,7 @@ public final class RubyPlatformManager {
         synchronized (RubyPlatform.class) {
             getPlatformsInternal().remove(plaf);
         }
+        firePlatformsChanged();
         LOGGER.fine("RubyPlatform removed: " + plaf);
     }
 
@@ -388,11 +413,10 @@ public final class RubyPlatformManager {
         }
     }
 
-    private static String computeID(final String label) {
-        String base = label.replaceAll("[\\. ]", "_"); // NOI18N
-        String id = base;
+    private static String computeID(final String kind) {
+        String id = kind;
         for (int i = 0; getPlatformByID(id) != null; i++) {
-            id = base + '_' + i;
+            id = kind + '_' + i;
         }
         return id;
     }
@@ -439,6 +463,14 @@ public final class RubyPlatformManager {
             LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
         }
         return info;
+    }
+    
+    public static void addVetoableChangeListener(VetoableChangeListener listener) {
+        vetoableChangeSupport.addVetoableChangeListener(listener);
+    }
+    
+    public static void removeVetoableChangeListener(VetoableChangeListener listener) {
+        vetoableChangeSupport.removeVetoableChangeListener(listener);
     }
 
 }
