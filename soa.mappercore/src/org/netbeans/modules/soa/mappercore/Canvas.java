@@ -62,11 +62,13 @@ import org.netbeans.modules.soa.mappercore.graphics.Grid;
 import org.netbeans.modules.soa.mappercore.graphics.VerticalGradient;
 import org.netbeans.modules.soa.mappercore.graphics.XRange;
 import org.netbeans.modules.soa.mappercore.model.Constant;
+import org.netbeans.modules.soa.mappercore.model.GraphItem;
 import org.netbeans.modules.soa.mappercore.model.Operation;
 import org.netbeans.modules.soa.mappercore.model.Vertex;
 import org.netbeans.modules.soa.mappercore.model.VertexItem;
 import org.netbeans.modules.soa.mappercore.utils.ScrollPaneWrapper;
 import org.netbeans.modules.soa.mappercore.utils.Utils;
+import org.openide.util.NbBundle;
 
 /**
  *
@@ -92,6 +94,10 @@ public class Canvas extends MapperPanel implements VertexCanvas,
     public Canvas(Mapper mapper) {
         super(mapper);
 
+        // vlv: print
+        putClientProperty(java.awt.print.Printable.class, ""); // NOI18N
+        putClientProperty(java.lang.Integer.class, new Integer(1));
+        
         setBackground(Mapper.CANVAS_BACKGROUND_COLOR);
 
         scrollPane = new CanvasScrollPane();
@@ -108,21 +114,40 @@ public class Canvas extends MapperPanel implements VertexCanvas,
 
         add(cellRendererPane);
         eventHandler = new CanvasEventHandler(this);
-
-        // vlv: print
-        putClientProperty(java.awt.print.Printable.class, "BPEL Mapper"); // NOI18N
-        
         inplaceEditor = new InplaceEditor(this);
-        
         getSelectionModel().addSelectionListener(this);
-                        
+                   
+//        ToolTipManager.sharedInstance().registerComponent(this);
+        
         registerAction(new StartInplaceEditor(this));
         registerAction(new MoveRightCanvasAction(this));
         registerAction(new MoveLeftCanvasAction(this));
         registerAction(new MoveUpCanvasAction(this));
         registerAction(new MoveDownCanvasAction(this));
         registerAction(new LinkConnectAction(this));
-   }
+    
+        getAccessibleContext().setAccessibleName(NbBundle
+                .getMessage(Canvas.class, "ACSN_Canvas")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(NbBundle
+                .getMessage(Canvas.class, "ACSD_Canvas")); // NOI18N
+    }
+
+//    @Override
+//    public String getToolTipText(MouseEvent event) {
+//        CanvasSearchResult searchResult = find(event.getX(), event.getY());
+//        
+//        if (searchResult == null) return null;
+//        if (searchResult.getPinItem() != null) return null;
+//        
+//        GraphItem graphItem = searchResult.getGraphItem();
+//        
+//        if (graphItem instanceof Vertex) {
+//            return ((Vertex) graphItem).getName();
+//        }
+//        
+//        return null;
+//    }
+    
     
     public void registerAction(MapperKeyboardAction action) {
         InputMap iMap = getInputMap();
@@ -237,11 +262,13 @@ public class Canvas extends MapperPanel implements VertexCanvas,
     
 
     public int toGraph(int canvasX) {
-        return canvasX + getX() + getGraphViewPositionX();
+        Rectangle viewRect = scrollPane.getViewport().getViewRect();
+        return canvasX + getGraphViewPositionX() - viewRect.x - viewRect.width;
     }
 
     public int toCanvas(int graphX) {
-        return graphX - getGraphViewPositionX() - getX();
+        Rectangle viewRect = scrollPane.getViewport().getViewRect();
+        return graphX - getGraphViewPositionX() + viewRect.x + viewRect.width;
     }
 
     @Override
@@ -339,7 +366,7 @@ public class Canvas extends MapperPanel implements VertexCanvas,
             }
         }
 
-        if (node.isVisibleGraph()) {
+        if (node.isVisibleGraph() && !node.getGraph().isEmptyOrOneLink()) {
             int size = step - 1;
             int topInset = size / 2;
             int bottomInset = size - topInset;
@@ -720,13 +747,13 @@ public class Canvas extends MapperPanel implements VertexCanvas,
 
         Dimension treeSize = mapper.getPreferredTreeSize();
         if (treeSize == null) {
-            return new Rectangle(graphViewPositionX, 0, 10, 10);
+            return new Rectangle(graphViewPositionX - 10, 0, 10, 10);
         }
 
         XRange range = mapper.getGraphXRange();
 
         if (range == null) {
-            return new Rectangle(graphViewPositionX, 0, 10, treeSize.height);
+            return new Rectangle(graphViewPositionX - 10, 0, 10, treeSize.height);
         }
 
         int graphX = range.x * step;
@@ -737,9 +764,9 @@ public class Canvas extends MapperPanel implements VertexCanvas,
         int inset = Math.max(100, visibleWidth - graphWidth);
 
         int minX = Math.min(graphX - inset,
-                graphViewPositionX - 100);
+                graphViewPositionX - visibleWidth - 100);
         int maxX = Math.max(graphX + graphWidth + inset,
-                graphViewPositionX + visibleWidth + 100);
+                graphViewPositionX + 100);
 
         return new Rectangle(minX, 0, maxX - minX, treeSize.height);
     }
@@ -779,7 +806,6 @@ public class Canvas extends MapperPanel implements VertexCanvas,
         @Override
         public void doLayout() {
             int step = getStep();
-            int graphViewPositionX = getGraphViewPositionX(step);
 
             JScrollBar hsb = getHorizontalScrollBar();
             JScrollBar vsb = getVerticalScrollBar();
@@ -789,6 +815,8 @@ public class Canvas extends MapperPanel implements VertexCanvas,
             vsb.setVisible(false);
 
             Insets insets = getInsets();
+
+            int graphViewPositionX = getGraphViewPositionX(step);
 
             int x = insets.left;
             int y = insets.top;
@@ -850,7 +878,6 @@ public class Canvas extends MapperPanel implements VertexCanvas,
             JViewport viewport = (JViewport) parent;
 
             int step = getStep();
-            int graphViewPositionX = getGraphViewPositionX(step);
 
             Rectangle graphBounds = Canvas.this.getPreferredGraphBounds();
             Dimension size = graphBounds.getSize();
@@ -858,12 +885,14 @@ public class Canvas extends MapperPanel implements VertexCanvas,
             int w = viewport.getWidth();
             int h = viewport.getHeight();
 
+            int graphViewPositionX = getGraphViewPositionX(step);
+            
             size.width = Math.max(size.width, w);
             size.height = Math.max(size.height, h);
 
             Point position = viewport.getViewPosition();
 
-            position.x = Math.max(0, Math.min(graphViewPositionX - graphBounds.x, size.width - w));
+            position.x = Math.max(0, Math.min(graphViewPositionX - w - graphBounds.x, size.width - w));
             position.y = Math.max(0, Math.min(position.y, size.height - h));
 
             viewport.setViewSize(size);
@@ -913,20 +942,32 @@ public class Canvas extends MapperPanel implements VertexCanvas,
         
         Vertex vertex = vertexes.get(0);
         
-        int graphX = getGraphViewPositionX();
-        int graphW = getScrollPane().getViewport().getViewRect().width;
+        int oldGraphX = getGraphViewPositionX();
+        int graphW = getScrollPane().getViewport().getWidth();
+        int graphX2 = oldGraphX;
+        int graphX1 = oldGraphX - graphW;
         
-        int x = vertex.getX() * getStep();
-        int w = vertex.getWidth() * getStep();
+        int step = getStep();
 
-        if (x + w > graphX + graphW) {
-            setGraphViewPositionX(x + w - graphW + getStep());
-            invalidate();
-            getScrollPane().validate();
-            repaint();
+        int w = vertex.getWidth() * step;
+        int x1 = vertex.getX() * step;
+        int x2 = x1 + w;
+        
+        x1 -= 2 * step;
+        x2 += 2 * step;
+        
+        if (x2 > graphX2) {
+            graphX2 = x2;
+            graphX1 = x2 - graphW;
         }
-        if (x < graphX) {
-            setGraphViewPositionX(x - getStep());
+        
+        if (x1 < graphX1) {
+            graphX1 = x1;
+            graphX2 = x1 + graphW;
+        }
+        
+        if (graphX2 != oldGraphX) {
+            setGraphViewPositionX(graphX2);
             invalidate();
             getScrollPane().validate();
             repaint();
