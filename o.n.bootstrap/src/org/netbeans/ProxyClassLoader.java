@@ -57,7 +57,6 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.util.Enumerations;
-import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 
 /**
@@ -74,7 +73,12 @@ import org.openide.util.Lookup;
 public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessibleClassLoader {
 
     private static final Logger LOGGER = Logger.getLogger(ProxyClassLoader.class.getName());
-    private static final boolean LOG_LOADING = LOGGER.isLoggable(Level.FINE);
+    private static final boolean LOG_LOADING;
+
+    static {
+        boolean prop1 = System.getProperty("org.netbeans.ProxyClassLoader.level") != null;
+        LOG_LOADING = prop1 || LOGGER.isLoggable(Level.FINE);
+    }
 
     /** All known packages */
     private final Map<String, Package> packages = new HashMap<String, Package>();
@@ -150,6 +154,7 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
         if (moduleFactory != null && moduleFactory.removeBaseClassLoader()) {
             // this hack is here to prevent having the application classloader
             // as parent to all module classloaders.
+            systemCL = ClassLoader.getSystemClassLoader();
             resParents = coalesceAppend(new ProxyClassLoader[0], nueparents);
         } else {
             resParents = coalesceAppend(parents, nueparents);
@@ -181,8 +186,10 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
     @Override
     protected synchronized Class loadClass(String name, boolean resolve)
                                             throws ClassNotFoundException {
-        if (LOG_LOADING) LOGGER.log(Level.FINEST, "{0} initiated loading of {1}",
+        if (LOG_LOADING && !name.startsWith("java.util.logging.")) {
+            LOGGER.log(Level.FINEST, "{0} initiated loading of {1}",
                     new Object[] {this, name});
+        }
         
         Class cls = null;
 
@@ -243,7 +250,7 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
         Class cls = findLoadedClass(name); 
         if (cls == null) {
             cls = doLoadClass(pkg, name);
-            if (LOG_LOADING) LOGGER.log(Level.FINEST, "{0} loaded {1}",
+            if (LOG_LOADING && !name.startsWith("java.util.logging.")) LOGGER.log(Level.FINEST, "{0} loaded {1}",
                         new Object[] {this, name});
         }
         return cls; 
@@ -291,6 +298,18 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
         String pkg = (last >= 0) ? name.substring(0, last).replace('/', '.') : "";
         String path = name.substring(0, last+1);
         
+        Boolean systemPackage = sclPackages.get(pkg);
+        if ((systemPackage == null || systemPackage) && shouldDelegateResource(path, null)) {
+            URL u = systemCL.getResource(name);
+            if (u != null) {
+                if (systemPackage == null) {
+                    sclPackages.put(pkg, true);
+                }
+                return u;
+            }
+            // else try other loaders
+        }
+
         Set<ProxyClassLoader> del = packageCoverage.get(pkg);
 
         if (del == null) {
@@ -442,15 +461,10 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
 		String implVersion, String implVendor, URL sealBase )
 		throws IllegalArgumentException {
 	synchronized (packages) {
-            try {
-                Package pkg = super.definePackage(name, specTitle, specVersion, specVendor, implTitle,
-                        implVersion, implVendor, sealBase);
-                packages.put(name, pkg);
-                return pkg;
-            } catch (IllegalArgumentException x) {
-                Exceptions.attachMessage(x, "If you are getting this, probably it is because you have several modules trying to load from the same package. This is not supported (#71524).");
-                throw x;
-            }
+            Package pkg = super.definePackage(name, specTitle, specVersion, specVendor, implTitle,
+                    implVersion, implVendor, sealBase);
+            packages.put(name, pkg);
+            return pkg;
 	}
     }
 
