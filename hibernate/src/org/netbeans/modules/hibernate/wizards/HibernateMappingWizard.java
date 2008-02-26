@@ -123,6 +123,8 @@ public class HibernateMappingWizard implements WizardDescriptor.InstantiatingIte
         this.wizard = wizard;
         project = Templates.getProject(wizard);
         descriptor = new HibernateMappingWizardDescriptor(project);
+        FileObject sourceRoot = Util.getSourceRoot(project);        
+        Templates.setTargetFolder(wizard, sourceRoot);      
     }
 
     public void uninitialize(WizardDescriptor wizard) {
@@ -147,8 +149,7 @@ public class HibernateMappingWizard implements WizardDescriptor.InstantiatingIte
             hmo.addMyClass(myClass);
             hmo.save();
             return Collections.singleton(hmo.getPrimaryFile());
-        } catch (Exception e) {
-            System.err.println("Error**************************" + e);
+        } catch (Exception e) {            
             return Collections.EMPTY_SET;
 
         }   
