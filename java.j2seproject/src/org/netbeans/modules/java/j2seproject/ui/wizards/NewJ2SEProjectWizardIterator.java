@@ -55,6 +55,7 @@ import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.modules.java.j2seproject.J2SEProjectGenerator;
 import org.netbeans.modules.java.j2seproject.ui.FoldersListSettings;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
+import org.netbeans.spi.java.project.support.ui.SharableLibrariesUtils;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.ui.support.ProjectChooser;
@@ -148,7 +149,7 @@ public class NewJ2SEProjectWizardIterator implements WizardDescriptor.ProgressIn
             if (!librariesDefinition.endsWith(File.separator)) {
                 librariesDefinition += File.separatorChar;
             }
-            librariesDefinition += J2SEProjectProperties.DEFAULT_LIBRARIES_FILENAME;
+            librariesDefinition += SharableLibrariesUtils.DEFAULT_LIBRARIES_FILENAME;
         }
         handle.progress (NbBundle.getMessage (NewJ2SEProjectWizardIterator.class, "LBL_NewJ2SEProjectWizardIterator_WizardProgress_CreatingProject"), 1);
         switch (type) {
@@ -206,16 +207,16 @@ public class NewJ2SEProjectWizardIterator implements WizardDescriptor.ProgressIn
 
         // Returning FileObject of project diretory. 
         // Project will be open and set as main
-        int index = (Integer) wiz.getProperty(PROP_NAME_INDEX);
+        int ind = (Integer) wiz.getProperty(PROP_NAME_INDEX);
         switch (type) {
             case APP:
-                FoldersListSettings.getDefault().setNewApplicationCount(index);
+                FoldersListSettings.getDefault().setNewApplicationCount(ind);
                 break;
             case LIB:
-                FoldersListSettings.getDefault().setNewLibraryCount(index);
+                FoldersListSettings.getDefault().setNewLibraryCount(ind);
                 break;
             case EXT:
-                FoldersListSettings.getDefault().setNewProjectCount(index);
+                FoldersListSettings.getDefault().setNewProjectCount(ind);
                 break;
         }        
         resultSet.add (dir);
@@ -224,7 +225,8 @@ public class NewJ2SEProjectWizardIterator implements WizardDescriptor.ProgressIn
         if (dirF != null && dirF.exists()) {
             ProjectChooser.setProjectsFolder (dirF);    
         }
-                        
+         
+        SharableLibrariesUtils.setLastProjectSharable(librariesDefinition != null);
         return resultSet;
     }
     
