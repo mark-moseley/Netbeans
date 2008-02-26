@@ -41,19 +41,34 @@
 
 package gui;
 
-import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.nodes.Node;
+
+import org.netbeans.junit.NbTestSuite;
+import gui.actions.*;
 
 /**
- * Utilities for Performance tests, workarrounds, often used methods, ...
+ * Measure UI-RESPONSIVENES and WINDOW_OPENING.
  *
- * @author  mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org, rashid@netbeans.org, mrkam@netbeans.org
  */
-public class EPUtilities extends gui.Utilities{
+public class EPMeasureActions3  {
 
-    public static Node getProcessFilesNode(String project){
-        String processNode = org.netbeans.jellytools.Bundle.getString("org.netbeans.modules.bpel.project.ui.Bundle", "LBL_Node_Sources");
-        return new Node(ProjectsTabOperator.invoke().getProjectRootNode(project),processNode);
+    public static NbTestSuite suite() {
+        NbTestSuite suite = new NbTestSuite();
+            
+        suite.addTest(new WatchProjects("testInitGCProjects"));
+        suite.addTest(new SchemaNavigatorSchemaView("measureTime", "Schema Navigator Schema View"));
+        suite.addTest(new NavigatorSchemaViewMode("measureTime","Schema Navigator Schema View mode"));
+        
+
+//TODO there is an password dialog solve before enable to run again        suite.addTest(new DeployProject("measureTime","Deploy Project"));
+        suite.addTest(new OpenComplexDiagram("measureTime","Open Complex Diagram"));         
+//        suite.addTest(new OpenComplexDiagram("testGC","Open Complex Diagram - Test GC"));         
+        suite.addTest(new OpenBPELproject("measureTime","OpenBPELproject"));
+
+        suite.addTest(new StartAppserver("measureTime","Start Appserver"));
+        suite.addTest(new OpenSchemaView("testOpenComplexSchemaView", "Open Complex Schema View"));
+        suite.addTest(new WatchProjects("testGCProjects"));
+        return suite;
     }
     
 }
