@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.javascript.editing;
 
 import java.util.List;
 import javax.swing.JTextArea;
@@ -50,32 +50,28 @@ import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
-import org.netbeans.modules.ruby.lexer.LexUtilities;
+import org.netbeans.modules.javascript.editing.lexer.LexUtilities;
 import org.openide.filesystems.FileObject;
 
 /**
- * @todo Test that if you insert x="" and then DELETE the ", it wipes out BOTH of them!
  * @todo Try typing in whole source files and other than tracking missing end and } closure
  *   statements the buffer should be identical - both in terms of quotes to the rhs not having
  *   accumulated as well as indentation being correct.
  * @todo
- *   // TODO: Test
- *   // - backspace deletion
- *   // - entering incomplete output
  *   // automatic reindentation of "end", "else" etc.
  *
  * 
  * 
  * @author Tor Norbye
  */
-public class BracketCompleterTest extends RubyTestBase {
+public class JsBracketCompleterTest extends JsTestBase {
     
-    public BracketCompleterTest(String testName) {
+    public JsBracketCompleterTest(String testName) {
         super(testName);
     }
 
     private void match(String original) throws BadLocationException {
-        BracketCompleter bc = new BracketCompleter();
+        JsBracketCompleter bc = new JsBracketCompleter();
         
         int caretPos = original.indexOf('^');
         
@@ -106,7 +102,7 @@ public class BracketCompleterTest extends RubyTestBase {
     }
     
     private void insertBreak(String original, String expected) throws BadLocationException {
-        BracketCompleter bc = new BracketCompleter();
+        JsBracketCompleter bc = new JsBracketCompleter();
         
         int insertOffset = original.indexOf('^');
         int finalCaretPos = expected.indexOf('^');
@@ -125,7 +121,7 @@ public class BracketCompleterTest extends RubyTestBase {
         try {
             doc.insertString(caret.getDot(), "\n", null);
             // Indent the new line
-            Formatter formatter = new Formatter();
+            JsFormatter formatter = new JsFormatter();
             //ParserResult result = parse(fo);
 
             int startPos = caret.getDot()+1;
@@ -166,7 +162,7 @@ public class BracketCompleterTest extends RubyTestBase {
         original = original.substring(0, insertOffset) + original.substring(insertOffset+1);
         expected = expected.substring(0, finalCaretPos) + expected.substring(finalCaretPos+1);
 
-        BracketCompleter bc = new BracketCompleter();
+        JsBracketCompleter bc = new JsBracketCompleter();
 
         BaseDocument doc = getDocument(original);
         
@@ -222,7 +218,7 @@ public class BracketCompleterTest extends RubyTestBase {
         original = original.substring(0, afterRemoveOffset) + original.substring(afterRemoveOffset+1);
         expected = expected.substring(0, finalCaretPos) + expected.substring(finalCaretPos+1);
 
-        BracketCompleter bc = new BracketCompleter();
+        JsBracketCompleter bc = new JsBracketCompleter();
 
         BaseDocument doc = getDocument(original);
 
@@ -266,7 +262,7 @@ public class BracketCompleterTest extends RubyTestBase {
         original = original.substring(0, afterRemoveOffset) + original.substring(afterRemoveOffset+1);
         expected = expected.substring(0, finalCaretPos) + expected.substring(finalCaretPos+1);
 
-        BracketCompleter bc = new BracketCompleter();
+        JsBracketCompleter bc = new JsBracketCompleter();
 
         BaseDocument doc = getDocument(original);
 
@@ -335,7 +331,7 @@ public class BracketCompleterTest extends RubyTestBase {
         FileObject fileObject = null;
         CompilationInfo info = new TestCompilationInfo(this, fileObject, doc, source);
         
-        BracketCompleter completer = new BracketCompleter();
+        JsBracketCompleter completer = new JsBracketCompleter();
         List<OffsetRange> ranges = completer.findLogicalRanges(info, caretPos);
         OffsetRange expectedRange;
         if (expectedStartPos != -1) {
@@ -374,7 +370,7 @@ public class BracketCompleterTest extends RubyTestBase {
             }
             fail("Selection range " + selected + " is not in the range");
         } else {
-            assert ranges.size() > 0;
+            assertTrue(ranges.size() > 0);
             OffsetRange was = ranges.get(0);
             assertEquals("Wrong selection: expected \"" + 
                     expected.substring(expectedRange.getStart(),expectedRange.getEnd()) + "\" and was \"" +
@@ -393,10 +389,14 @@ public class BracketCompleterTest extends RubyTestBase {
     }
 
     public void testNoMatchInComments() throws Exception {
-        insertChar("# Hello^", '\'', "# Hello'^");
-        insertChar("# Hello^", '"', "# Hello\"^");
-        insertChar("# Hello^", '[', "# Hello[^");
-        insertChar("# Hello^", '(', "# Hello(^");
+        insertChar("// Hello^", '\'', "// Hello'^");
+        insertChar("// Hello^", '"', "// Hello\"^");
+        insertChar("// Hello^", '[', "// Hello[^");
+        insertChar("// Hello^", '(', "// Hello(^");
+        insertChar("/* Hello^*/", '\'', "/* Hello'^*/");
+        insertChar("/* Hello^*/", '"', "/* Hello\"^*/");
+        insertChar("/* Hello^*/", '[', "/* Hello[^*/");
+        insertChar("/* Hello^*/", '(', "/* Hello(^*/");
     }
 
     public void testNoMatchInStrings() throws Exception {
@@ -405,10 +405,6 @@ public class BracketCompleterTest extends RubyTestBase {
         insertChar("x = \"^\"", '(', "x = \"(^\"");
         insertChar("x = \"^)\"", ')', "x = \")^)\"");
         insertChar("x = '^'", '"', "x = '\"^'");
-        insertChar("x = \"\nf^\n\"", '\'', "x = \"\nf'^\n\"");
-        insertChar("x = \"\nf^\n\"", '[', "x = \"\nf[^\n\"");
-        insertChar("x = \"\nf^\n\"", '(', "x = \"\nf(^\n\"");
-        insertChar("x = '\nf^\n'", '"', "x = '\nf\"^\n'");
     }
     
     public void testSingleQuotes1() throws Exception {
@@ -427,6 +423,26 @@ public class BracketCompleterTest extends RubyTestBase {
         insertChar("x = '\\^'", '\'', "x = '\\'^'");
     }
 
+    public void testInsertBrokenQuote() throws Exception {
+        insertChar("System.out.prinlnt(\"pavel^)", '"',
+                "System.out.prinlnt(\"pavel\"^)");
+    }
+
+    public void testInsertBrokenQuote2() throws Exception {
+        insertChar("System.out.prinlnt(\"pavel^\n", '"',
+                "System.out.prinlnt(\"pavel\"^\n");
+    }
+    
+    public void testInsertBrokenQuote3() throws Exception {
+        insertChar("System.out.prinlnt(\"^\n", '"',
+                "System.out.prinlnt(\"\"^\n");
+    }
+    
+    public void testInsertBrokenQuote4() throws Exception {
+        insertChar("System.out.prinlnt(\"pavel^", '"',
+                "System.out.prinlnt(\"pavel\"^");
+    }
+
     public void testDoubleQuotes1() throws Exception {
         insertChar("x = ^", '"', "x = \"^\"");
     }
@@ -443,48 +459,97 @@ public class BracketCompleterTest extends RubyTestBase {
         insertChar("x = \"\\^\"", '"', "x = \"\\\"^\"");
     }
 
-    public void testDocs() throws Exception {
-        insertBreak("=begin^\n", "=begin\n^\n=end\n");
-    }
-
-    public void testDocsEnd() throws Exception {
-        insertBreak("=begin^", "=begin\n^\n=end");
-    }
-
-    public void testDocsEnd2() throws Exception {
-        insertBreak("def foo\nend\n=begin^", "def foo\nend\n=begin\n^\n=end");
-    }
-
     public void testInsertEnd1() throws Exception {
         insertBreak("x^", "x\n^");
     }
+    
+    public void testInsertBlockComment() throws Exception {
+        insertBreak("/**^", "/**\n * ^\n */");
+    }
+
+    public void testInsertBlockComment2() throws Exception {
+        insertBreak("    /**^", "    /**\n     * ^\n     */");
+    }
+
+    public void testInsertBlockComment3() throws Exception {
+        insertBreak("/*^\n", "/*\n * ^\n */\n");
+    }
+
+    public void testInsertBlockComment4() throws Exception {
+        insertBreak("/*^\nfunction foo() {}", "/*\n * ^\n */\nfunction foo() {}");
+    }
+    
+    public void testInsertBlockComment5() throws Exception {
+        insertBreak("^/*\n*/\n", "\n^/*\n*/\n");
+    }
+
+// These tests no longer apply -- I'm doing the string-literal insertion differently now    
+//    public void testSplitStrings() throws Exception {
+//        insertBreak("  x = 'te^st'", "  x = 'te' +\n  '^st'");
+//    }
+//
+//    public void testSplitStrings2() throws Exception {
+//        insertBreak("  x = 'test^'", "  x = 'test' +\n  '^'");
+//    }
+//    
+//    public void testSplitStrings3() throws Exception {
+//        insertBreak("  x = \"te^st\"", "  x = \"te\" +\n  \"^st\"");
+//    }
+//    
+//    public void testSplitRegexps1() throws Exception {
+//        insertBreak("  x = /te^st/", "  x = /te/ +\n  /^st/");
+//    }
+//
+//    public void testSplitRegexps2() throws Exception {
+//        insertBreak("  x = /test^/", "  x = /test/ +\n  /^/");
+//    }
+//
+
+    public void testSplitStrings1() throws Exception {
+        insertBreak("  x = 'te^st'", "  x = 'te\\n\\\n^st'");
+    }
+
+    public void testSplitStrings1b() throws Exception {
+        insertBreak("  x = '^test'", "  x = '\\\n^test'");
+    }
+
+    public void testSplitStrings2() throws Exception {
+        insertBreak("  x = 'test^'", "  x = 'test\\n\\\n^'");
+    }
+    
+    public void testSplitStrings3() throws Exception {
+        insertBreak("  x = \"te^st\"", "  x = \"te\\n\\\n^st\"");
+    }
+    
+    public void testSplitRegexps1() throws Exception {
+        insertBreak("  x = /te^st/", "  x = /te\\n\\\n^st/");
+    }
+
+    
+    public void testSplitRegexps1b() throws Exception {
+        insertBreak("  x = /^test/", "  x = /\\\n^test/");
+    }
+
+    public void testSplitRegexps2() throws Exception {
+        insertBreak("  x = /test^/", "  x = /test\\n\\\n^/");
+    }
 
     public void testInsertEnd2() throws Exception {
-        insertBreak("class Foo^", "class Foo\n  ^\nend");
+        insertBreak("function foo() {^", "function foo() {\n    ^\n}");
     }
     
     public void testInsertEnd3() throws Exception {
-        insertBreak("class Foo^\nend", "class Foo\n  ^\nend");
+        insertBreak("function foo() {^\n}", "function foo() {\n    ^\n}");
     }
 
-    public void testInsertEnd4() throws Exception {
-        insertBreak("foo bar, {:x => :x,\n  :y => :y, ^:z => :z} do\nend\n",
-                "foo bar, {:x => :x,\n  :y => :y, \n  ^:z => :z} do\nend\n");
-    }
-
-    public void testInsertEnd5() throws Exception {
-        insertBreak("if a_condition ^thing()", "if a_condition \n  ^thing()\nend");
-    }
-    
+    // THIS IS BROKEN!!!
+    //public void testInsertEnd5() throws Exception {
+    //    insertBreak("if (a_condition) ^thing() {", "if (a_condition) \n  ^thing()\n}");
+    //}
     
     public void testInsertIf1() throws Exception {
-        insertBreak("    if true^", "    if true\n      ^\n    end");
+        insertBreak("    if (true) {^", "    if (true) {\n        ^\n    }");
     }
-
-    // This doesn't work
-//    public void testInsertIf2() throws Exception {
-//        insertBreak("    if true\n    else", 20, "    if true\n    else\n      end", 27);
-//    }
 
     public void testBrackets1() throws Exception {
         insertChar("x = ^", '[', "x = [^]");
@@ -494,16 +559,6 @@ public class BracketCompleterTest extends RubyTestBase {
         insertChar("x = [^]", ']', "x = []^");
     }
 
-    public void testBracketsSpecialName() throws Exception {
-        // "[]" and "[]=" are valid method names!
-        insertChar("def ^", '[', "def [^]");
-    }
-
-    public void testBracketsSpecialName2() throws Exception {
-        // "[]" and "[]=" are valid method names!
-        insertChar("def [^]", ']', "def []^");
-    }
-    
     public void testBrackets3() throws Exception {
         insertChar("x = [^]", 'a', "x = [a^]");
     }
@@ -561,8 +616,8 @@ public class BracketCompleterTest extends RubyTestBase {
     }
 
     public void testRegexp5() throws Exception {
-        insertChar("    regexp = /fofo^\n      # Subsequently, you can make calls to it by name with <tt>yield</tt> in", '/',
-                "    regexp = /fofo/^\n      # Subsequently, you can make calls to it by name with <tt>yield</tt> in");
+        insertChar("    regexp = /fofo^\n      // Subsequently, you can make calls to it by name with <tt>yield</tt> in", '/',
+                "    regexp = /fofo/^\n      // Subsequently, you can make calls to it by name with <tt>yield</tt> in");
     }
 
     public void testRegexp6() throws Exception {
@@ -610,74 +665,12 @@ public class BracketCompleterTest extends RubyTestBase {
         insertChar("x = y^", '/', "x = y/^");
     }
 
-    public void testRegexpPercent1() throws Exception {
-        insertChar("x = %r^", '(', "x = %r(^)");
+    public void testNotRegexp5() throws Exception {
+        insertChar("/^", '/', "//^");
     }
 
-    public void testRegexpPercent2() throws Exception {
-        insertChar("x = %r(^)", ')', "x = %r()^");
-    }
-    
-    
-    public void testSinglePercent1() throws Exception {
-        insertChar("x = %q^", '(', "x = %q(^)");
-    }
-
-    public void testSinglePercent2() throws Exception {
-        insertChar("x = %q(^)", ')', "x = %q()^");
-    }
-    
-    // Broken!!
-    // I've gotta handle proper parenthesis nesting here... e.g.
-    // %q(())
-//    public void testSinglePercent3() throws Exception {
-//        insertChar("x = %q(^)", '(', "x = %q((^))");
-//    }
-
-    // Broken!!
-//    public void testSinglePercent4() throws Exception {
-//        insertChar("x = %q((^))", ')', "x = %q(()^)");
-//    }
-
-    public void testSinglePercent5() throws Exception {
-        insertChar("x = %q((^))", 'a', "x = %q((a^))");
-    }
-    
-    public void testSinglePercent6() throws Exception {
-        insertChar("x = %q^", '-', "x = %q-^-");
-    }
-
-    public void testSinglePercent7() throws Exception {
-        insertChar("x = %q-^-", '-', "x = %q--^");
-    }
-    
-    public void testSinglePercent8() throws Exception {
-        insertChar("x = %q^", ' ', "x = %q ^ ");
-    }
-
-    // Broken!
-//    public void testSinglePercent9() throws Exception {
-//        insertChar("x = %q ^ ", ' ', "x = %q  ^");
-//    }
-    
-    public void testSinglePercent10() throws Exception {
-        insertChar("x = %q ^ ", 'x', "x = %q x^ ");
-    }
-
-    public void testSinglePercent11() throws Exception {
-        insertChar("x = %q-\\^-", '-', "x = %q-\\-^-");
-    }
-
-    public void testHeredoc1() throws Exception {
-        insertBreak("x=<<FOO^\n", "x=<<FOO\n^\nFOO\n");
-    }
-
-    public void testHeredoc2() throws Exception {
-        insertBreak("x=f(<<FOO,^\n", "x=f(<<FOO,\n^\nFOO\n");
-    }
-    
     public void testFindMatching1() throws Exception {
-        match("^if true\n^end");
+        match("if (true) ^{\n^}");
     }
     
     public void testFindMatching2() throws Exception {
@@ -689,14 +682,9 @@ public class BracketCompleterTest extends RubyTestBase {
     }
 
     public void testFindMatching4() throws Exception {
-        match("^def foo\nif true\nend\n^end\nend");
+        match("function foo() ^{\nif (true) {\n}\n^}\n}");
     }
 
-    public void testFindMatching5() throws Exception {
-        // Test heredocs
-        match("x=f(^<<ABC,\"hello\")\nfoo\nbar\n^ABC\n");
-    }
-    
     public void testBackspace1() throws Exception {
         deleteChar("x^", "^");
     }
@@ -739,211 +727,117 @@ public class BracketCompleterTest extends RubyTestBase {
     }
     
 
-    public void testPercentBackspace() throws Exception {
-        deleteChar("x=\"#{^}\"", "x=\"#^\"");
-    }
-
-    public void testPercentBackspace2() throws Exception {
-        deleteChar("x=\"#{a^}\"", "x=\"#{^}\"");
-    }
-
-    public void testPercentBackspace3() throws Exception {
-        deleteChar("x=\"a#{^}b\"", "x=\"a#^b\"");
-    }
-    
-    public void testPercentBackspace4() throws Exception {
-        deleteChar("x=/#{^}/", "x=/#^/");
-    }
-
-    public void testPercentBackspace5() throws Exception {
-        deleteChar("x=/#{a^}/", "x=/#{^}/");
-    }
-
-    public void testPercentBackspace6() throws Exception {
-        deleteChar("x=/a#{^}b/", "x=/a#^b/");
-    }
-    
     public void testContComment() throws Exception {
-        if (BracketCompleter.CONTINUE_COMMENTS) {
-            insertBreak("# ^", "# \n# ^");
+        if (JsBracketCompleter.CONTINUE_COMMENTS) {
+            insertBreak("// ^", "// \n// ^");
         } else {
-            insertBreak("# ^", "# \n^");
+            insertBreak("// ^", "// \n^");
         }
     }
     
     public void testContComment2() throws Exception {
         // No auto-# on new lines
-        if (BracketCompleter.CONTINUE_COMMENTS) {
-            insertBreak("   #  ^", "   #  \n   #  ^");
+        if (JsBracketCompleter.CONTINUE_COMMENTS) {
+            insertBreak("   //  ^", "   //  \n   //  ^");
         } else {
-            insertBreak("   #  ^", "   #  \n   ^");
+            insertBreak("   //  ^", "   //  \n   ^");
         }
     }
     
     public void testContComment3() throws Exception {
         // No auto-# on new lines
-        if (BracketCompleter.CONTINUE_COMMENTS) {
-            insertBreak("   #\t^", "   #\t\n   #\t^");
+        if (JsBracketCompleter.CONTINUE_COMMENTS) {
+            insertBreak("   //\t^", "   //\t\n   //\t^");
         } else {
-            insertBreak("   #\t^", "   #\t\n   ^");
+            insertBreak("   //\t^", "   //\t\n   ^");
         }
     }
 
     public void testContComment4() throws Exception {
-        insertBreak("# foo\n^", "# foo\n\n^");
+        insertBreak("// foo\n^", "// foo\n\n^");
     }
 
     public void testContComment5() throws Exception {
         // No auto-# on new lines
-        if (BracketCompleter.CONTINUE_COMMENTS) {
-            insertBreak("      # ^", "      # \n      # ^");
+        if (JsBracketCompleter.CONTINUE_COMMENTS) {
+            insertBreak("      // ^", "      // \n      // ^");
         } else {
-            insertBreak("      # ^", "      # \n      ^");
+            insertBreak("      // ^", "      // \n      ^");
         }
     }
     
     public void testContComment6() throws Exception {
-        insertBreak("   # foo^bar", "   # foo\n   # ^bar");
+        insertBreak("   // foo^bar", "   // foo\n   // ^bar");
     }
     
     public void testContComment7() throws Exception {
-        insertBreak("   # foo^\n   # bar", "   # foo\n   # ^\n   # bar");
+        insertBreak("   // foo^\n   // bar", "   // foo\n   // ^\n   // bar");
     }
     
     public void testContComment8() throws Exception {
-        insertBreak("   # foo^bar", "   # foo\n   # ^bar");
+        insertBreak("   // foo^bar", "   // foo\n   // ^bar");
     }
 
     
     public void testContComment9() throws Exception {
-        insertBreak("^# foobar", "\n^# foobar");
+        insertBreak("^// foobar", "\n^// foobar");
     }
 
     public void testContComment10() throws Exception {
-        insertBreak("#foo\n^# foobar", "#foo\n# ^\n# foobar");
+        insertBreak("//foo\n^// foobar", "//foo\n// ^\n// foobar");
     }
 
     public void testContComment11() throws Exception {
-        insertBreak("code #foo\n^# foobar", "code #foo\n\n^# foobar");
+        // This behavior is debatable -- to be consistent with testContComment10 I
+        // should arguably continue comments here as well
+        insertBreak("code //foo\n^// foobar", "code //foo\n\n^// foobar");
     }
 
     public void testContComment12() throws Exception {
-        insertBreak("  code\n^# foobar", "  code\n\n  ^# foobar");
+        insertBreak("  code\n^// foobar", "  code\n\n  ^// foobar");
     }
     
     public void testContComment14() throws Exception {
-        insertBreak("def foo\n  code\n^# foobar\nend\n", "def foo\n  code\n\n  ^# foobar\nend\n");
+        insertBreak("function foo() {\n    code\n^// foobar\n}\n", "function foo() {\n    code\n\n    ^// foobar\n}\n");
     }
 
     public void testContComment15() throws Exception {
-        insertBreak("\n\n^# foobar", "\n\n\n^# foobar");
+        insertBreak("\n\n^// foobar", "\n\n\n^// foobar");
     }
 
     public void testContComment16() throws Exception {
-        insertBreak("\n  \n^# foobar", "\n  \n\n^# foobar");
+        insertBreak("\n  \n^// foobar", "\n  \n\n^// foobar");
     }
 
     public void testContComment17() throws Exception {
-        insertBreak("def foo\n  # cmnt1\n^  # cmnt2\nend\n", "def foo\n  # cmnt1\n  # ^\n  # cmnt2\nend\n");
+        insertBreak("function foo() {\n  // cmnt1\n^  // cmnt2\n}\n", "function foo() {\n  // cmnt1\n  // ^\n  // cmnt2\n}\n");
     }
     
     public void testNoContComment() throws Exception {
-        // No auto-# on new lines
-        insertBreak("foo # ^", "foo # \n^");
+        // No auto-// on new lines
+        insertBreak("foo // ^", "foo // \n^");
     }
 
     public void testDeleteContComment() throws Exception {
-        deleteChar("# ^", "^");
-        deleteChar("\n# ^", "\n^");
+        deleteChar("// ^", "^");
+        deleteChar("\n// ^", "\n^");
     }
     
     public void testDeleteContComment2() throws Exception {
-        deleteChar("# ^  ", "^  ");
-        deleteChar("\n# ^  ", "\n^  ");
+        deleteChar("// ^  ", "^  ");
+        deleteChar("\n// ^  ", "\n^  ");
     }
     
     public void testNoDeleteContComment() throws Exception {
-        deleteChar("#  ^", "# ^");
-        deleteChar("#^", "^");
-        deleteChar("puts '# ^'", "puts '#^'");
-    }
-
-    public void testFindMatching6() throws Exception {
-        // Test heredocs
-        match("x=f(^<<ABC,'hello',<<-DEF,'bye')\nfoo\nbar\n^ABC\nbaz\n  DEF\nwhatever");
-    }
-
-    public void testFindMatching7() throws Exception {
-        // Test heredocs
-        match("x=f(<<ABC,'hello',^<<-DEF,'bye')\nfoo\nbar\nABC\nbaz\n  ^DEF\nwhatever");
-    }
-
-//    public void testFreakOutEditor1() throws Exception {
-//        String before = "x = method_call(50, <<TOKEN1, \"arg3\", <<TOKEN2, /startofregexp/^\nThis is part of the string\nTOKEN1\nrestofregexp/)";
-//        String  after = "x = method_call(50, <<TOKEN1, \"arg3\", <<TOKEN2, /startofregexp^\nThis is part of the string\nTOKEN1\nrestofregexp/)";
-//        deleteChar(before, after);
-//    }
-//    
-
-
-    public void testInsertPercentInString() throws Exception {
-        insertChar("x = \"foo ^\"", '#', "x = \"foo #{^}\"");
-    }
-
-    public void testInsertPercentInString2() throws Exception {
-        // Make sure type-through works
-        insertChar("x = \"foo #{^}\"", '}', "x = \"foo #{}^\"");
-    }
-
-    public void testInsertPercentInString3() throws Exception {
-        insertChar("x = \"foo #{^}\"", '{', "x = \"foo #{^}\"");
-    }
-
-    public void testInsertPercentInString4() throws Exception {
-        insertChar("x = \"foo #{^a}\"", '}', "x = \"foo #{}^a}\"");
-    }
-
-    public void testInsertPercentInString5() throws Exception {
-        insertChar("x = \"foo {^}\"", '}', "x = \"foo {}^}\"");
-    }
-
-    public void testInsertPercentInString6() throws Exception {
-        insertChar("x = \"foo {^}\"", '{', "x = \"foo {{^}\"");
-    }
-
-    public void testNoInsertPercentInString() throws Exception {
-        insertChar("x = 'foo ^'", '#', "x = 'foo #^'");
+        deleteChar("//  ^", "// ^");
+        deleteChar("//^", "^");
+        deleteChar("puts ('// ^')", "puts ('//^')");
     }
 
     public void testNoInsertPercentElsewhere() throws Exception {
         insertChar("x = ^", '#', "x = #^");
     }
     
-    public void testInsertPercentInRegexp() throws Exception {
-        insertChar("x = /foo ^/", '#', "x = /foo #{^}/");
-    }
-
-    public void testInsertPercentInRegexp2() throws Exception {
-        // Make sure type-through works
-        insertChar("x = /foo #{^}/", '}', "x = /foo #{}^/");
-    }
-
-    public void testInsertPercentInRegexp3() throws Exception {
-        insertChar("x = /foo #{^}/", '{', "x = /foo #{^}/");
-    }
-
-    public void testInsertPercentInRegexp4() throws Exception {
-        insertChar("x = /foo #{^a}/", '}', "x = /foo #{}^a}/");
-    }
-
-    public void testInsertPercentInRegexp5() throws Exception {
-        insertChar("x = /foo {^}/", '}', "x = /foo {}^}/");
-    }
-
-    public void testInsertPercentInRegexp6() throws Exception {
-        insertChar("x = /foo {^}/", '{', "x = /foo {{^}/");
-    }
-
     public void testReplaceSelection1() throws Exception {
         insertChar("x = foo^", 'y', "x = y^", "foo");
     }
@@ -952,10 +846,6 @@ public class BracketCompleterTest extends RubyTestBase {
         insertChar("x = foo^", '"', "x = \"foo\"^", "foo");
     }
 
-    public void testReplaceSelection3() throws Exception {
-        insertChar("x = \"foo^bar\"", '#', "x = \"#{foo}^bar\"", "foo");
-    }
-    
     public void testReplaceSelection4() throws Exception {
         insertChar("x = 'foo^bar'", '#', "x = '#^bar'", "foo");
     }
@@ -978,33 +868,6 @@ public class BracketCompleterTest extends RubyTestBase {
 
     public void testReplaceSelectionNotInTemplateMode1() throws Exception {
         insertChar("x = foo^", '"', "x = \"^\"", "foo", true);
-    }
-    
-    // Functionality works but test is broken
-    //public void testReplaceSelectionNotInTemplateMode2() throws Exception {
-    //    insertChar("x = \"foo^bar\"", '#', "x = \"#{^}bar\"", "foo", true);
-    //}
-    
-    public void testReplaceCommentSelectionBold() throws Exception {
-        insertChar("# foo^", '*', "# *foo*^", "foo");
-    }
-
-    public void testReplaceCommentSelectionTerminal() throws Exception {
-        insertChar("# foo^", '+', "# +foo+^", "foo");
-    }
-
-    public void testReplaceCommentSelectionItalic() throws Exception {
-        insertChar("# foo^", '_', "# _foo_^", "foo");
-    }
-
-    public void testReplaceCommentSelectionWords() throws Exception {
-        // No replacement if it contains multiple lines
-        insertChar("# foo bar^", '*', "# *^", "foo bar");
-    }
-
-    public void testReplaceCommentOther() throws Exception {
-        // No replacement if it's not one of the three chars
-        insertChar("# foo^", 'x', "# x^", "foo");
     }
     
     public void testdeleteWord() throws Exception {
@@ -1049,25 +912,9 @@ public class BracketCompleterTest extends RubyTestBase {
         deleteWord(before, after);
     }
     
-    public void testDeleteWord4_110998b() throws Exception {
-        String before = "" +
-"  snark(%w(a b c))\n" +
-"  snark(%W(a b c))\n" +
-"  snark^\n" +
-"  snark(%Q(a b c))\n" +
-"  snark(%w(a b c))\n";
-        String after = "" +
-"  snark(%w(a b c))\n" +
-"  snark(%W(a b c))\n" +
-"  ^\n" +
-"  snark(%Q(a b c))\n" +
-"  snark(%w(a b c))\n";
-        deleteWord(before, after);
-    }
-    
     public void testBackwardsDeletion() throws Exception {
         String s = "Foo::Bar = whatever('hello')  \n  nextline";
-        BracketCompleter bc = new BracketCompleter();
+        JsBracketCompleter bc = new JsBracketCompleter();
         for (int i = s.length(); i >= 1; i--) {
             String shortened = s.substring(0, i);
             BaseDocument doc = getDocument(shortened);
@@ -1085,128 +932,57 @@ public class BracketCompleterTest extends RubyTestBase {
         }
     }
     
-    public void test108889() throws Exception {
-        // Reproduce 108889: AIOOBE and AE during editing
-        // NOTE: While the test currently throws an exception, when the 
-        // exception is fixed the test won't actually pass; that's an expected
-        // fail I will deal with later
-        insertChar("x = %q((^))", 'a', "x = %q((a^))");
-    }
-    
-    
-    public void test110332() throws Exception {
-        String before = "args = {\n" +
-            "      :name => args[:name],\n" +
-            "      :status => :missing,\n" +
-            "      :s2_test_comments => comments, \n" +
-            "      :metric => '', \n" +
-            "      :duration => '', \n" +
-            "      :setback? => true,\n" +
-            "      :progress? => false, :compare_metric => 0, ^:compare_duration => 0}\n" +
-            "    OpenStruct.new\n" +
-                            "";
-        String after = "args = {\n" +
-            "      :name => args[:name],\n" +
-            "      :status => :missing,\n" +
-            "      :s2_test_comments => comments, \n" +
-            "      :metric => '', \n" +
-            "      :duration => '', \n" +
-            "      :setback? => true,\n" +
-            "      :progress? => false, :compare_metric => 0, \n      ^:compare_duration => 0}\n" +
-            "    OpenStruct.new\n" +
-                            "";
-        insertBreak(before, after);
-    }
-    
-    public void test110332b() throws Exception {
-        String before = "args = {\n" +
-            "      :name => args[:name],\n" +
-            "      :status => :missing,\n" +
-            "      :s2_test_comments => comments, \n" +
-            "      :metric => '', \n" +
-            "      :duration => '', \n" +
-            "      :setback? => true,\n" +
-            "      :progress? => false, :compare_metric => 0,^ :compare_duration => 0}\n" +
-            "    OpenStruct.new\n" +
-                            "";
-        String after = "args = {\n" +
-            "      :name => args[:name],\n" +
-            "      :status => :missing,\n" +
-            "      :s2_test_comments => comments, \n" +
-            "      :metric => '', \n" +
-            "      :duration => '', \n" +
-            "      :setback? => true,\n" +
-            "      :progress? => false, :compare_metric => 0,\n      ^:compare_duration => 0}\n" +
-            "    OpenStruct.new\n" +
-                            "";
-        insertBreak(before, after);
-    }
-    
     public void testLogicalRange1() throws Exception {
-        String code = "if (true)\n  fo^o\nend";
-        String next = "if (true)\n  %<%fo^o%>%\nend";
+        String code = "if (true) {\n  fo^o\n}";
+        String next = "if (true) {\n  %<%fo^o%>%\n}";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
 
     public void testLogicalRange2() throws Exception {
-        String code = "if (true)\n  %<%fo^o%>%\nend";
-        String next = "%<%if (true)\n  fo^o\nend%>%";
+        String code = "if (true) {\n  %<%fo^o%>%\n}";
+        String next = "%<%if (true) {\n  fo^o\n}%>%";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
 
     public void testLogicalRange3() throws Exception {
-        String code = "def foo\nif (true)\n  %<%fo^o%>%\nend\nend";
-        String next = "def foo\n%<%if (true)\n  fo^o\nend%>%\nend";
-        assertLogicalRange(code, true, next);
-        assertLogicalRange(next, false, code);
-    }
-
-    public void testLogicalRange4() throws Exception {
-        String code = "class Foo\ndef foo\nif (true)\n  %<%fo^o%>%\nend\nend\nend";
-        String next = "class Foo\ndef foo\n%<%if (true)\n  fo^o\nend%>%\nend\nend";
-        assertLogicalRange(code, true, next);
-        assertLogicalRange(next, false, code);
-    }
-
-    public void testLogicalRange5() throws Exception {
-        String code = "class Foo\ndef foo\n%<%if (true)\n  fo^o\nend%>%\nend\nend";
-        String next = "class Foo\n%<%def foo\nif (true)\n  fo^o\nend\nend%>%\nend";
-        assertLogicalRange(code, true, next);
-        assertLogicalRange(next, false, code);
-    }
-
-    public void testLogicalRange6() throws Exception {
-        String code = "class Foo\n%<%def fo^o\nif (true)\n  foo\nend\nend%>%\nend";
-        String next = "%<%class Foo\ndef fo^o\nif (true)\n  foo\nend\nend\nend%>%";
+        String code = "function foo() {\nif (true) {\n  %<%fo^o%>%\n}\n}";
+        String next = "function foo() {\n%<%if (true) {\n  fo^o\n}%>%\n}";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
 
     public void testLogicalRangeComment1() throws Exception {
-        String code = "foo\n  # Foo Bar\n  # Foo^y Baary\n  # Bye\ndef foo\nend\n";
-        String next = "foo\n  # Foo Bar\n  %<%# Foo^y Baary%>%\n  # Bye\ndef foo\nend\n";
+        String code = "foo\n  // Foo Bar\n  // Foo^y Baary\n  // Bye\nfunction foo() {\n}\n";
+        String next = "foo\n  // Foo Bar\n  %<%// Foo^y Baary%>%\n  // Bye\nfunction foo() {\n}\n";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
 
     public void testLogicalRangeComment2() throws Exception {
-        String code = "foo\n  # Foo Bar\n  %<%# Foo^y Baary%>%\n  # Bye\ndef foo\nend\n";
-        String next = "foo\n  %<%# Foo Bar\n  # Foo^y Baary\n  # Bye%>%\ndef foo\nend\n";
+        String code = "foo\n  // Foo Bar\n  %<%// Foo^y Baary%>%\n  // Bye\nfunction foo() {\n}\n";
+        String next = "foo\n  %<%// Foo Bar\n  // Foo^y Baary\n  // Bye%>%\nfunction foo() {\n}\n";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
 
+    public void testLogicalRangeCommentBlocks() throws Exception {
+        String code = "foo\n  /* Foo Bar\n  * Foo^y Baary\n  * Bye */\nfunction foo() {\n}\n";
+        String next = "foo\n  %<%/* Foo Bar\n  * Foo^y Baary\n  * Bye */%>%\nfunction foo() {\n}\n";
+        assertLogicalRange(code, true, next);
+        assertLogicalRange(next, false, code);
+    }
+    
     public void testLogicalRangeComment3() throws Exception {
-        String code = "foo\n  # Foo Bar\n\n  %<%# Foo^y Baary%>%\n  # Bye\ndef foo\nend\n";
-        String next = "foo\n  # Foo Bar\n\n  %<%# Foo^y Baary\n  # Bye%>%\ndef foo\nend\n";
+        String code = "foo\n  // Foo Bar\n\n  %<%// Foo^y Baary%>%\n  // Bye\nfunction foo() {\n}\n";
+        String next = "foo\n  // Foo Bar\n\n  %<%// Foo^y Baary\n  // Bye%>%\nfunction foo() {\n}\n";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
     public void testLogicalRangeComment5() throws Exception {
-        String code = "foo\n  foo # Foo Bar\n  %<%# Foo^y Baary%>%\n  # Bye\ndef foo\nend\n";
-        String next = "foo\n  foo # Foo Bar\n  %<%# Foo^y Baary\n  # Bye%>%\ndef foo\nend\n";
+        String code = "foo\n  foo // Foo Bar\n  %<%// Foo^y Baary%>%\n  // Bye\nfunction foo() {\n}\n";
+        String next = "foo\n  foo // Foo Bar\n  %<%// Foo^y Baary\n  // Bye%>%\nfunction foo() {\n}\n";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
@@ -1218,106 +994,39 @@ public class BracketCompleterTest extends RubyTestBase {
         assertLogicalRange(next, false, code);
     }
 
-    public void testLogicalRangeStrings2() throws Exception {
-        String code = "x = %q-foo b^ar baz-, y = \"whatever\"";
-        String next = "x = %<%%q-foo b^ar baz-%>%, y = \"whatever\"";
-        assertLogicalRange(code, true, next);
-        assertLogicalRange(next, false, code);
-    }
-
     public void testLogicalRangeStrings3() throws Exception {
-        String code = "def foo\nif (true)\nx = %<%'foo b^ar baz'%>%\nend\nend";
-        String next = "def foo\nif (true)\n%<%x = 'foo b^ar baz'%>%\nend\nend";
+        String code = "function foo() {\nif (true) {\nx = %<%'foo b^ar baz'%>%\n}\n}";
+        String next = "function foo() {\nif (true) {\n%<%x = 'foo b^ar baz'%>%\n}\n}";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
 
     public void testLogicalRangeStrings4() throws Exception {
-        String code = "def foo\nif (true)\n%<%x = 'foo b^ar baz'%>%\nend\nend";
-        String next = "def foo\n%<%if (true)\nx = 'foo b^ar baz'\nend%>%\nend";
+        String code = "function foo() {\nif (true) {\n%<%x = 'foo b^ar baz'%>%\n}\n}";
+        String next = "function foo() {\n%<%if (true) {\nx = 'foo b^ar baz'\n}%>%\n}";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
 
     public void testLogicalRangeStrings5() throws Exception {
-        String code = "def test\n 'return^ me'\nend";
-        String next = "def test\n %<%'return^ me'%>%\nend";
+        String code = "function test() {\n 'return^ me'\n}";
+        String next = "function test() {\n %<%'return^ me'%>%\n}";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
     }
 
-    public void testLogicalRangeStrings6() throws Exception {
-        String code = "def test\n %<%'return^ me'%>%\nend";
-        String next = "%<%def test\n 'return^ me'\nend%>%";
-        assertLogicalRange(code, true, next);
-        assertLogicalRange(next, false, code);
-    }
+    // THIS IS BROKEN - THERE IS AN EXTRA BLOCK IN THERE WITH BAD OFFSETS!
+    //public void testLogicalRangeStrings6() throws Exception {
+    //    String code = "function test() {\n %<%'return^ me'%>%\n}";
+    //    String next = "%<%function test() {\n 'return^ me'\n}%>%";
+    //    assertLogicalRange(code, true, next);
+    //    assertLogicalRange(next, false, code);
+    //}
 
     public void testLogicalRangeRegexps1() throws Exception {
         String code = "x = /foo b^ar baz/, y = \"whatever\"";
-        // Uhm - is it good that we're selecting the -inside- of the regexp?
-        String next = "x = /%<%foo b^ar baz%>%/, y = \"whatever\"";
+        String next = "x = %<%/foo b^ar baz/%>%, y = \"whatever\"";
         assertLogicalRange(code, true, next);
         assertLogicalRange(next, false, code);
-    }
-    
-    public void testPipes1() throws Exception {
-        insertChar("5.each { ^", '|', "5.each { |^|");
-    }
-
-    public void testPipes2() throws Exception {
-        insertChar("5.each { ^}", '|', "5.each { |^|}");
-    }
-    
-    public void testPipes3() throws Exception {
-        insertChar("5.each { |^|}", '|', "5.each { ||^}");
-    }
-    
-    public void testPipes4() throws Exception {
-        insertChar("5.each { |foo^|}", '|', "5.each { |foo|^}");
-    }
-
-    public void testNegativePipes1() throws Exception {
-        insertChar("'^'", '|', "'|^'");
-    }
-
-    public void testNegativePipes2() throws Exception {
-        insertChar("/^/", '|', "/|^/");
-    }
-
-    public void testNegativePipes3() throws Exception {
-        insertChar("#^", '|', "#|^");
-    }
-
-    public void testNegativePipes4() throws Exception {
-        insertChar("\"^\"", '|', "\"|^\"");
-    }
-
-    public void testNegativePipes5() throws Exception {
-        insertChar("5.each { |f^oo|}", '|', "5.each { |f|^oo|}");
-    }
-
-    public void testNegativePipes6() throws Exception {
-        insertChar("5.each { |^|foo|}", '|', "5.each { ||^foo|}");
-    }
-
-    public void testNegativePipes7() throws Exception {
-        insertChar("x = true ^", '|', "x = true |^");
-    }
-
-    public void testNegativePipes8() throws Exception {
-        insertChar("x = true |^", '|', "x = true ||^");
-    }
-
-    public void testBackspacePipes() throws Exception {
-        deleteChar("x=|^|", "x=^");
-    }
-
-    public void testBackspacePipes2() throws Exception {
-        deleteChar("x=|^x", "x=^x");
-    }
-    
-    public void testBackspacePipes3() throws Exception {
-        deleteChar("x=|^", "x=^");
     }
 }
