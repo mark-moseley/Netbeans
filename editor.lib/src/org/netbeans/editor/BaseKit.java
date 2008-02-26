@@ -1025,7 +1025,7 @@ public class BaseKit extends DefaultEditorKit {
                             try {
                                 boolean doInsert = true; // editorUI.getAbbrev().checkAndExpand(ch, evt);
                                 if (doInsert) {
-                                    if (caret.isSelectionVisible()) { // valid selection
+                                    if (Utilities.isSelectionShowing(caret)) { // valid selection
                                         boolean ovr = (overwriteMode != null && overwriteMode.booleanValue());
                                         try {
                                             doc.putProperty(DOC_REPLACE_SELECTION_PROPERTY, true);
@@ -1186,7 +1186,6 @@ public class BaseKit extends DefaultEditorKit {
 
                 BaseDocument doc = (BaseDocument)target.getDocument();
                 Caret caret = target.getCaret();
-                int dotPos = caret.getDot();
 
                 Formatter formatter = doc.getFormatter();
                 formatter.indentLock();
@@ -1194,9 +1193,9 @@ public class BaseKit extends DefaultEditorKit {
                 DocumentUtilities.setTypingModification(doc, true);
                 try{
                     target.replaceSelection("");
-                    int newDotPos = dotPos; 		  // dot stays where it was
+                    final int dotPos = caret.getDot();      // dot stays where it was
                     formatter.indentNewLine(doc, dotPos);   // newline
-                    caret.setDot(newDotPos);
+                    caret.setDot(dotPos);
                 } finally {
                     DocumentUtilities.setTypingModification(doc, false);
                     doc.atomicUnlock();
@@ -1228,7 +1227,7 @@ public class BaseKit extends DefaultEditorKit {
                 doc.atomicLock();
                 DocumentUtilities.setTypingModification(doc, true);
                 try {
-                if (caret.isSelectionVisible()) { // block selected
+                if (Utilities.isSelectionShowing(caret)) { // block selected
                     try {
                         doc.getFormatter().changeBlockIndent(doc,
                                 target.getSelectionStart(), target.getSelectionEnd(), +1);
@@ -1908,7 +1907,7 @@ public class BaseKit extends DefaultEditorKit {
                 Caret caret = target.getCaret();
                 try {
                     int pos;
-                    if (!select && caret.isSelectionVisible())
+                    if (!select && Utilities.isSelectionShowing(caret))
                     {
                         pos = target.getSelectionEnd(); 
                         if (pos != caret.getDot()) {
@@ -2052,7 +2051,7 @@ public class BaseKit extends DefaultEditorKit {
                 Caret caret = target.getCaret();
                 try {
                     int pos;
-                    if (!select && caret.isSelectionVisible())
+                    if (!select && Utilities.isSelectionShowing(caret))
                     {
                         pos = target.getSelectionStart(); 
                         if (pos != caret.getDot()) {
