@@ -45,22 +45,27 @@ import java.awt.Image;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.Writer;
+import javax.swing.SwingUtilities;
 import org.netbeans.api.xml.cookies.CheckXMLCookie;
 import org.netbeans.api.xml.cookies.ValidateXMLCookie;
 import org.netbeans.core.spi.multiview.MultiViewElement;
 import org.netbeans.modules.hibernate.cfg.model.HibernateConfiguration;
 import org.netbeans.modules.hibernate.cfg.model.Security;
 import org.netbeans.modules.hibernate.cfg.model.SessionFactory;
+import org.netbeans.modules.hibernate.loaders.HbXmlMultiViewEditorSupport;
 import org.netbeans.modules.schema2beans.BaseBean;
 import org.netbeans.modules.schema2beans.Schema2BeansException;
 import org.netbeans.modules.xml.multiview.DesignMultiViewDesc;
 import org.netbeans.modules.xml.multiview.ToolBarMultiViewElement;
 import org.netbeans.modules.xml.multiview.XmlMultiViewDataObject;
 import org.netbeans.modules.xml.multiview.XmlMultiViewDataSynchronizer;
+import org.netbeans.modules.xml.multiview.XmlMultiViewEditorSupport;
 import org.netbeans.spi.xml.cookies.CheckXMLSupport;
 import org.netbeans.spi.xml.cookies.DataObjectAdapters;
 import org.netbeans.spi.xml.cookies.ValidateXMLSupport;
+import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
+import org.openide.NotifyDescriptor;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
@@ -70,7 +75,6 @@ import org.openide.nodes.Node;
 import org.openide.text.DataEditorSupport;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
-import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -92,6 +96,10 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
 
     public HibernateCfgDataObject(FileObject pf, HibernateCfgDataLoader loader) throws DataObjectExistsException, IOException {
         super(pf, loader);
+        
+        // Make sure to reset the MIME type here. See bug 127051
+        
+        getEditorSupport().setMIMEType(HibernateCfgDataLoader.REQUIRED_MIME);
 
         // Synchronize between the vew and XML file
         modelSynchronizer = new ModelSynchronizer(this);
@@ -115,7 +123,7 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
             try {
                 configuration = getHibernateConfiguration();
             } catch (RuntimeException ex) { // must catch RTE (thrown by schema2beans when document is not valid)
-                ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+                //ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
                 return false;
             }
         } else {
@@ -125,14 +133,14 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
                 try {
                     newConfiguration = HibernateConfiguration.createGraph(is);
                 } catch (RuntimeException ex) { // must catch RTE (thrown by schema2beans when document is not valid)
-                    ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+                    //ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
                     return false;
                 }
                 if (newConfiguration != null) {
                     try {
                         configuration.merge(newConfiguration, BaseBean.MERGE_UPDATE);
                     } catch (IllegalArgumentException iae) {
-                        ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, iae);
+                        //ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, iae);
                         return false;
                     }
                 }
@@ -142,6 +150,42 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
             }
         }
         return true;
+    }
+    
+        /**
+     * Checks whether the preferred view can be displayed and switches to the
+     * xml view and displays an appropriate warning if not. In case that
+     * the preferred view is the design view, it
+     * can be displayed if <ol><li>document is valid (parseable) and</li>
+     *<li>the target server is attached></li></ol>.
+     *@return true if the preferred view can be displayed, false otherwise.
+     */
+    public boolean viewCanBeDisplayed() {
+        
+        boolean switchView = false;
+        NotifyDescriptor nd = null;
+        
+        if (!parseDocument() && getSelectedPerspective().preferredID().startsWith(DESIGN_VIEW_ID)) {
+            nd = new org.openide.NotifyDescriptor.Message(
+                    NbBundle.getMessage(HibernateCfgDataObject.class, "TXT_DocumentUnparsable",
+                    getPrimaryFile().getNameExt()), NotifyDescriptor.WARNING_MESSAGE);
+            switchView = true;
+            
+        } 
+        
+        if (switchView){
+            DialogDisplayer.getDefault().notify(nd);
+            // postpone the "Switch to XML View" action to the end of event dispatching thread
+            // this enables to finish the current action first (e.g. painting particular view)
+            // see the issue 67580
+            SwingUtilities.invokeLater(new Runnable(){
+                public void run() {
+                    goToXmlView();
+                }
+            });
+        }
+        return !switchView;
+
     }
 
     /**
@@ -187,7 +231,19 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
             }
         }
     }
-
+    /**
+     * Override this method to workaround issue 
+     * http://www.netbeans.org/issues/show_bug.cgi?id=128211
+     */
+    @Override
+    protected synchronized XmlMultiViewEditorSupport getEditorSupport() {
+        if(editorSupport == null) {
+            editorSupport = new HbXmlMultiViewEditorSupport(this);
+            editorSupport.getMultiViewDescriptions();
+        }
+        return editorSupport;
+    }
+    
     @Override
     protected Node createNodeDelegate() {
         return new HibernateCfgDataNode(this);
@@ -219,7 +275,7 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
 
     @Override
     protected Image getXmlViewIcon() {
-        return Utilities.loadImage("org/netbeans/modules/hibernate/resources/hibernateCfg.gif");
+        return Utilities.loadImage("org/netbeans/modules/hibernate/resources/hibernate-configuration.png");
     }
 
     /** 
@@ -273,7 +329,7 @@ public class HibernateCfgDataObject extends XmlMultiViewDataObject {
         }
 
         public Image getIcon() {
-            return Utilities.loadImage("org/netbeans/modules/hibernate/resources/hibernateCfg.gif");
+            return Utilities.loadImage("org/netbeans/modules/hibernate/resources/hibernate-configuration.png");
         }
 
         public String preferredID() {
