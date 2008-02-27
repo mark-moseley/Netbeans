@@ -89,9 +89,9 @@ public final class CodeTemplateInsertHandler
 implements DocumentListener, KeyListener {
     
     /**
-     * Property preventing nested template expanding.
+     * Property used while nested template expanding.
      */
-    private static final Object EDITING_TEMPLATE_DOC_PROPERTY = "processing-code-template"; // NOI18N
+    private static final Object CT_HANDLER_DOC_PROPERTY = "code-template-insert-handler"; // NOI18N
     
     private final CodeTemplate codeTemplate;
     
@@ -121,6 +121,8 @@ implements DocumentListener, KeyListener {
     
     private boolean released;
     
+    private boolean suspended;
+    
     private Position caretPosition;
     
     private boolean completionInvoke;
@@ -136,13 +138,10 @@ implements DocumentListener, KeyListener {
     private MutablePositionRegion positionRegion;
     
     /**
-     * Whether an expanding of a template was requested
-     * when still editing parameters of an outer template.
-     * <br>
-     * It is only permitted to expand the nested abbreviation
-     * without editing of the parameters.
+     * When expanding of a template was requested when still editing parameters
+     * of an outer template remember the outer template's handler
      */
-    private boolean nestedTemplateExpanding;
+    private CodeTemplateInsertHandler outerHandler;
     
     /**
      * Parameter implementation for which the value is being explicitly
@@ -278,7 +277,7 @@ implements DocumentListener, KeyListener {
     }
     
     CodeTemplateParameter getActiveMaster() {
-        return (activeMasterIndex < editableMasters.size())
+        return (!suspended && activeMasterIndex < editableMasters.size())
             ? editableMasters.get(activeMasterIndex)
             : null;
     }
@@ -290,8 +289,8 @@ implements DocumentListener, KeyListener {
     
     public void insertTemplate() {
         doc = component.getDocument();
-        nestedTemplateExpanding = (Boolean.TRUE.equals(doc.getProperty(
-                EDITING_TEMPLATE_DOC_PROPERTY)));
+        outerHandler = (CodeTemplateInsertHandler)doc.getProperty(CT_HANDLER_DOC_PROPERTY);
+        doc.putProperty(CT_HANDLER_DOC_PROPERTY, this);
         
         String completeInsertString = getInsertText();
 
@@ -310,7 +309,7 @@ implements DocumentListener, KeyListener {
         try {
             // First check if there is a caret selection and if so remove it
             Caret caret = component.getCaret();
-            if (caret.isSelectionVisible()) {
+            if (Utilities.isSelectionShowing(caret)) {
                 int removeOffset = component.getSelectionStart();
                 int removeLength = component.getSelectionEnd() - removeOffset;
                 doc.remove(removeOffset, removeLength);
@@ -370,9 +369,10 @@ implements DocumentListener, KeyListener {
     }
     
     public void installActions() {
-        if (!nestedTemplateExpanding && editableMasters.size() > 0) {
-            doc.putProperty(EDITING_TEMPLATE_DOC_PROPERTY, Boolean.TRUE);
-
+        if (editableMasters.size() > 0) {
+            if (outerHandler != null)
+                outerHandler.suspended = true;
+            
             // Install the post modification document listener to sync regions
             if (doc instanceof BaseDocument) {
                 ((BaseDocument)doc).setPostModificationDocumentListener(this);
@@ -443,7 +443,7 @@ implements DocumentListener, KeyListener {
         checkNotifyParameterUpdate();
 
         activeMasterIndex++;
-        if (activeMasterIndex == editableMasters.size()) { 
+        if (activeMasterIndex >= editableMasters.size()) { 
             forceCaretPosition();
             release();
             if (completionInvoke) {
@@ -467,11 +467,11 @@ implements DocumentListener, KeyListener {
     }
     
     public String getDocParameterValue(CodeTemplateParameterImpl paramImpl) {
-        MutablePositionRegion positionRegion = paramImpl.getPositionRegion();
-        int offset = positionRegion.getStartOffset();
+        MutablePositionRegion preg = paramImpl.getPositionRegion();
+        int offset = preg.getStartOffset();
         String parameterText;
         try {
-            parameterText = doc.getText(offset, positionRegion.getEndOffset() - offset);
+            parameterText = doc.getText(offset, preg.getEndOffset() - offset);
         } catch (BadLocationException e) {
             ErrorManager.getDefault().notify(e);
             parameterText = ""; //NOI18N
@@ -534,6 +534,8 @@ implements DocumentListener, KeyListener {
     }
     
     public void keyPressed(KeyEvent e) {
+        if (suspended)
+            return;
         if (KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0).equals(KeyStroke.getKeyStrokeForEvent(e))) {
             release();
             e.consume();
@@ -613,10 +615,12 @@ implements DocumentListener, KeyListener {
     
     private void tabUpdate() {
         updateLastRegionBounds();
-        SyncDocumentRegion active = getActiveMasterImpl().getRegion();
-        component.select(active.getFirstRegionStartOffset(),
-                active.getFirstRegionEndOffset());
-        
+        CodeTemplateParameterImpl activeMasterImpl = getActiveMasterImpl();
+        if (activeMasterImpl != null) {
+            SyncDocumentRegion active = activeMasterImpl.getRegion();
+            component.select(active.getFirstRegionStartOffset(),
+                    active.getFirstRegionEndOffset());
+        }
         // Repaint the selected blocks according to the current master
         requestRepaint();
     }
@@ -631,9 +635,9 @@ implements DocumentListener, KeyListener {
             endOffset = Math.max(endOffset, region.getSortedRegion(
                     region.getRegionCount() - 1).getEndOffset());
         }
-        JTextComponent component = getComponent();
+        JTextComponent c = getComponent();
         if (endOffset != 0) {
-            component.getUI().damageRange(component, startOffset, endOffset);
+            c.getUI().damageRange(c, startOffset, endOffset);
         }
     }
 
@@ -645,30 +649,46 @@ implements DocumentListener, KeyListener {
             this.released = true;
         }
 
-        if (!nestedTemplateExpanding && editableMasters.size() > 0) {
+        if (editableMasters.size() > 0) {
             if (doc instanceof BaseDocument) {
                 ((BaseDocument)doc).setPostModificationDocumentListener(null);
             }
-            doc.putProperty(EDITING_TEMPLATE_DOC_PROPERTY, Boolean.FALSE);
 
             component.removeKeyListener(this);
 
             // Restore original action map
-            JTextComponent component = getComponent();
-            component.setActionMap(componentOrigActionMap);
+            JTextComponent c = getComponent();
+            c.setActionMap(componentOrigActionMap);
 
             // Free the draw layers
-            EditorUI editorUI = Utilities.getEditorUI(component);
+            EditorUI editorUI = Utilities.getEditorUI(c);
             if (editorUI != null) {
                 for (DrawLayer drawLayer : drawLayers) {
                     editorUI.removeLayer(drawLayer.getName());
                 }
             }
-            component.putClientProperty(DrawLayer.TEXT_FRAME_START_POSITION_COMPONENT_PROPERTY, null);
-            component.putClientProperty(DrawLayer.TEXT_FRAME_END_POSITION_COMPONENT_PROPERTY, null);
+            c.putClientProperty(DrawLayer.TEXT_FRAME_START_POSITION_COMPONENT_PROPERTY, null);
+            c.putClientProperty(DrawLayer.TEXT_FRAME_END_POSITION_COMPONENT_PROPERTY, null);
 
+            if (outerHandler != null) {
+                outerHandler.suspended = false;
+                if (doc instanceof BaseDocument)
+                    ((BaseDocument)doc).setPostModificationDocumentListener(outerHandler);
+                CodeTemplateParameterImpl activeMasterImpl = outerHandler.getActiveMasterImpl();
+                doc.putProperty("abbrev-ignore-modification", Boolean.TRUE); // NOI18N
+                try {
+                    activeMasterImpl.getRegion().sync(0);
+                } finally {
+                    doc.putProperty("abbrev-ignore-modification", Boolean.FALSE); // NOI18N
+                }
+                activeMasterImpl.setValue(outerHandler.getDocParameterValue(activeMasterImpl), false);
+                activeMasterImpl.markUserModified();
+                outerHandler.notifyParameterUpdate(activeMasterImpl.getParameter(), true);
+                outerHandler.updateLastRegionBounds();
+            }
             requestRepaint();
         }
+        doc.putProperty(CT_HANDLER_DOC_PROPERTY, outerHandler);
 
         // Notify processors
         for (CodeTemplateProcessor processor : processors) {
