@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,6 +44,7 @@ package org.netbeans.modules.ruby.railsprojects.ui.wizards;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import javax.swing.JPanel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -55,6 +56,7 @@ import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.WizardDescriptor;
 import org.openide.WizardValidationException;
+import org.openide.awt.Mnemonics;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
@@ -99,7 +101,7 @@ public class RailsInstallationPanel extends JPanel {
     private void updateLabel() {
         if (gemManager().isValidRails(false)) {
             descLabel.setText(NbBundle.getMessage(RailsInstallationPanel.class, "RailsOk"));
-            railsButton.setText(NbBundle.getMessage(RailsInstallationPanel.class, "UpdateRails"));
+            Mnemonics.setLocalizedText(railsButton, org.openide.util.NbBundle.getMessage(RailsInstallationPanel.class, "UpdateRails")); // NOI18N
             String version = gemManager().getVersion("rails"); // NOI18N
             if (version == null) {
                 version = "?";
@@ -107,11 +109,11 @@ public class RailsInstallationPanel extends JPanel {
             installedLabel.setText(NbBundle.getMessage(RailsInstallationPanel.class, "RailsVersion", version));
         } else if (!platform().isValidRuby(false)) {
             descLabel.setText(NbBundle.getMessage(RailsInstallationPanel.class, "NoRuby"));
-            railsButton.setText(NbBundle.getMessage(RailsInstallationPanel.class, "InstallRails"));
+            Mnemonics.setLocalizedText(railsButton, org.openide.util.NbBundle.getMessage(RailsInstallationPanel.class, "InstallRails")); // NOI18N
             installedLabel.setText("");
         } else {
             descLabel.setText(NbBundle.getMessage(RailsInstallationPanel.class, "NoRails"));
-            railsButton.setText(NbBundle.getMessage(RailsInstallationPanel.class, "InstallRails"));
+            Mnemonics.setLocalizedText(railsButton, org.openide.util.NbBundle.getMessage(RailsInstallationPanel.class, "InstallRails")); // NOI18N
             installedLabel.setText("");
         }
     }
@@ -201,7 +203,7 @@ public class RailsInstallationPanel extends JPanel {
                         .add(railsButton)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(installedLabel))
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, jSeparator1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 377, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, jSeparator1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 569, Short.MAX_VALUE)
                     .add(jrubyLabel)
                     .add(proxyButton)
                     .add(jrubySslLabel)
@@ -314,7 +316,7 @@ public class RailsInstallationPanel extends JPanel {
 
     static class Panel implements WizardDescriptor.ValidatingPanel {
 
-        private ArrayList listeners;        
+        private ArrayList<ChangeListener> listeners;        
         private RailsInstallationPanel component;
         private WizardDescriptor settings;
 
@@ -327,7 +329,7 @@ public class RailsInstallationPanel extends JPanel {
 
         public void addChangeListener(ChangeListener l) {
             if (this.listeners == null) {
-                this.listeners = new ArrayList ();
+                this.listeners = new ArrayList<ChangeListener>();
             }
             this.listeners.add (l);
         }
