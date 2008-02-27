@@ -59,17 +59,14 @@ import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
 /**
- * Provides WebFrameworkProvider implementation for Spring Framework
+ * Provides WebFrameworkProvider implementation for Spring Web MVC.
  *
  * @author Craig MacKay
  */
 public class SpringWebFrameworkProvider extends WebFrameworkProvider {
 
-    public static final String SPRING_LIB_NAME = "spring-framework-2.5"; // NOI18N
     public static final String CONTEXT_LOADER = "org.springframework.web.context.ContextLoaderListener"; // NOI18N
     public static final String DISPATCHER_SERVLET = "org.springframework.web.servlet.DispatcherServlet"; // NOI18N
-    public static final String ENCODING = "UTF-8"; // NOI18N
-
     private SpringWebModuleExtender panel;
 
     public SpringWebFrameworkProvider() {
@@ -90,25 +87,14 @@ public class SpringWebFrameworkProvider extends WebFrameworkProvider {
 
     @Override
     public File[] getConfigurationFiles(WebModule webModule) {
-        FileObject webInf = webModule.getWebInf();
-        List<File> files = new ArrayList<File>();
-        if (webModule.getDeploymentDescriptor() != null) {
-            FileObject file = webInf.getFileObject("applicationContext.xml"); // NOI18N
-            if (file != null) {
-                files.add(FileUtil.toFile(file));
-            }
-            file = webInf.getFileObject("dispatcher-servlet.xml"); // NOI18N
-            if (file != null) {
-                files.add(FileUtil.toFile(file));
-            }
-        }
-        return files.toArray(new java.io.File[0]);
+        // Don't add configuration files to the Configuration Files node.       
+        return null;
     }
     
     @Override
     public WebModuleExtender createWebModuleExtender(WebModule webModule, ExtenderController controller) {
         boolean defaultValue = (webModule == null || !isInWebModule(webModule));
-        panel = new SpringWebModuleExtender(this, controller, !defaultValue);
+        panel = new SpringWebModuleExtender(this, controller, !defaultValue); // NOI18N
         // may need to use panel for setting an extended configuration
         return panel;
     }  
