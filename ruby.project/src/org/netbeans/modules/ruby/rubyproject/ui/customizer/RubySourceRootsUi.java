@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -70,6 +70,7 @@ import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.modules.ruby.rubyproject.SourceRoots;
 import org.openide.DialogDisplayer;
 import org.openide.DialogDescriptor;
+import org.openide.awt.Mnemonics;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
@@ -461,11 +462,11 @@ out:        for( int i = 0; i < files.length; i++ ) {
             super (data,new Object[]{"location","label"});//NOI18N
         }
 
-        public boolean isCellEditable(int row, int column) {
+        public @Override boolean isCellEditable(int row, int column) {
             return column == 1;
         }
 
-        public Class getColumnClass(int columnIndex) {
+        public @Override Class getColumnClass(int columnIndex) {
             switch (columnIndex) {
                 case 0:
                     return File.class;
@@ -485,7 +486,7 @@ out:        for( int i = 0; i < files.length; i++ ) {
             this.projectFolder = projectFolder;
         }
         
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,int row, int column) {
+        public @Override Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,int row, int column) {
             String displayName;
             if (value instanceof File) {
                 File root = (File) value;
@@ -517,10 +518,9 @@ out:        for( int i = 0; i < files.length; i++ ) {
         }
 
         private void initGui (Set invalidRoots) {
-            setLayout( new GridBagLayout ());                        
-            JLabel label = new JLabel ();
-            label.setText (NbBundle.getMessage(RubySourceRootsUi.class,"LBL_InvalidRoot"));
-            label.setDisplayedMnemonic(NbBundle.getMessage(RubySourceRootsUi.class,"MNE_InvalidRoot").charAt(0));            
+            setLayout(new GridBagLayout());
+            JLabel label = new JLabel();
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage(RubySourceRootsUi.class, "LBL_InvalidRoot"));
             GridBagConstraints c = new GridBagConstraints();
             c.gridx = GridBagConstraints.RELATIVE;
             c.gridy = GridBagConstraints.RELATIVE;
@@ -568,7 +568,7 @@ out:        for( int i = 0; i < files.length; i++ ) {
                 this.projectConflict = projectConflict;
             }
 
-            public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            public @Override Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 File f = (File) value;
                 String message = f.getAbsolutePath();
                 if (projectConflict) {
