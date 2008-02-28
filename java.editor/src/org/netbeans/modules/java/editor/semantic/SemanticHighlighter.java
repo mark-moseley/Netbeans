@@ -74,6 +74,7 @@ import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.VariableTree;
+import com.sun.source.tree.WildcardTree;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
@@ -678,8 +679,14 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
         public Void visitTypeCast(TypeCastTree tree, EnumSet<UseTypes> d) {
             Tree expr = tree.getExpression();
             
-            if (expr instanceof IdentifierTree) {
+            if (expr.getKind() == Kind.IDENTIFIER) {
                 handlePossibleIdentifier(new TreePath(getCurrentPath(), expr), EnumSet.of(UseTypes.READ));
+            }
+            
+            Tree cast = tree.getType();
+            
+            if (cast.getKind() == Kind.IDENTIFIER) {
+                handlePossibleIdentifier(new TreePath(getCurrentPath(), cast), EnumSet.of(UseTypes.READ));
             }
             
             super.visitTypeCast(tree, d);
@@ -965,11 +972,13 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
                     MemberSelectTree qualIdent = (MemberSelectTree) tree.getQualifiedIdentifier();
                     Element decl = info.getTrees().getElement(new TreePath(new TreePath(getCurrentPath(), qualIdent), qualIdent.getExpression()));
 
-                    if (decl != null && decl.asType().getKind() != TypeKind.ERROR) { //unresolvable imports should not be marked as unused
+                    if (   decl != null
+                        && decl.asType().getKind() != TypeKind.ERROR //unresolvable imports should not be marked as unused
+                        && (decl.getKind().isClass() || decl.getKind().isInterface())) {
                         Name simpleName = isStar(tree) ? null : qualIdent.getIdentifier();
                         boolean assign = false;
 
-                        for (Element e : decl.getEnclosedElements()) {
+                        for (Element e : info.getElements().getAllMembers((TypeElement) decl)) {
                             if (simpleName != null && !e.getSimpleName().equals(simpleName)) {
                                 continue;
                             }
@@ -1296,6 +1305,14 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             }
             
             return super.visitForLoop(node, p);
+        }
+
+        @Override
+        public Void visitWildcard(WildcardTree node, EnumSet<UseTypes> p) {
+            if (node.getBound() != null && node.getBound().getKind() == Kind.IDENTIFIER) {
+                handlePossibleIdentifier(new TreePath(getCurrentPath(), node.getBound()), EnumSet.of(UseTypes.CLASS_USE));
+            }
+            return super.visitWildcard(node, p);
         }
         
         private void typeUsed(Element decl, TreePath expr) {
