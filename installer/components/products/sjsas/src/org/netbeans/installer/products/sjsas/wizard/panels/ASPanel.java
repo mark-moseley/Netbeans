@@ -172,6 +172,8 @@ public class ASPanel extends DestinationPanel {
         
         setProperty(WARNING_PORT_IN_USE_PROPERTY,
                 DEFAULT_WARNING_PORT_IN_USE);
+        setProperty(WARNING_ASADMIN_FILES_EXIST_PROPERTY,
+                DEFAULT_WARNING_ASADMIN_FILES_EXIST);
         
         setProperty(DEFAULT_USERNAME_PROPERTY,
                 DEFAULT_DEFAULT_USERNAME);
@@ -227,6 +229,16 @@ public class ASPanel extends DestinationPanel {
         }
         
         jdkLocationPanel.initialize();
+
+        //This makes it possible to perform silent installation with emptry state files 
+        //that means that JDK_LOCATION_PROPERTY property is explicitely set to the first location
+        //that fits the requirements
+        //TODO: Investigate the prons&cons and side affects of moving
+        //this code to the end of JdkLocationPanel.initialize() method        
+        File jdkLocation = jdkLocationPanel.getSelectedLocation();        
+        if(jdkLocation!=null && !jdkLocation.getPath().equals(StringUtils.EMPTY_STRING)) {
+            jdkLocationPanel.setLocation(jdkLocation);
+        }
     }
     
     public JdkLocationPanel getJdkLocationPanel() {
@@ -321,18 +333,28 @@ public class ASPanel extends DestinationPanel {
                 statusLabel.clearText();
                 statusLabel.setVisible(false);
             }
+
+            final List<File> jdkLocations = jdkLocationPanel.getLocations();                        
+            final List<String> jdkLabels = jdkLocationPanel.getLabels();
             
             final LocationsComboBoxModel model = new LocationsComboBoxModel(
-                    jdkLocationPanel.getLocations(),
-                    jdkLocationPanel.getLabels());
+                    jdkLocations,
+                    jdkLabels);
             
             ((LocationsComboBoxEditor) jdkLocationComboBox.getEditor()).setModel(
                     model);
             jdkLocationComboBox.setModel(
                     model);
             
-            model.setSelectedItem(
-                    jdkLocationPanel.getSelectedLocation().toString());
+            final File selectedLocation = jdkLocationPanel.getSelectedLocation();
+            final int index = jdkLocations.indexOf(selectedLocation);
+            String selectedItem;
+            if(index != -1) {
+                  selectedItem = jdkLabels.get(index);  
+            } else {
+                  selectedItem = selectedLocation.toString();
+            }  
+            model.setSelectedItem(selectedItem);                                                       
             
             browseButton.setText(
                     panel.getProperty(BROWSE_BUTTON_TEXT_PROPERTY));
@@ -610,9 +632,11 @@ public class ASPanel extends DestinationPanel {
         
         @Override
         protected String getWarningMessage() {
+            // check whether the selected ports are already in use by any other
+            // installed application server (SJSAS or GlassFish)
             final RegistryFilter filter = new OrFilter(
                     new ProductFilter("glassfish", SystemUtils.getCurrentPlatform()),
-                    new ProductFilter("sjsam", SystemUtils.getCurrentPlatform()));
+                    new ProductFilter("sjsas", SystemUtils.getCurrentPlatform()));
             final List<Product> products =
                     Registry.getInstance().queryProducts(filter);
             
@@ -664,6 +688,18 @@ public class ASPanel extends DestinationPanel {
                 ErrorManager.notifyDebug("Failed to get the port value.", e);
             }
             
+            // check whether the .asadminpass and .asadmintruststore file exist 
+            // in the user's home directory
+            final File asadminpass = new File(
+                    SystemUtils.getUserHomeDirectory(), 
+                    ".asadminpass");;
+            final File asadmintruststore = new File(
+                    SystemUtils.getUserHomeDirectory(), 
+                    ".asadmintruststore");
+            if (asadminpass.exists() || asadmintruststore.exists()) {
+                return panel.getProperty(WARNING_ASADMIN_FILES_EXIST_PROPERTY);
+            }
+
             return null;
         }
         
@@ -681,7 +717,7 @@ public class ASPanel extends DestinationPanel {
                 }
                 
                 public void removeUpdate(DocumentEvent e) {
-                    updateErrorMessage();
+                    //updateErrorMessage();
                 }
                 
                 public void changedUpdate(DocumentEvent e) {
@@ -1181,6 +1217,8 @@ public class ASPanel extends DestinationPanel {
     
     public static final String WARNING_PORT_IN_USE_PROPERTY =
             "warning.port.in.use"; // NOI18N
+    public static final String WARNING_ASADMIN_FILES_EXIST_PROPERTY =
+            "warning.asadmin.files.exist"; // NOI18N
     
     public static final String DEFAULT_ERROR_USERNAME_NULL =
             ResourceUtils.getString(ASPanel.class,
@@ -1252,6 +1290,9 @@ public class ASPanel extends DestinationPanel {
     public static final String DEFAULT_WARNING_PORT_IN_USE =
             ResourceUtils.getString(ASPanel.class,
             "AS.warning.port.in.use"); // NOI18N
+    public static final String DEFAULT_WARNING_ASADMIN_FILES_EXIST = 
+            ResourceUtils.getString(ASPanel.class,
+            "AS.warning.asadmin.files.exist"); // NOI18N
     
     public static final String DEFAULT_MINIMUM_JDK_VERSION =
             ResourceUtils.getString(ASPanel.class,
