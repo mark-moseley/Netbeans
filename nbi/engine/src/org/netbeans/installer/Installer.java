@@ -303,7 +303,13 @@ public class Installer implements FinishHandler {
                 final String key = keys.nextElement();
                 final String value = bundle.getString(key);
                 LogManager.log("loading " + key + " => " + value); // NOI18N
-                System.setProperty(key,value);
+		final String currentValue = System.getProperty(key);
+		if(currentValue!=null) {
+                    LogManager.log("... already defined, using existing value: " + currentValue); // NOI18N
+                } else {
+                    System.setProperty(key,value);
+                }
+                
             }
         } catch (MissingResourceException e) {
             LogManager.log("... no engine properties file, skip loading engine properties");
@@ -747,6 +753,17 @@ public class Installer implements FinishHandler {
                 LogManager.unindent();
                 continue;
             }
+            if (arguments[i].equalsIgnoreCase(NO_SPACE_CHECK_ARG)) {
+                LogManager.logIndent(StringUtils.format(
+                        PARSING_ARGUMENT_STRING, NO_SPACE_CHECK_ARG)); // NOI18N
+                
+                System.setProperty(
+                        SystemUtils.NO_SPACE_CHECK_PROPERTY,
+                        UNARY_ARG_VALUE);
+                
+                LogManager.unindent();
+                continue;
+            }
         }
         if (arguments.length == 0) {
             LogManager.log(
@@ -1094,6 +1111,9 @@ public class Installer implements FinishHandler {
     
     public static final String BUNDLE_PROPERTIES_ARG =
             "--bundle-properties"; // NOI18N
+
+    public static final String NO_SPACE_CHECK_ARG =
+            "--nospacecheck"; // NOI18N
     
     public static final String UNARY_ARG_VALUE =
             "true"; // NOI18N
