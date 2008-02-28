@@ -82,7 +82,6 @@ import org.netbeans.installer.wizard.components.panels.JdkLocationPanel;
 import org.netbeans.installer.wizard.containers.SwingContainer;
 import static java.lang.Integer.parseInt;
 import org.netbeans.installer.utils.helper.swing.NbiDirectoryChooser;
-import org.netbeans.installer.utils.helper.swing.NbiFileChooser;
 
 /**
  *
@@ -229,6 +228,16 @@ public class GlassFishPanel extends DestinationPanel {
         }
         
         jdkLocationPanel.initialize();
+
+        //This makes it possible to perform silent installation with emptry state files 
+        //that means that JDK_LOCATION_PROPERTY property is explicitely set to the first location
+        //that fits the requirements
+        //TODO: Investigate the prons&cons and side affects of moving
+        //this code to the end of JdkLocationPanel.initialize() method        
+        File jdkLocation = jdkLocationPanel.getSelectedLocation();        
+        if(jdkLocation!=null && !jdkLocation.getPath().equals(StringUtils.EMPTY_STRING)) {
+            jdkLocationPanel.setLocation(jdkLocation);
+        }
     }
     
     public JdkLocationPanel getJdkLocationPanel() {
@@ -1206,7 +1215,7 @@ public class GlassFishPanel extends DestinationPanel {
     public static final String WARNING_PORT_IN_USE_PROPERTY =
             "warning.port.in.use"; // NOI18N
     public static final String WARNING_ASADMIN_FILES_EXIST_PROPERTY =
-            "GFP.warning.asadmin.files.exist"; // NOI18N
+            "warning.asadmin.files.exist"; // NOI18N
     
     public static final String DEFAULT_ERROR_USERNAME_NULL =
             ResourceUtils.getString(GlassFishPanel.class,
