@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.refactoring.ruby.ui;
+package org.netbeans.modules.refactoring.javascript.ui;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
@@ -56,18 +56,18 @@ import org.netbeans.napi.gsfret.source.CompilationController;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.napi.gsfret.source.Phase;
 import org.netbeans.napi.gsfret.source.Source;
-import org.netbeans.modules.refactoring.ruby.RetoucheUtils;
-import org.netbeans.modules.refactoring.ruby.RubyElementCtx;
+import org.netbeans.modules.refactoring.javascript.RetoucheUtils;
+import org.netbeans.modules.refactoring.javascript.JsElementCtx;
 import org.netbeans.modules.refactoring.spi.ui.UI;
 import org.netbeans.modules.refactoring.spi.ui.ActionsImplementationProvider;
 import org.netbeans.modules.refactoring.spi.ui.RefactoringUI;
-import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.RubyParseResult;
-import org.netbeans.modules.ruby.RubyUtils;
-import org.netbeans.modules.ruby.StructureAnalyzer.AnalysisResult;
-import org.netbeans.modules.ruby.elements.AstElement;
-import org.netbeans.modules.ruby.elements.Element;
-import org.netbeans.modules.ruby.lexer.LexUtilities;
+import org.netbeans.modules.javascript.editing.AstUtilities;
+import org.netbeans.modules.javascript.editing.Element;
+import org.netbeans.modules.javascript.editing.JsAnalyzer.AnalysisResult;
+import org.netbeans.modules.javascript.editing.AstElement;
+import org.netbeans.modules.javascript.editing.JsParseResult;
+import org.netbeans.modules.javascript.editing.JsUtils;
+import org.netbeans.modules.javascript.editing.lexer.LexUtilities;
 import org.openide.ErrorManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
@@ -95,7 +95,7 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         if (isFromEditor(ec)) {
             task = new TextComponentTask(ec) {
                 @Override
-                protected RefactoringUI createRefactoringUI(RubyElementCtx selectedElement,int startOffset,int endOffset, final CompilationInfo info) {
+                protected RefactoringUI createRefactoringUI(JsElementCtx selectedElement,int startOffset,int endOffset, final CompilationInfo info) {
                     // If you're trying to rename a constructor, rename the enclosing class instead
                     return new RenameRefactoringUI(selectedElement, info);
                 }
@@ -103,7 +103,7 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         } else {
             task = new NodeToFileObjectTask(lookup.lookupAll(Node.class)) {
                 @Override
-                protected RefactoringUI createRefactoringUI(FileObject[] selectedElements, Collection<RubyElementCtx> handles) {
+                protected RefactoringUI createRefactoringUI(FileObject[] selectedElements, Collection<JsElementCtx> handles) {
                     String newName = getName(dictionary);
                     if (newName!=null) {
                         if (pkg[0]!= null)
@@ -137,8 +137,8 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
             return false;
         }
         FileObject fo = dob.getPrimaryFile();
-        
-        if (isOutsideRuby(lookup, fo)) {
+
+        if (isOutsideJs(lookup, fo)) {
             return false;
         }
         
@@ -149,27 +149,16 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         return false;
     }
     
-    /**
-     * returns true if exactly one refactorable file is selected
-     */
-    @Override
-    public boolean canCopy(Lookup lookup) {
-        return false;
-    }    
-    
-    private boolean isOutsideRuby(Lookup lookup, FileObject fo) {
-        if (RubyUtils.isRhtmlFile(fo)) {
-            // We're attempting to refactor in an RHTML file... If it's in
-            // the editor, make sure we're trying to refactoring in a Ruby section;
-            // if not, we shouldn't grab it. (JavaScript refactoring won't get
-            // invoked if Ruby returns true for canRename even when the caret is
-            // in the caret section
+    private boolean isOutsideJs(Lookup lookup, FileObject fo) {
+        if (!JsUtils.isJsFile(fo)) {
+            // We're attempting to refactor in an embedded scenario...
+            // Make sure it's actually in a JavaScript section.
             EditorCookie ec = lookup.lookup(EditorCookie.class);
             if (isFromEditor(ec)) {
                 JTextComponent textC = ec.getOpenedPanes()[0];
                 int caret = textC.getCaretPosition();
                 if (LexUtilities.getToken((BaseDocument) textC.getDocument(), caret) == null) {
-                    // Not in Ruby code!
+                    // Not in JavaScript code!
                     return true;
                 }
                 
@@ -180,13 +169,17 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
     }
 
     @Override
+    public boolean canCopy(Lookup lookup) {
+        return false;
+    }    
+
+    @Override
     public boolean canFindUsages(Lookup lookup) {
         Collection<? extends Node> nodes = lookup.lookupAll(Node.class);
         if (nodes.size() != 1) {
             return false;
         }
         Node n = nodes.iterator().next();
-
         DataObject dob = n.getCookie(DataObject.class);
         if (dob == null) {
             return false;
@@ -194,11 +187,11 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
 
         FileObject fo = dob.getPrimaryFile();
         
-        if (isOutsideRuby(lookup, fo)) {
+        if (RetoucheUtils.isJsFile(fo) && isOutsideJs(lookup, fo)) {
             return false;
         }
         
-        if ((dob!=null) && RubyUtils.isRubyOrRhtmlFile(fo)) { //NOI18N
+        if ((dob!=null) && RetoucheUtils.isJsFile(fo)) { //NOI18N
             return true;
         }
         return false;
@@ -211,13 +204,13 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         if (isFromEditor(ec)) {
             task = new TextComponentTask(ec) {
                 @Override
-                protected RefactoringUI createRefactoringUI(RubyElementCtx selectedElement,int startOffset,int endOffset, CompilationInfo info) {
+                protected RefactoringUI createRefactoringUI(JsElementCtx selectedElement,int startOffset,int endOffset, CompilationInfo info) {
                     return new WhereUsedQueryUI(selectedElement, info);
                 }
             };
         } else {
             task = new NodeToElementTask(lookup.lookupAll(Node.class)) {
-                protected RefactoringUI createRefactoringUI(RubyElementCtx selectedElement, CompilationInfo info) {
+                protected RefactoringUI createRefactoringUI(JsElementCtx selectedElement, CompilationInfo info) {
                     return new WhereUsedQueryUI(selectedElement, info);
                 }
             };
@@ -241,6 +234,10 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         return (String) dict.get("name"); //NOI18N
     }
     
+    /**
+     * returns true if there is at least one java file in the selection
+     * and all java files are refactorable
+     */
     @Override
     public boolean canMove(Lookup lookup) {
         return false;
@@ -272,14 +269,14 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         
         public void run(CompilationController cc) throws Exception {
             cc.toPhase(Phase.RESOLVED);
-            org.jruby.ast.Node root = AstUtilities.getRoot(cc);
+            org.mozilla.javascript.Node root = AstUtilities.getRoot(cc);
             if (root == null) {
                 // TODO How do I add some kind of error message?
                 System.out.println("FAILURE - can't refactor uncompileable sources");
                 return;
             }
 
-            RubyElementCtx ctx = new RubyElementCtx(cc, caret);
+            JsElementCtx ctx = new JsElementCtx(cc, caret);
             if (ctx.getSimpleName() == null) {
                 return;
             }
@@ -307,7 +304,7 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
             }
         }
         
-        protected abstract RefactoringUI createRefactoringUI(RubyElementCtx selectedElement,int startOffset,int endOffset, CompilationInfo info);
+        protected abstract RefactoringUI createRefactoringUI(JsElementCtx selectedElement,int startOffset,int endOffset, CompilationInfo info);
     }
     
     public static abstract class NodeToElementTask implements Runnable, CancellableTask<CompilationController>  {
@@ -324,10 +321,10 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         
         public void run(CompilationController info) throws Exception {
             info.toPhase(Phase.ELEMENTS_RESOLVED);
-            org.jruby.ast.Node root = AstUtilities.getRoot(info);
+            org.mozilla.javascript.Node root = AstUtilities.getRoot(info);
             if (root != null) {
-                Element element = AstElement.create(info, root);
-                RubyElementCtx fileCtx = new RubyElementCtx(root, root, element, info.getFileObject(), info);
+                Element element = AstElement.getElement(info, root);
+                JsElementCtx fileCtx = new JsElementCtx(root, root, element, info.getFileObject(), info);
                 ui = createRefactoringUI(fileCtx, info);
             }
         }
@@ -345,7 +342,7 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
             }
             UI.openRefactoringUI(ui);
         }
-        protected abstract RefactoringUI createRefactoringUI(RubyElementCtx selectedElement, CompilationInfo info);
+        protected abstract RefactoringUI createRefactoringUI(JsElementCtx selectedElement, CompilationInfo info);
     }
     
     public static abstract class NodeToFileObjectTask implements Runnable, CancellableTask<CompilationController> {
@@ -353,7 +350,7 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         private RefactoringUI ui;
         public NonRecursiveFolder pkg[];
         public WeakReference<CompilationInfo> cinfo;
-        Collection<RubyElementCtx> handles = new ArrayList<RubyElementCtx>();
+        Collection<JsElementCtx> handles = new ArrayList<JsElementCtx>();
      
         public NodeToFileObjectTask(Collection<? extends Node> nodes) {
             this.nodes = nodes;
@@ -364,9 +361,9 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         
         public void run(CompilationController info) throws Exception {
             info.toPhase(Phase.ELEMENTS_RESOLVED);
-            org.jruby.ast.Node root = AstUtilities.getRoot(info);
+            org.mozilla.javascript.Node root = AstUtilities.getRoot(info);
             if (root != null) {
-                RubyParseResult rpr = AstUtilities.getParseResult(info);
+                JsParseResult rpr = AstUtilities.getParseResult(info);
                 if (rpr != null) {
                     AnalysisResult ar = rpr.getStructure();
                     List<? extends AstElement> els = ar.getElements();
@@ -375,8 +372,8 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
                         // In Java, we look for a class with the name corresponding to the file.
                         // It's not as simple in Ruby.
                         AstElement element = els.get(0);
-                        org.jruby.ast.Node node = element.getNode();
-                        RubyElementCtx representedObject = new RubyElementCtx(root, node, element, info.getFileObject(), info);
+                        org.mozilla.javascript.Node node = element.getNode();
+                        JsElementCtx representedObject = new JsElementCtx(root, node, element, info.getFileObject(), info);
                         handles.add(representedObject);
                     }
                 }
@@ -411,7 +408,7 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
             UI.openRefactoringUI(createRefactoringUI(fobs, handles));
         }
 
-        protected abstract RefactoringUI createRefactoringUI(FileObject[] selectedElement, Collection<RubyElementCtx> handles);
+        protected abstract RefactoringUI createRefactoringUI(FileObject[] selectedElement, Collection<JsElementCtx> handles);
     }    
     
     static boolean isFromEditor(EditorCookie ec) {
