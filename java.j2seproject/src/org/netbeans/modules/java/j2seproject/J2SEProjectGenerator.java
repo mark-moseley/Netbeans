@@ -323,6 +323,7 @@ public class J2SEProjectGenerator {
         if (!h.isSharableProject()) {
             return; 
         }
+        //TODO: mkleint: this hardwiring of libraries is potencially source of problems
         if (rh.getProjectLibraryManager().getLibrary("junit") == null) {
             rh.copyLibrary(LibraryManager.getDefault().getLibrary("junit")); // NOI18N
         }
@@ -380,7 +381,7 @@ public class J2SEProjectGenerator {
             JavaPlatform defaultPlatform = JavaPlatformManager.getDefault().getDefaultPlatform();
             SpecificationVersion v = defaultPlatform.getSpecification().getVersion();
             if (v.equals(new SpecificationVersion("1.6")) || v.equals(new SpecificationVersion("1.7"))) {
-                // #89131: these levels are not actually distinct from 1.5.
+                // #89131: these levels are not actually distinct from 1.5. - xxx not true, but may be acceptable to have 1.5 as default
                 return new SpecificationVersion("1.5");
             } else {
                 return v;
