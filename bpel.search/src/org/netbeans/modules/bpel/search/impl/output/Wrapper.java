@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.search.impl.ui;
+package org.netbeans.modules.bpel.search.impl.output;
 
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
@@ -153,7 +153,7 @@ final class Wrapper extends JPanel {
     return results;
   }
 
-  // ----------------------------------------------------------------------------------------
+  // -------------------------------------------
   private class MultiListener extends KeyAdapter
     implements DocumentListener, FocusListener
   {
@@ -239,7 +239,13 @@ final class Wrapper extends JPanel {
       if (c == KeyEvent.VK_ESCAPE) {
         return;
       }
-      if (isCtrl(modifiers) || isAlt(modifiers)) {
+      if (isCtrl(modifiers)) {
+        return;
+      }
+      if (isAlt(modifiers)) {
+        return;
+      }
+      if (isMeta(modifiers)) {
         return;
       }
       myTextField.setText(String.valueOf(c));

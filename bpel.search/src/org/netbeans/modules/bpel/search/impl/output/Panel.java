@@ -38,44 +38,34 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.search.impl.ui;
+package org.netbeans.modules.bpel.search.impl.output;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 
 import javax.swing.JButton;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JToolBar;
+import javax.swing.SwingUtilities;
 
-import org.openide.util.HelpCtx;
-import org.openide.windows.TopComponent;
 import org.netbeans.modules.print.api.PrintManager;
 import org.netbeans.modules.bpel.search.impl.util.Util;
 import static org.netbeans.modules.soa.ui.util.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2006.11.24
+ * @version 2008.02.11
  */
-public final class View extends TopComponent {
+final class Panel extends JPanel {
 
-  public View() {
-    setIcon(icon(Util.class, "find").getImage()); // NOI18N
-    setLayout(new GridBagLayout());
-    setFocusable(true);
-  }
-
-  void show(Tree tree) {
+  Panel(Tree list, Tree tree) {
+    myList = list;
     myTree = tree;
-    createPanel();
-    open();
-    requestActive();
-  }
+    myCurrent = tree;
 
-  private void createPanel() {
-    removeAll();
-    JScrollPane scrollPane = new JScrollPane(myTree);
+    setLayout(new GridBagLayout());
     GridBagConstraints c = new GridBagConstraints();
     c.anchor = GridBagConstraints.NORTH;
 
@@ -83,23 +73,30 @@ public final class View extends TopComponent {
     add(createButtonPanel(), c);
 
     // tree
-    c.fill = GridBagConstraints.BOTH;
     c.weightx = 1.0;
     c.weighty = 1.0;
-    add(new Navigation(myTree, scrollPane, scrollPane), c);
-
-    revalidate();
-    repaint();
+    c.fill = GridBagConstraints.BOTH;
+    myInner = new JPanel(new GridBagLayout());
+    add(myInner, c);
+    updateView();
   }
 
-  @Override
-  public void requestActive()
-  {
-    super.requestActive();
+  private void updateView() {
+    SwingUtilities.invokeLater(new Runnable() { public void run() {
+      myInner.removeAll();
+      GridBagConstraints c = new GridBagConstraints();
 
-    if (myTree != null) {
-      myTree.requestFocus();
-    }
+      c.weightx = 1.0;
+      c.weighty = 1.0;
+      c.fill = GridBagConstraints.BOTH;
+      c.anchor = GridBagConstraints.NORTH;
+      JScrollPane scrollPane = new JScrollPane(myCurrent);
+      myInner.add(new Navigation(myCurrent, scrollPane), c);
+      
+      myInner.revalidate();
+      myInner.repaint();
+      myCurrent.requestFocus();
+    }});
   }
 
   private JToolBar createButtonPanel() {
@@ -111,9 +108,22 @@ public final class View extends TopComponent {
     button = createButton(
       new ButtonAction(
         icon(Util.class, "expose"), // NOI18N
-        i18n(View.class, "TLT_Expose")) { // NOI18N
+        i18n(Panel.class, "TLT_Expose")) { // NOI18N
         public void actionPerformed(ActionEvent event) {
-          myTree.expose(myTree.getSelectedNode());
+          myCurrent.expose();
+        }
+      }
+    );
+    setImageSize(button);
+    toolBar.add(button);
+
+    // collapse/expand
+    button = createButton(
+      new ButtonAction(
+        icon(Util.class, "view"), // NOI18N
+        i18n(Panel.class, "TLT_View")) { // NOI18N
+        public void actionPerformed(ActionEvent event) {
+          changeView();
         }
       }
     );
@@ -124,9 +134,9 @@ public final class View extends TopComponent {
     button = createButton(
       new ButtonAction(
         icon(Util.class, "previous"), // NOI18N
-        i18n(View.class, "TLT_Previous_Occurence")) { // NOI18N
+        i18n(Panel.class, "TLT_Previous_Occurence")) { // NOI18N
         public void actionPerformed(ActionEvent event) {
-          myTree.previousOccurence(myTree.getSelectedNode());
+          myCurrent.previousOccurence();
         }
       }
     );
@@ -137,9 +147,9 @@ public final class View extends TopComponent {
     button = createButton(
       new ButtonAction(
         icon(Util.class, "next"), // NOI18N
-        i18n(View.class, "TLT_Next_Occurence")) { // NOI18N
+        i18n(Panel.class, "TLT_Next_Occurence")) { // NOI18N
         public void actionPerformed(ActionEvent event) {
-          myTree.nextOccurence(myTree.getSelectedNode());
+          myCurrent.nextOccurence();
         }
       }
     );
@@ -150,9 +160,9 @@ public final class View extends TopComponent {
     button = createButton(
       new ButtonAction(
         icon(Util.class, "export"), // NOI18N
-        i18n(View.class, "TLT_Export")) { // NOI18N
+        i18n(Panel.class, "TLT_Export")) { // NOI18N
         public void actionPerformed(ActionEvent event) {
-          myTree.export(myTree.getSelectedNode());
+          myCurrent.export();
         }
       }
     );
@@ -167,49 +177,18 @@ public final class View extends TopComponent {
     return toolBar;
   }
 
-  @Override
-  public HelpCtx getHelpCtx()
-  {
-    return HelpCtx.DEFAULT_HELP;
+  private void changeView() {
+    if (myCurrent == myTree) {
+      myCurrent = myList;
+    }
+    else {
+      myCurrent = myTree;
+    }
+    updateView();
   }
 
-  @Override
-  public int getPersistenceType()
-  {
-    return PERSISTENCE_ALWAYS;
-  }
-      
-  @Override
-  public String getName()
-  {
-    return NAME;
-  }
-  
-  @Override
-  public String getDisplayName()
-  {
-    return i18n(View.class, "LBL_Search_Results_Name"); // NOI18N
-  }
-
-  @Override
-  public String getToolTipText()
-  {
-    return i18n(View.class, "LBL_Search_Results_Tooltip"); // NOI18N
-  }
-
-  @Override
-  protected void componentClosed()
-  {
-    super.componentClosed();
-    myTree = null;
-  }
-
-  @Override
-  protected String preferredID()
-  {
-    return NAME;
-  }
-
+  private Tree myList;
   private Tree myTree;
-  public static final String NAME = "search"; // NOI18N
+  private Tree myCurrent;
+  private JPanel myInner;
 }
