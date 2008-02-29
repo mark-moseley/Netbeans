@@ -118,11 +118,15 @@ public class AbstractVariable implements LocalVariable, Customizer {
         
     protected AbstractVariable() {} // used by AbstractField instantiation...
     
-    private TypeInfo getTypeInfo() {
+    protected TypeInfo getTypeInfo() {
         if (tinfo == null) {
             tinfo = TypeInfo.getTypeInfo(getDebugger(), this);
         }
         return tinfo;
+    }
+    
+    protected void resetTypeInfo() {
+        tinfo = null;
     }
     
     /**
@@ -163,22 +167,17 @@ public class AbstractVariable implements LocalVariable, Customizer {
         this.type = type;
     }
     
-    public void setTypeToError(String msg) {
-        msg = msg.replace("\\\"", "\""); // NOI18N
-        if (msg.charAt(msg.length() - 1) == '.') {
-            msg = msg.substring(0, msg.length() - 1);
-        }
-        setType('>' + msg + '<');
-        log.fine("AV.setTypeToError[" + Thread.currentThread().getName() + "]: " + getName()); // NOI18N
-    }
-    
     /**
      * Returns string representation of type of this variable.
      *
      * @return string representation of type of this variable.
      */
     public String getValue() {
-        return value;
+        if (value.startsWith(">") && value.endsWith(".\"<")) { // NOI18N
+            return '>' + value.substring(2, value.length() - 3).replace("\\\"", "\"") + '<'; // NOI18N
+        } else {
+            return value.replace("\\\"", "\""); // NOI18N
+        }
     }
 
     /**
@@ -256,7 +255,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
                     }
                 }
                 ovalue = this.value;
-                getDebugger().updateVariable(this, fullname, value);
+                value = getDebugger().updateVariable(fullname, value);
             }
         }
         if (msg != null) {
@@ -275,7 +274,9 @@ public class AbstractVariable implements LocalVariable, Customizer {
         if (fields.length > 0) {
             fields = new Field[0];
             derefValue = null;
-            expandChildren();
+            if (value.length() > 0) {
+                expandChildren();
+            }
         }
     }
     
@@ -415,8 +416,11 @@ public class AbstractVariable implements LocalVariable, Customizer {
     private boolean isValidPointerAddress() {
         String frag = "";
         int pos1;
-        int i;
+        long i;
         
+        if (value == null && this instanceof GdbWatchVariable) {
+            getValue(); // A watch might not have a value yet. This will initialize "value"
+        }
         if (value != null) { // value can be null for watches during initialization...
             if (value.length() > 0 && value.charAt(0) == '(') {
                 pos1 = value.indexOf("*) 0x"); // NOI18N
@@ -430,7 +434,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
                 }
                 if (pos1 != -1) {
                     try {
-                        i = Integer.parseInt(frag, 16);
+                        i = Long.parseLong(frag, 16);
                     } catch (NumberFormatException ex) {
                         return false;
                     }
@@ -438,7 +442,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
                 }
             } else if (value.startsWith("0x")) { // NOI18N
                 try {
-                    i = Integer.parseInt(value.substring(2), 16);
+                    i = Long.parseLong(value.substring(2), 16);
                 } catch (NumberFormatException ex) {
                     return false;
                 }
@@ -576,7 +580,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
     }
     
     private void createChildrenForPointer(String t, String v) {
-        addField(new AbstractField(this, '*' + name, t, v));
+        addField(new AbstractField(this, '*' + getName(), t, v));
     }
     
     private void createChildrenForMultiPointer(String t) {
@@ -590,7 +594,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
             if (v == null || v.length() < 1 || v.endsWith("0x0")) { // NOI18N
                 return;
             }
-            addField(new AbstractField(this, name + '[' + i++ + ']', t2, v));
+            addField(new AbstractField(this, getName() + '[' + i++ + ']', t2, v));
         }
     }
     
@@ -731,7 +735,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
         int count;
         int idx = var.fields.length;
         int pos = value.indexOf(' ');
-        String val = value.substring(0, pos).replace("\\\\", "\\");
+        String val = value.substring(0, pos).replace("\\\\", "\\"); // NOI18N
         int pos1 = value.indexOf("<repeats "); // NOI18N
         int pos2 = value.indexOf(" times>"); // NOI18N
         
@@ -839,7 +843,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
             size = 0;
         }
         if (t.equals("char")) { // NOI18N
-            parseCharArray(this, name, type, value);
+            parseCharArray(this, getName(), type, value);
         } else {
             value = value.substring(1, value.length() - 1);
             for (int i = 0; i < size && vstart != -1; i++) {
@@ -848,7 +852,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
                 } else {
                     vend = GdbUtils.findNextComma(value, vstart);
                 }
-                addField(new AbstractField(this, name + "[" + i + "]", t, // NOI18N
+                addField(new AbstractField(this, getName() + "[" + i + "]", t, // NOI18N
                         vend == -1 ? value.substring(vstart) : value.substring(vstart, vend)));
                 vstart = GdbUtils.firstNonWhite(value, vend + 1);
             }
@@ -884,7 +888,7 @@ public class AbstractVariable implements LocalVariable, Customizer {
     
     @Override
     public String toString() {
-        return "AbstractVariable "; // NOI18N
+        return getFullName(false);
     }
         
     private boolean isNumber(String value) {
