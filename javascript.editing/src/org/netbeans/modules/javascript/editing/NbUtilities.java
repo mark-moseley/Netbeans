@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.javascript.editing;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -313,7 +313,7 @@ public class NbUtilities {
             } else {
                 // Must be testsuite execution
                 try {
-                    Class c = Class.forName("org.netbeans.modules.ruby.RubyTestBase");
+                    Class c = Class.forName("org.netbeans.modules.javascript.editing.JsTestBase");
                     if (c != null) {
                         @SuppressWarnings("unchecked")
                         java.lang.reflect.Method m = c.getMethod("getDocumentFor", new Class[] { FileObject.class });
