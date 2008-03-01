@@ -46,6 +46,7 @@ import com.sun.jdi.ReferenceType;
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.event.Event;
 import com.sun.jdi.request.BreakpointRequest;
+import com.sun.jdi.request.EventRequest;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.reflect.InvocationTargetException;
@@ -99,16 +100,14 @@ public class RunIntoMethodActionProvider extends ActionsProviderSupport
     public RunIntoMethodActionProvider(ContextProvider lookupProvider) {
         debugger = (JPDADebuggerImpl) lookupProvider.lookupFirst 
                 (null, JPDADebugger.class);
-        session = (Session) lookupProvider.lookupFirst 
-                (null, Session.class);
-        sourcePath = (SourcePath) lookupProvider.lookupFirst 
-                (null, SourcePath.class);
-        debugger.addPropertyChangeListener (debugger.PROP_STATE, this);
+        session = lookupProvider.lookupFirst(null, Session.class);
+        sourcePath = lookupProvider.lookupFirst(null, SourcePath.class);
+        debugger.addPropertyChangeListener (JPDADebuggerImpl.PROP_STATE, this);
         EditorContextBridge.getContext().addPropertyChangeListener (this);
     }
     
     private void destroy () {
-        debugger.removePropertyChangeListener (debugger.PROP_STATE, this);
+        debugger.removePropertyChangeListener (JPDADebuggerImpl.PROP_STATE, this);
         EditorContextBridge.getContext().removePropertyChangeListener (this);
     }
     
@@ -277,6 +276,8 @@ public class RunIntoMethodActionProvider extends ActionsProviderSupport
                     traceLineForMethod(methodName, line);
                     return true;
                 }
+                
+                public void removed(EventRequest eventRequest) {}
             });
             brReq.setSuspendPolicy(debugger.getSuspend());
             brReq.enable();
