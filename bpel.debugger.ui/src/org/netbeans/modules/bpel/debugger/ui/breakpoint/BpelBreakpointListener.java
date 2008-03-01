@@ -21,8 +21,10 @@ package org.netbeans.modules.bpel.debugger.ui.breakpoint;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import org.netbeans.api.debugger.Breakpoint;
 import org.netbeans.api.debugger.DebuggerManager;
@@ -30,7 +32,6 @@ import org.netbeans.api.debugger.DebuggerManagerAdapter;
 import org.netbeans.modules.bpel.debugger.api.AnnotationType;
 import org.netbeans.modules.bpel.debugger.api.EditorContextBridge;
 import org.netbeans.modules.bpel.debugger.api.breakpoints.LineBreakpoint;
-import org.netbeans.modules.bpel.debugger.ui.editor.BpelAnnotationsObserver;
 
 
 /**
@@ -39,11 +40,11 @@ import org.netbeans.modules.bpel.debugger.ui.editor.BpelAnnotationsObserver;
  */
 public class BpelBreakpointListener extends DebuggerManagerAdapter {
     
-    private Map<Breakpoint, Object> myBreakpointToAnnotation =
-            new HashMap<Breakpoint, Object>();
+    private Map<LineBreakpoint, Object> myBreakpointToAnnotation =
+            new HashMap<LineBreakpoint, Object>();
     
-    private Map<Object, Breakpoint> myAnnotationToBreakpoint =
-            new HashMap<Object, Breakpoint>();
+    private Map<Object, LineBreakpoint> myAnnotationToBreakpoint =
+            new HashMap<Object, LineBreakpoint>();
     
     private final AnnotationListener myAnnotationListener =
             new AnnotationListener();
@@ -96,17 +97,23 @@ public class BpelBreakpointListener extends DebuggerManagerAdapter {
             DebuggerManager.PROP_BREAKPOINTS };
     }
     
+    public synchronized List<LineBreakpoint> getBreakpoints() {
+        return new ArrayList<LineBreakpoint>(myBreakpointToAnnotation.keySet());
+    }
+    
     public synchronized LineBreakpoint findBreakpoint(
             final String url, 
             final String xpath, 
             final int lineNumber) {
         
+        final String realUrl = url.replace("\\", "/");
+        
         final Iterator iterator = 
                 myBreakpointToAnnotation.keySet().iterator ();
         while (iterator.hasNext()) {
-            final LineBreakpoint lb = (LineBreakpoint) iterator.next ();
+            final LineBreakpoint lb = (LineBreakpoint) iterator.next();
             
-            if (!lb.getURL ().equals (url)) {
+            if (!lb.getURL().equals(realUrl)) {
                 continue;
             }
             
