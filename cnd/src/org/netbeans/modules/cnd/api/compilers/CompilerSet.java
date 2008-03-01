@@ -159,7 +159,10 @@ public class CompilerSet {
         NbBundle.getMessage(CompilerSet.class, "LBL_NoCCompiler"), // NOI18N
         NbBundle.getMessage(CompilerSet.class, "LBL_NoCppCompiler"), // NOI18N
         NbBundle.getMessage(CompilerSet.class, "LBL_NoFortranCompiler"), // NOI18N
-        NbBundle.getMessage(CompilerSet.class, "LBL_NoCustomBuildTool") // NOI18N
+        NbBundle.getMessage(CompilerSet.class, "LBL_NoCustomBuildTool"), // NOI18N
+        NbBundle.getMessage(CompilerSet.class, "LBL_NoAssembler"), // NOI18N
+        NbBundle.getMessage(CompilerSet.class, "LBL_NoMakeTool"), // NOI18N
+        NbBundle.getMessage(CompilerSet.class, "LBL_NoDebuggerTool") // NOI18N
     };
     
     /** Creates a new instance of CompilerSet */
@@ -234,45 +237,46 @@ public class CompilerSet {
     public static CompilerSet getCompilerSet(String name) {
         CompilerSet cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.toFlavor(name));
         
+//        IZ 120845 Project compiler collection property is changed after adding/changing compiler collection in Tools->Options
+//        if (cs == null) {
+//            if (name.startsWith("Sun")) { // NOI18N
+//                cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun12);
+//                if (cs == null) {
+//                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun11);
+//                }
+//                if (cs == null) {
+//                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun10);
+//                }
+//                if (cs == null) {
+//                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun9);
+//                }
+//                if (cs == null) {
+//                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun8);
+//                }
+//            } else {
+//                if (Utilities.isWindows()) {
+//                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Cygwin);
+//                    if (cs == null) {
+//                        cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.MinGW);
+//                    }
+//                    if (cs == null) {
+//                        cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Interix);
+//                    }
+//                    if (cs == null) {
+//                        cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.DJGPP);
+//                    }
+//                    if (cs == null) {
+//                        cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.GNU);
+//                    }
+//                } else {
+//                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.GNU);
+//                }
+//            }
+//        }
         if (cs == null) {
-            if (name.startsWith("Sun")) { // NOI18N
-                cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun12);
-                if (cs == null) {
-                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun11);
-                }
-                if (cs == null) {
-                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun10);
-                }
-                if (cs == null) {
-                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun9);
-                }
-                if (cs == null) {
-                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Sun8);
-                }
-            } else {
-                if (Utilities.isWindows()) {
-                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Cygwin);
-                    if (cs == null) {
-                        cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.MinGW);
-                    }
-                    if (cs == null) {
-                        cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.Interix);
-                    }
-                    if (cs == null) {
-                        cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.DJGPP);
-                    }
-                    if (cs == null) {
-                        cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.GNU);
-                    }
-                } else {
-                    cs = CompilerSetManager.getDefault().getCompilerSet(CompilerFlavor.GNU);
-                }
-            }
-            if (cs == null) {
-                CompilerFlavor flavor = CompilerFlavor.toFlavor(name);
-                flavor = flavor == null ? CompilerFlavor.Unknown : flavor;
-                cs = new CompilerSet(flavor, ""); // NOI18N
-            }
+            CompilerFlavor flavor = CompilerFlavor.toFlavor(name);
+            flavor = flavor == null ? CompilerFlavor.Unknown : flavor;
+            cs = new CompilerSet(flavor, ""); // NOI18N
         }
         return cs;
     }
@@ -342,11 +346,11 @@ public class CompilerSet {
         
         label.append(flavor);
         label.append("CompilerSet_"); // NOI18N
-        if (isMissing) {
-            label.append("Missing"); // NOI18N
-        } else {
+//        if (isMissing) {
+//            label.append("Missing"); // NOI18N
+//        } else {
             label.append(id == 0 ? "0" : "X"); // NOI18N
-        }
+//        }
         return NbBundle.getMessage(CompilerSet.class, label.toString(), Integer.valueOf(id));
     }
     
@@ -538,7 +542,14 @@ public class CompilerSet {
             if (tool.getKind() == kind)
                 return tool;
         }
-        Tool t = compilerProvider.createCompiler(CompilerFlavor.Unknown, kind, "", noCompDNames[kind], ""); // NOI18N
+        Tool t;
+        if (kind == Tool.MakeTool) {
+            // Fixup: all tools should go here ....
+            t = compilerProvider.createCompiler(flavor, kind, "", Tool.getToolDisplayName(kind), "");
+        }
+        else {
+            t = compilerProvider.createCompiler(CompilerFlavor.Unknown, kind, "", noCompDNames[kind], ""); // NOI18N
+        }
         tools.add(t);
         return t;
     }
@@ -554,29 +565,33 @@ public class CompilerSet {
     public List<Tool> getTools() {
         return tools;
     }
-    
-    public String[] getToolGenericNames() {
-        ArrayList names = new ArrayList();
-        
-        for (Tool tool : tools) {
-            if (tool.getKind() == Tool.FortranCompiler && !CppSettings.getDefault().isFortranEnabled())
-                continue;
-            names.add(tool.getGenericName());
-        }
-        return (String[])names.toArray(new String[names.size()]);
-    }
-
-    public int getToolKind(String genericName) {
-        int kind = -1;
-        for (int i = 0; i < tools.size(); i++) {
-            Tool tool = tools.get(i);
-            if (tools.get(i).getGenericName().equals(genericName)) {
-                kind = tools.get(i).getKind();
-                break;
-            }
-        }
-        return kind;
-    }
+//    
+//    public String[] getToolGenericNames() {
+//        ArrayList names = new ArrayList();
+//        
+//        for (Tool tool : tools) {
+//            if (tool.getKind() == Tool.Assembler ||
+//                tool.getKind() == Tool.CCCompiler ||
+//                tool.getKind() == Tool.CCompiler ||
+//                tool.getKind() == Tool.CustomTool ||
+//                (tool.getKind() == Tool.FortranCompiler && !CppSettings.getDefault().isFortranEnabled())
+//                )
+//                names.add(tool.getGenericName());
+//        }
+//        return (String[])names.toArray(new String[names.size()]);
+//    }
+//
+//    public int getToolKind(String genericName) {
+//        int kind = -1;
+//        for (int i = 0; i < tools.size(); i++) {
+//            Tool tool = tools.get(i);
+//            if (tools.get(i).getGenericName().equals(genericName)) {
+//                kind = tools.get(i).getKind();
+//                break;
+//            }
+//        }
+//        return kind;
+//    }
     
     public String getDynamicLibrarySearchOption() {
         return dynamicLibrarySearchOption;

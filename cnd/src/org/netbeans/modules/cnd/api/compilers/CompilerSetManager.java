@@ -68,6 +68,8 @@ public class CompilerSetManager {
     private static final String cc_pattern = "([a-zA-z][a-zA-Z0-9_]*-)*cc(([-.]\\d){2,4})?(\\.exe)?$"; // NOI18N
     private static final String CC_pattern = "([a-zA-z][a-zA-Z0-9_]*-)*CC(([-.]\\d){2,4})?$"; // NOI18N
     private static final String fortran_pattern = "([a-zA-z][a-zA-Z0-9_]*-)*[fg](77|90|95|fortran)(([-.]\\d){2,4})?(\\.exe)?"; // NOI18N
+    private static final String make_pattern = "([a-zA-z][a-zA-Z0-9_]*-)*([dg]make|make)(([-.]\\d){2,4})?(\\.exe)?$"; // NOI18N
+    private static final String debugger_pattern = "([a-zA-z][a-zA-Z0-9_]*-)*(gdb|dbx)(([-.]\\d){2,4})?(\\.exe)?$"; // NOI18N
     
     /* Legacy defines for CND 5.5 compiler set definitions */
     public static final int SUN_COMPILER_SET = 0;
@@ -84,6 +86,8 @@ public class CompilerSetManager {
     private CompilerFilenameFilter cc_filter;
     private CompilerFilenameFilter CC_filter;
     private CompilerFilenameFilter fortran_filter;
+    private CompilerFilenameFilter make_filter;
+    private CompilerFilenameFilter debugger_filter;
     
     private ArrayList<CompilerSet> sets = new ArrayList();
     private ArrayList<String> dirlist;
@@ -107,7 +111,7 @@ public class CompilerSetManager {
 	return getDefault(true);
     }
     
-    public static CompilerSetManager getDefault(boolean doCreate) {
+    public static synchronized CompilerSetManager getDefault(boolean doCreate) {
         if (instance == null && doCreate) {
             instance = new CompilerSetManager();
         }
@@ -117,7 +121,7 @@ public class CompilerSetManager {
     /**
      * Replace the default CompilerSetManager. Let registered listeners know its been updated.
      */
-    public static void setDefault(CompilerSetManager csm) {
+    public static synchronized void setDefault(CompilerSetManager csm) {
         instance = csm;
         fireCompilerSetChangeNotification(csm);
     }
@@ -135,6 +139,8 @@ public class CompilerSetManager {
                 if (Utilities.isUnix()) {  // CC and cc are the same on Windows, so skip this step on Windows
                     initCompiler(CC_filter, "CC", Tool.CCCompiler, path); // NOI18N
                 }
+                initMakeTool(make_filter, Tool.MakeTool, path); // NOI18N
+                initDebuggerTool(debugger_filter, Tool.DebuggerTool, path); // NOI18N
             }
         }
         completeCompilerSets();
@@ -183,6 +189,49 @@ public class CompilerSetManager {
         }
     }
     
+    private void initMakeTool(CompilerFilenameFilter filter, int kind, String path) {
+        File dir = new File(path);
+        String[] list = dir.list(filter);
+        String[] best = {
+            "dmake", // NOI18N
+            "gmake", // NOI18N
+            "make", // NOI18N
+        };
+
+        if (list != null && list.length > 0) {
+            CompilerSet cs = CompilerSet.getCompilerSet(dir.getAbsolutePath(), list);
+            add(cs);
+            for (int i = 0; i < best.length; i++) {
+                File file = new File(dir, best[i]);
+                if (file.exists() && !file.isDirectory()) {
+                    cs.addTool(best[i], path, kind);
+                    return;
+                }
+            }
+        }
+    }
+    
+    private void initDebuggerTool(CompilerFilenameFilter filter, int kind, String path) {
+        File dir = new File(path);
+        String[] list = dir.list(filter);
+        String[] best = {
+            "dbx", // NOI18N
+            "gdb", // NOI18N
+        };
+
+        if (list != null && list.length > 0) {
+            CompilerSet cs = CompilerSet.getCompilerSet(dir.getAbsolutePath(), list);
+            add(cs);
+            for (int i = 0; i < best.length; i++) {
+                File file = new File(dir, best[i]);
+                if (file.exists() && !file.isDirectory()) {
+                    cs.addTool(best[i], path, kind);
+                    return;
+                }
+            }
+        }
+    }
+    
     /**
      * If a compiler set doesn't have one of each compiler types, add a "No compiler"
      * tool. If selected, this will tell the build validation things are OK.
@@ -201,6 +250,12 @@ public class CompilerSetManager {
             if (cs.getTool(Tool.CustomTool) == null) {
                 cs.addTool("", "", Tool.CustomTool); // NOI18N
             }
+            if (cs.getTool(Tool.MakeTool) == null) {
+                cs.addTool("", "", Tool.MakeTool); // NOI18N
+            }
+            if (cs.getTool(Tool.DebuggerTool) == null) {
+                cs.addTool("", "", Tool.DebuggerTool); // NOI18N
+            }
         }
         
         if (sets.size() == 0) { // No compilers found
@@ -216,6 +271,8 @@ public class CompilerSetManager {
         if (Utilities.isUnix()) {
             CC_filter = new CompilerFilenameFilter(CC_pattern);
         }
+        make_filter = new CompilerFilenameFilter(make_pattern);
+        debugger_filter = new CompilerFilenameFilter(debugger_pattern);
     }
     
     /**
@@ -271,6 +328,15 @@ public class CompilerSetManager {
         }
         return null;
     }
+    
+    public CompilerSet getCompilerSetByDisplayName(String name) {
+        for (CompilerSet cs : sets) {
+            if (cs.getDisplayName().equals(name)) {
+                return cs;
+            }
+        }
+        return null;
+    }
         
     public CompilerSet getCompilerSet(String name, String dname) {
         for (CompilerSet cs : sets) {
@@ -288,6 +354,22 @@ public class CompilerSetManager {
     
     public List<CompilerSet> getCompilerSets() {
         return sets;
+    }
+    
+    public List<String> getCompilerSetDisplayNames() {
+        ArrayList<String> names = new ArrayList();
+        for (CompilerSet cs : getCompilerSets()) {
+            names.add(cs.getDisplayName());
+        }
+        return names;
+    }
+    
+    public List<String> getCompilerSetNames() {
+        ArrayList<String> names = new ArrayList();
+        for (CompilerSet cs : getCompilerSets()) {
+            names.add(cs.getName());
+        }
+        return names;
     }
     
     /**
