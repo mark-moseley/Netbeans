@@ -43,11 +43,20 @@ package org.netbeans.modules.websvc.saas.codegen.java.model;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import org.netbeans.modules.websvc.saas.codegen.java.AbstractGenerator;
 import org.netbeans.modules.websvc.saas.codegen.java.Constants.HttpMethodType;
 import org.netbeans.modules.websvc.saas.codegen.java.Constants.MimeType;
-import org.netbeans.modules.websvc.saas.codegen.java.support.Inflector;
+import org.netbeans.modules.websvc.saas.codegen.java.Constants.SaasAuthenticationType;
+import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo.ParamStyle;
+import org.netbeans.modules.websvc.saas.model.SaasMethod;
+import org.netbeans.modules.websvc.saas.model.jaxb.Method.Output.Media;
+import org.netbeans.modules.websvc.saas.model.jaxb.Params;
+import org.netbeans.modules.websvc.saas.model.jaxb.Params.Param;
+import org.netbeans.modules.websvc.saas.model.jaxb.SaasMetadata.Authentication;
+import org.netbeans.modules.websvc.saas.model.jaxb.SaasMetadata.Authentication.SignedUrl;
+import org.netbeans.modules.websvc.saas.model.jaxb.SaasMetadata.Authentication.SignedUrl.Sign;
 
 /**
  *
@@ -55,17 +64,23 @@ import org.netbeans.modules.websvc.saas.codegen.java.support.Inflector;
  */
 public abstract class SaasBean extends GenericResourceBean {
 
-    private static final String RESOURCE_TEMPLATE = "Templates/WebServices/WrapperResource.java"; //NOI18N
+    public static final String RESOURCE_TEMPLATE = AbstractGenerator.TEMPLATES_SAAS+"WrapperResource.java"; //NOI18N
     private String outputWrapperName;
     private String wrapperPackageName;
     private List<ParameterInfo> inputParams;
+    private List<ParameterInfo> headerParams;
+    private List<ParameterInfo> templateParams;
     private List<ParameterInfo> queryParams;
+    private String resourceTemplate;
+    private SaasAuthenticationType authType;
+    private SaasBean.SaasAuthentication auth;
+    private String authProfile;
 
     public SaasBean(String name, String packageName, String uriTemplate, MimeType[] mediaTypes, String[] representationTypes, HttpMethodType[] methodTypes) {
         super(name, packageName, uriTemplate, mediaTypes, representationTypes, methodTypes);
     }
 
-    public void setInputParameters(List<ParameterInfo> inputParams) {
+    protected void setInputParameters(List<ParameterInfo> inputParams) {
         this.inputParams = inputParams;
     }
 
@@ -79,7 +94,29 @@ public abstract class SaasBean extends GenericResourceBean {
     }
 
     public List<ParameterInfo> getHeaderParameters() {
-        return Collections.emptyList();
+        if (headerParams == null) {
+            headerParams = new ArrayList<ParameterInfo>();
+
+            for (ParameterInfo param : getInputParameters()) {
+                if (param.getStyle() == ParamStyle.HEADER) {
+                    headerParams.add(param);
+                }
+            }
+        }
+        return headerParams;
+    }
+    
+    public List<ParameterInfo> getTemplateParameters() {
+        if (templateParams == null) {
+            templateParams = new ArrayList<ParameterInfo>();
+
+            for (ParameterInfo param : getInputParameters()) {
+                if (param.getStyle() == ParamStyle.TEMPLATE) {
+                    templateParams.add(param);
+                }
+            }
+        }
+        return templateParams;
     }
 
     protected abstract List<ParameterInfo> initInputParameters();
@@ -90,7 +127,7 @@ public abstract class SaasBean extends GenericResourceBean {
             queryParams = new ArrayList<ParameterInfo>();
 
             for (ParameterInfo param : getInputParameters()) {
-                if (param.isQueryParam()) {
+                if (param.getStyle() == ParamStyle.QUERY) {
                     queryParams.add(param);
                 }
             }
@@ -118,14 +155,7 @@ public abstract class SaasBean extends GenericResourceBean {
         wrapperPackageName = packageName;
     }
 
-    protected static String deriveResourceName(String componentName) {
-        return Inflector.getInstance().camelize(componentName + GenericResourceBean.RESOURCE_SUFFIX);
-    }
-
-    protected static String deriveUriTemplate(String name) {
-        return Inflector.getInstance().camelize(name, true) + "/"; //NOI18N
-    }
-
+    @Override
     public String[] getRepresentationTypes() {
         if (getMimeTypes().length == 1 && getMimeTypes()[0] == MimeType.HTML) {
             return new String[]{String.class.getName()};
@@ -145,6 +175,169 @@ public abstract class SaasBean extends GenericResourceBean {
     }
 
     public String getResourceClassTemplate() {
-        return RESOURCE_TEMPLATE;
+        return resourceTemplate;
     }
+    
+    protected void setResourceClassTemplate(String template) {
+        this.resourceTemplate = template;
+    }
+    
+    public SaasAuthenticationType getAuthenticationType() {
+        return authType;
+    }
+    
+    public void setAuthenticationType(SaasAuthenticationType authType) {
+        this.authType = authType;
+    }
+    
+    
+    public SaasAuthentication getAuthentication() {
+        return auth;
+    }
+    
+    public void setAuthentication(SaasAuthentication auth) {
+        this.auth = auth;
+    }
+    
+    
+    public String getAuthenticationProfile() {
+        return this.authProfile;
+    }
+    
+    private void setAuthenticationProfile(String profile) {
+        this.authProfile = profile;
+    }
+    
+    public void findAuthentication(SaasMethod m) {
+        Authentication auth2 = m.getSaas().getSaasMetadata().getAuthentication();
+        if(auth2.getHttpBasic() != null) {
+            setAuthenticationType(SaasAuthenticationType.HTTP_BASIC);
+            setAuthentication(new HttpBasicAuthentication());
+        } else if(auth2.getCustom() != null) {
+            setAuthenticationType(SaasAuthenticationType.CUSTOM);
+            setAuthentication(new CustomAuthentication());
+        } else if(auth2.getApiKey() != null) {
+            setAuthenticationType(SaasAuthenticationType.API_KEY);
+            setAuthentication(new ApiKeyAuthentication(auth2.getApiKey().getId()));
+        } else if(auth2.getSignedUrl() != null) {
+            setAuthenticationType(SaasAuthenticationType.SIGNED_URL);
+            SignedUrlAuthentication signedUrl = new SignedUrlAuthentication();
+            setAuthentication(signedUrl);
+            Sign sign = ((SignedUrl)auth2.getSignedUrl()).getSign();
+            if (sign != null) {
+                Params params = sign.getParams();
+                if(params != null && params.getParam() != null) {
+                    List<ParameterInfo> signParams = new ArrayList<ParameterInfo>();
+                    findSaasParams(signParams, params.getParam());
+                    signedUrl.setParameters(signParams);
+                }
+            }
+        } else if(auth2.getSessionKey() != null) {
+            setAuthenticationType(SaasAuthenticationType.SESSION_KEY);
+            setAuthentication(new SessionKeyAuthentication());
+        } else {
+            setAuthenticationType(SaasAuthenticationType.PLAIN);
+        }
+        if(auth2.getProfile() != null)
+            setAuthenticationProfile(auth2.getProfile());
+    }
+
+    public void findSaasParams(List<ParameterInfo> paramInfos, List<Param> params) {
+        if (params != null) {
+            for (Param param:params) {
+                //<param name="replace" type="xsd:boolean" style="query" required="false" default="some value">
+                String paramName = param.getName();
+                Class paramType = findJavaType(param.getType());
+                ParameterInfo paramInfo = new ParameterInfo(paramName, paramType);
+                paramInfo.setIsRequired(param.isRequired()!=null?param.isRequired():false);
+                paramInfo.setFixed(param.getFixed());
+                paramInfo.setDefaultValue(param.getDefault());
+                paramInfos.add(paramInfo);
+            }
+        }
+    }
+ 
+    public Class findJavaType(String schemaType) {       
+        if(schemaType != null) {
+            int index = schemaType.indexOf(":");        //NOI18N
+            
+            if(index != -1) {
+                schemaType = schemaType.substring(index+1);
+            }
+            
+            if(schemaType.equals("string")) {     //NOI18N
+                return String.class;
+            } else if(schemaType.equals("int")) {       //NOI18N
+                return Integer.class;
+            } else if(schemaType.equals("date")) {       //NOI18N
+                return Date.class;
+            }
+        }
+        
+        return String.class;
+    }
+    
+    public void findSaasMediaType(List<MimeType> mimeTypes, Media media) {
+        String mediaType = media.getType();
+        String[] mTypes = mediaType.split(",");
+        for(String m1:mTypes) {
+            MimeType mType = MimeType.find(m1);
+            if (mType != null) {
+                mimeTypes.add(mType);
+            }
+        }
+    }
+    
+    public class SaasAuthentication {
+        public SaasAuthentication() {
+            
+        }
+    }
+    
+    public class HttpBasicAuthentication extends SaasAuthentication {
+        public HttpBasicAuthentication() {
+            
+        }
+    }
+    
+    public class ApiKeyAuthentication extends SaasAuthentication {
+        private String keyName;
+        
+        public ApiKeyAuthentication(String keyName) {
+            this.keyName = keyName;
+        }
+        
+        public String getApiKeyName() {
+            return keyName;
+        }
+    }
+    
+    public class SignedUrlAuthentication extends SaasAuthentication {
+        
+        List<ParameterInfo> params = Collections.emptyList();
+        public SignedUrlAuthentication() {
+            
+        }
+        
+        public List<ParameterInfo> getParameters() {
+            return params;
+        }
+        
+        public void setParameters(List<ParameterInfo> params) {
+            this.params = params;
+        }
+    }
+    
+    public class SessionKeyAuthentication extends SaasAuthentication {
+        public SessionKeyAuthentication() {
+            
+        }
+    }
+    
+    public class CustomAuthentication extends SaasAuthentication {
+        public CustomAuthentication() {
+            
+        }
+    }
+
 }

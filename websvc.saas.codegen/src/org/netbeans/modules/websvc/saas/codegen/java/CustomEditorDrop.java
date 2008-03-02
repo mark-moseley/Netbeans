@@ -48,8 +48,8 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
 import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo;
-import org.netbeans.modules.websvc.saas.codegen.java.model.WadlSaasBean;
-import org.netbeans.modules.websvc.saas.model.WadlSaasMethod;
+import org.netbeans.modules.websvc.saas.codegen.java.model.CustomSaasBean;
+import org.netbeans.modules.websvc.saas.model.CustomSaasMethod;
 import org.netbeans.modules.websvc.saas.model.wadl.Method;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -62,17 +62,17 @@ import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
-/** JaxRsEditorDrop
+/** CustomEditorDrop
  *
  * @author Ayub Khan, Nam Nguyen
  */
-public class JaxRsEditorDrop implements ActiveEditorDrop {
+public class CustomEditorDrop implements ActiveEditorDrop {
 
-    private WadlSaasMethod method;
+    private CustomSaasMethod method;
     private FileObject targetFO;
     private RequestProcessor.Task generatorTask;
 
-    public JaxRsEditorDrop(WadlSaasMethod method) {
+    public CustomEditorDrop(CustomSaasMethod method) {
         this.method = method;
     }
 
@@ -93,8 +93,7 @@ public class JaxRsEditorDrop implements ActiveEditorDrop {
     private boolean doHandleTransfer(final JTextComponent targetComponent) {
         FileObject targetSource = NbEditorUtilities.getFileObject(targetComponent.getDocument());
         Project targetProject = FileOwnerQuery.getOwner(targetSource);
-        Method m = method.getWadlMethod();
-        final String displayName = m.getName();
+        final String displayName = method.getName();
         
         targetFO = getTargetFile(targetComponent);
 
@@ -105,42 +104,45 @@ public class JaxRsEditorDrop implements ActiveEditorDrop {
         final List<Exception> errors = new ArrayList<Exception>();
        
         final ProgressDialog dialog = new ProgressDialog(
-                NbBundle.getMessage(JaxRsEditorDrop.class, "LBL_CodeGenProgress", 
+                NbBundle.getMessage(CustomEditorDrop.class, "LBL_CodeGenProgress", 
                 displayName));
 
         generatorTask = RequestProcessor.getDefault().create(new Runnable() {
             public void run() {
                 try {
-                    JaxRsCodeGenerator codegen = 
-                        JaxRsCodeGeneratorFactory.create(targetComponent, targetFO, method);
+                    CustomCodeGenerator codegen = codegen = 
+                        CustomCodeGeneratorFactory.create(targetComponent, targetFO, method);
+                    if(codegen == null) {//No action for DnD
+                        String message = NbBundle.getMessage(CustomEditorDrop.class, 
+                                "WARN_UnsupportedDropTarget", new Object[] {targetFO.getNameExt(), "REST Resource"}); // NOI18N
+                        NotifyDescriptor desc = new NotifyDescriptor.Message(message, NotifyDescriptor.Message.WARNING_MESSAGE);
+                        DialogDisplayer.getDefault().notify(desc);
+                        return;
+                    }
                 
-                    WadlSaasBean bean = codegen.getBean();
+                    CustomSaasBean bean = codegen.getBean();
                     boolean showParams = codegen.canShowParam();
-                    List<ParameterInfo> allParams = new ArrayList<ParameterInfo>();
+                    List<ParameterInfo> allParams = new ArrayList<ParameterInfo>(bean.getHeaderParameters());
                     if (showParams && bean.getInputParameters() != null) {
                         allParams.addAll(bean.getInputParameters());
                     }
-                    if(allParams.isEmpty())
-                        showParams = false;
-                    if(codegen.canShowResourceInfo() || showParams) {
-                        JaxRsCodeSetupPanel panel = new JaxRsCodeSetupPanel(
-                                codegen.getSubresourceLocatorUriTemplate(),
-                                bean.getQualifiedClassName(), 
-                                allParams,
-                                codegen.canShowResourceInfo(), showParams);
+                    CustomCodeSetupPanel panel = new CustomCodeSetupPanel(
+                            codegen.getSubresourceLocatorUriTemplate(),
+                            bean.getQualifiedClassName(), 
+                            allParams,
+                            codegen.canShowResourceInfo(), showParams);
 
-                        DialogDescriptor desc = new DialogDescriptor(panel, 
-                                NbBundle.getMessage(JaxRsEditorDrop.class,
-                                "LBL_CustomizeSaasService", displayName));
-                        Object response = DialogDisplayer.getDefault().notify(desc);
-
-                        if (response.equals(NotifyDescriptor.YES_OPTION)) {
-                            codegen.setSubresourceLocatorUriTemplate(panel.getUriTemplate());
-                            codegen.setSubresourceLocatorName(panel.getMethodName());
-                        } else {
-                            // cancel
-                            return;
-                        }
+                    DialogDescriptor desc = new DialogDescriptor(panel, 
+                            NbBundle.getMessage(CustomEditorDrop.class,
+                            "LBL_CustomizeSaasService", displayName));
+                    Object response = DialogDisplayer.getDefault().notify(desc);
+                    
+                    if (response.equals(NotifyDescriptor.YES_OPTION)) {
+                        codegen.setSubresourceLocatorUriTemplate(panel.getUriTemplate());
+                        codegen.setSubresourceLocatorName(panel.getMethodName());
+                    } else {
+                        // cancel
+                        return;
                     }
 
                     codegen.generate(dialog.getProgressHandle());

@@ -40,83 +40,70 @@
  */
 package org.netbeans.modules.websvc.saas.codegen.java;
 
-import org.netbeans.modules.websvc.saas.model.WadlSaasMethod;
+import org.netbeans.modules.websvc.saas.model.CustomSaasMethod;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import javax.swing.text.JTextComponent;
-import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.api.project.SourceGroup;
+import org.netbeans.modules.websvc.saas.codegen.java.model.CustomSaasBean;
 import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo;
+import org.netbeans.modules.websvc.saas.codegen.java.support.JavaSourceHelper;
+import org.netbeans.modules.websvc.saas.codegen.java.support.SourceGroupSupport;
+import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.FileUtil;
 
 /**
- * Code generator for Accessing Saas services.
+ * Code generator for REST services wrapping WSDL-based web service.
  *
- * @author nam
+ * @author Ayub Khan
  */
-public class JaxRsJavaClientCodeGenerator extends JaxRsCodeGenerator {
+public class CustomCodeGenerator extends SaasCodeGenerator {
 
-    
-    public JaxRsJavaClientCodeGenerator(JTextComponent targetComponent,
-            FileObject targetFile, WadlSaasMethod m) throws IOException {
-        super(targetComponent, targetFile, m);
+    public CustomCodeGenerator(JTextComponent targetComponent, 
+            FileObject targetFile, CustomSaasMethod m) throws IOException {
+        super(targetComponent, targetFile, new CustomSaasBean(m));
+    }
+
+    @Override
+    public CustomSaasBean getBean() {
+        return (CustomSaasBean) bean;
     }
     
     @Override
-    public Set<FileObject> generate(ProgressHandle pHandle) throws IOException {
-        initProgressReporting(pHandle);
-
-        preGenerate();
-        
-        createAuthenticatorClass();
-        
-        createSaasServiceClass();
-        addSaasServiceMethod();
-        addImportsToSaasService();
-        
-        insertSaasServiceAccessCode(isInBlock(getTargetComponent()));
-        addImportsToTargetFile();
-        
-        finishProgressReporting();
-
-        return new HashSet<FileObject>(Collections.EMPTY_LIST);
+    protected void preGenerate() throws IOException {
+        createRestConnectionFile(getProject());
+        getTargetFolder().getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
+            public void run() throws IOException {
+                try {
+                    List<String> libs = getBean().getArtifactLibs();
+                    for(String lib: libs) {
+                        //TODO - Fix the copyFile method
+                        copyFile(lib, FileUtil.toFile(getTargetFolder()));
+                    }
+                    List<String> templates = getBean().getArtifactTemplates();
+                    for(String template: templates) {
+                        Util.createDataObjectFromTemplate(template, getTargetFolder(), null);
+                    }
+                } finally {
+                }
+            }
+        });
     }
-    
-    @Override
+
     protected String getCustomMethodBody() throws IOException {
-        String paramUse = "";
-        String paramDecl = "";
+        String paramStr = "";       //NOI18N
+    
+        int count = 0;
+        for (ParameterInfo param : getBean().getInputParameters()) {
+            if (count++ > 0) {
+                paramStr += ", ";       //NOI18N
+            }
+            
+            paramStr += getParameterName(param, true, true);
+        }
         
-        //Evaluate parameters (query(not fixed or apikey), header, template,...)
-        List<ParameterInfo> filterParams = filterParameters();
-        paramUse += getHeaderOrParameterUsage(filterParams);
-        paramDecl += getHeaderOrParameterDeclaration(filterParams);
-
-        if(paramUse.endsWith(", "))
-            paramUse = paramUse.substring(0, paramUse.length()-2);
-        
-        String methodBody = "try {\n";
-        methodBody += paramDecl + "\n";
-        methodBody += "             String result = " + getSaasServiceName() + "." + getSaasServiceMethodName() + "(" + paramUse + ");\n";
-        methodBody += "             System.out.println(\"The SaasService returned: \"+result);\n";
-        methodBody += "        } catch (java.io.IOException ex) {\n";
-        methodBody += "             //java.util.logging.Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.SEVERE, null, ex);\n";
-        methodBody += "             ex.printStackTrace();\n";
-        methodBody += "        }\n";
-       
-        return methodBody;
+        return "return execute(" + paramStr + ")";
     }
-    
-    @Override
-    public boolean canShowResourceInfo() {
-        return false;
-    }
-    
-    @Override
-    public boolean canShowParam() {
-        return true;
-    }
-    
 }
