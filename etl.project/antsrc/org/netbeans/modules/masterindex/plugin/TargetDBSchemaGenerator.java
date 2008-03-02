@@ -384,8 +384,7 @@ public class TargetDBSchemaGenerator {
            HashMap childfieldmap = (HashMap) this.lookup.getLookupMap().get(Qchildname);
            Iterator childfields = childfieldmap.keySet().iterator();
            while (childfields.hasNext()) {
-               String childfield = (String) childfields.next();
-               //System.out.println("MANISH 4 : " + childfield);
+               String childfield = (String) childfields.next();               
                if (childfield.equals(fkname)) {
                    mLogger.infoNoloc(mLoc.t("Foreign Key Column is available for [ " + Qchildname + " ] !!"));
                    fkavailable = true;
@@ -399,7 +398,8 @@ public class TargetDBSchemaGenerator {
        }
        if (!overallstatus) {
            mLogger.infoNoloc(mLoc.t("Object.xml validation failed!.\nGenerate [ " + fkname + " ] field in all the child objects and re-run schema generator with the valid object.xml"));
-           System.exit(0);
+			// Fix for BugNo:6666486
+		   //System.exit(0);
        }
 
    } 
