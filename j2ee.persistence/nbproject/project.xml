@@ -127,7 +127,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>3</release-version>
-                        <specification-version>1.18</specification-version>
+                        <specification-version>1.37</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -315,6 +315,24 @@ made subject to such option by the copyright holder.
                         <specification-version>6.2</specification-version>
                     </run-dependency>
                 </dependency>
+            <dependency>
+                    <code-name-base>org.netbeans.modules.editor.deprecated.pre61completion</code-name-base>
+                    <run-dependency>
+                        <release-version>0-1</release-version>
+                        <specification-version>1.0</specification-version>
+                    </run-dependency>
+                <build-prerequisite/>
+                    <compile-dependency/>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.editor.deprecated.pre61settings</code-name-base>
+                    <run-dependency>
+                        <release-version>0-1</release-version>
+                        <specification-version>1.0</specification-version>
+                    </run-dependency>
+                <build-prerequisite/>
+                    <compile-dependency/>
+                </dependency>
             </module-dependencies>
             <test-dependencies>
                 <test-type>
@@ -323,6 +341,9 @@ made subject to such option by the copyright holder.
                         <code-name-base>org.netbeans.modules.j2ee.metadata.model.support</code-name-base>
                         <compile-dependency/>
                         <test/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.projectui</code-name-base>
                     </test-dependency>
                     <test-dependency>
                         <code-name-base>org.netbeans.modules.java.source</code-name-base>
@@ -373,6 +394,7 @@ made subject to such option by the copyright holder.
                 <friend>org.netbeans.modules.j2ee.jpa.verification</friend>
                 <friend>org.netbeans.modules.profiler.j2ee</friend>
                 <friend>org.netbeans.modules.web.project</friend>
+                <friend>org.netbeans.modules.web.jsf</friend>
                 <package>org.netbeans.modules.j2ee.persistence.api.entity.generator</package>
                 <package>org.netbeans.modules.j2ee.persistence.spi.entitymanagergenerator</package>
                 <package>org.netbeans.modules.j2ee.persistence.dd</package>
