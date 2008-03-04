@@ -68,6 +68,8 @@ public class DatabaseContext extends DatabaseItem {
     private boolean                         usagesSorted = false;
     private boolean                         contextsSorted = false;
     private boolean                         definitionsSorted = false;
+    private DatabaseDefinition              enclosingDefinition;
+
         
     public DatabaseContext (DatabaseContext parent, String type, int offset, int endOffset) {
         super (offset, endOffset);
@@ -87,6 +89,23 @@ public class DatabaseContext extends DatabaseItem {
         return type;
     }
 
+    public void setEnclosingDefinition(DatabaseDefinition enclosingDefinition) {
+        this.enclosingDefinition = enclosingDefinition;
+    }
+    
+    public DatabaseDefinition getEnclosingDefinition() {
+        if (enclosingDefinition != null) {
+            return enclosingDefinition;
+        } else {
+            if (parent != null) {
+                return parent.getEnclosingDefinition();
+            } else {
+                return null;
+            }
+        }        
+    }
+    
+
     public void addDefinition (DatabaseDefinition definition) {
         definitionsCache = null;
         if (definitions == null)
@@ -102,8 +121,11 @@ public class DatabaseContext extends DatabaseItem {
         usagesSorted = false;
     }
 
-    public void addUsage(ASTToken token, DatabaseDefinition definition) {
-        DatabaseUsage usage = new DatabaseUsage("", token.getOffset(), token.getEndOffset());
+    /**
+     * Only accept ASTToken here, which has precise toString() and offset, endOffset etc.
+     */
+    public void addUsage(ASTToken item, DatabaseDefinition definition) {
+        DatabaseUsage usage = new DatabaseUsage("", item.getOffset(), item.getEndOffset());
         definition.addUsage(usage);
         usage.setDatabaseDefinition(definition);
         addUsage(usage);
@@ -333,9 +355,9 @@ public class DatabaseContext extends DatabaseItem {
         DatabaseContext result = null;
         if (contexts != null) {
             /** search children first */
-            for (DatabaseContext context : contexts) {
-                if (context.contains(offset)) {
-                    result = context.getClosestContext(offset);
+            for (DatabaseContext child : contexts) {
+                if (child.contains(offset)) {
+                    result = child.getClosestContext(offset);
 		    break;
 		}
 	    }  
@@ -360,9 +382,9 @@ public class DatabaseContext extends DatabaseItem {
 
     public <T extends DatabaseDefinition> T getFirstDefinition(Class<T> clazz) {
         if (definitions == null) return null;
-        for (DatabaseDefinition definition : definitions) {
-            if (clazz.isInstance(definition)) {
-                return (T)definition;
+        for (DatabaseDefinition dfn : definitions) {
+            if (clazz.isInstance(dfn)) {
+                return (T) dfn;
             }
         }
         return null;
@@ -371,9 +393,9 @@ public class DatabaseContext extends DatabaseItem {
     public <T extends DatabaseDefinition> Collection<T> getDefinitions(Class<T> clazz) {
         if (definitions == null) return Collections.<T>emptyList();
         Collection<T> result = new ArrayList<T>();
-        for (DatabaseDefinition definition: definitions) {
-            if (clazz.isInstance(definition)) {
-                result.add((T)definition);
+        for (DatabaseDefinition dfn: definitions) {
+            if (clazz.isInstance(dfn)) {
+                result.add((T) dfn);
             }
         }
         return result;
@@ -391,9 +413,9 @@ public class DatabaseContext extends DatabaseItem {
     public <T extends DatabaseDefinition> T getDefinitionInScopeByName(Class<T> clazz, String name) {
         T result = null;
 	if (definitions != null) {
-	    for (DatabaseDefinition definition : definitions) {
-                if (clazz.isInstance(definition) && name.equals(definition.getName())) {
-                    result = (T) definition;
+	    for (DatabaseDefinition dfn : definitions) {
+                if (clazz.isInstance(dfn) && name.equals(dfn.getName())) {
+                    result = (T) dfn;
 		    break;
 	        }
 	    }
@@ -409,6 +431,29 @@ public class DatabaseContext extends DatabaseItem {
 	} 
     }
     
+    public <T extends DatabaseDefinition> T getEnclosingDefinition(Class<T> clazz, int offset) {
+        DatabaseContext context = getClosestContext(offset);
+        return context.getEnclosingDefinitionRecursively(clazz);
+    }
+    
+    public <T extends DatabaseDefinition> T getEnclosingDefinition(Class<T> clazz) {
+        return getEnclosingDefinitionRecursively(clazz);
+    }
+
+    private <T extends DatabaseDefinition> T getEnclosingDefinitionRecursively(Class<T> clazz) {
+        DatabaseDefinition result = getEnclosingDefinition();
+        if (result != null && clazz.isInstance(result)) {
+            return (T) result;
+        } else {
+            DatabaseContext parentCtx = getParent();
+            if (parentCtx != null) {
+                return parentCtx.getEnclosingDefinition(clazz);
+            } else {
+                return null;
+            }
+        }        
+    }
+
     
     @Override
     public String toString () {
