@@ -44,6 +44,7 @@ package org.netbeans.modules.websvc.saas.codegen.java.support;
 import java.awt.Component;
 import javax.swing.JLabel;
 import java.awt.Container;
+import java.io.IOException;
 import javax.swing.JComponent;
 import java.util.Vector;
 import java.util.Iterator;
@@ -57,6 +58,7 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.modules.websvc.saas.codegen.java.JaxRsCodeGenerator;
+import org.openide.util.Exceptions;
 import org.openide.util.Utilities;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -69,18 +71,29 @@ import java.util.TreeSet;
 import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import org.netbeans.api.java.source.JavaSource;
+import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.websvc.api.jaxws.project.GeneratedFilesHelper;
-import org.netbeans.modules.websvc.rest.model.api.RestConstants;
+import org.netbeans.modules.websvc.saas.codegen.java.AbstractGenerator;
+import org.netbeans.modules.websvc.saas.codegen.java.Constants;
+import org.netbeans.modules.websvc.saas.codegen.java.Constants.MimeType;
+import org.netbeans.modules.websvc.saas.codegen.java.model.GenericResourceBean;
+import org.netbeans.modules.websvc.saas.codegen.java.model.JaxwsOperationInfo;
+import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
+import org.openide.NotifyDescriptor;
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.LineCookie;
 import org.openide.cookies.SaveCookie;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.Repository;
+import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.text.Line;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 
 /**
  * Copy of j2ee/utilities Util class
@@ -92,11 +105,13 @@ import org.openide.util.Lookup;
 public class Util {
     public static final String TYPE_DOC_ROOT="doc_root"; //NOI18N
     public static final String AT = "@"; //NOI18N
-    public static final String APATH = AT + RestConstants.PATH_ANNOTATION;      //NOI18N
-    public static final String AGET = AT + RestConstants.GET_ANNOTATION;      //NOI18N
-    public static final String APOST = AT + RestConstants.POST_ANNOTATION;      //NOI18N
-    public static final String APUT = AT + RestConstants.PUT_ANNOTATION;      //NOI18N
-    public static final String ADELETE = AT + RestConstants.DELETE_ANNOTATION;      //NOI18N
+    public static final String APATH = AT + Constants.PATH_ANNOTATION;      //NOI18N
+    public static final String AGET = AT + Constants.GET_ANNOTATION;      //NOI18N
+    public static final String APOST = AT + Constants.POST_ANNOTATION;      //NOI18N
+    public static final String APUT = AT + Constants.PUT_ANNOTATION;      //NOI18N
+    public static final String ADELETE = AT + Constants.DELETE_ANNOTATION;      //NOI18N
+    public static final String SCANNING_IN_PROGRESS = "ScanningInProgress";//NOI18N
+    
     /*
      * Check if the primary file of d is a REST Resource
      */ 
@@ -124,7 +139,7 @@ public class Util {
         }
         return false;
     }
-    
+
     public static boolean isServlet(DataObject d) {
         try {
             if (d == null || !"java".equals(d.getPrimaryFile().getExt())) //NOI18N
@@ -441,7 +456,7 @@ public class Util {
         return sortedKeys;
     }
     
-    public static void showMethod(FileObject source, String methodName) {
+    public static void showMethod(FileObject source, String methodName) throws IOException {
         try {
             DataObject dataObj = DataObject.find(source);          
             JavaSource javaSource = JavaSource.forFileObject(source);
@@ -457,6 +472,7 @@ public class Util {
             LineCookie lc = (LineCookie) dataObj.getCookie(LineCookie.class);
             
             if (lc != null) {
+                Util.checkScanning(false);
                 final long[] position = JavaSourceHelper.getPosition(javaSource, methodName);
                 final Line line = lc.getLineSet().getOriginal((int) position[0]);
                 
@@ -467,8 +483,12 @@ public class Util {
                 });
             }
         } catch (Exception de) {
-            de.printStackTrace();
-            ErrorManager.getDefault().log(ErrorManager.INFORMATIONAL, de.toString());
+            if(de instanceof IOException && de.getMessage().equals(Util.SCANNING_IN_PROGRESS)) {
+                throw new IOException(Util.SCANNING_IN_PROGRESS);
+            } else {
+                de.printStackTrace();
+                ErrorManager.getDefault().log(ErrorManager.INFORMATIONAL, de.toString());
+            }
         }    
     }
 
@@ -516,5 +536,70 @@ public class Util {
 
     public static FileObject findBuildXml(Project project) {
         return project.getProjectDirectory().getFileObject(GeneratedFilesHelper.BUILD_XML_PATH);
+    }
+    
+    public static DataObject createDataObjectFromTemplate(String template, 
+            FileObject targetFolder, String targetName) throws IOException {
+        assert template != null;
+        assert targetFolder != null;
+        
+        FileSystem defaultFS = Repository.getDefault().getDefaultFileSystem();
+        FileObject templateFO = defaultFS.findResource(template);
+        DataObject templateDO = DataObject.find(templateFO);
+        DataFolder dataFolder = DataFolder.findFolder(targetFolder);
+
+        return templateDO.createFromTemplate(dataFolder, targetName);
+    }
+ 
+    public static String deriveResourceName(final String name) {
+        return Inflector.getInstance().camelize(normailizeName(name) + GenericResourceBean.RESOURCE_SUFFIX);
+    }
+
+    public static String deriveUriTemplate(final String name) {
+        return Inflector.getInstance().camelize(normailizeName(name), true) + "/"; //NOI18N
+    }
+    
+    public static MimeType[] deriveMimeTypes(JaxwsOperationInfo[] operations) {
+        if (String.class.getName().equals(operations[operations.length-1].getOperation().getReturnTypeName())) {
+            return new MimeType[] { MimeType.HTML };
+        } else {
+            return new MimeType[] { MimeType.XML };//TODO  MimeType.JSON };
+        }
+    }
+    
+    public static String normailizeName(final String name) {
+        String normalized = name;
+        normalized = normalized.replaceAll("\\p{Punct}", "_");
+        normalized = normalized.replaceAll("\\p{Space}", "_");
+        return normalized;
+    }
+
+    public static boolean isScanningInProgress(boolean showMessage) {
+        try {
+            Thread.sleep(2000);
+            if(SourceUtils.isScanInProgress()) {
+                if(showMessage) {
+                    String message = NbBundle.getMessage(AbstractGenerator.class, 
+                            "MSG_ScanningInProgress"); // NOI18N
+                    NotifyDescriptor desc = new NotifyDescriptor.Message(message, NotifyDescriptor.Message.WARNING_MESSAGE);
+                    DialogDisplayer.getDefault().notify(desc);
+                }
+                return true;
+            }
+        } catch (InterruptedException ex) {
+        }
+        return false;
+    }
+
+    public static void checkScanning() throws IOException{
+        if(Util.isScanningInProgress(true)) {
+            throw new IOException(SCANNING_IN_PROGRESS);
+        }
+    }
+    
+    public static void checkScanning(boolean showMessage) throws IOException{
+        if(Util.isScanningInProgress(showMessage)) {
+            throw new IOException(SCANNING_IN_PROGRESS);
+        }
     }
 }
