@@ -42,6 +42,7 @@ import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.api.Scope;
 import org.netbeans.modules.bpel.model.api.Variable;
+import org.netbeans.modules.bpel.model.api.VariableContainer;
 import org.netbeans.modules.bpel.model.api.references.WSDLReference;
 import org.netbeans.modules.xml.schema.model.GlobalType;
 import org.netbeans.modules.xml.wsdl.model.Message;
@@ -170,7 +171,12 @@ public class VariablesUtil {
             
             final int length = attrs.getLength();
             for (int i = 0; i < length; i++) {
-                result.add(attrs.item(i));
+                final Node item = attrs.item(i);
+                if (item.getPrefix().equals("xmlns")) { // NOI18N
+                    continue;
+                }
+                
+                result.add(node);
             }
         }
         
@@ -222,28 +228,42 @@ public class VariablesUtil {
     // Type ////////////////////////////////////////////////////////////////////
     public String getType(
             final Object object) {
+        String type = null;
+        
         if (object instanceof NamedValueHost) {
             if (object instanceof WsdlMessageVariable) {
-                return " " + getType((WsdlMessageVariable) object) + " ";
+                type = getType((WsdlMessageVariable) object);
             }
-
+            
             if (object instanceof WsdlMessageValue.Part) {
-                return " " + getType((WsdlMessageValue.Part) object) + " ";
+                type = getType((WsdlMessageValue.Part) object);
             }
-
+            
             if (object instanceof XmlElementVariable) {
-                return " " + getType((XmlElementVariable) object) + " ";
+                type = getType((XmlElementVariable) object);
             }
-
+            
             if (object instanceof SimpleVariable) {
-                return " " + getType((SimpleVariable) object) + " ";
+                type = getType((SimpleVariable) object);
+            }
+            
+            if (type == null) {
+                return "";
+            } else {
+                return " " + type + " ";
             }
         }
-
+        
         if (object instanceof Node) {
-            return " " + getType((Node) object) + " ";
+            type = getType((Node) object);
+            
+            if (type == null) {
+                return "";
+            } else {
+                return " " + type + " ";
+            }
         }
-
+        
         return NbBundle.getMessage(
                 VariablesUtil.class, "VU_CannotResolveType", object); // NOI18N
     }
@@ -819,6 +839,12 @@ public class VariablesUtil {
         }
         
         if (object instanceof Node) {
+            final Node node = (Node) object;
+            
+            if ((node instanceof Element) && !XmlUtil.isTextOnlyNode(node)) {
+                return XmlUtil.toString(node);
+            }
+            
             return ((Node) object).getTextContent();
         }
         
@@ -853,6 +879,12 @@ public class VariablesUtil {
         }
         
         if (object instanceof Node) {
+            final Node node = (Node) object;
+            
+            if ((node instanceof Element) && !XmlUtil.isTextOnlyNode(node)) {
+                return "text/xml";
+            }
+            
             return "text/plain"; // NOI18N
         }
         
@@ -900,9 +932,13 @@ public class VariablesUtil {
             return null;
         }
         
+        VariableContainer varsContainer = model.getProcess().
+                getVariableContainer();
+        
         // Add the variables from the process
-        variables.addAll(Arrays.asList(model.getProcess().
-                getVariableContainer().getVariables()));
+        if ((varsContainer != null) && (varsContainer.sizeOfVariable() > 0)) {
+            variables.addAll(Arrays.asList(varsContainer.getVariables()));
+        }
         
         final ProcessInstance currentInstance = 
                 myDebugger.getCurrentProcessInstance();
@@ -926,8 +962,14 @@ public class VariablesUtil {
             
             final Scope scope = getScopeEntity(scopeXpath);
             if (scope != null) {
-                variables.addAll(Arrays.asList(
-                        scope.getVariableContainer().getVariables()));
+                varsContainer = scope.getVariableContainer();
+                
+                if ((varsContainer != null) && 
+                        (varsContainer.sizeOfVariable() > 0)) {
+                    
+                    variables.addAll(
+                            Arrays.asList(varsContainer.getVariables()));
+                }
             }
             
             scopeIndex = index == -1 ? 
