@@ -29,14 +29,14 @@ import org.openide.explorer.propertysheet.PropertyEnv;
  * 
  * @author Kirill Sorokin
  */
-public final class ProcessExecutionColumnModel_Name extends AbstractColumn {
-    public ProcessExecutionColumnModel_Name() {
+public final class ProcessExecutionColumnModel_Line extends AbstractColumn {
+    public ProcessExecutionColumnModel_Line() {
         super();
         
         myId = COLUMN_ID;
-        myName = "CTL_PEV_Column_Name"; // NOI18N
-        myTooltip = "CTL_PEV_Column_Name_Tooltip"; // NOI18N
-        myType = null;
+        myName = "CTL_Column_Line"; // NOI18N
+        myTooltip = "CTL_Column_Line_Tooltip"; // NOI18N
+        myType = String.class;
         mySortable = false;
     }
     
@@ -48,7 +48,7 @@ public final class ProcessExecutionColumnModel_Name extends AbstractColumn {
     ////////////////////////////////////////////////////////////////////////////
     // Constants
     public static final String COLUMN_ID = 
-            "NameColumn"; // NOI18N
+            "LineColumn"; // NOI18N
     
     ////////////////////////////////////////////////////////////////////////////
     // Inner Classes
