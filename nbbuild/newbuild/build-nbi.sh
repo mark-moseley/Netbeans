@@ -6,9 +6,16 @@ cd ${DIRNAME}
 SCRIPTS_DIR=`pwd`
 source init.sh
 
-cd $NB_ALL/installer/infra/build
-
 if [ ! -z $NATIVE_MAC_MACHINE ]; then
+   ssh $NATIVE_MAC_MACHINE rm -rf $MAC_PATH/installer
+   ERROR_CODE=$?
+   if [ $ERROR_CODE != 0 ]; then
+       echo "ERROR: $ERROR_CODE - Connection to MAC machine $NATIVE_MAC_MACHINE failed, can't remove old scripts"
+       exit $ERROR_CODE;
+   fi
+   ssh $NATIVE_MAC_MACHINE mkdir $MAC_PATH/installer
+   cd $NB_ALL
+   gtar c installer/mac | ssh $NATIVE_MAC_MACHINE "( cd $MAC_PATH; tar x )"
    ssh $NATIVE_MAC_MACHINE rm -f $MAC_PATH/zip/*
    ERROR_CODE=$?
    if [ $ERROR_CODE != 0 ]; then
@@ -17,17 +24,30 @@ if [ ! -z $NATIVE_MAC_MACHINE ]; then
    fi
    ssh $NATIVE_MAC_MACHINE mkdir -p $MAC_PATH/zip
    scp -q -v $DIST/zip/$BASENAME*.zip $NATIVE_MAC_MACHINE:$MAC_PATH/zip
+   ls $DIST/zip/moduleclusters | grep -v "all-in-one" | xargs -I {} scp -q -v {} $NATIVE_MAC_MACHINE:$MAC_PATH/zip
    if [ 1 -eq $ML_BUILD ] ; then
         ssh $NATIVE_MAC_MACHINE mkdir -p $MAC_PATH/zip-ml
 	scp -q -v $DIST/ml/zip/$BASENAME*.zip $NATIVE_MAC_MACHINE:$MAC_PATH/zip-ml
+        ls $DIST/ml/zip/moduleclusters | grep -v "all-in-one" | xargs -I {} scp -q -v {} $NATIVE_MAC_MACHINE:$MAC_PATH/zip-ml
    fi
    ERROR_CODE=$?
    if [ $ERROR_CODE != 0 ]; then
        echo "ERROR: $ERROR_CODE - Connection to MAC machine $NATIVE_MAC_MACHINE failed, can't put the zips"
        exit $ERROR_CODE;
    fi
-   ssh $NATIVE_MAC_MACHINE $MAC_PATH/run-mac-installer.sh $ML_BUILD > $MAC_LOG 2>&1 &
+   ssh $NATIVE_MAC_MACHINE $MAC_PATH/run-mac-installer.sh $ML_BUILD > $MAC_LOG 2>&1 
+
+# Run new builds
+   scp -q -v $NB_ALL/../build-private.sh $NATIVE_MAC_MACHINE:$MAC_PATH/installer/mac/newbuild
+   if [ 1 -eq $ML_BUILD ] ; then
+       ssh $NATIVE_MAC_MACHINE $MAC_PATH/installer/mac/newbuild/build.sh $MAC_PATH/zip-ml $BASENAME_PREFIX $BUILDNUMBER $ML_BUILD > $MAC_LOG_NEW 2>&1 &  
+       mv $MAC_PATH/installer/mac/dist/* $MAC_PATH/dist_ml 
+   fi
+   ssh $NATIVE_MAC_MACHINE $MAC_PATH/installer/mac/newbuild/build.sh $MAC_PATH/zip $BASENAME_PREFIX $BUILDNUMBER $ML_BUILD >> $MAC_LOG_NEW 2>&1 &
+
 fi
+
+cd $NB_ALL/installer/infra/build
 
 bash build.sh
 ERROR_CODE=$?
@@ -64,14 +84,16 @@ if [ ! -z $NATIVE_MAC_MACHINE ]; then
         #copy the bits back
         mkdir -p $DIST/bundles
         scp $NATIVE_MAC_MACHINE:$MAC_PATH/installer/mac/dist/* $DIST/bundles
-        EXIT_CODE=$?
+        scp $NATIVE_MAC_MACHINE:$MAC_PATH/installer/mac/newbuild/dist/* $DIST/bundles
+        ERROR_CODE=$?
         if [ $ERROR_CODE != 0 ]; then
             echo "ERROR: $ERROR_CODE - Connection to MAC machine $NATIVE_MAC_MACHINE failed, can't get installers"
             exit $ERROR_CODE;
         fi    
 	if [ 1 -eq $ML_BUILD ] ; then
 		scp $NATIVE_MAC_MACHINE:$MAC_PATH/dist/* $DIST/ml/bundles
-                EXIT_CODE=$?
+		scp $NATIVE_MAC_MACHINE:$MAC_PATH/dist_ml/* $DIST/ml/bundles
+                ERROR_CODE=$?
                 if [ $ERROR_CODE != 0 ]; then
                     echo "ERROR: $ERROR_CODE - Connection to MAC machine $NATIVE_MAC_MACHINE failed, can't get installers"
                     exit $ERROR_CODE;
