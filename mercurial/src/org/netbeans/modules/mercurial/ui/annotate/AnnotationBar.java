@@ -51,10 +51,8 @@ import org.netbeans.modules.mercurial.ui.update.RevertModificationsAction;
 import org.netbeans.modules.mercurial.ui.diff.DiffAction;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.HgProgressSupport;
-import org.netbeans.modules.mercurial.util.HgUtils;
 import org.netbeans.modules.mercurial.util.HgLogMessage;
 import org.netbeans.modules.versioning.util.Utils;
-import org.openide.*;
 import org.openide.loaders.*;
 import org.openide.filesystems.*;
 import org.openide.text.*;
@@ -428,10 +426,12 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
             return;
         }
         final String revStr =  revertModifications.getSelectionRevision();
+        final boolean doBackup = revertModifications.isBackupRequested();
+
         RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(root);
         HgProgressSupport support = new HgProgressSupport() {
             public void perform() {                 
-                RevertModificationsAction.performRevert(root, revStr, file);
+                RevertModificationsAction.performRevert(root, revStr, file, doBackup, this.getLogger());
             }
         };
         support.start(rp, root.getAbsolutePath(), NbBundle.getMessage(AnnotationBar.class, "MSG_Revert_Progress")); // NOI18N
@@ -592,15 +592,6 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         dim.width = width;
         dim.height *=2;  // XXX
         return dim;
-    }
-
-    /**
-     * Gets the maximum size of this component.
-     *
-     * @return the maximum size of this component
-     */
-    public Dimension getMaximumSize() {
-        return getPreferredSize();
     }
 
     /**
