@@ -44,6 +44,7 @@ package org.netbeans.modules.java.hints.errors;
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
+import com.sun.source.tree.ConditionalExpressionTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.LiteralTree;
@@ -119,9 +120,12 @@ public final class AddCast implements ErrorRule<Void> {
                     parents = parents.getParentPath();
                 
                 if (parents != null) {
-                    expected = info.getTrees().getTypeMirror(new TreePath(parents, ((MethodTree) parents.getLeaf()).getReturnType()));
-                    found = ((ReturnTree) scope).getExpression();
-                    resolved = info.getTrees().getTypeMirror(new TreePath(path, found));
+                    Tree returnTypeTree = ((MethodTree) parents.getLeaf()).getReturnType();
+                    if (returnTypeTree != null) {
+                        expected = info.getTrees().getTypeMirror(new TreePath(parents, returnTypeTree));
+                        found = ((ReturnTree) scope).getExpression();
+                        resolved = info.getTrees().getTypeMirror(new TreePath(path, found));
+                    }
                 }
             }
             
@@ -172,8 +176,9 @@ public final class AddCast implements ErrorRule<Void> {
         
         if (tm[0] != null) {
             int position = (int) info.getTrees().getSourcePositions().getStartPosition(info.getCompilationUnit(), expression[0]);
-            
-            result.add(new AddCastFix(info.getJavaSource(), new HintDisplayNameVisitor(info).scan(expression[0], null), Utilities.getTypeName(tm[0], false).toString(), position, expression[0].getKind().asInterface() == BinaryTree.class));
+            Class interf = expression[0].getKind().asInterface();
+            boolean wrapWithBrackets = interf == BinaryTree.class || interf == ConditionalExpressionTree.class;
+            result.add(new AddCastFix(info.getJavaSource(), new HintDisplayNameVisitor(info).scan(expression[0], null), Utilities.getTypeName(tm[0], false).toString(), position, wrapWithBrackets));
         }
         
         return result;
