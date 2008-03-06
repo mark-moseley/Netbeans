@@ -36,7 +36,7 @@
 # holder.
 # 
 
-set -e 
+set -x -e
 
 if [ -z "$1" ] || [ -z "$2" ] ; then
     echo "usage: $0 zipdir basename"
@@ -94,7 +94,7 @@ ant -f $progdir/build.xml -Ddmgname=$dmgname-javaee-macosx.dmg -Dnb.dir=$progdir
 
 # all others
 
-for pkg in javase ruby cpp ; do
+for pkg in javase ruby cpp php ; do
     dmg_postfix=$pkg
     license_file=pkg/license.txt
     if [ $pkg = cpp ]
