@@ -39,47 +39,47 @@
 
 package org.netbeans.modules.ruby.railsprojects.database;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.IOException;
+import javax.swing.text.BadLocationException;
+import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.modules.ruby.railsprojects.RailsProject;
+import org.openide.LifecycleManager;
+import org.openide.cookies.EditorCookie;
+import org.openide.cookies.SaveCookie;
+import org.openide.filesystems.FileObject;
+import org.openide.loaders.DataObject;
+import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.util.Exceptions;
 
 /**
- * A factory for Rails database adapters.
+ * Represent a Rails database adapter that doesn't require any 
+ * extra configuration to be done, except commenting out socket 
+ * in case of JRuby.
  *
  * @author Erno Mononen
  */
-public class RailsAdapterFactory {
+class StandardRailsAdapter implements RailsDatabaseConfiguration {
     
-    private static final List<RailsDatabaseConfiguration> adapters = initAdapters();
+    private final String database;
 
-    /**
-     * Gets all know adapters.
-     * 
-     * @return all know adapters.
-     */
-    public static List<RailsDatabaseConfiguration> getAdapters() {
-        return adapters;
+    StandardRailsAdapter(String database) {
+        this.database = database;
     }
-    
-    /**
-     * Gets the default adapter, i.e. the adapter to be used when no configuration
-     * is specified. The default adapter is MySQL.
-     * 
-     * @return the default adapter.
-     */
-    public static RailsDatabaseConfiguration getDefaultAdapter() {
-        return getAdapters().get(0);
+
+    public String railsGenerationParam() {
+        return database;
     }
-    
-    private static List<RailsDatabaseConfiguration> initAdapters() {
-        List<RailsDatabaseConfiguration> result = new  ArrayList<RailsDatabaseConfiguration>();
-        result.add(new MySQLAdapter());
-//        result.add(new StandardRailsAdapter("mysql"));
-        result.add(new StandardRailsAdapter("oracle"));
-        result.add(new PostgreSQLAdapter());
-        result.add(new StandardRailsAdapter("sqlite2"));
-        result.add(new StandardRailsAdapter("sqlite3"));
-        result.add(new JavaDBAdapter());
-        return result;
+
+    public void editConfig(RailsProject project) {
+        RubyPlatform platform = RubyPlatform.platformFor(project);
+        if (platform.isJRuby()) {
+            // JRuby doesn't support socket
+            RailsAdapters.commentOutSocket(project.getProjectDirectory());
+        }
+    }
+
+    public JdbcInfo getJdbcInfo() {
+        return null;
     }
     
 

@@ -39,48 +39,35 @@
 
 package org.netbeans.modules.ruby.railsprojects.database;
 
-import java.util.ArrayList;
-import java.util.List;
+import org.netbeans.modules.ruby.railsprojects.RailsProject;
 
 /**
- * A factory for Rails database adapters.
+ * Handles the database configuration for a Rails project.
  *
  * @author Erno Mononen
  */
-public class RailsAdapterFactory {
-    
-    private static final List<RailsDatabaseConfiguration> adapters = initAdapters();
+public interface RailsDatabaseConfiguration {
 
     /**
-     * Gets all know adapters.
+     * Gets the database parameter passed to the rails command, i.e. the name 
+     * of the Rails database adapter to be used.
      * 
-     * @return all know adapters.
+     * @return the parameter for the Rails generator or <code>null</code> if
+     * the Rails generator should not be used for generating database configuration
+     * for this.
      */
-    public static List<RailsDatabaseConfiguration> getAdapters() {
-        return adapters;
-    }
+    String railsGenerationParam();
     
     /**
-     * Gets the default adapter, i.e. the adapter to be used when no configuration
-     * is specified. The default adapter is MySQL.
+     * Edits the database config file (database.yml) of the given <code>project</code>
+     * as required by this configuration, and in case of JDBC connections, 
+     * possibly adds a reference to the required 
+     * driver jar files to the properties of the <code>project</code>.
      * 
-     * @return the default adapter.
+     * @param projectDir the project whose <code>database.yml</code> is 
+     * to be edited.
      */
-    public static RailsDatabaseConfiguration getDefaultAdapter() {
-        return getAdapters().get(0);
-    }
+    void editConfig(RailsProject project);
     
-    private static List<RailsDatabaseConfiguration> initAdapters() {
-        List<RailsDatabaseConfiguration> result = new  ArrayList<RailsDatabaseConfiguration>();
-        result.add(new MySQLAdapter());
-//        result.add(new StandardRailsAdapter("mysql"));
-        result.add(new StandardRailsAdapter("oracle"));
-        result.add(new PostgreSQLAdapter());
-        result.add(new StandardRailsAdapter("sqlite2"));
-        result.add(new StandardRailsAdapter("sqlite3"));
-        result.add(new JavaDBAdapter());
-        return result;
-    }
-    
-
+    JdbcInfo getJdbcInfo();
 }
