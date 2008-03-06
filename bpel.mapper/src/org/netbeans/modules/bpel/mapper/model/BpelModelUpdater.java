@@ -73,7 +73,8 @@ import org.netbeans.modules.xml.wsdl.model.Part;
 import org.netbeans.modules.xml.xpath.ext.XPathStringLiteral;
 
 /**
- * 
+ * Looks on the current state of the BPEL Mapper and modifies 
+ * the BPEL model correspondingly.  
  * 
  * @author nk160297
  */
@@ -121,13 +122,11 @@ public class BpelModelUpdater extends AbstractBpelModelUpdater {
         //
         Graph graph = getMapperModel().graphRequired(rightTreePath);
         //
-        GraphInfoCollector graphInfo = new GraphInfoCollector(graph);
-        //
         //=====================================================================
         //
         // Remove copy if there is not any content in the graph 
         //
-        if (graphInfo.noLinksAtAll()) {
+        if (graph.isEmpty()) {
             // Remove copy from the BPEL model
             BpelContainer copyOwner = copy.getParent();
             if (copyOwner != null) {
@@ -150,6 +149,7 @@ public class BpelModelUpdater extends AbstractBpelModelUpdater {
             oldFromForm = CopyFromProcessor.calculateCopyFromForm(from);
         }
         //
+        GraphInfoCollector graphInfo = new GraphInfoCollector(graph);
         if (graphInfo.onlyOneTransitLink()) {
             // Only one link from the left to the right tree
             // 
@@ -474,10 +474,12 @@ public class BpelModelUpdater extends AbstractBpelModelUpdater {
         }
         case EXPRESSION: {
             XPathExpression xPathExpr = createVariableXPath(xPathModel, tpInfo);
-            try {
-                from.setContent(xPathExpr.getExpressionString());
-            } catch (VetoException ex) {
-                // Do nothing
+            if (xPathExpr != null) {
+                try {
+                    from.setContent(xPathExpr.getExpressionString());
+                } catch (VetoException ex) {
+                    // Do nothing
+                }
             }
             //
             from.removeVariable();
