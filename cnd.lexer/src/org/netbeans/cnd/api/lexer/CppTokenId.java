@@ -65,12 +65,20 @@ import org.netbeans.spi.lexer.LexerRestartInfo;
  * @version 1.00
  */
 public enum CppTokenId implements TokenId {
-
+    
+    // make sure token category names are the same used in the string
+    // constants below
+    
     ERROR(null, "error"),
     IDENTIFIER(null, "identifier"),
-
+    
     // C/C++ keywords
+    ALIGNOF("alignof", "keyword"), // g++
+    __ALIGNOF__("__alignof__", "keyword"), // gcc
     ASM("asm", "keyword-directive"), // gcc and C++
+    _ASM("_asm", "keyword"), // g++
+    __ASM("__asm", "keyword"), // gcc
+    __ASM__("__asm__", "keyword"), // gcc
     AUTO("auto", "keyword"), 
     BOOL("bool", "keyword"), // C++
     BREAK("break", "keyword-directive"),
@@ -79,6 +87,8 @@ public enum CppTokenId implements TokenId {
     CHAR("char", "keyword"),
     CLASS("class", "keyword"), //C++
     CONST("const", "keyword"),
+    __CONST("__const", "keyword"), // gcc
+    __CONST__("__const__", "keyword"), // gcc C only
     CONST_CAST("const_cast", "keyword"), // C++
     CONTINUE("continue", "keyword-directive"),
     DEFAULT("default", "keyword-directive"),
@@ -98,12 +108,18 @@ public enum CppTokenId implements TokenId {
     GOTO("goto", "keyword-directive"),
     IF("if", "keyword-directive"),
     INLINE("inline", "keyword"), // now in C also
+    _INLINE("_inline", "keyword"), // g++
+    __INLINE("__inline", "keyword"), // gcc
+    __INLINE__("__inline__", "keyword"), // gcc
     INT("int", "keyword"),
     LONG("long", "keyword"),
     MUTABLE("mutable", "keyword"), // C++
     NAMESPACE("namespace", "keyword"), //C++
     NEW("new", "keyword"), //C++
     OPERATOR("operator", "keyword"), // C++
+    PASCAL("pascal", "keyword"), // g++
+    _PASCAL("_pascal", "keyword"), // g++
+    __PASCAL("__pascal", "keyword"), // g++
     PRIVATE("private", "keyword"), //C++
     PROTECTED("protected", "keyword"), //C++
     PUBLIC("public", "keyword"), // C++
@@ -112,7 +128,9 @@ public enum CppTokenId implements TokenId {
     RESTRICT("restrict", "keyword"), // C
     RETURN("return", "keyword-directive"),
     SHORT("short", "keyword"),
-    SIZNED("signed", "keyword"),
+    SIGNED("signed", "keyword"),
+    __SIGNED("__signed", "keyword"), // gcc
+    __SIGNED__("__signed__", "keyword"), // gcc
     SIZEOF("sizeof", "keyword"),
     STATIC("static", "keyword"),
     STATIC_CAST("static_cast", "keyword"), // C++
@@ -126,18 +144,43 @@ public enum CppTokenId implements TokenId {
     TYPEID("typeid", "keyword"), //C++
     TYPENAME("typename", "keyword"), //C++
     TYPEOF("typeof", "keyword"), // gcc, C++
+    __TYPEOF("__typeof", "keyword"), // gcc
+    __TYPEOF__("__typeof__", "keyword"), // gcc
     UNION("union", "keyword"),
     UNSIGNED("unsigned", "keyword"),
+    __UNSIGNED__("__unsigned__", "keyword"), // g++
     USING("using", "keyword"), //C++
     VIRTUAL("virtual", "keyword"), //C++
     VOID("void", "keyword"),
-    VOLATILE("volatile", "keywrod"),
+    VOLATILE("volatile", "keyword"),
+    __VOLATILE("__volatile", "keyword"), // gcc
+    __VOLATILE__("__volatile__", "keyword"), // gcc
     WCHAR_T("wchar_t", "keyword"), // C++
     WHILE("while", "keyword-directive"),
+    __ATTRIBUTE__("__attribute__", "keyword"), // gcc
     _BOOL("_Bool", "keyword"), // C 
+    _CDECL("_cdecl", "keyword"), // g++
+    __CDECL("__cdecl", "keyword"), // g++
     _COMPLEX("_Complex", "keyword"), // C
+    __COMPLEX__("__complex__", "keyword"), // gcc
+    _DECLSPEC("_declspec", "keyword"), // g++
+    __DECLSPEC("__declspec", "keyword"), // g++
+    __EXTENSION__("__extension__", "keyword"), // g++
+    _FAR("_far", "keyword"), // g++
+    __FAR("__far", "keyword"), // g++
     _IMAGINARY("_Imaginary", "keyword"), // C
-    
+    __IMAG__("__imag__", "keyword"), // gcc
+    _INT64("_int64", "keyword"), // g++
+    __INT64("__int64", "keyword"), // g++
+    __INTERRUPT("__interrupt", "keyword"), // g++
+    _NEAR("_near", "keyword"), // g++
+    __NEAR("__near", "keyword"), // g++
+    __REAL__("__real__", "keyword"), // gcc
+    __RESTRICT("__restrict", "keyword"), // g++
+    _STDCALL("_stdcall", "keyword"), // g++
+    __STDCALL("__stdcall", "keyword"), // g++
+    __W64("__w64", "keyword"), // g++
+
     INT_LITERAL(null, "number"),
     LONG_LITERAL(null, "number"),
     FLOAT_LITERAL(null, "number"),
@@ -230,6 +273,7 @@ public enum CppTokenId implements TokenId {
     PREPROCESSOR_INCLUDE("include", "preprocessor-keyword-directive"),
     PREPROCESSOR_INCLUDE_NEXT("include_next", "preprocessor-keyword-directive"),
     PREPROCESSOR_LINE("line", "preprocessor-keyword-directive"),
+    PREPROCESSOR_IDENT("ident", "preprocessor-keyword-directive"),
     PREPROCESSOR_PRAGMA("pragma", "preprocessor-keyword-directive"),
     PREPROCESSOR_WARNING("warning", "preprocessor-keyword-directive"),
     PREPROCESSOR_ERROR("error", "preprocessor-keyword-directive"),
@@ -241,8 +285,28 @@ public enum CppTokenId implements TokenId {
     
     // Errors
     INVALID_COMMENT_END("*/", "error"),
-    FLOAT_LITERAL_INVALID(null, "number");
+    FLOAT_LITERAL_INVALID(null, "number");    
     
+    // make sure string names are the same used in the tokenIds above
+    public static final String WHITESPACE_CATEGORY = "whitespace"; // NOI18N
+    public static final String COMMENT_CATEGORY = "comment"; // NOI18N
+    public static final String KEYWORD_CATEGORY = "keyword"; // NOI18N
+    public static final String KEYWORD_DIRECTIVE_CATEGORY = "keyword-directive"; // NOI18N
+    public static final String ERROR_CATEGORY = "error"; // NOI18N
+    public static final String NUMBER_CATEGORY = "number"; // NOI18N
+    public static final String LITERAL_CATEGORY = "literal"; // NOI18N
+    public static final String CHAR_CATEGORY = "character"; // NOI18N
+    public static final String STRING_CATEGORY = "string"; // NOI18N
+    public static final String SEPARATOR_CATEGORY = "separator"; // NOI18N
+    public static final String OPERATOR_CATEGORY = "operator"; // NOI18N
+    public static final String SPECIAL_CATEGORY = "special"; // NOI18N
+    public static final String PREPROCESSOR_CATEGORY = "preprocessor"; // NOI18N
+    public static final String PREPROCESSOR_KEYWORD_CATEGORY = "preprocessor-keyword"; // NOI18N
+    public static final String PREPROCESSOR_KEYWORD_DIRECTIVE_CATEGORY = "preprocessor-keyword-directive"; // NOI18N
+    public static final String PREPROCESSOR_IDENTIFIER_CATEGORY = "preprocessor-identifier"; // NOI18N
+    public static final String PREPROCESSOR_USER_INCLUDE_CATEGORY = "preprocessor-user-include-literal"; // NOI18N
+    public static final String PREPROCESSOR_SYS_INCLUDE_CATEGORY = "preprocessor-system-include-literal"; // NOI18N
+  
     private final String fixedText;
 
     private final String primaryCategory;
@@ -305,9 +369,9 @@ public enum CppTokenId implements TokenId {
         @Override
         protected String mimeType() {
             if (this.preproc) {
-                return "text/x-preprocessor";
+                return CndLexerUtilities.PREPROC_MIME_TYPE;
             } else {
-                return this.cpp ? "text/x-c++" : "text/x-c";
+                return this.cpp ? CndLexerUtilities.CPLUSPLUS_MIME_TYPE : CndLexerUtilities.C_MIME_TYPE;
             }
         }
 
@@ -320,7 +384,7 @@ public enum CppTokenId implements TokenId {
         protected Map<String,Collection<CppTokenId>> createTokenCategories() {
             Map<String,Collection<CppTokenId>> cats = new HashMap<String,Collection<CppTokenId>>();
             // Additional literals being a lexical error
-            cats.put("error", EnumSet.of(
+            cats.put(ERROR_CATEGORY, EnumSet.of(
                 CppTokenId.FLOAT_LITERAL_INVALID
             ));
             // Literals category
@@ -333,7 +397,7 @@ public enum CppTokenId implements TokenId {
                 CppTokenId.CHAR_LITERAL,
                 CppTokenId.STRING_LITERAL
             );
-            cats.put("literal", l);
+            cats.put(LITERAL_CATEGORY, l);
 
             // Preprocessor category
 //            EnumSet<CppTokenId> p = EnumSet.of(
