@@ -51,7 +51,6 @@ import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.modules.hibernate.cfg.model.HibernateConfiguration;
 import org.netbeans.modules.hibernate.cfg.model.SessionFactory;
 import org.netbeans.modules.hibernate.util.HibernateUtil;
-import org.netbeans.modules.web.project.api.WebProjectLibrariesModifier;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 
@@ -242,7 +241,7 @@ public class HibernateEnvironment {
         ArrayList<HibernateConfiguration> hibernateConfigurations = new ArrayList<HibernateConfiguration>();
         for(HibernateConfiguration config : getAllHibernateConfigurationsFromProject()) {
             for(String mappingFile : getAllHibernateMappingsFromConfiguration(config)) {
-                if(mappingFileObject.getPath().contains(mappingFile)) {
+                if(!mappingFile.trim().equals("") && mappingFileObject.getPath().contains(mappingFile)) {
                     hibernateConfigurations.add(config);
                 }
             }
