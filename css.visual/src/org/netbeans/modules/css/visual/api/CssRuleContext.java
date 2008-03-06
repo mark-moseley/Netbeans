@@ -23,18 +23,18 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.css.visual.api;
 
 import javax.swing.text.Document;
-import org.netbeans.modules.css.model.CssModel;
-import org.netbeans.modules.css.model.CssRule;
+import org.netbeans.modules.css.editor.model.CssModel;
+import org.netbeans.modules.css.editor.model.CssRule;
 import org.openide.filesystems.FileObject;
 
 /**
  *
- * @author marek
+ * @author marek.fukala@sun.com
  */
 public class CssRuleContext {
 
@@ -42,6 +42,10 @@ public class CssRuleContext {
         private Document doc;
         private CssRule selectedRule;
         private CssModel model;
+        
+        public CssRuleContext(CssRule selectedRule, CssModel model) {
+            this(selectedRule, model, null, null);
+        }
         
         public CssRuleContext(CssRule selectedRule, CssModel model, Document doc, FileObject source) {
             this.selectedRule = selectedRule;
