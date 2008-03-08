@@ -78,8 +78,11 @@ public abstract class SimpleItem {
     
     public static final String LICENSE = "license";
     
+    static final Set<Node> declaratingNodes = new org.openide.util.WeakSet<Node> ();
+    
     public SimpleItem (Node node) {
         declaratingNode = node;
+        declaratingNodes.add (declaratingNode);
     }
     
     public abstract UpdateItem toUpdateItem (Map<String, String> licenses, String catalogDate);
@@ -315,7 +318,7 @@ public abstract class SimpleItem {
         public UpdateItem toUpdateItem (Map<String, String> licenses, String installTime) {
             UpdateItemImpl impl = new InstalledModuleItem (
                     info.getCodeNameBase (),
-                    info.getSpecificationVersion ().toString (),
+                    info.getSpecificationVersion () == null ? null : info.getSpecificationVersion ().toString (),
                     info,
                     null, // XXX author
                     null, // installed cluster
