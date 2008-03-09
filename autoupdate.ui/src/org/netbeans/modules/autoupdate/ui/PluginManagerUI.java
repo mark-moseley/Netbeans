@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -80,7 +80,7 @@ public class PluginManagerUI extends javax.swing.JPanel  {
     private UnitTable updateTable;
     private UnitTable localTable;
     private JButton closeButton;
-    final RequestProcessor.Task initTask;
+    public final RequestProcessor.Task initTask;
     private Object helpInstance = null;
     
     private static RequestProcessor.Task runningTask;
@@ -148,16 +148,19 @@ public class PluginManagerUI extends javax.swing.JPanel  {
                 public void windowOpened (WindowEvent e) {
                     final WindowAdapter waa = this;
                     setWaitingState (true);
-                    Utilities.startAsWorkerThread (PluginManagerUI.this, new Runnable () {
-                        public void run () {
-                            try {
-                                initTask.waitFinished ();
-                                w.removeWindowListener (waa);
-                            } finally {
-                                setWaitingState (false);
-                            }
-                        }
-                    }, NbBundle.getMessage (PluginManagerUI.class, "UnitTab_InitAndCheckingForUpdates"));
+                    Utilities.startAsWorkerThread (PluginManagerUI.this,
+                            new Runnable () {
+                                public void run () {
+                                    try {
+                                        initTask.waitFinished ();
+                                        w.removeWindowListener (waa);
+                                    } finally {
+                                        setWaitingState (false);
+                                    }
+                                }
+                            },
+                            NbBundle.getMessage (PluginManagerUI.class, "UnitTab_InitAndCheckingForUpdates"),
+                            Utilities.getTimeOfInitialization ());
                 }
             });
         }

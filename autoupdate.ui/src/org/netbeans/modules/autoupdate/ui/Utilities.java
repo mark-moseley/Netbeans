@@ -51,6 +51,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.StringTokenizer;
@@ -80,6 +81,8 @@ import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
 import org.netbeans.api.autoupdate.UpdateUnitProvider.CATEGORY;
+import org.openide.util.Task;
+import org.openide.util.TaskListener;
 
 /**
  *
@@ -94,10 +97,16 @@ public class Utilities {
     public static String PLUGIN_MANAGER_CHECK_INTERVAL = "plugin.manager.check.interval";
     
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat ("yyyy/MM/dd"); // NOI18N
+    public static final String TIME_OF_MODEL_INITIALIZATION = "time_of_model_initialization"; // NOI18N
     
     static final String UNSORTED_CATEGORY = NbBundle.getMessage (Utilities.class, "Utilities_Unsorted_Category");
     static final String LIBRARIES_CATEGORY = NbBundle.getMessage (Utilities.class, "Utilities_Libraries_Category");
     static final String BRIDGES_CATEGORY = NbBundle.getMessage (Utilities.class, "Utilities_Bridges_Category");
+    
+    private static final String FIRST_CLASS_MODULES = "org.netbeans.modules.autoupdate.services, org.netbeans.modules.autoupdate.ui"; // NOI18N
+    private static final String PLUGIN_MANAGER_FIRST_CLASS_MODULES = "plugin.manager.first.class.modules"; // NOI18N
+    
+    private static Collection<String> first_class_modules = null;
     
     @SuppressWarnings ("deprecation")
     public static List<UnitCategory> makeInstalledCategories (List<UpdateUnit> units) {
@@ -125,6 +134,12 @@ public class Utilities {
         };
 
     public static List<UnitCategory> makeUpdateCategories (final List<UpdateUnit> units, boolean isNbms) {
+        if (! isNbms && ! units.isEmpty ()) {
+            List<UnitCategory> fcCats = makeFirstClassUpdateCategories ();
+            if (! fcCats.isEmpty ()) {
+                return fcCats;
+            }
+        }
         List<UnitCategory> res = new ArrayList<UnitCategory> ();
         List<String> names = new ArrayList<String> ();
         for (UpdateUnit u : units) {
@@ -149,6 +164,43 @@ public class Utilities {
         logger.log(Level.FINER, "makeUpdateCategories (" + units.size () + ") returns " + res.size ());
         return res;
     };
+
+    public static long getTimeOfInitialization () {
+        return getPreferences ().getLong (TIME_OF_MODEL_INITIALIZATION, 0);
+    }
+    
+    public static void putTimeOfInitialization (long time) {
+        getPreferences ().putLong (TIME_OF_MODEL_INITIALIZATION, time);
+    }
+    
+    private static List<UnitCategory> makeFirstClassUpdateCategories () {
+        Collection<UpdateUnit> units = UpdateManager.getDefault ().getUpdateUnits (UpdateManager.TYPE.MODULE);
+        List<UnitCategory> res = new ArrayList<UnitCategory> ();
+        List<String> names = new ArrayList<String> ();
+        for (UpdateUnit u : units) {
+            UpdateElement el = u.getInstalled ();
+            if (! u.isPending() && el != null) {
+                List<UpdateElement> updates = u.getAvailableUpdates ();
+                if (updates.isEmpty()) {
+                    continue;
+                }
+                if (getFirstClassModules ().contains (el.getCodeName ())) {
+                    String catName = el.getCategory();
+                    if (names.contains (catName)) {
+                        UnitCategory cat = res.get (names.indexOf (catName));
+                        cat.addUnit (new Unit.Update (u, false, catName));
+                    } else {
+                        UnitCategory cat = new UnitCategory (catName);
+                        cat.addUnit (new Unit.Update (u, false, catName));
+                        res.add (cat);
+                        names.add (catName);
+                    }
+                }
+            }
+        }
+        logger.log(Level.FINER, "makeFirstClassUpdateCategories (" + units.size () + ") returns " + res.size ());
+        return res;
+    }
 
     public static List<UnitCategory> makeAvailableCategories (final List<UpdateUnit> units, boolean isNbms) {
         List<UnitCategory> res = new ArrayList<UnitCategory> ();
@@ -296,19 +348,53 @@ public class Utilities {
     }
 
     public static void startAsWorkerThread(final PluginManagerUI manager, final Runnable runnableCode, final String progressDisplayName) {
+        startAsWorkerThread (manager, runnableCode, progressDisplayName, 0);
+    }
+    
+    public static void startAsWorkerThread (final PluginManagerUI manager,
+            final Runnable runnableCode,
+            final String progressDisplayName,
+            final long estimatedTime) {
         startAsWorkerThread(new Runnable() {
             public void run() {
-                ProgressHandle handle = ProgressHandleFactory.createHandle(progressDisplayName); // NOI18N                
+                final ProgressHandle handle = ProgressHandleFactory.createHandle(progressDisplayName); // NOI18N                
                 JComponent progressComp = ProgressHandleFactory.createProgressComponent(handle);
                 JLabel detailLabel = ProgressHandleFactory.createDetailLabelComponent(handle);
                 
                 try {                    
                     detailLabel.setHorizontalAlignment(SwingConstants.LEFT);
                     manager.setProgressComponent(detailLabel, progressComp);
-                    handle.setInitialDelay(0);                    
-                    handle.start();                    
-                    handle.progress (progressDisplayName);
-                    runnableCode.run();
+                    handle.setInitialDelay(0);
+                    if (estimatedTime == 0) {
+                        handle.start ();                    
+                        handle.progress (progressDisplayName);
+                        runnableCode.run ();
+                    } else {
+                        assert estimatedTime > 0 : "Estimated time " + estimatedTime;
+                        handle.start ((int) estimatedTime * 10, estimatedTime); 
+                        handle.progress (progressDisplayName, 0);
+                        final RequestProcessor.Task runnableTask = RequestProcessor.getDefault ().post (runnableCode);
+                        RequestProcessor.getDefault ().post (new Runnable () {
+                            public void run () {
+                                int i = 0;
+                                while (! runnableTask.isFinished ()) {
+                                    try {
+                                        handle.progress (progressDisplayName, i++);
+                                        Thread.sleep (100);
+                                    } catch (InterruptedException ex) {
+                                        // no worries
+                                    }
+                                }
+                            }
+                        });
+                        runnableTask.addTaskListener (new TaskListener () {
+                            public void taskFinished (Task task) {
+                                task.removeTaskListener (this);
+                                handle.finish ();
+                            }
+                        });
+                        runnableTask.waitFinished ();
+                    }
                 } finally {
                     if (handle != null) {
                         handle.finish();
@@ -366,6 +452,26 @@ public class Utilities {
     
     public static String getCustomCheckIntervalInMinutes () {
         return System.getProperty (PLUGIN_MANAGER_CHECK_INTERVAL);
+    }
+    
+    private static String getCustomFirstClassModules () {
+        return System.getProperty (PLUGIN_MANAGER_FIRST_CLASS_MODULES);
+    }
+    
+    private static Collection<String> getFirstClassModules () {
+        if (first_class_modules != null) {
+            return first_class_modules;
+        }
+        String names = getCustomFirstClassModules ();
+        if (names == null || names.length () == 0) {
+            names = FIRST_CLASS_MODULES;
+        }
+        first_class_modules = new HashSet<String> ();
+        StringTokenizer en = new StringTokenizer (names, ","); // NOI18N
+        while (en.hasMoreTokens ()) {
+            first_class_modules.add (en.nextToken ().trim ());
+        }
+        return first_class_modules;
     }
 
     /** Do auto-check for available new plugins a while after startup.
