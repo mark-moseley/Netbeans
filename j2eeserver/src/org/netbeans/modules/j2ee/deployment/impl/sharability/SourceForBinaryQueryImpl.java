@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.java.j2seplatform.libraries;
+package org.netbeans.modules.j2ee.deployment.impl.sharability;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -66,15 +66,20 @@ import org.openide.util.WeakListeners;
  * Finds the locations of sources for various libraries.
  * @author Tomas Zezula
  */
-public class J2SELibrarySourceForBinaryQuery implements SourceForBinaryQueryImplementation2 {
+public class SourceForBinaryQueryImpl implements SourceForBinaryQueryImplementation2 {
 
+    private static final String[] CLASSPATH_VOLUMES = new String[] {
+        ServerLibraryTypeProvider.VOLUME_CLASSPATH,
+        ServerLibraryTypeProvider.VOLUME_WS_COMPILE_CLASSPATH
+    };
+    
     private final Map<URL,SourceForBinaryQueryImplementation2.Result> cache = new ConcurrentHashMap<URL,SourceForBinaryQueryImplementation2.Result>();
     private final Map<URL,URL> normalizedURLCache = new ConcurrentHashMap<URL,URL>();
 
     /** Default constructor for lookup. */
-    public J2SELibrarySourceForBinaryQuery() {}
+    public SourceForBinaryQueryImpl() {}
 
-    public SourceForBinaryQueryImplementation2.Result findSourceRoots2 (URL binaryRoot) {
+    public SourceForBinaryQueryImplementation2.Result findSourceRoots2(URL binaryRoot) {
         SourceForBinaryQueryImplementation2.Result res = cache.get(binaryRoot);
         if (res != null) {
             return res;
@@ -82,16 +87,19 @@ public class J2SELibrarySourceForBinaryQuery implements SourceForBinaryQueryImpl
         boolean isNormalizedURL = isNormalizedURL(binaryRoot);
         for (LibraryManager mgr : LibraryManager.getOpenManagers()) {
             for (Library lib : mgr.getLibraries()) {
-                if (lib.getType().equals(J2SELibraryTypeProvider.LIBRARY_TYPE)) {
-                    for (URL entry : lib.getContent(J2SELibraryTypeProvider.VOLUME_TYPE_CLASSPATH)) {
-                        URL normalizedEntry = LibrariesSupport.resolveLibraryEntryURL(lib.getManager().getLocation(), entry);
-                        if (isNormalizedURL) {
-                            normalizedEntry = getNormalizedURL(normalizedEntry);
-                        }
-                        if (binaryRoot.equals(normalizedEntry)) {
-                            res = new Result(entry, lib);
-                            cache.put(binaryRoot, res);
-                            return res;
+                if (lib.getType().equals(ServerLibraryTypeProvider.LIBRARY_TYPE)) {
+                    for (String type : CLASSPATH_VOLUMES) {
+                        for (URL entry : lib.getContent(type)) {
+                            URL normalizedEntry = LibrariesSupport.resolveLibraryEntryURL(
+                                    mgr.getLocation(), entry);
+                            if (isNormalizedURL) {
+                                normalizedEntry = getNormalizedURL(normalizedEntry);
+                            }
+                            if (binaryRoot.equals(normalizedEntry)) {
+                                res = new Result(entry, lib);
+                                cache.put(binaryRoot, res);
+                                return res;
+                            }
                         }
                     }
                 }
@@ -100,10 +108,10 @@ public class J2SELibrarySourceForBinaryQuery implements SourceForBinaryQueryImpl
         return null;
     }
     
-    
     public SourceForBinaryQuery.Result findSourceRoots (final URL binaryRoot) {
         return this.findSourceRoots2(binaryRoot);
     }
+    
     
     private URL getNormalizedURL (URL url) {
         //URL is already nornalized, return it
@@ -158,18 +166,25 @@ public class J2SELibrarySourceForBinaryQuery implements SourceForBinaryQueryImpl
         public synchronized FileObject[] getRoots () {
             if (this.cache == null) {
                 // entry is not resolved so directly volume content can be searched for it:
-                if (this.lib.getContent(J2SELibraryTypeProvider.VOLUME_TYPE_CLASSPATH).contains(entry)) {
+                boolean contains = false;
+                for (String type : CLASSPATH_VOLUMES) {
+                    if (this.lib.getContent(type).contains(entry)) {
+                        contains = true;
+                        break;
+                    }
+                }
+
+                if (contains) {
                     List<FileObject> result = new ArrayList<FileObject>();
-                    for (URL u : lib.getContent(J2SELibraryTypeProvider.VOLUME_TYPE_SRC)) {
+                    for (URL u : lib.getContent(ServerLibraryTypeProvider.VOLUME_SOURCE)) {
                         u = LibrariesSupport.resolveLibraryEntryURL(lib.getManager().getLocation(), u);
                         FileObject sourceRootURL = URLMapper.findFileObject(u);
-                        if (sourceRootURL!=null) {
-                            result.add (sourceRootURL);
+                        if (sourceRootURL != null) {
+                            result.add(sourceRootURL);
                         }
                     }
                     this.cache = result.toArray(new FileObject[result.size()]);
-                }
-                else {
+                } else {
                     this.cache = new FileObject[0];
                 }
             }
