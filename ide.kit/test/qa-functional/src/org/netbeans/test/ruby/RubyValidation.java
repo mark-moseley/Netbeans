@@ -50,7 +50,6 @@ import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.actions.Action;
 import org.netbeans.jellytools.actions.ActionNoBlock;
 import org.netbeans.jellytools.nodes.Node;
@@ -77,11 +76,12 @@ public class RubyValidation extends JellyTestCase {
 
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new RubyValidation("testIrbShell"));
         suite.addTest(new RubyValidation("testCreateRubyProject"));
         suite.addTest(new RubyValidation("testRunRubyFile"));
         suite.addTest(new RubyValidation("testCreateRailsProject"));
         suite.addTest(new RubyValidation("testRailsGenerate"));
+        // disabled until 129751 is fixed
+        //suite.addTest(new RubyValidation("testIrbShell"));
         return suite;
     }
     
@@ -113,13 +113,11 @@ public class RubyValidation extends JellyTestCase {
      * - open IRB shell window 
      * - close it
      */
-    public void testIrbShell() throws Exception{
-        String rubyproject_packagename = "org.netbeans.modules.ruby.rubyproject.Bundle";
-        String irb_action = Bundle.getStringTrimmed(rubyproject_packagename, "CTL_IrbAction");
-        String irb_TC = Bundle.getString(rubyproject_packagename, "CTL_IrbTopComponent");
-        new Action("Window|Other|" + irb_action, null).perform(); //NOI18N
-        TopComponentOperator tco = new TopComponentOperator(irb_TC);
-        tco.close();
+    public void testIrbShell() {
+        String irbItem = Bundle.getStringTrimmed("org.netbeans.modules.ruby.rubyproject.Bundle", "CTL_IrbAction");
+        String irbTitle = Bundle.getString("org.netbeans.modules.ruby.rubyproject.Bundle", "CTL_IrbTopComponent");
+        new Action("Window|Other|" + irbItem, null).perform();
+        new OutputTabOperator(irbTitle).close();
     }   
 
 
@@ -163,7 +161,7 @@ public class RubyValidation extends JellyTestCase {
         // wait main.rb is opened in editor
         EditorOperator editor = new EditorOperator("main.rb"); // NOI18N
         // "Run File"
-        String runFileItem = Bundle.getStringTrimmed("org.netbeans.modules.ruby.rubyproject.Bundle", "LBL_RunFile_Action");
+        String runFileItem = Bundle.getStringTrimmed("org.netbeans.modules.project.ui.actions.Bundle", "LBL_RunSingleAction_Name", new Integer[] {0});
         // call "Run File" in editor
         new Action(null, runFileItem).perform(editor);
         // check message in output tab
@@ -240,7 +238,7 @@ public class RubyValidation extends JellyTestCase {
         String helpersLabel = Bundle.getString("org.netbeans.modules.ruby.railsprojects.Bundle", "app_helpers");
         new Node(projectRootNode, helpersLabel+"|"+filename);
         
-        filename = "myview.rhtml"; // NOI18N
+        filename = "myview.html.erb"; // NOI18N
         new EditorOperator(filename);
         // "Views"
         String viewsLabel = Bundle.getString("org.netbeans.modules.ruby.railsprojects.Bundle", "app_views");
