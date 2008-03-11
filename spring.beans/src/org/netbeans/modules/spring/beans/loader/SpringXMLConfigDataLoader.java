@@ -42,15 +42,18 @@
 package org.netbeans.modules.spring.beans.loader;
 
 import java.io.IOException;
+import org.netbeans.modules.spring.api.beans.SpringConstants;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.Repository;
 import org.openide.loaders.DataObjectExistsException;
 import org.openide.loaders.MultiDataObject;
 import org.openide.loaders.UniFileLoader;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 public class SpringXMLConfigDataLoader extends UniFileLoader {
 
-    public static final String REQUIRED_MIME = "text/x-springconfig+xml"; // NOI18N
     private static final long serialVersionUID = 1L;
 
     public SpringXMLConfigDataLoader() {
@@ -65,7 +68,23 @@ public class SpringXMLConfigDataLoader extends UniFileLoader {
     @Override
     protected void initialize() {
         super.initialize();
-        getExtensions().addMimeType(REQUIRED_MIME);
+        getExtensions().addMimeType(SpringConstants.CONFIG_MIME_TYPE);
+    }
+
+    @Override
+    protected FileObject findPrimaryFile(FileObject fo) {
+        try {
+            // Hack. The XML templates are not well-formed XML, so they
+            // do not have the Spring XML config MIME type.
+            if (Repository.getDefault().getDefaultFileSystem().equals(fo.getFileSystem())) {
+                if (fo.getPath().startsWith("SpringFramework/Templates") && "xml".equals(fo.getExt())) { // NOI18N
+                    return fo;
+                }
+            }
+        } catch (FileStateInvalidException e) {
+            Exceptions.printStackTrace(e);
+        }
+        return super.findPrimaryFile(fo);
     }
 
     protected MultiDataObject createMultiObject(FileObject primaryFile) throws DataObjectExistsException, IOException {
@@ -74,6 +93,6 @@ public class SpringXMLConfigDataLoader extends UniFileLoader {
 
     @Override
     protected String actionsContext() {
-        return "Loaders/" + REQUIRED_MIME + "/Actions"; // NOI18N
+        return "Loaders/" + SpringConstants.CONFIG_MIME_TYPE + "/Actions"; // NOI18N
     }
 }
