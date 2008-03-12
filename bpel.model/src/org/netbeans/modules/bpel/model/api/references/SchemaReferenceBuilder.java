@@ -16,11 +16,7 @@
  * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  */
-
-/**
- *
- */
-package org.netbeans.modules.bpel.model.impl.references;
+package org.netbeans.modules.bpel.model.api.references;
 
 import java.util.Collection;
 import java.util.LinkedList;
@@ -28,9 +24,8 @@ import java.util.LinkedList;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.api.Import;
-import org.netbeans.modules.bpel.model.api.references.SchemaReference;
-import org.netbeans.modules.bpel.model.api.support.ExNamespaceContext;
-import org.netbeans.modules.bpel.model.impl.Utils;
+import org.netbeans.modules.xml.xpath.ext.schema.ExNamespaceContext;
+import org.netbeans.modules.bpel.model.api.support.Utils;
 import org.netbeans.modules.bpel.model.xam.spi.ExternalModelRetriever;
 import org.netbeans.modules.xml.schema.model.GlobalComplexType;
 import org.netbeans.modules.xml.schema.model.GlobalElement;
@@ -39,15 +34,16 @@ import org.netbeans.modules.xml.schema.model.GlobalType;
 import org.netbeans.modules.xml.schema.model.ReferenceableSchemaComponent;
 import org.netbeans.modules.xml.schema.model.SchemaModel;
 import org.netbeans.modules.xml.schema.model.SchemaModelFactory;
+import org.netbeans.modules.bpel.model.impl.references.AbstractNamedComponentReference;
+import org.netbeans.modules.bpel.model.impl.references.BpelAttributesType;
+import org.netbeans.modules.bpel.model.impl.references.SchemaReferenceImpl;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentComponent;
 import org.netbeans.modules.xml.xam.dom.Attribute;
 import org.openide.util.Lookup;
 import org.openide.util.Lookup.Result;
 
-
 /**
  * @author ads
- *
  */
 public final class SchemaReferenceBuilder {
 
@@ -175,7 +171,7 @@ public final class SchemaReferenceBuilder {
         return ret;
     }
     
-    interface SchemaResolver {
+    public interface SchemaResolver {
         <T extends ReferenceableSchemaComponent> T resolve(
                 AbstractNamedComponentReference<T> reference );
     }
