@@ -432,13 +432,13 @@ public class MenuEditLayer extends JPanel {
                 }
                 
             };
-            formDesigner.addPropertyChangeListener("activatedNodes",selectionListener);
+            formDesigner.addPropertyChangeListener("activatedNodes", selectionListener); // NOI18N
         }
     }
     
     private void unconfigureSelectionListener() {
         if(selectionListener != null) {
-            formDesigner.removePropertyChangeListener(selectionListener);
+            formDesigner.removePropertyChangeListener("activatedNodes", selectionListener); // NOI18N
             selectionListener = null;
         }
     }
@@ -724,12 +724,13 @@ public class MenuEditLayer extends JPanel {
     JComponent getMenuParent(JComponent menu) {
         RADComponent targetRad = formDesigner.getMetaComponent(menu);
         RADComponent parentRad = targetRad.getParentComponent();
-        Object possibleParent = formDesigner.getComponent(parentRad);
-        if(possibleParent instanceof JComponent) {
-            return (JComponent) possibleParent;
-        } else {
-            return null;
+        if (parentRad != null) {
+            Object possibleParent = formDesigner.getComponent(parentRad);
+            if(possibleParent instanceof JComponent) {
+                return (JComponent) possibleParent;
+            }
         }
+        return null;
     }
     
    
@@ -1403,7 +1404,8 @@ public class MenuEditLayer extends JPanel {
             // open top level menus when clicking them
             RADComponent rad = formDesigner.getHandleLayer().getMetaComponentAt(e.getPoint(), HandleLayer.COMP_DEEPEST);
             if(rad != null) {
-                JComponent c = (JComponent) formDesigner.getComponent(rad);
+                Object o = formDesigner.getComponent(rad);
+                JComponent c = (o instanceof JComponent) ? (JComponent)o : null;
                 if(c != null && isTopLevelMenu(c)) {
                     if(e.getClickCount() > 1) {
                         isEditing = true;
