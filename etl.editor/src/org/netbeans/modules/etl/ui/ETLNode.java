@@ -34,9 +34,11 @@ package org.netbeans.modules.etl.ui;
 
 import java.awt.Image;
 
-import java.awt.Image;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import net.java.hulp.i18n.Logger;
+import org.netbeans.modules.etl.logger.Localizer;
+import org.netbeans.modules.etl.logger.LogUtil;
 import org.netbeans.modules.etl.ui.view.cookies.ExecuteTestCookie;
 import org.netbeans.modules.etl.ui.view.cookies.SelectTablesCookie;
 import org.openide.ErrorManager;
@@ -59,6 +61,8 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
     static Image warningImg = Utilities.loadImage("org/netbeans/modules/etl/ui/resources/images/ETLDefinitionWarning.png");
     private ETLDataObject dObj;
     private int state = VALID;
+    private static transient final Logger mLogger = LogUtil.getLogger(ETLNode.class.getName());
+    private static transient final Localizer mLoc = Localizer.get();
 
     public ETLNode(ETLDataObject obj) {
         this(obj, Children.LEAF);
@@ -67,6 +71,7 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
 
     private ETLNode(DataObject obj, Children ch) {
         super(obj, ch);
+		this.dObj = (ETLDataObject) obj;
         obj.addPropertyChangeListener(this);
         setIconBaseWithExtension("org/netbeans/modules/etl/ui/resources/images/ETLDefinition.png");
         init();
@@ -74,6 +79,7 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
 
     private void init() {
         CookieSet cs = getCookieSet();
+		cs.add(dObj);
         cs.add(new ExecuteTestCookie());
         cs.add(new SelectTablesCookie());
     }
@@ -89,13 +95,14 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
         try {
             Property nameProp = new PropertySupport.Reflection(this.dObj, String.class,
                     "getName", null);
-            Property execProp = new PropertySupport.Reflection(this.dObj.getETLDefinition().getSQLDefinition(),
-                    String.class, "getExecutionStrategyStr", null);
-
-            nameProp.setName("Collaboration Name");
-            execProp.setName("Execution Strategy");
+            //Property execProp = new PropertySupport.Reflection(this.dObj.getETLDefinition().getSQLDefinition(),
+                    //String.class, "getExecutionStrategyStr", null);
+            String nbBundle1 = mLoc.t("PRSR001: Collaboration Name");  
+            //String nbBundle2 = mLoc.t("PRSR001: Execution Strategy"); 
+            nameProp.setName(Localizer.parse(nbBundle1));
+            //execProp.setName(Localizer.parse(nbBundle2));
             set.put(nameProp);
-            set.put(execProp);
+            //set.put(execProp);
         } catch (Exception ex) {
             ErrorManager.getDefault().notify(ex);
         }
