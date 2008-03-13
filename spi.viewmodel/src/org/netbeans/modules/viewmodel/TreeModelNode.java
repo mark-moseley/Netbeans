@@ -359,9 +359,9 @@ public class TreeModelNode extends AbstractNode {
     }
     
     private static RequestProcessor requestProcessor;
-    public static RequestProcessor getRequestProcessor () {
+    static RequestProcessor getRequestProcessor () {
         if (requestProcessor == null)
-            requestProcessor = new RequestProcessor ("TreeModel");
+            requestProcessor = new RequestProcessor ("TreeModel", 1);
         return requestProcessor;
     }
 
@@ -963,7 +963,6 @@ public class TreeModelNode extends AbstractNode {
             treeModelRoot.getValuesEvaluator().evaluate(this);
             
             Object ret = null;
-            boolean refreshChildren = false;
             
             synchronized (evaluated) {
                 if (evaluated[0] != 1) {
@@ -973,8 +972,6 @@ public class TreeModelNode extends AbstractNode {
                     if (evaluated[0] != 1) {
                         evaluated[0] = -1; // timeout
                         ret = EVALUATING_STR;
-                    } else {
-                        refreshChildren = true;
                     }
                 }
             }
@@ -984,13 +981,6 @@ public class TreeModelNode extends AbstractNode {
                 }
             }
             
-            if (refreshChildren) {
-                RequestProcessor.getDefault().post(new Runnable() {
-                    public void run() {
-                        refreshTheChildren(true);
-                    }
-                });
-            }
             if (ret == EVALUATING_STR &&
                     getValueType() != null && getValueType() != String.class) {
                 ret = null; // Must not provide String when the property type is different.
