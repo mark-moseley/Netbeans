@@ -49,6 +49,7 @@ import org.netbeans.jellytools.actions.CloseAllDocumentsAction;
 import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.operators.ComponentOperator;
 
+import org.netbeans.jemmy.util.PNGEncoder;
 import org.netbeans.junit.ide.ProjectSupport;
 
 
@@ -94,9 +95,11 @@ public class CreateBPELmodule extends org.netbeans.performance.test.utilities.Pe
     }
     
     public void prepare(){
+        new EventTool().waitNoEvent(3000);
         NewProjectWizardOperator wizard = NewProjectWizardOperator.invoke();
         wizard.selectCategory(category);
         wizard.selectProject(project);
+        wizard.move(0, 0);
         wizard.next();
         wizard_location = new NewProjectNameLocationStepOperator();
         
@@ -119,6 +122,7 @@ public class CreateBPELmodule extends org.netbeans.performance.test.utilities.Pe
     }
     
     public void close(){
+        closeAllModal(); // This is necessary in case open failed
         ProjectSupport.closeProject(project_name);
 //        new CloseAllDocumentsAction().performAPI(); //avoid issue 68671 - editors are not closed after closing project by ProjectSupport
     }
