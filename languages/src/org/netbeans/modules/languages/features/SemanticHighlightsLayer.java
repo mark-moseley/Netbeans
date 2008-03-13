@@ -40,6 +40,7 @@ import javax.swing.text.AttributeSet;
 import javax.swing.text.Document;
 
 import org.netbeans.api.languages.ASTEvaluator;
+import org.netbeans.api.languages.ASTNode;
 import org.netbeans.modules.languages.ParserManagerImpl;
 import org.netbeans.spi.editor.highlighting.HighlightsSequence;
 import org.netbeans.spi.editor.highlighting.support.AbstractHighlightsContainer;
@@ -54,7 +55,7 @@ class SemanticHighlightsLayer extends AbstractHighlightsContainer {
 
     private static Map<Document,List<WeakReference<SemanticHighlightsLayer>>> cache = new WeakHashMap<Document,List<WeakReference<SemanticHighlightsLayer>>> ();
 
-    static void addHighlight (
+    static synchronized void addHighlight (
         Document document, 
         int startOffset,
         int endOffset,
@@ -86,7 +87,7 @@ class SemanticHighlightsLayer extends AbstractHighlightsContainer {
             cache.put (document, newLayers);
     }
     
-    static void update (Document document) {
+    static synchronized void update (Document document) {
         List<WeakReference<SemanticHighlightsLayer>> layers = cache.get (document);
         boolean remove = true;
         if (layers != null) {
@@ -124,12 +125,14 @@ class SemanticHighlightsLayer extends AbstractHighlightsContainer {
         ContextASTEvaluator.register (document);
         UsagesASTEvaluator.register (document);
         
-        List<WeakReference<SemanticHighlightsLayer>> layers = cache.get (document);
-        if (layers == null) {
-            layers = new ArrayList<WeakReference<SemanticHighlightsLayer>> ();
-            cache.put (document, layers);
+        synchronized(SemanticHighlightsLayer.class) {
+            List<WeakReference<SemanticHighlightsLayer>> layers = cache.get (document);
+            if (layers == null) {
+                layers = new ArrayList<WeakReference<SemanticHighlightsLayer>> ();
+                cache.put (document, layers);
+            }
+            layers.add (new WeakReference<SemanticHighlightsLayer> (this));
         }
-        layers.add (new WeakReference<SemanticHighlightsLayer> (this));
     }
     
     public HighlightsSequence getHighlights (int startOffset, int endOffset) {
@@ -143,11 +146,13 @@ class SemanticHighlightsLayer extends AbstractHighlightsContainer {
     
     private void refresh () {
         ParserManagerImpl parserManager = ParserManagerImpl.getImpl (document);
+        ASTNode root = parserManager.getAST ();
+        if (root == null) return;
         parserManager.fire (
             parserManager.getState (), 
             null, 
             getEvaluators (), 
-            parserManager.getAST ()
+            root
         );
     }
     
@@ -157,13 +162,21 @@ class SemanticHighlightsLayer extends AbstractHighlightsContainer {
         if (evaluators == null) {
             evaluators = new HashMap<String,Set<ASTEvaluator>> ();
             ColorsASTEvaluator colorsASTEvaluator = ColorsASTEvaluator.get (document);
-            evaluators.put (colorsASTEvaluator.getFeatureName (), Collections.<ASTEvaluator>singleton (colorsASTEvaluator));
+            if (colorsASTEvaluator != null) {
+                evaluators.put (colorsASTEvaluator.getFeatureName (), Collections.<ASTEvaluator>singleton (colorsASTEvaluator));
+            }
             UsagesASTEvaluator usagesASTEvaluator = UsagesASTEvaluator.get (document);
-            evaluators.put (usagesASTEvaluator.getFeatureName (), Collections.<ASTEvaluator>singleton (usagesASTEvaluator));
+            if (usagesASTEvaluator != null) {
+                evaluators.put (usagesASTEvaluator.getFeatureName (), Collections.<ASTEvaluator>singleton (usagesASTEvaluator));
+            }
             DeclarationASTEvaluator declarationASTEvaluator = DeclarationASTEvaluator.get (document);
-            evaluators.put (declarationASTEvaluator.getFeatureName (), Collections.<ASTEvaluator>singleton (declarationASTEvaluator));
+            if (declarationASTEvaluator != null) {
+                evaluators.put (declarationASTEvaluator.getFeatureName (), Collections.<ASTEvaluator>singleton (declarationASTEvaluator));
+            }    
             ContextASTEvaluator contextASTEvaluator = ContextASTEvaluator.get (document);
-            evaluators.put (contextASTEvaluator.getFeatureName (), Collections.<ASTEvaluator>singleton (contextASTEvaluator));
+            if (contextASTEvaluator != null) {
+                evaluators.put (contextASTEvaluator.getFeatureName (), Collections.<ASTEvaluator>singleton (contextASTEvaluator));
+            }
         }
         return evaluators;
     }
