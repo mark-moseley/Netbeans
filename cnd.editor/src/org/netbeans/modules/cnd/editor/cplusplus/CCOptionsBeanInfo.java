@@ -39,38 +39,52 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.editor.makefile;
+package org.netbeans.modules.cnd.editor.cplusplus;
 
-import org.netbeans.editor.*;
-import org.netbeans.editor.ext.ExtSettingsDefaults;
+import java.util.MissingResourceException;
 
-/**
-* Default settings values for Make.
-*
-*/
+import org.openide.util.NbBundle;
+import org.netbeans.modules.editor.options.BaseOptionsBeanInfo;
 
-public class MakefileSettingsDefaults extends ExtSettingsDefaults {
+/** BeanInfo for CC editor options */
+public class CCOptionsBeanInfo extends BaseOptionsBeanInfo {
 
-  public static final Boolean defaultMakeWordMatchMatchCase = Boolean.TRUE;
+    private static final String[] EXPERT_PROP_NAMES = new String[] {
+        CCOptions.JAVADOC_AUTO_POPUP_PROP,
+    };
+    
+    public CCOptionsBeanInfo() {
+	super("/org/netbeans/modules/cnd/editor/cplusplus/CCIcon"); //NOI18N
+    }
+    
+    protected @Override String[] getPropNames() {
+        // already merged on initialization
+        return CCOptions.CC_PROP_NAMES;
+    }
 
+    protected @Override void updatePropertyDescriptors() {
+        super.updatePropertyDescriptors();
+        setExpert(EXPERT_PROP_NAMES);
+        String hidden[] = new String[] {
+                CCOptions.LINE_HEIGHT_CORRECTION_PROP,
+                CCOptions.STATUS_BAR_CARET_DELAY_PROP,
+                CCOptions.STATUS_BAR_VISIBLE_PROP,
+                CCOptions.COMPLETION_AUTO_POPUP_PROP,
+                CCOptions.INDENT_ENGINE_PROP,
+                CCOptions.JAVADOC_AUTO_POPUP_PROP
+        };
+        setHidden(hidden);
+    }    
+    
+    protected @Override Class getBeanClass() {
+	return CCOptions.class;
+    }
 
-  public static final Acceptor defaultIndentHotCharsAcceptor
-    = new Acceptor() {
-        public boolean accept(char ch) {
-          switch (ch) {
-            case '}':
-            return true;
-          }
-
-          return false;
+    protected @Override String getString(String key) {
+        try {
+            return NbBundle.getBundle(CCOptionsBeanInfo.class).getString(key);
+        } catch (MissingResourceException e) {
+            return super.getString(key);
         }
-      };
-
-  // DO WE NEED IT?
-  public static final String defaultWordMatchStaticWords
-  = "Exception IntrospectionException FileNotFoundException IOException" //NOI18N
-    + " ArrayIndexOutOfBoundsException ClassCastException ClassNotFoundException" //NOI18N
-    + " CloneNotSupportedException NullPointerException NumberFormatException" //NOI18N
-    + " SQLException IllegalAccessException IllegalArgumentException"; //NOI18N
-
-}//MakefileSettingsDefaults
+    }
+}
