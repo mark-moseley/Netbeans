@@ -50,6 +50,7 @@ import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.netbeans.spi.project.ui.support.ProjectSensitiveActions;
+import org.netbeans.modules.bpel.model.api.support.Utils;
 import org.netbeans.modules.bpel.project.IcanproConstants;
 import org.netbeans.modules.bpel.project.ProjectConstants;
 import org.netbeans.modules.compapp.projects.base.ui.customizer.IcanproProjectProperties;
@@ -175,8 +176,7 @@ public class IcanproLogicalViewProvider implements LogicalViewProvider {
         // XXX remove after SimpleTargetChooserPanel rewrite (suggestion if default dir is project dir then it's source dir)
         Sources sources = ProjectUtils.getSources(project);
         List<SourceGroup> roots = new ArrayList<SourceGroup>();
-        SourceGroup[] javaRoots = 
-            sources.getSourceGroups(ProjectConstants.SOURCES_TYPE_BPELPRO);
+        SourceGroup[] javaRoots = sources.getSourceGroups(Utils.SOURCES_TYPE_BPELPRO);
         roots.addAll(Arrays.asList(javaRoots));
         if (roots.isEmpty()) {
             SourceGroup[] sourceGroups = sources.getSourceGroups(Sources.TYPE_GENERIC);
@@ -263,7 +263,7 @@ public class IcanproLogicalViewProvider implements LogicalViewProvider {
 //                null,
 //                ProjectSensitiveActions.projectCommandAction( IcanproConstants.COMMAND_REDEPLOY, bundle.getString( "LBL_RedeployAction_Name" ), null ), // NOI18N
 //                ProjectSensitiveActions.projectCommandAction( IcanproConstants.COMMAND_DEPLOY, bundle.getString( "LBL_DeployAction_Name" ), null ), // NOI18N
-                actions.add(ProjectSensitiveActions.projectCommandAction( IcanproConstants.POPULATE_CATALOG, bundle.getString( "LBL_Populate_Catalog" ), null )); // NOI18N
+//                actions.add(ProjectSensitiveActions.projectCommandAction( IcanproConstants.POPULATE_CATALOG, bundle.getString( "LBL_Populate_Catalog" ), null )); // NOI18N
                 actions.add(null);
                 actions.add(CommonProjectActions.setAsMainProjectAction());
                 actions.add(CommonProjectActions.openSubprojectsAction());
