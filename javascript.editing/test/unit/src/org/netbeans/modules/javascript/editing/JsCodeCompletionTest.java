@@ -39,14 +39,14 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.javascript.editing;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import javax.swing.JTextArea;
 import javax.swing.text.Caret;
-import org.jruby.ast.Node;
 import org.netbeans.modules.gsf.api.CompilationInfo;
 import org.netbeans.modules.gsf.api.Completable.QueryType;
 import org.netbeans.modules.gsf.api.CompletionProposal;
@@ -54,23 +54,20 @@ import org.netbeans.modules.gsf.api.ElementKind;
 import org.netbeans.modules.gsf.api.HtmlFormatter;
 import org.netbeans.modules.gsf.api.NameKind;
 import org.netbeans.napi.gsfret.source.Source;
-import org.netbeans.api.ruby.platform.RubyPlatform;
-import org.netbeans.api.ruby.platform.RubyPlatformManager;
-import org.netbeans.api.ruby.platform.TestUtil;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.modules.gsf.Language;
 import org.netbeans.modules.gsf.LanguageRegistry;
-import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
  * @author Tor Norbye
  */
-public class CodeCompleterTest extends RubyTestBase {
+public class JsCodeCompletionTest extends JsTestBase {
     
-    public CodeCompleterTest(String testName) {
+    public JsCodeCompletionTest(String testName) {
         super(testName);
     }
 
@@ -96,8 +93,16 @@ public class CodeCompleterTest extends RubyTestBase {
                     return p1.getLhsHtml().compareTo(p2.getLhsHtml());
                 }
 
-                if (!p1.getRhsHtml().equals(p2.getRhsHtml())) {
-                    return p1.getRhsHtml().compareTo(p2.getRhsHtml());
+                String p1Rhs = p1.getRhsHtml();
+                String p2Rhs = p2.getRhsHtml();
+                if (p1Rhs == null) {
+                    p1Rhs = "";
+                }
+                if (p2Rhs == null) {
+                    p2Rhs = "";
+                }
+                if (!p1Rhs.equals(p2Rhs)) {
+                    return p1Rhs.compareTo(p2Rhs);
                 }
 
                 // Yuck - tostring comparison of sets!!
@@ -169,28 +174,32 @@ public class CodeCompleterTest extends RubyTestBase {
     }
     
     public void checkCompletion(String file, String caretLine) throws Exception {
-// TODO call TestCompilationInfo.setCaretOffset!        
+        // TODO call TestCompilationInfo.setCaretOffset!        
         QueryType type = QueryType.COMPLETION;
         boolean caseSensitive = true;
         NameKind kind = caseSensitive ? NameKind.PREFIX : NameKind.CASE_INSENSITIVE_PREFIX;
 
-        System.setProperty("netbeans.user", getWorkDirPath());
-        FileObject jrubyHome = TestUtil.getXTestJRubyHomeFO();
-        assertNotNull(jrubyHome);
-        FileObject preindexed = jrubyHome.getParent().getFileObject("preindexed");
-        RubyIndexer.setPreindexedDb(preindexed);
+        String jsDir = System.getProperty("xtest.js.home");
+        if (jsDir == null) {
+            throw new RuntimeException("xtest.js.home property has to be set when running within binary distribution");
+        }
+        File clusterDir = new File(jsDir);
+        if (clusterDir.exists()) {
+            FileObject preindexed = FileUtil.toFileObject(clusterDir).getFileObject("preindexed");
+            if (preindexed != null) {
+                JsIndexer.setPreindexedDb(preindexed);
+            }
+        }
         initializeRegistry();
         // Force classpath initialization
-        RubyPlatform platform = RubyPlatformManager.getDefaultPlatform();
-        platform.getGemManager().getNonGemLoadPath();
-        Language language = LanguageRegistry.getInstance().getLanguageByMimeType(RubyMimeResolver.RUBY_MIME_TYPE);
+        LanguageRegistry.getInstance().getLibraryUrls();
+        Language language = LanguageRegistry.getInstance().getLanguageByMimeType(JsMimeResolver.JAVASCRIPT_MIME_TYPE);
         org.netbeans.modules.gsfret.source.usages.ClassIndexManager.get(language).getBootIndices();
         
         CompilationInfo ci = getInfo(file);
         String text = ci.getText();
         assertNotNull(text);
         assertNotNull(AstUtilities.getParseResult(ci));
-        assertEquals(0, ci.getErrors().size());
         
         int caretOffset = -1;
         if (caretLine != null) {
@@ -204,7 +213,7 @@ public class CodeCompleterTest extends RubyTestBase {
         }
 
         
-        CodeCompleter cc = new CodeCompleter();
+        JsCodeCompletion cc = new JsCodeCompletion();
         
         HtmlFormatter formatter = new HtmlFormatter() {
             private StringBuilder sb = new StringBuilder();
@@ -280,13 +289,104 @@ public class CodeCompleterTest extends RubyTestBase {
         //ci.getIndex();
         //index.setDirty(js);
         js.testUpdateIndex();
-        RubyIndex.setClusterUrl("file:/bogus"); // No translation
+        JsIndex.setClusterUrl("file:/bogus"); // No translation
         List<CompletionProposal> proposals = cc.complete(ci, caretOffset, prefix, kind, type, caseSensitive, formatter);
         
         String described = describe(caretLine, kind, type, proposals);
         assertDescriptionMatches(file, described, true, ".completion");
     }
     
+    public void checkComputeMethodCall(String file, String caretLine, String fqn, String param, boolean expectSuccess) throws Exception {
+        // TODO call TestCompilationInfo.setCaretOffset!        
+        QueryType type = QueryType.COMPLETION;
+        boolean caseSensitive = true;
+
+        String jsDir = System.getProperty("xtest.js.home");
+        if (jsDir == null) {
+            throw new RuntimeException("xtest.js.home property has to be set when running within binary distribution");
+        }
+        File clusterDir = new File(jsDir);
+        if (clusterDir.exists()) {
+            FileObject preindexed = FileUtil.toFileObject(clusterDir).getFileObject("preindexed");
+            if (preindexed != null) {
+                JsIndexer.setPreindexedDb(preindexed);
+            }
+        }
+        
+        initializeRegistry();
+        // Force classpath initialization
+        LanguageRegistry.getInstance().getLibraryUrls();
+        Language language = LanguageRegistry.getInstance().getLanguageByMimeType(JsMimeResolver.JAVASCRIPT_MIME_TYPE);
+        org.netbeans.modules.gsfret.source.usages.ClassIndexManager.get(language).getBootIndices();
+        
+        CompilationInfo ci = getInfo(file);
+        String text = ci.getText();
+        assertNotNull(text);
+        assertNotNull(AstUtilities.getParseResult(ci));
+        
+        int caretOffset = -1;
+        if (caretLine != null) {
+            int caretDelta = caretLine.indexOf("^");
+            assertTrue(caretDelta != -1);
+            caretLine = caretLine.substring(0, caretDelta) + caretLine.substring(caretDelta + 1);
+            int lineOffset = text.indexOf(caretLine);
+            assertTrue(lineOffset != -1);
+
+            caretOffset = lineOffset + caretDelta;
+        }
+        
+        JsCodeCompletion cc = new JsCodeCompletion();
+        boolean upToOffset = type == QueryType.COMPLETION;
+        String prefix = cc.getPrefix(ci, caretOffset, upToOffset);
+        if (prefix == null) {
+            if (prefix == null) {
+                int[] blk =
+                    org.netbeans.editor.Utilities.getIdentifierBlock((BaseDocument)ci.getDocument(),
+                        caretOffset);
+
+                if (blk != null) {
+                    int start = blk[0];
+
+                    if (start < caretOffset ) {
+                        if (upToOffset) {
+                            prefix = ci.getDocument().getText(start, caretOffset - start);
+                        } else {
+                            prefix = ci.getDocument().getText(start, blk[1]-start);
+                        }
+                    }
+                }
+            }
+        }
+
+        Source js = Source.forFileObject(ci.getFileObject());
+        assertNotNull(js);
+        //ci.getIndex();
+        //index.setDirty(js);
+        js.testUpdateIndex();
+        JsIndex.setClusterUrl("file:/bogus"); // No translation
+        
+        IndexedFunction[] methodHolder = new IndexedFunction[1];
+        int[] paramIndexHolder = new int[1];
+        int[] anchorOffsetHolder = new int[1];
+        int lexOffset = caretOffset;
+        int astOffset = caretOffset;
+        boolean ok = JsCodeCompletion.computeMethodCall(ci, lexOffset, astOffset, methodHolder, paramIndexHolder, anchorOffsetHolder, null);
+
+        if (expectSuccess) {
+            assertTrue(ok);
+        } else {
+            return;
+        }
+        IndexedFunction method = methodHolder[0];
+        assertNotNull(method);
+        int index = paramIndexHolder[0];
+        assertTrue(index >= 0);
+        
+        // The index doesn't work right at test time - not sure why
+        // it doesn't have all of the gems...
+        //assertEquals(fqn, method.getFqn());
+        assertEquals(param, method.getParameters().get(index));
+    }
     
     public void checkPrefix(String relFilePath) throws Exception {
         CompilationInfo info = getInfo(relFilePath);
@@ -294,7 +394,7 @@ public class CodeCompleterTest extends RubyTestBase {
         BaseDocument doc = (BaseDocument)info.getDocument();
         StringBuilder sb = new StringBuilder();
 
-        CodeCompleter completer = new CodeCompleter();
+        JsCodeCompletion completer = new JsCodeCompletion();
 
         int index = 0;
         while (index < doc.getLength()) {
@@ -337,40 +437,40 @@ public class CodeCompleterTest extends RubyTestBase {
     }
     
     public void testPrefix1() throws Exception {
-        checkPrefix("testfiles/cc-prefix1.rb");
+        checkPrefix("testfiles/cc-prefix1.js");
     }
     
     public void testPrefix2() throws Exception {
-        checkPrefix("testfiles/cc-prefix2.rb");
+        checkPrefix("testfiles/cc-prefix2.js");
     }
 
     public void testPrefix3() throws Exception {
-        checkPrefix("testfiles/cc-prefix3.rb");
+        checkPrefix("testfiles/cc-prefix3.js");
     }
 
     public void testPrefix4() throws Exception {
-        checkPrefix("testfiles/cc-prefix4.rb");
+        checkPrefix("testfiles/cc-prefix4.js");
     }
 
     public void testPrefix5() throws Exception {
-        checkPrefix("testfiles/cc-prefix5.rb");
+        checkPrefix("testfiles/cc-prefix5.js");
     }
 
     public void testPrefix6() throws Exception {
-        checkPrefix("testfiles/cc-prefix6.rb");
+        checkPrefix("testfiles/cc-prefix6.js");
     }
 
     public void testPrefix7() throws Exception {
-        checkPrefix("testfiles/cc-prefix7.rb");
+        checkPrefix("testfiles/cc-prefix7.js");
     }
 
     public void testPrefix8() throws Exception {
-        checkPrefix("testfiles/cc-prefix8.rb");
+        checkPrefix("testfiles/cc-prefix8.js");
     }
     
     
     private void assertAutoQuery(QueryType queryType, String source, String typedText) {
-        CodeCompleter completer = new CodeCompleter();
+        JsCodeCompletion completer = new JsCodeCompletion();
         int caretPos = source.indexOf('^');
         source = source.substring(0, caretPos) + source.substring(caretPos+1);
         
@@ -388,15 +488,17 @@ public class CodeCompleterTest extends RubyTestBase {
         assertAutoQuery(QueryType.NONE, "foo^", " ");
         assertAutoQuery(QueryType.NONE, "foo^", "c");
         assertAutoQuery(QueryType.NONE, "foo^", "d");
-        assertAutoQuery(QueryType.NONE, "foo^", ";");
         assertAutoQuery(QueryType.NONE, "foo^", "f");
         assertAutoQuery(QueryType.NONE, "Foo:^", ":");
+        assertAutoQuery(QueryType.NONE, "Foo::^", ":");
         assertAutoQuery(QueryType.NONE, "Foo^ ", ":");
         assertAutoQuery(QueryType.NONE, "Foo^bar", ":");
         assertAutoQuery(QueryType.NONE, "Foo:^bar", ":");
+        assertAutoQuery(QueryType.NONE, "Foo::^bar", ":");
     }
 
     public void testAutoQuery2() throws Exception {
+        assertAutoQuery(QueryType.STOP, "foo^", ";");
         assertAutoQuery(QueryType.STOP, "foo^", "[");
         assertAutoQuery(QueryType.STOP, "foo^", "(");
         assertAutoQuery(QueryType.STOP, "foo^", "{");
@@ -405,17 +507,15 @@ public class CodeCompleterTest extends RubyTestBase {
 
     public void testAutoQuery3() throws Exception {
         assertAutoQuery(QueryType.COMPLETION, "foo.^", ".");
-        assertAutoQuery(QueryType.COMPLETION, "Foo::^", ":");
         assertAutoQuery(QueryType.COMPLETION, "foo^ ", ".");
         assertAutoQuery(QueryType.COMPLETION, "foo^bar", ".");
-        assertAutoQuery(QueryType.COMPLETION, "Foo::^bar", ":");
     }
 
     public void testAutoQueryComments() throws Exception {
         assertAutoQuery(QueryType.COMPLETION, "foo^ # bar", ".");
-        assertAutoQuery(QueryType.NONE, "#^foo", ".");
-        assertAutoQuery(QueryType.NONE, "# foo^", ".");
-        assertAutoQuery(QueryType.NONE, "# foo^", ":");
+        assertAutoQuery(QueryType.NONE, "//^foo", ".");
+        assertAutoQuery(QueryType.NONE, "/* foo^*/", ".");
+        assertAutoQuery(QueryType.NONE, "// foo^", ".");
     }
 
     public void testAutoQueryStrings() throws Exception {
@@ -423,189 +523,84 @@ public class CodeCompleterTest extends RubyTestBase {
         assertAutoQuery(QueryType.NONE, "'^foo'", ".");
         assertAutoQuery(QueryType.NONE, "/f^oo/", ".");
         assertAutoQuery(QueryType.NONE, "\"^\"", ".");
-        assertAutoQuery(QueryType.NONE, "\" foo^ \"", ":");
+        assertAutoQuery(QueryType.NONE, "\" foo^ \"", ".");
     }
 
-    public void testAutoQueryRanges() throws Exception {
-        assertAutoQuery(QueryType.NONE, "x..^", ".");
-        assertAutoQuery(QueryType.NONE, "x..^5", ".");
+//    public void testAutoQueryRanges() throws Exception {
+//        assertAutoQuery(QueryType.NONE, "x..^", ".");
+//        assertAutoQuery(QueryType.NONE, "x..^5", ".");
+//    }
+
+//    public void testCompletion1() throws Exception {
+//        checkCompletion("testfiles/completion/lib/test1.js", "f.e^");
+//    }
+//    
+//    public void testCompletion2() throws Exception {
+//        // This test doesn't pass yet because we need to index the -current- file
+//        // before resuming
+//        checkCompletion("testfiles/completion/lib/test2.js", "Result is #{@^myfield} and #@another.");
+//    }
+//    
+//    public void testCompletion3() throws Exception {
+//        checkCompletion("testfiles/completion/lib/test2.js", "Result is #{@myfield} and #@a^nother.");
+//    }
+//    
+
+    public void testLocalCompletion1() throws Exception {
+        checkCompletion("testfiles/completion/lib/test2.js", "^alert('foo1");
     }
 
-    // This test is unstable for some reason
-    //public void testCompletion1() throws Exception {
-    //    checkCompletion("testfiles/completion/lib/test1.rb", "f.e^");
-    //}
-    // ditto
-    //public void testCompletion2() throws Exception {
-    //    // This test doesn't pass yet because we need to index the -current- file
-    //    // before resuming
-    //    checkCompletion("testfiles/completion/lib/test2.rb", "Result is #{@^myfield} and #@another.");
-    //}
-    // 
-    //public void testCompletion3() throws Exception {
-    //    checkCompletion("testfiles/completion/lib/test2.rb", "Result is #{@myfield} and #@a^nother.");
-    //}
+    public void testLocalCompletion2() throws Exception {
+        checkCompletion("testfiles/completion/lib/test2.js", "^alert('foo2");
+    }
     
-    public void testCompletion4() throws Exception {
-        checkCompletion("testfiles/completion/lib/test2.rb", "Hell^o World");
+    public void test129036() throws Exception {
+        checkCompletion("testfiles/completion/lib/test129036.js", "my^ //Foo");
     }
     
-    public void testCompletion5() throws Exception {
-        checkCompletion("testfiles/completion/lib/test2.rb", "/re^g/");
+    public void testCompletionStringCompletion1() throws Exception {
+        checkCompletion("testfiles/completion/lib/test1.js", "Hell^o World");
     }
 
-    public void testCompletion6() throws Exception {
-        checkCompletion("testfiles/completion/lib/test2.rb", "class My^Test");
+    public void testCompletionStringCompletion2() throws Exception {
+        checkCompletion("testfiles/completion/lib/test1.js", "\"f\\^oo\"");
     }
+    
+    public void testCompletionRegexpCompletion1() throws Exception {
+        checkCompletion("testfiles/completion/lib/test1.js", "/re^g/");
+    }
+
+    public void testCompletionRegexpCompletion2() throws Exception {
+        checkCompletion("testfiles/completion/lib/test1.js", "/b\\^ar/");
+    }
+
+//
+//    public void testCompletion6() throws Exception {
+//        checkCompletion("testfiles/completion/lib/test2.js", "class My^Test");
+//    }
 //    
 //    // TODO: Test open classes, class inheritance, relative symbols, finding classes, superclasses, def completion, ...
 
-    public void checkComputeMethodCall(String file, String caretLine, String fqn, String param, boolean expectSuccess) throws Exception {
-        System.setProperty("netbeans.user", getWorkDirPath());
-        FileObject jrubyHome = TestUtil.getXTestJRubyHomeFO();
-        assertNotNull(jrubyHome);
-        FileObject preindexed = jrubyHome.getParent().getFileObject("preindexed");
-        RubyIndexer.setPreindexedDb(preindexed);
-        initializeRegistry();
-        // Force classpath initialization
-        RubyPlatform platform = RubyPlatformManager.getDefaultPlatform();
-        platform.getGemManager().getNonGemLoadPath();
-        Language language = LanguageRegistry.getInstance().getLanguageByMimeType(RubyMimeResolver.RUBY_MIME_TYPE);
-        org.netbeans.modules.gsfret.source.usages.ClassIndexManager.get(language).getBootIndices();
-
-        CodeCompleter cc = new CodeCompleter();
-        TestCompilationInfo info = getInfo(file);
-        String text = info.getText();
-
-        int caretOffset = -1;
-        if (caretLine != null) {
-            int caretDelta = caretLine.indexOf("^");
-            assertTrue(caretDelta != -1);
-            caretLine = caretLine.substring(0, caretDelta) + caretLine.substring(caretDelta + 1);
-            int lineOffset = text.indexOf(caretLine);
-            assertTrue(lineOffset != -1);
-
-            caretOffset = lineOffset + caretDelta;
-        }
-
-        info.setCaretOffset(caretOffset);
-
-        assertNotNull(text);
-        assertNotNull(AstUtilities.getParseResult(info));
-        Source js = Source.forFileObject(info.getFileObject());
-        assertNotNull(js);
-        //ci.getIndex();
-        //index.setDirty(js);
-        js.testUpdateIndex();
-        
-        Node root = AstUtilities.getRoot(info);
-        IndexedMethod[] methodHolder = new IndexedMethod[1];
-        int[] paramIndexHolder = new int[1];
-        int[] anchorOffsetHolder = new int[1];
-        int lexOffset = caretOffset;
-        int astOffset = caretOffset;
-        boolean ok = CodeCompleter.computeMethodCall(info, lexOffset, astOffset, methodHolder, paramIndexHolder, anchorOffsetHolder, null);
-
-        if (expectSuccess) {
-            assertTrue(ok);
-        } else {
-            return;
-        }
-        IndexedMethod method = methodHolder[0];
-        assertNotNull(method);
-        int index = paramIndexHolder[0];
-        assertTrue(index >= 0);
-        
-        // The index doesn't work right at test time - not sure why
-        // it doesn't have all of the gems...
-        //assertEquals(fqn, method.getFqn());
-        assertEquals(param, method.getParameters().get(index));
-    }
-
-    public void testCall1() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call1.rb", "create_table(^firstarg,  :id => true)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "table_name", true);
-    }
-
-    public void testCall2() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call1.rb", "create_table(firstarg^,  :id => true)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "table_name", true);
-    }
-    public void testCall3() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call1.rb", "create_table(firstarg,^  :id => true)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-    public void testCall4() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call1.rb", "create_table(firstarg,  ^:id => true)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-    public void testCallSpace1() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call1.rb", "create_table firstarg,  ^:id => true",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-    public void testCallSpace2() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call1.rb", "create_table ^firstarg,  :id => true",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "table_name", true);
-    }
-    public void testCall5() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call2.rb", "create_table(^)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "table_name", true);
-    }
-    public void testCall6() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call3.rb", "create_table^",
-                null, null, false);
-    }
-    public void testCall7() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call3.rb", "create_table ^",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "table_name", true);
-    }
-    public void testCall8() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call4.rb", "create_table foo,^",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-    public void testCall9() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call4.rb", "create_table foo, ^",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-    public void testCall10() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call5.rb", " create_table(foo, ^)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-    public void testCall11() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call6.rb", " create_table(foo, :key => ^)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-
-    public void testCall12() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call7.rb", " create_table(foo, :key => :^)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-
-    public void testCall13() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call8.rb", " create_table(foo, :key => :a^)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-    public void testCall14() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call9.rb", " create_table(foo, :^)",
-                "ActiveRecord::SchemaStatements::ClassMethods#create_table", "options", true);
-    }
-
-//    public void testCall15() throws Exception {
-//        checkComputeMethodCall("testfiles/calls/call10.rb", "File.exists?(^)",
-//                "File#exists", "file", true);
-//    }
-
-    public void testCall16() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call11.rb", " ^#",
-                null, null, false);
-    }
-
-    public void testCall17() throws Exception {
-        checkComputeMethodCall("testfiles/calls/call12.rb", " ^#",
-                null, null, false);
-    }
     
-    // TODO - test more non-fc calls (e.g. x.foo)
-    // TODO test with splat args (more args than are in def list)
-    // TODO test with long arg lists
+    
+// The call tests don't work yet because I don't have a preindexed database for jsstubs
+// (and the test infrastructure refuses to update the index for test files themselves)
+//    public void testCall1() throws Exception {
+//        //checkComputeMethodCall("testfiles/calls/call1.js", "foo2(^x);", "Foo#bar", "name", true);
+//        checkComputeMethodCall("testfiles/calls/call1.js", "x.addEventListener(type, ^listener, useCapture)", "Foo#bar", "name", true);
+//    }
+//
+//    public void testCall2() throws Exception {
+//        checkComputeMethodCall("testfiles/calls/call1.js", "foo1(^);",
+//                "Foo#bar", "name", true);
+//    }
+//
+//    public void testCall3() throws Exception {
+//        checkComputeMethodCall("testfiles/calls/call1.js", "foo3(x^,y)",
+//                "Foo#bar", "name", false);
+//    }
+//    public void testCall4() throws Exception {
+//        checkComputeMethodCall("testfiles/calls/call2.js", "foo3(x,^)",
+//                "Foo#bar", "name", false);
+//    }
 }

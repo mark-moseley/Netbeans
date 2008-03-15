@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,12 +39,11 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.javascript.editing;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.ArrayList;
 import java.util.Comparator;
 import javax.swing.text.Document;
@@ -53,18 +52,28 @@ import org.netbeans.modules.gsf.api.ElementKind;
 import org.netbeans.modules.gsf.api.HtmlFormatter;
 import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.modules.gsf.api.StructureItem;
-import org.netbeans.modules.ruby.elements.AstAttributeElement;
-import org.netbeans.modules.ruby.elements.AstClassElement;
+import org.netbeans.modules.javascript.editing.JsAnalyzer.AnalysisResult;
 
 /**
+ *
  * @author Tor Norbye
  */
-public class StructureAnalyzerTest extends RubyTestBase {
+public class JsAnalyzerTest extends JsTestBase {
     
-    public StructureAnalyzerTest(String testName) {
+    public JsAnalyzerTest(String testName) {
         super(testName);
     }
 
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        super.tearDown();
+    }
+    
     private void annotate(int indent, StringBuilder sb, Document document, List<? extends StructureItem> structure) {
         for (StructureItem element : structure) {
             for (int i = 0; i < indent; i++) {
@@ -80,12 +89,24 @@ public class StructureAnalyzerTest extends RubyTestBase {
             sb.append(":");
             sb.append("\n");
             List<? extends StructureItem> children = element.getNestedItems();
-            if (children != null && !children.isEmpty()) {
+            if (children != null && children.size() > 0) {
                 List<? extends StructureItem> c = new ArrayList<StructureItem>(children);
                 // Sort children to make tests more stable
                 Collections.sort(c, new Comparator<StructureItem>() {
                     public int compare(StructureItem s1, StructureItem s2) {
-                        return s1.getName().compareTo(s2.getName());
+                        String s1Name = s1.getName();
+                        String s2Name = s2.getName();
+                        if (s1Name == null || s2Name == null) {
+                            if (s1Name == s2Name) {
+                                return 0;
+                            } else if (s1Name == null) {
+                                return -1;
+                            } else {
+                                return 1;
+                            }
+                        } else {
+                            return s1Name.compareTo(s2Name);
+                        }
                     }
                     
                 });
@@ -105,7 +126,7 @@ public class StructureAnalyzerTest extends RubyTestBase {
     
     private void checkStructure(String relFilePath) throws Exception {
         CompilationInfo info = getInfo(relFilePath);
-        StructureAnalyzer analyzer = new StructureAnalyzer();
+        JsAnalyzer analyzer = new JsAnalyzer();
         HtmlFormatter formatter = new HtmlFormatter() {
             private StringBuilder sb = new StringBuilder();
             
@@ -184,76 +205,92 @@ public class StructureAnalyzerTest extends RubyTestBase {
 
         assertDescriptionMatches(relFilePath, annotatedSource, false, ".structure");
     }
+
+    private void checkImports(String relFilePath) throws Exception {
+        CompilationInfo info = getInfo(relFilePath);
+        JsParseResult result = AstUtilities.getParseResult(info);
+        AnalysisResult analysisResult = JsAnalyzer.analyze(result, info);
+        List<String> imports = analysisResult.getImports();
+        if (imports.size() > 1) {
+            Collections.sort(imports);
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        for (String s : imports) {
+            sb.append(s);
+            sb.append("\n");
+        }
+        
+        String annotatedSource = sb.toString();
+
+        assertDescriptionMatches(relFilePath, annotatedSource, false, ".imports");
+    }
     
     public void testAnalysis() throws Exception {
-        checkStructure("testfiles/postgresql_adapter.rb");
+        checkStructure("testfiles/SpryEffects.js");
     }
 
     public void testAnalysis2() throws Exception {
-        checkStructure("testfiles/ape.rb");
+        checkStructure("testfiles/SpryXML.js");
     }
 
     public void testAnalysis3() throws Exception {
-        checkStructure("testfiles/date.rb");
+        checkStructure("testfiles/jmaki-uncompressed.js");
     }
 
     public void testAnalysis4() throws Exception {
-        checkStructure("testfiles/resolv.rb");
+        checkStructure("testfiles/dojo.js.uncompressed.js");
     }
 
-    public void testUnused() throws Exception {
-        checkStructure("testfiles/unused.rb");
-    }
-
-    public void testProtectionLevels() throws Exception {
-        checkStructure("testfiles/protection_levels.rb");
+    public void testAnalysis5() throws Exception {
+        checkStructure("testfiles/dragdrop.js");
     }
     
-    private void checkAttributes(String relFilePath) throws Exception {
-        CompilationInfo info = getInfo(relFilePath);
-        RubyParseResult rpr = AstUtilities.getParseResult(info);
-        StructureAnalyzer.AnalysisResult ar = rpr.getStructure();
-        Map<AstClassElement, Set<AstAttributeElement>> attributes = ar.getAttributes();
-        
-        StringBuilder sb = new StringBuilder();
-        // Gotta sort the results
-        List<AstClassElement> clzList = new ArrayList<AstClassElement>(attributes.keySet());
-        Collections.sort(clzList, new Comparator<AstClassElement>() {
-            public int compare(AstClassElement arg0, AstClassElement arg1) {
-                return arg0.getFqn().compareTo(arg1.getFqn());
-            }
-        });
-        for (AstClassElement clz : clzList) {
-            Set<AstAttributeElement> aes = attributes.get(clz);
-            if (aes != null) {
-                sb.append(clz.getFqn());
-                sb.append("\n");
-                List<AstAttributeElement> attributeList = new ArrayList<AstAttributeElement>(aes);
-                Collections.sort(attributeList, new Comparator<AstAttributeElement>() {
-                    public int compare(AstAttributeElement arg0, AstAttributeElement arg1) {
-                        return arg0.getName().compareTo(arg1.getName());
-                    }
-                });
-                for (AstAttributeElement ae : attributeList) {
-                    sb.append("  ");
-                    sb.append(ae.getName());
-                    sb.append("\n");
-                }
-            }
-        }
-        String annotatedSource = sb.toString();
-
-        assertDescriptionMatches(relFilePath, annotatedSource, false, ".attributes");
-    }
-
-    public void testAttributes1() throws Exception {
-        checkAttributes("testfiles/resolv.rb");
-    }
+//    private void checkAttributes(String relFilePath) throws Exception {
+//        CompilationInfo info = getInfo(relFilePath);
+//        JsParseResult rbr = (JsParseResult)info.getParserResult();
+//        JsAnalyzer.AnalysisResult ar = rbr.getStructure();
+//        Map<AstClassElement, Set<AstAttributeElement>> attributes = ar.getAttributes();
+//        
+//        StringBuilder sb = new StringBuilder();
+//        // Gotta sort the results
+//        List<AstClassElement> clzList = new ArrayList<AstClassElement>(attributes.keySet());
+//        Collections.sort(clzList, new Comparator<AstClassElement>() {
+//            public int compare(AstClassElement arg0, AstClassElement arg1) {
+//                return arg0.getFqn().compareTo(arg1.getFqn());
+//            }
+//        });
+//        for (AstClassElement clz : clzList) {
+//            Set<AstAttributeElement> aes = attributes.get(clz);
+//            if (aes != null) {
+//                sb.append(clz.getFqn());
+//                sb.append("\n");
+//                List<AstAttributeElement> attributeList = new ArrayList<AstAttributeElement>(aes);
+//                Collections.sort(attributeList, new Comparator<AstAttributeElement>() {
+//                    public int compare(AstAttributeElement arg0, AstAttributeElement arg1) {
+//                        return arg0.getName().compareTo(arg1.getName());
+//                    }
+//                });
+//                for (AstAttributeElement ae : attributeList) {
+//                    sb.append("  ");
+//                    sb.append(ae.getName());
+//                    sb.append("\n");
+//                }
+//            }
+//        }
+//        String annotatedSource = sb.toString();
+//
+//        assertDescriptionMatches(relFilePath, annotatedSource, false, ".attributes");
+//    }
+//
+//    public void testAttributes1() throws Exception {
+//        checkAttributes("testfiles/resolv.rb");
+//    }
     
     
     private void checkFolds(String relFilePath) throws Exception {
         CompilationInfo info = getInfo(relFilePath);
-        StructureAnalyzer analyzer = new StructureAnalyzer();
+        JsAnalyzer analyzer = new JsAnalyzer();
         Map<String,List<OffsetRange>> foldsMap = analyzer.folds(info);
         
         // Write folding structure
@@ -325,39 +362,30 @@ public class StructureAnalyzerTest extends RubyTestBase {
     }
 
     public void testFolds1() throws Exception {
-        checkFolds("testfiles/resolv.rb");
+        checkFolds("testfiles/SpryEffects.js");
     }
 
     public void testFolds2() throws Exception {
-        checkFolds("testfiles/postgresql_adapter.rb");
+        checkFolds("testfiles/SpryXML.js");
     }
 
     public void testFolds3() throws Exception {
-        checkFolds("testfiles/ape.rb");
+        checkFolds("testfiles/jmaki-uncompressed.js");
     }
 
     public void testFolds4() throws Exception {
-        checkFolds("testfiles/date.rb");
+        checkFolds("testfiles/dojo.js.uncompressed.js");
     }
 
     public void testFolds5() throws Exception {
-        checkFolds("testfiles/unused.rb");
+        checkFolds("testfiles/dragdrop.js");
     }
 
-    public void testRubyStructureItemEqualsAndHashCode() throws Exception {
-        CompilationInfo info = getInfo("testfiles/testRubyStructureItemEqualsAndHashCode.rb");
-        StructureAnalyzer analyzer = new StructureAnalyzer();
-
-        List<? extends StructureItem> structures = analyzer.scan(info, null);
-        assertEquals("two methods", 3, structures.size());
-        StructureItem twoParams = structures.get(0);
-        StructureItem oneParamA = structures.get(1);
-        StructureItem oneParamB = structures.get(2);
-        assertFalse("not equals", twoParams.equals(oneParamA));
-        assertFalse("not same hashCode (first: " + twoParams.hashCode() + ", second: " + oneParamA.hashCode() + ')',
-                twoParams.hashCode() == oneParamA.hashCode());
-        assertFalse("not equals", oneParamA.equals(oneParamB));
-        assertEquals("same hashCode - we consider just arity", oneParamA.hashCode(), oneParamB.hashCode());
+    public void testImports1() throws Exception {
+        checkImports("testfiles/fileinclusion.html.js");
     }
 
+    public void testImports2() throws Exception {
+        checkImports("testfiles/dragdrop.js");
+    }
 }
