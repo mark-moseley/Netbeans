@@ -877,14 +877,13 @@ public class FormDesigner extends TopComponent implements MultiViewElement
     }
 
     Node[] getSelectedComponentNodes() {
-        Node[] selectedNodes = new Node[selectedComponents.size()];
-        Iterator iter = selectedComponents.iterator();
-        int i = 0;
-        while (iter.hasNext()) {
-            RADComponent metacomp = (RADComponent) iter.next();
-            selectedNodes[i++] = metacomp.getNodeReference();
+        List<Node> selectedNodes = new ArrayList<Node>(selectedComponents.size());
+        for (RADComponent c : selectedComponents) {
+            if (c.getNodeReference() != null) { // issue 126192 workaround
+                selectedNodes.add(c.getNodeReference());
+            }
         }
-        return selectedNodes;
+        return selectedNodes.toArray(new Node[selectedNodes.size()]);
     }
     
     java.util.List<RADComponent> getSelectedLayoutComponents() {
@@ -1072,47 +1071,70 @@ public class FormDesigner extends TopComponent implements MultiViewElement
     }
 
     private void updateAssistantContext() {
-        String context = "select"; // NOI18N
-        List selComps = getSelectedComponents();
-        if (selComps.size() == 1) {
-            RADComponent metacomp = (RADComponent)selComps.get(0);
-            Object bean = metacomp.getBeanInstance();
-            if (bean instanceof JTabbedPane) {
-                JTabbedPane pane = (JTabbedPane)bean;
-                int count = pane.getTabCount();
-                switch (count) {
-                    case 0: context = "tabbedPaneEmpty"; break; // NOI18N
-                    case 1: context = "tabbedPaneOne"; break; // NOI18N
-                    default: context = "tabbedPane"; break; // NOI18N
-                }
-            } else if (bean instanceof JRadioButton) {
-                Node.Property property = metacomp.getPropertyByName("buttonGroup"); // NOI18N
-                try {
-                    if ((property != null) && (property.getValue() == null)) {
-                        context = "buttonGroup"; // NOI18N
+        String context = null;
+        String additionalCtx = null;
+        List<RADComponent> selComps = getSelectedComponents();
+        int selCount = selComps.size();
+        if (selCount > 0) {
+            RADComponent metacomp = selComps.get(0);
+            if (layoutDesigner != null && layoutDesigner.isUnplacedComponent(metacomp.getId())) {
+                if (selCount > 1) {
+                    List<String> ids = new ArrayList<String>(selCount);
+                    for (RADComponent c : selComps) {
+                        ids.add(c.getId());
                     }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }        
-            } else if ((bean instanceof JPanel) && (getTopDesignComponent() != metacomp) && (Math.random() < 0.2)) {
-                context = "designThisContainer"; // NOI18N
-            } else if ((bean instanceof JComboBox) && (Math.random() < 0.4)) {
-                context = "comboBoxModel"; // NOI18N
-            } else if ((bean instanceof JList) && (Math.random() < 0.4)) {
-                context = "listModel"; // NOI18N
-            } else if ((bean instanceof JTable) && (Math.random() < 0.4)) {
-                context = "tableModel"; // NOI18N
-            } else if (bean instanceof JScrollPane) {
-                JScrollPane scrollPane = (JScrollPane)bean;
-                if ((scrollPane.getViewport() != null)
-                        && (scrollPane.getViewport().getView() == null)) {
-                    context = "scrollPaneEmpty"; // NOI18N
-                } else if (Math.random() < 0.5) {
-                    context = "scrollPane"; // NOI18N
+                    if (layoutDesigner.getDraggableComponents(ids).size() == selCount) {
+                        // all selected components are "unplaced" in the same container
+                        context = "unplacedComponents1"; // NOI18N
+                        additionalCtx = "unplacedComponents2"; // NOI18N
+                    }
+                } else {
+                    context = "unplacedComponent1"; // NOI18N
+                    additionalCtx = "unplacedComponent2"; // NOI18N
+                }
+            }
+            if (selCount == 1 && context == null) {
+                Object bean = metacomp.getBeanInstance();
+                if (bean instanceof JTabbedPane) {
+                    JTabbedPane pane = (JTabbedPane)bean;
+                    int count = pane.getTabCount();
+                    switch (count) {
+                        case 0: context = "tabbedPaneEmpty"; break; // NOI18N
+                        case 1: context = "tabbedPaneOne"; break; // NOI18N
+                        default: context = "tabbedPane"; break; // NOI18N
+                    }
+                } else if (bean instanceof JRadioButton) {
+                    Node.Property property = metacomp.getPropertyByName("buttonGroup"); // NOI18N
+                    try {
+                        if ((property != null) && (property.getValue() == null)) {
+                            context = "buttonGroup"; // NOI18N
+                        }
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }        
+                } else if ((bean instanceof JPanel) && (getTopDesignComponent() != metacomp) && (Math.random() < 0.2)) {
+                    context = "designThisContainer"; // NOI18N
+                } else if ((bean instanceof JComboBox) && (Math.random() < 0.4)) {
+                    context = "comboBoxModel"; // NOI18N
+                } else if ((bean instanceof JList) && (Math.random() < 0.4)) {
+                    context = "listModel"; // NOI18N
+                } else if ((bean instanceof JTable) && (Math.random() < 0.4)) {
+                    context = "tableModel"; // NOI18N
+                } else if (bean instanceof JScrollPane) {
+                    JScrollPane scrollPane = (JScrollPane)bean;
+                    if ((scrollPane.getViewport() != null)
+                            && (scrollPane.getViewport().getView() == null)) {
+                        context = "scrollPaneEmpty"; // NOI18N
+                    } else if (Math.random() < 0.5) {
+                        context = "scrollPane"; // NOI18N
+                    }
                 }
             }
         }
-        FormEditor.getAssistantModel(formModel).setContext(context);
+        if (context == null) {
+            context = "select"; // NOI18N
+        }
+        FormEditor.getAssistantModel(formModel).setContext(context, additionalCtx);
     }
 
     /** Finds out what component follows after currently selected component
@@ -1280,12 +1302,10 @@ public class FormDesigner extends TopComponent implements MultiViewElement
             // Align actions
             designerActions.add(new AlignAction(LayoutConstants.HORIZONTAL, LayoutConstants.LEADING, false));
             designerActions.add(new AlignAction(LayoutConstants.HORIZONTAL, LayoutConstants.TRAILING, false));
-            designerActions.add(new AlignAction(LayoutConstants.HORIZONTAL, LayoutConstants.CENTER, false));
             designerActions.add(new AlignAction(LayoutConstants.VERTICAL, LayoutConstants.LEADING, false));
             designerActions.add(new AlignAction(LayoutConstants.VERTICAL, LayoutConstants.TRAILING, false));
-            designerActions.add(new AlignAction(LayoutConstants.VERTICAL, LayoutConstants.CENTER, false));
         }
-        return forToolbar ? designerActions.subList(0, designerActions.size()/2) : designerActions;
+        return forToolbar ? designerActions.subList(0, 6) : designerActions;
     }
 
     public Collection<Action> getResizabilityActions() {

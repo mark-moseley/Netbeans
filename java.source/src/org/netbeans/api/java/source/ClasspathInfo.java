@@ -74,7 +74,7 @@ public final class ClasspathInfo {
     private static final ClassPath EMPTY_PATH = ClassPathSupport.createClassPath(new URL[0]);
     
     static {
-        ClasspathInfoAccessor.INSTANCE = new ClasspathInfoAccessorImpl ();
+        ClasspathInfoAccessor.setINSTANCE(new ClasspathInfoAccessorImpl());
         try {
             Class.forName(ClassIndex.class.getName(), true, CompilationInfo.class.getClassLoader());
         } catch (ClassNotFoundException ex) {            
@@ -126,7 +126,7 @@ public final class ClasspathInfo {
     }
     
     public String toString() {
-        return "ClasspathInfo boot:[" + cachedBootClassPath + "],compile:[" + cachedCompileClassPath + "],src:[" + srcClassPath + "]";  //NOI18N
+        return "ClasspathInfo boot:[" + cachedBootClassPath + "],compile:[" + cachedCompileClassPath + "],src:[" + srcClassPath + "]," + "out:["+outputClassPath+"]";  //NOI18N
     }
     
     // Factory methods ---------------------------------------------------------
