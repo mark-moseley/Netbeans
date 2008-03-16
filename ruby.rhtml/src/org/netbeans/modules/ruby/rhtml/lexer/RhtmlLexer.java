@@ -127,14 +127,18 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                             state = ISA_LT;
                             break;
                             
-                        case '%':
+                        case '%': {
+                            int peek = input.read();
+                            if (peek == '%') {
+                                // %% means just %
+                                break;
+                            }
+                            if (peek != LexerInput.EOF) {
+                                input.backup(1);
+                            }
+                            
                             // See if we're in a line prefix
                             if (input.readLength() == 1) {
-                                // Just treat the % as a delimiter
-                                if (input.read() != '%') {
-                                    // %% = %
-                                    input.backup(1);
-                                }
                                 state = ISI_RUBY_LINE;
                                 return token(RhtmlTokenId.DELIMITER);
                             }
@@ -154,8 +158,8 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                             }
                             break;
                     }
-                    
-                    break;
+                }
+                break;
                     
                 case ISA_LT:
                     switch (actChar) {
@@ -182,18 +186,35 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                                 state = INIT;
                                 return token(RhtmlTokenId.HTML); //return CL token
                             }
-                        case '%':
-                            // Handle <%% == <%
-                            if(input.readLength() == 3) {
-                                // just read <%%.  TODO - should <%%= be considered valid?
+                        case '%': {
+                            int peek = input.read();
+                            if (peek != LexerInput.EOF) {
+                                input.backup(1);
+                            }
+                            if (peek != '>') {
+                                // Handle <%% == <%
+                                if(input.readLength() == 3) {
+                                    // just read <%%.  TODO - should <%%= be considered valid?
+                                    state = ISI_SCRIPTLET;
+                                    return token(RhtmlTokenId.DELIMITER);
+                                } else {
+                                    // RHTML symbol, but we also have content language in the buffer
+                                    input.backup(3); //backup <%@
+                                    state = INIT;
+                                    return token(RhtmlTokenId.HTML); //return CL token
+                                }
+                            } else if (input.readLength() == 3) {
+                                // We have <%%> - it's just a <% opener followed by a %> closer;
+                                // digest the open delimiter now
+                                input.backup(1);
                                 state = ISI_SCRIPTLET;
                                 return token(RhtmlTokenId.DELIMITER);
                             } else {
-                                // RHTML symbol, but we also have content language in the buffer
-                                input.backup(3); //backup <%@
                                 state = INIT;
-                                return token(RhtmlTokenId.HTML); //return CL token
+                                input.backup(3);
+                                return token(RhtmlTokenId.HTML);
                             }
+                        }
                             
                         case '#':
                             if(input.readLength() == 3) {
