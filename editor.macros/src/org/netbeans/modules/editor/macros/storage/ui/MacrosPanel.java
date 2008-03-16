@@ -41,8 +41,8 @@
 package org.netbeans.modules.editor.macros.storage.ui;
 
 import java.awt.Component;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.Set;
 import javax.swing.AbstractButton;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
@@ -56,8 +56,8 @@ import javax.swing.event.ListSelectionListener;
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import org.netbeans.api.editor.mimelookup.MimePath;
+import org.netbeans.core.options.keymap.api.ShortcutAction;
 import org.netbeans.core.options.keymap.api.ShortcutsFinder;
-import org.netbeans.modules.editor.settings.storage.spi.support.StorageSupport;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.NotifyDescriptor.InputLine;
@@ -102,7 +102,11 @@ public class MacrosPanel extends JPanel {
             }
         });
         tMacros.getTableHeader().setReorderingAllowed(false);
-        tMacros.setModel(model.getTableModel());
+        TableSorter sorter = new TableSorter(model.getTableModel());
+        tMacros.setModel(sorter);
+        sorter.setTableHeader(tMacros.getTableHeader());
+        sorter.getTableHeader().setReorderingAllowed(false);
+
         tMacros.getModel().addTableModelListener(new TableModelListener() {
             public void tableChanged(TableModelEvent evt) {
                 tMacrosTableChanged(evt);
@@ -237,6 +241,9 @@ public class MacrosPanel extends JPanel {
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(sMacroCode, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 147, Short.MAX_VALUE))))
         );
+
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(MacrosPanel.class, "AN_MacrosPanel")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MacrosPanel.class, "AD_MacrosPanel")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
     private void bNewActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_bNewActionPerformed
@@ -250,6 +257,14 @@ public class MacrosPanel extends JPanel {
         assert shortcutsFinder != null : "Can't find ShortcutsFinder"; //NOI18N
         
         String shortcut = shortcutsFinder.showShortcutsDialog();
+        // is there already an action with such SC defined?
+        ShortcutAction act = shortcutsFinder.findActionForShortcut(shortcut);
+        if (act != null) {
+            Set<String> set = Collections.emptySet();
+            ((MacrosModel.Macro) act).setShortcuts(set);
+            shortcutsFinder.setShortcuts(act, set);
+        }
+        
         if (shortcut != null) {
             MacrosModel.Macro macro = model.getMacroByIndex(tMacros.getSelectedRow());
             macro.setShortcut(shortcut);
