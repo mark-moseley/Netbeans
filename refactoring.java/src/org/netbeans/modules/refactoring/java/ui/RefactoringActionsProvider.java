@@ -73,7 +73,6 @@ import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.modules.refactoring.api.ui.ExplorerContext;
 import org.netbeans.modules.refactoring.api.ui.RefactoringActionsFactory;
 import org.netbeans.modules.refactoring.java.RetoucheUtils;
-import org.netbeans.modules.refactoring.java.RetoucheUtils;
 import org.netbeans.modules.refactoring.spi.ui.UI;
 import org.netbeans.modules.refactoring.spi.ui.ActionsImplementationProvider;
 import org.netbeans.modules.refactoring.spi.ui.RefactoringUI;
@@ -331,7 +330,7 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         //We live with a 2 pass validation of the selected nodes for now since
         //the code will become unreadable if we attempt to implement all checks
         //in one pass.
-        if (multiplePkgsSelected(nodes)) {
+        if (isSelectionHeterogeneous(nodes)) {
             return false;
         }
         for (Node n:nodes) {
@@ -393,22 +392,15 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
                 }
                 
             };
-        } else if(isPackageSelected(lookup)) {
-            task = new PackagetoTreePathHandleTask(lookup.lookupAll(Node.class)) {
-                @Override
-                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles, CompilationInfo cinfo) {
-                    if (handles.isEmpty()) {
-                        return new SafeDeleteUI(getFileHandles(), handles, true);
-                    }else{
-                        return new SafeDeleteUI(getFileHandles(), handles, b);
-                    }
-                }
-            };
         } else {
             task = new NodeToFileObjectTask(new HashSet(lookup.lookupAll(Node.class))) {
                 @Override
                 protected RefactoringUI createRefactoringUI(FileObject[] selectedElements, Collection<TreePathHandle> handles) {
-                    return new SafeDeleteUI(selectedElements, handles, b);
+                    if (pkg[0]!= null) {
+                        return new SafeDeleteUI(pkg[0]);
+                    } else{                
+                        return new SafeDeleteUI(selectedElements, handles, b);
+                    }
                 }
 
             };
@@ -815,38 +807,22 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
         protected abstract RefactoringUI createRefactoringUI(FileObject[] selectedElement, Collection<TreePathHandle> handles);
     }    
 
-    private static boolean isPackageSelected(Lookup lookup) {
-        Node node = lookup.lookup(Node.class);
-        if ( node != null) {
-            DataObject dataObject = node.getLookup().lookup(DataObject.class);
-            if (dataObject == null) {
-                return false;
-            }
-
-            FileObject fileObject = dataObject.getPrimaryFile();
-            if ((dataObject instanceof DataFolder) && 
-                    RetoucheUtils.isFileInOpenProject(fileObject) && 
-                    RetoucheUtils.isOnSourceClasspath(fileObject) &&
-                    !RetoucheUtils.isClasspathRoot(fileObject)){
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean multiplePkgsSelected(Collection<? extends Node> nodes){
-        boolean pkgSelected = false;
+    private static boolean isSelectionHeterogeneous(Collection<? extends Node> nodes){
+        boolean folderSelected = false;
+        boolean nonFolderNodeSelected = false;
         for (Node node : nodes) {
             DataObject dataObject = node.getCookie(DataObject.class);
             if (dataObject == null){
                 continue;
             }
             if (isRefactorableFolder(dataObject)){
-                if (pkgSelected) {
+                if (folderSelected || nonFolderNodeSelected) {
                     return true;
                 }else{
-                    pkgSelected = true;
+                    folderSelected = true;
                 }
+            }else{
+                nonFolderNodeSelected = true;
             }
         }
 
