@@ -94,6 +94,9 @@ import org.openide.util.NbBundle;
 import java.util.HashSet;
 import java.util.Set;
 import javax.swing.event.ChangeEvent;
+import net.java.hulp.i18n.Logger;
+import org.netbeans.modules.etl.logger.Localizer;
+
 
 /**
  * Captures information needed to determine the record and field layout of a file to be
@@ -108,6 +111,8 @@ import javax.swing.event.ChangeEvent;
  */
 public class TableDefinitionPanel implements ListSelectionListener,
         WizardDescriptor.FinishablePanel {
+    private static transient final Logger mLogger = Logger.getLogger(TableDefinitionPanel.class.getName());
+    private static transient final Localizer mLoc = Localizer.get();
     
     class BoundedIntegerVerifier extends InputVerifier {
         private int max;
@@ -423,50 +428,54 @@ public class TableDefinitionPanel implements ListSelectionListener,
     
     static {
         List headerList = new ArrayList(8);
+        String nbBundle1 = mLoc.t("BUND230: #");
         try {
-            headerList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_layout_recordtable_fieldnum"));
+            headerList.add(nbBundle1.substring(15));
         } catch (MissingResourceException e) {
             headerList.add("Field #");
         }
         
+        String nbBundle2 = mLoc.t("BUND231: Length");
         try {
-            headerList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_layout_recordtable_length"));
+            headerList.add(nbBundle2.substring(15));
         } catch (MissingResourceException e) {
             headerList.add("Length");
         }
         
+        String nbBundle3 = mLoc.t("BUND232: Name");
         try {
-            headerList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_layout_recordtable_name"));
+            headerList.add(nbBundle3.substring(15));
         } catch (MissingResourceException e) {
             headerList.add("Column Name");
         }
         
+        String nbBundle4 = mLoc.t("BUND233: Datatype");
         try {
-            headerList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_layout_recordtable_datatype"));
+            headerList.add(nbBundle4.substring(15));
         } catch (MissingResourceException e) {
             headerList.add("Datatype");
         }
-        
+        String nbBundle5 = mLoc.t("BUND234: Scale");
         try {
-            headerList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_layout_recordtable_scale"));
+            headerList.add(nbBundle5.substring(15));
         } catch (MissingResourceException e) {
             headerList.add("Scale");
         }
-        
+        String nbBundle6 = mLoc.t("BUND235: Null?");
         try {
-            headerList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_layout_recordtable_nullable"));
+            headerList.add(nbBundle6.substring(15));
         } catch (MissingResourceException e) {
             headerList.add("Null?");
         }
-        
+        String nbBundle7 = mLoc.t("BUND236: PK?");
         try {
-            headerList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_layout_recordtable_PK"));
+            headerList.add(nbBundle7.substring(15));
         } catch (MissingResourceException e) {
             headerList.add("PK?");
         }
-        
+        String nbBundle8 = mLoc.t("BUND237: Default");
         try {
-            headerList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_layout_recordtable_default"));
+            headerList.add(nbBundle8.substring(15));
         } catch (MissingResourceException e) {
             headerList.add("Default");
         }
@@ -527,7 +536,8 @@ public class TableDefinitionPanel implements ListSelectionListener,
             Iterator iter = errorList.iterator();
             StringBuilder buf = new StringBuilder(100);
             
-            buf.append(NbBundle.getMessage(TableDefinitionPanel.class, "ERROR_import_layout_cantadvance_prefix"));
+            String nbBundle9 = mLoc.t("BUND238: Please correct the following error(s) in the current set of field properties.");
+            buf.append(nbBundle9.substring(15));
             while (iter.hasNext()) {
                 buf.append(iter.next());
             }
@@ -535,7 +545,8 @@ public class TableDefinitionPanel implements ListSelectionListener,
             DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(buf.toString(), NotifyDescriptor.WARNING_MESSAGE));
             isValid = false;
         } else if (((FlatfileColumnTableModel) tableModel).hasZeroLengthColumns()) {
-            String errMsg = NbBundle.getMessage(TableDefinitionPanel.class, "ERROR_import_layout_delimited_zerolength");
+            String nbBundle10 = mLoc.t("BUND239: Please supply non-zero length values for each field.");
+            String errMsg = nbBundle10.substring(15);
             DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(errMsg, NotifyDescriptor.WARNING_MESSAGE));
             isValid = false;
         } else if(!previewDataPanel.showData(null)) {
@@ -578,8 +589,9 @@ public class TableDefinitionPanel implements ListSelectionListener,
                 if (!"".equals(columnName.trim())) { // ignore empty or blank names
                     int index = existingColumnNames.indexOf(columnName);
                     if (index != -1) {
-                        String errMsg = NbBundle.getMessage(TableDefinitionPanel.class, "ERROR_field_duplicate_name", columnName, new Integer(
+                        String nbBundle11 = mLoc.t("BUND240: Column #{1}:  {0} is already used in column #{2}.",columnName,new Integer(
                                 iter.nextIndex()), new Integer(index + 1));
+                        String errMsg = nbBundle11.substring(15);
                         duplicateErrorList.add(errMsg);
                     } else {
                         existingColumnNames.add(columnName);
@@ -596,15 +608,17 @@ public class TableDefinitionPanel implements ListSelectionListener,
                 }
             }
             
+            String nbBundle12 = mLoc.t("BUND241: Column lengths do not sum up to the record length given inStep 2.Please adjust your column values, or go back to Step 2 and correct the record length.");
             if (PropertyKeys.FIXEDWIDTH.equalsIgnoreCase(parserType) && sumFieldLengths != recordLength) {
-                errList.add(0, NbBundle.getMessage(TableDefinitionPanel.class, "ERROR_field_length_sum_notequal_recordlength"));
+                errList.add(0, nbBundle12.substring(15));
             }
             
             if (errList.size() < MAX_ERRORS_TO_DISPLAY && !duplicateErrorList.isEmpty()) {
                 int maximumToShow = Math.min(Math.max(0, (MAX_ERRORS_TO_DISPLAY - errList.size())), duplicateErrorList.size());
                 // Show only up to the first twenty duplications.
                 if (maximumToShow != 0) {
-                    errList.add(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_error_duplicate_header"));
+                    String nbBundle13 = mLoc.t("BUND242: Duplicate column names:");
+                    errList.add(nbBundle13.substring(15));
                     
                     errList.addAll(duplicateErrorList.subList(0, maximumToShow));
                     if (maximumToShow >= MAX_ERRORS_TO_DISPLAY) {
@@ -630,7 +644,8 @@ public class TableDefinitionPanel implements ListSelectionListener,
         previewDataPanel.setEnabled(isValid);
         
         if (parseErrorMessage != null) {
-            parseErrorMessage.setText(isValid ? " " : NbBundle.getMessage(TableDefinitionPanel.class, "ERROR_check_parameters"));
+            String nbBundle14 = mLoc.t("BUND243: Please check for invalid name, length, scale, default values.");
+            parseErrorMessage.setText(isValid ? " " : nbBundle14.substring(15));
             parseErrorMessage.revalidate();
             parseErrorMessage.repaint();
         }
@@ -770,14 +785,17 @@ public class TableDefinitionPanel implements ListSelectionListener,
                 Object timeType = SQLUtils.getStdSqlType(Types.TIME);
                 Object tsType = SQLUtils.getStdSqlType(Types.TIMESTAMP);
                 
+                String nbBundle15 = mLoc.t("BUND244: Precision of column");
                 if (numericType != null && numericType.equals(typeObj)) {
-                    renderer1.setToolTipText(NbBundle.getMessage(TableDefinitionPanel.class, "TOOLTIP_layout_recordtable_precision"));
+                    renderer1.setToolTipText(nbBundle15.substring(15));
                     renderer1.setHorizontalAlignment(SwingConstants.RIGHT);
                 } else if (timeType != null && tsType != null && (timeType.equals(typeObj) || tsType.equals(typeObj))) {
-                    renderer1.setToolTipText(NbBundle.getMessage(TableDefinitionPanel.class, "TOOLTIP_layout_recordtable_maxlength", typeObj));
+                    String nbBundle16 = mLoc.t("BUND245: Max length of {0} representation",typeObj);
+                    renderer1.setToolTipText(nbBundle16.substring(15));
                     renderer1.setHorizontalAlignment(SwingConstants.RIGHT);
                 } else {
-                    renderer1.setToolTipText(NbBundle.getMessage(TableDefinitionPanel.class, "TOOLTIP_layout_recordtable_length", typeObj));
+                    String nbBundle17 = mLoc.t("BUND246: Char length of column",typeObj);
+                    renderer1.setToolTipText(nbBundle15.substring(15));
                     renderer1.setHorizontalAlignment(SwingConstants.RIGHT);
                 }
                 
@@ -831,8 +849,10 @@ public class TableDefinitionPanel implements ListSelectionListener,
                     editor.setEnabled(true);
                 } else {
                     JLabel lbl = (JLabel) editor;
-                    lbl.setText(NbBundle.getMessage(TableDefinitionPanel.class, "COMMON_layout_recordtable_notapplicable"));
-                    lbl.setToolTipText(NbBundle.getMessage(TableDefinitionPanel.class, "COMMON_layout_recordtable_unused", typeObj));
+                    String nbBundle18 = mLoc.t("BUND051: N/A");
+                    lbl.setText(nbBundle18.substring(15));
+                    String nbBundle19 = mLoc.t("BUND248: Not defined for datatype {0}",typeObj);
+                    lbl.setToolTipText(nbBundle19.substring(15));
                     lbl.setHorizontalAlignment(SwingConstants.CENTER);
                 }
                 
@@ -846,11 +866,14 @@ public class TableDefinitionPanel implements ListSelectionListener,
                 Object typeObj = aTable.getValueAt(row, FlatfileColumnTableModel.COLUMN_JDBCTYPE);
                 Object numericType = SQLUtils.getStdSqlType(Types.NUMERIC);
                 if (numericType != null && numericType.equals(typeObj)) {
-                    renderer1.setToolTipText(NbBundle.getMessage(TableDefinitionPanel.class, "TOOLTIP_layout_recordtable_scale_numeric"));
+                    String nbBundle20 = mLoc.t("BUND249: Numeric scale (must be less than or equal to precision)");
+                    renderer1.setToolTipText(nbBundle20.substring(15));
                     renderer1.setHorizontalAlignment(SwingConstants.RIGHT);
                 } else {
-                    renderer1.setText(NbBundle.getMessage(TableDefinitionPanel.class, "COMMON_layout_recordtable_notapplicable"));
-                    renderer1.setToolTipText(NbBundle.getMessage(TableDefinitionPanel.class, "COMMON_layout_recordtable_unused", typeObj));
+                    String nbBundle21 = mLoc.t("BUND051: N/A");
+                    renderer1.setText(nbBundle21.substring(15));
+                    String nbBundle22 = mLoc.t("BUND248: Not defined for datatype {0}",typeObj);
+                    renderer1.setToolTipText(nbBundle22.substring(15));
                     renderer1.setHorizontalAlignment(SwingConstants.CENTER);
                 }
                 
@@ -869,8 +892,11 @@ public class TableDefinitionPanel implements ListSelectionListener,
                 if (Boolean.TRUE.equals(typeObj)) {
                     nullrenderer.setSelected(false);
                     JLabel lbl = (JLabel) editor;
-                    lbl.setText(NbBundle.getMessage(TableDefinitionPanel.class, "COMMON_layout_recordtable_notapplicable"));
-                    lbl.setToolTipText(NbBundle.getMessage(TableDefinitionPanel.class, "COMMON_layout_recordtable_unused", typeObj));
+                    String nbBundle23 = mLoc.t("BUND051: N/A");
+                    lbl.setText(nbBundle23.substring(15));
+                    String nbBundle24 = mLoc.t("BUND248: Not defined for datatype {0}",typeObj);
+                    lbl.setToolTipText(nbBundle24.substring(15));
+                    lbl.setDisplayedMnemonic(nbBundle24.substring(15).charAt(0));
                     lbl.setHorizontalAlignment(SwingConstants.CENTER);
                 } else {
                     editor = (JComponent) nullrenderer.getTableCellRendererComponent(aTable, value, isSelected, isSelected, row, column);
@@ -932,7 +958,8 @@ public class TableDefinitionPanel implements ListSelectionListener,
         
         // Set up listeners for interaction between colMetaTable selections and buttons.
         JPanel tablePanel = new JPanel();
-        String tableLabel = NbBundle.getMessage(TableDefinitionPanel.class, "LBL_import_field_table");
+        String nbBundle25 = mLoc.t("BUND250: Column Definition");
+        String tableLabel = nbBundle25.substring(15);
         tablePanel.setBorder(BorderFactory.createTitledBorder(tableLabel));
         
         tablePanel.setLayout(new BorderLayout());
@@ -1059,7 +1086,10 @@ public class TableDefinitionPanel implements ListSelectionListener,
     private void init() {
         panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
         panel.setPreferredSize(new Dimension(205, 130));
-        JLabel instr = new JLabel(NbBundle.getMessage(TableDefinitionPanel.class, "LBL_instr_import_layout"));
+        
+        String nbBundle26 = mLoc.t("BUND251: Define table and column definition for this file.");
+        JLabel instr = new JLabel(nbBundle26.substring(15));
+        instr.setDisplayedMnemonic(nbBundle26.substring(15).charAt(0));
         instr.setAlignmentX(Component.LEFT_ALIGNMENT);
         layoutPanel = new JPanel(); // Column layout subpanel
         

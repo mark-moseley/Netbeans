@@ -45,6 +45,7 @@
     <folder name="Templates">
         <folder name="WebServices">
             <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.websvc.rest.wizard.Bundle"/>
+            <attr name="position" intvalue="1500"/>
             <file name="RestServicesFromEntities">         
                 <attr name="position" intvalue="300"/>
                 <attr name="template" boolvalue="true"/>
@@ -168,15 +169,6 @@
             </file>
         </folder>
     </folder>
-    
-    <folder name="RestComponents">
-        <!--folder name="Google">
-            <file name="google-map.xml" url="/org/netbeans/modules/websvc/rest/component/resources/google-map.xml"/>
-        </folder-->
-        <folder name="Yahoo">
-            <file name="yahoo-ns.xml" url="/org/netbeans/modules/websvc/rest/component/resources/yahoo-ns.xml"/>
-        </folder>
-    </folder>    
     
     <folder name="Projects">
         <folder name="Rest_Actions_holder">

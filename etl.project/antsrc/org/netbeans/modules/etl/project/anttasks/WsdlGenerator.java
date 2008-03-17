@@ -78,10 +78,11 @@ import org.xml.sax.SAXException;
 import com.sun.etl.engine.impl.ETLEngineImpl;
 import com.sun.sql.framework.exception.BaseException;
 import com.sun.sql.framework.utils.RuntimeAttribute;
+import java.util.HashMap;
 import javax.wsdl.Message;
 import javax.wsdl.Part;
-import org.netbeans.modules.etl.logger.Localizer;
-import org.netbeans.modules.etl.logger.LogUtil;
+import org.netbeans.modules.etl.project.Localizer;
+
 
 /**
  * This class generates an ETL WSDL file given an ETL engine file name
@@ -95,7 +96,7 @@ public class WsdlGenerator {
     private String wsdlLocation;
     private Definition def;
     private File engineFile;
-    private static transient final Logger mLogger = LogUtil.getLogger(WsdlGenerator.class.getName());
+    private static transient final Logger mLogger = Logger.getLogger(WsdlGenerator.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
     
     static {
@@ -201,7 +202,7 @@ public class WsdlGenerator {
             sink.flush();
             sink.close();
         } catch (Exception e) {
-            mLogger.infoNoloc(mLoc.t("PRSR015: Exception{0}", e.getMessage()));
+            mLogger.infoNoloc(mLoc.t("PRJS015: Exception{0}", e.getMessage()));
             throw new WsdlGenerateException(e);
         }
 
@@ -211,33 +212,43 @@ public class WsdlGenerator {
      * modify the wsdl template
      */
     private void modifyWsdl() {
+        try {
         modifyName();
-//        modifyMessages();
+        modifyMessages();
         modifyMessageTypes();
         modifyPortTypes();
         modifyBinding();
         modifyServices();
         modifyPartnerLink();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 
     private void modifyBinding() {
-        Binding b = def.getBinding(new QName(def.getTargetNamespace(), "Binding"));
+        //Binding b = def.getBinding(new QName(def.getTargetNamespace(), "Binding"));
 
+        HashMap bMap = (HashMap) def.getBindings();
+        java.util.Iterator keysIter = bMap.keySet().iterator();
+        while (keysIter.hasNext()) {
+            Binding b = (Binding) bMap.get(keysIter.next());
+            if (b != null) {
         BindingOperation bo = b.getBindingOperation("execute", null, null);
         if (getEngineInputParams().isEmpty()) {
             bo.setBindingInput(null);
         }
-
+            }
+        }
     }
 
     private void modifyMessages() {
         Map msgs = def.getMessages();
-        for (int i = 0; i < msgs.size(); i++) {
-            Object o = msgs.get(i);
-            //if (o instanceof Message) {
-            System.out.println("Message: " + ((Message) o).toString());
-            modifyMessageElementName((Message) o);
-        //}
+        java.util.Iterator keysIter = msgs.keySet().iterator();
+        while (keysIter.hasNext()) {
+            Message msg = (Message) msgs.get(keysIter.next());
+            if (msg != null) {
+				modifyMessageElementName((Message) msg);
+            }
         }
     }
 
@@ -247,6 +258,9 @@ public class WsdlGenerator {
             QName qname = new QName("http://com.sun.jbi/etl/etlengine", engineFileName + "_" + msgLocalName);
             message.setQName(qname);
         }
+		Part p = message.getPart("part");
+		QName pqname = new QName("http://com.sun.jbi/etl/etlengine", engineFileName + "_" + p.getElementName().getLocalPart());
+		p.setElementName(pqname);
     }
 
     private void modifyMessageTypes() {
@@ -270,7 +284,10 @@ public class WsdlGenerator {
         Document doc = (Document) root.getParentNode().getParentNode().getParentNode();
         Element inputItem = getElementByName(root, "inputItem");
 
-        inputItem.toString();
+		inputItem.setAttribute("name", engineFileName + "_" + "inputItem");
+
+		Element outputItem = getElementByName(root, "outputItem");
+		outputItem.setAttribute("name", engineFileName + "_" + "outputItem");
         Node sequence = inputItem.getElementsByTagName("xsd:sequence").item(0);
 
         Map inputParams = getEngineInputParams();
@@ -426,6 +443,7 @@ public class WsdlGenerator {
                 List ops = pt.getOperations();
                 for (int i = 0; i < ops.size(); i++) {
                     Operation op = (Operation) ops.get(i);
+                    op.setName("execute");
                     op.setInput(null);
                 }
             }
@@ -454,7 +472,7 @@ public class WsdlGenerator {
             String wsdlURI = u.getFile().indexOf(".jar") > 0 ? "jar:" + u.getFile() : u.getFile();
             def = reader.readWSDL(wsdlURI);
         } catch (WSDLException e) {
-            mLogger.infoNoloc(mLoc.t("PRSR016: Exception{0}", e.getMessage()));
+            mLogger.infoNoloc(mLoc.t("PRJS016: Exception{0}", e.getMessage()));
             throw new WsdlGenerateException(e);
         }
         return def;
@@ -470,7 +488,7 @@ public class WsdlGenerator {
             try {
                 factory = WSDLFactory.newInstance();
             } catch (WSDLException e) {
-                mLogger.infoNoloc(mLoc.t("PRSR017: Exception{0}", e.getMessage()));
+                mLogger.infoNoloc(mLoc.t("PRJS017: Exception{0}", e.getMessage()));
             }
         }
     }
