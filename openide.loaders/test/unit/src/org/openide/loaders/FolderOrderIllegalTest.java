@@ -62,6 +62,9 @@ public class FolderOrderIllegalTest extends NbTestCase {
         LOG = Logger.getLogger("org.openide.loaders.FolderList." + getName());
     }
     public void testRenameBehaviour() throws Exception {
+        if (Boolean.getBoolean("ignore.random.failures")) {
+            return;
+        }
         File dir = new File(getWorkDir(), "dir");
         dir.mkdirs();
         File old = new File(getWorkDir(), "old");
@@ -98,10 +101,10 @@ public class FolderOrderIllegalTest extends NbTestCase {
                 "THREAD: Folder recognizer MSG:.*carefullySort on.*" +
                 "THREAD: Folder recognizer MSG:.*carefullySort before getOrder.*" +
                 "THREAD: move MSG:.*done";
-        Log.controlFlow(listenTo, Logger.global, order, 500);
+        Log.controlFlow(listenTo, Logger.getLogger("global"), order, 500);
         
         DataObject[] arr = f.getChildren();
         
-        assertEquals("Just 9", 9, arr.length);
+        assertEquals("Just 9:\n" + Arrays.asList(arr), 9, arr.length);//fail("OK:\n" + Arrays.asList(arr));
     }
 }
