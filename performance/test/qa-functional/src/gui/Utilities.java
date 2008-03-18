@@ -52,6 +52,7 @@ import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.MainWindowOperator;
 import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
+import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.RuntimeTabOperator;
 import org.netbeans.jellytools.TopComponentOperator;
@@ -61,6 +62,7 @@ import org.netbeans.jellytools.actions.DeleteAction;
 import org.netbeans.jellytools.actions.EditAction;
 import org.netbeans.jellytools.actions.OpenAction;
 import org.netbeans.jellytools.actions.Action;
+import org.netbeans.jellytools.actions.OutputWindowViewAction;
 import org.netbeans.jellytools.modules.form.FormDesignerOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.ProjectRootNode;
@@ -69,12 +71,17 @@ import org.netbeans.jellytools.nodes.SourcePackagesNode;
 import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.QueueTool;
 import org.netbeans.jemmy.TimeoutExpiredException;
+import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JCheckBoxOperator;
+import org.netbeans.jemmy.operators.JListOperator;
 import org.netbeans.jemmy.operators.JMenuBarOperator;
 import org.netbeans.jemmy.operators.JMenuItemOperator;
 import org.netbeans.jemmy.operators.JPopupMenuOperator;
+import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 
+import org.netbeans.jemmy.operators.Operator;
+import org.netbeans.jemmy.operators.Operator.StringComparator;
 import org.netbeans.junit.ide.ProjectSupport;
 import org.netbeans.performance.test.utilities.PerformanceTestCase;
 
@@ -86,7 +93,7 @@ import org.netbeans.progress.spi.TaskModel;
 /**
  * Utilities for Performance tests, workarrounds, often used methods, ...
  *
- * @author  mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org, mrkam@netbeans.org
  */
 public class Utilities {
     
@@ -300,14 +307,16 @@ public class Utilities {
         NewProjectNameLocationStepOperator wizard_location = new NewProjectNameLocationStepOperator();
         wizard_location.txtProjectLocation().clearText();
         wizard_location.txtProjectLocation().typeText(System.getProperty("xtest.tmpdir"));
-        String pname = wizard_location.txtProjectName().getText();
+        String pname = wizard_location.txtProjectName().getText() + System.currentTimeMillis();
+        wizard_location.txtProjectName().clearText();
+        wizard_location.txtProjectName().typeText(pname);
         
-        // if the project exists, try to generate new name
-        for (int i = 0; i < 5 && !wizard.btFinish().isEnabled(); i++) {
-            pname = pname+"1";
-            wizard_location.txtProjectName().clearText();
-            wizard_location.txtProjectName().typeText(pname);
-        }
+//        // if the project exists, try to generate new name
+//        for (int i = 0; i < 5 && !wizard.btFinish().isEnabled(); i++) {
+//            pname = pname+"1";
+//            wizard_location.txtProjectName().clearText();
+//            wizard_location.txtProjectName().typeText(pname);
+//        }
         wizard.finish();
         
         // wait 10 seconds
@@ -377,7 +386,10 @@ public class Utilities {
     public static void buildproject(String project) {
         ProjectRootNode prn = ProjectsTabOperator.invoke().getProjectRootNode(project);
         prn.buildProject();
-        MainWindowOperator.getDefault().waitStatusText("Finished building "+project); // NOI18N
+        StringComparator sc = MainWindowOperator.getDefault().getComparator();        
+        MainWindowOperator.getDefault().setComparator(new Operator.DefaultStringComparator(false, true));
+        MainWindowOperator.getDefault().waitStatusText("Finished building "); // NOI18N
+        MainWindowOperator.getDefault().setComparator(sc);
     }
     
     /**
@@ -465,6 +477,54 @@ public class Utilities {
         }
     }
     
+    /**
+     * Adds GlassFish V2 using path from com.sun.aas.installRoot property
+     */
+    public static void addApplicationServer() {
+        
+        String appServerPath = System.getProperty("com.sun.aas.installRoot");
+        
+        if (appServerPath == null) {
+            throw new Error("Can't add application server. com.sun.aas.installRoot property is not set.");
+        }
+
+        String addServerMenuItem = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.actions.Bundle", "LBL_Add_Server_Instance"); // Add Server...
+        String addServerInstanceDialogTitle = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.wizard.Bundle", "LBL_ASIW_Title"); //"Add Server Instance"
+        String glassFishV2ListItem = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.sun.ide.Bundle", "LBL_GlassFishV2");
+        String nextButtonCaption = Bundle.getStringTrimmed("org.openide.Bundle", "CTL_NEXT");
+        String finishButtonCaption = Bundle.getStringTrimmed("org.openide.Bundle", "CTL_FINISH");
+
+        RuntimeTabOperator rto = RuntimeTabOperator.invoke();        
+        JTreeOperator runtimeTree = rto.tree();
+        
+        long oldTimeout = runtimeTree.getTimeouts().getTimeout("JTreeOperator.WaitNextNodeTimeout");
+        runtimeTree.getTimeouts().setTimeout("JTreeOperator.WaitNextNodeTimeout", 60000);
+        
+        TreePath path = runtimeTree.findPath("Servers");
+        runtimeTree.selectPath(path);
+        
+        try {
+            //log("Let's check whether GlassFish V2 is already added");
+            runtimeTree.findPath("Servers|GlassFish V2");
+        } catch (TimeoutExpiredException tee) {
+            //log("There is no GlassFish V2 node so we'll add it");
+            
+            new JPopupMenuOperator(runtimeTree.callPopupOnPath(path)).pushMenuNoBlock(addServerMenuItem);
+
+            NbDialogOperator addServerInstanceDialog = new NbDialogOperator(addServerInstanceDialogTitle);
+
+            new JListOperator(addServerInstanceDialog, 1).selectItem(glassFishV2ListItem);
+
+            new JButtonOperator(addServerInstanceDialog,nextButtonCaption).push();
+
+            new JTextFieldOperator(addServerInstanceDialog).enterText(appServerPath);
+
+            new JButtonOperator(addServerInstanceDialog,finishButtonCaption).push();
+        }
+        
+        runtimeTree.getTimeouts().setTimeout("JTreeOperator.WaitNextNodeTimeout", oldTimeout);
+    }
+    
     public static Node getApplicationServerNode(){
         RuntimeTabOperator rto = RuntimeTabOperator.invoke();
         
@@ -486,7 +546,7 @@ public class Utilities {
             runtimeTree.selectPath(path);
         } catch (Exception exc) {
             exc.printStackTrace(System.err);
-            throw new Error("Cannot find Application Server Node: "+exc.getMessage());
+            throw new Error("Cannot find Application Server Node", exc);
         }
         runtimeTree.getTimeouts().setTimeout("JTreeOperator.WaitNextNodeTimeout", oldTimeout);
 //        rto.setComparator(previousComparator);
