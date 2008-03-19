@@ -126,6 +126,48 @@ public class DestinationPanel extends ErrorMessagePanel {
         
         return wizardUi;
     }
+
+    @Override
+    public void initialize() {
+        super.initialize();
+        final Product product = (Product) getWizard().
+                getContext().
+                get(Product.class);
+
+        String destination = product.getProperty(Product.INSTALLATION_LOCATION_PROPERTY);
+
+        if (destination == null) {
+            destination = DEFAULT_DESTINATION;
+        }
+
+        destination = resolvePath(destination).getAbsolutePath();
+
+        try {
+            if (SystemUtils.isMacOS() && (product.getLogic().wrapForMacOs() ||
+                    product.getLogic().requireDotAppForMacOs())) {
+                if (!destination.endsWith(APP_SUFFIX)) {
+                    final File parent = new File(destination).getParentFile();
+                    final String suffix = product.getDisplayName() + APP_SUFFIX;
+
+                    if (parent != null) {
+                        destination = new File(
+                                parent,
+                                suffix).getAbsolutePath();
+                    } else {
+                        destination = new File(
+                                destination,
+                                suffix).getAbsolutePath();
+                    }
+                }
+            }
+        } catch (InitializationException e) {
+            ErrorManager.notifyError(
+                    getProperty(ERROR_CANNOT_GET_LOGIC_PROPERTY),
+                    e);
+        }
+        getWizard().setProperty(Product.INSTALLATION_LOCATION_PROPERTY,
+                destination);
+    }
     
     /////////////////////////////////////////////////////////////////////////////////
     // Inner Classes
@@ -181,46 +223,8 @@ public class DestinationPanel extends ErrorMessagePanel {
             destinationButton.setText(
                     component.getProperty(DESTINATION_BUTTON_TEXT_PROPERTY));
             
-            final Product product = (Product) component.
-                    getWizard().
-                    getContext().
-                    get(Product.class);
-            
-            String destination = null;
-            
-            destination = product.
-                    getProperty(Product.INSTALLATION_LOCATION_PROPERTY);
-            
-            if (destination == null) {
-                destination = DEFAULT_DESTINATION;
-            }
-            
-            destination = component.resolvePath(destination).getAbsolutePath();
-            
-            try {
-                if (SystemUtils.isMacOS() && (
-                        product.getLogic().wrapForMacOs() ||
-                        product.getLogic().requireDotAppForMacOs())) {
-                    if (!destination.endsWith(APP_SUFFIX)) {
-                        final File parent = new File(destination).getParentFile();
-                        final String suffix = product.getDisplayName() + APP_SUFFIX;
-                        
-                        if (parent != null) {
-                            destination = new File(
-                                    parent,
-                                    suffix).getAbsolutePath();
-                        } else {
-                            destination = new File(
-                                    destination,
-                                    suffix).getAbsolutePath();
-                        }
-                    }
-                }
-            } catch (InitializationException e) {
-                ErrorManager.notifyError(
-                        component.getProperty(ERROR_CANNOT_GET_LOGIC_PROPERTY),
-                        e);
-            }
+            final String destination =  component.getWizard().getProperty(
+                    Product.INSTALLATION_LOCATION_PROPERTY);
             
             destinationField.setText(destination);
             
@@ -363,15 +367,17 @@ public class DestinationPanel extends ErrorMessagePanel {
                             filePath);
                 }
                 
-                final long requiredSize =
-                        product.getRequiredDiskSpace() + REQUIRED_SPACE_ADDITION;
-                final long availableSize =
-                        SystemUtils.getFreeSpace(file);
-                if (availableSize < requiredSize) {
-                    return StringUtils.format(
-                            component.getProperty(ERROR_NOT_ENOUGH_SPACE_PROPERTY),
-                            filePath,
-                            StringUtils.formatSize(requiredSize - availableSize));
+                if(!Boolean.getBoolean(SystemUtils.NO_SPACE_CHECK_PROPERTY)) {
+                    final long requiredSize =
+                            product.getRequiredDiskSpace() + REQUIRED_SPACE_ADDITION;
+                    final long availableSize =
+                            SystemUtils.getFreeSpace(file);
+                    if (availableSize < requiredSize) {
+                        return StringUtils.format(
+                                component.getProperty(ERROR_NOT_ENOUGH_SPACE_PROPERTY),
+                                filePath,
+                                StringUtils.formatSize(requiredSize - availableSize));
+                    }
                 }
             } catch (InitializationException e) {
                 ErrorManager.notifyError(component.getProperty(
