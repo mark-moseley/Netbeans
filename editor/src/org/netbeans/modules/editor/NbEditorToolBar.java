@@ -412,7 +412,7 @@ import org.openide.util.lookup.ProxyLookup;
         return retMap;
     }
     
-    private static List getKeyBindingList(String mimeType) {
+    public static List getKeyBindingList(String mimeType) {
         List keyBindingsList = new ArrayList();
 
         AllOptionsFolder aof = AllOptionsFolder.getDefault();
@@ -604,7 +604,9 @@ import org.openide.util.lookup.ProxyLookup;
             }
         }
 
-        if (nodeLookup == null) {
+        if (nodeLookup == null && ancestorLookup == null) {
+            return Lookups.singleton(c);
+        } else if (nodeLookup == null) {
             return ancestorLookup;
         } else if (ancestorLookup == null) {
             return nodeLookup;
