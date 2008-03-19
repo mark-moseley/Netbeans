@@ -49,13 +49,16 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
+import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.FileChooser;
@@ -76,6 +79,7 @@ import org.openide.util.Exceptions;
 import org.openide.util.Mutex;
 import org.openide.util.MutexException;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 
 /**
  * Utility methods related to sharable libraries UI.
@@ -94,8 +98,28 @@ public final class SharableLibrariesUtils {
     /**
      * The default filename for sharable library definition file.
      */
-    public static final String DEFAULT_LIBRARIES_FILENAME = "nblibraries.properties";
+    public static final String DEFAULT_LIBRARIES_FILENAME = "nblibraries.properties"; //NOI18N
     
+    private static String PROP_LAST_SHARABLE = "lastSharable"; //NOI18N
+    
+    /**
+     * boolean value representing the state of library sharability of the last created project.
+     * To be used by new project wizards.
+     * @return true if last created project was created sharable, false if not.
+     */
+    public static boolean isLastProjectSharable() {
+        return NbPreferences.root().node("org.netbeans.modules.java.project.share").getBoolean(PROP_LAST_SHARABLE, false); //NOI18N
+    }
+    /**
+     * Setter for boolean value representing the state of library sharability of the last created project.
+     * To be used by new project wizards.
+     * 
+     * @param sharable
+     */
+    public static void setLastProjectSharable(boolean sharable) {
+        NbPreferences.root().node("org.netbeans.modules.java.project.share").putBoolean(PROP_LAST_SHARABLE, sharable); //NOI18N
+    }
+
     
     
     /**
@@ -142,66 +166,103 @@ public final class SharableLibrariesUtils {
      */
     public static boolean showMakeSharableWizard(final AntProjectHelper helper, ReferenceHelper ref, List<String> libraryNames, List<String> jarReferences) {
 
-        final WizardDescriptor wizardDescriptor = new WizardDescriptor(getPanels());
+        final WizardDescriptor wizardDescriptor = new WizardDescriptor(new CopyIterator(helper));
         // {0} will be replaced by WizardDesriptor.Panel.getComponent().getName()
         wizardDescriptor.setTitleFormat(new MessageFormat("{0}"));
-        wizardDescriptor.setTitle("Make project sharable and self-contained.");
+        wizardDescriptor.setTitle(NbBundle.getMessage(SharableLibrariesUtils.class, "TIT_MakeSharableWizard")); 
         wizardDescriptor.putProperty(PROP_HELPER, helper);
         wizardDescriptor.putProperty(PROP_REFERENCE_HELPER, ref);
         wizardDescriptor.putProperty(PROP_LIBRARIES, libraryNames);
         wizardDescriptor.putProperty(PROP_JAR_REFS, jarReferences);
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizardDescriptor);
+        dialog.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(SharableLibrariesUtils.class, "ACSD_MakeSharableWizard"));
         dialog.setVisible(true);
         dialog.toFront();
-        boolean cancelled = wizardDescriptor.getValue() != WizardDescriptor.FINISH_OPTION;
-        if (!cancelled) {
-            final String loc = (String) wizardDescriptor.getProperty(PROP_LOCATION);
-            assert loc != null;
-            try {
-                // create libraries property file if it does not exist:
-                File f = new File(loc);
-                if (!f.isAbsolute()) {
-                    f = new File(FileUtil.toFile(helper.getProjectDirectory()), loc);
-                }
-                f = FileUtil.normalizeFile(f);
-                if (!f.exists()) {
-                    FileUtil.createData(f);
-                }
+        return wizardDescriptor.getValue() == WizardDescriptor.FINISH_OPTION;
+    }
 
-                try {
-                    ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction() {
-
-                        public Object run() throws IOException {
-                            try {
-                                helper.getProjectDirectory().getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
-                                    public void run() throws IOException {
-                                        helper.setLibrariesLocation(loc);
-
-                                        // TODO or make just runnables?
-                                        List<Action> actions = (List<Action>) wizardDescriptor.getProperty(PROP_ACTIONS);
-                                        for (Action act : actions) {
-                                            act.actionPerformed(null);
-                                        }
-                                        ProjectManager.getDefault().saveProject(FileOwnerQuery.getOwner(helper.getProjectDirectory()));
-                                    }
-                                });
-                            } catch (IllegalArgumentException ex) {
-                                Exceptions.printStackTrace(ex);
-                            }
-
-                            return null;
-                        }
-                    });
-                } catch (MutexException ex) {
-                    throw (IOException) ex.getException();
-                }
-            } catch (IOException ex) {
-                Exceptions.printStackTrace(ex);
+    private static void execute(final WizardDescriptor wizardDescriptor, final AntProjectHelper helper, final ProgressHandle handle) {
+        
+        final String loc = (String) wizardDescriptor.getProperty(PROP_LOCATION);
+        final List<Action> actions = (List<Action>) wizardDescriptor.getProperty(PROP_ACTIONS);
+        assert loc != null;
+        handle.start(Math.max(1, actions.size() + 1));
+        try {
+            // create libraries property file if it does not exist:
+            File f = new File(loc);
+            if (!f.isAbsolute()) {
+                f = new File(FileUtil.toFile(helper.getProjectDirectory()), loc);
+            }
+            f = FileUtil.normalizeFile(f);
+            if (!f.exists()) {
+                FileUtil.createData(f);
             }
 
+            try {
+                ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction() {
 
+                    public Object run() throws IOException {
+                        try {
+                            helper.getProjectDirectory().getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
+
+                                public void run() throws IOException {
+                                    helper.setLibrariesLocation(loc);
+                                    int count = 1;
+                                    // TODO or make just runnables?
+                                    for (Action act : actions) {
+                                        handle.progress(count);
+                                        count = count + 1;
+                                        act.actionPerformed(null);
+                                    }
+                                    ProjectManager.getDefault().saveProject(FileOwnerQuery.getOwner(helper.getProjectDirectory()));
+                                }
+                            });
+                        } catch (IllegalArgumentException ex) {
+                            Exceptions.printStackTrace(ex);
+                        }
+                        return null;
+                    }
+                });
+            } catch (MutexException ex) {
+                throw (IOException) ex.getException();
+            }
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        } finally {
+            handle.finish();
         }
-        return !cancelled;
+    }
+    
+    private static class CopyIterator extends WizardDescriptor.ArrayIterator<WizardDescriptor> implements WizardDescriptor.ProgressInstantiatingIterator<WizardDescriptor> {
+        private AntProjectHelper helper;
+        private WizardDescriptor desc;
+
+        private CopyIterator(AntProjectHelper helper) {
+            this.helper = helper;
+            
+        }
+
+        public Set instantiate(ProgressHandle handle) throws IOException {
+            execute(desc, helper, handle);
+            return Collections.EMPTY_SET;
+        }
+
+        public Set instantiate() throws IOException {
+            throw new UnsupportedOperationException("Not supported");
+        }
+
+        public void initialize(WizardDescriptor wizard) {
+            this.desc = wizard;
+        }
+
+        public void uninitialize(WizardDescriptor wizard) {
+            this.desc = wizard;
+        }
+        
+        public WizardDescriptor.Panel<WizardDescriptor>[] initializePanels() {
+            return getPanels();
+        }
+        
     }
 
     /**
@@ -391,7 +452,12 @@ public final class SharableLibrariesUtils {
                             if (keepRelativeLocations) {
                                 File path = FileUtil.toFile(fo);
                                 String str = PropertyUtils.relativizeFile(mainPropertiesFile.getParentFile(), path);
-                                url = LibrariesSupport.convertFilePathToURL(str);
+                                if (str == null) {
+                                    // the relative path cannot be established, different drives?
+                                    url = fo.getURL();
+                                } else {
+                                    url = LibrariesSupport.convertFilePathToURL(str);
+                                }
                             } else {
                                 url = fo.getURL();
                             }
