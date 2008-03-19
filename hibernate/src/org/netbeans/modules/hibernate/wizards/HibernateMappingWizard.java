@@ -61,6 +61,7 @@ import org.netbeans.modules.hibernate.cfg.model.SessionFactory;
 import org.netbeans.modules.hibernate.loaders.cfg.HibernateCfgDataObject;
 import org.netbeans.modules.hibernate.loaders.mapping.HibernateMappingDataObject;
 import org.netbeans.modules.hibernate.mapping.model.MyClass;
+import org.netbeans.modules.hibernate.util.HibernateUtil;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 
 /**
@@ -151,7 +152,8 @@ public class HibernateMappingWizard implements WizardDescriptor.InstantiatingIte
             HibernateCfgDataObject hco = (HibernateCfgDataObject) confDataObject;
             SessionFactory sf = hco.getHibernateConfiguration().getSessionFactory();
             int mappingIndex = sf.addMapping(true);                        
-            sf.setAttributeValue(SessionFactory.MAPPING, mappingIndex, resourceAttr, newOne.getPrimaryFile().getNameExt());
+            sf.setAttributeValue(SessionFactory.MAPPING, mappingIndex, resourceAttr, 
+                    HibernateUtil.getRelativeSourcePath(newOne.getPrimaryFile(), Util.getSourceRoot(project)));
             hco.modelUpdatedFromUI();
             hco.save();
         }
@@ -160,6 +162,9 @@ public class HibernateMappingWizard implements WizardDescriptor.InstantiatingIte
             HibernateMappingDataObject hmo = (HibernateMappingDataObject) newOne;
             if (descriptor.getClassName() != null && !"".equals(descriptor.getClassName())) {
                 myClass.setAttributeValue("name", descriptor.getClassName());
+                if (descriptor.getDatabaseTable() != null && !"".equals(descriptor.getDatabaseTable())) {
+                    myClass.setAttributeValue("table", descriptor.getDatabaseTable());
+                }
                 hmo.addMyClass(myClass);
             }            
             hmo.save();
