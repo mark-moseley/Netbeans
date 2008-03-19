@@ -84,8 +84,12 @@ public class JavaWhereUsedQueryPlugin extends JavaRefactoringPlugin {
     
     @Override
     public Problem preCheck() {
-        if (!refactoring.getRefactoringSource().lookup(TreePathHandle.class).getFileObject().isValid()) {
+        TreePathHandle handle = refactoring.getRefactoringSource().lookup(TreePathHandle.class);
+        if (!handle.getFileObject().isValid()) {
             return new Problem(true, NbBundle.getMessage(FindVisitor.class, "DSC_ElNotAvail")); // NOI18N
+        }
+        if (handle.getKind() == Tree.Kind.ARRAY_TYPE) {
+            return new Problem(true, NbBundle.getMessage(FindVisitor.class, "ERR_FindUsagesArrayType"));
         }
         return null;
     }
@@ -178,9 +182,14 @@ public class JavaWhereUsedQueryPlugin extends JavaRefactoringPlugin {
     public Problem prepare(final RefactoringElementsBag elements) {
         Set<FileObject> a = getRelevantFiles(refactoring.getRefactoringSource().lookup(TreePathHandle.class));
         fireProgressListenerStart(ProgressEvent.START, a.size());
-        processFiles(a, new FindTask(elements));
+        Problem problem = null;
+        try {
+            processFiles(a, new FindTask(elements));
+        } catch (IOException e) {
+            problem = createProblemAndLog(null, e);
+        }
         fireProgressListenerStop();
-        return null;
+        return problem;
     }
     
     @Override
@@ -257,8 +266,13 @@ public class JavaWhereUsedQueryPlugin extends JavaRefactoringPlugin {
                 ErrorManager.getDefault().log(ErrorManager.ERROR, "compiler.getCompilationUnit() is null " + compiler); // NOI18N
                 return;
             }
-            Element element = refactoring.getRefactoringSource().lookup(TreePathHandle.class).resolveElement(compiler);
-            assert element != null;
+            TreePathHandle handle = refactoring.getRefactoringSource().lookup(TreePathHandle.class);
+            Element element = handle.resolveElement(compiler);
+            if (element==null) {
+                ErrorManager.getDefault().log(ErrorManager.ERROR, "element is null for handle " + handle); // NOI18N
+                return;
+            }
+            
             Collection<TreePath> result = new ArrayList<TreePath>();
             if (isFindUsages()) {
                 FindUsagesVisitor findVisitor = new FindUsagesVisitor(compiler, refactoring.getBooleanValue(refactoring.SEARCH_IN_COMMENTS));
