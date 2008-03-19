@@ -45,10 +45,12 @@ import org.netbeans.installer.product.dependencies.InstallAfter;
 import org.netbeans.installer.product.filters.OrFilter;
 import org.netbeans.installer.product.filters.ProductFilter;
 import org.netbeans.installer.product.filters.RegistryFilter;
+import org.netbeans.installer.utils.LogManager;
 import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StringUtils;
 import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.applications.JavaUtils;
+import org.netbeans.installer.utils.exceptions.InitializationException;
 import org.netbeans.installer.utils.helper.Dependency;
 import org.netbeans.installer.utils.helper.Status;
 import org.netbeans.installer.utils.helper.Version;
@@ -218,6 +220,7 @@ public class JdkLocationPanel extends ApplicationLocationPanel {
         // choices:
         // - reuse the location which was selected on another jdk location panel if
         //   it fits the requirements
+        // - use the location of the jdk if it is bundled and already installed
         // - reuse the location which has been used for an installed product if
         //   it fits the requirements
         // - choose the closest one to the preferred version if it is defined and
@@ -230,9 +233,57 @@ public class JdkLocationPanel extends ApplicationLocationPanel {
             return new File(jdkLocation);
         }
         
+        final Object obj = getWizard().
+                getContext().
+                get(Product.class);
+        if (obj != null && obj instanceof Product) {
+            final Product product = (Product) obj;
+            final String jdkSysPropName = product.getUid() + StringUtils.DOT +
+                    JdkLocationPanel.JDK_LOCATION_PROPERTY;
+            final String jdkSysProp = System.getProperty(jdkSysPropName);
+            if (jdkSysProp != null) {                                
+                final File f = new File(jdkSysProp);
+                if (jdkLocations.contains(f)) {                    
+                    LogManager.log("... using JDK from system property " + jdkSysPropName + " : " + jdkSysProp);
+                    return f;
+                }
+            }
+        }
+        
         if ((lastSelectedJava != null) &&
                 jdkLocations.contains(lastSelectedJava)) {
             return lastSelectedJava;
+        }
+        
+        try {            
+            Registry bundledRegistry = new Registry();            
+            final String bundledRegistryUri = System.getProperty(
+                    Registry.BUNDLED_PRODUCT_REGISTRY_URI_PROPERTY);
+            
+            bundledRegistry.loadProductRegistry(
+                        (bundledRegistryUri != null) ? 
+                            bundledRegistryUri : 
+                            Registry.DEFAULT_BUNDLED_PRODUCT_REGISTRY_URI);
+            
+            // iterate over bundled JDKs to check whether they are already installed
+            for(Product bundledJdk : bundledRegistry.getProducts(JDK_PRODUCT_UID)) {
+                Product globalJdk = Registry.getInstance().getProduct(
+                        JDK_PRODUCT_UID, 
+                        bundledJdk.getVersion());
+                
+                if (globalJdk != null) {
+                    final File jdkLoc = globalJdk.getStatus().equals(Status.INSTALLED) ? 
+                        globalJdk.getInstallationLocation() : 
+                        JavaUtils.findJDKHome(globalJdk.getVersion());
+
+                    if (jdkLoc != null && jdkLocations.contains(jdkLoc)) {
+                        return jdkLoc;
+                    }
+                }                        
+            }
+            
+        } catch (InitializationException e) {
+            LogManager.log("Cannot load bundled registry", e);
         }
         
         for (Product product: Registry.getInstance().queryProducts(new OrFilter(
