@@ -42,25 +42,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Set;
+import org.netbeans.modules.hibernate.mapping.HibernateMappingXmlConstants;
 import org.netbeans.modules.hibernate.mapping.model.HibernateMapping;
 import org.netbeans.modules.hibernate.mapping.model.MyClass;
-import org.netbeans.modules.hibernate.mapping.model.Property;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileAlreadyLockedException;
 import org.openide.filesystems.FileObject;
 
 /**
- * Refactor the Java field names in the Hibernate mapping files
  * 
  * @author Dongmei Cao
  */
-public class JavaFieldRenameTransaction extends RenameTransaction {
+public class JavaClassRenameTransaction extends RenameTransaction {
 
-    private String className;
-
-    public JavaFieldRenameTransaction(Set<FileObject> files, String className, String origFieldName, String newFieldName) {
-        super(files, origFieldName, newFieldName);
-        this.className = className;
+    public JavaClassRenameTransaction(Set<FileObject> files, String oldName, String newName) {
+        super(files, oldName, newName);
     }
 
     /**
@@ -80,40 +76,34 @@ public class JavaFieldRenameTransaction extends RenameTransaction {
                 HibernateMapping hbMapping = HibernateMapping.createGraph(is);
                 MyClass[] myClazz = hbMapping.getMyClass();
                 for (int ci = 0; ci < myClazz.length; ci++) {
-                    String clsName = myClazz[ci].getAttributeValue("name"); // NOI18N
-                    if (clsName.equals(className)) {
-
-                        // Found the property element
-                        Property[] clazzProps = myClazz[ci].getProperty2();
-                        for (int pi = 0; pi < clazzProps.length; pi++) {
-                            String propName = clazzProps[pi].getAttributeValue("name"); // NOI18N
-                            if (propName.equals(oldName)) {
-                                clazzProps[pi].setAttributeValue("name", newName); // NOI18N
-                                break;
-                            }
-                        }
-
-                    // TODO: need to search other elements, such as, <id>, etc
+                    String clsName = myClazz[ci].getAttributeValue(HibernateMappingXmlConstants.NAME_ATTRIB); 
+                    if (clsName.equals(oldName)) {
+                        myClazz[ci].setAttributeValue(HibernateMappingXmlConstants.NAME_ATTRIB, newName); // NOI18N
                     }
                 }
                 
-                //HibernateMappingXmlConstants.ID_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.SET_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.COMPOSITE_ID_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.KEY_PROPERTY_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.KEY_MANY_TO_ONE_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.VERSION_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.TIMESTAMP_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.MANY_TO_ONE_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.ONE_TO_ONE_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.COMPONENT_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.ANY_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.MAP_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
-                //HibernateMappingXmlConstants.LIST_TAG, HibernateMappingXmlConstants.NAME_ATTRIB
+                // TODO: need to search on 
+                /*HibernateMappingXmlConstants.ONE_TO_MANY_TAG HibernateMappingXmlConstants.CLASS_ATTRIB); 
+                HibernateMappingXmlConstants.COMPOSITE_ID_TAG HibernateMappingXmlConstants.CLASS_ATTRIB); 
+                HibernateMappingXmlConstants.KEY_MANY_TO_ONE_TAGHibernateMappingXmlConstants.CLASS_ATTRIB);
+                HibernateMappingXmlConstants.MANY_TO_ONE_TAG HibernateMappingXmlConstants.CLASS_ATTRIB);
+                HibernateMappingXmlConstants.ONE_TO_ONE_TAG HibernateMappingXmlConstants.CLASS_ATTRIB);
+                HibernateMappingXmlConstants.COMPONENT_TAG HibernateMappingXmlConstants.CLASS_ATTRIB);
+                HibernateMappingXmlConstants.SUBCLASS_TAG HibernateMappingXmlConstants.NAME_ATTRIB);
+                                                          HibernateMappingXmlConstants.EXTENDS_ATTRIB);
+                HibernateMappingXmlConstants.JOINED_SUBCLASS_TAG HibernateMappingXmlConstants.NAME_ATTRIB);
+                                                                 HibernateMappingXmlConstants.EXTENDS_ATTRIB);
+                                                                 HibernateMappingXmlConstants.PERSISTER_ATTRIB);
+                HibernateMappingXmlConstants.UNION_SUBCLASS_TAG HibernateMappingXmlConstants.NAME_ATTRIB);
+                                                                HibernateMappingXmlConstants.EXTENDS_ATTRIB);
+                                                                HibernateMappingXmlConstants.PERSISTER_ATTRIB);
+                HibernateMappingXmlConstants.IMPORT_TAG  HibernateMappingXmlConstants.CLASS_ATTRIB);
+                HibernateMappingXmlConstants.MANY_TO_MANY_TAG  HibernateMappingXmlConstants.CLASS_ATTRIB);
+                */
                 
                 outs = mappingFileObject.getOutputStream();
                 hbMapping.write(outs);
-
+                
             } catch (FileAlreadyLockedException ex) {
                 ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
             } catch (IOException ex) {
