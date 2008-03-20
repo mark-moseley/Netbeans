@@ -1,4 +1,45 @@
 /*
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ *
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ *
+ * The contents of this file are subject to the terms of either the GNU
+ * General Public License Version 2 only ("GPL") or the Common
+ * Development and Distribution License("CDDL") (collectively, the
+ * "License"). You may not use this file except in compliance with the
+ * License. You can obtain a copy of the License at
+ * http://www.netbeans.org/cddl-gplv2.html
+ * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
+ * specific language governing permissions and limitations under the
+ * License.  When distributing the software, include this License Header
+ * Notice in each file and include the License file at
+ * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Sun in the GPL Version 2 section of the License file that
+ * accompanied this code. If applicable, add the following below the
+ * License Header, with the fields enclosed by brackets [] replaced by
+ * your own identifying information:
+ * "Portions Copyrighted [year] [name of copyright owner]"
+ *
+ * Contributor(s):
+ *
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
+ * If you wish your version of this file to be governed by only the CDDL
+ * or only the GPL Version 2, indicate your decision by adding
+ * "[Contributor] elects to include this software in this distribution
+ * under the [CDDL or GPL Version 2] license." If you do not indicate a
+ * single choice of license, a recipient has the option to distribute
+ * your version of this file under either the CDDL, the GPL Version 2 or
+ * to extend the choice of license to its licensees as provided above.
+ * However, if you add GPL Version 2 code and therefore, elected the GPL
+ * Version 2 license, then the option applies only if the new code is
+ * made subject to such option by the copyright holder.
+ */
+
+/*
  * HibernateMappingWizardPanel.java
  *
  * Created on February 5, 2008, 12:23 PM
@@ -7,12 +48,11 @@ package org.netbeans.modules.hibernate.wizards;
 
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
+import java.util.List;
 import javax.swing.DefaultComboBoxModel;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
+import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.netbeans.api.java.source.ui.TypeElementFinder;
 import javax.swing.SwingUtilities;
@@ -22,7 +62,10 @@ import org.netbeans.api.java.source.ClassIndex.NameKind;
 import org.netbeans.api.java.source.ClassIndex.SearchScope;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.ElementHandle;
+import org.netbeans.modules.hibernate.cfg.model.HibernateConfiguration;
+import org.netbeans.modules.hibernate.loaders.cfg.HibernateCfgDataObject;
 import org.openide.filesystems.FileObject;
+import org.openide.loaders.DataObject;
 
 /**
  *
@@ -32,42 +75,65 @@ public class HibernateMappingWizardPanel extends javax.swing.JPanel {
 
     private Project project;
     ArrayList<FileObject> configFileObjects;
+    List<String> databaseTables;
+    org.netbeans.modules.hibernate.service.HibernateEnvironment env;
 
     /** Creates new form HibernateMappingWizardPanel */
     public HibernateMappingWizardPanel(Project project) {
         this.project = project;
         initComponents();
+        env = project.getLookup().lookup(org.netbeans.modules.hibernate.service.HibernateEnvironment.class);
         String[] configFiles = getConfigFilesFromProject(project);
         this.cmbResource.setModel(new DefaultComboBoxModel(configFiles));
-
+        fillDatabaseTable();
         this.browseButton.addActionListener(new java.awt.event.ActionListener() {
 
             public void actionPerformed(ActionEvent evt) {
                 browseButtonActionPerformed(evt);
-            }                
+            }
         });
     }
-    
+
+    // This fills the databaseTable drop down with a list of tables
+    public void fillDatabaseTable() {
+        if (cmbResource.getItemCount() == 0) {
+            this.cmbDatabaseTable.setModel(new DefaultComboBoxModel(new String[]{}));
+        } else {
+            if (cmbResource.getSelectedIndex() != -1) {
+                try {
+                    HibernateConfiguration hibConf = ((HibernateCfgDataObject) DataObject.find(configFileObjects.get(cmbResource.getSelectedIndex()))).getHibernateConfiguration();
+                    databaseTables = env.getAllDatabaseTables(hibConf);
+                    // adding an empty element to the list
+                    databaseTables.add(0, "");
+                    this.cmbDatabaseTable.setModel(new DefaultComboBoxModel(databaseTables.toArray()));
+                } catch (DataObjectNotFoundException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        }
+    }
+
     private void browseButtonActionPerformed(ActionEvent evt) {
         SwingUtilities.invokeLater(new Runnable() {
+
             public void run() {
                 final ElementHandle<TypeElement> handle = TypeElementFinder.find(null, new TypeElementFinder.Customizer() {
 
-                            public Set<ElementHandle<TypeElement>> query(ClasspathInfo classpathInfo, String textForQuery, NameKind nameKind, Set<SearchScope> searchScopes) {
-                                return classpathInfo.getClassIndex().getDeclaredTypes(textForQuery, nameKind, searchScopes);
-                            }
+                    public Set<ElementHandle<TypeElement>> query(ClasspathInfo classpathInfo, String textForQuery, NameKind nameKind, Set<SearchScope> searchScopes) {
+                        return classpathInfo.getClassIndex().getDeclaredTypes(textForQuery, nameKind, searchScopes);
+                    }
 
-                            public boolean accept(ElementHandle<TypeElement> typeHandle) {
-                                return true;
-                            }
-                        });
+                    public boolean accept(ElementHandle<TypeElement> typeHandle) {
+                        return true;
+                    }
+                });
 
                 if (handle != null) {
                     txtClassName.setText(handle.getQualifiedName());
                 }
             }
         });
-        
+
     }
 
     @Override
@@ -78,7 +144,7 @@ public class HibernateMappingWizardPanel extends javax.swing.JPanel {
     public String getClassName() {
         if (txtClassName.getText() != null) {
             return txtClassName.getText().trim();
-        } 
+        }
         return null;
     }
 
@@ -89,19 +155,16 @@ public class HibernateMappingWizardPanel extends javax.swing.JPanel {
         return null;
     }
 
-    private SourceGroup[] getJavaSourceGroups() throws java.io.IOException {
-        if (project == null) {
-            return new SourceGroup[]{};
+    public String getDatabaseTable() {
+        if (cmbDatabaseTable.getSelectedIndex() != -1) {
+            return cmbDatabaseTable.getSelectedItem().toString().trim();
         }
-        Sources sources = ProjectUtils.getSources(project);
-        return sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
+        return null;
     }
 
     // Gets the list of Config files from HibernateEnvironment.
     public String[] getConfigFilesFromProject(Project project) {
         ArrayList<String> configFiles = new ArrayList<String>();
-        org.netbeans.api.project.Project enclosingProject = project;
-        org.netbeans.modules.hibernate.service.HibernateEnvironment env = enclosingProject.getLookup().lookup(org.netbeans.modules.hibernate.service.HibernateEnvironment.class);
         configFileObjects = env.getAllHibernateConfigFileObjects();
         for (FileObject fo : configFileObjects) {
             configFiles.add(fo.getNameExt());
@@ -122,6 +185,8 @@ public class HibernateMappingWizardPanel extends javax.swing.JPanel {
         browseButton = new javax.swing.JButton();
         jLabel2 = new javax.swing.JLabel();
         cmbResource = new javax.swing.JComboBox();
+        jLabel3 = new javax.swing.JLabel();
+        cmbDatabaseTable = new javax.swing.JComboBox();
 
         setName(org.openide.util.NbBundle.getMessage(HibernateMappingWizardPanel.class, "LBL_HibernateMappingPanel_Name")); // NOI18N
 
@@ -140,6 +205,17 @@ public class HibernateMappingWizardPanel extends javax.swing.JPanel {
         jLabel2.setText(org.openide.util.NbBundle.getMessage(HibernateMappingWizardPanel.class, "HibernateMappingWizardPanel.jLabel2.text")); // NOI18N
 
         cmbResource.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
+        cmbResource.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmbResourceActionPerformed(evt);
+            }
+        });
+
+        jLabel3.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/hibernate/wizards/Bundle").getString("Database_mnemonic").charAt(0));
+        jLabel3.setLabelFor(cmbDatabaseTable);
+        jLabel3.setText(org.openide.util.NbBundle.getMessage(HibernateMappingWizardPanel.class, "HibernateMappingWizardPanel.jLabel3.text")); // NOI18N
+
+        cmbDatabaseTable.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -147,15 +223,20 @@ public class HibernateMappingWizardPanel extends javax.swing.JPanel {
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(jLabel2)
-                    .add(jLabel1))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(layout.createSequentialGroup()
-                        .add(txtClassName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 366, Short.MAX_VALUE)
+                        .add(jLabel1)
+                        .add(27, 27, 27)
+                        .add(txtClassName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 374, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(browseButton))
-                    .add(cmbResource, 0, 417, Short.MAX_VALUE))
+                    .add(layout.createSequentialGroup()
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING, false)
+                            .add(jLabel3, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .add(jLabel2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(cmbDatabaseTable, 0, 425, Short.MAX_VALUE)
+                            .add(cmbResource, 0, 425, Short.MAX_VALUE))))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -166,18 +247,29 @@ public class HibernateMappingWizardPanel extends javax.swing.JPanel {
                     .add(jLabel1)
                     .add(browseButton)
                     .add(txtClassName, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .add(18, 18, 18)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(jLabel2)
                     .add(cmbResource, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(cmbDatabaseTable, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(jLabel3))
+                .addContainerGap(16, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
+    private void cmbResourceActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmbResourceActionPerformed
+        // TODO add your handling code here:
+        fillDatabaseTable();
+    }//GEN-LAST:event_cmbResourceActionPerformed
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton browseButton;
+    private javax.swing.JComboBox cmbDatabaseTable;
     private javax.swing.JComboBox cmbResource;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jLabel3;
     private javax.swing.JTextField txtClassName;
     // End of variables declaration//GEN-END:variables
 }
