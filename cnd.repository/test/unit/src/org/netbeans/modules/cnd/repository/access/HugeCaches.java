@@ -21,6 +21,12 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  * 
+ * Contributor(s):
+ * 
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,78 +37,72 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
- * Contributor(s):
- * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.cnd.repository.access;
 
 import java.io.File;
+import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmProject;
-import org.netbeans.modules.cnd.api.project.NativeProject;
+import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.core.ModelImpl;
-import org.netbeans.modules.cnd.modelimpl.platform.ModelSupport;
-import org.netbeans.modules.cnd.modelimpl.trace.NativeProjectProvider;
 import org.netbeans.modules.cnd.modelimpl.trace.TraceModelBase;
 
 /**
- *
+ * A test that reproduces the situation described in the IZ #124767
+ * http://www.netbeans.org/issues/show_bug.cgi?id=124767
  * @author Vladimir Kvashin
  */
-public class ChangingPropertiesTestCase extends RepositoryAccessTestBase {
+public class HugeCaches extends RepositoryAccessTestBase {
 
-    private final static boolean verbose;
     static {
-        verbose = true; // Boolean.getBoolean("test.library.changing.props.verbose");
-        if( verbose ) {
-            System.setProperty("cnd.modelimpl.timing", "true");
-            System.setProperty("cnd.modelimpl.timing.per.file.flat", "true");
-            System.setProperty("cnd.repository.listener.trace", "true");
-            System.setProperty("cnd.trace.close.project", "true");
-	    //System.setProperty("cnd.repository.workaround.nulldata", "true");
-        }
-    }    
-
-    public ChangingPropertiesTestCase(String testName) {
+	System.setProperty("cnd.repository.trace.defragm", "true");
+	System.setProperty("cnd.repository.queue.maintenance", "10");
+    }
+    
+    public HugeCaches(String testName) {
 	super(testName);
     }
     
     public void testRun() throws Exception {
 	
-	File projectRoot = getDataFile("quote_syshdr");
+	File projectRoot1 = getDataFile("quote_nosyshdr");
+	File projectRoot2 = getDataFile("../org");
 	
-	int count = Integer.getInteger("test.library.changing.props.laps", 1000);
+	int count = Integer.getInteger("huge.caches.laps", 1000);
 	
 	final TraceModelBase traceModel = new  TraceModelBase();
 	traceModel.setUseSysPredefined(true);
-	traceModel.processArguments(projectRoot.getAbsolutePath());
+	traceModel.processArguments(projectRoot1.getAbsolutePath(), projectRoot2.getAbsolutePath());
 	ModelImpl model = traceModel.getModel();
-	ModelSupport.instance().setModel(model);
-	final CsmProject project = traceModel.getProject();
-	
-	System.err.printf("Waiting parse...\n");
-	project.waitParse();
-	final NativeProject nativeProject = (NativeProject) project.getPlatformProject();
-	
-	// a simple timing
-	System.err.printf("Calculating parse time\n");
-	long parseTime = System.currentTimeMillis();
-	NativeProjectProvider.fireAllFilesChanged(nativeProject);
-	sleep(500); // otherwise
-	project.waitParse();
-	parseTime = System.currentTimeMillis() - parseTime;
-	System.err.printf("Parse time is %d ms\n", parseTime);
 	
 	for (int i = 0; i < count; i++) {
-	    System.err.printf("########## %s: processing project %s. Pass %d \n", getBriefClassName(), projectRoot.getAbsolutePath(), i);
-	    NativeProjectProvider.fireAllFilesChanged(nativeProject);
-	    long timeout = (long) (Math.random() * parseTime);
-	    System.err.printf("Sleeping %d ms\n", timeout);
-	    sleep(timeout);
+	    System.err.printf("%s: processing project %s. Pass %d \n", getBriefClassName(), projectRoot1.getAbsolutePath(), i);
+	    final CsmProject project = traceModel.getProject();
+	    project.waitParse();
+	    sleep(2000); // (i < 2 ? 2000 : 4000); // 12000);
+	    if( i > 0 &&  i % 20 == 0 ) {
+		System.err.printf("\n\nSleeping...\n");
+		sleep(15000);
+		System.err.printf("\nAwoke\n\n");
+	    }
+	    
+	    invalidateProjectFiles(project);
+	    //traceModel.resetProject(i < count/2);
 	    assertNoExceptions();
 	}
 	assertNoExceptions();
     }
+    
+    private void invalidateProjectFiles(CsmProject project) {
+	for(CsmFile file : project.getAllFiles() ) {
+	    FileImpl impl = (FileImpl) file;
+	    impl.stateChanged(false);
+	    try {
+		file.scheduleParsing(false);
+		//sleep(500);
+	    } catch ( InterruptedException e ) {}
+	}
+    }
+    
 }
