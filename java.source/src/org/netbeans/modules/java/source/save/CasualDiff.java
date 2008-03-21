@@ -1063,9 +1063,20 @@ public class CasualDiff {
         copyTo(localPointer, condBounds[0]);
         localPointer = diffTree(oldT.cond, newT.cond, condBounds);
         // detail
-        int[] detailBounds = getBounds(oldT.detail);
-        copyTo(localPointer, detailBounds[0]);
-        localPointer = diffTree(oldT.detail, newT.detail, detailBounds);
+        if (oldT.detail != newT.detail) {
+            if (oldT.detail == null) {
+                printer.print(" : ");
+                printer.print(newT.detail);
+            } else {
+                int[] detailBounds = getBounds(oldT.detail);
+                if (newT.detail == null) {
+                    localPointer = detailBounds[1];
+                } else {
+                    copyTo(localPointer, detailBounds[0]);
+                    localPointer = diffTree(oldT.detail, newT.detail, detailBounds);
+                }
+            }
+        }
         copyTo(localPointer, bounds[1]);
         
         return bounds[1];
@@ -2047,6 +2058,14 @@ public class CasualDiff {
                     copyTo(start, pos = end, printer);
                     break;
                 }
+                case DELETE: {
+                    oldIndex++;
+                    int[] bounds = getBounds(item.element);
+                    tokenSequence.move(bounds[1] - 1);
+                    moveToSrcRelevant(tokenSequence, Direction.FORWARD);
+                    pos = tokenSequence.offset();
+                    break;
+                }
                 default: 
                     break;
             }
@@ -2091,7 +2110,7 @@ public class CasualDiff {
                     if (!fieldGroup.isEmpty()) {
                         int oldPos = getOldPos(fieldGroup.get(0));
                         
-                        if (oldPos != (-1) && oldPos == getOldPos(var) && fieldGroup.get(0).getModifiers() == var.getModifiers()) {
+                        if (oldPos != (-1) && oldPos != NOPOS && oldPos == getOldPos(var) && fieldGroup.get(0).getModifiers() == var.getModifiers()) {
                             //seems like a field group:
                             fieldGroup.add(var);
                         } else {
