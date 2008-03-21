@@ -143,24 +143,27 @@ public class NbCustomizeSelectionDialog extends NbiDialog {
                 getClass().getClassLoader().getResource(EMPTY_ICON));
         
         initComponents();
-        
+        setDefaultMinimumSize();
+    }
+	
+    private void setDefaultMinimumSize(){
         switch (UiUtils.getLAF()) {
             case WINDOWS_CLASSIC :
             case WINDOWS_XP :
-                setSize(560, 420);
+                setMinimumSize(new Dimension(560, 420));
                 break;
             case GTK:
-                setSize(660, 500);
+                setMinimumSize(new Dimension(660, 500));
                 break;
             case AQUA:
-                setSize(550,410);
+                setMinimumSize(new Dimension(550,410));
                 break;
             case MOTIF:
             case METAL:
-                setSize(620,460);
+                setMinimumSize(new Dimension(620,460));
                 break;
             default:
-                setSize(560,420);
+                setMinimumSize(new Dimension(560,420));
                 break;
         }
     }
@@ -373,7 +376,7 @@ public class NbCustomizeSelectionDialog extends NbiDialog {
         } else if (!isThereAnythingVisibleToUninstall()) {
             messageLabel.setText(panel.getProperty(panel.MESSAGE_INSTALL_PROPERTY));
         } else {
-            messageLabel.setText(panel.getProperty(panel.MESSAGE_PROPERTY));
+            messageLabel.setText(panel.getProperty(panel.MESSAGE_INSTALL_PROPERTY));
         }
         
         componentsList.setModel(
@@ -392,6 +395,20 @@ public class NbCustomizeSelectionDialog extends NbiDialog {
         
         okButton.setText(panel.getProperty(panel.OK_BUTTON_TEXT_PROPERTY));
         cancelButton.setText(panel.getProperty(panel.CANCEL_BUTTON_TEXT_PROPERTY));
+	
+        componentsList.setVisibleRowCount(componentsList.getModel().getSize());
+        componentsList.getUI().getPreferredSize(componentsList);
+        componentsScrollPane.getViewport().setPreferredSize(
+                componentsList.getPreferredScrollableViewportSize());
+        pack();
+        final Dimension currentSize = getSize();
+        final Dimension minimumSize = getMinimumSize();
+        setPreferredSize(new Dimension(
+                (minimumSize.width > currentSize.width?
+                    minimumSize.width : currentSize.width),
+                (minimumSize.height > currentSize.height?
+                    minimumSize.height : currentSize.height)));
+        pack();
     }
     
     private void updateDescription() {
@@ -454,7 +471,7 @@ public class NbCustomizeSelectionDialog extends NbiDialog {
                     Boolean.getBoolean(Registry.SUGGEST_UNINSTALL_PROPERTY)) {
                 return panel.getProperty(panel.ERROR_NO_CHANGES_UNINSTALL_ONLY_PROPERTY);
             }
-            return panel.getProperty(panel.ERROR_NO_CHANGES_PROPERTY);
+            return panel.getProperty(panel.ERROR_NO_CHANGES_INSTALL_ONLY_PROPERTY);
         }
         
         for (Product product: toInstall) {
@@ -774,7 +791,8 @@ public class NbCustomizeSelectionDialog extends NbiDialog {
                 
                 checkBox.setVisible(false);
             }
-            
+            titleLabel.setPreferredSize(titleLabel.getMinimumSize());
+
             // l&f-specific tweaks
             if (UIManager.getLookAndFeel().getID().equals("GTK")) {
                 panel.setOpaque(false);
