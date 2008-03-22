@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,12 +39,26 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.db.explorer.nodes;
+package org.netbeans.modules.cnd.repository.disk;
 
-import org.openide.util.NbBundle;
+import java.io.IOException;
+import org.netbeans.modules.cnd.repository.sfs.ConcurrentFileRWAccess;
+import org.netbeans.modules.cnd.repository.spi.Key;
 
-public class AdaptorListNode extends DatabaseNode {
-    public String getShortDescription() {
-        return NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ND_AdaptorList"); //NOI18N
-    }
+
+/**
+ *
+ * @author Nickolay Dalmatov
+ */
+public interface FilesAccessStrategy {
+    
+    /** Returns the file access for the object identified by the id */
+    ConcurrentFileRWAccess getFile(Key id,  boolean read)  throws IOException;
+    
+    /** Remove the record */
+    void removeFile (Key id) throws IOException;
+
+    void setOpenFilesLimit(int limit) throws IOException;
+    
+    void closeUnit(String unitName) throws IOException;
 }

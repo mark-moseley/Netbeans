@@ -41,112 +41,127 @@
 package org.netbeans.modules.websvc.saas.codegen.java;
 
 import org.netbeans.modules.websvc.saas.model.WadlSaasMethod;
-import com.sun.source.tree.MethodTree;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import javax.swing.text.JTextComponent;
+import javax.xml.namespace.QName;
 import org.netbeans.api.java.source.JavaSource;
-import org.netbeans.api.java.source.ModificationResult;
-import org.netbeans.api.java.source.WorkingCopy;
-import org.netbeans.api.progress.ProgressHandle;
-import org.netbeans.modules.websvc.saas.codegen.java.Constants.MimeType;
+import org.netbeans.modules.websvc.saas.codegen.java.Constants.HttpMethodType;
+import org.netbeans.modules.websvc.saas.codegen.java.Constants.SaasAuthenticationType;
 import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo;
 import org.netbeans.modules.websvc.saas.codegen.java.model.WadlSaasBean;
-import org.netbeans.modules.websvc.saas.codegen.java.support.AbstractTask;
-import org.netbeans.modules.websvc.saas.codegen.java.support.JavaSourceHelper;
+import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
 import org.openide.filesystems.FileObject;
 
 /**
  * Code generator for Accessing Saas services.
  *
- * @author nam
+ * @author ayubskhan
  */
-public class JaxRsServletCodeGenerator extends JaxRsCodeGenerator {
+public class JaxRsServletCodeGenerator extends JaxRsJavaClientCodeGenerator {
 
+    private JavaSource loginJS;
+    private FileObject loginFile;
+    private JavaSource callbackJS;
+    private FileObject callbackFile;
+    
     public JaxRsServletCodeGenerator(JTextComponent targetComponent,
             FileObject targetFile, WadlSaasMethod m) throws IOException {
         super(targetComponent, targetFile, m);
     }
     
+    /**
+     *  Create Authorization Frame
+     */
     @Override
-    public Set<FileObject> generate(ProgressHandle pHandle) throws IOException {
-        initProgressReporting(pHandle);
-
-        preGenerate();
-        insertSaasServiceAccessCode();
-        
-        finishProgressReporting();
-
-        return new HashSet<FileObject>(Collections.EMPTY_LIST);
+    public void createAuthorizationClasses() throws IOException {
+        List<ParameterInfo> filterParams = getAuthenticatorMethodParameters();
+        final String[] parameters = getGetParamNames(filterParams);
+        final Object[] paramTypes = getGetParamTypes(filterParams);
+        Util.createSessionKeyAuthorizationClassesForWeb(
+            getBean(), getProject(),
+            getBean().getSaasName(), getBean().getSaasServicePackageName(), 
+            getSaasServiceFolder(), 
+            loginJS, loginFile, 
+            callbackJS, callbackFile,
+            parameters, paramTypes
+        );
     }
     
-
-    @Override
-    protected void preGenerate() {
-        JavaSourceHelper.createJavaSource(REST_CONNECTION_TEMPLATE, destDir, bean.getPackageName(), REST_CONNECTION);
-    }
-
-    /**
-     *  Return target and generated file objects
-     */
-    protected void insertSaasServiceAccessCode() throws IOException {
-        JavaSource targetFileJS = JavaSource.forFileObject(getTargetFile());
-        ModificationResult result = targetFileJS.runModificationTask(new AbstractTask<WorkingCopy>() {
-
-            public void run(WorkingCopy copy) throws IOException {
-                copy.toPhase(JavaSource.Phase.ELEMENTS_RESOLVED);
-                
-                String methodBody = "{" + getOverridingStatements(); //NOI18N
-                methodBody += getCustomMethodBody();
-
-                methodBody += "}"; //NOI18N
-                for(MimeType mime:bean.getMimeTypes()) {
-                    MethodTree methodTree = JavaSourceHelper.getMethodByName(copy, bean.getGetMethodName(mime));
-                    JavaSourceHelper.replaceMethodBody(copy, methodTree, methodBody);
-                }
-            }
-        });
-        result.commit();
-    }
-
     @Override
     protected String getCustomMethodBody() throws IOException {
-        String paramStr = null;
-        StringBuffer sb1 = new StringBuffer();
-        List<ParameterInfo> params = bean.getInputParameters();
-
-        for (ParameterInfo param : params) {
-            String paramName = param.getName();
-            if (param.getType() != String.class) {
-                sb1.append("{\"" + paramName + "\", " + paramName + ".toString()},");
-            } else {
-                sb1.append("{\"" + paramName + "\", " + paramName + "},");
-            }
-        }
-        paramStr = sb1.toString();
-        if (params.size() > 0) {
-            paramStr = paramStr.substring(0, paramStr.length() - 1);
-        }
+        String paramUse = "";
+        String paramDecl = "";
         
-        String methodBody = "String url = \"" + ((WadlSaasBean) bean).getUrl() + "\";\n";
-        methodBody += "        try {\n";
-        methodBody += "             String[][] params = new String[][]{\n";
-        methodBody += "                 " + paramStr + "\n";
-        methodBody += "             };\n";
-        methodBody += "             RestConnection cl = new RestConnection(url, params);\n";
-        methodBody += "             String result = cl.get();\n";
-        methodBody += "        } catch (java.io.IOException ex) {\n";
-        methodBody += "             throw new WebApplicationException(ex);\n";
-        methodBody += "        }\n }";
+        //Evaluate parameters (query(not fixed or apikey), header, template,...)
+        List<ParameterInfo> filterParams = getServiceMethodParameters();//includes request, response also
+        paramUse += Util.getHeaderOrParameterUsage(filterParams);
+        filterParams = super.getServiceMethodParameters();
+        paramDecl += getHeaderOrParameterDeclaration(filterParams);
+        
+        String methodBody = "";
+        methodBody += "             try {\n";
+        methodBody += paramDecl + "\n";
+        methodBody += "             "+REST_RESPONSE+" result = " + getBean().getSaasServiceName() + 
+                "." + getBean().getSaasServiceMethodName() + "(" + paramUse + ");\n";
+        if(getBean().getHttpMethod() == HttpMethodType.GET) {
+            if(getBean().canGenerateJAXBUnmarshaller()) {
+                String resultClass = getBean().getOutputWrapperPackageName()+ "." +getBean().getOutputWrapperName();
+                methodBody += "             "+resultClass+" resultObj = result.getDataAsJaxbObject("+resultClass+".class);\n";
+                methodBody += "             System.out.println(\"The SaasService returned: \" + resultObj.toString());\n";
+            } else {
+                methodBody += "             System.out.println(\"The SaasService returned: \"+result.getDataAsString());\n";
+            }
+        } else {
+            methodBody += "                 System.out.println(\"The SaasService returned: \"+result);\n";
+        }
+        methodBody += "             } catch (Exception ex) {\n";
+        methodBody += "                 ex.printStackTrace();\n";
+        methodBody += "             }\n";
        
         return methodBody;
     }
     
     @Override
-    public boolean showParams() {
-        return wrapperResourceFile != null;
+    protected List<ParameterInfo> getAuthenticatorMethodParameters() {
+        if(bean.getAuthenticationType() == SaasAuthenticationType.SESSION_KEY)
+            return Util.getAuthenticatorMethodParametersForWeb();
+        else
+            return super.getAuthenticatorMethodParameters();
     }
+    
+    @Override
+    protected List<ParameterInfo> getServiceMethodParameters() {
+        if(bean.getAuthenticationType() == SaasAuthenticationType.SESSION_KEY)
+            return Util.getServiceMethodParametersForWeb(getBean());
+        else
+            return super.getServiceMethodParameters();
+    }
+    
+    @Override
+    protected String getLoginBody(WadlSaasBean bean, 
+            String groupName, String paramVariableName) throws IOException {
+        if(getBean().getAuthenticationType() != SaasAuthenticationType.SESSION_KEY)
+            return null;
+        return Util.createSessionKeyLoginBodyForWeb(bean, groupName, paramVariableName);
+    }
+    
+    @Override
+    protected String getTokenBody(WadlSaasBean bean, 
+            String groupName, String paramVariableName, String saasServicePkgName) throws IOException {
+        if(getBean().getAuthenticationType() != SaasAuthenticationType.SESSION_KEY)
+            return null;
+        return Util.createSessionKeyTokenBodyForWeb(bean, groupName, paramVariableName,
+                saasServicePkgName);
+    }
+    
+    @Override
+    protected String getSessionKeyLoginArguments() {
+        return Util.getSessionKeyLoginArgumentsForWeb();
+    }
+    
+    @Override
+    protected void addJaxbLib() throws IOException {}
 }
