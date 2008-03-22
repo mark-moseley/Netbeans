@@ -48,6 +48,7 @@ import javax.xml.namespace.QName;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.websvc.saas.codegen.java.Constants.HttpMethodType;
 import org.netbeans.modules.websvc.saas.codegen.java.Constants.MimeType;
+import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
 import org.netbeans.modules.websvc.saas.model.WsdlSaasMethod;
 
 /**
@@ -58,9 +59,10 @@ import org.netbeans.modules.websvc.saas.model.WsdlSaasMethod;
 public class WsdlSaasBean extends SaasBean {
     
     private JaxwsOperationInfo[] jaxwsInfos;
-  
+    private WsdlSaasMethod m;
+    
     public WsdlSaasBean(WsdlSaasMethod m, Project project) {
-        this(deriveResourceName(m.getName()), 
+        this(Util.deriveResourceName(m.getName()), 
                 toJaxwsOperationInfos(m, project));
     }
   
@@ -74,32 +76,19 @@ public class WsdlSaasBean extends SaasBean {
     private WsdlSaasBean(String name, JaxwsOperationInfo[] jaxwsInfos) {
         super(name, 
               null,
-              deriveUriTemplate(jaxwsInfos[jaxwsInfos.length-1].getOperationName()),
-              deriveMimeTypes(jaxwsInfos), 
+              Util.deriveUriTemplate(jaxwsInfos[jaxwsInfos.length-1].getOperationName()),
+              Util.deriveMimeTypes(jaxwsInfos), 
               new String[] { jaxwsInfos[jaxwsInfos.length-1].getOutputType() }, 
               new HttpMethodType[] { HttpMethodType.GET });
         this.jaxwsInfos = jaxwsInfos;
     }
-      
+
     private static JaxwsOperationInfo[] toJaxwsOperationInfos(WsdlSaasMethod m, 
             Project project) {
         List<JaxwsOperationInfo> infos = new ArrayList<JaxwsOperationInfo>();
-        
-        //for (Method m : data.getService().getMethods()) {
-            String service = m.getSaas().getDefaultServiceName();
-            String port = m.getWsdlPort().getName();
-            infos.add(new JaxwsOperationInfo(m.getSaas().getParentGroup().getName(), service, port, m.getName(), m.getSaas().getUrl(), project));
-        //}
+        infos.add(new JaxwsOperationInfo(m, project));
         
         return infos.toArray(new JaxwsOperationInfo[infos.size()]);
-    }
-    
-    private static MimeType[] deriveMimeTypes(JaxwsOperationInfo[] operations) {
-        if (String.class.getName().equals(operations[operations.length-1].getOperation().getReturnTypeName())) {
-            return new MimeType[] { MimeType.HTML };
-        } else {
-            return new MimeType[] { MimeType.XML };//TODO  MimeType.JSON };
-        }
     }
     
     protected List<ParameterInfo> initInputParameters() {
@@ -165,5 +154,8 @@ public class WsdlSaasBean extends SaasBean {
     public JaxwsOperationInfo lastOperationInfo() {
         return getOperationInfos()[getOperationInfos().length-1];
     }
-    
+
+    public String getResourceClassTemplate() {
+        return RESOURCE_TEMPLATE;
+    }
 }

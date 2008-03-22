@@ -75,7 +75,7 @@ public class MetaDataSerializer {
      * @param mdFileName absolute filename 
      * @return
      */
-    public boolean mdFileNameExists(String mdFileName) {
+    public boolean mdFileNameExists(String mdFileName) {  
         return new File(mdFileName).exists();
     }
     
@@ -85,17 +85,20 @@ public class MetaDataSerializer {
      * @param mdFileName absolute filename
      */
     public void serialize(ResultSetMetaData resultSetMetaData, String mdFileName) {
-
+        mdFileName = mdFileName.replaceAll("\\n", ""); // NOI18N
         if (resultSetMetaData != null) {
             ObjectOutputStream os = null;
-            try {    
+            try {                
                 os = new ObjectOutputStream(new FileOutputStream(mdFileName));
                 os.writeObject(resultSetMetaData);
             } catch (IOException ex) {
                 ex.printStackTrace();
             } finally {
                 try {
-                    os.close();
+                    // if new FileOutputStream(mdFileName) is null (due to FileNotFoundException) then os would be null and no stream would be opened for writing
+                    if (os != null) {
+                        os.close();
+                    }
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }

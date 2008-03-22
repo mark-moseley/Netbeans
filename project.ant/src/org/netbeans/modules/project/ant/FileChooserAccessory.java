@@ -53,6 +53,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import javax.swing.JFileChooser;
+import org.netbeans.api.queries.CollocationQuery;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -76,7 +77,7 @@ public class FileChooserAccessory extends javax.swing.JPanel
     private final File sharedLibrariesFolder;
     private boolean copyAllowed;
     private JFileChooser chooser;
-    private List<File> copiedRelativeFiles = null;
+    private List<String> copiedRelativeFiles = null;
     /** In RelativizeFilePathCustomizer scenario this property holds preselected file */
     private File usetThisFileInsteadOfOneFromChooser = null;
 
@@ -87,7 +88,18 @@ public class FileChooserAccessory extends javax.swing.JPanel
         this(null, baseFolder, sharedLibrariesFolder, copyAllowed);
         usetThisFileInsteadOfOneFromChooser = selectedFile;
         enableAccessory(true);
-        update(Collections.singletonList(selectedFile));
+        update(Collections.singletonList(usetThisFileInsteadOfOneFromChooser));
+        
+        //when deciding on predefined file, we can assume certain options to be preferable.
+        if (CollocationQuery.areCollocated(baseFolder, selectedFile)) {
+            rbRelative.setSelected(true);
+        } else {
+            if (copyAllowed) {
+                rbCopy.setSelected(true);
+            } else {
+                rbAbsolute.setSelected(true);
+            }
+        }
     }
     
     /**
@@ -120,16 +132,20 @@ public class FileChooserAccessory extends javax.swing.JPanel
             copyTo.setText(sharedLibrariesFolder.getAbsolutePath());
         }
         enableAccessory(false);
+        if (!copyAllowed) {
+            rbCopy.setVisible(false);
+            copyTo.setVisible(false);
+        }
     }
 
-    public File[] getFiles() {
+    public String[] getFiles() {
         assert isRelative();
         if (isCopy()) {
-            return copiedRelativeFiles.toArray(new File[copiedRelativeFiles.size()]);
+            return copiedRelativeFiles.toArray(new String[copiedRelativeFiles.size()]);
         } else {
             List<File> files = Arrays.asList(getSelectedFiles());
-            List<File> l = getRelativeFiles(files);
-            return l.toArray(new File[l.size()]);
+            List<String> l = getRelativeFiles(files);
+            return l.toArray(new String[l.size()]);
         }
     }
     
@@ -237,7 +253,6 @@ public class FileChooserAccessory extends javax.swing.JPanel
     private void update(List<File> files) {
         StringBuffer absolute = new StringBuffer();
         StringBuffer relative = new StringBuffer();
-        StringBuffer copy = new StringBuffer();
         boolean isRelative = true;
         for (File file : files) {
             if (absolute.length() != 0) {
@@ -245,16 +260,6 @@ public class FileChooserAccessory extends javax.swing.JPanel
                 relative.append(", ");
                 if (file.getParentFile() != null && file.getParentFile().getParentFile() != null &&
                         file.getParentFile().getName().length() > 0) {
-                    copy.setLength(0);
-                    copy.append("/"+file.getParentFile().getName());
-                }
-            } else {
-                // first file:
-                if (file.getParentFile() != null && file.getParentFile().getParentFile() != null &&
-                        file.getParentFile().getName().length() > 0) {
-                    copy.append("/"+file.getParentFile().getName()+"/"+file.getName());
-                } else {
-                    copy.append("/");
                 }
             }
             absolute.append(file.getAbsolutePath());
@@ -277,12 +282,12 @@ public class FileChooserAccessory extends javax.swing.JPanel
         absolutePath.setToolTipText(absolute.toString());
     }
 
-    private List<File> getRelativeFiles(List<File> files) {
-        List<File> fs = new ArrayList<File>();
+    private List<String> getRelativeFiles(List<File> files) {
+        List<String> fs = new ArrayList<String>();
         for (File file : files) {
             String s = PropertyUtils.relativizeFile(baseFolder, file);
             if (s != null) {
-                fs.add(new File(s));
+                fs.add(s);
             }
         }
         return fs;
@@ -349,19 +354,19 @@ public class FileChooserAccessory extends javax.swing.JPanel
 
         buttonGroup1.add(rbRelative);
         rbRelative.setSelected(true);
-        rbRelative.setText(org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "FileChooserAccessory.rbRelative.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(rbRelative, org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "FileChooserAccessory.rbRelative.text")); // NOI18N
 
         relativePath.setEditable(false);
         relativePath.setText(null);
 
         buttonGroup1.add(rbCopy);
-        rbCopy.setText(org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "FileChooserAccessory.rbCopy.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(rbCopy, org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "FileChooserAccessory.rbCopy.text")); // NOI18N
 
         copyTo.setEditable(false);
         copyTo.setText(null);
 
         buttonGroup1.add(rbAbsolute);
-        rbAbsolute.setText(org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "FileChooserAccessory.rbAbsolute.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(rbAbsolute, org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "FileChooserAccessory.rbAbsolute.text")); // NOI18N
 
         absolutePath.setEditable(false);
         absolutePath.setText(null);
@@ -375,15 +380,15 @@ public class FileChooserAccessory extends javax.swing.JPanel
                     .add(rbRelative)
                     .add(layout.createSequentialGroup()
                         .add(21, 21, 21)
-                        .add(relativePath, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 219, Short.MAX_VALUE))
-                    .add(rbCopy, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 240, Short.MAX_VALUE)
+                        .add(relativePath, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 209, Short.MAX_VALUE))
+                    .add(rbCopy, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 230, Short.MAX_VALUE)
                     .add(layout.createSequentialGroup()
                         .add(21, 21, 21)
-                        .add(copyTo, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 219, Short.MAX_VALUE))
+                        .add(copyTo, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 209, Short.MAX_VALUE))
                     .add(rbAbsolute)
                     .add(layout.createSequentialGroup()
                         .add(21, 21, 21)
-                        .add(absolutePath, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 219, Short.MAX_VALUE)))
+                        .add(absolutePath, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 209, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -401,6 +406,10 @@ public class FileChooserAccessory extends javax.swing.JPanel
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(absolutePath, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
         );
+
+        rbRelative.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "ACSD_FileChooserAccessory_NA")); // NOI18N
+        rbCopy.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "ACSD_FileChooserAccessory_NA")); // NOI18N
+        rbAbsolute.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FileChooserAccessory.class, "ACSD_FileChooserAccessory_NA")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     
     

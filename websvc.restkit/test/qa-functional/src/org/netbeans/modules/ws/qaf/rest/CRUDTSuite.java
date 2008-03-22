@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,17 +34,13 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.ws.qaf.rest;
 
-import com.meterware.httpunit.WebResponse;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -55,11 +51,14 @@ import org.netbeans.jellytools.WizardOperator;
 import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JComboBoxOperator;
+import org.netbeans.jemmy.operators.JListOperator;
 import org.netbeans.junit.NbTestSuite;
+import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.xml.sax.SAXException;
 
 /**
+ * Tests for New REST web services from Entity Classes wizard
  *
  * @author lukas
  */
@@ -72,25 +71,6 @@ public class CRUDTSuite extends RestTestBase {
         super(name);
     }
 
-    /** Creates suite from particular test cases. You can define order of testcases here. */
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new CRUDTSuite("testRfE"));
-        suite.addTest(new CRUDTSuite("testDeploy"));
-        suite.addTest(new CRUDTSuite("testGet"));
-        suite.addTest(new CRUDTSuite("testPost"));
-        suite.addTest(new CRUDTSuite("testPut"));
-        suite.addTest(new CRUDTSuite("testDelete"));
-        suite.addTest(new CRUDTSuite("testUndeploy"));
-        return suite;
-    }
-
-    /* Method allowing test execution directly from the IDE. */
-    public static void main(java.lang.String[] args) {
-        // run whole suite
-        TestRunner.run(suite());
-    }
-
     public String getProjectName() {
         return "FromEntities"; //NOI18N
     }
@@ -99,6 +79,11 @@ public class CRUDTSuite extends RestTestBase {
         return "o.n.m.ws.qaf.rest.crud"; //NOI18N
     }
 
+    /**
+     * Create new web project with entity classes from sample database
+     * (jdbc/sample), create new RESTful web services from created entities
+     * and deploy the project
+     */
     public void testRfE() {
         prepareEntityClasses();
         //RESTful Web Services from Entity Classes
@@ -106,12 +91,11 @@ public class CRUDTSuite extends RestTestBase {
         createNewWSFile(getProject(), restLabel);
         WizardOperator wo = new WizardOperator(restLabel);
         //have to wait until "retrieving message dissapers (see also issue 122802)
-        new EventTool().waitNoEvent(1500);
-        //Add All
-        new JButtonOperator(wo, 4).pushNoBlock();
+        new EventTool().waitNoEvent(2500);
+        //Add All >>
+        String addAllLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.wizard.Bundle", "LBL_AddAll");
+        new JButtonOperator(wo, addAllLabel).pushNoBlock();
         wo.next();
-        wo = new WizardOperator(restLabel);
-        System.out.println("project: " + getProject());
         //Resource Package
         JComboBoxOperator jcbo = new JComboBoxOperator(wo, 2);
         jcbo.clearText();
@@ -128,75 +112,144 @@ public class CRUDTSuite extends RestTestBase {
         files.addAll(getFiles(getRestPackage() + ".converter")); //NOI18N
         assertEquals("Some files were not generated", 37, files.size()); //NOI18N
         checkFiles(files);
+        //make sure all REST services nodes are visible in project log. view
+        assertEquals("missing nodes?", 14, getRestNode().getChildren().length);
+    }
+    
+    /**
+     * Test creation of RESTful web service from an entity class which
+     * uses property based access. Also tests functionality of the new RESTful
+     * web service from entity classes wizard (buttons, updating model
+     * in the wizard)
+     */
+    public void testPropAccess() throws IOException {
+        //copy entity class into a project
+        FileObject fo = FileUtil.toFileObject(new File(getRestDataDir(), "Person.java.gf")); //NOI18N
+        FileObject targetDir = getProject().getProjectDirectory().getFileObject("src/java"); //NOI18N
+        fo.copy(targetDir.createFolder("entity"), "Person", "java"); //NOI18N
+        //RESTful Web Services from Entity Classes
+        String restLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.wizard.Bundle", "Templates/WebServices/RestServicesFromEntities");
+        createNewWSFile(getProject(), restLabel);
+        WizardOperator wo = new WizardOperator(restLabel);
+        //have to wait until "retrieving message dissapers (see also issue 122802)
+        new EventTool().waitNoEvent(2500);
+        JListOperator availableEntities = new JListOperator(wo, 1);
+        JListOperator selectedEntities = new JListOperator(wo, 2);
+        
+        //XXX - workaround for: http://www.netbeans.org/issues/show_bug.cgi?id=130835
+        //Add All >>
+        String addAllLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.wizard.Bundle", "LBL_AddAll");
+        new JButtonOperator(wo, addAllLabel).push();
+        //<< Remove All
+        String removeAllLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.wizard.Bundle", "LBL_RemoveAll");
+        new JButtonOperator(wo, removeAllLabel).push();
+        //XXX - end
+        
+        availableEntities.selectItem("Customer"); //NOI18N
+        //Add >
+        String addLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.wizard.Bundle", "LBL_Add");
+        new JButtonOperator(wo, addLabel).push();
+        assertEquals("add failed in selected", 6, selectedEntities.getModel().getSize()); //NOI18N
+        assertEquals("add failed in available", 2, availableEntities.getModel().getSize()); //NOI18N
+        selectedEntities.selectItem("Product"); //NOI18N
+        //< Remove
+        String removeLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.wizard.Bundle", "LBL_Remove");
+        new JButtonOperator(wo, removeLabel).push();
+        assertEquals("remove failed in selected", 5, selectedEntities.getModel().getSize()); //NOI18N
+        assertEquals("remove failed in available", 3, availableEntities.getModel().getSize()); //NOI18N
+//        //<< Remove All
+//        String removeAllLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.wizard.Bundle", "LBL_RemoveAll");
+        new JButtonOperator(wo, removeAllLabel).push();
+        assertEquals("remove all failed in selected", 0, selectedEntities.getModel().getSize()); //NOI18N
+        assertEquals("remove all failed in available", 8, availableEntities.getModel().getSize()); //NOI18N
+        availableEntities.selectItem("Person"); //NOI18N
+        new JButtonOperator(wo, addLabel).push();
+        assertEquals("add in selected", 1, selectedEntities.getModel().getSize()); //NOI18N
+        assertEquals("add in available", 7, availableEntities.getModel().getSize()); //NOI18N
+        wo.next();
+        wo.finish();
+        //Generating RESTful Web Services from Entity Classes
+        String restGenTitle = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.wizard.Bundle", "LBL_RestSevicicesFromEntitiesProgress");
+        waitDialogClosed(restGenTitle);
+        Set<File> files = getFiles("service"); //NOI18N
+        files.addAll(getFiles("converter")); //NOI18N
+        assertEquals("Some files were not generated", 7, files.size()); //NOI18N
+        checkFiles(files);
+        //make sure all REST services nodes are visible in project log. view
+        assertEquals("missing nodes?", 16, getRestNode().getChildren().length);
     }
 
     /**
      * Test HTTP Get method
      */
     public void testGet() throws SAXException, IOException {
-        WebResponse wr = doGet(
-                getResourcesURL() + "/microMarkets/?max=30", //NOI18N
-                MimeType.APPLICATION_XML);
-        int i = wr.getDOM().getDocumentElement().getChildNodes().getLength();
-        int j = 0;
-        try {
-            ResultSet rs = doQuery("select * from \"APP\".\"MICRO_MARKET\""); //NOI18N
-            while (rs.next()) {
-                j++;
-            }
-        } catch (SQLException ex) {
-        }
-        assertEquals(i, j);
+//        WebResponse wr = doGet(
+//                getResourcesURL() + "/microMarkets/?max=30", //NOI18N
+//                MimeType.APPLICATION_XML);
+//        int i = wr.getDOM().getDocumentElement().getChildNodes().getLength();
+//        int j = 0;
+//        try {
+//            ResultSet rs = doQuery("select * from \"APP\".\"MICRO_MARKET\""); //NOI18N
+//            while (rs.next()) {
+//                j++;
+//            }
+//        } catch (SQLException ex) {
+//        }
+//        assertEquals(i, j);
     }
 
     /**
      * Test HTTP Post method (add new purchaseOrder and check its stored into DB)
      */
     public void testPost() throws IOException, SAXException {
-        WebResponse wr = doPost(
-                getResourcesURL() + "/purchaseOrders/", //NOI18N
-                new FileInputStream(new File(getRestDataDir(), "purchaseOrder-new.xml")), //NOI18N
-                MimeType.APPLICATION_XML);
-        int quantity = 0;
-        try {
-            ResultSet rs = doQuery("select * from \"APP\".\"PURCHASE_ORDER\" where order_num = 99999999"); //NOI18N
-            rs.next();
-            quantity = rs.getInt("quantity"); //NOI18N
-        } catch (SQLException ex) {
-        }
-        assertEquals(75, quantity);
+//        WebResponse wr = doPost(
+//                getResourcesURL() + "/purchaseOrders/", //NOI18N
+//                new FileInputStream(new File(getRestDataDir(), "purchaseOrder-new.xml")), //NOI18N
+//                MimeType.APPLICATION_XML);
+//        int quantity = 0;
+//        try {
+//            ResultSet rs = doQuery("select * from \"APP\".\"PURCHASE_ORDER\" where order_num = 99999999"); //NOI18N
+//            rs.next();
+//            quantity = rs.getInt("quantity"); //NOI18N
+//        } catch (SQLException ex) {
+//        }
+//        assertEquals(75, quantity);
     }
 
     /**
      * Test HTTP Put method (modify new purchaseOrder and check changes in DB)
      */
     public void testPut() throws IOException, SAXException {
-        WebResponse wr = doPut(
-                getResourcesURL() + "/purchaseOrders/99999999/", //NOI18N
-                new FileInputStream(new File(getRestDataDir(), "purchaseOrder-update.xml")), //NOI18N
-                MimeType.APPLICATION_XML);
-        int quantity = 0;
-        try {
-            ResultSet rs = doQuery("select * from \"APP\".\"PURCHASE_ORDER\" where order_num = 99999999"); //NOI18N
-            rs.next();
-            quantity = rs.getInt("quantity"); //NOI18N
-        } catch (SQLException ex) {
-        }
-        assertEquals(199, quantity);
+//        WebResponse wr = doPut(
+//                getResourcesURL() + "/purchaseOrders/99999999/", //NOI18N
+//                new FileInputStream(new File(getRestDataDir(), "purchaseOrder-update.xml")), //NOI18N
+//                MimeType.APPLICATION_XML);
+//        int quantity = 0;
+//        try {
+//            ResultSet rs = doQuery("select * from \"APP\".\"PURCHASE_ORDER\" where order_num = 99999999"); //NOI18N
+//            rs.next();
+//            quantity = rs.getInt("quantity"); //NOI18N
+//        } catch (SQLException ex) {
+//        }
+//        assertEquals(199, quantity);
     }
 
     /**
      * Test HTTP Delete method (remove new purchaseOrder and check changes in DB)
      */
     public void testDelete() throws IOException, SAXException {
-        WebResponse wr = doDelete(
-                getResourcesURL() + "/purchaseOrders/99999999/", //NOI18N
-                MimeType.APPLICATION_XML);
-        try {
-            ResultSet rs = doQuery("select * from \"APP\".\"PURCHASE_ORDER\" where order_num = 99999999"); //NOI18N
-            assertFalse(rs.next());
-        } catch (SQLException ex) {
-        }
+//        WebResponse wr = doDelete(
+//                getResourcesURL() + "/purchaseOrders/99999999/", //NOI18N
+//                MimeType.APPLICATION_XML);
+//        try {
+//            ResultSet rs = doQuery("select * from \"APP\".\"PURCHASE_ORDER\" where order_num = 99999999"); //NOI18N
+//            assertFalse(rs.next());
+//        } catch (SQLException ex) {
+//        }
+    }
+
+    public void testCreateRestClient() throws IOException {
+        prepareRestClient();
     }
 
     private void prepareEntityClasses() {
@@ -243,4 +296,30 @@ public class CRUDTSuite extends RestTestBase {
         files.addAll(Arrays.asList(pkgRoot.listFiles()));
         return files;
     }
+    
+    /**
+     * Creates suite from particular test cases. You can define order of testcases here.
+     */
+    public static NbTestSuite suite() {
+        NbTestSuite suite = new NbTestSuite();
+        suite.addTest(new CRUDTSuite("testRfE")); //NOI18N
+        suite.addTest(new CRUDTSuite("testPropAccess")); //NOI18N
+        suite.addTest(new CRUDTSuite("testDeploy")); //NOI18N
+//        suite.addTest(new CRUDTSuite("testGet")); //NOI18N
+//        suite.addTest(new CRUDTSuite("testPost")); //NOI18N
+//        suite.addTest(new CRUDTSuite("testPut")); //NOI18N
+//        suite.addTest(new CRUDTSuite("testDelete")); //NOI18N
+        suite.addTest(new CRUDTSuite("testCreateRestClient")); //NOI18N
+        suite.addTest(new CRUDTSuite("testUndeploy")); //NOI18N
+        return suite;
+    }
+
+    /**
+     * Method allowing test execution directly from the IDE.
+     */
+    public static void main(java.lang.String[] args) {
+        // run whole suite
+        TestRunner.run(suite());
+    }
+
 }
