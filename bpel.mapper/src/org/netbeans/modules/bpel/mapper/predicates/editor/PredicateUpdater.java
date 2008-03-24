@@ -26,6 +26,7 @@ import java.util.Set;
 import javax.swing.tree.TreePath;
 import org.netbeans.modules.bpel.mapper.model.AbstractBpelModelUpdater;
 import org.netbeans.modules.bpel.mapper.model.BpelMapperModel;
+import org.netbeans.modules.bpel.mapper.model.GraphInfoCollector;
 import org.netbeans.modules.bpel.mapper.predicates.AbstractPredicate;
 import org.netbeans.modules.bpel.mapper.predicates.PredicateManager;
 import org.netbeans.modules.bpel.mapper.predicates.SyntheticPredicate;
@@ -79,6 +80,9 @@ public class PredicateUpdater extends AbstractBpelModelUpdater {
         // Create a new predicate and populate it
         mPred = new SyntheticPredicate(mSContext, null);
         recalculatePredicates();
+        if (mPred.getPredicates().length == 0) {
+            return;
+        }
         //
         // Add the new predicate to the PredicateManager
         BpelMapperModel mapperModel = getMapperModel();
