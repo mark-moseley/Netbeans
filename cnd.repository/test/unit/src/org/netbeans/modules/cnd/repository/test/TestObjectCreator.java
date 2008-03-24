@@ -39,76 +39,61 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.repository.disk;
+package org.netbeans.modules.cnd.repository.test;
 
-import java.io.IOException;
+import java.io.*;
+import java.util.*;
 import org.netbeans.modules.cnd.repository.spi.Key;
-import org.netbeans.modules.cnd.repository.spi.Persistent;
-import org.netbeans.modules.cnd.repository.util.RepositoryExceptionImpl;
-import org.netbeans.modules.cnd.repository.util.RepositoryListenersManager;
 
 /**
- * The implementation of the repository, which uses HDD
- * @author Nickolay Dalmatov 
+ * Creates a set of TestObject objects
+ * that correspond to file by the given path
+ * @author Vladimir Kvashin
  */
-public class MultyFileStorage implements Storage {
+public class TestObjectCreator {
     
-    private FilesAccessStrategy theFilesHelper;
-    private String unitName;
+    private String unit;
+    private Key.Behavior behavior;
     
-    public MultyFileStorage(String unitName) {
-        super();
-        theFilesHelper = FilesAccessStrategyImpl.getInstance();
-        this.unitName = unitName;
+    public TestObjectCreator() {
+        this("Test", Key.Behavior.Default);
     }
     
-    /** Creates a new instance of SimpleDiskRepository */
-    public MultyFileStorage(FilesAccessStrategy aFilesHelper) {
-        theFilesHelper = aFilesHelper;
+    public TestObjectCreator(String unit, Key.Behavior behavior) {
+        this.unit = unit;
+        this.behavior = behavior;
     }
     
-    public void write(Key id, final Persistent obj) {
-        assert id != null;
-        assert obj != null;
-        try {
-            theFilesHelper.write(id, obj);
-        } catch (Throwable ex) {
-            RepositoryListenersManager.getInstance().fireAnException(
-                    id.getUnit().toString(), new RepositoryExceptionImpl(ex));
+    public Collection<TestObject> createTestObjects(String... args) {
+	Collection<TestObject> objects = new ArrayList<TestObject>();
+	for (int i = 0; i < args.length; i++) {
+	    createTestObjects(new File(args[i]), objects);
+	}
+	return objects;
+    }
+    
+    public Collection<TestObject> createTestObjects(List<String> args) {
+	Collection<TestObject> objects = new ArrayList<TestObject>();
+	for( String path : args ) {
+	    createTestObjects(new File(path), objects);
+	}
+	return objects;
+    }
+    
+    private void createTestObjects(File file, Collection<TestObject> objects) {
+	TestObject  obj = new TestObject(file.getAbsolutePath(), unit, behavior);
+	if( file.exists() ) {
+	    obj.lData = file.length();
+	    objects.add(obj);
+	    if( file.isDirectory() ) {
+		obj.sData = file.list();
+		File[] children = file.listFiles();
+		if( children != null ) {
+		    for (int i = 0; i < children.length; i++) {
+                        createTestObjects(children[i], objects);
+                    }
+		}
+	    }
         }
-    }
-    
-    public boolean defragment(long timeout) {
-	return false;
-    }
-    
-    public Persistent get(Key id) {
-        assert id != null;
-        Persistent obj = null;
-        try {
-            obj = theFilesHelper.read(id);
-        }  catch (Throwable ex) {
-            RepositoryListenersManager.getInstance().fireAnException(
-                    id.getUnit().toString(), new RepositoryExceptionImpl(ex));
-        }
-        return obj;
-    }
-    
-    public void remove(Key id) {
-        assert id != null;
-        try {
-        theFilesHelper.remove(id);
-        } catch (Throwable ex) {
-            RepositoryListenersManager.getInstance().fireAnException(
-                    id.getUnit().toString(), new RepositoryExceptionImpl(ex));
-        }
-    }
-
-    public void close() throws IOException {
-        theFilesHelper.closeUnit(unitName);
-    }
-
-    public int getFragmentationPercentage() {
-        return 0;
     }
 }

@@ -39,76 +39,40 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.repository.disk;
+package org.netbeans.modules.cnd.repository.test;
 
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
-import org.netbeans.modules.cnd.repository.util.RepositoryExceptionImpl;
-import org.netbeans.modules.cnd.repository.util.RepositoryListenersManager;
+import org.netbeans.modules.cnd.repository.spi.PersistentFactory;
 
 /**
- * The implementation of the repository, which uses HDD
- * @author Nickolay Dalmatov 
+ * PersistentFactory implementation
+ * for tests
+ * @author Vladimir Kvashin
  */
-public class MultyFileStorage implements Storage {
-    
-    private FilesAccessStrategy theFilesHelper;
-    private String unitName;
-    
-    public MultyFileStorage(String unitName) {
-        super();
-        theFilesHelper = FilesAccessStrategyImpl.getInstance();
-        this.unitName = unitName;
-    }
-    
-    /** Creates a new instance of SimpleDiskRepository */
-    public MultyFileStorage(FilesAccessStrategy aFilesHelper) {
-        theFilesHelper = aFilesHelper;
-    }
-    
-    public void write(Key id, final Persistent obj) {
-        assert id != null;
-        assert obj != null;
-        try {
-            theFilesHelper.write(id, obj);
-        } catch (Throwable ex) {
-            RepositoryListenersManager.getInstance().fireAnException(
-                    id.getUnit().toString(), new RepositoryExceptionImpl(ex));
-        }
-    }
-    
-    public boolean defragment(long timeout) {
-	return false;
-    }
-    
-    public Persistent get(Key id) {
-        assert id != null;
-        Persistent obj = null;
-        try {
-            obj = theFilesHelper.read(id);
-        }  catch (Throwable ex) {
-            RepositoryListenersManager.getInstance().fireAnException(
-                    id.getUnit().toString(), new RepositoryExceptionImpl(ex));
-        }
-        return obj;
-    }
-    
-    public void remove(Key id) {
-        assert id != null;
-        try {
-        theFilesHelper.remove(id);
-        } catch (Throwable ex) {
-            RepositoryListenersManager.getInstance().fireAnException(
-                    id.getUnit().toString(), new RepositoryExceptionImpl(ex));
-        }
-    }
+public class TestFactory implements PersistentFactory {
 
-    public void close() throws IOException {
-        theFilesHelper.closeUnit(unitName);
+    private static final TestFactory instance = new TestFactory();
+    
+    public static TestFactory instance() {
+	return instance;
     }
+    
+    public void write(DataOutput out, Persistent obj) throws IOException {
+	if( obj instanceof TestObject ) {
+	    ((TestObject) obj).write(out);
+	}
+    }
+    
+    public Persistent read(DataInput in) throws IOException {
+	TestObject obj = new TestObject(in);
+	return obj;
+    }    
 
-    public int getFragmentationPercentage() {
-        return 0;
+    public boolean canWrite(Persistent obj) {
+	return obj instanceof TestObject;
     }
+    
 }
