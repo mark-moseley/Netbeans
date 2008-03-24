@@ -67,6 +67,7 @@ import org.netbeans.modules.websvc.core.WebServiceReference;
 import org.openide.ErrorManager;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 /**
@@ -80,7 +81,7 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
     
     private DesignView designView;
     private DragSource dragSource;
-    private DropTarget dropTarget;
+
     
     private MessageFlowDataFlavor flowDataFlavor = new MessageFlowDataFlavor();
     private BpelDataFlavor bpelDataFlavor = new BpelDataFlavor();
@@ -95,13 +96,14 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
         views.add(designView.getProvidersView());
 
         
-        dropTarget = new DropTarget(designView.getOverlayView(), DnDConstants.ACTION_MOVE, (DropTargetListener)this, true);
+
         dragSource = DragSource.getDefaultDragSource();// new DragSource();
         
 
         
         for (DiagramView view: views){
              dragSource.createDefaultDragGestureRecognizer(view, DnDConstants.ACTION_MOVE, this);
+             new DropTarget(view, DnDConstants.ACTION_MOVE, (DropTargetListener)this, true);
         
         }
         
@@ -135,11 +137,7 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
 
             
     public void dragDropEnd(DragSourceDropEvent dsde) {
-        getGhostSelection().clear();
-        for(DiagramView view : views){
-            view.getPlaceholderManager().clear();
-        }
-        getFlowLinkTool().clear();
+        clear();
         
 //      System.out.println("DragSource.dragDropEnd");
         if (dsde.getDropAction() == DnDConstants.ACTION_MOVE) {
@@ -148,7 +146,13 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
 //            parent.remove(be);
         }
     }
-    
+    private void clear(){
+            getGhostSelection().clear();
+        for(DiagramView view : views){
+            view.getPlaceholderManager().clear();
+        }
+        getFlowLinkTool().clear();    
+    }
     public void dragGestureRecognized(DragGestureEvent dge) {
 //      System.out.println("DragSource.dragGestureRecognized");
         
@@ -201,7 +205,7 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
         
         Transferable tr = dtde.getTransferable();
         
-        
+
         if (tr.isDataFlavorSupported(flowDataFlavor)){
             FPoint p;
             try {
@@ -301,9 +305,9 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
                 
         
                 
-                DiagramView view = designView.getView(dtde.getLocation());
+                DiagramView view = (DiagramView) dtde.getDropTargetContext().getComponent();
                 if (view != null){
-                    FPoint mp = view.convertPointFromParent(dtde.getLocation());
+                    FPoint mp = view.convertScreenToDiagram(dtde.getLocation());
 
                     tool = view.getPlaceholderManager();
 
@@ -328,12 +332,7 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
     }
     
     public void dragExit(DropTargetEvent dte) {
-//      System.out.println("DropTarget.DragExit");
-        getGhostSelection().clear();
-        for(DiagramView view : views){
-            view.getPlaceholderManager().clear();
-        }
-        getFlowLinkTool().clear();
+        clear();
     }
     
     public void drop(final DropTargetDropEvent dtde) {
@@ -345,13 +344,14 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
         getDesignView().requestFocusInWindow();
         
         getGhostSelection().clear();
-        final DiagramView view = designView.getView(dtde.getLocation());
         
+        final DiagramView view = (DiagramView) dtde.getDropTargetContext().getComponent();
+                
         if (view == null){
             return;
         }
         
-        final FPoint location = view.convertPointFromParent(dtde.getLocation());
+        final FPoint location = view.convertScreenToDiagram(dtde.getLocation());
         
         
         Callable<Object> callable = null;
@@ -369,6 +369,7 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
                 
                 public Object call() {
                     view.getPlaceholderManager().drop(location);
+                    clear();
                     return null;
                 }
             };
@@ -408,6 +409,7 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
                 } else if (WebServiceReference.class.isAssignableFrom(repClass)) {
                     entity = designView.getBPELModel().getBuilder().createPartnerLink();
                     entity.setCookie(DnDHandler.class, data);
+                    
                 } else if (DataObject.class.isAssignableFrom(repClass)) {
                     DataObject dataObj = (DataObject) data;
                     String ext = dataObj.getPrimaryFile().getExt();
@@ -549,6 +551,14 @@ public class DnDHandler implements DragSourceListener , DragGestureListener, Dro
         } else if (item.equals("foreach")) { // NOI18N
             ForEach fe = builder.createForEach();
             fe.setParallel(TBoolean.NO);
+            try {
+                fe.setCounterName(fe.getName() + "Counter"); // NOI18N
+            } catch (VetoException ex) {
+                // Somebody does not like this counter name 
+                // or property is not supported or something else.
+                // Anyway we unable to determine cause of problem, 
+                // so will ignore this exception.            
+            }
             return fe;
         } else if (item.equals("scope")) { // NOI18N
             return builder.createScope();
