@@ -42,6 +42,7 @@
 package org.netbeans.modules.compapp.projects.jbi.anttasks;
 
 import java.io.*;
+import java.net.URI;
 import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -109,6 +110,10 @@ public class BuildServiceAssembly extends Task {
     private String projDirLoc;
     private String serviceUnitsDirLoc;
     private String jbiasaDirLoc;
+
+    // IZ#126214 Soap bc wsit callback handler projects
+    private String wsitCallbackProjects;
+    private static final String SOAP_BC = "sun-http-binding";
     
     private boolean saInternalRouting = true;
     
@@ -163,12 +168,14 @@ public class BuildServiceAssembly extends Task {
     public void execute() throws BuildException {
         showLog = showLogOption.equalsIgnoreCase("true");
         JarFile genericBCJar = null;
-                             
+
         Project p = this.getProject();
         String confDir = p.getProperty((JbiProjectProperties.META_INF));
         if ((confDir == null) || (confDir.length() < 1)) {
             return;
         }
+
+        wsitCallbackProjects = p.getProperty("WsitCallbackProjects"); // NOI18N
 
         String javaeeJars = p.getProperty(JbiProjectProperties.JBI_JAVAEE_JARS);
         String jars = p.getProperty((JbiProjectProperties.JBI_CONTENT_ADDITIONAL));
@@ -328,7 +335,9 @@ public class BuildServiceAssembly extends Task {
             
             // Create the new CASA file (This depends on BC SU jbi.xml)
             log("Creating/Updating CASA...");
-            Document newCasaDocument = casaBuilder.createCasaDocument(jbiDocument);  
+            Document newCasaDocument = casaBuilder.createCasaDocument(jbiDocument);
+            //String s = new String(XmlUtil.writeToBytes(newCasaDocument));
+            //System.out.println("---------------\n"+s+"------------------\n");
             
             // Decorate BC SU jbi.xml and generate BC jar.
             for (String bcName : bcsuDescriptorBuilderMap.keySet()) {
@@ -341,8 +350,10 @@ public class BuildServiceAssembly extends Task {
                 // 1. copy BCjars for each needed BC
                 // 2. create jbi.xml
                 // boolean isCompAppWSDLNeeded = bcsUsingCompAppWsdl.contains(bcName);
-                createBCJar(bcJarMap.get(bcName), genericBCJar, 
-                        /*isCompAppWSDLNeeded,*/ bcsuDescriptorBuilder);
+
+                // IZ#126214, soap bc wist callback handler...
+                createBCJar(bcJarMap.get(bcName), genericBCJar,
+                        /*isCompAppWSDLNeeded,*/ bcsuDescriptorBuilder, bcName);
             }
                         
             // 9/12/07, filter out unconnected JavaEE endpoints
@@ -467,12 +478,28 @@ public class BuildServiceAssembly extends Task {
         for (int i = 0; i < systemNodes.getLength(); i++) {
             Element systemNode = (Element) systemNodes.item(i);
             String uri = systemNode.getAttribute("uri");
-            if (uri != null && 
-                    // make sure the catalog data is along with the catalog.xml
-                    new File(sesuDir, uri).exists()) {
-                uri = sesuName + "/" + uri;
-                systemNode.setAttribute("uri", uri);
+            
+            if (uri != null) {
+//                // Tmp fix to make valid URI (#130092)
+//                uri = uri.replaceAll("\\\\", "/");
+                URI realUri = new URI(uri);
+                
+                if (realUri.getScheme() == null) {
+                    uri = "../" + sesuName + "/META-INF/" + uri;
+                    
+                    // correct the URI (get rid of "META-INF/../")
+                    uri = uri.replace("/META-INF/..", "");
+                    
+                    systemNode.setAttribute("uri", uri);
+                }
             }
+            
+//            if (uri != null && 
+//                    // make sure the catalog data is along with the catalog.xml
+//                    new File(sesuDir, uri).exists()) {
+//                uri = sesuName + "/" + uri;
+//                systemNode.setAttribute("uri", uri);
+//            }
         }
         
         return doc;
@@ -520,6 +547,9 @@ public class BuildServiceAssembly extends Task {
             dd.buildDOMTree(connectionResolver, saName, saDescription, casaDocument);
             dd.writeToFile(conFileLoc);
             
+            if (jbiDocument == null) {
+              return;
+            }
             NodeList sas = jbiDocument.getElementsByTagName("service-assembly");
             if ((sas != null) && (sas.getLength() > 0)) {
                 Element sa = (Element) sas.item(0);
@@ -925,7 +955,8 @@ public class BuildServiceAssembly extends Task {
     private void createBCJar(String outFile,
             JarFile genericBCJar,
             /*boolean isCompAppWSDLNeeded,*/ 
-            BCSUDescriptorBuilder bcsuDescriptorBuilder)
+            BCSUDescriptorBuilder bcsuDescriptorBuilder,
+            String bcName)
             throws Exception {
         byte[] buffer = new byte[1024];
         int bytesRead;
@@ -999,6 +1030,20 @@ public class BuildServiceAssembly extends Task {
                 }
                 in.close();
             }
+
+            // IZ#126214... add WSIT Callback java class to http-soap bc
+            if (SOAP_BC.equals(bcName) && (wsitCallbackProjects != null)) {
+                StringTokenizer st = new StringTokenizer(wsitCallbackProjects, ";"); // NOI18N
+                while (st.hasMoreTokens()) {
+                    String projLoc = st.nextToken();
+                    File buildDir = new File(projLoc + "/build/classes/"); // NOI18N
+                    if (buildDir.exists()) {
+                        String path = "";
+                        copyWsitCallbackClass(buildDir, newJar, path);
+                    }
+                }
+
+            }
             
         } catch (IOException ex) {
             log("Operation aborted due to : " + ex);
@@ -1010,6 +1055,34 @@ public class BuildServiceAssembly extends Task {
                 // ignore this..
             }
         }
+    }
+
+    private void copyWsitCallbackClass(File file, JarOutputStream newJar, String path) {
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            String fname = file.getName();
+            String pname = fname.equals("classes") ? "" : path+fname+"/"; // NOI18N
+            for (int i=0; i<children.length; i++) {
+                copyWsitCallbackClass(children[i], newJar, pname);
+            }
+        } else {
+            String fname = path+file.getName();
+            try {
+                // System.out.println("COPYING: "+fname);
+                JarEntry classEntry = new JarEntry(fname);
+                newJar.putNextEntry(classEntry);
+                InputStream in = new FileInputStream(file);
+                byte[] buf = new byte[1024];
+                int len;
+                while ((len = in.read(buf)) > 0) {
+                    newJar.write(buf, 0, len);
+                }
+                in.close();
+            } catch (IOException ex) {
+                log("Copying " + fname + " failed due to :\n" + ex); // NOI18N
+            }
+        }
+
     }
     
     // TODO: Move me to a separate ant task when some mandatory change is 
