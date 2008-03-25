@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,7 +41,9 @@
 
 package org.netbeans.modules.autoupdate.services;
 
+import java.io.BufferedInputStream;
 import java.text.ParseException;
+import java.util.jar.JarEntry;
 import org.netbeans.modules.autoupdate.updateprovider.UpdateItemImpl;
 import org.netbeans.modules.autoupdate.updateprovider.InstalledModuleProvider;
 import java.io.ByteArrayInputStream;
@@ -49,6 +51,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -64,6 +67,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.jar.JarFile;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.Module;
@@ -79,6 +83,7 @@ import org.netbeans.spi.autoupdate.UpdateItem;
 import org.netbeans.updater.ModuleDeactivator;
 import org.netbeans.updater.ModuleUpdater;
 import org.netbeans.updater.UpdateTracking;
+import org.netbeans.updater.UpdaterDispatcher;
 import org.openide.filesystems.FileUtil;
 import org.openide.modules.Dependency;
 import org.openide.modules.InstalledFileLocator;
@@ -376,16 +381,58 @@ public class Utilities {
         return res;
     }
     
+    static void writeUpdateOfUpdaterJar (JarEntry updaterJarEntry, JarFile updaterJar, File targetCluster) {
+        File dest = new File (targetCluster, UpdaterDispatcher.UPDATE_DIR + // updater
+                                UpdateTracking.FILE_SEPARATOR + UpdaterDispatcher.NEW_UPDATER_DIR + // new_updater
+                                UpdateTracking.FILE_SEPARATOR + ModuleUpdater.UPDATER_JAR
+                                );
+        
+        dest.getParentFile ().mkdirs ();
+        assert dest.getParentFile ().exists () && dest.getParentFile ().isDirectory () : "Parent of " + dest + " exists and is directory.";
+        InputStream is = null;
+        OutputStream fos = null;            
+        
+        try {
+            try {
+                fos = new FileOutputStream (dest);
+                is = updaterJar.getInputStream (updaterJarEntry);
+                FileUtil.copy (is, fos);
+            } finally {
+                if (is != null) is.close();
+                if (fos != null) fos.close();
+            }                
+        } catch (java.io.FileNotFoundException fnfe) {
+            getLogger ().log (Level.INFO, fnfe.getLocalizedMessage (), fnfe);
+        } catch (java.io.IOException ioe) {
+            getLogger ().log (Level.INFO, ioe.getLocalizedMessage (), ioe);
+        }
+    }
+    
+    static void cleanUpdateOfUpdaterJar () {
+        // loop for all clusters and clean if needed
+        List<File> clusters = UpdateTracking.clusters (true);
+        assert clusters != null : "Clusters cannot be empty."; // NOI18N
+        for (File cluster : clusters) {
+            File updaterDir = new File (cluster, UpdaterDispatcher.UPDATE_DIR + UpdateTracking.FILE_SEPARATOR + UpdaterDispatcher.NEW_UPDATER_DIR);
+            if (updaterDir.exists () && updaterDir.isDirectory ()) {
+                for (File f : updaterDir.listFiles ()) {
+                    f.delete ();
+                }
+                updaterDir.delete ();
+            }
+        }
+    }
+
     static Module toModule(UpdateUnit uUnit) {
         return getModuleInstance(uUnit.getCodeName(), null); // XXX
     }
     
-    public static Module toModule(String codeNameBase, String specificationVersion) {
+    public static Module toModule(String codeNameBase, SpecificationVersion specificationVersion) {
         return getModuleInstance(codeNameBase, specificationVersion);
     }
     
     public static Module toModule (ModuleInfo info) {
-        return getModuleInstance (info.getCodeNameBase(), info.getSpecificationVersion ().toString ());
+        return getModuleInstance (info.getCodeNameBase(), info.getSpecificationVersion ());
     }
     
     public static boolean isFixed (ModuleInfo info) {
@@ -604,7 +651,7 @@ public class Utilities {
             final Set<Dependency> deps = ((ModuleUpdateElementImpl) el).getModuleInfo ().getDependencies ();
             final Collection<ModuleInfo> extendedModules = getInstalledModules ();
             extendedModules.addAll (infos);
-            final Set<Dependency> brokenDeps = DependencyChecker.findBrokenDependencies (deps, extendedModules);
+            Set<Dependency> brokenDeps = DependencyChecker.findBrokenDependencies (deps, extendedModules);
             retval = findRequiredModules (brokenDeps, extendedModules);
             
             // go up and find affected modules
@@ -618,7 +665,15 @@ public class Utilities {
             }
             Collection<Dependency> byToken = takeRecommendsRequiresNeeds (primaryAndRequiredElementDeps);
             if (! byToken.isEmpty ()) {
-                retval.addAll (checkUpdateTokenProvider (byToken));
+                Collection<UpdateElement> newModules = checkUpdateTokenProvider (byToken);
+                retval.addAll (newModules);
+                Set<Dependency> newDeps = new HashSet<Dependency> ();
+                for (UpdateElement newEl : newModules) {
+                    UpdateElementImpl newElImpl = Trampoline.API.impl (newEl);
+                    newDeps.addAll (((ModuleUpdateElementImpl) newElImpl).getModuleInfo ().getDependencies ());
+                }
+                brokenDeps = DependencyChecker.findBrokenDependencies (newDeps, extendedModules);
+                retval.addAll (findRequiredModules (brokenDeps, extendedModules));
             }
             // go up and find affected modules again
             retval = findAffectedModules (retval);
@@ -791,7 +846,7 @@ public class Utilities {
         return infos;
     }
     
-    private static Module getModuleInstance(String codeNameBase, String specificationVersion) {
+    private static Module getModuleInstance(String codeNameBase, SpecificationVersion specificationVersion) {
         if (mgr == null) {
             mgr = Main.getModuleSystem().getManager();
         }
@@ -803,7 +858,10 @@ public class Utilities {
             if (m == null) {
                 return null;
             } else {
-                return m.getSpecificationVersion ().compareTo (new SpecificationVersion (specificationVersion)) >= 0 ? m : null;
+                if (m.getSpecificationVersion () == null) {
+                    return null;
+                }
+                return m.getSpecificationVersion ().compareTo (specificationVersion) >= 0 ? m : null;
             }
         }
     }
@@ -833,7 +891,7 @@ public class Utilities {
         Document document = null;
         InputStream is;
         try {
-            is = new FileInputStream (moduleUpdateTracking);
+            is = new BufferedInputStream (new FileInputStream (moduleUpdateTracking));
             InputSource xmlInputSource = new InputSource (is);
             document = XMLUtil.parse (xmlInputSource, false, false, null, org.openide.xml.EntityCatalog.getDefault ());
             if (is != null) {
@@ -980,4 +1038,52 @@ public class Utilities {
             return DATE_FORMAT.parse(date);
         }
     }    
+    
+    public static boolean canWriteInCluster (File cluster) {
+        assert cluster != null : "dir cannot be null";
+        if (cluster == null || ! cluster.exists () || ! cluster.isDirectory ()) {
+            getLogger ().log (Level.INFO, "Nonexistent cluster " + cluster);
+            return cluster.canWrite ();
+        }
+        // workaround the bug: http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4420020
+        if (cluster.canWrite () && cluster.canRead () && org.openide.util.Utilities.isWindows ()) {
+            File trackings = new File (cluster, UpdateTracking.TRACKING_FILE_NAME);
+            if (trackings.exists () && trackings.isDirectory ()) {
+                for (File f : trackings.listFiles ()) {
+                    if (f.exists () && f.isFile ()) {
+                        getLogger ().log (Level.FINE, "Can write into " + cluster + "? " + canWrite (f));
+                        return canWrite (f);
+                    }
+                }
+            }
+        }
+        getLogger ().log (Level.FINE, "Can write into " + cluster + "? " + cluster.canWrite ());
+        return cluster.canWrite ();
+    }
+    
+    public static boolean canWrite (File f) {
+        // workaround the bug: http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4420020
+        if (org.openide.util.Utilities.isWindows ()) {
+            FileWriter fw = null;
+            try {
+                fw = new FileWriter (f);
+            } catch (IOException ioe) {
+                // just check of write permission
+                getLogger ().log (Level.FINE, f + " has no write permission", ioe);
+                return false;
+            } finally {
+                try {
+                    if (fw != null) {
+                        fw.close ();
+                    }
+                } catch (IOException ex) {
+                    getLogger ().log (Level.INFO, ex.getLocalizedMessage (), ex);
+                }
+            }
+            getLogger ().log (Level.FINE, f + " has write permission");
+            return true;
+        } else {
+            return f.canWrite ();
+        }
+    }
 }

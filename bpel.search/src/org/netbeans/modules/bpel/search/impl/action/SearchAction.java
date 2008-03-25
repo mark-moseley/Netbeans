@@ -76,7 +76,7 @@ import static org.netbeans.modules.soa.ui.util.UI.*;
 public final class SearchAction extends IconAction {
 
   public SearchAction() {
-    this(null, "TLT_Search_Action", "search"); // NOI18N
+    this("LBL_Search_Action", "TLT_Search_Action", "search"); // NOI18N
   }
 
   private SearchAction(String name, String toolTip, String icon) {
@@ -89,7 +89,8 @@ public final class SearchAction extends IconAction {
   }
 
   public void actionPerformed(ActionEvent event) {
-    Node node = getSelectedNode();
+    Node node = getLastNode();
+
     Model model = getModel(node);
     ShowCookie cookie = getShowCookie(node);
     Object view = getView();

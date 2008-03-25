@@ -50,8 +50,10 @@ import java.util.Collection;
 import java.util.List;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmMacro;
+import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
 import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceKind;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.structure.APTDefine;
 import org.netbeans.modules.cnd.apt.structure.APTElif;
@@ -59,6 +61,7 @@ import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.structure.APTIf;
 import org.netbeans.modules.cnd.apt.structure.APTIfdef;
 import org.netbeans.modules.cnd.apt.structure.APTIfndef;
+import org.netbeans.modules.cnd.apt.structure.APTUndefine;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
 import org.netbeans.modules.cnd.apt.support.APTPreprocHandler;
 import org.netbeans.modules.cnd.apt.support.APTToken;
@@ -106,16 +109,22 @@ public class APTFindMacrosWalker extends APTDefinesCollectorWalker {
 
     @Override
     protected boolean onIfndef(APT apt) {
-        addReference((APTToken) ((APTIfndef)apt).getMacroName());
+        analyzeToken((APTToken) ((APTIfndef)apt).getMacroName());
         return super.onIfndef(apt);
     }
 
     @Override
     protected boolean onIfdef(APT apt) {
-        addReference((APTToken) ((APTIfdef)apt).getMacroName());
+        analyzeToken((APTToken) ((APTIfdef)apt).getMacroName());
         return super.onIfdef(apt);
     }
     private final List<CsmReference> references = new ArrayList<CsmReference>();
+
+    @Override
+    protected void onUndef(APT apt) {
+        analyzeToken((APTToken) ((APTUndefine)apt).getName());
+        super.onUndef(apt);
+    }
 
     public List<CsmReference> getCollectedData() {
         return references;
@@ -129,16 +138,19 @@ public class APTFindMacrosWalker extends APTDefinesCollectorWalker {
     }
 
     private void analyzeToken(Token token) {
-        if (token != null) {
-            APTMacro m = getMacroMap().getMacro(token);
+        APTToken apttoken = (APTToken) token;
+        if (apttoken != null) {
+            APTMacro m = getMacroMap().getMacro(apttoken);
             if (m != null) {
-                APTToken apttoken = (APTToken) token;
                 if (m.isSystem()) {
                     addSysReference(apttoken, m);
                 } else {
                     addReference(apttoken, macroRefMap.get(apttoken.getText()));
                 }
             }
+//            else if (apttoken.getType() == CPPTokenTypes.ID_DEFINED) {
+//                addReference(apttoken, macroRefMap.get(apttoken.getText()));
+//            }
         }
     }
 
@@ -193,6 +205,10 @@ public class APTFindMacrosWalker extends APTDefinesCollectorWalker {
         public CsmObject getOwner() {
             return null;
         }
+
+        public CsmReferenceKind getKind() {
+            return CsmReferenceKind.DECLARATION;
+        }
     }
 
     private class MacroReference extends OffsetableBase implements CsmReference {
@@ -218,11 +234,15 @@ public class APTFindMacrosWalker extends APTDefinesCollectorWalker {
                     List<CsmMacro> macros = new ArrayList<CsmMacro>(macrosCollection);
                     for (int i = macros.size() - 1; i >= 0; i--) {
                         CsmMacro macro = macros.get(i);
-                        if (mi.offset == macro.getStartOffset()) {
+                        if (macro!=null && mi.offset == macro.getStartOffset()) {
                             ref = macro;
                             break;
                         }
                     }
+                    // TODO: IZ#130897
+                    // if not found in file, create own macro impl 
+                    // (i.e. could be dead block of original file)
+                    // ref = new MacroImpl(...)
                 }
             }
             return ref;
@@ -233,8 +253,14 @@ public class APTFindMacrosWalker extends APTDefinesCollectorWalker {
             if (mi.includePath != null) {
                 ProjectBase targetPrj = ((ProjectBase) current.getProject()).findFileProject(mi.includePath);
                 if (targetPrj != null) {
-                    return targetPrj.getFile(new File(mi.includePath));
+                    current = targetPrj.getFile(new File(mi.includePath));
+                    // if file belongs to project, it should be not null
+                    // but info could be obsolete
                 }
+                // try full model?
+//                if (current == null) {
+//                    current = CsmModelAccessor.getModel().findFile(mi.includePath);
+//                }
             }
             return current;
         }
@@ -242,5 +268,9 @@ public class APTFindMacrosWalker extends APTDefinesCollectorWalker {
         public CsmObject getOwner() {
             return getTargetFile();
         }
+        
+        public CsmReferenceKind getKind() {
+            return CsmReferenceKind.DECLARATION;
+        }        
     }
 }
