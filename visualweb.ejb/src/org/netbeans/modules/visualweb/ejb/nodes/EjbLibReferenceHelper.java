@@ -317,12 +317,15 @@ public class EjbLibReferenceHelper {
             return false;
         }
         
+        JarFile projectJar = null;
+        JarFile repositoryJar = null;
+        
         try {
             File projectFile = FileUtil.toFile(projectJarFO);
             File repositoryFile = FileUtil.toFile(repositoryJarFO);
             
-            JarFile projectJar = new JarFile(projectFile, false);
-            JarFile repositoryJar = new JarFile(repositoryFile, false);
+            projectJar = new JarFile(projectFile, false);
+            repositoryJar = new JarFile(repositoryFile, false);
             
             ZipEntry projectManifestEntry = projectJar.getEntry(MANIFEST_PATH);
             ZipEntry repositoryManifestEntry = repositoryJar.getEntry(MANIFEST_PATH);
@@ -348,6 +351,22 @@ public class EjbLibReferenceHelper {
             // if there is no manifest, the file sizes and names are at least the same, so
             // assume that the file is unchanged
             return true;
+        }finally {
+            if (projectJar != null) {
+                try {
+                    projectJar.close();
+                }catch (IOException ex) {
+                    Util.getLogger().log(Level.WARNING, "Unable to close jar file: " + projectJar.getName(), ex);
+                }
+            }
+            
+            if (repositoryJar != null) {
+                try {
+                    repositoryJar.close();
+                }catch (IOException ex) {
+                    Util.getLogger().log(Level.WARNING, "Unable to close jar file: " + repositoryJar.getName(), ex);
+                }
+            }
         }
         
     }
@@ -472,6 +491,8 @@ public class EjbLibReferenceHelper {
             ConfigurationException {
         Project project = getActiveProject();
 
+        if (project == null) return;
+        
         addEjbGroupJarsToProject(ejbGroup, project);
 
         // Add/update this ejb group to the ejb ref xml in the project

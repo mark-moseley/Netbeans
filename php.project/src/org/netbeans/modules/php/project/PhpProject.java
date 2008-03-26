@@ -48,7 +48,11 @@ import javax.swing.ImageIcon;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
+import org.netbeans.modules.gsfpath.api.classpath.GlobalPathRegistry;
+import org.netbeans.modules.php.project.classpath.ClassPathProviderImpl;
 import org.netbeans.modules.php.project.customizer.PhpCustomizerProvider;
+import org.netbeans.modules.php.project.ui.customizer.CustomizerProviderImpl;
 import org.netbeans.modules.php.rt.utils.PhpProjectSharedConstants;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.SubprojectProvider;
@@ -104,6 +108,10 @@ public class PhpProject implements Project, AntProjectListener {
 
     public static final String SOURCES_TYPE_PHP 
             = PhpProjectSharedConstants.SOURCES_TYPE_PHP;
+    
+    public static final String COPY_SRC_FILES = "copy.src.files"; // NOI18N
+    public static final String COPY_SRC_TARGET = "copy.src.target"; // NOI18N
+    public static final String URL = "url"; // NOI18N
 
     private static final Icon PROJECT_ICON = 
         new ImageIcon(Utilities.loadImage( 
@@ -224,7 +232,7 @@ public class PhpProject implements Project, AntProjectListener {
         return myHelper;
     }
     
-    PropertyEvaluator getEvaluator() {
+    public PropertyEvaluator getEvaluator() {
         if ( myEvaluator == null ) {
             myEvaluator = getHelper().getStandardPropertyEvaluator();
         }
@@ -234,7 +242,7 @@ public class PhpProject implements Project, AntProjectListener {
     private void initLookup( AuxiliaryConfiguration configuration ) {
 
         SubprojectProvider provider = getRefHelper().createSubprojectProvider();
-
+        PhpSources phpSources = new PhpSources(getHelper(), getEvaluator());
         myLookup = Lookups.fixed(new Object[] {
                 new Info(),
                 configuration,
@@ -243,14 +251,15 @@ public class PhpProject implements Project, AntProjectListener {
                 provider,
                 new PhpActionProvider( this ),
                 getHelper().createCacheDirectoryProvider(),
+                new ClassPathProviderImpl(getHelper(), getEvaluator(), phpSources),
                 new PhpLogicalViewProvider( this , provider ),
-                new PhpCustomizerProvider( this ),
+                new CustomizerProviderImpl(this, myHelper),
                 getHelper().createSharabilityQuery( getEvaluator(), 
                     new String[] { SRC_DIR } , new String[] {} ),
                 new PhpProjectOperations(this) ,
                 new PhpProjectEncodingQueryImpl(getEvaluator()),
                 new PhpTemplates(),
-                new PhpSources(getHelper(), getEvaluator()),
+                phpSources,
                 getHelper(),
                 getEvaluator()
                 // ?? getRefHelper()
@@ -336,7 +345,9 @@ public class PhpProject implements Project, AntProjectListener {
     private final class PhpOpenedHook extends ProjectOpenedHook {
         
         protected void projectOpened() {
-            // TODO ??
+            ClassPathProviderImpl cpProvider = myLookup.lookup(ClassPathProviderImpl.class);
+            GlobalPathRegistry.getDefault().register(ClassPath.BOOT, cpProvider.getProjectClassPaths(ClassPath.BOOT));
+            GlobalPathRegistry.getDefault().register(ClassPath.SOURCE, cpProvider.getProjectClassPaths(ClassPath.SOURCE));
         }
         
         protected void projectClosed() {

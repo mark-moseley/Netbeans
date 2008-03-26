@@ -49,6 +49,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -72,6 +73,7 @@ import org.netbeans.modules.websvc.rest.codegen.model.ClientStubModel;
 import org.netbeans.modules.websvc.rest.codegen.model.ClientStubModel.*;
 import org.openide.filesystems.FileSystem;
 import org.openide.loaders.DataObject;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 /**
@@ -98,6 +100,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
     public static final String JS = "js"; //NOI18N
     public static final String HTML = "html"; //NOI18N
     public static final String HTM = "htm"; //NOI18N
+    public static final String TXT = "txt"; //NOI18N
     public static final String JSON = "json"; //NOI18N
     public static final String GIF = "gif"; //NOI18N
     public static final String JSP = "jsp"; //NOI18N
@@ -109,7 +112,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
     public static final String PROPERTIES = "properties"; //NOI18N
     public static final String LIBS = "libs"; //NOI18N
     public static final String DJD43 = "djd43"; //NOI18N
-    public static final String JMAKI_DOJO_10_ZIP = "jmaki-dojo-1.0.zip"; //NOI18n
+    public static final String JMAKI_DOJO = "jmaki-dojo"; //NOI18n
     public static final String JMAKI_COMP_LIB = "jmakicomplib"; //NOI18n
     
     public static final String JS_SUPPORT = "Support"; //NOI18N
@@ -121,7 +124,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
     public static final String JS_CONTAINERSTUB_TEMPLATE = "Templates/WebServices/JsContainerStub.js"; //NOI18N
     public static final String JS_CONTAINERITEMSTUB_TEMPLATE = "Templates/WebServices/JsContainerItemStub.js"; //NOI18N
     public static final String JS_GENERICSTUB_TEMPLATE = "Templates/WebServices/JsGenericStub.js"; //NOI18N
-    public static final String JS_README_TEMPLATE = "Templates/WebServices/JsReadme.html"; //NOI18N
+    public static final String JS_README_TEMPLATE = "Templates/WebServices/JsReadme.txt"; //NOI18N
      
     //Dojo templates
     public static final String DOJO_RESTSTORE = "RestStore";//NOI18N
@@ -145,7 +148,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
     public static final String JMAKI_RESOURCESTABLE_DEST = "rtable"; //NOI18N
     public static final String JMAKI_RESOURCESTABLEUP_DEST = "rtableUp"; //NOI18N
     public static final String JMAKI_RESOURCESTABLEDOWN_DEST = "rtableDown"; //NOI18N
-    public static final String JMAKI_README_TEMPLATE = "Templates/WebServices/JmakiReadme.html"; //NOI18N
+    public static final String JMAKI_README_TEMPLATE = "Templates/WebServices/JmakiReadme.txt"; //NOI18N
     public static final String JMAKI_COMPONENTCSS_TEMPLATE = "Templates/WebServices/JmakiComponent.css"; //NOI18N
     public static final String JMAKI_COMPONENTHTM_TEMPLATE = "Templates/WebServices/JmakiComponent.htm"; //NOI18N
     public static final String JMAKI_COMPONENTJS_TEMPLATE = "Templates/WebServices/JmakiComponent.js"; //NOI18N
@@ -300,7 +303,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
                 new ResourceDojoComponents(r, rdjDir).generate();
                 new ResourceJmakiComponent(r, restDir).generate();
                 File dir = new File(FileUtil.toFile(templatesDir), DOJO+File.separator+REST);
-                dir.mkdirs();
+                FileUtil.createFolder(dir);
                 new ResourceJmakiTemplate(r, FileUtil.toFileObject(dir)).generate();
             }
         }
@@ -340,14 +343,14 @@ public class ClientStubsGenerator extends AbstractGenerator {
             if (testFile != null) {
                 files.add(testFile);
             }
-            FileObject readme = restDir.getFileObject(JMAKI_README, HTML);
+            FileObject readme = restDir.getFileObject(JMAKI_README, TXT);
             if(readme != null)
                 files.add(readme);
         } else {
             FileObject rjsTest = rjsDir.getFileObject(JS_TESTSTUBS, HTML);
             if(rjsTest != null)
                 files.add(rjsTest);
-            FileObject readme = rjsDir.getFileObject(JS_README, HTML);
+            FileObject readme = rjsDir.getFileObject(JS_README, TXT);
             if(readme != null)
                 files.add(readme);
         }
@@ -397,20 +400,74 @@ public class ClientStubsGenerator extends AbstractGenerator {
             throw new RuntimeException("Cannot find jMaki component folder (" + jmakiCompDir + ").");
         }
         
-        File dojoLib = new File(jmakiCompDir, JMAKI_DOJO_10_ZIP);
-        if(!dojoLib.exists()) {
-            throw new RuntimeException("Cannot find dojo library  (" + dojoLib.getAbsolutePath() + ").");
+        File dojoLib = findDojoLibrary(jmakiCompDir);
+        if(dojoLib != null) {
+            unzip(new FileInputStream(dojoLib), resourcesDir.getParent(), canOverwrite());
+        } else {
+            File src = new File(jmakiCompDir, RESOURCES+File.separator+DOJO+File.separator+RESOURCES);
+            File dst = FileUtil.toFile(dojoDir);
+            FileSystem fs = FileUtil.toFileObject(dst).getFileSystem();
+            copyDirectory(fs, src, dst);
         }
-        unzip(new FileInputStream(dojoLib), resourcesDir.getParent(), canOverwrite());
-        
         if(dojoDir.getFileObject(RESOURCES) == null)
-            new IOException("Unzip of dojo libs :"+dojoLib.getAbsolutePath()+" to "+resourcesDir.getParent()+" failed.");
+            throw new IOException("Copying dojo libs from :"+jmakiCompDir.getAbsolutePath()+" to "+resourcesDir.getParent()+" failed.");
+    }
+    
+    private File findDojoLibrary(File jmakiCompDir) {
+        File dojoLib = null;
+        FilenameFilter filter = new FilenameFilter() {
+            public boolean accept(File dir, String name) {
+                if(name != null && name.startsWith("jmaki-dojo") && name.endsWith(".zip"))
+                    return true;
+                else
+                    return false;
+            }
+        };
+        File[] dojoLibs = jmakiCompDir.listFiles(filter);
+        if(dojoLibs != null && dojoLibs.length > 0)
+            dojoLib = dojoLibs[0];
+        return dojoLib;
+    }
+    
+    public void copyDirectory(final FileSystem fs, final File src, final File dst)
+            throws IOException {
+        if (src.isDirectory()) {
+            if (!dst.exists()) {
+                dst.mkdir();
+            }
+            String files[] = src.list();
+            for (int i = 0; i < files.length; i++) {
+                copyDirectory(fs, new File(src, files[i]),
+                        new File(dst, files[i]));
+            }
+        } else {
+            if (!src.exists()) {
+                throw new IOException("File or directory does not exist.");
+            } else {
+                fs.runAtomicAction(new FileSystem.AtomicAction() {
+                    public void run() throws IOException {
+                        InputStream in = new FileInputStream(src);
+                        OutputStream out = new FileOutputStream(dst);
+                        try {
+                            byte[] buf = new byte[1024];
+                            int len;
+                            while ((len = in.read(buf)) > 0) {
+                                out.write(buf, 0, len);
+                            }
+                        } finally {
+                            in.close();
+                            out.close();
+                        }
+                    }
+                });
+            }
+        }
     }
     
     private void initJs(Project p) throws IOException {
         createDataObjectFromTemplate(JS_TESTSTUBS_TEMPLATE, rjsDir, JS_TESTSTUBS, HTML, false);
         createDataObjectFromTemplate(JS_STUBSUPPORT_TEMPLATE, rjsDir, JS_SUPPORT, JS, canOverwrite());  
-        createDataObjectFromTemplate(JS_README_TEMPLATE, rjsDir, JS_README, HTML, canOverwrite());
+        createDataObjectFromTemplate(JS_README_TEMPLATE, rjsDir, JS_README, TXT, canOverwrite());
     }
 
     private void initDojo(Project p, List<Resource> resourceList) throws IOException {
@@ -439,7 +496,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
     }
     
     private void initJmaki(Project p, List<Resource> resourceList) throws IOException {
-        createDataObjectFromTemplate(JMAKI_README_TEMPLATE, restDir, JMAKI_README, HTML, canOverwrite());
+        createDataObjectFromTemplate(JMAKI_README_TEMPLATE, restDir, JMAKI_README, TXT, canOverwrite());
         createDataObjectFromTemplate(JMAKI_RESTBUNDLE_TEMPLATE, getRootDir().getParent(), BUNDLE, PROPERTIES, canOverwrite());
                 
         //find first container 
@@ -540,7 +597,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
             }
                     out.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            Exceptions.printStackTrace(e);
                 }
             }
 
@@ -585,9 +642,13 @@ public class ClientStubsGenerator extends AbstractGenerator {
                 }
                 final File entryFile = new File(targetFolder, entry.getName());
                 if(entry.isDirectory()) {
-                    if(!entryFile.exists() && !entryFile.mkdirs()) {
-                        throw new RuntimeException("Failed to create folder: " +
-                                entryFile.getName() + ".  Terminating archive installation.");
+                    if(!entryFile.exists()) {
+                        try {
+                            FileObject fObj = FileUtil.createFolder(entryFile);
+                        } catch(IOException iox) {
+                            throw new RuntimeException("Failed to create folder: " +
+                                    entryFile.getName() + ".  Terminating archive installation.");
+                        }
                     }
                 } else {
                     if(entryFile.exists() && overwrite) {
@@ -597,9 +658,13 @@ public class ClientStubsGenerator extends AbstractGenerator {
                         }
                     }
                     File parentFile = entryFile.getParentFile();
-                    if(!parentFile.exists() && !parentFile.mkdirs()) {
-                        throw new RuntimeException("Failed to create folder: " +
+                    if(!parentFile.exists()) {
+                        try {
+                            FileObject fObj = FileUtil.createFolder(parentFile);
+                        } catch(IOException iox) {
+                            throw new RuntimeException("Failed to create folder: " +
                                 parentFile.getName() + ".  Terminating archive installation.");
+                        }
                     }
                     targetFS.runAtomicAction(new FileSystem.AtomicAction() {
                         public void run() throws IOException {
@@ -615,6 +680,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
                                     try {
                                         os.close();
                                     } catch(IOException ex) {
+                                        Exceptions.printStackTrace(ex);
                                     }
                                 }
                             }
@@ -627,6 +693,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
                 try {
                     zip.close();
                 } catch(IOException ex) {
+                    Exceptions.printStackTrace(ex);
                 }
             }
         }
@@ -823,7 +890,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
                 "__RESOURCE_NAME__",
                 "__STUB_METHODS__"
             };
-            if(r.isContainer() && root != null) {
+            if(r.isContainer() && root != null && root.getChildren().size() > 0) {
                 String containerName = r.getName();
                 String containerRepName = root.getName();
                 //TODO
@@ -893,10 +960,22 @@ public class ClientStubsGenerator extends AbstractGenerator {
             return replacedLine;
         }
         
+        public static final String RJSSUPPORT = "rjsSupport";
         protected String createStubJSMethods(Resource r, String object, String pkg) {
             StringBuffer sb = new StringBuffer();
+            Method getMethod = null;
             for (Method m : r.getMethods()) {
-                sb.append(createMethod(m, object, pkg)+",\n\n");
+                if (m.getType() == MethodType.GET) {
+                    getMethod = m;
+                }
+            }
+            if(getMethod != null){
+                String defaultGetMethod = createDefaultGetMethod(getMethod, RJSSUPPORT+".");
+                if(defaultGetMethod != null)
+                    sb.append(defaultGetMethod+",\n\n");
+            }
+            for (Method m : r.getMethods()) {
+                sb.append(createMethod(m, RJSSUPPORT+".", pkg)+",\n\n");
             }
             String s = sb.toString();
             if(s.length() > 3)
@@ -982,13 +1061,13 @@ public class ClientStubsGenerator extends AbstractGenerator {
                     if(child.isEntity()) //child is a Entity and has a non-generic converter
                         sb.append("         '\""+childName+"\":{\"@uri\":\"'+" +
                             "this."+childName+".getUri()+'\", \""+childRepName+"\":" +
-                            "{\"$\":\"'+eval(\"this."+childName+".get\"+this."+childName+".getFields()[0].substring(0,1).toUpperCase()+this."+childName+".getFields()[0].substring(1)+\"()\")+'\"}},'+\n");
+                            ":\"'+eval(\"this."+childName+".get\"+this."+childName+".getFields()[0].substring(0,1).toUpperCase()+this."+childName+".getFields()[0].substring(1)+\"()\")+'\"},'+\n");
                     else
                         sb.append("         '\""+childName+"\":{\"@uri\":\"'+this."+childName+".getUri()+'\"},'+\n");
                 }else if(child.isRoot()) {
                     sb.append("         this."+childName+".toString()+','+\n");
                 }else
-                    sb.append("         '\""+childName+"\":{\"$\":\"'+this."+childName+"+'\"},'+\n");
+                    sb.append("         '\""+childName+"\":\"'+this."+childName+"+'\",'+\n");
             }
             return sb.toString();
         }
@@ -1051,8 +1130,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
             return mName;
         }
         
-        private String createMethod(Method m, String object, String pkg) {
-            object = "rjsSupport.";
+        private String createMethod(Method m, final String object, String pkg) {
             if (m.getType() == MethodType.GET) {
                 return createGetMethod(m, object);
             } else if (m.getType() == MethodType.POST) {
@@ -1077,6 +1155,28 @@ public class ClientStubsGenerator extends AbstractGenerator {
             return m.getName();
         }
         
+        private String createDefaultGetMethod(Method m, String object) {
+            StringBuffer sb = new StringBuffer();
+            String jsonMethod = null;
+            for(Representation rep:m.getResponse().getRepresentation()) {
+                String mimeType = rep.getMime();
+                mimeType = mimeType.replaceAll("\"", "").trim();
+                if(mimeType.equals(Constants.MimeType.JSON.value()))
+                    jsonMethod = mimeType;
+            }
+            //Add a default getJson() method used by Container/Containee init() methods
+            if(jsonMethod != null) {
+                sb.append("/* Default getJson() method used by Container/Containee init() methods. Do not remove. */\n");
+                sb.append("   getJson : function() {\n" +
+                    "      return "+object+"get(this.uri, '" +jsonMethod+ "');\n" +
+                    "   }");
+            }
+            if(sb.length() > 0)
+                return sb.toString();
+            else
+                return null;
+        }
+        
         private String createGetMethod(Method m, String object) {
             StringBuffer sb = new StringBuffer();
             int length = m.getResponse().getRepresentation().size();
@@ -1096,7 +1196,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
         
         private String createPostMethod(Method m, String object) {
             StringBuffer sb = new StringBuffer();
-            int length = m.getResponse().getRepresentation().size();
+            int length = m.getRequest().getRepresentation().size();
             for(Representation rep:m.getRequest().getRepresentation()) {
                 String mimeType = rep.getMime();
                 mimeType = mimeType.replaceAll("\"", "").trim();
@@ -1113,7 +1213,7 @@ public class ClientStubsGenerator extends AbstractGenerator {
         
         private String createPutMethod(Method m, String object) {
             StringBuffer sb = new StringBuffer();
-            int length = m.getResponse().getRepresentation().size();
+            int length = m.getRequest().getRepresentation().size();
             for(Representation rep:m.getRequest().getRepresentation()) {
                 String mimeType = rep.getMime();
                 mimeType = mimeType.replaceAll("\"", "").trim();
