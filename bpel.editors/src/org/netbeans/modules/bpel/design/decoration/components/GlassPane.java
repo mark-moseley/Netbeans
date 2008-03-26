@@ -70,11 +70,13 @@ public class GlassPane extends JPanel implements ActionListener, FocusListener, 
     private JTextComponent editorPane;
     private JScrollPane scrollPane;
     private StringBuffer html = new StringBuffer();
+    private boolean myEditable;
     
     public GlassPane(String text, ActionListener actionListener, boolean editable) {
         setLayout(new BorderLayout(0, 1));
         setBorder(new EmptyBorder(6, 36, 6, 6)); 
         setPreferredSize(new Dimension(320, 180)); 
+        myEditable = editable;
         setOpaque(false);
 
         if (editable) {
@@ -153,11 +155,15 @@ public class GlassPane extends JPanel implements ActionListener, FocusListener, 
         scrollPane.addMouseListener(this);
         editorPane.addMouseListener(this);
 
-        if (text != null) {
-          editorPane.setText(text);
-          editorPane.setCaretPosition(editorPane.getDocument().getStartPosition().getOffset());
-        }
+        editorPane.addFocusListener(this);
+        updateText(text);
+
         myActionListener = actionListener;
+    }
+
+    @Override
+    public void requestFocus() {
+      editorPane.requestFocus();
     }
     
     public boolean contains(int x, int y) {
@@ -219,6 +225,12 @@ public class GlassPane extends JPanel implements ActionListener, FocusListener, 
         fillHTMLSpacer();
     }
     
+    public void updateText(String text) {
+      if (text != null) {
+        editorPane.setText(text);
+      }
+    }
+
     public void updateHTML() {
         if (html.length() == 0) {
             fillHTMLHeader();
@@ -301,7 +313,21 @@ public class GlassPane extends JPanel implements ActionListener, FocusListener, 
     }
     
     public void actionPerformed(ActionEvent e) {
-        DesignView designView = (DesignView) getParent().getParent();
+        hidePane();
+    }
+
+    private void hidePane() {
+        if (getParent() == null) {
+          return;
+        }
+//System.out.println();
+//System.out.println();
+//System.out.println("getParent() 1: " + getParent());
+//System.out.println();
+//System.out.println("getParent() 2: " + getParent().getParent());
+//System.out.println();
+//System.out.println("getParent() 3: " + getParent().getParent().getParent());
+        DesignView designView = (DesignView) (getParent().getParent().getParent());
         designView.getOverlayView().remove(this);
         
         hideButton.getModel().setArmed(false);
@@ -442,7 +468,12 @@ public class GlassPane extends JPanel implements ActionListener, FocusListener, 
         moveOnTop();
     }
 
-    public void focusLost(FocusEvent e) {}
+    public void focusLost(FocusEvent e) {
+      if (myEditable) {
+          hidePane();
+      }
+    }
+
     public void mousePressed(MouseEvent e) {}
     public void mouseReleased(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
