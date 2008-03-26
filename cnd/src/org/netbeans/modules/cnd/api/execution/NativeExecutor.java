@@ -132,7 +132,7 @@ public class NativeExecutor implements Runnable {
     
     /** Start it going. */
     public ExecutorTask execute() throws IOException {
-        return execute(getTab(actionName, tabName));
+        return execute(getTab(tabName));
     }
     
     /** Start it going. */
@@ -149,8 +149,16 @@ public class NativeExecutor implements Runnable {
         return task;
     }
     
-    public InputOutput getTab(String actionName, String tabName) {
-        return IOProvider.getDefault().getIO(tabName, false);
+    private InputOutput getTab(String tabName) {
+        return IOProvider.getDefault().getIO(tabName, true);
+    }
+    
+    public InputOutput getTab() {
+        return io;
+    }
+    
+    public String getTabeName() {
+        return tabName;
     }
     
     public void setExitValueOverride(String rcfile) {
