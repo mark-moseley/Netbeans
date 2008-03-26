@@ -202,20 +202,22 @@ public class JaxWsServiceCreator implements ServiceCreator {
 
 
         if (serviceType == WizardProperties.FROM_SCRATCH) {
-//            if ((projectType == ProjectInfo.JSE_PROJECT_TYPE && Util.isSourceLevel16orHigher(project)) ||
-//                    ((Util.isJavaEE5orHigher(project) &&
-//                    (projectType == WEB_PROJECT_TYPE || projectType == EJB_PROJECT_TYPE))) ||
-//                    (jwsdpSupported)
-//                    ) {
             JAXWSSupport jaxWsSupport = JAXWSSupport.getJAXWSSupport(projectInfo.getProject().getProjectDirectory());
-            wsName = getUniqueJaxwsName(jaxWsSupport, wsName);
-            handle.progress(NbBundle.getMessage(JaxWsServiceCreator.class, "MSG_GEN_WS"), 50); //NOI18N
-            //add the JAXWS 2.0 library, if not already added
-            if (addJaxWsLib) {
-                addJaxws21Library(projectInfo.getProject());
+            if (jaxWsSupport != null) {
+                wsName = getUniqueJaxwsName(jaxWsSupport, wsName);
+                handle.progress(NbBundle.getMessage(JaxWsServiceCreator.class, "MSG_GEN_WS"), 50); //NOI18N
+                //add the JAXWS 2.0 library, if not already added
+                if (addJaxWsLib) {
+                    addJaxws21Library(projectInfo.getProject());
+                }
+                generateJaxWSImplFromTemplate(pkg, wsName, projectType);
+                handle.finish();
+            } else {
+                 DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                        NbBundle.getMessage(JaxWsServiceCreator.class, "TXT_JaxWsNotSupported"),
+                        NotifyDescriptor.ERROR_MESSAGE));
+                 handle.finish();
             }
-            generateJaxWSImplFromTemplate(pkg, wsName, projectType);
-            handle.finish();
             return;
         }
         if (serviceType == WizardProperties.ENCAPSULATE_SESSION_BEAN) {
@@ -223,13 +225,18 @@ public class JaxWsServiceCreator implements ServiceCreator {
                     ) {
 
                 JAXWSSupport jaxWsSupport = JAXWSSupport.getJAXWSSupport(projectInfo.getProject().getProjectDirectory());
-                wsName = getUniqueJaxwsName(jaxWsSupport, wsName);
-                handle.progress(NbBundle.getMessage(JaxWsServiceCreator.class, "MSG_GEN_SEI_AND_IMPL"), 50); //NOI18N
-                Node[] nodes = (Node[]) wiz.getProperty(WizardProperties.DELEGATE_TO_SESSION_BEAN);
-                generateWebServiceFromEJB(wsName, pkg, projectInfo, nodes);
-
-                handle.progress(70);
-                handle.finish();
+                if (jaxWsSupport != null) {
+                    wsName = getUniqueJaxwsName(jaxWsSupport, wsName);
+                    handle.progress(NbBundle.getMessage(JaxWsServiceCreator.class, "MSG_GEN_SEI_AND_IMPL"), 50); //NOI18N
+                    Node[] nodes = (Node[]) wiz.getProperty(WizardProperties.DELEGATE_TO_SESSION_BEAN);
+                    generateWebServiceFromEJB(wsName, pkg, projectInfo, nodes);
+                    handle.finish();
+                } else {
+                    DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                        NbBundle.getMessage(JaxWsServiceCreator.class, "TXT_JaxWsNotSupported"),
+                        NotifyDescriptor.ERROR_MESSAGE));
+                    handle.finish();                   
+                }
             }
         }
     }
@@ -323,6 +330,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
         }
         final URL wsdlURL = wsdlUrl;
         final WsdlService service = (WsdlService) wiz.getProperty(WizardProperties.WSDL_SERVICE);
+        final Boolean useProvider = (Boolean) wiz.getProperty(WizardProperties.USE_PROVIDER);
         if (service == null) {
             FileObject targetFolder = Templates.getTargetFolder(wiz);
             String targetName = Templates.getTargetName(wiz);
@@ -368,7 +376,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
                                 targetFolder,
                                 targetName,
                                 wsdlURL,
-                                service1, port1);
+                                service1, port1, useProvider);
                         handle.finish();
                     } catch (Exception ex) {
                         handle.finish();
@@ -561,14 +569,29 @@ public class JaxWsServiceCreator implements ServiceCreator {
                 }
 
                 // generate @Oneway annotation
-                if (isVoid) {
+                if (isVoid && method.getThrows().isEmpty()) {
                     TypeElement onewayEl = workingCopy.getElements().getTypeElement("javax.jws.Oneway"); //NOI18N
                     AnnotationTree onewayAn = make.Annotation(
                             make.QualIdent(onewayEl),
                             Collections.<ExpressionTree>emptyList());
                     modifiersTree = make.addModifiersAnnotation(modifiersTree, onewayAn);
                 }
-
+                // parameters
+                List<? extends VariableTree> params = method.getParameters();
+                List<VariableTree> newParams = new ArrayList<VariableTree>();
+                if (params.size() > 0) {
+                    TypeElement paramEl = workingCopy.getElements().getTypeElement("javax.jws.WebParam"); //NOI18N
+                    for (VariableTree param: params) {
+                        String paramName = param.getName().toString();
+                        AssignmentTree nameAttr = make.Assignment(make.Identifier("name"), make.Literal(paramName)); //NOI18N
+                        AnnotationTree paramAn = make.Annotation(
+                                make.QualIdent(paramEl),
+                                Collections.<ExpressionTree>singletonList(nameAttr));
+                        ModifiersTree paramModifierTree = make.addModifiersAnnotation(param.getModifiers(), paramAn);
+                        newParams.add(make.Variable(paramModifierTree, param.getName(), param.getType(), null));
+                    }
+                }
+                
                 // method body
                 List<ExpressionTree> arguments = new ArrayList<ExpressionTree>();
                 for (VariableElement ve : methodEl.getParameters()) {
@@ -588,7 +611,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
                         method.getName(),
                         method.getReturnType(),
                         method.getTypeParameters(),
-                        method.getParameters(),
+                        newParams,
                         method.getThrows(),
                         body,
                         null);
