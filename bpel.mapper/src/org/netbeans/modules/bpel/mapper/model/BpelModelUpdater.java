@@ -59,7 +59,7 @@ import org.netbeans.modules.bpel.model.api.While;
 import org.netbeans.modules.bpel.model.api.events.VetoException;
 import org.netbeans.modules.bpel.model.api.references.BpelReference;
 import org.netbeans.modules.bpel.model.api.references.WSDLReference;
-import org.netbeans.modules.bpel.model.api.support.XPathModelFactory;
+import org.netbeans.modules.bpel.model.api.support.BpelXPathModelFactory;
 import org.netbeans.modules.soa.mappercore.model.Graph;
 import org.netbeans.modules.soa.mappercore.model.Link;
 import org.netbeans.modules.soa.mappercore.model.TreeSourcePin;
@@ -73,7 +73,8 @@ import org.netbeans.modules.xml.wsdl.model.Part;
 import org.netbeans.modules.xml.xpath.ext.XPathStringLiteral;
 
 /**
- * 
+ * Looks on the current state of the BPEL Mapper and modifies 
+ * the BPEL model correspondingly.  
  * 
  * @author nk160297
  */
@@ -121,13 +122,11 @@ public class BpelModelUpdater extends AbstractBpelModelUpdater {
         //
         Graph graph = getMapperModel().graphRequired(rightTreePath);
         //
-        GraphInfoCollector graphInfo = new GraphInfoCollector(graph);
-        //
         //=====================================================================
         //
         // Remove copy if there is not any content in the graph 
         //
-        if (graphInfo.noLinksAtAll()) {
+        if (graph.isEmpty()) {
             // Remove copy from the BPEL model
             BpelContainer copyOwner = copy.getParent();
             if (copyOwner != null) {
@@ -150,6 +149,7 @@ public class BpelModelUpdater extends AbstractBpelModelUpdater {
             oldFromForm = CopyFromProcessor.calculateCopyFromForm(from);
         }
         //
+        GraphInfoCollector graphInfo = new GraphInfoCollector(graph);
         if (graphInfo.onlyOneTransitLink()) {
             // Only one link from the left to the right tree
             // 
@@ -159,7 +159,7 @@ public class BpelModelUpdater extends AbstractBpelModelUpdater {
             TreePath sourceTreePath = sourcePin.getTreePath();
             TreePathInfo tpInfo = collectTreeInfo(sourceTreePath);
             //
-            XPathModel xPathModel = XPathModelFactory.create(from);
+            XPathModel xPathModel = BpelXPathModelFactory.create(from);
             populateFrom(from, xPathModel, tpInfo);
         } else {
             boolean processed = false;
@@ -224,7 +224,7 @@ public class BpelModelUpdater extends AbstractBpelModelUpdater {
         //
         TreePathInfo tpInfo = collectTreeInfo(rightTreePath);
         //
-        XPathModel xPathModel = XPathModelFactory.create(to);
+        XPathModel xPathModel = BpelXPathModelFactory.create(to);
         populateTo(to, xPathModel, tpInfo);
     }
     
@@ -474,10 +474,12 @@ public class BpelModelUpdater extends AbstractBpelModelUpdater {
         }
         case EXPRESSION: {
             XPathExpression xPathExpr = createVariableXPath(xPathModel, tpInfo);
-            try {
-                from.setContent(xPathExpr.getExpressionString());
-            } catch (VetoException ex) {
-                // Do nothing
+            if (xPathExpr != null) {
+                try {
+                    from.setContent(xPathExpr.getExpressionString());
+                } catch (VetoException ex) {
+                    // Do nothing
+                }
             }
             //
             from.removeVariable();

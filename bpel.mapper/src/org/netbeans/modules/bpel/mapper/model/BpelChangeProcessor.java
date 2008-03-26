@@ -21,22 +21,23 @@ package org.netbeans.modules.bpel.mapper.model;
 import java.util.Collection;
 import java.util.concurrent.Callable;
 import javax.swing.tree.TreePath;
-import org.netbeans.modules.bpel.mapper.tree.spi.MapperTcContext;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.openide.ErrorManager;
 
 /**
- * Controlls a BPEL model's updating process. 
- * 
+ * Controlls a BPEL model's updating process after a change at the BPEL mapper. 
  * 
  * @author nk160297
  */
 public class BpelChangeProcessor implements GraphChangeProcessor {
 
+    private Object mChangeSource;
     private BpelModelUpdater mBpelModelUpdater;
     
-    public BpelChangeProcessor(BpelModelUpdater bpelModelUpdater) {
+    public BpelChangeProcessor(Object source, BpelModelUpdater bpelModelUpdater) {
         assert bpelModelUpdater != null;
+        assert source != null;
+        mChangeSource = source;
         mBpelModelUpdater = bpelModelUpdater;
     }
     
@@ -51,7 +52,7 @@ public class BpelChangeProcessor implements GraphChangeProcessor {
                     mBpelModelUpdater.updateOnChanges(graphTreePath);
                     return null;
                 }
-            }, this);
+            }, mChangeSource);
         } catch (Exception ex) {
             ErrorManager.getDefault().notify(ex);
         }
@@ -70,7 +71,7 @@ public class BpelChangeProcessor implements GraphChangeProcessor {
                     }
                     return null;
                 }
-            }, this);
+            }, mChangeSource);
         } catch (Exception ex) {
             ErrorManager.getDefault().notify(ex);
         }
