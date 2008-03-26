@@ -42,6 +42,7 @@
 package org.netbeans.modules.compapp.projects.jbi.anttasks;
 
 import java.io.*;
+import java.net.URI;
 import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -467,12 +468,28 @@ public class BuildServiceAssembly extends Task {
         for (int i = 0; i < systemNodes.getLength(); i++) {
             Element systemNode = (Element) systemNodes.item(i);
             String uri = systemNode.getAttribute("uri");
-            if (uri != null && 
-                    // make sure the catalog data is along with the catalog.xml
-                    new File(sesuDir, uri).exists()) {
-                uri = sesuName + "/" + uri;
-                systemNode.setAttribute("uri", uri);
+            
+            if (uri != null) {
+//                // Tmp fix to make valid URI (#130092)
+//                uri = uri.replaceAll("\\\\", "/");
+                URI realUri = new URI(uri);
+                
+                if (realUri.getScheme() == null) {
+                    uri = "../" + sesuName + "/META-INF/" + uri;
+                    
+                    // correct the URI (get rid of "META-INF/../")
+                    uri = uri.replace("/META-INF/..", "");
+                    
+                    systemNode.setAttribute("uri", uri);
+                }
             }
+            
+//            if (uri != null && 
+//                    // make sure the catalog data is along with the catalog.xml
+//                    new File(sesuDir, uri).exists()) {
+//                uri = sesuName + "/" + uri;
+//                systemNode.setAttribute("uri", uri);
+//            }
         }
         
         return doc;
@@ -520,6 +537,9 @@ public class BuildServiceAssembly extends Task {
             dd.buildDOMTree(connectionResolver, saName, saDescription, casaDocument);
             dd.writeToFile(conFileLoc);
             
+            if (jbiDocument == null) {
+              return;
+            }
             NodeList sas = jbiDocument.getElementsByTagName("service-assembly");
             if ((sas != null) && (sas.getLength() > 0)) {
                 Element sa = (Element) sas.item(0);
@@ -941,8 +961,10 @@ public class BuildServiceAssembly extends Task {
                 JarEntry jarEntry = jarEntries.nextElement();
                 InputStream is = genericBCJar.getInputStream(jarEntry);
                 
+                String jarEntryName = jarEntry.getName();
+                
                 // TODO: update casa wsdl entry in generic bc jar file.
-                if (jarEntry.getName().equals(compAppWSDLFileName)) {
+                if (jarEntryName.equals(compAppWSDLFileName)) {
 //                    // Quick fix for J1: If the casa wsdl file doesn't contain 
 //                    // active endpoints, then we skip packaging the casa wsdl entry.
 //                    // (Future improvement: This rule should apply to all the 
@@ -969,7 +991,12 @@ public class BuildServiceAssembly extends Task {
                     }
                     reader.close();
 //                    }
-                    
+                } else if (bcNames.contains(jarEntryName.substring(0, jarEntryName.length() - 1))) {
+                    // Skip (empty) BC SU directory, (for example, "sun-http-binding/")
+                    // which shouldn't go into the generic bc jar file in the 
+                    // first place.
+                } else if (jarEntryName.equals(".ignore")) {
+                    // Ignore ".ignore" entry.
                 } else {
                     
                     newJar.putNextEntry(jarEntry);
