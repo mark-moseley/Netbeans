@@ -43,12 +43,9 @@ package org.netbeans.modules.java.source.classpath;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeListener;
 import java.lang.ref.WeakReference;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -80,7 +77,6 @@ import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.spi.java.classpath.ClassPathImplementation;
 import org.netbeans.spi.java.classpath.PathResourceImplementation;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
-import org.netbeans.spi.project.libraries.support.LibrariesSupport;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
@@ -112,6 +108,7 @@ public class GlobalSourcePath {
     private Map<URL, WeakValue> unknownRoots;
     private long timeStamp;             //Lamport event ordering
     private Runnable debugCallBack;
+    private volatile boolean useLibraries = true;
     
     private final SourcePathImplementation sourcePath;
     private final BinaryPathImplementation binaryPath;
@@ -354,6 +351,30 @@ public class GlobalSourcePath {
         this.debugCallBack = callBack;
     }
     
+    /**
+     * Unit test method, used to set disable use of {@link Library}
+     * int the test in which the libraries SPI is not initialized.   
+     * @param use if false libraries will not be used
+     *
+     **/
+    void setUseLibraries (final boolean use) {
+        StackTraceElement[] st = Thread.currentThread().getStackTrace();
+        final String myClass = this.getClass().getName();
+        final String expectedCallerClass = this.getClass().getPackage().getName() + 
+            ".GlobalSourcePathTestUtil";          //NOI18N
+        for (int i=0; i<st.length; i++) {
+            if (myClass.equals(st[i].getClassName())) {
+                if (expectedCallerClass.equals(st[i+1].getClassName())) {
+                    this.useLibraries = use;
+                    return;
+                }
+                else {
+                    throw new AssertionError ("Can be called only by GlobalSourcePathTestUtil");    //NOI18N
+                }
+            }
+        }
+    }
+    
     private Collection <? extends PathResourceImplementation> getSources (final FileObject[] roots, final List<URL> cacheDirs, final Map<URL, WeakValue> unknownRoots) {
         assert roots != null;        
         URL[] urls = new URL[roots.length];
@@ -392,6 +413,10 @@ public class GlobalSourcePath {
     }
     
     private Set<URL> getLibsSources () {
+        if (!useLibraries) {
+            //Running in the test where libraries modules SPI is not initialized
+            return Collections.<URL>emptySet();
+        }
         // retrieve list outside of java mutex:
         final Collection<LibraryManager> libraryManagers = LibraryManager.getOpenManagers();
         final Mutex.Action<Set<URL>> libsTask = new Mutex.Action<Set<URL>> () {
@@ -453,7 +478,6 @@ public class GlobalSourcePath {
                                     List<URL> libSrc = lib.getContent("src");      //NOI18N
                                     for (URL url : libSrc) {                        
                                         try {
-                                            url = LibrariesSupport.resolveLibraryEntryURL(lm.getLocation(), url);
                                             Project p = FileOwnerQuery.getOwner(url.toURI());
                                             if (p != null) {
                                                 Sources src = p.getLookup().lookup(Sources.class);

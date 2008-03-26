@@ -19,6 +19,7 @@
 
 package org.netbeans.modules.project.ant;
 
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
@@ -28,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,7 +40,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
-import java.util.jar.JarFile;
+import java.util.regex.Matcher;
+import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.netbeans.api.project.Project;
@@ -51,6 +54,7 @@ import org.netbeans.api.queries.SharabilityQuery;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
+import org.netbeans.spi.project.libraries.LibraryImplementation2;
 import org.netbeans.spi.project.libraries.LibraryProvider;
 import org.netbeans.spi.project.libraries.LibraryTypeProvider;
 import org.netbeans.spi.project.libraries.support.LibrariesSupport;
@@ -61,6 +65,7 @@ import org.netbeans.spi.project.support.ant.ProjectGenerator;
 import org.netbeans.spi.project.support.ant.PropertyProvider;
 import org.netbeans.spi.queries.CollocationQueryImplementation;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
@@ -102,6 +107,31 @@ public class ProjectLibraryProviderTest extends NbTestCase {
         ProjectLibraryProvider.FIRE_CHANGES_SYNCH = true;
         registerTestLibraryTypeProvider();
     }
+    
+    
+    public void testPatternMatching() throws Exception {
+        Matcher matcher = ProjectLibraryProvider.LIBS_LINE.matcher("libs.grapht.classpath");
+        assertTrue(matcher.matches());
+        assertEquals(matcher.group(2), "classpath");
+        matcher = ProjectLibraryProvider.LIBS_LINE.matcher("libs.grapht_1_0.classpath");
+        assertTrue(matcher.matches());
+        assertEquals(matcher.group(2), "classpath");
+        matcher = ProjectLibraryProvider.LIBS_LINE.matcher("libs.grapht_1_0.classpath2");
+        assertTrue(matcher.matches());
+        assertEquals(matcher.group(2), "classpath2");
+        matcher = ProjectLibraryProvider.LIBS_LINE.matcher("libs.grapht_1_0.classpath_1");
+        assertTrue(matcher.matches());
+        assertEquals(matcher.group(2), "classpath_1");
+        matcher = ProjectLibraryProvider.LIBS_LINE.matcher("libs.grapht-1.0.classpath");
+        assertTrue(matcher.matches());
+        assertEquals(matcher.group(2), "classpath");
+        matcher = ProjectLibraryProvider.LIBS_LINE.matcher("libs.grapht-1.0.classpath_1");
+        assertTrue(matcher.matches());
+        assertEquals(matcher.group(2), "classpath_1");
+        matcher = ProjectLibraryProvider.LIBS_LINE.matcher("libs.grapht-1.0.1-classpath");
+        assertTrue(matcher.matches());
+        assertEquals(matcher.group(2), "1-classpath");
+    }
 
     // XXX test name/type/description
     // XXX test : vs. ; and / vs. \ (in <definitions> and in *.properties)
@@ -110,7 +140,7 @@ public class ProjectLibraryProviderTest extends NbTestCase {
     public void testLibraryLoadingBasic() throws Exception {
         writeProperties("libs/my libraries.properties",
                 "libs.jgraph.classpath=${base}/jgraph.jar:${base}/../extra libs/jgraph-extras.jar",
-                "libs.jgraph.javadoc=${base}/api/jgraph-docs",
+                "libs.jgraph.javadoc=${base}/api/jgraph-docs:${base}/api/jgraph-docs.zip!/docs/api/",
                 "irrelevant=stuff");
         storeDefs(project, "../libs/my libraries.properties");
         Library lib = LibraryManager.forLocation(new URL(base, "libs/my%20libraries.properties")).getLibrary("jgraph");
@@ -119,9 +149,14 @@ public class ProjectLibraryProviderTest extends NbTestCase {
         assertEquals("jgraph", lib.getDisplayName());
         assertNull(lib.getDescription());
         assertEquals("j2se", lib.getType());
-        assertEquals(Arrays.asList(new URL("jar:file:jgraph.jar!/"), new URL("jar:file:../extra%20libs/jgraph-extras.jar!/")), lib.getContent("classpath"));
-        assertEquals(Collections.singletonList(new URL("file:api/jgraph-docs/")), lib.getContent("javadoc"));
+        assertEquals(Arrays.asList(new URI("jgraph.jar!/"), new URI("../extra%20libs/jgraph-extras.jar!/")), lib.getURIContent("classpath"));
+        assertEquals(Arrays.asList(new URL("jar:"+base.toExternalForm()+"libs/jgraph.jar!/"), new URL("jar:"+base.toExternalForm()+"extra%20libs/jgraph-extras.jar!/")), lib.getContent("classpath"));
+        assertEquals(Arrays.asList(new URI("api/jgraph-docs/"), new URI("api/jgraph-docs.zip!/docs/api/")), lib.getURIContent("javadoc"));
         assertEquals(Collections.emptyList(), lib.getContent("src"));
+        
+        //if this field is null, it means the reflection won't work on Library instances
+        // and localized names fro libraries won't be found
+        assertNotNull(ProjectLibraryProvider.ProjectLibraryImplementation.libraryImplField);
     }
 
     public void testLibraryLoadingPrivateAbsolute() throws Exception {
@@ -132,9 +167,10 @@ public class ProjectLibraryProviderTest extends NbTestCase {
                 "libs.jgraph.javadoc=" + new File(getWorkDir(), "jgraph-api"));
         storeDefs(project, "../libs/libraries.properties");
         Library lib = LibraryManager.forLocation(new URL(base, "libs/libraries.properties")).getLibrary("jgraph");
-        assertEquals(Collections.singletonList(new URL("jar:file:jgraph.jar!/")), lib.getContent("classpath"));
-        assertEquals(Collections.singletonList(new URL("jar:" + base + "jgraph-src.zip!/")), lib.getContent("src"));
-        assertEquals(Collections.singletonList(new URL(base, "jgraph-api/")), lib.getContent("javadoc"));
+        assertEquals(Collections.singletonList(new URI("jgraph.jar!/")), lib.getURIContent("classpath"));
+        assertEquals(Collections.singletonList(new URI("jar:" + base.toExternalForm() + "jgraph-src.zip!/")), lib.getURIContent("src"));
+        assertEquals(Collections.singletonList(new URL("jar:" + base.toExternalForm() + "jgraph-src.zip!/")), lib.getContent("src"));
+        assertEquals(Collections.singletonList(new URL(base, "jgraph-api/").toURI()), lib.getURIContent("javadoc"));
     }
 
     public void testPrivateOverridesSharedProperties() throws Exception {
@@ -144,7 +180,7 @@ public class ProjectLibraryProviderTest extends NbTestCase {
                 "libs.jgraph.classpath=" + new File(getWorkDir(), "jgraph-api"));
         storeDefs(project, "../libs/libraries.properties");
         Library lib = LibraryManager.forLocation(new URL(base, "libs/libraries.properties")).getLibrary("jgraph");
-        assertEquals(Collections.singletonList(new URL(base, "jgraph-api/")), lib.getContent("classpath"));
+        assertEquals(Collections.singletonList(new URL(base, "jgraph-api/").toURI()), lib.getURIContent("classpath"));
     }
 
     public void testSetContent() throws Exception {
@@ -152,15 +188,16 @@ public class ProjectLibraryProviderTest extends NbTestCase {
                 "libs.jgraph.classpath=");
         storeDefs(project, "../libs/libraries.properties");
         Library lib = LibraryManager.forLocation(new URL(base, "libs/libraries.properties")).getLibrary("jgraph");
-        setLibraryContent(lib, "classpath", new URL("jar:file:jgraph.jar!/"), new URL("jar:file:../extra%20libs/jgraph-extras.jar!/"));
-        setLibraryContent(lib, "src", new URL(base, "separate/jgraph-src/"), new URL(base, "jgraph-other-src/"));
-        setLibraryContent(lib, "javadoc", new URL("jar:" + base + "separate/jgraph-api.zip!/"));
+        setLibraryContent(lib, "classpath", new URI("jgraph.jar!/"), new URI("../extra%20libs/jgraph-extras.jar!/"));
+        setLibraryContent(lib, "src", new URL(base, "separate/jgraph-src/").toURI(), new URL(base, "jgraph-other-src/").toURI());
+        setLibraryContent(lib, "javadoc", new URI("jar:" + base + "separate/jgraph-api.zip!/"), new URI("../separate/jgraph-api.zip!/docs/api/"));
         Map<String,String> m = new HashMap<String,String>();
         File separate = new File(getWorkDir(), "separate");
         m.put("libs.jgraph.classpath", "${base}/jgraph.jar"+File.pathSeparatorChar+"${base}/../extra libs/jgraph-extras.jar");
         m.put("libs.jgraph.src", new File(separate, "jgraph-src").getAbsolutePath().replace('\\', '/') + File.pathSeparator + 
                 new File(getWorkDir(), "jgraph-other-src").getAbsolutePath().replace('\\', '/'));
-        m.put("libs.jgraph.javadoc", new File(separate, "jgraph-api.zip").getAbsolutePath().replace('\\', '/'));
+        m.put("libs.jgraph.javadoc", new File(separate, "jgraph-api.zip").getAbsolutePath().replace('\\', '/') + File.pathSeparator + 
+                "${base}/../separate/jgraph-api.zip!/docs/api/");
         assertEquals(m, loadProperties("libs/libraries.properties"));
     }
 
@@ -208,11 +245,11 @@ public class ProjectLibraryProviderTest extends NbTestCase {
                 "libs.jgraph.classpath=${base}/jgraph",
                 "libs.collections.classpath=${base}/collections");
         contentlist.assertEventCount(1);
-        assertEquals(Collections.singletonList(new URL("file:jgraph/")), lib1.getContent("classpath"));
+        assertEquals(Collections.singletonList(new URI("jgraph/")), lib1.getURIContent("classpath"));
         liblist.assertEventCount(1);
         assertEquals(lib1, mgr.getLibrary("jgraph"));
         Library lib2 = mgr.getLibrary("collections");
-        assertEquals(Collections.singletonList(new URL("file:collections/")), lib2.getContent("classpath"));
+        assertEquals(Collections.singletonList(new URI("collections/")), lib2.getURIContent("classpath"));
         pplist.assertEventCount(1);
         assertEquals(("{libs.collections.classpath=" + getWorkDir() + "/collections, libs.jgraph.classpath=" + 
                 getWorkDir() + "/jgraph}").replace('/', File.separatorChar),
@@ -222,32 +259,87 @@ public class ProjectLibraryProviderTest extends NbTestCase {
         storeDefs(project, "../others.properties");
         contentlist.assertEventCount(0);
         liblist.assertEventCount(0);
-        pplist.assertEventCount(1);
+        // storeDefs() fires configurationXmlChanged twice - after put() and after save()
+        pplist.assertEventCount(2);
         assertEquals(("{libs.jrcs.classpath=}").replace('/', File.separatorChar),
                 new TreeMap<String,String>(pp.getProperties()).toString());
     }
 
     public void testCreateRemoveLibrary() throws Exception {
         LibraryManager mgr = LibraryManager.forLocation(new URL(base, "libraries.properties"));
-        Map<String,List<URL>> content = new HashMap<String,List<URL>>();
-        content.put("classpath", Arrays.asList(new URL("jar:file:jh.jar!/"), new URL("jar:file:jh-search.jar!/")));
-        content.put("javadoc", Arrays.asList(new URL("file:jh-api/")));
-        Library lib = mgr.createLibrary("j2se", "javahelp", content);
+        Map<String,List<URI>> content = new HashMap<String,List<URI>>();
+        content.put("classpath", Arrays.asList(new URI("jh.jar!/"), new URI("jh-search.jar!/")));
+        content.put("javadoc", Arrays.asList(new URI("jh-api/")));
+        Library lib = mgr.createURILibrary("j2se", "javahelp", content);
         assertEquals("j2se", lib.getType());
         assertEquals("javahelp", lib.getName());
-        assertEquals(content.get("classpath"), lib.getContent("classpath"));
-        assertEquals(content.get("javadoc"), lib.getContent("javadoc"));
-        lib = mgr.createLibrary("j2me", "gps", Collections.<String,List<URL>>emptyMap());
+        assertEquals(content.get("classpath"), lib.getURIContent("classpath"));
+        assertEquals(content.get("javadoc"), lib.getURIContent("javadoc"));
+        lib = mgr.createURILibrary("j2me", "gps", Collections.<String,List<URI>>emptyMap());
         assertEquals("j2me", lib.getType());
         assertEquals("gps", lib.getName());
         Map<String,String> expected = new HashMap<String,String>();
         expected.put("libs.javahelp.classpath", "${base}/jh.jar"+File.pathSeparatorChar+"${base}/jh-search.jar");
-        expected.put("libs.javahelp.javadoc", "${base}/jh-api");
+        expected.put("libs.javahelp.javadoc", "${base}/jh-api/");
         expected.put("libs.gps.type", "j2me");
         assertEquals(expected, loadProperties("libraries.properties"));
         mgr.removeLibrary(lib);
         expected.remove("libs.gps.type");
         assertEquals(expected, loadProperties("libraries.properties"));
+    }
+
+    public void testCreateLibraryUnderFSAtomicAction() throws Exception {
+        final LibraryManager mgr = LibraryManager.forLocation(new URL(base, "libraries.properties"));
+        final Map<String,List<URI>> content = new HashMap<String,List<URI>>();
+        content.put("classpath", Arrays.asList(new URI("jh.jar!/"), new URI("jh-search.jar!/")));
+        content.put("javadoc", Arrays.asList(new URI("jh-api/")));
+
+        FileSystem fs = projdir.getFileSystem();
+        fs.runAtomicAction(new FileSystem.AtomicAction() {
+            public void run() throws IOException {
+                Library lib = mgr.createURILibrary("j2se", "javahelp", content);
+                assertEquals("j2se", lib.getType());
+                assertEquals("javahelp", lib.getName());
+                assertEquals(content.get("classpath"), lib.getURIContent("classpath"));
+                assertEquals(content.get("javadoc"), lib.getURIContent("javadoc"));
+                try {
+                    setLibraryContent(lib, "src", new URL(base, "separate/jgraph-src/").toURI(), new URL(base, "jgraph-other-src/").toURI());
+                } catch (Exception e) {
+                    throw new IOException(e.toString());
+                }
+            }});
+    }
+
+    public void testCreateLibraryAndLibrariesEventFiring() throws Exception {
+        final LibraryManager mgr = LibraryManager.forLocation(new URL(base, "libraries.properties"));
+        final Map<String,List<URI>> content = new HashMap<String,List<URI>>();
+        content.put("classpath", Arrays.asList(new URI("jh.jar!/"), new URI("jh-search.jar!/")));
+        content.put("javadoc", Arrays.asList(new URI("jh-api/")));
+        final List<PropertyChangeEvent> list = new ArrayList<PropertyChangeEvent>();
+        final PropertyChangeListener l = new PropertyChangeListener() {
+            public void propertyChange(PropertyChangeEvent evt) {
+                list.add(evt);
+                if (evt.getPropertyName().equals(LibraryManager.PROP_LIBRARIES)) {
+                    // by the time we got this event library must be fully set up:
+                    assertTrue("must have one library", mgr.getLibraries().length == 1);
+                    assertEquals("library content must be set", content.get("classpath"), mgr.getLibraries()[0].getURIContent("classpath"));
+                    assertEquals("library content must be set", content.get("javadoc"), mgr.getLibraries()[0].getURIContent("javadoc"));
+                }
+            }
+        };
+        mgr.addPropertyChangeListener(l);
+        Library lib = mgr.createURILibrary("j2se", "javahelp", content);
+        mgr.removePropertyChangeListener(l);
+        assertTrue(list.size() == 1);
+        mgr.removeLibrary(lib);
+        FileSystem fs = projdir.getFileSystem();
+        fs.runAtomicAction(new FileSystem.AtomicAction() {
+            public void run() throws IOException {
+                mgr.addPropertyChangeListener(l);
+                mgr.createURILibrary("j2se", "javahelp", content);
+                mgr.removePropertyChangeListener(l);
+                assertTrue(list.size() == 2);
+            }});
     }
 
     public void testPropertyProviderBasic() throws Exception {
@@ -320,20 +412,20 @@ public class ProjectLibraryProviderTest extends NbTestCase {
         OpenProjects.getDefault().close(projects);
     }
 
-    private static void setLibraryContent(Library lib, String volumeType, URL... paths) throws Exception {
+    private static void setLibraryContent(Library lib, String volumeType, URI... paths) throws Exception {
         MockPropertyChangeListener l = new MockPropertyChangeListener(Library.PROP_CONTENT);
         lib.addPropertyChangeListener(l);
-        LibraryImplementation impl = getLibraryImplementation(lib);
-        List<URL> path = Arrays.asList(paths);
-        impl.setContent(volumeType, path);
+        LibraryImplementation2 impl = getLibraryImplementation(lib);
+        List<URI> path = Arrays.asList(paths);
+        impl.setURIContent(volumeType, path);
         l.assertEventCount(1);
-        assertEquals(path, lib.getContent(volumeType));
+        assertEquals(path, lib.getURIContent(volumeType));
     }
 
-    private static LibraryImplementation getLibraryImplementation(Library lib) throws Exception {
+    private static LibraryImplementation2 getLibraryImplementation(Library lib) throws Exception {
         Method getLibraryImplementation = Library.class.getDeclaredMethod("getLibraryImplementation");
         getLibraryImplementation.setAccessible(true);
-        return (LibraryImplementation) getLibraryImplementation.invoke(lib);
+        return (LibraryImplementation2) getLibraryImplementation.invoke(lib);
     }
 
     private Map<String,String> loadProperties(String path) throws IOException {
@@ -352,20 +444,28 @@ public class ProjectLibraryProviderTest extends NbTestCase {
      * Test of copyLibrary method, of class LibrariesSupport.
      */
     public void testCopyLibrary() throws Exception {
+        // disable all collocation queries:
+        MockLookup.setLookup(Lookups.fixed(AntBasedTestUtil.testAntBasedProjectType(), libraryProvider),
+                // Filter out standard CQIs since they are bogus.
+                Lookups.exclude(Lookups.metaInfServices(ProjectLibraryProviderTest.class.getClassLoader()), CollocationQueryImplementation.class));
         File f = new File(this.getWorkDir(), "bertie.jar");
-        createFakeJAR(f);
+        createFakeJAR(f, "smth");
         File f1 = new File(this.getWorkDir(), "dog.jar");
-        createFakeJAR(f1);
+        createFakeJAR(f1, "smth");
         new File(this.getWorkDir(), "sources").mkdir();
         File f2 = new File(this.getWorkDir(), "sources/bertie.jar");
-        createFakeJAR(f2);
+        createFakeJAR(f2, "docs/api/test.smth");
         new File(this.getWorkDir(), "libraries").mkdir();
         File f3 = new File(this.getWorkDir(), "libraries/libs.properties");
         f3.createNewFile();
+        new File(this.getWorkDir(), "libraries2").mkdir();
+        File f4 = new File(this.getWorkDir(), "libraries2/libs.properties");
+        f4.createNewFile();
+        FileUtil.toFileObject(getWorkDir()).getFileSystem().refresh(false);
         LibraryImplementation l1 = LibrariesSupport.createLibraryImplementation("j2test", new String[]{"jars", "sources"});
         l1.setName("vino");
         l1.setContent("jars", Arrays.asList(new URL[]{f.toURI().toURL(), f1.toURI().toURL()}));
-        l1.setContent("sources", Arrays.asList(new URL[]{f2.toURI().toURL()}));
+        l1.setContent("sources", Arrays.asList(new URL[]{new URL("jar:" + f2.toURI().toURL() + "!/docs/api/")}));
         libraryProvider.set(l1);
         Library l = LibraryManager.getDefault().getLibrary("vino");
         assertNotNull(l);
@@ -374,22 +474,59 @@ public class ProjectLibraryProviderTest extends NbTestCase {
         Library result = ProjectLibraryProvider.copyLibrary(l, u, false);
         assertNotNull(result);
         assertEquals(u, result.getManager().getLocation());
-        assertEquals(Arrays.asList(new URL("jar:file:vino/bertie.jar!/"),
-                new URL("jar:file:vino/dog.jar!/")), result.getContent("jars"));
-        assertEquals(Arrays.asList(new URL("jar:file:vino/bertie-2.jar!/")), result.getContent("sources"));
+        assertEquals(Arrays.asList(new URI("vino/bertie.jar!/"),
+                new URI("vino/dog.jar!/")), result.getURIContent("jars"));
+        assertEquals(Arrays.asList(new URI("vino/bertie-2.jar!/docs/api/")), result.getURIContent("sources"));
         assertEquals("vino", result.getName());
         assertEquals("j2test", result.getType());
-        assertEquals(new File(this.getWorkDir(), "libraries/vino/bertie.jar").getPath(), 
-                FileUtil.toFile(LibrariesSupport.resolveLibraryEntryFileObject(u, FileUtil.getArchiveFile(result.getContent("jars").get(0)))).getPath());
+        //assertNotNull(LibrariesSupport.resolveLibraryEntryFileObject(u, result.getURIContent("jars").get(0)));
+        assertEquals("jar:"+(new File(this.getWorkDir(), "libraries/vino/bertie.jar").toURI().toString())+"!/", 
+                LibrariesSupport.resolveLibraryEntryURI(u, result.getURIContent("jars").get(0)).toString());
+        assertEquals("jar:"+(new File(this.getWorkDir(), "libraries/vino/bertie.jar").toURI().toString())+"!/", 
+                result.getContent("jars").get(0).toExternalForm());
+        //assertNotNull(LibrariesSupport.resolveLibraryEntryFileObject(u, result.getContent("sources").get(0)));
+        assertEquals("jar:"+(new File(this.getWorkDir(), "libraries/vino/bertie-2.jar").toURI())+"!/docs/api/", 
+                LibrariesSupport.resolveLibraryEntryURI(u, result.getURIContent("sources").get(0)).toString());
+        assertEquals("jar:"+(new File(this.getWorkDir(), "libraries/vino/bertie-2.jar").toURI())+"!/docs/api/", 
+                result.getContent("sources").get(0).toExternalForm());
+        // enable test collocation query:
+        MockLookup.setLookup(Lookups.fixed(AntBasedTestUtil.testAntBasedProjectType(), AntBasedTestUtil.testCollocationQueryImplementation(getWorkDir()), libraryProvider),
+                // Filter out standard CQIs since they are bogus.
+                Lookups.exclude(Lookups.metaInfServices(ProjectLibraryProviderTest.class.getClassLoader()), CollocationQueryImplementation.class));
+        u = f4.toURI().toURL();
+        result = ProjectLibraryProvider.copyLibrary(l, u, false);
+        assertNotNull(result);
+        assertEquals(u, result.getManager().getLocation());
+        assertEquals(Arrays.asList(new URI("../bertie.jar!/"),
+                new URI("../dog.jar!/")), result.getURIContent("jars"));
+        assertEquals(Arrays.asList(new URI("../sources/bertie.jar!/docs/api/")), result.getURIContent("sources"));
+        
     }
     
-    private void createFakeJAR(File f) throws IOException {
+    private void createFakeJAR(File f, String content) throws IOException {
         // create just enough to make URLMapper recognize file as JAR:
         ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(f));
-        zos.putNextEntry(new ZipEntry("test"));
+        writeZipFileEntry(zos, content, "some content".getBytes());
         zos.finish();
         zos.close();
     }
+
+    private static void writeZipFileEntry(ZipOutputStream zos, String zipEntryName, byte[] byteArray) throws IOException {
+        int byteArraySize = byteArray.length;
+
+        CRC32 crc = new CRC32();
+        crc.update(byteArray, 0, byteArraySize);
+
+        ZipEntry entry = new ZipEntry(zipEntryName);
+        entry.setMethod(ZipEntry.STORED);
+        entry.setSize(byteArraySize);
+        entry.setCrc(crc.getValue());
+
+        zos.putNextEntry(entry);
+        zos.write(byteArray, 0, byteArraySize);
+        zos.closeEntry();
+    }
+    
 
     public static class TestLibraryProvider implements LibraryProvider<LibraryImplementation> {
 

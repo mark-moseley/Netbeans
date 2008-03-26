@@ -39,20 +39,20 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.java.j2seplatform.libraries;
+package org.netbeans.modules.j2ee.deployment.impl.sharability;
 
 import java.net.URI;
 import javax.swing.AbstractListModel;
+import java.util.List;
 import java.util.ArrayList;
 import java.net.URL;
 
-import java.util.List;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
 import org.netbeans.spi.project.libraries.LibraryImplementation2;
 import org.netbeans.spi.project.libraries.LibraryStorageArea;
 import org.openide.util.NbCollections;
 
-class VolumeContentModel extends AbstractListModel/*<String>*/ {
+class ServerVolumeContentModel extends AbstractListModel/*<String>*/ {
 
     private LibraryImplementation impl;
     private LibraryImplementation2 impl2;
@@ -60,7 +60,7 @@ class VolumeContentModel extends AbstractListModel/*<String>*/ {
     private String volumeType;
     private List<Object> content;
 
-    public VolumeContentModel (LibraryImplementation impl, LibraryStorageArea area, String volumeType) {
+    public ServerVolumeContentModel(LibraryImplementation impl, LibraryStorageArea area, String volumeType) {
         //TODO: Should listen on the impl
         this.impl = impl;
         this.area = area;

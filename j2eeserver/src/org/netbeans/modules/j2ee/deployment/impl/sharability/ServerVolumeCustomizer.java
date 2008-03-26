@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,33 +39,33 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.visualweb.project.jsf.libraries.provider;
+package org.netbeans.modules.j2ee.deployment.impl.sharability;
 
+import java.awt.Color;
+import java.awt.Component;
 import java.beans.Customizer;
 import java.io.File;
+import java.io.IOException;
 import java.net.URL;
 import java.net.MalformedURLException;
-import java.util.Collection;
-import java.util.Arrays;
-import java.awt.*;
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import javax.swing.*;
+import java.util.Collection;
+import java.util.Arrays;
 import javax.swing.DefaultListCellRenderer;
-import javax.swing.event.*;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JFileChooser;
+import javax.swing.JList;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
+import javax.swing.filechooser.FileFilter;
+import org.netbeans.api.project.ant.FileChooser;
+import org.netbeans.spi.project.libraries.LibraryCustomizerContext;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
-
-
-
-
-import javax.swing.filechooser.FileFilter;
-import org.netbeans.api.project.ant.FileChooser;
-import org.netbeans.modules.visualweb.project.jsf.libraries.JavadocForBinaryQueryLibraryImpl;
-import org.netbeans.spi.project.libraries.LibraryCustomizerContext;
 import org.netbeans.spi.project.libraries.LibraryStorageArea;
 import org.netbeans.spi.project.libraries.support.LibrariesSupport;
 import org.openide.DialogDisplayer;
@@ -77,22 +77,20 @@ import org.openide.util.Exceptions;
  *
  * @author  tom
  */
-public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customizer {
-
+public class ServerVolumeCustomizer extends javax.swing.JPanel implements Customizer {
+    
     private String volumeType;
     private LibraryImplementation impl;
-    private VolumeContentModel model;
     private LibraryStorageArea area;
+    private ServerVolumeContentModel model;
     private Boolean allowRelativePaths = null;
 
-    /**
-     * Creates new form ThemeVolumeCustomizer
-     */
-    ThemeVolumeCustomizer (String volumeType) {
+    /** Creates new form J2SEVolumeCustomizer */
+    ServerVolumeCustomizer(String volumeType) {
         this.volumeType = volumeType;
         initComponents();
-        postInitComponents ();
-        this.setName (NbBundle.getMessage(ThemeVolumeCustomizer.class,"TXT_"+volumeType));
+        postInitComponents();
+        this.setName(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_"+volumeType));
     }
 
 
@@ -119,55 +117,28 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
         this.upButton.setEnabled (false);
         this.downButton.setEnabled (false);
         this.removeButton.setEnabled (false);
-        if (this.volumeType.equals(ThemeLibraryTypeProvider.VOLUME_TYPE_CLASSPATH)) {  //NOI18N
-            this.addButton.setText (NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_AddClassPath"));
-            this.addButton.setMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_AddClassPath").charAt(0));
-            this.message.setText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_ContentClassPath"));
-            this.message.setDisplayedMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_ContentClassPath").charAt(0));
-            this.addButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ThemeVolumeCustomizer.class,"AD_AddClassPath"));
-            this.message.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ThemeVolumeCustomizer.class,"AD_ContentClassPath"));
-        }
-        else if (this.volumeType.equals(ThemeLibraryTypeProvider.VOLUME_TYPE_JAVADOC)) {  //NOI18N
-            this.addButton.setText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_AddJavadoc"));
-            this.addButton.setMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_AddJavadoc").charAt(0));
-            this.message.setText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_ContentJavadoc"));
-            this.message.setDisplayedMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_ContentJavadoc").charAt(0));
-            this.addButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ThemeVolumeCustomizer.class,"AD_AddJavadoc"));
-            this.message.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ThemeVolumeCustomizer.class,"AD_ContentJavadoc"));
-//            this.addURLButton = new JButton ();
-//            this.addURLButton.setText(NbBundle.getMessage (ThemeVolumeCustomizer.class,"CTL_AddJavadocURL"));
-//            this.addURLButton.setMnemonic(NbBundle.getMessage (ThemeVolumeCustomizer.class,"MNE_AddJavadocURL").charAt(0));
-//            this.addURLButton.addActionListener (new ActionListener () {
-//                public void actionPerformed(ActionEvent e) {
-//                    addURLResource ();
-//                }
-//            });
-//            GridBagConstraints c = new GridBagConstraints();
-//            c.gridx = 1;
-//            c.gridy = 2;
-//            c.gridwidth = GridBagConstraints.REMAINDER;
-//            c.gridheight = 1;
-//            c.fill = GridBagConstraints.HORIZONTAL;
-//            c.anchor = GridBagConstraints.NORTHWEST;
-//            c.insets = new Insets (0,6,5,6);
-//            ((GridBagLayout)this.getLayout()).setConstraints(this.addURLButton,c);
-//            this.add (this.addURLButton);
-        }
-        else if (this.volumeType.equals(ThemeLibraryTypeProvider.VOLUME_TYPE_SRC)) {  //NOI18N
-            this.addButton.setText (NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_AddSources"));
-            this.addButton.setMnemonic (NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_AddSources").charAt(0));
-            this.message.setText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_ContentSources"));
-            this.message.setDisplayedMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_ContentSources").charAt(0));
-            this.addButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ThemeVolumeCustomizer.class,"AD_AddSources"));
-            this.message.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ThemeVolumeCustomizer.class,"AD_ContentSources"));
-        }
-        else if (this.volumeType.equals(ThemeLibraryTypeProvider.VOLUME_TYPE_RUNTIME)) {  //NOI18N
-            this.addButton.setText (NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_AddSources"));
-            this.addButton.setMnemonic (NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_AddSources").charAt(0));
-            this.message.setText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_ContentSources"));
-            this.message.setDisplayedMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_ContentSources").charAt(0));
-            this.addButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ThemeVolumeCustomizer.class,"AD_AddSources"));
-            this.message.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ThemeVolumeCustomizer.class,"AD_ContentSources"));
+        if (!this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_JAVADOC)
+                && !this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_SOURCE)) {
+            this.addButton.setText (NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_AddClassPath"));
+            this.addButton.setMnemonic(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_AddClassPath").charAt(0));
+            this.message.setText(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_ContentClassPath"));
+            this.message.setDisplayedMnemonic(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_ContentClassPath").charAt(0));
+            this.addButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.AD_AddClassPath"));
+            this.message.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.AD_ContentClassPath"));
+        } else if (this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_JAVADOC)) {
+            this.addButton.setText(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_AddJavadoc"));
+            this.addButton.setMnemonic(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_AddJavadoc").charAt(0));
+            this.message.setText(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_ContentJavadoc"));
+            this.message.setDisplayedMnemonic(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_ContentJavadoc").charAt(0));
+            this.addButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.AD_AddJavadoc"));
+            this.message.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.AD_ContentJavadoc"));
+        } else if (this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_SOURCE)) {
+            this.addButton.setText (NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_AddSources"));
+            this.addButton.setMnemonic (NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_AddSources").charAt(0));
+            this.message.setText(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_ContentSources"));
+            this.message.setDisplayedMnemonic(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_ContentSources").charAt(0));
+            this.addButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.AD_AddSources"));
+            this.message.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.AD_ContentSources"));
         }
         this.content.addListSelectionListener(new ListSelectionListener () {
             public void valueChanged(ListSelectionEvent e) {
@@ -186,7 +157,7 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
@@ -200,15 +171,14 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
 
         setLayout(new java.awt.GridBagLayout());
 
-        getAccessibleContext().setAccessibleDescription(null);
         message.setLabelFor(content);
-        org.openide.awt.Mnemonics.setLocalizedText(message, org.openide.util.NbBundle.getBundle(ThemeVolumeCustomizer.class).getString("CTL_RemoveContent"));
+        org.openide.awt.Mnemonics.setLocalizedText(message, org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.CTL_ContentMessage")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(6, 12, 2, 6);
+        gridBagConstraints.insets = new java.awt.Insets(6, 6, 2, 6);
         add(message, gridBagConstraints);
 
         jScrollPane1.setViewportView(content);
@@ -220,50 +190,47 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
         gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.weighty = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(0, 12, 6, 6);
+        gridBagConstraints.insets = new java.awt.Insets(0, 6, 6, 6);
         add(jScrollPane1, gridBagConstraints);
 
-        org.openide.awt.Mnemonics.setLocalizedText(addButton, org.openide.util.NbBundle.getBundle(ThemeVolumeCustomizer.class).getString("CTL_AddContent"));
+        org.openide.awt.Mnemonics.setLocalizedText(addButton, org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.CTL_AddContent")); // NOI18N
         addButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 addResource(evt);
             }
         });
-
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
         gridBagConstraints.gridy = 1;
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(3, 6, 5, 6);
+        gridBagConstraints.insets = new java.awt.Insets(0, 6, 6, 6);
         add(addButton, gridBagConstraints);
-        addButton.getAccessibleContext().setAccessibleDescription(null);
+        addButton.getAccessibleContext().setAccessibleDescription("null");
 
-        org.openide.awt.Mnemonics.setLocalizedText(removeButton, org.openide.util.NbBundle.getBundle(ThemeVolumeCustomizer.class).getString("CTL_RemoveContent"));
+        org.openide.awt.Mnemonics.setLocalizedText(removeButton, org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.CTL_RemoveContent")); // NOI18N
         removeButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 removeResource(evt);
             }
         });
-
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
         gridBagConstraints.gridy = 3;
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(6, 6, 6, 6);
+        gridBagConstraints.insets = new java.awt.Insets(5, 6, 6, 6);
         add(removeButton, gridBagConstraints);
-        removeButton.getAccessibleContext().setAccessibleDescription(null);
+        removeButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.AD_RemoveContent")); // NOI18N
 
-        org.openide.awt.Mnemonics.setLocalizedText(upButton, org.openide.util.NbBundle.getBundle(ThemeVolumeCustomizer.class).getString("CTL_UpContent"));
+        org.openide.awt.Mnemonics.setLocalizedText(upButton, org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.CTL_UpContent")); // NOI18N
         upButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 upResource(evt);
             }
         });
-
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
         gridBagConstraints.gridy = 4;
@@ -272,15 +239,14 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         gridBagConstraints.insets = new java.awt.Insets(5, 6, 0, 6);
         add(upButton, gridBagConstraints);
-        upButton.getAccessibleContext().setAccessibleDescription(null);
+        upButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.AD_UpContent")); // NOI18N
 
-        org.openide.awt.Mnemonics.setLocalizedText(downButton, org.openide.util.NbBundle.getBundle(ThemeVolumeCustomizer.class).getString("CTL_DownContent"));
+        org.openide.awt.Mnemonics.setLocalizedText(downButton, org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.CTL_DownContent")); // NOI18N
         downButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 downResource(evt);
             }
         });
-
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
         gridBagConstraints.gridy = 5;
@@ -289,10 +255,10 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         gridBagConstraints.insets = new java.awt.Insets(5, 6, 6, 6);
         add(downButton, gridBagConstraints);
-        downButton.getAccessibleContext().setAccessibleDescription(null);
+        downButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.AD_DownContent")); // NOI18N
 
-    }
-    // </editor-fold>//GEN-END:initComponents
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(ServerVolumeCustomizer.class).getString("ServerVolumeCustomizer.AD_J2SEVolumeCustomizer")); // NOI18N
+    }// </editor-fold>//GEN-END:initComponents
 
     private void downResource(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_downResource
         int[] indices = this.content.getSelectedIndices();
@@ -330,51 +296,50 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
         else if (indices[0]  >= 1) {
             this.content.setSelectedIndex (indices[0]-1);
         }
+        //XXX don't know
+//        if (this.volumeType.equals(J2SELibraryTypeProvider.VOLUME_TYPE_CLASSPATH)) {
+//            impl.setContent(J2SELibraryTypeProvider.VOLUME_TYPE_MAVEN_POM, Collections.<URL>emptyList());
+//        }
     }//GEN-LAST:event_removeResource
 
     private void addResource(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addResource
         File baseFolder = null;
-        if (allowRelativePaths != null && allowRelativePaths.booleanValue()) {
+        if (allowRelativePaths) {
             baseFolder = new File(URI.create(area.getLocation().toExternalForm())).getParentFile();
         }
         FileChooser chooser = new FileChooser(baseFolder, baseFolder);
         FileUtil.preventFileChooserSymlinkTraversal(chooser, null);
         chooser.setAcceptAllFileFilterUsed(false);
-        if (this.volumeType.equalsIgnoreCase(ThemeLibraryTypeProvider.VOLUME_TYPE_CLASSPATH)) {        //NOI18N
+        if (!this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_JAVADOC)
+                && !this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_SOURCE)) {
             chooser.setMultiSelectionEnabled (true);
-            chooser.setDialogTitle(NbBundle.getMessage(ThemeVolumeCustomizer.class,"TXT_OpenClasses"));
+            chooser.setDialogTitle(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_OpenClasses"));
             chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
             chooser.setFileFilter (new SimpleFileFilter(NbBundle.getMessage(
-                    ThemeVolumeCustomizer.class,"TXT_Classpath"),new String[] {"ZIP","JAR"}));   //NOI18N
-            chooser.setApproveButtonText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_SelectCP"));
-            chooser.setApproveButtonMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_SelectCP").charAt(0));
-        }
-        else if (this.volumeType.equalsIgnoreCase(ThemeLibraryTypeProvider.VOLUME_TYPE_JAVADOC)) {     //NOI18N
-            chooser.setDialogTitle(NbBundle.getMessage(ThemeVolumeCustomizer.class,"TXT_OpenJavadoc"));
+                    ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_Classpath"),new String[] {"ZIP","JAR"}));   //NOI18N
+            chooser.setApproveButtonText(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_SelectCP"));
+            chooser.setApproveButtonMnemonic(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_SelectCP").charAt(0));
+        } else if (this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_JAVADOC)) {
+            chooser.setMultiSelectionEnabled (true);
+            chooser.setDialogTitle(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_OpenJavadoc"));
             chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
             chooser.setFileFilter (new SimpleFileFilter(NbBundle.getMessage(
-                    ThemeVolumeCustomizer.class,"TXT_Javadoc"),new String[] {"ZIP","JAR"}));     //NOI18N
-            chooser.setApproveButtonText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_SelectJD"));
-            chooser.setApproveButtonMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_SelectJD").charAt(0));
-        }
-        else if (this.volumeType.equalsIgnoreCase(ThemeLibraryTypeProvider.VOLUME_TYPE_SRC)) {         //NOI18N
-            chooser.setDialogTitle(NbBundle.getMessage(ThemeVolumeCustomizer.class,"TXT_OpenSources"));
+                    ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_Javadoc"),new String[] {"ZIP","JAR"}));     //NOI18N
+            chooser.setApproveButtonText(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_SelectJD"));
+            chooser.setApproveButtonMnemonic(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_SelectJD").charAt(0));
+        } else if (this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_SOURCE)) {
+            chooser.setMultiSelectionEnabled (true);
+            chooser.setDialogTitle(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_OpenSources"));
             chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
             chooser.setFileFilter (new SimpleFileFilter(NbBundle.getMessage(
-                    ThemeVolumeCustomizer.class,"TXT_Sources"),new String[] {"ZIP","JAR"}));     //NOI18N
-            chooser.setApproveButtonText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_SelectSRC"));
-            chooser.setApproveButtonMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_SelectSRC").charAt(0));
-        }
-        else if (this.volumeType.equalsIgnoreCase(ThemeLibraryTypeProvider.VOLUME_TYPE_RUNTIME)) {         //NOI18N
-            chooser.setDialogTitle(NbBundle.getMessage(ThemeVolumeCustomizer.class,"TXT_OpenSources"));
-            chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
-            chooser.setFileFilter (new SimpleFileFilter(NbBundle.getMessage(
-                    ThemeVolumeCustomizer.class,"TXT_Sources"),new String[] {"ZIP","JAR"}));     //NOI18N
-            chooser.setApproveButtonText(NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_SelectSRC"));
-            chooser.setApproveButtonMnemonic(NbBundle.getMessage(ThemeVolumeCustomizer.class,"MNE_SelectSRC").charAt(0));
+                    ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_Sources"),new String[] {"ZIP","JAR"}));     //NOI18N
+            chooser.setApproveButtonText(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.CTL_SelectSRC"));
+            chooser.setApproveButtonMnemonic(NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.MNE_SelectSRC").charAt(0));
         }
         if (lastFolder != null) {
             chooser.setCurrentDirectory (lastFolder);
+        } else if (baseFolder != null) {
+            chooser.setCurrentDirectory (baseFolder);
         }
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             try {
@@ -391,8 +356,8 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
 
 //    private void addURLResource () {
 //        DialogDescriptor.InputLine input = new DialogDescriptor.InputLine (
-//                NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_AddJavadocURLMessage"),
-//                NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_AddJavadocURLTitle"));
+//                NbBundle.getMessage(J2SEVolumeCustomizer.class,"CTL_AddJavadocURLMessage"),
+//                NbBundle.getMessage(J2SEVolumeCustomizer.class,"CTL_AddJavadocURLTitle"));
 //        if (DialogDisplayer.getDefault().notify(input) == DialogDescriptor.OK_OPTION) {
 //            try {
 //                String value = input.getInputText();
@@ -401,7 +366,7 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
 //                this.content.setSelectedIndex(this.model.getSize()-1);
 //            } catch (MalformedURLException mue) {
 //                DialogDescriptor.Message message = new DialogDescriptor.Message (
-//                        NbBundle.getMessage(ThemeVolumeCustomizer.class,"CTL_InvalidURLFormat"),
+//                        NbBundle.getMessage(J2SEVolumeCustomizer.class,"CTL_InvalidURLFormat"),
 //                        DialogDescriptor.ERROR_MESSAGE
 //                );
 //                DialogDisplayer.getDefault().notify(message);
@@ -444,11 +409,11 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
                 }
                 model.addResource(url);
             }
-            if (this.volumeType.equals(ComponentLibraryTypeProvider.VOLUME_TYPE_JAVADOC)
-                && !JavadocForBinaryQueryLibraryImpl.isValidLibraryJavadocRoot (
+            if (this.volumeType.equals(ServerLibraryTypeProvider.VOLUME_JAVADOC)
+                && !JavadocForBinaryQueryImpl.isValidLibraryJavadocRoot (
                     LibrariesSupport.resolveLibraryEntryURI(libraryLocation, uri).toURL())) {
                 DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
-                    NbBundle.getMessage(ComponentVolumeCustomizer.class,"TXT_InvalidJavadocRoot", f.getPath()),
+                    NbBundle.getMessage(ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_InvalidJavadocRoot", f.getPath()),
                     NotifyDescriptor.ERROR_MESSAGE));
                 continue;
             }
@@ -469,7 +434,7 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
         area = context.getLibraryStorageArea();
         impl = context.getLibraryImplementation();
         allowRelativePaths = Boolean.valueOf(context.getLibraryImplementation2() != null);
-        model = new VolumeContentModel(impl, area, volumeType);
+        model = new ServerVolumeContentModel(impl, area, volumeType);
         content.setModel(model);
         if (model.getSize()>0) {
             content.setSelectedIndex(0);
@@ -478,16 +443,16 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
     
     
     private static class SimpleFileFilter extends FileFilter {
-
+        
         private String description;
         private Collection extensions;
-
-
+        
+        
         public SimpleFileFilter(String description, String[] extensions) {
             this.description = description;
             this.extensions = Arrays.asList(extensions);
         }
-
+        
         public boolean accept(File f) {
             if (f.isDirectory())
                 return true;
@@ -498,16 +463,16 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
             String extension = name.substring(index+1).toUpperCase();
             return this.extensions.contains(extension);
         }
-
+        
         public String getDescription() {
             return this.description;
         }
     }
-
-
+    
+    
     private static File lastFolder = null;
-
-
+    
+    
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton addButton;
     private javax.swing.JList content;
@@ -518,7 +483,7 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
     private javax.swing.JButton upButton;
     // End of variables declaration//GEN-END:variables
     private JButton addURLButton;
-
+    
     private static class ContentRenderer extends DefaultListCellRenderer {
 
         public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
@@ -541,7 +506,7 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
                     uri = LibrariesSupport.getArchiveFile(uri);
                 }
                 boolean broken = false;
-                VolumeContentModel model = (VolumeContentModel)list.getModel();
+                ServerVolumeContentModel model = (ServerVolumeContentModel)list.getModel();
                 LibraryStorageArea area = model.getArea();
                 FileObject fo = LibrariesSupport.resolveLibraryEntryFileObject(area != null ? area.getLocation() : null, uri);
                 if (fo == null) {
@@ -561,7 +526,7 @@ public class ThemeVolumeCustomizer extends javax.swing.JPanel implements Customi
                 }
                 if (broken) {
                     color = new Color (164,0,0);
-                    toolTip = NbBundle.getMessage (ThemeVolumeCustomizer.class,"TXT_BrokenFile");
+                    toolTip = NbBundle.getMessage (ServerVolumeCustomizer.class,"ServerVolumeCustomizer.TXT_BrokenFile");                    
                 }
             }
             Component c = super.getListCellRendererComponent(list, displayName, index, isSelected, cellHasFocus);

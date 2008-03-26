@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,62 +38,76 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.java.j2seproject.classpath;
+
+package org.netbeans.modules.j2ee.common.project.classpath;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import org.netbeans.spi.java.project.classpath.ProjectClassPathExtender;
+
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.openide.util.Exceptions;
 
 @Deprecated
-public class J2SEProjectClassPathExtender implements ProjectClassPathExtender {
+@SuppressWarnings("deprecation")
+public final class ClassPathExtender implements org.netbeans.spi.java.project.classpath.ProjectClassPathExtender {
     
-    private static final String CP_CLASS_PATH = "javac.classpath"; //NOI18N
+    private final ClassPathModifier delegate;
+    private final String elementName;
+    private final String classPathProperty;
 
-    private final J2SEProjectClassPathModifier delegate;
-
-    public J2SEProjectClassPathExtender (final J2SEProjectClassPathModifier delegate) {
+    public ClassPathExtender (final ClassPathModifier delegate, String classPathProperty, String elementName) {
         assert delegate != null;
         this.delegate = delegate;
+        this.elementName = elementName;
+        this.classPathProperty = classPathProperty;
     }
-
+    
     public boolean addLibrary(final Library library) throws IOException {
-        return addLibrary(CP_CLASS_PATH, library);
+        return addLibraries(classPathProperty, new Library[] { library }, elementName);
     }
-
-    public boolean addLibrary(final String type, final Library library) throws IOException {
-        return this.delegate.handleLibraries (new Library[] {library},type, J2SEProjectClassPathModifier.ADD);
+    
+    public boolean addLibraries(final String classPathId, final Library[] libraries, final String projectXMLElementName) throws IOException {
+        return this.delegate.handleLibraries(libraries, classPathId, projectXMLElementName, ClassPathModifier.ADD);
     }
 
     public boolean addArchiveFile(final FileObject archiveFile) throws IOException {
-        return addArchiveFile(CP_CLASS_PATH,archiveFile);
+        return addArchiveFiles(classPathProperty, new FileObject[] { archiveFile }, elementName);
     }
 
-    public boolean addArchiveFile(final String type, FileObject archiveFile) throws IOException {
-        if (FileUtil.isArchiveFile(archiveFile)) {
-            archiveFile = FileUtil.getArchiveRoot (archiveFile);
+    public boolean addArchiveFiles(final String classPathId, FileObject[] archiveFiles, final String projectXMLElementName) throws IOException {
+        for (int i = 0; i < archiveFiles.length; i++) {
+            FileObject archiveFile = archiveFiles[i];
+            if (FileUtil.isArchiveFile(archiveFile)) {
+                archiveFiles[i] = FileUtil.getArchiveRoot(archiveFile);
+            }           
         }
-        try {
-            return this.delegate.handleRoots(new URI[]{archiveFile.getURL().toURI()}, type, J2SEProjectClassPathModifier.ADD, true);
-        } catch (URISyntaxException ex) {
-            IOException ioe = new IOException();
-            ioe.initCause(ex);
-            throw ioe;
-        }
+        URI[] archiveFileURIs = new URI[archiveFiles.length];
+        for (int i = 0; i < archiveFiles.length; i++) {
+            try {
+                archiveFileURIs[i] = archiveFiles[i].getURL().toURI();
+            } catch (URISyntaxException ex) {
+                IOException ioe = new IOException();
+                ioe.initCause(ex);
+                throw ioe;
+            }
+        }        
+        return this.delegate.handleRoots(archiveFileURIs, classPathId, projectXMLElementName, ClassPathModifier.ADD);
+    }
+    
+    // TODO: AB: AntArtifactItem should not be in LibrariesChooser
+    
+    public boolean addAntArtifact (AntArtifact artifact, URI artifactElement) throws IOException {
+        return addAntArtifacts(classPathProperty, new AntArtifact[]{artifact}, new URI[]{artifactElement}, elementName);
     }
 
-    public boolean addAntArtifact(final AntArtifact artifact, final URI artifactElement) throws IOException {
-        return addAntArtifact(CP_CLASS_PATH,artifact, artifactElement);
+    public boolean addAntArtifacts(final String classPathId, final AntArtifact[] artifacts, URI[] artifactElements, final String projectXMLElementName) throws IOException {
+        return this.delegate.handleAntArtifacts(artifacts, artifactElements, classPathId, projectXMLElementName, ClassPathModifier.ADD);
     }
-
-    public boolean addAntArtifact(final String type, final AntArtifact artifact, final URI artifactElement) throws IOException {
-        return this.delegate.handleAntArtifacts(new AntArtifact[] {artifact}, new URI[] {artifactElement},type,J2SEProjectClassPathModifier.ADD);
-    }
-
+    
 }

@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,75 +39,66 @@
  * made subject to such option by the copyright holder.
  */
 
-// <RAVE> Copy of org.netbeans.modules.java.j2seplatform.libraries.J2SELibrarySourceForBinaryQuery
-package org.netbeans.modules.visualweb.project.jsf.libraries;
+package org.netbeans.modules.j2ee.deployment.impl.sharability;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-import javax.swing.event.ChangeEvent;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.queries.SourceForBinaryQuery;
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.spi.java.queries.SourceForBinaryQueryImplementation;
+import org.netbeans.spi.project.libraries.support.LibrariesSupport;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
+import org.openide.util.ChangeSupport;
 import org.openide.util.WeakListeners;
-// <RAVE>
-import org.netbeans.modules.visualweb.project.jsf.libraries.provider.ComponentLibraryTypeProvider;
 
 /**
  * Finds the locations of sources for various libraries.
- * @author Po-Ting Wu
+ * @author Tomas Zezula
  */
-public class SourceForBinaryQueryLibraryImpl implements SourceForBinaryQueryImplementation {
+public class SourceForBinaryQueryImpl implements SourceForBinaryQueryImplementation {
 
-    private final Map/*<URL,SourceForBinaryQuery.Result>*/ cache = new HashMap();
-    private final Map/*<URL,URL>*/ normalizedURLCache = new HashMap();
+    private static final String[] CLASSPATH_VOLUMES = new String[] {
+        ServerLibraryTypeProvider.VOLUME_CLASSPATH,
+        ServerLibraryTypeProvider.VOLUME_WS_COMPILE_CLASSPATH
+    };
+    
+    private final Map<URL,SourceForBinaryQuery.Result> cache = new ConcurrentHashMap<URL,SourceForBinaryQuery.Result>();
+    private final Map<URL,URL> normalizedURLCache = new ConcurrentHashMap<URL,URL>();
 
     /** Default constructor for lookup. */
-    public SourceForBinaryQueryLibraryImpl() {}
+    public SourceForBinaryQueryImpl() {}
 
     public SourceForBinaryQuery.Result findSourceRoots(URL binaryRoot) {
-        SourceForBinaryQuery.Result res = (SourceForBinaryQuery.Result) this.cache.get (binaryRoot);
+        SourceForBinaryQuery.Result res = cache.get(binaryRoot);
         if (res != null) {
             return res;
         }
         boolean isNormalizedURL = isNormalizedURL(binaryRoot);
-        for (LibraryManager lm : LibraryManager.getOpenManagers()) {
-            Library[] libs = lm.getLibraries();
-            for (int i=0; i< libs.length; i++) {
-                String type = libs[i].getType ();
-                if (ComponentLibraryTypeProvider.LIBRARY_TYPE.equalsIgnoreCase(type)) {
-                    // <RAVE> Only search the one that has 'src' volume defined
-                    List src = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_SRC);
-                    if (src.size() == 0) {
-                        continue;
-                    }
-                    // </RAVE>
-                    List classes = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_CLASSPATH);
-                    for (Iterator it = classes.iterator(); it.hasNext();) {
-                        URL entry = (URL) it.next();
-                        URL normalizedEntry = entry;
-                        if (isNormalizedURL) {
-                            normalizedEntry = getNormalizedURL(entry);
-                        }
-                        else {
-                            normalizedEntry = entry;
-                        }
-                        if (normalizedEntry != null && normalizedEntry.equals(binaryRoot)) {
-                            res =  new Result(entry, libs[i]);
-                            cache.put (binaryRoot, res);
-                            return res;
+        for (LibraryManager mgr : LibraryManager.getOpenManagers()) {
+            for (Library lib : mgr.getLibraries()) {
+                if (lib.getType().equals(ServerLibraryTypeProvider.LIBRARY_TYPE)) {
+                    for (String type : CLASSPATH_VOLUMES) {
+                        for (URL entry : lib.getContent(type)) {
+                            URL normalizedEntry = entry;
+                            if (isNormalizedURL) {
+                                normalizedEntry = getNormalizedURL(normalizedEntry);
+                            }
+                            if (binaryRoot.equals(normalizedEntry)) {
+                                res = new Result(entry, lib);
+                                cache.put(binaryRoot, res);
+                                return res;
+                            }
                         }
                     }
                 }
@@ -115,17 +106,17 @@ public class SourceForBinaryQueryLibraryImpl implements SourceForBinaryQueryImpl
         }
         return null;
     }
-
-
+    
+    
     private URL getNormalizedURL (URL url) {
         //URL is already nornalized, return it
         if (isNormalizedURL(url)) {
             return url;
         }
-        //Todo: Should listen on the LibrariesManager and cleanup cache
-        // in this case the search can use the cache onle and can be faster
+        //Todo: Should listen on the LibrariesManager and cleanup cache        
+        // in this case the search can use the cache onle and can be faster 
         // from O(n) to O(ln(n))
-        URL normalizedURL = (URL) this.normalizedURLCache.get (url);
+        URL normalizedURL = normalizedURLCache.get(url);
         if (normalizedURL == null) {
             FileObject fo = URLMapper.findFileObject(url);
             if (fo != null) {
@@ -158,30 +149,36 @@ public class SourceForBinaryQueryLibraryImpl implements SourceForBinaryQueryImpl
         
         private Library lib;
         private URL entry;
-        private ArrayList listeners;
+        private final ChangeSupport cs = new ChangeSupport(this);
         private FileObject[] cache;
         
         public Result (URL queryFor, Library lib) {
             this.entry = queryFor;
             this.lib = lib;
-            this.lib.addPropertyChangeListener ((PropertyChangeListener)WeakListeners.create(PropertyChangeListener.class,this,this.lib));
+            this.lib.addPropertyChangeListener(WeakListeners.propertyChange(this, this.lib));
         }
         
         public synchronized FileObject[] getRoots () {
             if (this.cache == null) {
                 // entry is not resolved so directly volume content can be searched for it:
-                if (this.lib.getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_CLASSPATH).contains(entry)) {
-                    List<URL> src = this.lib.getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_SRC);
-                    List result = new ArrayList ();
-                    for (URL u : src) {
+                boolean contains = false;
+                for (String type : CLASSPATH_VOLUMES) {
+                    if (this.lib.getContent(type).contains(entry)) {
+                        contains = true;
+                        break;
+                    }
+                }
+
+                if (contains) {
+                    List<FileObject> result = new ArrayList<FileObject>();
+                    for (URL u : lib.getContent(ServerLibraryTypeProvider.VOLUME_SOURCE)) {
                         FileObject sourceRootURL = URLMapper.findFileObject(u);
-                        if (sourceRootURL!=null) {
-                            result.add (sourceRootURL);
+                        if (sourceRootURL != null) {
+                            result.add(sourceRootURL);
                         }
                     }
-                    this.cache = (FileObject[]) result.toArray(new FileObject[result.size()]);
-                }
-                else {
+                    this.cache = result.toArray(new FileObject[result.size()]);
+                } else {
                     this.cache = new FileObject[0];
                 }
             }
@@ -190,18 +187,12 @@ public class SourceForBinaryQueryLibraryImpl implements SourceForBinaryQueryImpl
         
         public synchronized void addChangeListener (ChangeListener l) {
             assert l != null : "Listener cannot be null"; // NOI18N
-            if (this.listeners == null) {
-                this.listeners = new ArrayList ();
-            }
-            this.listeners.add (l);
+            cs.addChangeListener(l);
         }
         
         public synchronized void removeChangeListener (ChangeListener l) {
             assert l != null : "Listener cannot be null"; // NOI18N
-            if (this.listeners == null) {
-                return;
-            }
-            this.listeners.remove (l);
+            cs.removeChangeListener(l);
         }
         
         public void propertyChange (PropertyChangeEvent event) {
@@ -209,21 +200,7 @@ public class SourceForBinaryQueryLibraryImpl implements SourceForBinaryQueryImpl
                 synchronized (this) {                    
                     this.cache = null;
                 }
-                this.fireChange ();
-            }
-        }
-        
-        private void fireChange () {
-            Iterator it = null;
-            synchronized (this) {
-                if (this.listeners == null) {
-                    return;
-                }
-                it = ((ArrayList)this.listeners.clone()).iterator();
-            }
-            ChangeEvent event = new ChangeEvent (this);
-            while (it.hasNext ()) {
-                ((ChangeListener)it.next()).stateChanged(event);
+                cs.fireChange();
             }
         }
         
