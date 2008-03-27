@@ -74,6 +74,8 @@ public class CustomSaasBean extends SaasBean {
     
         this.m = m;
         
+        setHttpMethod(HttpMethodType.GET);
+        
         if(m.getHref() != null)
             setResourceClassTemplate(m.getHref());
         
@@ -126,7 +128,11 @@ public class CustomSaasBean extends SaasBean {
             }
         }
     }
-
+    
+    public CustomSaasMethod getMethod() {
+        return m;
+    }
+    
     protected List<ParameterInfo> initInputParameters() {
         return inputParams;
     }
