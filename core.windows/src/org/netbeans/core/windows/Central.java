@@ -589,8 +589,16 @@ final class Central implements ControllerHandler {
         
         TopComponent[] tcs = getModeOpenedTopComponents(mode).toArray(new TopComponent[0]);
         
-        for(int i = 0; i < tcs.length; i++) {
-            model.addModeClosedTopComponent(mode, tcs[i]);
+        for (int i = 0; i < tcs.length; i++) {
+            if (PersistenceHandler.isTopComponentPersistentWhenClosed(tcs[i])) {
+                model.addModeClosedTopComponent(mode, tcs[i]);
+            } else {
+                if (tcs[i].getClientProperty(Constants.KEEP_NON_PERSISTENT_TC_IN_MODEL_WHEN_CLOSED) != null) {
+                    model.addModeClosedTopComponent(mode, tcs[i]);
+                } else {
+                    model.removeModeTopComponent(mode, tcs[i], null);
+                }
+            }
         }
         
         ModeImpl oldActive = getActiveMode();
@@ -978,7 +986,7 @@ final class Central implements ControllerHandler {
      * @param closedTc TopComponent which is being closed in the given mode.
      * @return TopComponent to select or null (e.g. the mode will be empty after close)
      */
-    private TopComponent getRecentTopComponent( ModeImpl editorMode, TopComponent closedTc ) {
+    TopComponent getRecentTopComponent( ModeImpl editorMode, TopComponent closedTc ) {
         WindowManagerImpl wm = WindowManagerImpl.getInstance();
         TopComponent[] documents = wm.getRecentViewList();
         
@@ -1211,7 +1219,15 @@ final class Central implements ControllerHandler {
                     } else {
                         tc.putClientProperty(GROUP_SELECTED, null);
                     }
-                    model.addModeClosedTopComponent(mode, tc);
+                    if (PersistenceHandler.isTopComponentPersistentWhenClosed(tc)) {
+                        model.addModeClosedTopComponent(mode, tc);
+                    } else {
+                        if (tc.getClientProperty(Constants.KEEP_NON_PERSISTENT_TC_IN_MODEL_WHEN_CLOSED) != null) {
+                            model.addModeClosedTopComponent(mode, tc);
+                        } else {
+                            model.removeModeTopComponent(mode, tc, null);
+                        }
+                    }
                     closedTcs.add(tc);
                 }
             }
@@ -1619,11 +1635,12 @@ final class Central implements ControllerHandler {
             for (int i = 0; i < tcs.length; i++) {
                 prevMode = (ModeImpl) wmi.findMode(tcs[i]);
                 tcID = wmi.findTopComponentID(tcs[i]);
-                if (prevMode.getState() == Constants.MODE_STATE_SEPARATED) {
+                if (prevMode.getState() == Constants.MODE_STATE_SEPARATED
+                        || prevMode.getKind() == Constants.MODE_KIND_SLIDING ) {
                     prevMode = model.getModeTopComponentPreviousMode(prevMode, tcID);
                 }
-                prevIndex = prevMode.getOpenedTopComponentsIDs().indexOf( tcID );
                 if (prevMode != null) {
+                    prevIndex = prevMode.getOpenedTopComponentsIDs().indexOf( tcID );
                     model.setModeTopComponentPreviousMode(newMode, tcID, prevMode, prevIndex);
                     model.setModeTopComponentPreviousConstraints(newMode, wmi.findTopComponentID(tcs[i]), prevMode.getConstraints());
                 }
@@ -1903,7 +1920,15 @@ final class Central implements ControllerHandler {
             //an editor document is being closed so let's find the most recent editor to select
             recentTc = getRecentTopComponent( mode, tc );
         }
-        addModeClosedTopComponent(mode, tc);
+        if (PersistenceHandler.isTopComponentPersistentWhenClosed(tc)) {
+            model.addModeClosedTopComponent(mode, tc);
+        } else {
+            if (tc.getClientProperty(Constants.KEEP_NON_PERSISTENT_TC_IN_MODEL_WHEN_CLOSED) != null) {
+                model.addModeClosedTopComponent(mode, tc);
+            } else {
+                model.removeModeTopComponent(mode, tc, null);
+            }
+        }
         if( null != recentTc )
             recentTc.requestActive();
     }
@@ -2084,6 +2109,7 @@ final class Central implements ControllerHandler {
         if(isVisible()) {
             viewRequestor.scheduleRequest(
                 new ViewRequest(null, View.CHANGE_DND_PERFORMED, null, null));
+            FloatingWindowTransparencyManager.getDefault().update();
         }
     }
 
