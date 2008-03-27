@@ -58,6 +58,7 @@ import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
+import org.netbeans.modules.php.project.ui.customizer.PhpProjectProperties;
 import org.netbeans.modules.php.rt.spi.providers.Command;
 import org.netbeans.modules.php.rt.spi.providers.CommandProvider;
 import org.netbeans.modules.php.rt.spi.providers.WebServerProvider;
@@ -408,7 +409,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
          */
         public void propertyChange(PropertyChangeEvent evt) {
             String property = evt.getPropertyName();
-            if (property.startsWith(PhpProject.SRC_) && property.endsWith(PhpProject._DIR)) {
+            if (property.startsWith(PhpProjectProperties.SRC_) && property.endsWith(PhpProjectProperties._DIR)) {
                 createNodes();
             }
         }
@@ -691,29 +692,26 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
         }
         
         private Action[] getAdditionalActions(){
-                if (myActions == null) {
-                    List<Action> actions = new LinkedList<Action>();
-                    
-                    for (Action action : super.getActions(false)){
-                        actions.add(action);
-                    }
+            List<Action> actions = new LinkedList<Action>();
 
-                    // want to add recent after 'NewFile' action.
-                    // use fixed index not to search for 'NewFile' 
-                    // in seper actions each time (this wuill need to create 
-                    // CommonProjectActions.newFileAction() and check equals() )
-                    int pos = 2;
-                    for (Action action : getProviderActions()){
-                        actions.add(pos++, action);
-                    }
-                    
-                    for (Action action : getFolderActions()){
-                        actions.add(pos++, action);
-                    }
+            for (Action action : super.getActions(false)) {
+                actions.add(action);
+            }
 
-                    myActions = actions.toArray(new Action[]{});
-                }
-                return myActions;
+            // want to add recent after 'NewFile' action.
+            // use fixed index not to search for 'NewFile' 
+            // in seper actions each time (this wuill need to create 
+            // CommonProjectActions.newFileAction() and check equals() )
+            int pos = 2;
+            for (Action action : getProviderActions()) {
+                actions.add(pos++, action);
+            }
+
+            for (Action action : getFolderActions()) {
+                actions.add(pos++, action);
+            }
+
+            return actions.toArray(new Action[]{});
         }
 
         private Action[] getFolderActions() {
@@ -725,11 +723,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
                 null,
                 SystemAction.get(FileSystemAction.class)};
             return actions;
-        }
-        
-        Action[] myActions;
-
-        
+        }                
     }
 
     private boolean isInvokedForProject(){
@@ -796,29 +790,25 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
             }
         }
         
-        private Action[] getAdditionalActions(){
-                if (myActions == null) {
-                    List<Action> actions = new LinkedList<Action>();
-                    
-                    actions.add(SystemAction.get(OpenAction.class));
-                    actions.add(null);
-                        
-                    for (Action action : getProviderActions()){
-                        actions.add(action);
-                    }
-                    
-                    for (Action action : getObjectActions()){
-                        actions.add(action);
-                    }
+        private Action[] getAdditionalActions() {
+            List<Action> actions = new LinkedList<Action>();
 
-                    for (Action action : super.getActions(false)){
-                        actions.add(action);
-                    }
-                    
-                    myActions = actions.toArray(new Action[]{});
-                }
-                
-                return myActions;
+            actions.add(SystemAction.get(OpenAction.class));
+            actions.add(null);
+
+            for (Action action : getProviderActions()) {
+                actions.add(action);
+            }
+
+            for (Action action : getObjectActions()) {
+                actions.add(action);
+            }
+
+            for (Action action : super.getActions(false)) {
+                actions.add(action);
+            }
+            
+            return actions.toArray(new Action[]{});
         }
         
         private Action[] getObjectActions(){
@@ -839,9 +829,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
                 SystemAction.get(FileSystemAction.class)
             };
             return actions;
-        }
-
-        Action[] myActions;
+        }        
 
     }
 
@@ -925,7 +913,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
         
         private boolean isNotTemporaryFile(DataObject object){
                 String name = object.getPrimaryFile().getNameExt();
-                return !name.endsWith(PhpProject.TMP_FILE_POSTFIX);
+                return !name.endsWith(PhpProjectProperties.TMP_FILE_POSTFIX);
         }
         
         private final File PROJECT_XML = getProject().getHelper()
