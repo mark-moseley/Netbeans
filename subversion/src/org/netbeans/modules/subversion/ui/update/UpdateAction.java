@@ -177,7 +177,6 @@ public class UpdateAction extends ContextAction {
     
     private static void updateRoots(List<File> roots, SvnProgressSupport support, SvnClient client, boolean recursive) throws SVNClientException {
         boolean conflict = false;
-roots_loop:        
         for (Iterator<File> it = roots.iterator(); it.hasNext();) {
             File root = it.next();
             if(support.isCanceled()) {
@@ -193,13 +192,11 @@ roots_loop:
                 SvnUtils.refreshRecursively(root);
             } else {                
                 FileStatusCache cache = Subversion.getInstance().getStatusCache();
-                cache.onNotify(root, null);
+                cache.notifyChanges(root);
                 if(root.isDirectory()) {
                     File[] files = root.listFiles();
                     if(files != null) {                        
-                        for(File f : files) {
-                            cache.onNotify(f, null);
-                        }
+                        cache.notifyChanges(files);
                     }
                 }
             }
@@ -208,7 +205,6 @@ roots_loop:
                 ISVNStatus s = status[k];
                 if (SVNStatusUtils.isTextConflicted(s) || SVNStatusUtils.isPropConflicted(s)) {
                     conflict = true;
-                    break roots_loop;
                 }
             }
         }
