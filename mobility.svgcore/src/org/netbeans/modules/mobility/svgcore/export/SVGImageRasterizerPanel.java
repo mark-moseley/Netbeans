@@ -647,5 +647,3 @@ private void formatComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
         });
     }
 }
-    
-    

@@ -62,7 +62,10 @@ import javax.swing.text.BadLocationException;
 import org.netbeans.modules.mobility.svgcore.SVGDataObject;
 import org.netbeans.modules.mobility.svgcore.export.AnimationRasterizer.ColorReductionMethod;
 import org.netbeans.modules.mobility.svgcore.export.AnimationRasterizer.ImageType;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.util.Exceptions;
+import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
 /**
@@ -70,10 +73,11 @@ import org.openide.util.RequestProcessor;
  * @author Pavel Benes
  */
 public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
-    private       SpinnerNumberModel m_previewSpinnerModel;
-    private final ComponentGroup     m_startTime;    
-    private final ComponentGroup     m_stopTime;    
-    private       Thread             m_sizeCalculationThread;
+    private          SpinnerNumberModel m_previewSpinnerModel;
+    private final    ComponentGroup     m_startTime;    
+    private final    ComponentGroup     m_stopTime;    
+    private          Thread             m_sizeCalculationThread;
+    private volatile boolean            m_processingStopped = false;
 
     /** Creates new form SVGAnimationRasterizer */
     public SVGAnimationRasterizerPanel(SVGDataObject dObj) throws IOException, BadLocationException {
@@ -218,7 +222,7 @@ public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
                     .add(sizePanelLayout.createSequentialGroup()
                         .add(12, 12, 12)
                         .add(keepRatio)))
-                .addContainerGap(97, Short.MAX_VALUE))
+                .addContainerGap(106, Short.MAX_VALUE))
         );
         sizePanelLayout.setVerticalGroup(
             sizePanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -291,7 +295,7 @@ public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
                 .add(optionsPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(84, 84, 84)
-                        .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 141, Short.MAX_VALUE))
+                        .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 136, Short.MAX_VALUE))
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(jLabel2)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
@@ -299,7 +303,7 @@ public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
                         .addContainerGap())
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(progressiveCheckBox)
-                        .addContainerGap(112, Short.MAX_VALUE))
+                        .addContainerGap(128, Short.MAX_VALUE))
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(optionsPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                             .add(compressionLabel)
@@ -312,12 +316,12 @@ public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
                         .add(40, 40, 40))
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(transparentCheckBox)
-                        .addContainerGap(108, Short.MAX_VALUE))
+                        .addContainerGap(124, Short.MAX_VALUE))
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(optionsPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING, false)
                             .add(org.jdesktop.layout.GroupLayout.LEADING, reductionCombo, 0, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                             .add(org.jdesktop.layout.GroupLayout.LEADING, reductionLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                        .addContainerGap(60, Short.MAX_VALUE))))
+                        .addContainerGap(85, Short.MAX_VALUE))))
         );
         optionsPanelLayout.setVerticalGroup(
             optionsPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -368,20 +372,20 @@ public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
                     .add(timeLinePanelLayout.createSequentialGroup()
                         .add(12, 12, 12)
                         .add(framesPerSecLabel)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 37, Short.MAX_VALUE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 52, Short.MAX_VALUE)
                         .add(framesPerSecSpinner, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 46, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                    .add(startTimeSlider, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 199, Short.MAX_VALUE)
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, stopTimeSlider, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 199, Short.MAX_VALUE)
+                    .add(startTimeSlider, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 201, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, stopTimeSlider, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 201, Short.MAX_VALUE)
                     .add(timeLinePanelLayout.createSequentialGroup()
                         .addContainerGap()
                         .add(timeLinePanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                             .add(timeLinePanelLayout.createSequentialGroup()
                                 .add(stopTimeLabel)
-                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 44, Short.MAX_VALUE)
+                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 60, Short.MAX_VALUE)
                                 .add(stopTimeSpinner, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 84, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                             .add(timeLinePanelLayout.createSequentialGroup()
                                 .add(startTimeLabel)
-                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 43, Short.MAX_VALUE)
+                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 59, Short.MAX_VALUE)
                                 .add(startTimeSpinner, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 83, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))))
                 .addContainerGap())
         );
@@ -444,7 +448,7 @@ public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
                     .add(radioExportAll)
                     .add(allFramesCheckBox)
                     .add(radioExportCurrent))
-                .addContainerGap(18, Short.MAX_VALUE))
+                .addContainerGap(46, Short.MAX_VALUE))
         );
         exportPanelLayout.setVerticalGroup(
             exportPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -507,8 +511,8 @@ public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(jLabel5)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(previewAnimationSizeText, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 126, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                    .add(previewFileText, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 301, Short.MAX_VALUE)
+                        .add(previewAnimationSizeText, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 162, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                    .add(previewFileText, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 312, Short.MAX_VALUE)
                     .add(previewFormatText, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 55, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .addContainerGap())
         );
@@ -583,7 +587,7 @@ public final class SVGAnimationRasterizerPanel extends SVGRasterizerPanel {
                         .add(jLabel9)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(previewMaxFrameText, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 35, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 62, Short.MAX_VALUE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 88, Short.MAX_VALUE)
                         .add(jLabel7)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(previewCurrentTimeText, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 56, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
@@ -771,8 +775,15 @@ private void formatComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
         return (ColorReductionMethod) reductionCombo.getSelectedItem();
     }
     
+    public void stopProcessing() {
+        m_processingStopped = true;
+        if ( m_sizeCalculationThread != null) {
+            m_sizeCalculationThread.interrupt();
+        }
+    }
+    
     protected void updateImage(JComponent source, boolean isOutputChanged) {
-        if ( !m_updateInProgress) {
+        if ( !m_updateInProgress && !m_processingStopped) {
             m_updateInProgress = true;
             //System.out.println("Updating model " + source);
             final JLabel label = new JLabel( "Updating image...");
@@ -828,22 +839,33 @@ private void formatComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
                 if ( m_sizeCalculationThread != null) {
                     m_sizeCalculationThread.interrupt();
                 }
+                final boolean [] blockUpdate = { false};
                 m_sizeCalculationThread = new Thread() {
                     public void run() {
                         try {
                             AnimationRasterizer.calculateAnimationSize(getSVGImage(), 
                                     SVGAnimationRasterizerPanel.this, new AnimationRasterizer.ProgressUpdater() {
                                 public void updateProgress(final String text) {
-                                    SwingUtilities.invokeLater(new Runnable() {
-                                        public void run() {
-                                            previewAnimationSizeText.setText(text);
-                                        }
-                                    });
+                                    if ( !blockUpdate[0]) {
+                                        updatePreviewText(text);
+                                    }
                                 }
                             });
+                            updateSafeValues();
                         } catch( InterruptedException e) {
+                        } catch( javax.imageio.IIOException e) {
+                            blockUpdate[0] = true;
+                            if ( !m_processingStopped) {
+                                String msg = NbBundle.getMessage(SVGAnimationRasterizerPanel.class, "MSG_IMG_ENCODING_ERROR");   
+                                updatePreviewText(msg + ".");
+                                msg += ": " + e.getLocalizedMessage();
+                                DialogDisplayer.getDefault().notify(
+                                        new NotifyDescriptor.Message( msg, NotifyDescriptor.ERROR_MESSAGE));
+                                restoreSafeValues();
+                            }
                         } catch (Exception ex) {
                             Exceptions.printStackTrace(ex);
+                            restoreSafeValues();
                         }
                     }
                 };
@@ -883,6 +905,14 @@ private void formatComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
         }
     }
     
+    private void updatePreviewText(final String msg) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                previewAnimationSizeText.setText(msg);
+            }
+        });
+    }
+    
     private void updateTimelineBounds(JComponent source) {
         ComponentGroup.ComponentWrapper wrapper;
         if ( (wrapper = m_startTime.findWrapper(source)) != null) {
@@ -894,5 +924,28 @@ private void formatComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
             startTimeSlider.setExtent( startTimeSlider.getMaximum() - Math.round( value * 100));
             ((SpinnerNumberModel)startTimeSpinner.getModel()).setMaximum( new Double(value));
         }
+    }
+    
+    private double  m_backupFramesPerSec;
+    private boolean m_backupAllFramesInSingleImage;
+    private double  m_backupStartTime;
+    private double  m_backupStopTime;
+    
+    private void updateSafeValues() {
+        m_backupStartTime              = getStartTime();
+        m_backupStopTime               = getEndTime();
+        m_backupFramesPerSec           = getFramesPerSecond();
+        m_backupAllFramesInSingleImage = isInSingleImage();
+    }
+    
+    private void restoreSafeValues() {
+        SwingUtilities.invokeLater( new Runnable() {
+            public void run() {
+                framesPerSecSpinner.setValue( Double.valueOf(m_backupFramesPerSec));
+                allFramesCheckBox.setSelected(m_backupAllFramesInSingleImage);
+                startTimeSpinner.setValue( Double.valueOf(m_backupStartTime));
+                stopTimeSpinner.setValue( Double.valueOf(m_backupStopTime));
+            };
+        });
     }
 }
