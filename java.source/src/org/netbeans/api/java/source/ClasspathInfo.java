@@ -57,7 +57,7 @@ import org.netbeans.modules.java.source.parsing.OutputFileManager;
 import org.netbeans.modules.java.source.parsing.ProxyFileManager;
 import org.netbeans.modules.java.source.parsing.SourceFileManager;
 import org.netbeans.modules.java.preprocessorbridge.spi.JavaFileFilterImplementation;
-import org.netbeans.modules.java.source.classpath.GlobalSourcePath;
+import org.netbeans.modules.java.source.classpath.SourcePath;
 import org.netbeans.modules.java.source.usages.ClasspathInfoAccessor;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.openide.ErrorManager;
@@ -74,7 +74,7 @@ public final class ClasspathInfo {
     private static final ClassPath EMPTY_PATH = ClassPathSupport.createClassPath(new URL[0]);
     
     static {
-        ClasspathInfoAccessor.INSTANCE = new ClasspathInfoAccessorImpl ();
+        ClasspathInfoAccessor.setINSTANCE(new ClasspathInfoAccessorImpl());
         try {
             Class.forName(ClassIndex.class.getName(), true, CompilationInfo.class.getClassLoader());
         } catch (ClassNotFoundException ex) {            
@@ -111,14 +111,14 @@ public final class ClasspathInfo {
         this.cachedCompileClassPath = CacheClassPath.forClassPath(this.compileClassPath);
 	this.cachedBootClassPath.addPropertyChangeListener(WeakListeners.propertyChange(this.cpListener,this.cachedBootClassPath));
 	this.cachedCompileClassPath.addPropertyChangeListener(WeakListeners.propertyChange(this.cpListener,this.cachedCompileClassPath));
-	if ( srcCp != null && !GlobalSourcePath.getDefault().isLibrary(srcCp)) {
-            this.srcClassPath = srcCp;
-            this.outputClassPath = CacheClassPath.forSourcePath (this.srcClassPath);
-	    this.srcClassPath.addPropertyChangeListener(WeakListeners.propertyChange(this.cpListener,this.srcClassPath));
-	}
-        else {
+        if (srcCp == null) {
             this.srcClassPath = ClassPathSupport.createClassPath(new URL[0]);
             this.outputClassPath = ClassPathSupport.createClassPath(new URL[0]);
+        }
+        else {
+            this.srcClassPath = SourcePath.create(srcCp, backgroundCompilation);
+            this.outputClassPath = CacheClassPath.forSourcePath (this.srcClassPath);
+	    this.srcClassPath.addPropertyChangeListener(WeakListeners.propertyChange(this.cpListener,this.srcClassPath));
         }
         this.backgroundCompilation = backgroundCompilation;
         this.ignoreExcludes = ignoreExcludes;
@@ -126,7 +126,13 @@ public final class ClasspathInfo {
     }
     
     public String toString() {
-        return "ClasspathInfo boot:[" + cachedBootClassPath + "],compile:[" + cachedCompileClassPath + "],src:[" + srcClassPath + "]";  //NOI18N
+        return String.format("ClasspathInfo boot: %s, compile: %s, src: %s, internal boot: %s, internal compile: %s, internal out: %s", //NOI18N
+                bootClassPath,
+                compileClassPath,
+                srcClassPath,
+                cachedBootClassPath,
+                cachedCompileClassPath,
+                outputClassPath);        
     }
     
     // Factory methods ---------------------------------------------------------
