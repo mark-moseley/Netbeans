@@ -64,6 +64,7 @@ import org.netbeans.modules.xml.schema.abe.UIUtilities;
 import org.netbeans.modules.xml.schema.abe.action.ShowDesignAction;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.schema.model.SchemaModel;
+import org.netbeans.modules.xml.schema.ui.basic.DesignGotoType;
 import org.netbeans.modules.xml.schema.ui.basic.SchemaGotoType;
 import org.netbeans.modules.xml.xam.Component;
 import org.netbeans.modules.xml.xam.Nameable;
@@ -263,6 +264,7 @@ public abstract class ABEAbstractNode extends AbstractNode
     private static final GotoType[] GOTO_TYPES = new GotoType[] {
         new SourceGotoType(),
         new SchemaGotoType(),
+        new DesignGotoType(),        
     };
     
     
@@ -461,8 +463,8 @@ public abstract class ABEAbstractNode extends AbstractNode
         // try rename silently
         
         try {
-            
-            context.setUserInducedEventMode(true);
+            if(context != null)
+                context.setUserInducedEventMode(true);
             SchemaModel sm = model.getSchemaModel();
           //  RefactoringManager.getInstance().execute(request, false);
             SharedUtils.silentRename((Nameable)ref,value, false);
