@@ -255,6 +255,20 @@ public class FileModelTest extends TraceModelTestBase {
     public void testFunctionsAndVariables() throws Exception {
         performTest("functions_and_variables.cc"); // NOI18N
     }
+
+    public void testStaticFunction() throws Exception {
+        performTest("static_function.cc"); // NOI18N
+    }
+
+    public void testTypename() throws Exception {
+        // IZ 131012 : missed declaration with "typename" keyword
+        performTest("typename.cc"); // NOI18N
+    }
+    
+    public void testArray() throws Exception {
+        // IZ 130678 : incorrect offsets for type of array delcaration
+        performTest("array.cc"); // NOI18N
+    }
     
     /////////////////////////////////////////////////////////////////////
     // FAILS
