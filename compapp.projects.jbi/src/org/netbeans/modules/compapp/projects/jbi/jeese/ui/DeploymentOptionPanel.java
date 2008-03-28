@@ -47,6 +47,9 @@
 
 package org.netbeans.modules.compapp.projects.jbi.jeese.ui;
 
+import java.util.List;
+import javax.swing.JLabel;
+import org.netbeans.modules.compapp.javaee.codegen.model.EndpointCfg;
 import org.openide.awt.Mnemonics;
 import org.openide.util.NbBundle;
 
@@ -55,15 +58,16 @@ import org.openide.util.NbBundle;
  * @author  gpatil
  */
 public class DeploymentOptionPanel extends javax.swing.JPanel {
-    
+
     /**
      * Creates new form DeploymentOptionPanel
      */
-    public DeploymentOptionPanel() {
+    public DeploymentOptionPanel(List<EndpointCfg> cfgs) {
+        this.epCfgs = cfgs;
         initComponents();
         custInit();
     }
-        
+
     public void isDeployThruCA(boolean dep){
         this.jCheckBox1.setSelected(dep);
     }
@@ -72,13 +76,22 @@ public class DeploymentOptionPanel extends javax.swing.JPanel {
         return this.jCheckBox1.isSelected();
     }
 
+    public List<EndpointCfg> getEndpointCfgs(){
+        if ((this.epCfgs == null) || (this.epCfgs.size() <= 0)){
+            return this.epCfgs;
+        }
+
+        return this.cfgPnl.getEndpointCfgs();
+    }
+
     private void custInit(){
+        addEndpointCnofigPanel();
         Mnemonics.setLocalizedText(jCheckBox1, NbBundle.getMessage(
                 DeploymentOptionPanel.class, "LBL_depThruCA"));//NOI18N
         jCheckBox1.setToolTipText(NbBundle.getMessage(
                 DeploymentOptionPanel.class,"TT_depThruCA"));//NOI18N
     }
-    
+
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
@@ -86,9 +99,16 @@ public class DeploymentOptionPanel extends javax.swing.JPanel {
      */
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
+        java.awt.GridBagConstraints gridBagConstraints;
 
         jCheckBox1 = new javax.swing.JCheckBox();
+        jlblConfigEffect = new javax.swing.JLabel();
+        jLabel1 = new javax.swing.JLabel();
+        jLabel2 = new javax.swing.JLabel();
 
+        setLayout(new java.awt.GridBagLayout());
+
+        org.openide.awt.Mnemonics.setLocalizedText(jCheckBox1, org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "LBL_depThruCA")); // NOI18N
         jCheckBox1.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         jCheckBox1.setMargin(new java.awt.Insets(0, 0, 0, 0));
         jCheckBox1.addActionListener(new java.awt.event.ActionListener() {
@@ -96,32 +116,83 @@ public class DeploymentOptionPanel extends javax.swing.JPanel {
                 jCheckBox1ActionPerformed(evt);
             }
         });
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 3;
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
+        gridBagConstraints.insets = new java.awt.Insets(5, 10, 5, 5);
+        add(jCheckBox1, gridBagConstraints);
+        jCheckBox1.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "ASN_Deploy_ChkBx")); // NOI18N
+        jCheckBox1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "ASD_Deploy_ChkBx")); // NOI18N
 
-        org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
-        this.setLayout(layout);
-        layout.setHorizontalGroup(
-            layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(layout.createSequentialGroup()
-                .add(20, 20, 20)
-                .add(jCheckBox1)
-                .addContainerGap(43, Short.MAX_VALUE))
-        );
-        layout.setVerticalGroup(
-            layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                .add(20, 20, 20)
-                .add(jCheckBox1)
-                .addContainerGap(12, Short.MAX_VALUE))
-        );
+        jlblConfigEffect.setText(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "LBL_ConfigEffect")); // NOI18N
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 4;
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
+        gridBagConstraints.insets = new java.awt.Insets(5, 10, 5, 5);
+        add(jlblConfigEffect, gridBagConstraints);
+        jlblConfigEffect.getAccessibleContext().setAccessibleName("configEffect");
+
+        jLabel1.setText(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "LBL_Endpoints")); // NOI18N
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 0;
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
+        gridBagConstraints.insets = new java.awt.Insets(5, 10, 5, 5);
+        add(jLabel1, gridBagConstraints);
+        jLabel1.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "ASN_Endpoints")); // NOI18N
+        jLabel1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "ASD_Endpoints")); // NOI18N
+
+        jLabel2.setText(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "LBL_Deployment")); // NOI18N
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 2;
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
+        gridBagConstraints.insets = new java.awt.Insets(5, 10, 5, 5);
+        add(jLabel2, gridBagConstraints);
+        jLabel2.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "ASN_Deployment")); // NOI18N
+        jLabel2.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DeploymentOptionPanel.class, "ASD_Deployment")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
     private void jCheckBox1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckBox1ActionPerformed
 // TODO add your handling code here:
     }//GEN-LAST:event_jCheckBox1ActionPerformed
-    
-    
+
+
+    private void  addEndpointCnofigPanel(){
+        if ((this.epCfgs != null) && (this.epCfgs.size() > 0)){
+            cfgPnl = new EndpointConfigPanel(this.epCfgs);
+            java.awt.GridBagConstraints gridBagConstraints = new java.awt.GridBagConstraints();
+            gridBagConstraints.gridx = 0;
+            gridBagConstraints.gridy = 1;
+            gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
+            gridBagConstraints.weightx = 0.5;
+            gridBagConstraints.weighty = 0.5;
+            gridBagConstraints.insets = new java.awt.Insets(5, 5, 5, 5);
+            add(cfgPnl, gridBagConstraints);
+        } else {
+            JLabel msgLbl = new JLabel();
+            msgLbl.setText(NbBundle.getMessage(DeploymentOptionPanel.class, "MSG_NoEndpoints"));//NOI18N
+            java.awt.GridBagConstraints gridBagConstraints = new java.awt.GridBagConstraints();
+            gridBagConstraints.gridx = 0;
+            gridBagConstraints.gridy = 1;
+            gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
+            gridBagConstraints.weightx = 0.5;
+            gridBagConstraints.weighty = 0.5;
+            gridBagConstraints.insets = new java.awt.Insets(5, 10, 10, 5);
+            add(msgLbl, gridBagConstraints);
+        }
+    }
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JCheckBox jCheckBox1;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jlblConfigEffect;
     // End of variables declaration//GEN-END:variables
-    
+
+    private List<EndpointCfg> epCfgs = null;
+    private EndpointConfigPanel cfgPnl = null;
 }
+
