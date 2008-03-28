@@ -37,58 +37,43 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.mysql.installations;
+package org.netbeans.modules.db.mysql;
 
-import org.netbeans.modules.db.mysql.Installation;
-import org.netbeans.modules.db.mysql.util.Utils;
-import org.openide.util.Utilities;
+import org.netbeans.api.db.explorer.ConnectionListener;
+import org.netbeans.api.db.explorer.ConnectionManager;
+import org.netbeans.api.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.mysql.util.DatabaseUtils.URLParser;
 
 /**
- * Webstack version on SXDE.
+ * Listen to changes on the connection list, and if we're not registered
+ * and a MySQL connection is added, register the MySQL 
  * 
  * @author David Van Couvering
  */
-public class SXDEWebStackInstallation implements Installation {
-    
-    private static final SXDEWebStackInstallation DEFAULT = new
-            SXDEWebStackInstallation();
-    
-    private static final String SVC_EXE = "/usr/bin/svcadm"; // NOI18N
-    private static final String GKSU = "/usr/bin/gksu"; // NOI18N
-    private static final String MYSQLD_PATH = "/usr/mysql/bin/mysqld"; // NOI18N
-    private static final String SVC_NAME = 
-            "svc:/application/database/mysql:version_50"; // NOI18N
+public class DbExplorerConnectionListener implements ConnectionListener {
+
+    public void connectionsChanged() {
+        MySQLOptions options = MySQLOptions.getDefault();
         
-    public static SXDEWebStackInstallation getDefault() {
-        return DEFAULT;
+        if ( options.isProviderRegistered() || options.isProviderRemoved() ) {
+            return;
+        }
+
+        DatabaseConnection[] connections = 
+            ConnectionManager.getDefault().getConnections();
+
+        for ( DatabaseConnection conn : connections ) {
+            if ( conn.getDriverClass().equals(MySQLOptions.getDriverClass()) ) {
+                ServerInstance instance = ServerInstance.getDefault();
+                URLParser parser = new URLParser(conn.getDatabaseURL());
+                instance.setHost(parser.getHost());
+                instance.setPort(parser.getPort());
+                instance.setUser(conn.getUser());
+                instance.setPassword(conn.getPassword());
+                
+                ServerNodeProvider.getDefault().setRegistered(true);
+            }
+        }
     }
 
-    protected SXDEWebStackInstallation() {
-    }
-    
-    public String[] getStartCommand() {
-        return new String[] { GKSU, SVC_EXE + " -v enable " + SVC_NAME};
-    }
-
-    public String[] getStopCommand() {
-        return new String[] { GKSU, SVC_EXE + " -v disable " + SVC_NAME};
-    }
-    
-    public boolean isInstalled() {
-        return Utilities.isUnix() && Utils.isValidExecutable(SVC_EXE) &&
-                Utils.isValidExecutable(GKSU) && 
-                Utils.isValidExecutable(MYSQLD_PATH);
-    }
-
-    public boolean isStackInstall() {
-        return true;
-    }
-
-    public String[] getAdminCommand() {
-        return new String[] { "", ""};
-    }
-
-    public String getDefaultPort() {
-        return "3306"; // NOI18N
-    }
 }

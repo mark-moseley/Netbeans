@@ -39,80 +39,84 @@
 
 package org.netbeans.modules.db.mysql;
 
-import org.netbeans.modules.db.mysql.util.DatabaseUtils;
-import java.util.List;
-import org.netbeans.api.db.explorer.ConnectionManager;
-import org.netbeans.api.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.mysql.util.Utils;
+import javax.swing.Action;
+import org.netbeans.api.db.explorer.DatabaseException;
+import org.openide.actions.DeleteAction;
+import org.openide.nodes.AbstractNode;
+import org.openide.nodes.Children;
 import org.openide.nodes.Node;
-import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
-import org.openide.util.actions.CookieAction;
+import org.openide.util.actions.SystemAction;
 
 /**
- * Connect to a database
+ * Represents a database. 
  * 
  * @author David Van Couvering
  */
-public class ConnectAction extends CookieAction {
-    private static final Class[] COOKIE_CLASSES = new Class[] {
-        DatabaseModel.class
-    };
-
-    public ConnectAction() {
-        putValue("noIconInMenu", Boolean.TRUE);
-    }    
+class DatabaseNode extends AbstractNode implements Comparable {
+    
+    // I'd like a less generic icon, but this is what we have for now...
+    private static final String ICON_BASE = "org/netbeans/modules/db/mysql/resources/database.gif";
+    
+    private final DatabaseModel model;    
+    
+    public DatabaseNode(DatabaseModel model) {
+        super(Children.LEAF);
+        this.model = model;
+        setDisplayName(model.getDisplayName());
+        setShortDescription(model.getShortDescription());
+        setIconBaseWithExtension(ICON_BASE);
+    }
         
-    protected boolean asynchronous() {
-        return false;
-    }
-
-    public String getName() {
-        return NbBundle.getBundle(ConnectAction.class).
-                getString("LBL_ConnectAction");
-    }
-
-    public HelpCtx getHelpCtx() {
-        return new HelpCtx(ConnectAction.class);
+   
+    @Override
+    public Action[] getActions(boolean context) {
+        if ( context ) {
+            return super.getActions(context);
+        } else {
+            return new SystemAction[] {
+                SystemAction.get(ConnectAction.class),
+                SystemAction.get(DeleteAction.class)
+            };
+        }
     }
     
     @Override
-    public boolean enable(Node[] activatedNodes) {
+    public boolean canDestroy() {
         return true;
     }
-
-
+    
     @Override
-    protected int mode() {
-        return MODE_EXACTLY_ONE;
-    }
-
-    @Override
-    protected Class<?>[] cookieClasses() {
-        return COOKIE_CLASSES;
-    }
-
-    @Override
-    protected void performAction(Node[] activatedNodes) {
-        if ( activatedNodes == null || activatedNodes.length == 0 ) {
-            return;
-        }
-        DatabaseModel model = activatedNodes[0].getCookie(DatabaseModel.class);        
+    public void destroy() {
         ServerInstance server = model.getServer();
         String dbname = model.getDbName();
-        
-        List<DatabaseConnection> conns = 
-                DatabaseUtils.findDatabaseConnections(
-                    server.getURL(dbname));
-        
-        if ( conns.size() == 0 ) {
-            ConnectionManager.getDefault().
-                showAddConnectionDialogFromEventThread(
-                    DatabaseUtils.getJDBCDriver(),
-                    server.getURL(dbname),
-                    server.getUser(),
-                    null);
-        } else {
-            ConnectionManager.getDefault().showConnectionDialog(conns.get(0));            
-        }      
+
+        try {                
+            server.dropDatabase(dbname);
+        } catch ( DatabaseException dbe ) {
+            String msg = NbBundle.getMessage(DatabaseNode.class,
+                    "MSG_ErrorDeletingDatabase", model.getDbName());
+            Utils.displayError(msg, dbe);
+        }
+
     }
+    
+    @Override
+    @SuppressWarnings("unchecked")
+    public Node.Cookie getCookie(Class cls) {
+        if ( cls == DatabaseModel.class ) {
+            return model;
+        } else {
+            return super.getCookie(cls);
+        }
+        
+    }
+    
+    public int compareTo(Object other) {
+        Node othernode = (Node)other;
+        return this.getDisplayName().compareTo(othernode.getDisplayName());
+    }
+
+        
 }

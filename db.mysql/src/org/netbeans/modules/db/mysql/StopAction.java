@@ -36,51 +36,85 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.db.mysql;
 
-import org.netbeans.modules.db.mysql.util.DatabaseUtils;
-import java.util.List;
-import org.netbeans.api.db.explorer.ConnectionManager;
-import org.netbeans.api.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.mysql.util.Utils;
+import org.netbeans.api.db.explorer.DatabaseException;
+import org.netbeans.modules.db.mysql.util.DatabaseUtils.ConnectStatus;
+import org.netbeans.modules.db.mysql.ui.PropertiesDialog;
+import org.netbeans.modules.db.mysql.ui.PropertiesDialog.Tab;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.CookieAction;
 
 /**
- * Connect to a database
- * 
  * @author David Van Couvering
  */
-public class ConnectAction extends CookieAction {
-    private static final Class[] COOKIE_CLASSES = new Class[] {
-        DatabaseModel.class
-    };
-
-    public ConnectAction() {
+public class StopAction extends CookieAction {
+    private static final Class[] COOKIE_CLASSES = 
+            new Class[] { ServerInstance.class };
+    
+    public StopAction() {
         putValue("noIconInMenu", Boolean.TRUE);
-    }    
-        
+    }
+
+    @Override
     protected boolean asynchronous() {
         return false;
     }
 
     public String getName() {
-        return NbBundle.getBundle(ConnectAction.class).
-                getString("LBL_ConnectAction");
+        return NbBundle.getBundle(StopAction.class).
+                getString("LBL_StopAction");
     }
 
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(ConnectAction.class);
+        return new HelpCtx(StopAction.class);
     }
-    
+
     @Override
     public boolean enable(Node[] activatedNodes) {
-        return true;
+        if ( activatedNodes == null || activatedNodes.length == 0 ) {
+            return false;
+        }
+        
+        ServerInstance server = activatedNodes[0].getCookie(ServerInstance.class);
+        
+        return server != null && server.isConnected();
     }
 
+    @Override
+    protected void performAction(Node[] activatedNodes) {
+        ServerInstance server = activatedNodes[0].getCookie(ServerInstance.class);
+        String path = server.getStopPath();
+        String message = NbBundle.getMessage(AdministerAction.class,
+                "MSG_NoStopPath");
+        PropertiesDialog dialog = new PropertiesDialog(server);
 
+
+        while ( path == null || path.equals("")) {
+            
+            if ( ! Utils.displayConfirmDialog(message) ) {
+                return;
+            }  
+            
+            if ( ! dialog.displayDialog(Tab.ADMIN) ) {
+                return;
+            }
+            
+            path = server.getAdminPath();
+        }
+
+        try {
+            server.stop();                
+        } catch ( DatabaseException dbe ) {
+            Utils.displayError(NbBundle.getMessage(StopAction.class,
+                        "MSG_UnableToStopServer"), 
+                    dbe);
+        }
+    }
+    
     @Override
     protected int mode() {
         return MODE_EXACTLY_ONE;
@@ -89,30 +123,5 @@ public class ConnectAction extends CookieAction {
     @Override
     protected Class<?>[] cookieClasses() {
         return COOKIE_CLASSES;
-    }
-
-    @Override
-    protected void performAction(Node[] activatedNodes) {
-        if ( activatedNodes == null || activatedNodes.length == 0 ) {
-            return;
-        }
-        DatabaseModel model = activatedNodes[0].getCookie(DatabaseModel.class);        
-        ServerInstance server = model.getServer();
-        String dbname = model.getDbName();
-        
-        List<DatabaseConnection> conns = 
-                DatabaseUtils.findDatabaseConnections(
-                    server.getURL(dbname));
-        
-        if ( conns.size() == 0 ) {
-            ConnectionManager.getDefault().
-                showAddConnectionDialogFromEventThread(
-                    DatabaseUtils.getJDBCDriver(),
-                    server.getURL(dbname),
-                    server.getUser(),
-                    null);
-        } else {
-            ConnectionManager.getDefault().showConnectionDialog(conns.get(0));            
-        }      
     }
 }
