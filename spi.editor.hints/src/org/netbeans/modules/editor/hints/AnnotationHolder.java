@@ -531,6 +531,11 @@ public class AnnotationHolder implements ChangeListener, PropertyChangeListener,
         Logger.getLogger(AnnotationHolder.class.getName()).log(Level.FINE, "updateAnnotations: errorsToUpdate={0}", errorsToUpdate);
         
         for (ErrorDescription e : errorsToUpdate) {
+            //TODO: #115340: e can be for an unknown reason null:
+            if (e == null) {
+                continue;
+            }
+            
             LazyFixList l = e.getFixes();
 
             if (l.probablyContainsFixes() && !l.isComputed()) {
@@ -597,14 +602,14 @@ public class AnnotationHolder implements ChangeListener, PropertyChangeListener,
         }
     }
     
-    private List<LazyFixList> computeFixes(List<ErrorDescription> errors) {
+    private LazyFixList computeFixes(List<ErrorDescription> errors) {
         List<LazyFixList> result = new ArrayList<LazyFixList>();
         
         for (ErrorDescription e : errors) {
             result.add(e.getFixes());
         }
         
-        return result;
+        return ErrorDescriptionFactory.lazyListForDelegates(result);
     }
     
     private void updateAnnotationOnLine(Position line) throws BadLocationException {
@@ -649,7 +654,7 @@ public class AnnotationHolder implements ChangeListener, PropertyChangeListener,
             }
         }
         
-        LazyFixList fixes = ErrorDescriptionFactory.lazyListForDelegates(computeFixes(hasErrors ? trueErrors : others));
+        FixData fixes = new FixData(computeFixes(trueErrors), computeFixes(others));
         
         ParseErrorAnnotation pea = new ParseErrorAnnotation(mostImportantSeverity, fixes, description.toString(), line, this);
         Annotation previous = line2Annotations.put(line, pea);
@@ -700,7 +705,20 @@ public class AnnotationHolder implements ChangeListener, PropertyChangeListener,
             List<int[]> currentHighlights = new ArrayList<int[]>();
             
             for (ErrorDescription e : filteredDescriptions) {
-                int[] h = new int[] {e.getRange().getBegin().getPosition().getOffset(), e.getRange().getEnd().getPosition().getOffset()};
+                int beginOffset = e.getRange().getBegin().getPosition().getOffset();
+                int endOffset   = e.getRange().getEnd().getPosition().getOffset();
+                
+                if (endOffset < beginOffset) {
+                    //see issue #112566
+                    int swap = endOffset;
+                    
+                    endOffset = beginOffset;
+                    beginOffset = swap;
+                    
+                    Logger.getLogger(AnnotationHolder.class.getName()).warning("Incorrect highlight in ErrorDescription, attach your messages.log to issue #112566: " + e.toString());
+                }
+                
+                int[] h = new int[] {beginOffset, endOffset};
                 
                 OUT: for (Iterator<int[]> it = currentHighlights.iterator(); it.hasNext() && h != null; ) {
                     int[] hl = it.next();
