@@ -33,9 +33,7 @@ import org.netbeans.modules.bpel.mapper.tree.models.VariableTreeModel;
 import org.netbeans.modules.bpel.mapper.tree.search.LoggingNodeFinder;
 import org.netbeans.modules.bpel.mapper.tree.spi.MapperTcContext;
 import org.netbeans.modules.bpel.mapper.tree.spi.TreeItemFinder;
-import org.netbeans.modules.bpel.model.api.Assign;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
-import org.netbeans.modules.bpel.model.api.Copy;
 import org.netbeans.modules.bpel.model.api.Expression;
 import org.netbeans.modules.bpel.model.api.ExtensibleElements;
 import org.netbeans.modules.bpel.model.api.From;
@@ -43,6 +41,7 @@ import org.netbeans.modules.bpel.model.ext.logging.api.Alert;
 import org.netbeans.modules.bpel.model.ext.logging.api.Location;
 import org.netbeans.modules.bpel.model.ext.logging.api.Log;
 import org.netbeans.modules.bpel.model.ext.logging.api.Trace;
+import org.netbeans.modules.soa.mappercore.Mapper;
 import org.netbeans.modules.soa.mappercore.model.Graph;
 import org.netbeans.modules.soa.mappercore.model.MapperModel;
 
@@ -73,10 +72,9 @@ public class LoggingMapperModelFactory extends BpelMapperModelFactory {
     public MapperModel constructModel(
             MapperTcContext mapperTcContext, BpelDesignContext context) {
         //
-        BpelChangeProcessor changeProcessor = 
-                new BpelChangeProcessor(new LoggingBpelModelUpdater(mapperTcContext));
-        mapperTcContext.getDesignContextController().
-                setBpelModelUpdateSource(changeProcessor);
+        Mapper mapper = mapperTcContext.getMapper();
+        BpelChangeProcessor changeProcessor = new BpelChangeProcessor(
+                mapper, new LoggingBpelModelUpdater(mapperTcContext));
         //
 //        BpelEntity bpelEntity = context.getBpelEntity();
         BpelEntity bpelEntity = context.getContextEntity();
@@ -86,46 +84,50 @@ public class LoggingMapperModelFactory extends BpelMapperModelFactory {
         LoggingAlertingTreeModel targetModel = 
                 new LoggingAlertingTreeModel((ExtensibleElements)bpelEntity);
         
-        if (bpelEntity instanceof Copy) {
-            Copy copy = (Copy)bpelEntity;
+//        if (bpelEntity instanceof Copy) {
+//            Copy copy = (Copy)bpelEntity;
+//            //
+//            EmptyTreeModel sourceModel = new EmptyTreeModel();
+//            VariableTreeModel sourceVariableModel = new VariableTreeModel(context);
+//            sourceModel.addExtensionModel(sourceVariableModel);
+//            PartnerLinkTreeExtModel pLinkExtModel = 
+//                    new PartnerLinkTreeExtModel(copy, true);
+//            sourceModel.addExtensionModel(pLinkExtModel);
+//            //
+//            BpelMapperModel newMapperModel = new BpelMapperModel(
+//                    mapperTcContext, changeProcessor, sourceModel, targetModel);
+//            //
+//            addTraceGraph(copy, newMapperModel);
+//            postProcess(newMapperModel);
+//            //
+//            return newMapperModel;
+//            //
+//        } else if (bpelEntity instanceof Assign) {
+//            Assign assign = (Assign)bpelEntity;
+//            //
+//            EmptyTreeModel sourceModel = new EmptyTreeModel();
+//            VariableTreeModel variableModel = new VariableTreeModel(context);
+//            sourceModel.addExtensionModel(variableModel);
+//            PartnerLinkTreeExtModel pLinkExtModel = 
+//                    new PartnerLinkTreeExtModel(assign, true);
+//            sourceModel.addExtensionModel(pLinkExtModel);
+//            //
+//            BpelMapperModel newMapperModel = new BpelMapperModel(
+//                    mapperTcContext, changeProcessor, sourceModel, targetModel);
+//            addTraceGraph(assign, newMapperModel);
+//            postProcess(newMapperModel);
+//            //
+//            return newMapperModel;
+//            //
+//        } else {
             //
             EmptyTreeModel sourceModel = new EmptyTreeModel();
-            VariableTreeModel sourceVariableModel = new VariableTreeModel(context);
+            VariableTreeModel sourceVariableModel = 
+                    new VariableTreeModel(context, true, mapper);
             sourceModel.addExtensionModel(sourceVariableModel);
             PartnerLinkTreeExtModel pLinkExtModel = 
-                    new PartnerLinkTreeExtModel(copy, true);
+                    new PartnerLinkTreeExtModel(bpelEntity, true);
             sourceModel.addExtensionModel(pLinkExtModel);
-            //
-            BpelMapperModel newMapperModel = new BpelMapperModel(
-                    mapperTcContext, changeProcessor, sourceModel, targetModel);
-            //
-            addTraceGraph(copy, newMapperModel);
-            postProcess(newMapperModel);
-            //
-            return newMapperModel;
-            //
-        } else if (bpelEntity instanceof Assign) {
-            Assign assign = (Assign)bpelEntity;
-            //
-            EmptyTreeModel sourceModel = new EmptyTreeModel();
-            VariableTreeModel variableModel = new VariableTreeModel(context);
-            sourceModel.addExtensionModel(variableModel);
-            PartnerLinkTreeExtModel pLinkExtModel = 
-                    new PartnerLinkTreeExtModel(assign, true);
-            sourceModel.addExtensionModel(pLinkExtModel);
-            //
-            BpelMapperModel newMapperModel = new BpelMapperModel(
-                    mapperTcContext, changeProcessor, sourceModel, targetModel);
-            addTraceGraph(assign, newMapperModel);
-            postProcess(newMapperModel);
-            //
-            return newMapperModel;
-            //
-        } else {
-            //
-            EmptyTreeModel sourceModel = new EmptyTreeModel();
-            VariableTreeModel sourceVariableModel = new VariableTreeModel(context);
-            sourceModel.addExtensionModel(sourceVariableModel);
             //
             BpelMapperModel newMapperModel = new BpelMapperModel(
                     mapperTcContext, changeProcessor, sourceModel, targetModel);
@@ -134,7 +136,7 @@ public class LoggingMapperModelFactory extends BpelMapperModelFactory {
             postProcess(newMapperModel);
             //
             return newMapperModel;
-        }
+//        }
         //
 //        return null;
     }
@@ -180,7 +182,7 @@ public class LoggingMapperModelFactory extends BpelMapperModelFactory {
         Graph newGraph = new Graph(newMapperModel);
         //
         MapperSwingTreeModel leftTreeModel = newMapperModel.getLeftTreeModel();
-        populateGraph(newGraph, leftTreeModel, contextEntity, expr);
+        populateGraph(newGraph, leftTreeModel, contextEntity, expr, null);
         //
         List<TreeItemFinder> finderList = Collections.singletonList(
                 (TreeItemFinder)new LoggingNodeFinder(type, location, level));
