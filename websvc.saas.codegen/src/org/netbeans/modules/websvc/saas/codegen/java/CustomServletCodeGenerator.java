@@ -40,46 +40,53 @@
  */
 package org.netbeans.modules.websvc.saas.codegen.java;
 
-import java.io.IOException;
-import javax.swing.text.JTextComponent;
-import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
 import org.netbeans.modules.websvc.saas.model.CustomSaasMethod;
+import java.io.IOException;
+import java.util.List;
+import javax.swing.text.JTextComponent;
+import org.netbeans.modules.websvc.saas.codegen.java.Constants.SaasAuthenticationType;
+import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo;
+import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
 
 /**
- * Code generator factory for REST services wrapping WADL-based web service.
+ * Code generator for Accessing Saas services.
  *
  * @author nam
  */
-public class CustomCodeGeneratorFactory {
+public class CustomServletCodeGenerator extends CustomJavaClientCodeGenerator {
 
-    public static CustomCodeGenerator create(JTextComponent targetComponent, 
-            FileObject targetFO, CustomSaasMethod method) throws IOException {
-        CustomCodeGenerator codegen = null;
-        try {
-            DataObject d = DataObject.find(targetFO);
-            if (Util.isRestJavaFile(d) || Util.isServlet(d)) {
-                codegen = new CustomServletCodeGenerator(
-                        targetComponent, targetFO, method);
-                if (Util.isServlet(d)) {
-                    codegen.setDropFileType(Constants.DropFileType.SERVLET);
-                } else {
-                    codegen.setDropFileType(Constants.DropFileType.RESOURCE);
-                }
-            } else if (Util.isJsp(d)) {
-                codegen = new CustomJspCodeGenerator(
-                        targetComponent, targetFO, method);
-                codegen.setDropFileType(Constants.DropFileType.JSP);
-            } else {
-                codegen = new CustomJavaClientCodeGenerator(
-                        targetComponent, targetFO, method);
-                codegen.setDropFileType(Constants.DropFileType.JAVA_CLIENT);
-            }
-        } catch (DataObjectNotFoundException ex) {
-            throw new IOException(ex.getMessage());
-        }
-        return codegen;
+    public CustomServletCodeGenerator(JTextComponent targetComponent,
+            FileObject targetFile, CustomSaasMethod m) throws IOException {
+        super(targetComponent, targetFile, m);
+    }
+    
+    @Override
+    protected List<ParameterInfo> getServiceMethodParameters() {
+        if(bean.getAuthenticationType() == SaasAuthenticationType.SESSION_KEY ||
+                bean.getAuthenticationType() == SaasAuthenticationType.HTTP_BASIC)
+            return getServiceMethodParametersForWeb(getBean());
+        else
+            return super.getServiceMethodParameters();
+    }
+    
+    
+    protected String getCustomMethodBody(String paramDecl, String paramUse, String indent2) {
+        String indent = "             ";
+        String methodBody = "";
+        methodBody += indent+"try {\n";
+        methodBody += paramDecl + "\n";
+        methodBody +=indent2+REST_RESPONSE+" result = " + getBean().getSaasServiceName() + 
+                "." + getBean().getSaasServiceMethodName() + "(" + paramUse + ");\n";
+        methodBody += Util.createPrintStatement(
+                getBean().getOutputWrapperPackageName(), 
+                getBean().getOutputWrapperName(),
+                getDropFileType(), 
+                getBean().getHttpMethod(), 
+                getBean().canGenerateJAXBUnmarshaller(), indent2);
+        methodBody += indent+"} catch (Exception ex) {\n";
+        methodBody += indent2+"ex.printStackTrace();\n";
+        methodBody += indent+"}\n";
+        return methodBody;
     }
 }
