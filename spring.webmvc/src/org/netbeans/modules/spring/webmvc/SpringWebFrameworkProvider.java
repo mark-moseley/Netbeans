@@ -45,8 +45,6 @@ package org.netbeans.modules.spring.webmvc;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.web.api.webmodule.ExtenderController;
@@ -54,22 +52,17 @@ import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.modules.web.spi.webmodule.WebFrameworkProvider;
 import org.netbeans.modules.web.spi.webmodule.WebModuleExtender;
 import org.openide.ErrorManager;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
 /**
- * Provides WebFrameworkProvider implementation for Spring Framework
+ * Provides WebFrameworkProvider implementation for Spring Web MVC.
  *
  * @author Craig MacKay
  */
 public class SpringWebFrameworkProvider extends WebFrameworkProvider {
 
-    public static final String SPRING_LIB_NAME = "spring-framework-2.5"; // NOI18N
     public static final String CONTEXT_LOADER = "org.springframework.web.context.ContextLoaderListener"; // NOI18N
     public static final String DISPATCHER_SERVLET = "org.springframework.web.servlet.DispatcherServlet"; // NOI18N
-    public static final String ENCODING = "UTF-8"; // NOI18N
-
     private SpringWebModuleExtender panel;
 
     public SpringWebFrameworkProvider() {
@@ -90,34 +83,17 @@ public class SpringWebFrameworkProvider extends WebFrameworkProvider {
 
     @Override
     public File[] getConfigurationFiles(WebModule webModule) {
-        FileObject webInf = webModule.getWebInf();
-        List<File> files = new ArrayList<File>();
-        if (webModule.getDeploymentDescriptor() != null) {
-            FileObject file = webInf.getFileObject("applicationContext.xml"); // NOI18N
-            if (file != null) {
-                files.add(FileUtil.toFile(file));
-            }
-            file = webInf.getFileObject("dispatcher-servlet.xml"); // NOI18N
-            if (file != null) {
-                files.add(FileUtil.toFile(file));
-            }
-        }
-        return files.toArray(new java.io.File[0]);
+        return new File[0];
     }
     
     @Override
     public WebModuleExtender createWebModuleExtender(WebModule webModule, ExtenderController controller) {
         boolean defaultValue = (webModule == null || !isInWebModule(webModule));
-        panel = new SpringWebModuleExtender(this, controller, !defaultValue);
-        // may need to use panel for setting an extended configuration
+        panel = new SpringWebModuleExtender(this, controller, !defaultValue); // NOI18N
         return panel;
     }  
 
     public WebApp getWebApp(WebModule webModule) throws IOException {
         return DDProvider.getDefault().getDDRoot(webModule.getDeploymentDescriptor());
-    }
-
-    public WebApp getWebAppCopy(WebModule webModule) throws IOException {
-        return DDProvider.getDefault().getDDRootCopy(webModule.getDeploymentDescriptor());
     }
 }
