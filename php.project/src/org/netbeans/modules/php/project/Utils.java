@@ -68,7 +68,8 @@ public final class Utils {
     }
 
     public static WebServerProvider getProvider(PhpProject project) {
-        String provider = project.getEvaluator().getProperty(PhpProject.PROVIDER_ID);
+        // XXX remove all this provider stuff
+        String provider = null;
         if (provider == null) {
             // TODO realize fake provider that will return commands but will 
             // suggest to setup real server
