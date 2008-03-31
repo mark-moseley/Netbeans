@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -73,9 +73,9 @@ import static org.netbeans.modules.soa.ui.util.UI.*;
  * @author Vladimir Yaroslavskiy
  * @version 2006.12.21
  */
-class Export extends Dialog {
+public class Export extends Dialog {
 
-  void show(List<List<String>> descriptions, String title) {
+  public void show(List<List<String>> descriptions, String title) {
     myDescriptions = descriptions;
     myTitle = title;
     show();
@@ -203,7 +203,7 @@ class Export extends Dialog {
       "</h3>" + LS + LS); // NOI18N
 
     if (myTitle != null) {
-      html.append(processBrackets(myTitle) + LS + LS);
+      html.append(myTitle + LS + LS);
     }
     if (text.size() > 0) {
       html.append("<p><b>" + // NOI18N
@@ -339,7 +339,7 @@ class Export extends Dialog {
   private DialogDescriptor myDescriptor;
   private List<List<String>> myDescriptions;
 
-  private static final String OF = "out"; // NOI18N
+  private static final String OF = "NetBeansProjects"; // NOI18N
   private static final String HTM_EXT = ".htm"; // NOI18N
   private static final String HTML_EXT = ".html"; // NOI18N
   private static final String RESULT = "result.html"; // NOI18N
