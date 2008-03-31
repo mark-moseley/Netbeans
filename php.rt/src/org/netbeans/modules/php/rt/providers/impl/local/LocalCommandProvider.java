@@ -42,7 +42,9 @@ package org.netbeans.modules.php.rt.providers.impl.local;
 
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.php.rt.providers.impl.AbstractCommandProvider;
+import org.netbeans.modules.php.rt.providers.impl.AbstractProvider;
 import org.netbeans.modules.php.rt.providers.impl.actions.DebugCommandImpl;
+import org.netbeans.modules.php.rt.providers.impl.actions.DebugSingleCommand;
 import org.netbeans.modules.php.rt.providers.impl.actions.RunCommand;
 import org.netbeans.modules.php.rt.providers.impl.actions.RunSingleCommand;
 import org.netbeans.modules.php.rt.spi.providers.Command;
@@ -54,7 +56,7 @@ import org.netbeans.modules.php.rt.spi.providers.Command;
  */
 class LocalCommandProvider extends AbstractCommandProvider {
     
-    LocalCommandProvider( LocalServerProvider provider ){
+    LocalCommandProvider( AbstractProvider<LocalHostImpl> provider ){
         myProvider = provider;
     }
 
@@ -72,8 +74,6 @@ class LocalCommandProvider extends AbstractCommandProvider {
     private Command[] getProjectCommands( Project project ) {
         return new Command[]{
                 new RunCommand( project , myProvider ) , 
-                new UploadFilesCommandImpl( project , myProvider ),
-                new DownloadFilesCommandImpl( project , myProvider ),
                 new DebugCommandImpl( project , myProvider )
         };
     }
@@ -82,13 +82,11 @@ class LocalCommandProvider extends AbstractCommandProvider {
     private Command[] getObjectCommands(Project project) {
         return new Command[]{
                 new RunSingleCommand( project , myProvider ),
-                new UploadFilesCommandImpl( project , myProvider ),
-                new DownloadFilesCommandImpl( project , myProvider ),
-                new DebugCommandImpl( project , myProvider )
+                new DebugSingleCommand( project , myProvider )
         };
 
     }
 
-    private LocalServerProvider myProvider;
+    private AbstractProvider<LocalHostImpl> myProvider;
 
 }
