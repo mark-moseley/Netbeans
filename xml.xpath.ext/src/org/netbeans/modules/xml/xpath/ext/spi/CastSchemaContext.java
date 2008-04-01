@@ -20,74 +20,54 @@
 package org.netbeans.modules.xml.xpath.ext.spi;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
+import org.netbeans.modules.xml.schema.model.GlobalType;
 import org.netbeans.modules.xml.xpath.ext.XPathSchemaContext;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.xpath.ext.LocationStep;
 
 /**
- * The schema context, which contains only one Schema component. 
+ * The schema context, which relates to a Type Cast step. 
+ * 
  * @author nk160297
  */
-public class SimpleSchemaContext implements XPathSchemaContext {
+public class CastSchemaContext implements XPathSchemaContext {
 
-    private XPathSchemaContext mParentContext;
-    private SchemaCompPair mSchemaCompPair;
+    // The context, which this Cast context based on. 
+    private XPathSchemaContext mBaseContext; 
+    private XPathCast mXPathCast;
     
-    /**
-     * Constructs a simple schema context based on the list of 
-     * SchemaComponent objects. 
-     * @param parentContext can be null. It not null then is will 
-     * be assigned as parent to the first SimpleSchemaContext in the chain.  
-     * @param pathList
-     * @return
-     */
-    public static XPathSchemaContext constructSimpleSchemaContext(
-            XPathSchemaContext parentContext,
-            List<SchemaComponent> pathList) {
-        //
-        XPathSchemaContext result = parentContext;
-        for (SchemaComponent sComp : pathList) {
-            result = new SimpleSchemaContext(result, sComp);
-            }
-        //
-        return result;
-    }
-        
-    public SimpleSchemaContext(XPathSchemaContext parentContext, 
-            SchemaCompPair schemaCompPair) {
-        mParentContext = parentContext;
-        mSchemaCompPair = schemaCompPair;
+    private Set<SchemaCompPair> mCompPairSet;
+    
+    public CastSchemaContext(XPathSchemaContext baseContext, 
+            XPathCast xPathCast) {
+        mBaseContext = baseContext;
+        mXPathCast = xPathCast;
     }
 
-    /**
-     * Creates context for a global Type or global Element.
-     */ 
-    public SimpleSchemaContext(SchemaComponent sComp) {
-        this(null, sComp);
+    public XPathSchemaContext getBaseContext() {
+        return mBaseContext;
     }
-
-    public SimpleSchemaContext(XPathSchemaContext parentContext, 
-            SchemaComponent sComp) {
-        //
-        if (parentContext == null) {
-            mParentContext = null;
-            mSchemaCompPair = new SchemaCompPair(sComp, null);
-        } else {
-            mParentContext = parentContext;
-            SchemaComponent parentComp = Utilities.getSchemaComp(mParentContext);
-            assert parentComp != null;
-            mSchemaCompPair = new SchemaCompPair(sComp, parentComp);
-        }
+    
+    public XPathCast getTypeCast() {
+        return mXPathCast;
     }
-
+    
     public XPathSchemaContext getParentContext() {
-        return mParentContext;
+        return mBaseContext.getParentContext();
     }
 
     public Set<SchemaCompPair> getSchemaCompPairs() {
-        return Collections.singleton(mSchemaCompPair);
+        if (mCompPairSet == null) {
+            XPathSchemaContext parentContext = getParentContext();
+            SchemaComponent parentComp = Utilities.getSchemaComp(parentContext);
+            //
+            GlobalType castTo = mXPathCast.getCastTo();
+            SchemaCompPair sCompPair = new SchemaCompPair(castTo, parentComp);
+            mCompPairSet = Collections.singleton(sCompPair);
+        }
+        //
+        return mCompPairSet;
     }
     
     public Set<SchemaCompPair> getUsedSchemaCompPairs() {
@@ -100,44 +80,36 @@ public class SimpleSchemaContext implements XPathSchemaContext {
     }
 
     public String toStringWithoutParent() {
-        StringBuilder sb = new StringBuilder();
-        if (mSchemaCompPair != null) {
-            SchemaComponent sComp = mSchemaCompPair.getComp();
-            SchemaCompPair.appendCompName(sb, sComp);
-        }
-        return sb.toString();
+        String castTo = mXPathCast.getCastTo().getName();
+        return "(" + castTo + ")" + mBaseContext.toStringWithoutParent();
     }
-
+    
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
         //
-        if (mParentContext != null) {
-            sb.append(mParentContext.toString());
+        XPathSchemaContext parentContext = getParentContext();
+        if (parentContext != null) {
+            sb.append(parentContext.toString());
+            sb.append(LocationStep.STEP_SEPARATOR);
         }
-        sb.append(LocationStep.STEP_SEPARATOR);
         //
-        if (mSchemaCompPair != null) {
-            sb.append(toStringWithoutParent());
-        }
+        sb.append(toStringWithoutParent());
         //
         return sb.toString();
     }
 
     @Override
     public boolean equals(Object obj)  {
-        if (obj instanceof SimpleSchemaContext) {
+        if (obj instanceof CastSchemaContext) {
             //
-            // Optimized comparison for this simple case
-            SimpleSchemaContext other = (SimpleSchemaContext)obj;
-            SchemaComponent sComp1 = this.mSchemaCompPair.getComp();
-            SchemaComponent sComp2 = other.mSchemaCompPair.getComp();
-            //
-            if (sComp1 != sComp2) {
-                return false;
+            CastSchemaContext other = (CastSchemaContext)obj;
+            if (this.mBaseContext.equals(other.mBaseContext) && 
+                    this.mXPathCast.getCastTo().equals(other.mXPathCast.getCastTo())) {
+                return true;
             }
             //
-            return true;
+            return false;
         } else if (obj instanceof XPathSchemaContext) {
             return XPathSchemaContext.Utilities.equals(
                     this, (XPathSchemaContext)obj);
@@ -150,7 +122,7 @@ public class SimpleSchemaContext implements XPathSchemaContext {
         if (equals(other)) {
             //
             // Compare parent contexts
-            XPathSchemaContext parentCont1 = this.mParentContext;
+            XPathSchemaContext parentCont1 = this.getParentContext();
             XPathSchemaContext parentCont2 = other.getParentContext();
             if (parentCont1 != null && parentCont2 != null) {
                 boolean result = parentCont1.equalsChain(parentCont2);
