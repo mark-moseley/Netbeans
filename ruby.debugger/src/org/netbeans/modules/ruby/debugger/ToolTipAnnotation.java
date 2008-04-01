@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -130,21 +130,31 @@ public final class ToolTipAnnotation extends Annotation implements Runnable {
                 return null;
             }
             t = doc.getText(lineStartOffset, lineLen);
-            int identStart = col;
-            while (identStart > 0 && (Character.isJavaIdentifierPart(t.charAt(identStart - 1)) || (t.charAt(identStart - 1) == '.'))) {
-                identStart--;
-            }
-            int identEnd = col;
-            while (identEnd < lineLen && Character.isJavaIdentifierPart(t.charAt(identEnd))) {
-                identEnd++;
-            }
-            if (identStart == identEnd) { return null; }
-            return t.substring(identStart, identEnd);
+            return getExpressionToEvaluate(t, col);
         } catch (BadLocationException e) {
             return null;
         }
     }
+
+    static String getExpressionToEvaluate(String text, int col) {
+        int identStart = col;
+        while (identStart > 0 && (isRubyIdentifier(text.charAt(identStart - 1)) || (text.charAt(identStart - 1) == '.'))) {
+            identStart--;
+        }
+        int identEnd = col;
+        while (identEnd < text.length() && isRubyIdentifier(text.charAt(identEnd))) {
+            identEnd++;
+        }
+        if (identStart == identEnd) {
+            return null;
+        }
+        return text.substring(identStart, identEnd);
+    }
     
+    static boolean isRubyIdentifier(char ch) {
+        return ch == '@' || ch == '?' || Character.isJavaIdentifierPart(ch);
+    }
+
     /** Returns current editor component instance. */
     private static JEditorPane getCurrentEditor_() {
         EditorCookie e = getCurrentEditorCookie();
