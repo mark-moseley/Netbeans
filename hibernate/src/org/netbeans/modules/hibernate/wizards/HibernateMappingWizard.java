@@ -46,6 +46,7 @@ import java.util.Collections;
 
 import javax.swing.JComponent;
 import java.awt.Component;
+import java.util.ArrayList;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Sources;
 
@@ -61,7 +62,11 @@ import org.netbeans.modules.hibernate.cfg.model.SessionFactory;
 import org.netbeans.modules.hibernate.loaders.cfg.HibernateCfgDataObject;
 import org.netbeans.modules.hibernate.loaders.mapping.HibernateMappingDataObject;
 import org.netbeans.modules.hibernate.mapping.model.MyClass;
+import org.netbeans.modules.hibernate.service.HibernateEnvironment;
+import org.netbeans.modules.hibernate.spi.hibernate.HibernateFileLocationProvider;
+import org.netbeans.modules.hibernate.util.HibernateUtil;
 import org.netbeans.spi.project.ui.templates.support.Templates;
+import org.openide.loaders.TemplateWizard;
 
 /**
  *
@@ -75,6 +80,7 @@ public class HibernateMappingWizard implements WizardDescriptor.InstantiatingIte
     private HibernateMappingWizardDescriptor descriptor;
     private transient WizardDescriptor.Panel[] panels;
     private final String resourceAttr = "resource";
+    private static String DEFAULT_MAPPING_FILENAME = "hibernate.hbm";
 
     public static HibernateMappingWizard create() {
         return new HibernateMappingWizard();
@@ -125,8 +131,41 @@ public class HibernateMappingWizard implements WizardDescriptor.InstantiatingIte
         this.wizard = wizard;
         project = Templates.getProject(wizard);
         descriptor = new HibernateMappingWizardDescriptor(project);
-        FileObject sourceRoot = Util.getSourceRoot(project);
-        Templates.setTargetFolder(wizard, sourceRoot);
+        if (Templates.getTargetFolder(wizard) == null) {
+            HibernateFileLocationProvider provider = project != null ? project.getLookup().lookup(HibernateFileLocationProvider.class) : null;
+            FileObject location = provider != null ? provider.getLocation() : null;
+            if (location != null) {
+                Templates.setTargetFolder(wizard, location);
+            }
+        }
+
+        // Set the targetName here. Default name for the new files should be in the form : 'hibernate<i>.hbm.xml
+        // and not like : hibernate.hbm<i>.xml
+        if (wizard instanceof TemplateWizard) {
+            HibernateEnvironment hibernateEnv = (HibernateEnvironment) project.getLookup().lookup(HibernateEnvironment.class);
+            ArrayList<FileObject> mappingFiles = hibernateEnv.getAllHibernateMappingFileObjects();
+            String targetName = DEFAULT_MAPPING_FILENAME;
+            if (!mappingFiles.isEmpty() && foundMappingFileInProject(mappingFiles, DEFAULT_MAPPING_FILENAME)) {
+                int mappingFilesCount = mappingFiles.size();
+                targetName = "hibernate" + (mappingFilesCount++) + ".hbm";
+                while (foundMappingFileInProject(mappingFiles, targetName)) {
+                    targetName = "hibernate" + (mappingFilesCount++) + ".hbm";
+                }
+            }
+            ((TemplateWizard) wizard).setTargetName(targetName);
+
+
+
+        }
+    }
+
+    private boolean foundMappingFileInProject(ArrayList<FileObject> mappingFiles, String mappingFileName) {
+        for (FileObject fo : mappingFiles) {
+            if (fo.getName().equals(mappingFileName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void uninitialize(WizardDescriptor wizard) {
@@ -143,15 +182,16 @@ public class HibernateMappingWizard implements WizardDescriptor.InstantiatingIte
         DataObject newOne = templateDataObject.createFromTemplate(targetDataFolder, targetName);
         FileObject confFile = null;
         MyClass myClass = new MyClass();
-        
+
         // Adding mapping entry in the selected config file.
         if (descriptor.getConfigurationFile() != null && !"".equals(descriptor.getConfigurationFile())) {
             confFile = (FileObject) descriptor.getConfigurationFile();
             DataObject confDataObject = DataObject.find(confFile);
             HibernateCfgDataObject hco = (HibernateCfgDataObject) confDataObject;
             SessionFactory sf = hco.getHibernateConfiguration().getSessionFactory();
-            int mappingIndex = sf.addMapping(true);                        
-            sf.setAttributeValue(SessionFactory.MAPPING, mappingIndex, resourceAttr, newOne.getPrimaryFile().getNameExt());
+            int mappingIndex = sf.addMapping(true);
+            sf.setAttributeValue(SessionFactory.MAPPING, mappingIndex, resourceAttr,
+                    HibernateUtil.getRelativeSourcePath(newOne.getPrimaryFile(), Util.getSourceRoot(project)));
             hco.modelUpdatedFromUI();
             hco.save();
         }
@@ -160,8 +200,11 @@ public class HibernateMappingWizard implements WizardDescriptor.InstantiatingIte
             HibernateMappingDataObject hmo = (HibernateMappingDataObject) newOne;
             if (descriptor.getClassName() != null && !"".equals(descriptor.getClassName())) {
                 myClass.setAttributeValue("name", descriptor.getClassName());
+                if (descriptor.getDatabaseTable() != null && !"".equals(descriptor.getDatabaseTable())) {
+                    myClass.setAttributeValue("table", descriptor.getDatabaseTable());
+                }
                 hmo.addMyClass(myClass);
-            }            
+            }
             hmo.save();
             return Collections.singleton(hmo.getPrimaryFile());
         } catch (Exception e) {
