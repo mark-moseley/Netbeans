@@ -3,7 +3,7 @@
 <!--
  DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  
- Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  
  The contents of this file are subject to the terms of either the GNU
  General Public License Version 2 only ("GPL") or the Common
@@ -41,32 +41,36 @@
  made subject to such option by the copyright holder.
 -->
 
-<saas-services xmlns="http://xml.netbeans.org/websvc/saas/services/1.0"
-               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/yahoo"
-               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'               
-               xsi:schemaLocation='http://xml.netbeans.org/websvc/saas/services/1.0 
-                    ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd' 
-               type="http://research.sun.com/wadl/2006/10"
-               api-doc="http://developer.yahoo.com/search/news/V1/newsSearch.html"
-               url="org/netbeans/modules/websvc/saas/services/yahoo/resources/YahooNewsSearchWadl.xml">
-
-    <description>Yahoo News Search Service</description>
+<!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
+<filesystem>
     
-    <display-name>News Search Service</display-name>
-
-    <saas-metadata>
-
-        <localizing-bundle>org.netbeans.modules.websvc.saas.services.yahoo.Bundle</localizing-bundle>
-
-        <group name="Yahoo">
-        </group>
-
-        <authentication profile="Templates/SaaSServices/apikey.properties">
-            <api-key id="appid"/>
-        </authentication>
-
-    </saas-metadata>
-
-    <methods/>
+    <folder name="Templates">
+        <folder name="SaaSServices">
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.websvc.saas.services.flickr.Bundle"/>
+            <file name="FlickrAuthenticator.java" 
+                  url="/org/netbeans/modules/websvc/saas/services/flickr/resources/web/FlickrAuthenticator.template">
+                <attr name="position" intvalue="3710"/>
+            </file>
+            <file name="FlickrLogin.java" 
+                  url="/org/netbeans/modules/websvc/saas/services/flickr/resources/web/FlickrLogin.template">
+                <attr name="position" intvalue="3720"/>
+            </file>
+            <file name="FlickrCallback.java" 
+                  url="/org/netbeans/modules/websvc/saas/services/flickr/resources/web/FlickrCallback.template">
+                <attr name="position" intvalue="3730"/>
+            </file>
+            <file name="FlickrAuthenticatorDesktop.java" 
+                  url="/org/netbeans/modules/websvc/saas/services/flickr/resources/desktop/FlickrAuthenticator.template">
+                <attr name="position" intvalue="3740"/>
+            </file>
+        </folder>
+    </folder>
     
-</saas-services>
+    <folder name="SaaSServices">
+        <folder name="Flickr">
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.websvc.saas.services.flickr.Bundle"/>
+            <file name="Flickr.xml" url="/org/netbeans/modules/websvc/saas/services/flickr/resources/Flickr.xml"/>
+        </folder>
+    </folder>
+    
+</filesystem>

@@ -42,27 +42,27 @@
 -->
 
 <saas-services xmlns="http://xml.netbeans.org/websvc/saas/services/1.0"
-               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/yahoo"
+               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/zillow"
                xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'               
                xsi:schemaLocation='http://xml.netbeans.org/websvc/saas/services/1.0 
                     ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd' 
                type="http://research.sun.com/wadl/2006/10"
-               api-doc="http://developer.yahoo.com/search/news/V1/newsSearch.html"
-               url="org/netbeans/modules/websvc/saas/services/yahoo/resources/YahooNewsSearchWadl.xml">
+               api-doc="http://www.zillow.com/howto/api/APIOverview.htm"
+               url="org/netbeans/modules/websvc/saas/services/zillow/resources/ZillowWadl.xml">
 
-    <description>Yahoo News Search Service</description>
+    <description>Zillow Real Estate Services</description>
     
-    <display-name>News Search Service</display-name>
+    <display-name>Real Estate Service</display-name>
 
     <saas-metadata>
 
-        <localizing-bundle>org.netbeans.modules.websvc.saas.services.yahoo.Bundle</localizing-bundle>
+        <localizing-bundle>org.netbeans.modules.websvc.saas.services.zillow.Bundle</localizing-bundle>
 
-        <group name="Yahoo">
+        <group name="Zillow">
         </group>
 
         <authentication profile="Templates/SaaSServices/apikey.properties">
-            <api-key id="appid"/>
+            <api-key id="zws-id"/>
         </authentication>
 
     </saas-metadata>

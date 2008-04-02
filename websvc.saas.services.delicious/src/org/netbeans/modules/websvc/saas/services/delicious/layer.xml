@@ -3,7 +3,7 @@
 <!--
  DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  
- Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  
  The contents of this file are subject to the terms of either the GNU
  General Public License Version 2 only ("GPL") or the Common
@@ -41,34 +41,14 @@
  made subject to such option by the copyright holder.
 -->
 
-<saas-services xmlns="http://xml.netbeans.org/websvc/saas/services/1.0"
-               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/amazon"
-               xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'               
-               xsi:schemaLocation='http://xml.netbeans.org/websvc/saas/services/1.0 
-                    ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd' 
-               type="http://research.sun.com/wadl/2006/10"
-               api-doc="http://developer.amazonwebservices.com/connect/kbcategory.jspa?categoryID=46"
-               url="org/netbeans/modules/websvc/saas/services/amazon/resources/AmazonS3BucketsWadl.xml">
-
-    <description>AmazonS3 Service</description>
+<!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
+<filesystem>
     
-    <display-name>AmazonS3</display-name>
-
-    <saas-metadata>
-
-        <localizing-bundle>org.netbeans.modules.websvc.saas.services.amazon.Bundle</localizing-bundle>
-
-        <group name="Amazon">
-        </group>
-
-        <authentication profile="SaaSServices/Amazon/profile.properties">
-            <api-key id="dev_id"/>
-        </authentication>
-
-    </saas-metadata>
-
-    <methods>
-        <method name="getBuckets" href="#amazons3.getBuckets"/>
-    </methods>
-
-</saas-services>
+    <folder name="SaaSServices">
+        <folder name="Delicious">
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.websvc.saas.services.delicious.Bundle"/>
+            <file name="Delicious.xml" url="/org/netbeans/modules/websvc/saas/services/delicious/resources/Delicious.xml"/>
+        </folder>
+        </folder>
+    
+</filesystem>

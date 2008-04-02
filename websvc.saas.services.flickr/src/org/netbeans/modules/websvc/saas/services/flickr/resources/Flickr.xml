@@ -42,49 +42,58 @@
 -->
 
 <saas-services xmlns="http://xml.netbeans.org/websvc/saas/services/1.0"
-               xmlns:tns="http://xml.netbeans.org/websvc/saas/services/1.0/google"
+               xmlns:tns="http://xml.netbeans.org/websvc/saas/component/1.0/flickr"
                xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'               
                xsi:schemaLocation='http://xml.netbeans.org/websvc/saas/services/1.0 
                     ../../../../../../../../../../websvc.saas.api/src/org/netbeans/modules/websvc/saas/model/SaasServices.xsd'
-               type="custom"
-               api-doc="http://code.google.com/apis/maps/">
-                   
-    <description>Google Map Service</description>
+               type="http://research.sun.com/wadl/2006/10"
+               api-doc="http://www.flickr.com/services/api/"
+               url="org/netbeans/modules/websvc/saas/services/flickr/resources/FlickrWadl.xml">
     
-    <display-name>Map Service</display-name>
-
+    <description>Photo Service</description>
+    <display-name>Photo Service</display-name>
+    
     <saas-metadata>
-        <localizing-bundle>org.netbeans.modules.websvc.components.google.Bundle</localizing-bundle>
-        <group name="Google">
-        </group>
+        <localizing-bundle>org.netbeans.modules.websvc.saas.services.flickr.Bundle</localizing-bundle>
+        <group name="Flickr"/>
         <code-gen>
-            <artifacts targets="servlet,resource">
-                <artifact id="GoogleMapService" type="template" requires="profile.properties"
-                    url="Templates/SaaSServices/GoogleMapResource.java"/>
-                <artifact id="googlemapservice" type="template"
-                    url="Templates/SaaSServices/apikey.properties"/>
+            <artifacts targets="java,servlet,resource,jsp">
+                <artifact id="FlickrAuthenticatorDesktop" type="template"
+                    url="Templates/SaaSServices/FlickrAuthenticatorDesktop.java"/>
+                <artifact id="FlickrAuthenticator" type="template"
+                    url="Templates/SaaSServices/FlickrAuthenticator.java"/>
+                <artifact id="FlickrAuthenticatorLogin" type="template"
+                    url="Templates/SaaSServices/FlickrLogin.java"/>
+                <artifact id="FlickrAuthenticatorCallback" type="template"
+                    url="Templates/SaaSServices/FlickrCallback.java"/>
             </artifacts>
         </code-gen>
-        <!-- http-basic, api-key, custom -->
-        <!--<authentication profile="SaaSServices/Google/profile.properties">
-            <api-key id="apiKey"/>
-        </authentication>-->
+        <authentication profile="Templates/SaaSServices/sessionkey.properties">
+            <session-key api-id="api_key" session-id="auth_token" sig-id="api_sig">
+                <sign id="sig">
+                    <params>
+                        <param id="api_key={api_key}" name="api_key" type="string" required="true"/>
+                        <param id="auth_token={auth_token}" name="auth_token" type="string" required="true"/>
+                    </params>
+                </sign>
+                <authenticator>
+                    <use-templates>
+                        <desktop>
+                            <template type="auth" href="FlickrAuthenticatorDesktop"/>
+                        </desktop>
+                        <web>
+                            <template type="auth" href="FlickrAuthenticator"/>
+                            <template type="login" href="FlickrAuthenticatorLogin"/>
+                            <template type="callback" href="FlickrAuthenticatorCallback"/>
+                        </web>
+                    </use-templates>
+                </authenticator>
+            </session-key>
+        </authentication>
+        
     </saas-metadata>
-
-    <methods>
-        <method name="getGoogleMap" href="GoogleMapService">      
-            <input>
-                <params>
-                    <!--<param name="apiKey" type="string"/>-->
-                    <param name="address" type="string" default="16 Network Circle, Menlo Park"/>
-                    <param name="zoom" type="int" default="15"/>
-                    <param name="iframe" type="string" default="false"/>
-                </params>
-            </input>
-            <output>
-                <media type="text/html"/>
-            </output>
-        </method>
-    </methods>
+    
+    <!-- Process all methods in the wadl !-->
+    <methods/>
     
 </saas-services>
