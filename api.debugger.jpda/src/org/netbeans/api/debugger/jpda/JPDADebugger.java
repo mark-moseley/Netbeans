@@ -176,8 +176,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             if (d == null) continue;
             d.waitRunning ();
             return d;
@@ -247,8 +246,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             if (d == null) continue;
             d.waitRunning ();
             return d;
@@ -282,8 +280,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             d.waitRunning ();
             if (d == null) continue;
             return d;
@@ -316,6 +313,15 @@ public abstract class JPDADebugger {
      * @param s a new value of suspend property
      */
     public abstract void setSuspend (int s);
+    
+    /**
+     * Returns all threads that exist in the debuggee.
+     *
+     * @return all threads
+     */
+    public List<JPDAThread> getAllThreads() {
+        return Collections.emptyList();
+    }
     
     /**
      * Returns current thread or null.
