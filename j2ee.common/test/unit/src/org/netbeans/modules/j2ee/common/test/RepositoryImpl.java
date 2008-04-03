@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.j2ee.common.source;
+package org.netbeans.modules.j2ee.common.test;
 
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
@@ -50,7 +50,7 @@ import org.xml.sax.SAXException;
 
 /**
  *
- * @author Andrei Badae
+ * @author Andrei Badea
  */
 public class RepositoryImpl extends Repository {
 
