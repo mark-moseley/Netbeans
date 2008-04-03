@@ -40,10 +40,9 @@
  */
 package org.netbeans.modules.websvc.saas.codegen.java;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.swing.text.JTextComponent;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
@@ -60,6 +59,7 @@ import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.text.ActiveEditorDrop;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
@@ -116,32 +116,38 @@ public class JaxWsEditorDrop implements ActiveEditorDrop {
                         JaxWsCodeGeneratorFactory.create(targetComponent, targetFO, method);
                 
                     WsdlSaasBean bean = codegen.getBean();
-                    boolean showParams = codegen.showParams();
+                    boolean showParams = codegen.canShowParam();
                     List<ParameterInfo> allParams = new ArrayList<ParameterInfo>(bean.getHeaderParameters());
-                    if (showParams) {
+                    if (showParams && bean.getInputParameters() != null) {
                         allParams.addAll(bean.getInputParameters());
                     }
-                    JaxRsCodeSetupPanel panel = new JaxRsCodeSetupPanel(
-                            codegen.getSubresourceLocatorUriTemplate(),
-                            bean.getQualifiedClassName(), 
-                            allParams,
-                            !showParams);
+                    if(codegen.canShowResourceInfo() || (showParams && !allParams.isEmpty())) {
+                        JaxRsCodeSetupPanel panel = new JaxRsCodeSetupPanel(
+                                codegen.getSubresourceLocatorUriTemplate(),
+                                bean.getQualifiedClassName(), 
+                                allParams,
+                                codegen.canShowResourceInfo(), showParams);
 
-                    DialogDescriptor desc = new DialogDescriptor(panel, 
-                            NbBundle.getMessage(JaxWsEditorDrop.class,
-                            "LBL_CustomizeSaasService", displayName));
-                    Object response = DialogDisplayer.getDefault().notify(desc);
-                    
-                    if (response.equals(NotifyDescriptor.YES_OPTION)) {
-                        codegen.setSubresourceLocatorUriTemplate(panel.getUriTemplate());
-                        codegen.setSubresourceLocatorName(panel.getMethodName());
-                    } else {
-                        // cancel
-                        return;
+                        DialogDescriptor desc = new DialogDescriptor(panel, 
+                                NbBundle.getMessage(JaxWsEditorDrop.class,
+                                "LBL_CustomizeSaasService", displayName));
+                        Object response = DialogDisplayer.getDefault().notify(desc);
+
+                        if (response.equals(NotifyDescriptor.YES_OPTION)) {
+                            codegen.setSubresourceLocatorUriTemplate(panel.getUriTemplate());
+                            codegen.setSubresourceLocatorName(panel.getMethodName());
+                        } else {
+                            // cancel
+                            return;
+                        }
                     }
 
-                    codegen.generate(dialog.getProgressHandle());
-                    Util.showMethod(targetFO, codegen.getSubresourceLocatorName());
+                    try {
+                        codegen.generate(dialog.getProgressHandle());
+                    } catch(IOException ex) {
+                        if(!ex.getMessage().equals(Util.SCANNING_IN_PROGRESS))
+                            errors.add(ex);
+                    }
                 } catch (Exception ioe) {
                     errors.add(ioe);
                 } finally {
@@ -155,9 +161,7 @@ public class JaxWsEditorDrop implements ActiveEditorDrop {
         dialog.open();
 
         if (errors.size() > 0) {
-            for (Exception e : errors) {
-                Logger.getLogger(getClass().getName()).log(Level.INFO, "handleTransfer", e);
-            }
+            Exceptions.printStackTrace(errors.get(0));
             return false;
         }
         return true;

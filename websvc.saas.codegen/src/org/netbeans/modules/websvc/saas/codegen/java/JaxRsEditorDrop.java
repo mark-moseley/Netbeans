@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.websvc.saas.codegen.java;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.text.JTextComponent;
@@ -48,6 +49,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
 import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo;
+import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo.ParamFilter;
 import org.netbeans.modules.websvc.saas.codegen.java.model.WadlSaasBean;
 import org.netbeans.modules.websvc.saas.model.WadlSaasMethod;
 import org.netbeans.modules.websvc.saas.model.wadl.Method;
@@ -91,9 +93,11 @@ public class JaxRsEditorDrop implements ActiveEditorDrop {
     }
     
     private boolean doHandleTransfer(final JTextComponent targetComponent) {
-        FileObject targetSource = NbEditorUtilities.getFileObject(targetComponent.getDocument());
+        final FileObject targetSource = NbEditorUtilities.getFileObject(targetComponent.getDocument());
         Project targetProject = FileOwnerQuery.getOwner(targetSource);
         Method m = method.getWadlMethod();
+        if(m == null)
+            Exceptions.printStackTrace(new IOException("Wadl method not found"));
         final String displayName = m.getName();
         
         targetFO = getTargetFile(targetComponent);
@@ -116,13 +120,9 @@ public class JaxRsEditorDrop implements ActiveEditorDrop {
                 
                     WadlSaasBean bean = codegen.getBean();
                     boolean showParams = codegen.canShowParam();
-                    List<ParameterInfo> allParams = new ArrayList<ParameterInfo>();
-                    if (showParams && bean.getInputParameters() != null) {
-                        allParams.addAll(bean.getInputParameters());
-                    }
-                    if(allParams.isEmpty())
-                        showParams = false;
-                    if(codegen.canShowResourceInfo() || showParams) {
+                    List<ParameterInfo> allParams = bean.filterParametersByAuth(
+                            bean.filterParameters(new ParamFilter[]{ParamFilter.FIXED}));
+                    if(codegen.canShowResourceInfo() || (showParams && !allParams.isEmpty())) {
                         JaxRsCodeSetupPanel panel = new JaxRsCodeSetupPanel(
                                 codegen.getSubresourceLocatorUriTemplate(),
                                 bean.getQualifiedClassName(), 
@@ -143,9 +143,18 @@ public class JaxRsEditorDrop implements ActiveEditorDrop {
                         }
                     }
 
-                    codegen.generate(dialog.getProgressHandle());
-                    Util.showMethod(targetFO, codegen.getSubresourceLocatorName());
+                    try {
+                        codegen.generate(dialog.getProgressHandle());
+                    } catch(IOException ex) {
+                        if(!ex.getMessage().equals(Util.SCANNING_IN_PROGRESS))
+                            errors.add(ex);
+                    }
                 } catch (Exception ioe) {
+                    if(ioe.getMessage().equals(Constants.UNSUPPORTED_DROP)) {
+                        Util.showUnsupportedDropMessage(new Object[] {
+                            targetSource.getNameExt(), "Java Client"});
+                        return;
+                    }
                     errors.add(ioe);
                 } finally {
                     dialog.close();
