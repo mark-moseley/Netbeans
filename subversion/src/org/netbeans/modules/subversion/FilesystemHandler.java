@@ -78,7 +78,7 @@ class FilesystemHandler extends VCSInterceptor {
         Subversion.LOG.fine("beforeDelete " + file);
         if (SvnUtils.isPartOfSubversionMetadata(file)) return true;
         // calling cache results in SOE, we must check manually
-        return !file.isFile() && hasMetadata(file);
+        return !file.isFile() && hasMetadata(file); // XXX files should be also removed by svn !!!
     }
 
     /**
@@ -90,7 +90,14 @@ class FilesystemHandler extends VCSInterceptor {
         Subversion.LOG.fine("doDelete " + file);
         boolean isMetadata = SvnUtils.isPartOfSubversionMetadata(file);        
         if (!isMetadata) {
-            remove(file);
+            try {
+                SvnClient client = Subversion.getInstance().getClient(false);
+                // funny thing is, the command will delete all files recursively
+                client.remove(new File [] { file }, true);            
+            } catch (SVNClientException e) {
+                // XXX log this
+                return;
+            }
         }
     }
 
@@ -176,13 +183,13 @@ class FilesystemHandler extends VCSInterceptor {
                 // there might have been no notification 
                 // for the children files - refresh them all
                 SvnUtils.refreshRecursively(to);
-                cache.onNotify(to, null); // as if there were an event
+                cache.notifyChanges(to); // as if there were an event
                 File parent = to.getParentFile();
                 if (parent != null) {
                     if (from.equals(to)) {
                         Subversion.LOG.warning( "Wrong (identity) rename event for " + from.getAbsolutePath());                        
                     }
-                    cache.onNotify(from, null); // as if there were an event
+                    cache.notifyChanges(from); // as if there were an event
                 }
             }
         });
@@ -203,7 +210,7 @@ class FilesystemHandler extends VCSInterceptor {
         } else {
             if (!file.exists()) {                
                 try {
-                    SvnClient client = Subversion.getInstance().getClient(true);                                        
+                    SvnClient client = Subversion.getInstance().getClient(false);                                        
                     // check if the file wasn't just deleted in this session
                     revertDeleted(client, file, true); 
                 } catch (SVNClientException ex) {
@@ -286,17 +293,6 @@ class FilesystemHandler extends VCSInterceptor {
         return  ( !file.isFile() && hasMetadata(file) ) || ( file.isFile() && hasMetadata(file.getParentFile()) );        
     }
 
-    private boolean remove(File file) {
-        try {
-            SvnClient client = Subversion.getInstance().getClient(false);
-            // funny thing is, the command will delete all files recursively
-            client.remove(new File [] { file }, true);
-            return true;
-        } catch (SVNClientException e) {
-            return false;
-        }
-    }
-
     private void revertDeleted(SvnClient client, final File file, boolean checkParents) {
 
         try {
@@ -366,9 +362,7 @@ class FilesystemHandler extends VCSInterceptor {
                             client.move(srcFile, dstFile, force);
                             
                             // fire events explicitly for all children which are already gone
-                            for(File f : srcChildren) {
-                                cache.onNotify(f, null);    
-                            }                                 
+                            cache.notifyChanges(srcChildren.toArray(new File[srcChildren.size()]));    
                         }                        
                                                 
                         break;
@@ -405,17 +399,15 @@ class FilesystemHandler extends VCSInterceptor {
     }
 
     private void renameFile(File srcFile, File dstFile) {
-        List<File> srcChildren = listAllChildren(srcFile);        
+        List<File> refreshFiles = listAllChildren(srcFile);        
         srcFile.renameTo(dstFile);
 
-        // notify the cache
-        cache.onNotify(srcFile, null);
-        for(File f : srcChildren) {
-            // fire events explicitly for 
-            // all children which are already gone
-            cache.onNotify(f, null);    
-        }        
-        cache.onNotify(dstFile, null);        
+        // notify the cache        
+        // fire events explicitly for 
+        // all children which are already gone
+        refreshFiles.add(srcFile);
+        refreshFiles.add(dstFile);        
+        cache.notifyChanges(refreshFiles.toArray(new File[refreshFiles.size()]));    
     }
         
     private List<File> listAllChildren(File file) {
