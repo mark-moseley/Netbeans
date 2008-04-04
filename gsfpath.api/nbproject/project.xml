@@ -44,88 +44,37 @@ made subject to such option by the copyright holder.
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
-            <code-name-base>org.netbeans.modules.ruby.platform</code-name-base>
+            <code-name-base>org.netbeans.modules.gsfpath.api</code-name-base>
             <module-dependencies>
                 <dependency>
-                    <code-name-base>org.jdesktop.layout</code-name-base>
+                    <code-name-base>org.openide.filesystems</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.4</specification-version>
+                        <specification-version>6.2</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.gsf.api</code-name-base>
+                    <code-name-base>org.openide.util</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>0.19.0</specification-version>
+                        <specification-version>7.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.api.progress</code-name-base>
+                    <code-name-base>org.openide.execution</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.11</specification-version>
+                        <specification-version>1.2</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.gsf</code-name-base>
+                    <code-name-base>org.openide.io</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
-                    <run-dependency>
-                        <release-version>2</release-version>
-                        <implementation-version/>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.options.api</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.4</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.projectapi</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.14</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.projectuiapi</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.25</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.queries</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.11</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.ruby.rakeproject</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>0.12</specification-version>
-                    </run-dependency>
+                    <run-dependency/>
                 </dependency>
                 <dependency>
                     <code-name-base>org.openide.awt</code-name-base>
@@ -144,35 +93,11 @@ made subject to such option by the copyright holder.
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.openide.execution</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>1.11</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
                     <code-name-base>org.openide.explorer</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <specification-version>6.8</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.filesystems</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>6.2</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.io</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>1.12</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -197,43 +122,44 @@ made subject to such option by the copyright holder.
                         <specification-version>6.2</specification-version>
                     </run-dependency>
                 </dependency>
-                <dependency>
-                    <code-name-base>org.openide.text</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>6.17</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.util</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>6.2</specification-version>
-                    </run-dependency>
-                </dependency>
             </module-dependencies>
             <test-dependencies>
                 <test-type>
                     <name>unit</name>
                     <test-dependency>
+                        <code-name-base>org.openide.util</code-name-base>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.openide.modules</code-name-base>
+                    </test-dependency>
+                    <test-dependency>
                         <code-name-base>org.netbeans.modules.masterfs</code-name-base>
                     </test-dependency>
                 </test-type>
+                <test-type>
+                    <name>qa-functional</name>
+                </test-type>
             </test-dependencies>
             <friend-packages>
-                <friend>org.netbeans.modules.ruby</friend>
-                <friend>org.netbeans.modules.ruby.debugger</friend>
+                <friend>org.netbeans.modules.gsf</friend>
+                <friend>org.netbeans.modules.javascript.refactoring</friend>
+                <friend> org.netbeans.modules.php.project</friend>
                 <friend>org.netbeans.modules.ruby.project</friend>
                 <friend>org.netbeans.modules.ruby.railsprojects</friend>
-                <friend>org.netbeans.modules.ruby.rspec</friend>
-                <friend>org.netbeans.modules.glassfish.jruby</friend>
-                <package>org.netbeans.api.ruby.platform</package>
-                <package>org.netbeans.modules.ruby.platform</package>
-                <package>org.netbeans.modules.ruby.platform.execution</package>
-                <package>org.netbeans.modules.ruby.platform.gems</package>
-                <package>org.netbeans.modules.ruby.platform.spi</package>
+                <friend>org.netbeans.modules.ruby.refactoring</friend>
+                <friend>org.netbeans.modules.web.project</friend>
+                <friend>org.netbeans.modules.scala.project</friend>
+                <friend>org.netbeans.modules.erlang.platform</friend>
+                <friend>org.netbeans.modules.erlang.project</friend>
+                <friend>org.netbeans.modules.gsf.tools</friend>
+                <package>org.netbeans.modules.gsfpath.api.classpath</package>
+                <package>org.netbeans.modules.gsfpath.api.platform</package>
+                <package>org.netbeans.modules.gsfpath.api.queries</package>
+                <package>org.netbeans.modules.gsfpath.classpath</package>
+                <package>org.netbeans.modules.gsfpath.spi.classpath</package>
+                <package>org.netbeans.modules.gsfpath.spi.classpath.support</package>
+                <package>org.netbeans.modules.gsfpath.spi.platform</package>
+                <package>org.netbeans.modules.gsfpath.spi.queries</package>
             </friend-packages>
         </data>
     </configuration>
