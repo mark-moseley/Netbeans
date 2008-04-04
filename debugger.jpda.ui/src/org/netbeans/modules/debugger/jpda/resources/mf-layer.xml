@@ -82,14 +82,6 @@ made subject to such option by the copyright holder.
             </folder>
         </folder>
         <folder name="AnnotationTypes">  <!-- Editor gutter popup menu -->
-            <folder name="BreakpointActions">
-                <file name="org-netbeans-modules-debugger-jpda-ui-actions-BreakpointEnableAction.instance">
-                    <attr name="position" intvalue="100"/>
-                </file>
-                <file name="org-netbeans-modules-debugger-jpda-ui-actions-BreakpointCustomizeAction.instance">
-                    <attr name="position" intvalue="200"/>
-                </file>
-            </folder>
             <file name="DisabledFieldBreakpoint.xml" url="DisabledFieldBreakpoint.xml"/>
             <file name="DisabledMethodBreakpoint.xml" url="DisabledMethodBreakpoint.xml"/>
             <file name="FieldBreakpoint.xml" url="FieldBreakpoint.xml"/>
@@ -112,8 +104,6 @@ made subject to such option by the copyright holder.
 
     <folder name="Actions">
         <folder name="Debug">
-            <file name="org-netbeans-modules-debugger-jpda-ui-actions-BreakpointEnableAction.instance"/>
-            <file name="org-netbeans-modules-debugger-jpda-ui-actions-BreakpointCustomizeAction.instance"/>
             <file name="org-netbeans-modules-debugger-jpda-ui-actions-ToggleMethodFieldBreakpointAction.instance"/>
             
             <file name="org-netbeans-modules-debugger-jpda-ui-actions-EvaluateAction.instance"/>
@@ -121,6 +111,7 @@ made subject to such option by the copyright holder.
         <folder name="Window">
             <folder name="Debug">
                 <file name="org-netbeans-modules-debugger-jpda-ui-actions-SourcesViewAction.instance"/>
+                <file name="org-netbeans-modules-debugger-jpda-ui-actions-DebuggingViewAction.instance"/>
             </folder>
         </folder>
     </folder>
@@ -250,6 +241,10 @@ made subject to such option by the copyright holder.
                     <attr name="originalFile" stringvalue="Actions/Window/Debug/org-netbeans-modules-debugger-jpda-ui-actions-SourcesViewAction.instance"/>
                     <attr name="position" intvalue="900"/>
                 </file>
+                <file name="org-netbeans-modules-debugger-jpda-ui-actions-DebuggingViewAction.shadow">
+                    <attr name="originalFile" stringvalue="Actions/Window/Debug/org-netbeans-modules-debugger-jpda-ui-actions-DebuggingViewAction.instance"/>
+                    <attr name="position" intvalue="2000"/>
+                </file>
             </folder>
         </folder>
     </folder>
@@ -257,6 +252,9 @@ made subject to such option by the copyright holder.
     <folder name="Shortcuts">
         <file name="SO-8.shadow">
             <attr name="originalFile" stringvalue="Actions/Window/Debug/org-netbeans-modules-debugger-jpda-ui-actions-SourcesViewAction.instance"/>
+        </file>
+        <file name="SO-9.shadow">
+            <attr name="originalFile" stringvalue="Actions/Window/Debug/org-netbeans-modules-debugger-jpda-ui-actions-DebuggingViewAction.instance"/>
         </file>
         <file name="D-F9.shadow">
             <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-jpda-ui-actions-EvaluateAction.instance"/>
@@ -314,12 +312,17 @@ made subject to such option by the copyright holder.
     <folder name="Windows2">
         <folder name="Components">
             <file name="sources.settings" url="sources.settings"/>
+            <file name="debugging.settings" url="debugging.settings"/>
         </folder>
-
         <folder name="Modes">
             <folder name="debugger">
                 <file name="sources.wstcref" url="sources.wstcref">
                     <attr name="position" intvalue="200"/>
+                </file>
+            </folder>
+            <folder name="explorer">
+                <file name="debugging.wstcref" url="debugging.wstcref">
+                    <attr name="position" intvalue="350"/>
                 </file>
             </folder>
         </folder>
