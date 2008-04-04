@@ -40,25 +40,99 @@
  */
 package org.netbeans.modules.websvc.saas.codegen.java;
 
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.tree.VariableTree;
 import org.netbeans.modules.websvc.saas.model.WsdlSaasMethod;
 import java.io.IOException;
-import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import javax.lang.model.element.TypeElement;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.JTextComponent;
+import com.sun.source.util.TreePath;
+import org.netbeans.api.java.source.CancellableTask;
+import org.netbeans.api.java.source.CompilationController;
+import org.netbeans.api.java.source.JavaSource.Phase;
+import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlParameter;
+import org.netbeans.modules.websvc.saas.codegen.java.model.JaxwsOperationInfo;
+import org.netbeans.modules.websvc.saas.codegen.java.model.ParameterInfo;
+import org.netbeans.modules.websvc.saas.codegen.java.model.WsdlSaasBean;
+import org.netbeans.modules.websvc.saas.codegen.java.support.JavaSourceHelper;
+import org.netbeans.modules.websvc.saas.codegen.java.support.SourceGroupSupport;
+import org.netbeans.modules.websvc.saas.codegen.java.support.Util;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
+import org.openide.util.NbBundle;
+import static com.sun.source.tree.Tree.Kind.*;
 
 /**
  * Code generator for REST services wrapping WSDL-based web service.
  *
- * @author nam
+ * @author ayubkhan
  */
 public class JaxWsJavaClientCodeGenerator extends JaxWsCodeGenerator {
-
-    private Collection<String> existingUriTemplates;
 
     public JaxWsJavaClientCodeGenerator(JTextComponent targetComponent, 
             FileObject targetFile, WsdlSaasMethod m) throws IOException {
         super(targetComponent, targetFile, m);
     }
 
+    @Override
+    public Set<FileObject> generate(ProgressHandle pHandle) throws IOException {
+        initProgressReporting(pHandle);
 
+        preGenerate();
+        
+        insertSaasServiceAccessCode(isInBlock(getTargetComponent()));
+        //addImportsToTargetFile();
+        
+        finishProgressReporting();
+
+        return new HashSet<FileObject>(Collections.EMPTY_LIST);
+    }
+    
+    @Override
+    protected String getCustomMethodBody() throws IOException {
+        String methodBody = INDENT + "try {\n";
+        for (ParameterInfo param : bean.getQueryParameters()) {
+            String name = param.getName();
+            methodBody += INDENT_2 + param.getType().getName() + " " + name + " = "+
+                    resolveInitValue(param)+"\n";
+        }
+        JaxwsOperationInfo[] operations = ((WsdlSaasBean) bean).getOperationInfos();
+        for (JaxwsOperationInfo info : operations) {
+            methodBody += getWSInvocationCode(info);
+        }
+        methodBody += INDENT + "} catch (Exception ex) {\n";
+        methodBody += INDENT_2 + "ex.printStackTrace();\n";
+        methodBody += INDENT + "}\n";
+        return methodBody;
+    }
+    
+    /**
+     *  Insert the Saas client call
+     */
+    protected void insertSaasServiceAccessCode(boolean isInBlock) throws IOException {
+        try {
+            String code = "";
+            if(isInBlock) {
+                code = getCustomMethodBody();
+            } else {
+                code = "\nprivate String call"+getBean().getName()+"Service() {\n";
+                code += getCustomMethodBody()+"\n";
+                code += "return result;\n";
+                code += "}\n";
+            }
+            insert(code, getTargetComponent(), true);
+        } catch (BadLocationException ex) {
+            throw new IOException(ex.getMessage());
+        }
+    }
+    
 }
