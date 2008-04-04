@@ -43,15 +43,14 @@ package org.netbeans.modules.debugger.jpda.ui.views;
 
 import java.beans.PropertyChangeEvent;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import javax.swing.JComponent;
 
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.DebuggerManagerAdapter;
+import org.netbeans.modules.debugger.jpda.ui.debugging.DebuggingView;
+import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.viewmodel.Model;
 import org.netbeans.spi.viewmodel.Models;
 import org.netbeans.spi.viewmodel.ColumnModel;
@@ -66,6 +65,7 @@ import org.netbeans.spi.viewmodel.TreeModel;
 import org.netbeans.spi.viewmodel.TreeModelFilter;
 import org.netbeans.spi.viewmodel.ModelListener;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
+import org.openide.nodes.Node;
 
 
 /**
@@ -77,7 +77,7 @@ import org.netbeans.spi.viewmodel.UnknownTypeException;
  *
  * @author   Jan Jancura
  */
-class ViewModelListener extends DebuggerManagerAdapter {
+public class ViewModelListener extends DebuggerManagerAdapter {
     
     private static boolean verbose = 
         System.getProperty ("netbeans.debugger.models") != null;
@@ -87,7 +87,7 @@ class ViewModelListener extends DebuggerManagerAdapter {
     private List models = new ArrayList(11);
     
     
-    ViewModelListener (
+    public ViewModelListener (
         String viewType,
         JComponent view
     ) {
@@ -96,7 +96,7 @@ class ViewModelListener extends DebuggerManagerAdapter {
         setUp();
     }
     
-    void setUp() {
+    public void setUp() {
         DebuggerManager.getDebuggerManager ().addDebuggerListener (
             DebuggerManager.PROP_CURRENT_ENGINE,
             this
@@ -104,27 +104,23 @@ class ViewModelListener extends DebuggerManagerAdapter {
         updateModel ();
     }
 
-    void destroy () {
+    public void destroy () {
         DebuggerManager.getDebuggerManager ().removeDebuggerListener (
             DebuggerManager.PROP_CURRENT_ENGINE,
             this
         );
-        Models.setModelsToView (
-            view, 
-            Models.EMPTY_MODEL
-        );
+        if (view instanceof DebuggingView) {
+            ((DebuggingView) view).setRootContext(Node.EMPTY);
+        } else {
+            Models.setModelsToView (
+                view, 
+                Models.EMPTY_MODEL
+            );
+        }
     }
 
     public void propertyChange (PropertyChangeEvent e) {
         updateModel ();
-    }
-    
-    private List joinLookups(DebuggerEngine e, DebuggerManager dm, Class service) {
-        List es = e.lookup (viewType, service);
-        List ms = dm.lookup(viewType, service);
-        ms.removeAll(es);
-        es.addAll(ms);
-        return es;
     }
     
     private synchronized void updateModel () {
@@ -142,31 +138,18 @@ class ViewModelListener extends DebuggerManagerAdapter {
         List nodeActionsProviderFilters;
         List columnModels;
         List mm;
-        if (e != null) {
-            treeModels =            joinLookups(e, dm, TreeModel.class);
-            treeModelFilters =      joinLookups(e, dm, TreeModelFilter.class);
-            treeExpansionModels =   joinLookups(e, dm, TreeExpansionModel.class);
-            nodeModels =            joinLookups(e, dm, NodeModel.class);
-            nodeModelFilters =      joinLookups(e, dm, NodeModelFilter.class);
-            tableModels =           joinLookups(e, dm, TableModel.class);
-            tableModelFilters =     joinLookups(e, dm, TableModelFilter.class);
-            nodeActionsProviders =  joinLookups(e, dm, NodeActionsProvider.class);
-            nodeActionsProviderFilters = joinLookups(e, dm, NodeActionsProviderFilter.class);
-            columnModels =          joinLookups(e, dm, ColumnModel.class);
-            mm =                    joinLookups(e, dm, Model.class);
-        } else {
-            treeModels =            dm.lookup (viewType, TreeModel.class);
-            treeModelFilters =      dm.lookup (viewType, TreeModelFilter.class);
-            treeExpansionModels =   dm.lookup (viewType, TreeExpansionModel.class);
-            nodeModels =            dm.lookup (viewType, NodeModel.class);
-            nodeModelFilters =      dm.lookup (viewType, NodeModelFilter.class);
-            tableModels =           dm.lookup (viewType, TableModel.class);
-            tableModelFilters =     dm.lookup (viewType, TableModelFilter.class);
-            nodeActionsProviders =  dm.lookup (viewType, NodeActionsProvider.class);
-            nodeActionsProviderFilters = dm.lookup (viewType, NodeActionsProviderFilter.class);
-            columnModels =          dm.lookup (viewType, ColumnModel.class);
-            mm =                    dm.lookup (viewType, Model.class);
-        }
+        ContextProvider cp = e != null ? DebuggerManager.join(e, dm) : dm;
+        treeModels =            cp.lookup (viewType, TreeModel.class);
+        treeModelFilters =      cp.lookup (viewType, TreeModelFilter.class);
+        treeExpansionModels =   cp.lookup (viewType, TreeExpansionModel.class);
+        nodeModels =            cp.lookup (viewType, NodeModel.class);
+        nodeModelFilters =      cp.lookup (viewType, NodeModelFilter.class);
+        tableModels =           cp.lookup (viewType, TableModel.class);
+        tableModelFilters =     cp.lookup (viewType, TableModelFilter.class);
+        nodeActionsProviders =  cp.lookup (viewType, NodeActionsProvider.class);
+        nodeActionsProviderFilters = cp.lookup (viewType, NodeActionsProviderFilter.class);
+        columnModels =          cp.lookup (viewType, ColumnModel.class);
+        mm =                    cp.lookup (viewType, Model.class);
         
         models.clear();
         models.add(treeModels);
@@ -181,10 +164,15 @@ class ViewModelListener extends DebuggerManagerAdapter {
         models.add(columnModels);
         models.add(mm);
         
-        Models.setModelsToView (
-            view, 
-            Models.createCompoundModel (models)
-        );
+        if (view instanceof DebuggingView) {
+            ((DebuggingView) view).setRootContext(
+                    Models.createNodes(Models.createCompoundModel(models)));
+        } else {
+            Models.setModelsToView (
+                view, 
+                Models.createCompoundModel (models)
+            );
+        }
     }
 
     
