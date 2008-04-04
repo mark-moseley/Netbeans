@@ -42,8 +42,6 @@
 package org.netbeans.modules.websvc.axis2.wizards;
 
 import java.awt.Component;
-import java.io.File;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -51,42 +49,31 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 
-import org.netbeans.modules.websvc.axis2.WSDLUtils;
-import org.netbeans.modules.xml.wsdl.model.Service;
-import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 import org.openide.WizardDescriptor;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.HelpCtx;
-import org.openide.util.RequestProcessor;
 
 /**
  *
  * @author mkuchtiak
  */
-public class WsFromWsdlPanel1 implements  WizardDescriptor.FinishablePanel<WizardDescriptor>, WizardProperties {
-    
-    private WsFromWsdlGUIPanel1 component;
+public class WsFromWsdlPanel0 implements  WizardDescriptor.FinishablePanel<WizardDescriptor>, WizardProperties {
+
+    private WsFromWsdlGUIPanel0 component;
     private WizardDescriptor wizardDescriptor;
     private Project project;
-    private File wsdlFile;
     
     /** Creates a new instance of WebServiceType */
-    public WsFromWsdlPanel1(Project project, WizardDescriptor wizardDescriptor) {
+    public WsFromWsdlPanel0(Project project, WizardDescriptor wizardDescriptor) {
         this.project = project;
         this.wizardDescriptor = wizardDescriptor;
     }
 
     public Component getComponent() {
         if (component == null) {
-            component = new WsFromWsdlGUIPanel1(this);
+            component = new WsFromWsdlGUIPanel0(this);
         }
         
         return component;
-    }
-    
-    WizardDescriptor getWizardDescriptor() {
-        return wizardDescriptor;
     }
     
     Project getProject() {
@@ -94,49 +81,25 @@ public class WsFromWsdlPanel1 implements  WizardDescriptor.FinishablePanel<Wizar
     }
 
     public HelpCtx getHelp() {
-        return new HelpCtx(WsFromWsdlPanel1.class);
+        return new HelpCtx(WsFromWsdlPanel0.class);
     }
 
-    public void readSettings(final WizardDescriptor settings) {
-        File newWsdlFile = (File)settings.getProperty(WizardProperties.PROP_WSDL_URL);
-        if (newWsdlFile != null && !newWsdlFile.equals(wsdlFile)) {
-            wsdlFile = newWsdlFile;
-            component.setW2JOptions("");
-            RequestProcessor.getDefault().post(new Runnable() {
-                public void run() {
-                    FileObject wsdlFo = FileUtil.toFileObject(wsdlFile);
-                    WSDLModel wsdlModel = WSDLUtils.getWSDLModel(wsdlFo, true);
-                    if (wsdlModel != null) {
-                        settings.putProperty(WizardProperties.PROP_WSDL_NS, WSDLUtils.getTargetNamespace(wsdlModel));
-                        Collection<Service> services = WSDLUtils.getServices(wsdlModel);
-                        component.setServices(services);
-                        if (services != null && services.size()>0) {
-                            component.setPorts(WSDLUtils.getPortsForService(services.iterator().next()));
-                        }
-                        String packageName = WSDLUtils.getPackageNameFromNamespace(wsdlModel.getDefinitions().getTargetNamespace());
-                        component.setPackageName(packageName);
-                        component.setW2JOptions("-ss -sd -sn "+component.getServiceName()+
-                                    " -pn "+component.getPortName()+
-                                    " -d " +component.getDatabindingName()+"\n"+
-                                    " -p "+packageName+(component.isSEI() ? " -ssi" : "")
-                        );
-                    }
-                }
-
-            });
-        }
+    public void readSettings(WizardDescriptor settings) {
     }
 
     public void storeSettings(WizardDescriptor settings) {
-        settings.putProperty(WizardProperties.PROP_DATABINDING_NAME, component.getDatabindingName());
-        settings.putProperty(WizardProperties.PROP_SEI, Boolean.valueOf(component.isSEI()));
-        settings.putProperty(WizardProperties.PROP_SERVICE_NAME, component.getServiceName());
-        settings.putProperty(WizardProperties.PROP_PORT_NAME, component.getPortName());
-        settings.putProperty(WizardProperties.PROP_PACKAGE_NAME, component.getPackageName());
-        settings.putProperty(WizardProperties.PROP_WS_TO_JAVA_OPTIONS, component.getW2JMoreOptions());
+        settings.putProperty(PROP_WSDL_URL, component.getWsdlFile()); 
     }
 
     public boolean isValid() {
+//        Preferences prefs = AxisUtils.getPreferences();
+//        String axisHome = prefs.get("AXIS_HOME",null); //NOI18N
+//        if (axisHome == null || axisHome.length() == 0) {
+//            wizardDescriptor.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(WsFromWsdlPanel0.class, "MSG_NoAxisHome")); // NOI18N
+//            return false;
+//        } else {
+//            wizardDescriptor.putProperty("WizardPanel_errorMessage", ""); //NOI18N
+//        }
         return component.dataIsValid();
     }
 
@@ -155,7 +118,7 @@ public class WsFromWsdlPanel1 implements  WizardDescriptor.FinishablePanel<Wizar
     }
 
     public boolean isFinishPanel() {
-        return true;
+        return false;
     }
 
 //    public void stateChanged(ChangeEvent e) {

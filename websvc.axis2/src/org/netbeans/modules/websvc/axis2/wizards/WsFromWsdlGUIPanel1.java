@@ -72,7 +72,7 @@ public class WsFromWsdlGUIPanel1 extends javax.swing.JPanel {
         jComboBox1.addItemListener(cbListener);
         jComboBox2.addItemListener(cbListener);
         jComboBox3.addItemListener(cbListener);
-        jTextArea2.setText("-s -ss -sd"); //NOI18N
+        jTextArea2.setText("-s"); //NOI18N
         tfPackageName.getDocument().addDocumentListener(new DocumentListener() {
 
             public void insertUpdate(DocumentEvent e) {
@@ -146,6 +146,7 @@ public class WsFromWsdlGUIPanel1 extends javax.swing.JPanel {
         jTextArea1.setColumns(5);
         jTextArea1.setEditable(false);
         jTextArea1.setRows(5);
+        jTextArea1.setOpaque(false);
         jScrollPane1.setViewportView(jTextArea1);
 
         optionsLabel.setText(org.openide.util.NbBundle.getMessage(WsFromWsdlGUIPanel1.class, "WsFromWsdlGUIPanel1.optionsLabel.text")); // NOI18N
@@ -273,7 +274,7 @@ public class WsFromWsdlGUIPanel1 extends javax.swing.JPanel {
         if (WizardProperties.BINDING_ADB.equals(databindingName)) return "adb"; //NOI18N
         else if (WizardProperties.BINDING_XML_BEANS.equals(databindingName)) return "xmlbeans"; //NOI18N
         else if (WizardProperties.BINDING_JIBX.equals(databindingName)) return "jibx"; //NOI18N
-        return "adb"; //NOI18N
+        return "axiom"; //NOI18N
     }
     
     boolean isSEI() {
@@ -305,24 +306,33 @@ public class WsFromWsdlGUIPanel1 extends javax.swing.JPanel {
 
         public void itemStateChanged(ItemEvent e) {
             Object source = e.getSource();
-            System.out.println("itemStateChanged "+source);
             if (jComboBox1 == source) {
                 String serviceName = (String)jComboBox1.getSelectedItem();
                 if (serviceName != null) {
                     Collection<Port> ports = WSDLUtils.getPortsForService(services, serviceName);
                     setPorts(ports);
                 }
-                changeOption("-sn", (String)serviceName);
+                changeOption("-sn", (String)serviceName); //NOI18N
             } else if (jComboBox2 == source) {
                 String portName = (String)jComboBox2.getSelectedItem();
-                changeOption("-pn", portName);
+                changeOption("-pn", portName); //NOI18N
             } else if (jComboBox3 == source) {
-                String databindingName = (String)jComboBox3.getSelectedItem();
                 String db = getDatabindingName();
-                changeOption("-d", db);
+                if ("axiom".equals(db)) { //NOI18N
+                    tfPackageName.setEditable(false);
+                    jCheckBox1.setEnabled(false);
+                    jTextArea2.setOpaque(false);
+                    jTextArea2.setEditable(false);
+                } else {
+                    tfPackageName.setEditable(true);
+                    jCheckBox1.setEnabled(true);
+                    jTextArea2.setOpaque(true);
+                    jTextArea2.setEditable(true);
+                    changeOption("-d", db);
+                }
             } else if (jCheckBox1 == source) {
                 boolean selected = jCheckBox1.isSelected();
-                changeOption("-ssi", Boolean.valueOf(selected));
+                changeOption("-ssi", Boolean.valueOf(selected)); //NOI18N
                 
             }
         }
@@ -338,13 +348,16 @@ public class WsFromWsdlGUIPanel1 extends javax.swing.JPanel {
         while (tokens.hasMoreTokens()) {
             String token = tokens.nextToken();
             if ("-p".equals(token)) buf.append("\n");
-            else if (!"-sn".equals(token)) buf.append(" ");
-            if (option.equals(token)) {              
+            else buf.append(" ");
+            if (option.equals(token)) {
+                // string options
                 if (value instanceof String) {
                     buf.append(token);
+                    // skip next token
                     token = tokens.nextToken();
                     buf.append(" "+(String)value);
                 }
+                // boolean option
                 else if (value instanceof Boolean) {
                     if (((Boolean)value).booleanValue()) {
                         buf.append(token);
