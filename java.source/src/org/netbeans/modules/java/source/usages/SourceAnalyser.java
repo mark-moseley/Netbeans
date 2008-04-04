@@ -45,6 +45,7 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.ErroneousTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.ImportTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.NewClassTree;
@@ -54,20 +55,17 @@ import com.sun.source.util.TreeScanner;
 import com.sun.tools.javac.api.JavacTaskImpl;
 import com.sun.tools.javac.code.Kinds;
 import com.sun.tools.javac.code.Symbol;
-import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Types;
 import com.sun.tools.javac.comp.TransTypes;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
 import com.sun.tools.javac.util.Name;
-import com.sun.tools.javac.util.Name;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -83,6 +81,7 @@ import java.util.Stack;
 import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
@@ -93,6 +92,7 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.source.ElementHandle;
+import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.modules.java.source.ElementHandleAccessor;
 import org.netbeans.modules.java.source.parsing.FileObjects;
 import org.netbeans.modules.java.source.parsing.OutputFileManager;
@@ -132,12 +132,13 @@ public class SourceAnalyser {
         return this.index.isValid(true);
     }
 
-    public void analyse (final Iterable<? extends CompilationUnitTree> data, JavacTaskImpl jt, JavaFileManager manager, javax.tools.JavaFileObject sibling, Set<? super ElementHandle<TypeElement>> newTypes) throws IOException {
+    public void analyse (final Iterable<? extends CompilationUnitTree> data, JavacTaskImpl jt, JavaFileManager manager, javax.tools.JavaFileObject sibling, Set<? super ElementHandle<TypeElement>> newTypes, /*out*/boolean[] mainMethod) throws IOException {
         final Map<Pair<String, String>,Map<String,Set<ClassIndexImpl.UsageType>>> usages = new HashMap<Pair<String,String>,Map<String,Set<ClassIndexImpl.UsageType>>>();
         for (CompilationUnitTree cu : data) {
             UsagesVisitor uv = new UsagesVisitor (jt, cu, manager, sibling, newTypes);
             uv.scan(cu,usages);
-            if (uv.rsList != null && uv.rsList.size()>0) {
+            mainMethod[0] |= uv.mainMethod;
+            if (uv.sourceName != null && uv.rsList != null && uv.rsList.size()>0) {
                 final int index = uv.sourceName.lastIndexOf('.');              //NOI18N
                 final String pkg = index == -1 ? "" : uv.sourceName.substring(0,index);    //NOI18N
                 final String rsName = (index == -1 ? uv.sourceName : uv.sourceName.substring(index+1)) + '.' + FileObjects.RS;    //NOI18N
@@ -252,9 +253,12 @@ public class SourceAnalyser {
         private final List<? super Pair<String,String>> topLevels;
         private final Set<? super ElementHandle<TypeElement>> newTypes;
         private final Set<String> imports;
+        private final Set<String> staticImports;
+        private boolean isStaticImport;
         private State state;        
         private Element enclosingElement = null;
         private Set<String> rsList;        
+        private boolean mainMethod;
         
         
         
@@ -265,6 +269,7 @@ public class SourceAnalyser {
             assert sibling != null;
             this.activeClass = new Stack<Pair<String,String>> ();
             this.imports = new HashSet<String> ();
+            this.staticImports = new HashSet<String> ();
             this.jt = jt;
             this.errorName = Name.Table.instance(jt.getContext()).error;
             this.state = State.OTHER;
@@ -287,6 +292,7 @@ public class SourceAnalyser {
             
             this.activeClass = new Stack<Pair<String,String>> ();
             this.imports = new HashSet<String> ();
+            this.staticImports = new HashSet<String>();
             this.jt = jt;
             this.errorName = Name.Table.instance(jt.getContext()).error;
             this.state = State.OTHER;
@@ -330,6 +336,12 @@ public class SourceAnalyser {
                         addUsage(name, s, p, ClassIndexImpl.UsageType.TYPE_REFERENCE);
                     }
                     imports.clear();
+                    for (String s : staticImports) {
+                        addUsage(name, s, p, ClassIndexImpl.UsageType.TYPE_REFERENCE);
+                        addUsage(name, s, p, ClassIndexImpl.UsageType.METHOD_REFERENCE);
+                        addUsage(name, s, p, ClassIndexImpl.UsageType.FIELD_REFERENCE);
+                    }
+                    staticImports.clear();
                 }
             }
             return null;
@@ -347,6 +359,13 @@ public class SourceAnalyser {
         public @Override Void visitIdentifier(final IdentifierTree node, final Map<Pair<String,String>,Map<String, Set<ClassIndexImpl.UsageType>>> p) {
             handleVisitIdentSelect (((JCTree.JCIdent)node).sym, p);
             return super.visitIdentifier(node, p);
+        }
+        
+        public @Override Void visitImport (final ImportTree node, final Map<Pair<String,String>,Map<String, Set<ClassIndexImpl.UsageType>>> p) {
+            this.isStaticImport = node.isStatic();
+            final Void ret = super.visitImport(node, p);
+            this.isStaticImport = false;
+            return ret;
         }
         
         private void handleVisitIdentSelect (Symbol sym, final Map<Pair<String,String>,Map<String, Set<ClassIndexImpl.UsageType>>> p) {
@@ -397,7 +416,12 @@ public class SourceAnalyser {
             else if (sym != null && (sym.getKind().isClass() || sym.getKind().isInterface())) {
                 final String className = encodeClassName(sym);
                 if (className != null) {
-                    this.imports.add(className);
+                    if (this.isStaticImport) {
+                        this.staticImports.add(className);                        
+                    }
+                    else {
+                        this.imports.add(className);
+                    }
                 }
             }
         }
@@ -409,29 +433,6 @@ public class SourceAnalyser {
             scan(node.getTypeArguments(), p);
             this.state = currState;
             return null;
-        }
-        
-        void dump(TypeElement clazz, String className, Element enclosingElement) {
-            PrintWriter output = null;
-            if (this.rsList != null) {
-                this.rsList.add (className);
-            }
-            try {
-                JavaFileObject jfo = manager.getJavaFileForOutput(StandardLocation.CLASS_OUTPUT, className, JavaFileObject.Kind.CLASS, sibling);
-                
-                output = new PrintWriter(new OutputStreamWriter(jfo.openOutputStream(), "UTF-8"));
-                
-                SymbolDumper.dump(output, types, trans, clazz, enclosingElement);
-                
-                output.close();
-                
-            } catch (IOException e) {
-                Exceptions.printStackTrace(e);
-            } finally {
-                if (output != null) {
-                    output.close();
-                }
-            }
         }
         
         protected boolean shouldGenerate (final String binaryName, ClassSymbol sym) {
@@ -476,6 +477,12 @@ public class SourceAnalyser {
                                     addUsage(name, s, p, ClassIndexImpl.UsageType.TYPE_REFERENCE);
                                 }
                                 imports.clear();
+                                for (String s : staticImports) {
+                                    addUsage(name, s, p, ClassIndexImpl.UsageType.TYPE_REFERENCE);
+                                    addUsage(name, s, p, ClassIndexImpl.UsageType.METHOD_REFERENCE);
+                                    addUsage(name, s, p, ClassIndexImpl.UsageType.FIELD_REFERENCE);
+                                }
+                                staticImports.clear();
                             }
                             activeClass.push (name);
                             errorIgnorSubtree = false;
@@ -527,6 +534,12 @@ public class SourceAnalyser {
                             addUsage(name, s, p, ClassIndexImpl.UsageType.TYPE_REFERENCE);
                         }
                         imports.clear();
+                        for (String s : staticImports) {
+                            addUsage(name, s, p, ClassIndexImpl.UsageType.TYPE_REFERENCE);
+                            addUsage(name, s, p, ClassIndexImpl.UsageType.METHOD_REFERENCE);
+                            addUsage(name, s, p, ClassIndexImpl.UsageType.FIELD_REFERENCE);
+                        }
+                        staticImports.clear();
                     }
                     activeClass.push (name);                    
                     errorIgnorSubtree = false;
@@ -552,9 +565,6 @@ public class SourceAnalyser {
                 } finally {
                     enclosingElement = old;
                 }
-            }
-            if (!errorInDecl && shouldGenerate(className, sym)) {
-                dump(sym, className, enclosingElement);
             }
             return null;
         }
@@ -586,6 +596,9 @@ public class SourceAnalyser {
             Element old = enclosingElement;
             try {
                 enclosingElement = ((JCMethodDecl) node).sym;
+                if (enclosingElement != null && enclosingElement.getKind() == ElementKind.METHOD) {
+                    mainMethod |= SourceUtils.isMainMethod((ExecutableElement) enclosingElement);
+                }
                 return super.visitMethod(node, p);
             } finally {
                 enclosingElement = old;
