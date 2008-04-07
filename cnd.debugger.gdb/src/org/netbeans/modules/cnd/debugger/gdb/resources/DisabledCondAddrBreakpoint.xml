@@ -43,11 +43,11 @@ made subject to such option by the copyright holder.
 
 <!DOCTYPE type PUBLIC "-//NetBeans//DTD annotation type 1.0//EN" "http://www.netbeans.org/dtds/annotation-type-1_0.dtd">
 <type
-    name='DisabledCondFuncBreakpoint'
-    description_key='HINT_DISABLED_CONDITIONAL_FUNCTION_BREAKPOINT'
+    name='DisabledCondAddrBreakpoint'
+    description_key='HINT_DISABLED_CONDITIONAL_ADDRESS_BREAKPOINT'
     localizing_bundle='org.netbeans.modules.cnd.debugger.gdb.resources.Bundle'
     visible='true' 
-    glyph='nbresloc:/org/netbeans/modules/debugger/resources/editor/DisabledConditionalBreakpoint.gif'
+    glyph='nbresloc:/org/netbeans/modules/debugger/resources/breakpointsView/DisabledConditionalBreakpoint.gif'
     highlight='0xDCDCD8' 
     type='line'
     actions='BreakpointActions'
