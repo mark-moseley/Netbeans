@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -51,6 +51,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
 import org.netbeans.modules.ruby.platform.PlatformComponentFactory;
 import org.netbeans.modules.ruby.platform.RubyPlatformCustomizer;
+import org.netbeans.modules.ruby.rubyproject.Util;
+import org.netbeans.modules.ruby.rubyproject.ui.wizards.NewRubyProjectWizardIterator.Type;
 import org.openide.WizardDescriptor;
 import org.openide.WizardValidationException;
 import org.openide.util.NbBundle;
@@ -60,11 +62,12 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
     
     private static boolean lastMainClassCheck = true; // XXX Store somewhere
     
-    private PanelConfigureProject panel;
+    private final PanelConfigureProject panel;
     private boolean valid;
     
-    public PanelOptionsVisual(PanelConfigureProject panel, int type) {
+    PanelOptionsVisual(PanelConfigureProject panel, Type type) {
         initComponents();
+        Util.preselectWizardPlatform(platforms);
         this.panel = panel;
         fireChangeEvent();
         
@@ -75,21 +78,18 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
         });
 
         switch (type) {
-//            case NewRubyProjectWizardIterator.TYPE_LIB:
-//                setAsMainCheckBox.setVisible( false );
-//                createMainCheckBox.setVisible( false );
-//                mainClassTextField.setVisible( false );
-//                break;
-            case NewRubyProjectWizardIterator.TYPE_APP:
-                createMainCheckBox.addActionListener( this );
-                createMainCheckBox.setSelected( lastMainClassCheck );
-                mainClassTextField.setEnabled( lastMainClassCheck );
+            case APPLICATION:
+                createMainCheckBox.addActionListener(this);
+                createMainCheckBox.setSelected(lastMainClassCheck);
+                mainClassTextField.setEnabled(lastMainClassCheck);
                 break;
-            case NewRubyProjectWizardIterator.TYPE_EXT:
-                setAsMainCheckBox.setVisible( true );
-                createMainCheckBox.setVisible( false );
-                mainClassTextField.setVisible( false );
+            case EXISTING:
+                setAsMainCheckBox.setVisible(true);
+                createMainCheckBox.setVisible(false);
+                mainClassTextField.setVisible(false);
                 break;
+            default:
+                throw new IllegalStateException("unknown type: " + type);
         }
         
         this.mainClassTextField.getDocument().addDocumentListener( new DocumentListener () {
@@ -109,6 +109,11 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
         });
     }
 
+    public @Override void removeNotify() {
+        Util.storeWizardPlatform(platforms);
+        super.removeNotify();
+    }
+    
     public void actionPerformed( ActionEvent e ) {        
         if ( e.getSource() == createMainCheckBox ) {
             lastMainClassCheck = createMainCheckBox.isSelected();
@@ -153,11 +158,9 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
 
         setAsMainCheckBox.setSelected(true);
         org.openide.awt.Mnemonics.setLocalizedText(setAsMainCheckBox, org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("LBL_setAsMainCheckBox")); // NOI18N
-        setAsMainCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         createMainCheckBox.setSelected(true);
         org.openide.awt.Mnemonics.setLocalizedText(createMainCheckBox, org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("LBL_createMainCheckBox")); // NOI18N
-        createMainCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         rubyPlatformLabel.setLabelFor(platforms);
         org.openide.awt.Mnemonics.setLocalizedText(rubyPlatformLabel, org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "RubyPlatformLabel")); // NOI18N
@@ -173,22 +176,18 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(setAsMainCheckBox)
             .add(layout.createSequentialGroup()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(createMainCheckBox)
+                    .add(rubyPlatformLabel))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(layout.createSequentialGroup()
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(setAsMainCheckBox)
-                            .add(layout.createSequentialGroup()
-                                .add(rubyPlatformLabel)
-                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                                .add(platforms, 0, 344, Short.MAX_VALUE)))
+                        .add(platforms, 0, 296, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(manageButton))
-                    .add(layout.createSequentialGroup()
-                        .add(createMainCheckBox)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(mainClassTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 419, Short.MAX_VALUE)))
-                .addContainerGap())
+                    .add(mainClassTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 377, Short.MAX_VALUE)))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -197,13 +196,13 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(createMainCheckBox)
-                    .add(mainClassTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .add(18, 18, 18)
+                    .add(mainClassTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 21, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(rubyPlatformLabel)
+                    .add(manageButton)
                     .add(platforms, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                    .add(manageButton))
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .add(rubyPlatformLabel))
+                .addContainerGap(29, Short.MAX_VALUE))
         );
 
         setAsMainCheckBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("ACSN_setAsMainCheckBox")); // NOI18N
@@ -212,6 +211,8 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
         createMainCheckBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("ACSD_createMainCheckBox")); // NOI18N
         mainClassTextField.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("ASCN_mainClassTextFiled")); // NOI18N
         mainClassTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(PanelOptionsVisual.class).getString("ASCD_mainClassTextFiled")); // NOI18N
+        rubyPlatformLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "PanelOptionsVisual.rubyPlatformLabel.AccessibleContext.accessibleDescription")); // NOI18N
+        manageButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "PanelOptionsVisual.manageButton.AccessibleContext.accessibleDescription")); // NOI18N
 
         getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "ACSN_PanelOptionsVisual")); // NOI18N
         getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(PanelOptionsVisual.class, "ACSD_PanelOptionsVisual")); // NOI18N
@@ -237,8 +238,6 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
     }
     
     void read(WizardDescriptor d) {
-        // XXX
-//        RubyInstallation.getInstance().addPropertyChangeListener(this);
     }
     
     void validate (WizardDescriptor d) throws WizardValidationException {
@@ -248,11 +247,9 @@ public final class PanelOptionsVisual extends SettingsPanel implements ActionLis
     void store( WizardDescriptor d ) {
         d.putProperty( /*XXX Define somewhere */ "setAsMain", setAsMainCheckBox.isSelected() && setAsMainCheckBox.isVisible() ? Boolean.TRUE : Boolean.FALSE ); // NOI18N
         d.putProperty( /*XXX Define somewhere */ "mainClass", createMainCheckBox.isSelected() && createMainCheckBox.isVisible() ? mainClassTextField.getText() : null ); // NOI18N
-        d.putProperty("platform", platforms.getModel().getSelectedItem());
-        // XXX
-//        RubyInstallation.getInstance().removePropertyChangeListener(this);
+        d.putProperty("platform", PlatformComponentFactory.getPlatform(platforms));
     }
-    
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JCheckBox createMainCheckBox;
     private javax.swing.JTextField mainClassTextField;
