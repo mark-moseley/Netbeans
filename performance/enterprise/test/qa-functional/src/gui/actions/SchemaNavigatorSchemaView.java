@@ -57,7 +57,7 @@ import org.netbeans.jemmy.operators.JComboBoxOperator;
  */
 public class SchemaNavigatorSchemaView  extends org.netbeans.performance.test.utilities.PerformanceTestCase {
     
-    private Node processNode, schemaNode;
+    private Node processNode, schemaNode, anotherSchemaNode;
     
     /** Creates a new instance of SchemaNavigatorDesignView */
     public SchemaNavigatorSchemaView(String testName) {
@@ -73,10 +73,13 @@ public class SchemaNavigatorSchemaView  extends org.netbeans.performance.test.ut
     
     protected void initialize() {
         log(":: initialize");
+        System.gc();
+        new EventTool().waitNoEvent(3000);
         processNode = EPUtilities.getProcessFilesNode("SOATestProject");
         processNode.select();
         
         schemaNode = new Node(processNode, "fields.xsd");
+        anotherSchemaNode = new Node(processNode, "batch.xsd");
     }
     
     public void prepare() {
@@ -86,14 +89,18 @@ public class SchemaNavigatorSchemaView  extends org.netbeans.performance.test.ut
     public ComponentOperator open() {
         log(":: open");
         schemaNode.select();
-        JComboBoxOperator combo = new JComboBoxOperator(new TopComponentOperator("Navigator")); // NOI18N
+        TopComponentOperator topComponentOperator = new TopComponentOperator("Navigator");
+        JComboBoxOperator combo = new JComboBoxOperator(topComponentOperator); // NOI18N
         combo.selectItem("Schema View"); // NOI18N
-        return null;
+        return topComponentOperator;
     }
     
     @Override
     public void close() {
-        processNode.select();
+        anotherSchemaNode.select();
+        JComboBoxOperator combo = new JComboBoxOperator(new TopComponentOperator("Navigator")); // NOI18N
+        combo.selectItem("Design View"); // NOI18N
+        System.gc();
         new EventTool().waitNoEvent(1000);
     }
     
