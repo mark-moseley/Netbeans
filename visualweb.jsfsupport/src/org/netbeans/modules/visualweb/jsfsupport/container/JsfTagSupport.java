@@ -4,28 +4,31 @@
  */
 package org.netbeans.modules.visualweb.jsfsupport.container;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import javax.faces.webapp.UIComponentTagBase;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.EntityResolver;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 /**
@@ -52,10 +55,7 @@ public class JsfTagSupport {
         try {
             Enumeration<URL> urls = classLoader.getResources("META-INF/faces-config.xml");
             while (urls.hasMoreElements()) {
-                URL url = urls.nextElement();
-                if (!url.getPath().contains("jsfcl.jar")) {
-                    addTaglibFacesConfigMapEntry(url);
-                }
+                addTaglibFacesConfigMapEntry(urls.nextElement());
             }
 
             // Bug Fix 124610 - Unfortunately the JSF RI component informations are not kept
@@ -67,17 +67,21 @@ public class JsfTagSupport {
             tagLibFacesConfigInfo.addTagLibUrl(tagLibUrl);
             tagLibFacesConfigInfo.addFacesConfigUrl(facesConfigUrl);
             statictTaglibFacesConfigLocationMap.put(taglibUri, tagLibFacesConfigInfo);
+            
+            tagLibUrl = new URL(facesConfigUrl.toString().split("!")[0] + "!/META-INF/jsf_core.tld");
+            taglibUri = "http://java.sun.com/jsf/core";
+            tagLibFacesConfigInfo = new TagLibFacesConfigInfo(taglibUri);
+            tagLibFacesConfigInfo.addTagLibUrl(tagLibUrl);
+            tagLibFacesConfigInfo.addFacesConfigUrl(facesConfigUrl);
+            statictTaglibFacesConfigLocationMap.put(taglibUri, tagLibFacesConfigInfo);            
         } catch (Exception ex) {
             Exceptions.printStackTrace(ex);
         }
     }
 
     private static void addTaglibFacesConfigMapEntry(URL facesConfigUrl) throws IOException, ParserConfigurationException, SAXException {
-        String zipFilePathPrefix = facesConfigUrl.getFile().split("!")[0];
-        String zipFilePath = zipFilePathPrefix.substring(zipFilePathPrefix.indexOf(":") + 1);
-        if (zipFilePath.contains("%20")) {
-            zipFilePath = zipFilePath.replaceAll("%20", " ");
-        }
+        FileObject facesConfigFileObject = URLMapper.findFileObject(facesConfigUrl);
+        String zipFilePath = FileUtil.toFile(FileUtil.getArchiveFile(facesConfigFileObject)).getAbsolutePath();
         ZipFile in = new ZipFile(zipFilePath);
         Enumeration<? extends ZipEntry> entries = in.entries();
         while (entries.hasMoreElements()) {
@@ -87,6 +91,7 @@ public class JsfTagSupport {
                 DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
                 factory.setValidating(false);
                 DocumentBuilder documentBuilder = factory.newDocumentBuilder();
+                documentBuilder.setEntityResolver(new EmptyEntityResolver());
                 Document tagLibdocument = documentBuilder.parse(tagLibUrl.openStream());
                 NodeList tagNodes = tagLibdocument.getElementsByTagName("uri");
                 // Scan the TLD file to find the taglib URI
@@ -132,6 +137,9 @@ public class JsfTagSupport {
 
     public String getComponentClass(
             ClassLoader classLoader, String tagName) throws ClassNotFoundException, InstantiationException, IllegalAccessException {
+        if(tagName.equals("view") || tagName.equals("subview") || tagName.equals("verbatim")) {
+            return null;
+        }
         UIComponentTagBase componentTag = (UIComponentTagBase) getTagHandler(classLoader, tagName);
         String componentType = componentTag.getComponentType();
         ComponentInfo componentInfo = componentInfoMap.get(componentType);
@@ -143,17 +151,22 @@ public class JsfTagSupport {
 
         if (tagLibFacesConfigInfo != null) {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setValidating(false);
             List<URL> tagLibUrlList = tagLibFacesConfigInfo.getTagLibUrls();
             for (URL tagLibUrl : tagLibUrlList) {
                 // Create the builder and parse XML data from input stream
-                Document tagLibdocument = factory.newDocumentBuilder().parse(tagLibUrl.openStream());
+                DocumentBuilder documentBuilder = factory.newDocumentBuilder();
+                documentBuilder.setEntityResolver(new EmptyEntityResolver());
+                Document tagLibdocument = documentBuilder.parse(tagLibUrl.openStream());
                 parseTagLibary(tagLibdocument);
             }
 
             List<URL> facesConfigUrlList = tagLibFacesConfigInfo.getFacesConfigUrls();
             for (URL facesConfigUrl : facesConfigUrlList) {
                 // Create the builder and parse XML data from input stream
-                Document facesConfigdocument = factory.newDocumentBuilder().parse(facesConfigUrl.openStream());
+                DocumentBuilder documentBuilder = factory.newDocumentBuilder();
+                documentBuilder.setEntityResolver(new EmptyEntityResolver());
+                Document facesConfigdocument = documentBuilder.parse(facesConfigUrl.openStream());
                 parseFacesConfig(facesConfigdocument);
             }
         } else {
@@ -247,6 +260,12 @@ public class JsfTagSupport {
 
         public String getComponentClass() {
             return componentClass;
+        }
+    }
+    
+    private static class EmptyEntityResolver implements EntityResolver {
+         public InputSource resolveEntity(String pubid, String sysid) {
+            return new InputSource(new ByteArrayInputStream(new byte[0]));
         }
     }
 }
