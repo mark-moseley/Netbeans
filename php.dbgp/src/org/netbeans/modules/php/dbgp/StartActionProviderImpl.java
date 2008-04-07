@@ -81,8 +81,6 @@ public class StartActionProviderImpl  implements StartActionProvider
 
     private static final String LOCALHOST   = "localhost";          // NOI18N
 
-    private static final int DEFAULT_PORT   = 9000; 
-    
     private static final int PORT_RANGE     = 100;
     
     private static final int TIMEOUT        = 60000;
@@ -107,7 +105,7 @@ public class StartActionProviderImpl  implements StartActionProvider
              *  TODO : port may be red from options, found free port via 
              *  #findFreePort(), suggest to user via option about free port.
              */
-            int port = DEFAULT_PORT;
+            int port = DebuggerOptions.getPort();
             myThread = new ServerThread( port );
             RequestProcessor.getDefault().post( myThread );
         }
@@ -116,7 +114,7 @@ public class StartActionProviderImpl  implements StartActionProvider
              *  Case stopping thread ( situation when debug session was 
              *  started right after previous stopping ).
              */ 
-            if ( myThread.isStop() ){
+            if ( myThread.isStopped() ){
                 /*
                  *  Not accurate stop accepting from other thread.
                  *  But otherwise one need to wait TIMEOUT seconds 
@@ -173,7 +171,7 @@ public class StartActionProviderImpl  implements StartActionProvider
         List<DebugSession> list = new ArrayList<DebugSession>( mySessions);
         for( DebugSession debSess : list) {
             if ( debSess.getSessionId() == id ) {
-                debSess.setStop();
+                debSess.stop();
                 mySessions.remove(debSess);
             }
         }
@@ -188,7 +186,7 @@ public class StartActionProviderImpl  implements StartActionProvider
             }
         }
         if ( last ) {
-            myThread.setStop();
+            myThread.stop();
         }
 
         stopEngines( session );
@@ -241,7 +239,8 @@ public class StartActionProviderImpl  implements StartActionProvider
     }
     
     private int findFreePort() {
-        for (int port = DEFAULT_PORT ; port < DEFAULT_PORT + PORT_RANGE; port++) {
+        int dbgPort = DebuggerOptions.getPort();
+        for (int port = dbgPort ; port < dbgPort + PORT_RANGE; port++) {
             Socket testClient = null;
             
             try {
@@ -292,14 +291,14 @@ public class StartActionProviderImpl  implements StartActionProvider
         
         ServerThread( int port ){
             myPort = port;
-            isStop  = new AtomicBoolean( false );
+            isStopped  = new AtomicBoolean( false );
         }
 
         public void run() {
             if ( !createServer() ) {
                 return;
             }
-            while( !isStop.get() ){
+            while( !isStopped()){
                 Socket sessionSocket = null;
                 
                 try {
@@ -318,10 +317,10 @@ public class StartActionProviderImpl  implements StartActionProvider
                 catch( IOException e ){
                     log( e );
                 }
-                if (sessionSocket != null) {
+                if (!isStopped.get() && sessionSocket != null) {
                     DebugSession session = 
                         new DebugSession( sessionSocket );
-                    RequestProcessor.getDefault().post( session );
+                    session.start();
                     setupCurrentSession( session );
                 }
             }
@@ -339,52 +338,56 @@ public class StartActionProviderImpl  implements StartActionProvider
                     Level.FINE, null, e );
         }
         
-        private synchronized boolean createServer(){
-            try {
-                myServer = new ServerSocket( myPort );
-                myServer.setSoTimeout(TIMEOUT);
-            }
-            catch (IOException e) {
-                String mesg = NbBundle.getMessage( 
-                        StartActionProviderImpl.class, PORT_OCCUPIED);
-                mesg = MessageFormat.format(mesg, myPort);
-                NotifyDescriptor descriptor =
-                    new NotifyDescriptor.Message( mesg , 
+        private boolean createServer() {
+            synchronized (StartActionProviderImpl.this) {
+                try {
+                    myServer = new ServerSocket(myPort);
+                    myServer.setSoTimeout(TIMEOUT);
+                } catch (IOException e) {
+                    String mesg = NbBundle.getMessage(
+                            StartActionProviderImpl.class, PORT_OCCUPIED);
+                    mesg = MessageFormat.format(mesg, myPort);
+                    NotifyDescriptor descriptor =
+                            new NotifyDescriptor.Message(mesg,
                             NotifyDescriptor.INFORMATION_MESSAGE);
-                DialogDisplayer.getDefault().notify(descriptor);
-                log( e );
-                return false;
+                    DialogDisplayer.getDefault().notify(descriptor);
+                    log(e);
+                    return false;
+                }
+                return true;
             }
-            return true;
         }
         
-        private synchronized void closeSocket() {
-            if ( myServer == null ){
-                return;
-            }
-            try {
-                if (!myServer.isClosed()) {
-                    myServer.close();
+        private void closeSocket() {
+            synchronized(StartActionProviderImpl.this) {
+                if ( myServer == null ){
+                    return;
+                }
+                try {
+                    if (!myServer.isClosed()) {
+                        myServer.close();
+                    }
+                }
+                catch (IOException e) {
+                    log(e);
                 }
             }
-            catch (IOException e) {
-                log(e);
-            }
         }
         
-        private void setStop(){
-            isStop.set( true );
+        private void stop(){
+            isStopped.set( true );
+            closeSocket();
         }
         
-        private boolean isStop(){
-            return isStop.get();
+        private boolean isStopped(){
+            return isStopped.get();
         }
         
         private int myPort;
         
         private ServerSocket myServer;
         
-        private AtomicBoolean isStop;
+        private AtomicBoolean isStopped;
         
     }
 
