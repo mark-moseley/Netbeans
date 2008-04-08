@@ -50,6 +50,7 @@ import java.io.BufferedReader;
 import java.util.concurrent.CountDownLatch;
 import org.netbeans.modules.groovy.grailsproject.GrailsProject;
 import org.netbeans.modules.groovy.grailsproject.SourceCategory;
+import org.netbeans.modules.groovy.grailsproject.actions.PublicSwingWorker;
 
 
 /**
@@ -97,6 +98,10 @@ public class NewArtifactWizardIterator implements  WizardDescriptor.Instantiatin
                 wizardTitle = NbBundle.getMessage(NewArtifactWizardIterator.class,"WIZARD_TITLE_VIEWS");
                 serverCommand = NbBundle.getMessage(NewArtifactWizardIterator.class,"SERVER_COMMAND_VIEWS");
                 break;    
+            case TAGLIB:
+                wizardTitle = NbBundle.getMessage(NewArtifactWizardIterator.class,"WIZARD_TITLE_TAGLIB");
+                serverCommand = NbBundle.getMessage(NewArtifactWizardIterator.class,"SERVER_COMMAND_TAGLIB");
+                break;    
             }
         }
    
@@ -110,15 +115,11 @@ public class NewArtifactWizardIterator implements  WizardDescriptor.Instantiatin
             this.handle = handle;
 
             Set<FileObject> resultSet = new HashSet<FileObject>();
-
-            new WizardSwingWorker(  project,
-                                    serverCommand  + " " + pls.getDomainClassName(),
-                                    pls,
-                                    handle,
-                                    serverFinished,
-                                    serverRunning,
-                                    null
-                                    ).start();
+            
+            serverRunning = true;
+            
+            new PublicSwingWorker(project, serverCommand  + " " + pls.getDomainClassName(),
+                                    null, handle, serverFinished).start();
             
             try {
                 serverFinished.await();
@@ -126,6 +127,8 @@ public class NewArtifactWizardIterator implements  WizardDescriptor.Instantiatin
                     Exceptions.printStackTrace(ex);
                     }
 
+            serverRunning = false;
+            
             LOG.log(Level.WARNING, "Artifact Name: " + pls.getFileName());
             File artifactFile = new File(pls.getFileName());
             
