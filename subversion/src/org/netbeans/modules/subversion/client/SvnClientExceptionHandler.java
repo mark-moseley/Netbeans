@@ -547,7 +547,6 @@ public class SvnClientExceptionHandler {
                msg.indexOf("authorization failed") > - 1 ||                                 // NOI18N
                msg.indexOf("authentication error from server: password incorrect") > -1 ||  // NOI18N
                msg.indexOf("can't get password") > - 1;                                     // NOI18N
-        // XXX we also have to check for authentication messages from proxy
     }
 
     private static boolean isNoCertificate(String msg) {
@@ -661,10 +660,10 @@ public class SvnClientExceptionHandler {
         if(isCancelledAction(ex.getMessage())) {
             cancelledAction();
             return;
-        }                 
-        Subversion.LOG.log(Level.WARNING, ex.getMessage(), ex);
+        }                   
+        Subversion.LOG.log(Level.INFO, ex.getMessage(), ex);
         if( annotate ) {
-            String msg = getCustomizedMessage(ex);
+            String msg = getCustomizedMessage(ex);  
             if(msg == null) {
                 if(ex instanceof SVNClientException) {
                     msg = parseExceptionMessage((SVNClientException) ex);    
@@ -713,7 +712,7 @@ public class SvnClientExceptionHandler {
         return msg;
     }
 
-    private static void annotate(String msg) {        
+    public static void annotate(String msg) {        
         CommandReport report = new CommandReport(NbBundle.getMessage(SvnClientExceptionHandler.class, "MSG_SubversionCommandError"), msg);
         JButton ok = new JButton(NbBundle.getMessage(SvnClientExceptionHandler.class, "CTL_CommandReport_OK"));
         NotifyDescriptor descriptor = new NotifyDescriptor(
