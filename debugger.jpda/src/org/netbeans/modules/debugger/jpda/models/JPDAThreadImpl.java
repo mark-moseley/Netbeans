@@ -53,6 +53,7 @@ import com.sun.jdi.ThreadGroupReference;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.VMDisconnectedException;
 
+import java.beans.Customizer;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.beans.PropertyVetoException;
@@ -62,6 +63,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.netbeans.api.debugger.jpda.CallStackFrame;
+import org.netbeans.api.debugger.jpda.JPDABreakpoint;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.JPDAThreadGroup;
 import org.netbeans.api.debugger.jpda.ObjectVariable;
@@ -73,7 +75,7 @@ import org.openide.util.NbBundle;
 /**
  * The implementation of JPDAThread.
  */
-public final class JPDAThreadImpl implements JPDAThread {
+public final class JPDAThreadImpl implements JPDAThread, Customizer {
     
     /**
      * Suspended property of the thread. Fired when isSuspended() changes.
@@ -93,6 +95,7 @@ public final class JPDAThreadImpl implements JPDAThread {
     private int                 cachedFramesFrom = -1;
     private int                 cachedFramesTo = -1;
     private Object              cachedFramesLock = new Object();
+    private JPDABreakpoint      currentBreakpoint;
 
     public JPDAThreadImpl (
         ThreadReference     threadReference,
@@ -194,6 +197,14 @@ public final class JPDAThreadImpl implements JPDAThread {
     
     public synchronized void holdLastOperations(boolean doHold) {
         doKeepLastOperations = doHold;
+    }
+
+    public synchronized JPDABreakpoint getCurrentBreakpoint() {
+        return currentBreakpoint;
+    }
+
+    public synchronized void setCurrentBreakpoint(JPDABreakpoint currentBreakpoint) {
+        this.currentBreakpoint = currentBreakpoint;
     }
 
 
@@ -496,6 +507,7 @@ public final class JPDAThreadImpl implements JPDAThread {
             waitUntilMethodInvokeDone();
             setReturnVariable(null); // Clear the return var on resume
             setCurrentOperation(null);
+            currentBreakpoint = null;
             if (!doKeepLastOperations) {
                 clearLastOperations();
             }
@@ -543,6 +555,7 @@ public final class JPDAThreadImpl implements JPDAThread {
             if (clearVars) {
                 setCurrentOperation(null);
                 setReturnVariable(null); // Clear the return var on resume
+                currentBreakpoint = null;
                 if (!doKeepLastOperations) {
                     clearLastOperations();
                 }
@@ -785,6 +798,10 @@ public final class JPDAThreadImpl implements JPDAThread {
     private void fireSuspended(boolean suspended) {
         pch.firePropertyChange(PROP_SUSPENDED,
                 Boolean.valueOf(!suspended), Boolean.valueOf(suspended));
+    }
+
+    public void setObject(Object bean) {
+        throw new UnsupportedOperationException("Not supported, do not call. Implementing Customizer interface just because of add/remove PropertyChangeListener.");
     }
 
 }
