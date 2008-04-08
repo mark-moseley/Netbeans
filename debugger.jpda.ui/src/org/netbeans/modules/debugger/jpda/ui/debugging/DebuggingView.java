@@ -6,10 +6,13 @@
 
 package org.netbeans.modules.debugger.jpda.ui.debugging;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Image;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
+import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.ref.Reference;
@@ -18,7 +21,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JTree;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
@@ -49,6 +54,9 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     private transient ViewModelListener viewModelListener;
     
     private DebugTreeView treeView;
+    private JPanel treePanel;
+    private TapPanel tapPanel;
+    private InfoPanel infoPanel;
     
     /**
      * instance/singleton of this class
@@ -69,7 +77,24 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         treeView = new DebugTreeView();
         treeView.setRootVisible(false);
         //treeView.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
-        treeViewScrollPane.setViewportView(treeView);
+
+        treePanel = new ZebraPanel(12,12);
+        mainPanel.add(treePanel, BorderLayout.CENTER);
+        
+        treePanel.setLayout(new BorderLayout());
+        treePanel.add(treeView, BorderLayout.CENTER);
+        
+        tapPanel = new TapPanel();
+        tapPanel.setOrientation(TapPanel.DOWN);
+        // tooltip
+        KeyStroke toggleKey = KeyStroke.getKeyStroke(KeyEvent.VK_T,
+            Toolkit.getDefaultToolkit().getMenuShortcutKeyMask());
+        String keyText = Utilities.keyToString(toggleKey);
+        tapPanel.setToolTipText(NbBundle.getMessage(DebuggingView.class, "LBL_TapPanel", keyText)); //NOI18N
+        mainPanel.add(tapPanel, BorderLayout.SOUTH);
+        
+        infoPanel = new InfoPanel();
+        tapPanel.add(infoPanel);
         
         manager.addPropertyChangeListener(this);
         treeView.addTreeExpansionListener(this);
@@ -78,10 +103,12 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         col1.add(new ElemNode("subnode 1", 4));
         col1.add(new ElemNode("subnode 2", 6));
         ElemNode rootNode = new ElemNode("root node", new ElemNodeChildren2(col1));
-        
+
+        sessionComboBox.removeAllItems();
+        sessionComboBox.addItem(rootNode.getDisplayName());
         manager.setRootContext(rootNode);
     }
-
+ 
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
@@ -90,58 +117,36 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
-        java.awt.GridBagConstraints gridBagConstraints;
 
         mainScrollPane = new javax.swing.JScrollPane();
         mainPanel = new javax.swing.JPanel();
         leftPanel = new javax.swing.JPanel();
         rightPanel = new javax.swing.JPanel();
-        treeViewScrollPane = new javax.swing.JScrollPane();
+        sessionComboBox = new javax.swing.JComboBox();
 
-        setLayout(new java.awt.GridBagLayout());
+        setLayout(new java.awt.BorderLayout());
 
         mainScrollPane.setBorder(null);
         mainScrollPane.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        mainScrollPane.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 
-        mainPanel.setLayout(new java.awt.GridBagLayout());
+        mainPanel.setLayout(new java.awt.BorderLayout());
 
-        leftPanel.setBackground(javax.swing.UIManager.getDefaults().getColor("Button.highlight"));
+        leftPanel.setBackground(javax.swing.UIManager.getDefaults().getColor("Tree.background"));
         leftPanel.setPreferredSize(new java.awt.Dimension(24, 0));
         leftPanel.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.VERTICAL;
-        mainPanel.add(leftPanel, gridBagConstraints);
+        mainPanel.add(leftPanel, java.awt.BorderLayout.WEST);
 
-        rightPanel.setBackground(javax.swing.UIManager.getDefaults().getColor("Button.highlight"));
+        rightPanel.setBackground(javax.swing.UIManager.getDefaults().getColor("Tree.background"));
         rightPanel.setPreferredSize(new java.awt.Dimension(24, 0));
         rightPanel.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 2;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.VERTICAL;
-        mainPanel.add(rightPanel, gridBagConstraints);
+        mainPanel.add(rightPanel, java.awt.BorderLayout.EAST);
 
-        treeViewScrollPane.setBorder(null);
-        treeViewScrollPane.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
-        treeViewScrollPane.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
-        gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.weighty = 1.0;
-        mainPanel.add(treeViewScrollPane, gridBagConstraints);
+        sessionComboBox.setMaximumRowCount(1);
+        mainPanel.add(sessionComboBox, java.awt.BorderLayout.NORTH);
 
         mainScrollPane.setViewportView(mainPanel);
 
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
-        gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.weighty = 1.0;
-        add(mainScrollPane, gridBagConstraints);
+        add(mainScrollPane, java.awt.BorderLayout.CENTER);
     }// </editor-fold>//GEN-END:initComponents
 
 
@@ -150,11 +155,13 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     private javax.swing.JPanel mainPanel;
     private javax.swing.JScrollPane mainScrollPane;
     private javax.swing.JPanel rightPanel;
-    private javax.swing.JScrollPane treeViewScrollPane;
+    private javax.swing.JComboBox sessionComboBox;
     // End of variables declaration//GEN-END:variables
 
     public void setRootContext(Node root) {
         manager.setRootContext(root);
+        sessionComboBox.removeAllItems();
+        sessionComboBox.addItem(root.getDisplayName());
     }
     
     public ExplorerManager getExplorerManager() {
@@ -291,11 +298,11 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
                     label.setBackground(Color.YELLOW);
                     label.setPreferredSize(new Dimension(imageIcon.getIconWidth(), (int)Math.round(height)));
                     leftPanel.add(label);
-                    label = new ClickableIcon();
+                    ClickableIcon icon = new ClickableIcon();
                     
                     // [TODO] put this inside ClicableIcon constructor
-                    label.setPreferredSize(new Dimension(imageIcon.getIconWidth(), (int)Math.round(height)));
-                    rightPanel.add(label);
+                    icon.setPreferredSize(new Dimension(imageIcon.getIconWidth(), (int)Math.round(height)));
+                    rightPanel.add(icon);
                 }
                 leftPanel.revalidate();
                 leftPanel.repaint();
@@ -374,5 +381,5 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         }
 
     }
-    
+
 }

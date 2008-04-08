@@ -39,90 +39,85 @@
 
 package org.netbeans.modules.debugger.jpda.ui.debugging;
 
-import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionListener;
+import java.awt.event.MouseListener;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
-import javax.swing.SwingUtilities;
+import javax.swing.JPanel;
 import org.openide.util.Utilities;
 
 /**
  *
  * @author Dan
  */
-public class ClickableIcon extends JLabel implements MouseMotionListener {
+public class ClickableIcon extends JPanel implements MouseListener {
 
-    private ImageIcon normal;
-    private ImageIcon focused;
+    private static final int STATE_NORMAL = 0;
+    private static final int STATE_FOCUSED = 1;
+    private static final int STATE_PRESSED = 2;
     
-    ClickableIcon(ImageIcon normal, ImageIcon focused) {
-        this.normal = normal;
-        this.focused = focused;
-        setIcon(normal); // [TODO] compute the initial state
-        addMouseMotionListener(this);
+    private JLabel label = new JLabel();
+    
+    private ImageIcon normalIcon;
+    private ImageIcon focusedIcon;
+    private ImageIcon pressedIcon;
+    
+    private int state;
+    
+    ClickableIcon(ImageIcon normal, ImageIcon focused, ImageIcon pressed) {
+        this.normalIcon = normal;
+        this.focusedIcon = focused;
+        this.pressedIcon = pressed;
+        
+        state = STATE_NORMAL;
+        
+        label.setIcon(normal); // [TODO] compute the initial state
+        add(label);
+        addMouseListener(this);
     }
     
     ClickableIcon() {
-        this.normal = new ImageIcon(Utilities.loadImage(
-            "org/netbeans/modules/debugger/jpda/resources/package.gif"));
-        this.focused = new ImageIcon(Utilities.loadImage(
-            "org/netbeans/modules/debugger/jpda/resources/packageOpen.gif"));
-        setIcon(normal);
-        addMouseMotionListener(this);
+        this(new ImageIcon(Utilities.loadImage(
+            "org/netbeans/modules/debugger/jpda/resources/package.gif")),
+            new ImageIcon(Utilities.loadImage(
+            "org/netbeans/modules/debugger/jpda/resources/packageOpen.gif")),
+            new ImageIcon(Utilities.loadImage(
+            "org/netbeans/modules/debugger/jpda/resources/ExprArguments.gif"))
+        );
     }
     
-//    @Override
-//    protected void processMouseMotionEvent(MouseEvent e) {
-//        super.processMouseMotionEvent(e);
-//        final MouseEvent evt = e;
-//        SwingUtilities.invokeLater(new Runnable() {
-//            public void run() {
-//                int id = evt.getID();
-//                switch(id) {
-//                    case MouseEvent.MOUSE_ENTERED:
-//                        setIcon(focused);
-//                    break;
-//                    case MouseEvent.MOUSE_EXITED:
-//                        setIcon(normal);
-//                    break;
-//                    case MouseEvent.MOUSE_MOVED:
-//                        Rectangle rect = getBounds();
-//                        int sx = evt.getX();
-//                        int sy = evt.getY();
-//                        boolean isInside = sx > 0 && sx < rect.getWidth() && sy > 0 && sy < rect.getHeight();
-//                        setIcon(isInside ? focused : normal);
-//                    break;
-//                }
-//            }
-//        });
-//    }
-
-    public void mouseDragged(MouseEvent e) {
+    // **************************************************************************
+    // MouseListener
+    // **************************************************************************
+    
+    public void mouseClicked(MouseEvent e) {
     }
 
-    public void mouseMoved(MouseEvent e) {
-        final MouseEvent evt = e;
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                int id = evt.getID();
-                switch(id) {
-                    case MouseEvent.MOUSE_ENTERED:
-                        setIcon(focused);
-                    break;
-                    case MouseEvent.MOUSE_EXITED:
-                        setIcon(normal);
-                    break;
-                    case MouseEvent.MOUSE_MOVED:
-                        Rectangle rect = getBounds();
-                        int sx = evt.getX();
-                        int sy = evt.getY();
-                        boolean isInside = sx > 1 && sx < rect.getWidth() - 1 && sy > 1 && sy < rect.getHeight() - 1;
-                        setIcon(isInside ? focused : normal);
-                    break;
-                }
-            }
-        });
+    public void mousePressed(MouseEvent e) {
+        label.setIcon(pressedIcon);
+        state = STATE_PRESSED;
+    }
+
+    public void mouseReleased(MouseEvent e) {
+        if (state == STATE_PRESSED) {
+            label.setIcon(focusedIcon);
+            state = STATE_FOCUSED;
+        }
+    }
+
+    public void mouseEntered(MouseEvent e) {
+        if ((e.getModifiers() & MouseEvent.BUTTON1_DOWN_MASK) != 0) {
+            label.setIcon(pressedIcon);
+            state = STATE_PRESSED;
+        } else {
+            label.setIcon(focusedIcon);
+            state = STATE_FOCUSED;
+        }
+    }
+
+    public void mouseExited(MouseEvent e) {
+        label.setIcon(normalIcon);
+        state = STATE_NORMAL;
     }
 
 }
