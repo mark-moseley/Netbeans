@@ -229,7 +229,7 @@ class ScriptExecSupport {
                 }
                 
                 Runtime rt = Runtime.getRuntime();
-                Process proc = rt.exec( command, env );
+                Process proc = rt.exec( command, null );
                 
                 if ( io != null ) {
                     StreamRedirect errorGobbler = new StreamRedirect( fileObject, proc.getErrorStream(), io.getErr() );
@@ -260,6 +260,12 @@ class ScriptExecSupport {
      */
     String getClassPath() {
         Project project = FileOwnerQuery.getOwner( fileObject);
+        
+        /* we are going to support running standalone Groovy scripts.
+           see: # 131771 : Running groovy script not being part of any project fails */
+        
+        if (project == null)
+            return ""; //NOI18N
 
         ClassPathProvider cpp = project.getLookup().lookup( ClassPathProvider.class );
         if ( cpp == null )
