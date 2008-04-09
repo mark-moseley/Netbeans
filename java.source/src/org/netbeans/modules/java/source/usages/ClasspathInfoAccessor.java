@@ -66,19 +66,19 @@ public abstract class ClasspathInfoAccessor {
         return INSTANCE;
     }
 
-    public static synchronized void setINSTANCE(ClasspathInfoAccessor aINSTANCE) {
+    public static void setINSTANCE(ClasspathInfoAccessor aINSTANCE) {
         INSTANCE = aINSTANCE;
     }
 
-    private static ClasspathInfoAccessor INSTANCE;
+    private static volatile ClasspathInfoAccessor INSTANCE;
        
     public abstract JavaFileManager getFileManager(ClasspathInfo cpInfo);
     
     public abstract ClassPath getCachedClassPath (ClasspathInfo cpInfo, ClasspathInfo.PathKind kind);
     
-    public abstract ClasspathInfo create (FileObject fo, JavaFileFilterImplementation filter, boolean backgroundCompilation, boolean ignoreExcludes);
+    public abstract ClasspathInfo create (FileObject fo, JavaFileFilterImplementation filter, boolean backgroundCompilation, boolean ignoreExcludes, boolean hasMemoryFileManager);
     
     public abstract ClasspathInfo create (ClassPath bootPath, ClassPath compilePath, ClassPath sourcePath, JavaFileFilterImplementation filter,
-                                          boolean backgroundCompilation, boolean ignoreExcludes);   
+                                          boolean backgroundCompilation, boolean ignoreExcludes, boolean hasMemoryFileManager);   
     
 }
