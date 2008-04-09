@@ -1,5 +1,5 @@
 Name: Apache Jakarta Commons Logging
-Version: 1.0.4
+Version: 1.1
 License: Apache-2.0
 OSR: 5465
 Description: Logging component
