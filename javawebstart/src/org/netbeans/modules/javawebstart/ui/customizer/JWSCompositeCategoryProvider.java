@@ -108,7 +108,9 @@ public class JWSCompositeCategoryProvider implements ProjectCustomizer.Composite
         JComponent component = null;
         if (CAT_WEBSTART.equals(name)) {
             jwsProps = new JWSProjectProperties(context);
-            category.setOkButtonListener(new SavePropsListener(jwsProps, context.lookup(Project.class)));
+            // use OkListener to create new configuration first
+            category.setOkButtonListener(new OkButtonListener(jwsProps, context.lookup(Project.class)));
+            category.setStoreListener(new SavePropsListener(jwsProps, context.lookup(Project.class)));
             component = new JWSCustomizerPanel(jwsProps);
         }
         return component;
@@ -122,6 +124,37 @@ public class JWSCompositeCategoryProvider implements ProjectCustomizer.Composite
     
     // ----------
     
+    private static class OkButtonListener implements ActionListener {
+        
+        private JWSProjectProperties jwsProps;
+        private Project j2seProject;
+        
+        private OkButtonListener(JWSProjectProperties props, Project proj) {
+            this.jwsProps = props;
+            this.j2seProject = proj;
+        }
+        
+        public void actionPerformed(ActionEvent e) {
+            try {
+                if (jwsProps.isJWSEnabled()) {
+                    // test if the file already exists, if so do not generate, just set as active
+                    J2SEProjectConfigurations.createConfigurationFiles(j2seProject, "JWS_generated", prepareSharedProps(), null /*or new Properties()*/); // NOI18N
+                }
+            } catch (IOException ioe) {
+                ErrorManager.getDefault().notify(ioe);
+            }
+        }
+        
+        private Properties prepareSharedProps() {
+            Properties props = new Properties();
+            props.setProperty("$label", NbBundle.getBundle(JWSCompositeCategoryProvider.class).getString("LBL_Category_WebStart"));
+            props.setProperty("$target.run", "jws-run"); // NOI18N
+            props.setProperty("$target.debug", "jws-debug"); // NOI18N
+            return props;
+        }
+        
+    }
+    
     private static class SavePropsListener implements ActionListener {
         
         private JWSProjectProperties jwsProps;
@@ -133,21 +166,15 @@ public class JWSCompositeCategoryProvider implements ProjectCustomizer.Composite
         }
         
         public void actionPerformed(ActionEvent e) {
-            // log("Saving Properties " + jwsProps + " ...");
             try {
                 jwsProps.store();
             } catch (IOException ioe) {
                 ErrorManager.getDefault().notify(ioe);
             }
-            boolean enabled = Boolean.valueOf(jwsProps.getProperty(JWSProjectProperties.JNLP_ENABLED)).booleanValue();
             final ProjectConfigurationProvider configProvider = 
                     j2seProject.getLookup().lookup(ProjectConfigurationProvider.class);
             try {
-                if (enabled) {
-                    // XXX logging
-                    // test if the file already exists, if so do not generate, just set as active
-                    J2SEProjectConfigurations.createConfigurationFiles(j2seProject, "JWS_generated",
-                            prepareSharedProps(), null /*or new Properties()*/); // NOI18N
+                if (jwsProps.isJWSEnabled()) {
                     setActiveConfig(configProvider, NbBundle.getBundle(JWSCompositeCategoryProvider.class).getString("LBL_Category_WebStart"));
                     copyTemplate(j2seProject);
                     modifyBuildXml(j2seProject);
@@ -275,14 +302,6 @@ public class JWSCompositeCategoryProvider implements ProjectCustomizer.Composite
                     throw (IOException) mex.getException();
                 }
             }
-        }
-        
-        private Properties prepareSharedProps() {
-            Properties props = new Properties();
-            props.setProperty("$label", NbBundle.getBundle(JWSCompositeCategoryProvider.class).getString("LBL_Category_WebStart"));
-            props.setProperty("$target.run", "jws-run"); // NOI18N
-            props.setProperty("$target.debug", "jws-debug"); // NOI18N
-            return props;
         }
         
     }
