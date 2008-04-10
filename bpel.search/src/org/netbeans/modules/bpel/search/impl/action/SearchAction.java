@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -65,8 +65,8 @@ import org.netbeans.modules.bpel.core.helper.api.CoreUtil;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.search.api.SearchManager;
 import org.netbeans.modules.bpel.search.api.SearchTarget;
+import org.netbeans.modules.bpel.search.impl.output.View;
 import org.netbeans.modules.bpel.search.impl.ui.Search;
-import org.netbeans.modules.bpel.search.impl.util.Util;
 import static org.netbeans.modules.soa.ui.util.UI.*;
 
 /**
@@ -83,14 +83,20 @@ public final class SearchAction extends IconAction {
     super(
       i18n(SearchAction.class, name),
       i18n(SearchAction.class, toolTip),
-      icon(Util.class, icon)
+      icon(View.class, icon)
     );
     setEnabled(false);
   }
 
   public void actionPerformed(ActionEvent event) {
-    Node node = getSelectedNode();
+    Node node = getLastNode();
     Model model = getModel(node);
+
+    SearchTarget [] targets = getTargets(model);
+
+    if (targets == null) {
+      return;
+    }
     ShowCookie cookie = getShowCookie(node);
     Object view = getView();
 //out();
@@ -102,7 +108,7 @@ public final class SearchAction extends IconAction {
     list.add(cookie);
     list.add(view);
 
-    SearchManager.getDefault().createSearch(list, getTargets(model));
+    SearchManager.getDefault().createSearch(list, targets);
   }
 
   private ShowCookie getShowCookie(Node node) {
@@ -177,7 +183,7 @@ public final class SearchAction extends IconAction {
     if (model instanceof SchemaModel) {
       return Target.SCHEMA;
     }
-    return new SearchTarget [] {};
+    return null;
   }
 
   private Model getModel(Node node) {
