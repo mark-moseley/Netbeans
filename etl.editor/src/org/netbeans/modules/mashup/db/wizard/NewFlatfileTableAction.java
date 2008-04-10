@@ -31,7 +31,7 @@ public final class NewFlatfileTableAction extends CallableSystemAction {
     public void performAction() {
         WizardDescriptor.Iterator iterator = new MashupTableWizardIterator();
         WizardDescriptor wizardDescriptor = new WizardDescriptor(iterator);
-        wizardDescriptor.setTitleFormat(new MessageFormat("{0} ({1})"));
+        wizardDescriptor.setTitleFormat(new MessageFormat("{0}"));
         wizardDescriptor.setTitle(nbBundle6.substring(15));
         ((MashupTableWizardIterator)iterator).setDescriptor(wizardDescriptor);
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizardDescriptor);
