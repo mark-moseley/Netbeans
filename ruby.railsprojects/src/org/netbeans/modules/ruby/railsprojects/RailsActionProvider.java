@@ -51,9 +51,9 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import javax.swing.text.JTextComponent;
-import org.netbeans.api.gsf.DeclarationFinder.DeclarationLocation;
+import org.netbeans.modules.gsf.api.DeclarationFinder.DeclarationLocation;
 import org.netbeans.api.project.ProjectInformation;
-import org.netbeans.modules.ruby.railsprojects.server.RailsServer;
+import org.netbeans.modules.ruby.railsprojects.server.RailsServerManager;
 import org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId;
 import org.netbeans.modules.ruby.rubyproject.AutoTestSupport;
 import org.netbeans.api.project.ProjectUtils;
@@ -61,6 +61,7 @@ import org.netbeans.modules.ruby.railsprojects.ui.customizer.RailsProjectPropert
 import org.netbeans.modules.ruby.rubyproject.RakeSupport;
 import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.api.ruby.platform.RubyPlatformManager;
 import org.netbeans.modules.ruby.AstUtilities;
 import org.netbeans.modules.ruby.NbUtilities;
 import org.netbeans.modules.ruby.RubyUtils;
@@ -133,7 +134,7 @@ public class RailsActionProvider implements ActionProvider, ScriptDescProvider {
     RailsProject project;
     
     // Ant project helper of the project
-    private UpdateHelper updateHelper;
+    private final UpdateHelper updateHelper;
     
         
     /**Set of commands which are affected by background scanning*/
@@ -156,7 +157,12 @@ public class RailsActionProvider implements ActionProvider, ScriptDescProvider {
     }
 
     private RubyPlatform getPlatform() {
-        return RubyPlatform.platformFor(project);
+        RubyPlatform platform = RubyPlatform.platformFor(project);
+        if (platform == null) {
+            platform = RubyPlatformManager.getDefaultPlatform();
+        }
+        
+        return platform;
     }
 
     /** Return true iff the given file is a migration file */
@@ -540,8 +546,8 @@ public class RailsActionProvider implements ActionProvider, ScriptDescProvider {
                 showProgress(false).
                 classPath(classPath).
                 allowInput().
-                //initialArgs(options).
-                //additionalArgs(getApplicationArguments()).
+                // see #130264
+                additionalArgs("--irb=irb --noreadline"). //NOI18N
                 fileLocator(new RailsFileLocator(context, project)).
                 addStandardRecognizers(),
                 project.evaluator().getProperty(RailsProjectProperties.SOURCE_ENCODING)
@@ -551,6 +557,9 @@ public class RailsActionProvider implements ActionProvider, ScriptDescProvider {
     
     private void runRubyScript(FileObject fileObject, String target, String displayName, final Lookup context, final boolean debug,
             OutputRecognizer[] extraRecognizers) {
+        if (!getPlatform().showWarningIfInvalid()) {
+            return;
+        }
         ExecutionDescriptor desc = getScriptDescriptor(null, fileObject, target, displayName, context, debug, extraRecognizers);
         RubyExecution service = new RubyExecution(desc,
                 project.evaluator().getProperty(RailsProjectProperties.SOURCE_ENCODING));
@@ -602,24 +611,22 @@ public class RailsActionProvider implements ActionProvider, ScriptDescProvider {
         // Locate the target and specify it by full path.
         // This is necessary because JRuby and Ruby don't locate the script from the load
         // path it seems.
-        if (!new File(target).exists()) {
-            if (srcPath != null && srcPath.length > 0) {
-                boolean found = false; // Prefer the first match
-                for (FileObject root : srcPath) {
+        if (!new File(target).exists() && srcPath != null && srcPath.length > 0) {
+            boolean found = false; // Prefer the first match
+            for (FileObject root : srcPath) {
+                FileObject fo = root.getFileObject(target);
+                if (fo != null) {
+                    target = FileUtil.toFile(fo).getAbsolutePath();
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && testPath != null) {
+                for (FileObject root : testPath) {
                     FileObject fo = root.getFileObject(target);
                     if (fo != null) {
                         target = FileUtil.toFile(fo).getAbsolutePath();
-                        found = true;
                         break;
-                    }
-                }
-                if (!found && testPath != null) {
-                    for (FileObject root : testPath) {
-                        FileObject fo = root.getFileObject(target);
-                        if (fo != null) {
-                            target = FileUtil.toFile(fo).getAbsolutePath();
-                            break;
-                        }
                     }
                 }
             }
@@ -751,7 +758,7 @@ public class RailsActionProvider implements ActionProvider, ScriptDescProvider {
     }    
 
     private void runServer(final String path, final boolean debug) {
-        RailsServer server = project.getLookup().lookup(RailsServer.class);
+        RailsServerManager server = project.getLookup().lookup(RailsServerManager.class);
         if (server != null) {
             server.setDebug(debug);
             server.showUrl(path);
