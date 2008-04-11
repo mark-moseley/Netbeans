@@ -123,7 +123,7 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
         <property name="build.classes.dir" location="build/classes"/>
         <property name="build.classes.dir.ml" location="build/ml/classes"/>
         <property name="nbm" value="${code.name.base.dashes}.nbm"/>
-        <property name="nbm.homepage" value="http://${nbm.domain}.netbeans.org/"/>
+        <property name="nbm.homepage" value="http://www.netbeans.org/"/>
         <property name="nbm.distribution" value="${dist.base}/${nbm}"/>
         <property name="nbm.module.author" value=""/>
         <property name="nbm.release.date" value=""/>
@@ -170,15 +170,7 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
     </target>
 
     <target name="test-lib-init" depends="init">
-        <!-- xtest.home is set externally when run using XTest. -->
-        <property name="xtest.home" location="${nb_all}/xtest"/>
-        <path id="test.unit.lib.cp">
-            <!-- XXX check if these files exist, and if not, run xtest/build.xml -->
-            <pathelement location="${xtest.home}/lib/junit.jar"/>
-            <pathelement location="${xtest.home}/lib/nbjunit.jar"/>
-            <pathelement location="${xtest.home}/lib/nbjunit-ide.jar"/>
-            <pathelement location="${xtest.home}/lib/insanelib.jar"/>
-        </path>
+        <path id="test.unit.lib.cp"/>
     </target>
 
     <target name="-conditional-javadoc-init" depends="-conditional-16-init">
@@ -595,14 +587,10 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
             <pathelement location="${cluster}/${module.jar}"/>
             <path refid="test.unit.lib.cp"/>
             <pathelement path="${test.qa-functional.cp.extra}"/>
-            <pathelement path="${nb_all}/jellytools/builds/jelly2-nb.jar"/>
-            <pathelement location="${nb_all}/jemmy/builds/jemmy.jar"/>
         </path>
         <path id="test.qa-functional.run.cp">
             <pathelement path="${test.qa-functional.runtime.cp}"/>
             <pathelement path="${test.qa-functional.run.cp.extra}"/>
-            <pathelement path="${nb_all}/jellytools/builds/jelly2-nb.jar"/>
-            <pathelement location="${nb_all}/jemmy/builds/jemmy.jar"/>
         </path>
     </target>
 
@@ -696,14 +684,10 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
             <pathelement location="${cluster}/${module.jar}"/>
             <path refid="test.unit.lib.cp"/>
             <pathelement path="${test.qa-performance.cp.extra}"/>
-            <pathelement path="${nb_all}/jellytools/builds/jelly2-nb.jar"/>
-            <pathelement location="${nb_all}/jemmy/builds/jemmy.jar"/>
         </path>
         <path id="test.qa-performance.run.cp">
             <pathelement path="${test.qa-performance.runtime.cp}"/>
             <pathelement path="${test.qa-performance.run.cp.extra}"/>
-            <pathelement path="${nb_all}/jellytools/builds/jelly2-nb.jar"/>
-            <pathelement location="${nb_all}/jemmy/builds/jemmy.jar"/>
         </path>
     </target>
 
@@ -944,9 +928,9 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
         />
     </target>
 
-    <target name="findbugs-init">
+    <target name="findbugs-init" depends="build-init">       
         <property name="findbugs.home" location="${nb_all}/nbbuild/external/findbugs"/>
-        <ant dir="${findbugs.home}"/>
+        <ant dir="${findbugs.home}" inheritall="false"/>
     </target>
     
     <target name="findbugs" depends="build-init,jar,findbugs-init">
@@ -961,13 +945,14 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
             <path path="${cp.extra}"/>
             <path path="${cluster}/${module.jar}"/>
         </path>
-        <pathconvert refid="findbugs.class.path.ref" property="findbugs.class.path">
-            
-        </pathconvert>    
+        <pathconvert refid="findbugs.class.path.ref" property="findbugs.class.path"/>
+
         <echo>Findbugs module: ${module.name}</echo>
         <findbugs home="${findbugs.home}"
               output="xml"
-              outputFile="${report.file}">
+              outputFile="${report.file}"
+              failOnError="true"
+              jvmargs="-Xmx256m">
             <auxClasspath path="${findbugs.class.path}" />
             <sourcePath path="${src.dir}" />
             <class location="${build.classes.dir}" />
@@ -979,6 +964,7 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
         </condition>
         <antcall target="findbugs.delete"/>
     </target>
+    
     <target name="findbugs.delete" if="findbugs.error">
         <delete file="${report.file}" failonerror="false"/>
     </target>
