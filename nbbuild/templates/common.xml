@@ -56,13 +56,7 @@ made subject to such option by the copyright holder.
         <property name="module.jar.dir" value="modules"/>
         <property name="module.jar.basename" value="${code.name.base.dashes}.jar"/>
         <property name="module.jar" value="${module.jar.dir}/${module.jar.basename}"/>
-        <condition property="has.javahelp">
-            <and>
-                <available file="javahelp"/>
-                <!-- Special hack for core: -->
-                <not><available file="javahelp/manifest.mf"/></not>
-            </and>
-        </condition>
+        <available property="has.javahelp" file="javahelp" type="dir"/>
         <property name="javahelp.jar.dir" value="modules/docs"/>
         <property name="javahelp.jar.basename" value="${code.name.base.dashes}.jar"/>
         <property name="javahelp.jar" value="${javahelp.jar.dir}/${javahelp.jar.basename}"/>
@@ -132,7 +126,7 @@ made subject to such option by the copyright holder.
                 </not>
             </condition>
             You have stray *.class files in ${src.dir} which you must remove.
-            Probably you failed to clean your sources before updating them from CVS.
+            Probably you failed to clean your sources before updating them.
         </fail>
         <!-- OK, continue: -->
         <copy todir="${build.classes.dir}">
@@ -331,6 +325,8 @@ made subject to such option by the copyright holder.
         <!-- if project.xml doesn't contain test dependencies -->
         <property name="test.unit.folder" location="build/test/unit/dist"/>
         <property name="test.unit.out.folder" location="${test.unit.folder}"/>
+        <property name="test.timeout" value="600000"/> <!-- 10min per test -->
+        <property name="test.run.args" value="-ea"/>
 
         <property name="test.filter.trace" value="true"/>
         <path id="test.unit.cp">
@@ -367,6 +363,8 @@ made subject to such option by the copyright holder.
                 <mapper type="glob" from="build.test.unit.work.dir" to="nbjunit.workdir"/>
             </propertyset>
         </propertyset>
+        
+        <available file="${test.unit.src.dir}" type="dir" property="exists.test.unit.src.dir"/>
     </target>
 
     <target name="test-build" depends="jar,test-dep-build,do-test-build,test-build-datajar"/>
@@ -382,7 +380,7 @@ made subject to such option by the copyright holder.
       <subant buildpath="${modules.sorted}" target="do-test-build" />
     </target>
 
-    <target name="do-test-build" depends="init,test-init">
+    <target name="do-test-build" depends="init,test-init" if="exists.test.unit.src.dir">
         <fail >
          Missing test dependency 
           Runtime classpath: ${test.unit.runtime.cp}
@@ -474,9 +472,9 @@ made subject to such option by the copyright holder.
         </copy>
     </target>
 
-    <target name="test" depends="init,test-init,test-build">
+    <target name="test" depends="init,test-init,test-build" if="exists.test.unit.src.dir">
         <mkdir dir="${build.test.unit.results.dir}"/>
-        <junit showoutput="true" fork="true" failureproperty="tests.failed" errorproperty="tests.failed" filtertrace="${test.filter.trace}" tempdir="${build.test.unit.results.dir}">
+        <junit showoutput="true" fork="true" failureproperty="tests.failed" errorproperty="tests.failed" filtertrace="${test.filter.trace}" tempdir="${build.test.unit.results.dir}" timeout="${test.timeout}">
             <batchtest todir="${build.test.unit.results.dir}">
                 <fileset dir="${build.test.unit.classes.dir}">
                     <include name="**/*Test.class"/>
@@ -484,7 +482,7 @@ made subject to such option by the copyright holder.
             </batchtest>
             <classpath refid="test.unit.run.cp"/>
             <syspropertyset refid="test.unit.properties"/>
-            <jvmarg value="-ea"/>
+            <jvmarg line="${test.run.args}"/>
             <formatter type="brief" usefile="false"/>
             <formatter type="xml"/>
         </junit>
@@ -494,14 +492,13 @@ made subject to such option by the copyright holder.
     <target name="test-single" depends="init,test-init,test-build">
         <fail unless="test.includes">Must set test.includes</fail>
         <mkdir dir="${build.test.unit.results.dir}"/>
-        <junit showoutput="true" fork="true" failureproperty="tests.failed" errorproperty="tests.failed" filtertrace="${test.filter.trace}" tempdir="${build.test.unit.results.dir}">
+        <junit showoutput="true" fork="true" failureproperty="tests.failed" errorproperty="tests.failed" filtertrace="${test.filter.trace}" tempdir="${build.test.unit.results.dir}" timeout="${test.timeout}">
             <batchtest todir="${build.test.unit.results.dir}">
                 <fileset dir="${test.unit.src.dir}" includes="${test.includes}"/>
             </batchtest>
             <classpath refid="test.unit.run.cp"/>
             <syspropertyset refid="test.unit.properties"/>
-            <!-- <assertions> does not seem to work in Ant 1.6.1? -->
-            <jvmarg value="-ea"/>
+            <jvmarg line="${test.run.args}"/>
             <formatter type="brief" usefile="false"/>
             <formatter type="xml"/>
         </junit>
@@ -519,7 +516,7 @@ made subject to such option by the copyright holder.
             <jvmarg value="-Xnoagent"/>
             <jvmarg value="-Djava.compiler=none"/>
             <jvmarg value="-Xrunjdwp:transport=dt_socket,address=${jpda.address}"/>
-            <jvmarg value="-ea"/>
+            <jvmarg line="${test.run.args}"/>
             <classpath>
                 <path refid="test.unit.run.cp"/>
                 <pathelement location="${ant.home}/lib/ant.jar"/>
@@ -571,15 +568,14 @@ made subject to such option by the copyright holder.
             >
             <classpath refid="test.unit.run.cp"/>
         </nbprofiledirect>
-        <junit showoutput="true" fork="true" failureproperty="tests.failed" errorproperty="tests.failed" filtertrace="${test.filter.trace}">
+        <junit showoutput="true" fork="true" failureproperty="tests.failed" errorproperty="tests.failed" filtertrace="${test.filter.trace}" tempdir="${build.test.unit.results.dir}">
             <env key="${profiler.info.pathvar}" path="${profiler.info.agentpath}:${profiler.current.path}"/>
             <jvmarg value="${profiler.info.jvmargs.agent}"/>
             <jvmarg line="${profiler.info.jvmargs}"/>
-            <test name="${profile.class}"/>
+            <test name="${profile.class}" todir="${build.test.unit.results.dir}"/>
             <classpath refid="test.unit.run.cp"/>
             <syspropertyset refid="test.unit.properties"/>
-            <!-- <assertions> does not seem to work in Ant 1.6.1? -->
-            <jvmarg value="-ea"/>
+            <jvmarg line="${test.run.args}"/>
             <formatter type="brief" usefile="false"/>
             <formatter type="xml"/>
         </junit>
