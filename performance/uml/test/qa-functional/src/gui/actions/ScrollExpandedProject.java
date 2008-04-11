@@ -54,6 +54,7 @@ import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 import javax.swing.tree.TreePath;
 import org.netbeans.jemmy.operators.JScrollBarOperator;
+import org.netbeans.performance.test.guitracker.ActionTracker;
 
 /**
  * Measure UI-RESPONSIVENES and WINDOW_OPENING.
@@ -74,8 +75,8 @@ public class ScrollExpandedProject extends org.netbeans.performance.test.utiliti
         expectedTime = 2000;
         WAIT_AFTER_OPEN=4000;        
     }
-    public ScrollExpandedProject(String testName, String  performanceDataName) {
-        super(testName);
+    public ScrollExpandedProject(String testName, String performanceDataName) {
+        super(testName, performanceDataName);
         //TODO: Adjust expectedTime value
         expectedTime = 2000;
         WAIT_AFTER_OPEN=4000;                
@@ -95,6 +96,7 @@ public class ScrollExpandedProject extends org.netbeans.performance.test.utiliti
         new EventTool().waitNoEvent(1000);
         pto = new ProjectsTabOperator(); 
         projectScroll = new JScrollBarOperator(pto,0);
+        MY_START_EVENT = ActionTracker.TRACK_OPEN_BEFORE_TRACE_MESSAGE;
     }
    
     public void prepare() {
