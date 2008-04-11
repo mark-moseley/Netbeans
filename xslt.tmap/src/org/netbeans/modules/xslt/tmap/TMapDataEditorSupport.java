@@ -33,7 +33,6 @@ import org.netbeans.core.spi.multiview.CloseOperationHandler;
 import org.netbeans.core.spi.multiview.CloseOperationState;
 import org.netbeans.modules.xml.retriever.catalog.Utilities;
 import org.netbeans.modules.xml.validation.ShowCookie;
-import org.netbeans.modules.xml.validation.ui.ValidationAnnotation;
 import org.netbeans.modules.xml.xam.AbstractModel;
 import org.netbeans.modules.xml.xam.Component;
 import org.netbeans.modules.xml.xam.Model.State;
@@ -65,6 +64,8 @@ import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 import org.netbeans.modules.soa.ui.UndoRedoManagerProvider;
+import org.openide.cookies.SaveCookie;
+import org.openide.util.UserCancelException;
 
 /**
  * @author Vitaly Bychkov
@@ -78,12 +79,10 @@ public class TMapDataEditorSupport extends DataEditorSupport  implements
         setMIMEType(TMapDataLoader.MIME_TYPE);
     }
 
-    // vlv
     public UndoRedo.Manager getUndoRedoManager() {
       return getUndoManager();
     }
 
-    /** {@inheritDoc} */
     @Override
     public void saveDocument() throws IOException {
         super.saveDocument();
@@ -255,11 +254,6 @@ public class TMapDataEditorSupport extends DataEditorSupport  implements
         return associatedTCs;
     }
 
-    public boolean validateXML(CookieObserver observer) {
-        // TODO a
-        return true;
-    }
-    
     @Override
     protected CloneableEditorSupport.Pane createPane() {
         TopComponent multiview = TMapMultiViewSupport
@@ -298,11 +292,33 @@ public class TMapDataEditorSupport extends DataEditorSupport  implements
 
         // all editors are closed so we don't need to keep this task.
         prepareTask = null;
-
-//        getValidationController().detach();
-    
     }
     
+    /*
+     * Update presence of SaveCookie on first keystroke.
+     */
+    @Override
+    protected boolean notifyModified() {
+        boolean notify = super.notifyModified();
+        if (!notify) {
+            return false;
+        }
+        
+        TMapDataObject dObj = getEnv().getTMapDataObject();
+        if (dObj.getCookie(SaveCookie.class) == null) {
+            dObj.addSaveCookie(new SaveCookie() {
+                public void save() throws java.io.IOException {
+                    try {
+                        saveDocument();
+                    } catch(UserCancelException e) {
+                        //just ignore
+                    }
+                }
+            });
+        }
+        return true;
+    }
+
     /*
      * This method is redefined for marking big TopCompenent as modified (
      * asterik (*) needs to be appended to name of bpel file ). Without this
@@ -388,26 +404,13 @@ public class TMapDataEditorSupport extends DataEditorSupport  implements
         super.initializeCloneableEditor(editor);
         // Force the title to update so the * left over from when the
         // modified data object was discarded is removed from the title.
-        if (!getEnv().getTMapDataObject().isModified()) {
+//        if (!getEnv().getTMapDataObject().isModified()) {
             // Update later to avoid an infinite loop.
             EventQueue.invokeLater(new Runnable() {
                 public void run() {
                     updateTitles();
                 }
             });
-        }
-
-        // TODO a
-//        /*
-//         *  I put this code here because it is called each time when
-//         *  editor is opened. This can happened omn first open,
-//         *  on reopen, on deserialization.
-//         *  CTOR of BPELDataEditorSupport is called only once due lifecycle 
-//         *  data object, so it cannot be used on attach after reopening.
-//         *  Method "open" doesn't called after deser-ion.
-//         *  But this method is called always on editor opening. 
-//         */ 
-//        getValidationController().attach();
     }
     
    @Override
@@ -678,7 +681,4 @@ public class TMapDataEditorSupport extends DataEditorSupport  implements
 
     /** Used for managing the prepareTask listener. */
     private transient Task prepareTask;
-
-    private ValidationAnnotation myAnnotation = new ValidationAnnotation();
-
 }
