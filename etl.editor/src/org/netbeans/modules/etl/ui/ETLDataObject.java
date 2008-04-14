@@ -61,6 +61,7 @@ import org.openide.util.HelpCtx;
 import org.xml.sax.InputSource;
 
 import com.sun.org.apache.xerces.internal.util.XMLChar;
+import org.openide.filesystems.FileUtil;
 
 /**
  * Represents a ETL file.
@@ -69,15 +70,16 @@ import com.sun.org.apache.xerces.internal.util.XMLChar;
  */
 public class ETLDataObject extends MultiDataObject {
 
+    private FileObject fileObj;
+
     public ETLDataObject(FileObject fObj, MultiFileLoader loader)
             throws DataObjectExistsException {
         super(fObj, loader);
         CookieSet set = getCookieSet();
-
+        fileObj = fObj;
         editorSupport = new ETLEditorSupport(this);
         // editor support defines MIME type understood by EditorKits registry
         set.add(editorSupport);
-
         // Add check and validate cookies
         InputSource is = DataObjectAdapters.inputSource(this);
         set.add(new CheckXMLSupport(is));
@@ -226,6 +228,15 @@ public class ETLDataObject extends MultiDataObject {
             this.topPanel = new ETLCollaborationTopPanel(this);
         }
         return this.topPanel;
+    }
+
+    public String getPath() {
+        String path = null;
+        try {            
+            path = FileUtil.toFile(fileObj).getParentFile().getParentFile().getAbsolutePath();
+        } catch (Exception ex) {
+        }
+        return path;
     }
     private static final long serialVersionUID = 6338889116068357651L;
     private transient ETLEditorSupport editorSupport;
