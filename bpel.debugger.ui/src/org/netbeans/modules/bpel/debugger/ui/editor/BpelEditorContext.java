@@ -31,7 +31,7 @@ import javax.xml.namespace.QName;
 import org.netbeans.core.api.multiview.MultiViewHandler;
 import org.netbeans.core.api.multiview.MultiViewPerspective;
 import org.netbeans.core.api.multiview.MultiViews;
-import org.netbeans.modules.bpel.core.util.SelectBpelElement;
+import org.netbeans.modules.bpel.core.SelectBpelElement;
 import org.netbeans.modules.bpel.debugger.ui.breakpoint.BreakpointTranslator;
 import org.netbeans.modules.bpel.debugger.ui.util.Log;
 import org.netbeans.modules.bpel.debugger.ui.util.ModelUtil;
@@ -283,6 +283,23 @@ public class BpelEditorContext implements EditorContext {
                     
                     mvh.requestVisible(mvp);
                     mvh.requestActive(mvp);
+                } else {
+                    final String currentId = 
+                            mvh.getSelectedPerspective().preferredID();
+                    
+                    if (!currentId.equals("orch-designer") && 
+                            !currentId.equals("bpelsource")) {
+                        
+                        for (MultiViewPerspective temp: mvh.getPerspectives()) {
+                            if (temp.preferredID().equals("orch-designer")) {
+                                mvp = temp;
+                                break;
+                            }
+                        }
+                        
+                        mvh.requestVisible(mvp);
+                        mvh.requestActive(mvp);
+                    }
                 }
                 
                 if (mvp.preferredID().equals("orch-designer")) {

@@ -43,10 +43,8 @@ import org.netbeans.core.spi.multiview.CloseOperationState;
 import org.netbeans.modules.bpel.core.multiview.BPELSourceMultiViewElementDesc;
 import org.netbeans.modules.bpel.core.multiview.BpelMultiViewSupport;
 import org.netbeans.modules.bpel.core.util.BPELValidationController;
-import org.netbeans.modules.bpel.core.util.SelectBpelElement;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
-import org.netbeans.modules.bpel.model.api.support.Util;
 import org.netbeans.modules.bpel.model.spi.BpelModelFactory;
 import org.netbeans.modules.xml.retriever.catalog.Utilities;
 import org.netbeans.modules.xml.validation.ShowCookie;
@@ -78,6 +76,9 @@ import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 import org.netbeans.modules.soa.ui.UndoRedoManagerProvider;
+import org.netbeans.modules.bpel.core.util.ValidationUtil;
+import org.openide.cookies.SaveCookie;
+import org.openide.util.UserCancelException;
 
 /**
  * @author ads
@@ -94,7 +95,6 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
         return (QuietUndoManager) getUndoRedo();
     }
 
-    // vlv
     public UndoRedo.Manager getUndoRedoManager() {
       return getUndoManager();
     }
@@ -126,42 +126,18 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
                 model.sync();
             }
         }
-        catch (IOException e) {
-            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
-            // assert false;
-        }
+        catch (IOException e) {}
     }
 
-    /**
-     * Public accessor for the <code>initializeCloneableEditor()</code>
-     * method.
-     * {@inheritDoc} 
-     */
     @Override
-    public void initializeCloneableEditor( CloneableEditor editor )
-    {
+    public void initializeCloneableEditor(CloneableEditor editor) {
         super.initializeCloneableEditor(editor);
-        // Force the title to update so the * left over from when the
-        // modified data object was discarded is removed from the title.
-        if (!getEnv().getBpelDataObject().isModified()) {
-            // Update later to avoid an infinite loop.
-            EventQueue.invokeLater(new Runnable() {
 
-                public void run() {
-                    updateTitles();
-                }
-            });
-        }
-
-        /*
-         *  I put this code here because it is called each time when
-         *  editor is opened. This can happened omn first open,
-         *  on reopen, on deserialization.
-         *  CTOR of BPELDataEditorSupport is called only once due lifecycle 
-         *  data object, so it cannot be used on attach after reopening.
-         *  Method "open" doesn't called after deser-ion.
-         *  But this method is called always on editor opening. 
-         */ 
+        EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                updateTitles();
+            }
+        });
         getValidationController().attach();
     }
 
@@ -199,35 +175,39 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
     @Override
     public Task prepareDocument()
     {
+        QuietUndoManager undo = (QuietUndoManager) getUndoRedo();
         Task task = super.prepareDocument();
         // Avoid listening to the same task more than once.
         if (task == prepareTask) {
             return task;
         }
-        task.addTaskListener(new TaskListener() {
+        synchronized (undo) {
+            task.addTaskListener(new TaskListener() {
 
-            public void taskFinished( Task task ) {
-                /* The superclass prepareDocument() adds the undo/redo
-                 * manager as a listener -- we need to remove it since
-                 *  the views will add and remove it as needed.
-                 */
-                QuietUndoManager undo = (QuietUndoManager) getUndoRedo();
-                StyledDocument doc = getDocument();
-                synchronized (undo) {
-                    // Now that the document is ready, pass it to the manager.
-                    undo.setDocument((AbstractDocument) doc);
-                    if (!undo.isCompound()) {
-                        /* The superclass prepareDocument() adds the undo/redo
-                         * manager as a listener -- we need to remove it since
-                         * we will initially listen to the model instead.
-                         */
-                        doc.removeUndoableEditListener(undo);
-                        // If not listening to document, then listen to model.
-                        addUndoManagerToModel(undo);
+                public void taskFinished( Task task ) {
+                    /* The superclass prepareDocument() adds the undo/redo
+                     * manager as a listener -- we need to remove it since
+                     *  the views will add and remove it as needed.
+                     */
+                    QuietUndoManager undo = (QuietUndoManager) getUndoRedo();
+                    StyledDocument doc = getDocument();
+                    synchronized (undo) {
+                        // Now that the document is ready, pass it to the manager.
+                        undo.setDocument((AbstractDocument) doc);
+                        if (!undo.isCompound()) {
+                            /* The superclass prepareDocument() adds the undo/redo
+                             * manager as a listener -- we need to remove it since
+                             * we will initially listen to the model instead.
+                             */
+                            doc.removeUndoableEditListener(undo);
+                            // If not listening to document, then listen to model.
+                            addUndoManagerToModel(undo);
+                        }
                     }
                 }
-            }
-        });
+            });
+            prepareTask = task;
+        }
         return task;
     }
 
@@ -429,7 +409,7 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
                 else if (mvp.preferredID().equals(
                         BPELSourceMultiViewElementDesc.PREFERED_ID))
                 {
-                    Line line = Util.getLine(resultItem);
+                    Line line = ValidationUtil.getLine(resultItem);
 
                     if (line != null) {
                       line.show(Line.SHOW_GOTO);
@@ -458,7 +438,7 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
             (BPELValidationController) ((BPELDataObject) getDataObject()).
                     getLookup().lookup(BPELValidationController.class);
         if (controller != null) {
-            controller.notifyCompleteValidationResults(validationResults);
+            controller.notifyValidationResult(validationResults);
         }
 
         return true;
@@ -477,8 +457,7 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
     }
 
     @Override
-    protected void notifyClosed()
-    {
+    protected void notifyClosed() {
         QuietUndoManager undo = getUndoManager();
         StyledDocument doc = getDocument();
         synchronized (undo) {
@@ -499,11 +478,33 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
         }
         super.notifyClosed();
         getUndoManager().discardAllEdits();
-
-        // all editors are closed so we don't need to keep this task.
         prepareTask = null;
-
         getValidationController().detach();
+    }
+
+    /*
+     * Update presence of SaveCookie on first keystroke.
+     */
+    @Override
+    protected boolean notifyModified() {
+        boolean notify = super.notifyModified();
+        if (!notify) {
+            return false;
+        }
+        
+        BPELDataObject dObj = getEnv().getBpelDataObject();
+        if (dObj.getCookie(SaveCookie.class) == null) {
+            dObj.addSaveCookie(new SaveCookie() {
+                public void save() throws java.io.IOException {
+                    try {
+                        saveDocument();
+                    } catch(UserCancelException e) {
+                        //just ignore
+                    }
+                }
+            });
+        }
+        return true;
     }
 
     /*
@@ -681,8 +682,8 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
     }
 
     private BpelModelFactory getModelFactory() {
-        BpelModelFactory factory = (BpelModelFactory) Lookup.getDefault()
-                .lookup(BpelModelFactory.class);
+        BpelModelFactory factory = Lookup.getDefault().
+                lookup(BpelModelFactory.class);
         return factory;
     }
 
