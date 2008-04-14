@@ -45,7 +45,7 @@ import org.netbeans.modules.bpel.core.BPELDataObject;
 import org.netbeans.modules.bpel.core.util.BPELValidationController;
 import org.netbeans.modules.bpel.editors.api.nodes.FactoryAccess;
 import org.netbeans.modules.bpel.editors.api.nodes.NodeType;
-import org.netbeans.modules.bpel.editors.api.utils.Util;
+import org.netbeans.modules.bpel.editors.api.utils.EditorUtil;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.api.events.ArrayUpdateEvent;
@@ -194,7 +194,7 @@ public class BPELSourceMultiViewElement extends CloneableEditor
         editor.addUndoManagerToDocument();
 //        addUndoManager();
         
-        getValidationController().triggerValidation( true );
+        getValidationController().triggerValidation(true);
     }
     
     public void componentClosed() {
@@ -433,11 +433,13 @@ public class BPELSourceMultiViewElement extends CloneableEditor
             editorPane.removeCaretListener(myCaretPositionListener);
         }
         
-        myCaretPositionListener = new CaretListener() {
-            public void caretUpdate(final CaretEvent e) {
-                selectElement();
-            }
-        };
+        if (myCaretPositionListener == null) {
+            myCaretPositionListener = new CaretListener() {
+                public void caretUpdate(final CaretEvent e) {
+                    selectElement();
+                }
+            };
+        }
         editorPane.addCaretListener(myCaretPositionListener);
         
         
@@ -448,14 +450,23 @@ public class BPELSourceMultiViewElement extends CloneableEditor
                 model.removeEntityChangeListener(myBpelModelListener);
             }
 
-            myBpelModelListener = new ChangeEventListener() {
+            if (myBpelModelListener == null) {
+                myBpelModelListener = new ChangeEventListener() {
 
                 private void handleEvent(ChangeEvent event) {
                     if (event == null) {
                         return;
                     }
                     if (event.isLastInAtomic()) {
-                        selectElement();
+                        if (!SwingUtilities.isEventDispatchThread()) {
+                            SwingUtilities.invokeLater(new Runnable() {
+                                    public void run() {
+                                        selectElement(0);
+                                    }
+                                });
+                        } else {
+                            selectElement(0);
+                        }
                     }
                 }
 
@@ -483,6 +494,7 @@ public class BPELSourceMultiViewElement extends CloneableEditor
                     handleEvent(event);
                 }
             };
+            }
 
             model.addEntityChangeListener(myBpelModelListener);
         }
@@ -519,12 +531,10 @@ public class BPELSourceMultiViewElement extends CloneableEditor
                 if (foundedEntity == null) {
                     return;
                 }
-
-        //                NodeFactory nodeFactory = (NodeFactory)getDataObject().getLookup().lookup(NodeFactory.class);
                 NodeFactory nodeFactory = FactoryAccess.getPropertyNodeFactory();
                 assert nodeFactory != null;
 
-                NodeType nodeType = Util.getBasicNodeType(foundedEntity);
+                NodeType nodeType = EditorUtil.getBasicNodeType(foundedEntity);
                 if (nodeType == null) {
                     return;
                 }
@@ -539,22 +549,14 @@ public class BPELSourceMultiViewElement extends CloneableEditor
                 if (node == null) {
                     return;
                 }
-
-        //                    System.out.println("set active node");
-                
                 final TopComponent tc = myMultiViewObserver == null 
                         ? null 
                         : myMultiViewObserver.getTopComponent();
                 if (tc != null) {
-////                    tc.setActivatedNodes(new Node[] {node});
                     setActivatedNodes(new Node[] {node});
                 }
             }
         });
-//                    setActivatedNodes(new Node[] {node});
-//                    setActivatedNodes(new Node[] {node, getDataObject().getNodeDelegate()});
-//            Node[] tmpNodes = getActivatedNodes();
-//                    System.out.println("tmpNodes: "+tmpNodes);
     }
     
     private void removeCaretPositionListener() {
@@ -563,6 +565,7 @@ public class BPELSourceMultiViewElement extends CloneableEditor
         if (editorPane != null && myCaretPositionListener != null) {
             editorPane.removeCaretListener(myCaretPositionListener);
         }
+        myCaretPositionListener = null;
         
         BPELDataEditorSupport editorSupport = getDataObject().getEditorSupport();
         BpelModel model = editorSupport != null ? editorSupport.getBpelModel() : null;
@@ -570,14 +573,18 @@ public class BPELSourceMultiViewElement extends CloneableEditor
         if (myBpelModelListener != null && model != null) {
             model.removeEntityChangeListener(myBpelModelListener);
         }
+        
+        myBpelModelListener = null;
     }
 
+    // TODO m
     private void selectElement(int delay) {
+        assert SwingUtilities.isEventDispatchThread();
         if (myPreviousTask != null) {
             myPreviousTask.cancel();
         }
         if (myPreviousTask != null && !myPreviousTask.isFinished()
-                && RequestProcessor.getDefault().isRequestProcessorThread()) // issue 125439
+                && RequestProcessor.getDefault().isRequestProcessorThread()) // issue 125 439
         {
             myPreviousTask.waitFinished();
             myPreviousTask = null;
@@ -605,18 +612,9 @@ public class BPELSourceMultiViewElement extends CloneableEditor
     }
     
     private transient MultiViewElementCallback myMultiViewObserver;
-    
     private BPELDataObject myDataObject;
-    
     private transient JToolBar myToolBar; 
-    
     private CaretListener myCaretPositionListener;
-    
     private ChangeEventListener myBpelModelListener;
-
     private transient RequestProcessor.Task myPreviousTask;
 }
-
-
-
-

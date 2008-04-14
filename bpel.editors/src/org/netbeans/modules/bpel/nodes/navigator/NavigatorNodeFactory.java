@@ -84,7 +84,7 @@ public class NavigatorNodeFactory implements NodeFactory<NodeType> {
      */
     public Node createNode(BpelEntity reference, Lookup lookup) {
         return this.createNode(org.netbeans.modules.bpel.editors.api.utils.
-                                    Util.getBasicNodeType((BpelEntity)reference)
+                                    EditorUtil.getBasicNodeType((BpelEntity)reference)
                 , reference, ChildrenType.DEFAULT_CHILD, lookup);
     }
     
@@ -294,10 +294,11 @@ public class NavigatorNodeFactory implements NodeFactory<NodeType> {
             case SEQUENCE :
             case WHILE :
             case REPEAT_UNTIL :
-                Children activityChildren = new ActivityNodeChildren(
+                ActivityNodeChildren activityChildren = new ActivityNodeChildren(
                         (BpelContainer)reference,lookup);
                 newNode = PropertyNodeFactory.getInstance().createNode(
-                        nodeType, reference, activityChildren, lookup);
+                        nodeType, reference, activityChildren, 
+                        new ExtendedLookup(lookup, activityChildren.getIndex()));
                 break;
                 
             case COPY :

@@ -21,7 +21,7 @@ package org.netbeans.modules.bpel.diagram;
 import org.netbeans.modules.xml.xam.Component;
 
 import org.netbeans.modules.bpel.editors.api.diagram.DiagramElement;
-import org.netbeans.modules.bpel.editors.api.utils.Util;
+import org.netbeans.modules.bpel.editors.api.utils.EditorUtil;
 
 import org.netbeans.modules.bpel.design.DesignView;
 import org.netbeans.modules.bpel.design.model.elements.VisualElement;
@@ -37,15 +37,15 @@ final class DiagramElementImpl implements DiagramElement {
     myElement = element;
   }
 
-  public String getText() {
+  public String getName() {
     return myElement.getText();
   }
 
   public void gotoSource() {
-    Util.goToSource(getComponent());
+    EditorUtil.goToSource(getComponent());
   }
 
-  public void select() {
+  public void gotoDesign() {
     Pattern pattern = myElement.getPattern();
     DesignView view = pattern.getModel().getView();
 
@@ -56,11 +56,15 @@ final class DiagramElementImpl implements DiagramElement {
     getDecorator().select(getComponent());
 
     // scroll
-//todo FIXME: myElement.scrollTo();
+    // myElement.scrollTo();
   }
 
-  public void highlight(boolean highlighted) {
-    getDecorator().highlight(getComponent(), highlighted);
+  public void highlight() {
+    getDecorator().doHighlight(getComponent(), true);
+  }
+
+  public void unhighlight() {
+    getDecorator().doHighlight(getComponent(), false);
   }
 
   private DiagramDecorator getDecorator() {

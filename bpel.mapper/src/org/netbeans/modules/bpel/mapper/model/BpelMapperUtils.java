@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import javax.swing.tree.TreePath;
-import org.netbeans.modules.bpel.editors.api.utils.Util;
+import org.netbeans.modules.bpel.editors.api.utils.EditorUtil;
 import org.netbeans.modules.bpel.mapper.tree.MapperSwingTreeModel;
 import org.netbeans.modules.bpel.model.api.AbstractVariableDeclaration;
 import org.netbeans.modules.bpel.model.api.VariableDeclarationScope;
@@ -55,7 +55,7 @@ public final class BpelMapperUtils {
             if (lastPathObj instanceof VariableDeclarationScope) {
                 return null;
             } else if (lastPathObj instanceof AbstractVariableDeclaration) {
-                SchemaComponent varType = Util.getVariableSchemaType(
+                SchemaComponent varType = EditorUtil.getVariableSchemaType(
                         (AbstractVariableDeclaration)lastPathObj);
                 if (varType == null) {
                     // Null can be for example in case of message variable
@@ -66,7 +66,7 @@ public final class BpelMapperUtils {
                 }
             } else if (lastPathObj instanceof Part) {
                 Part part = (Part)lastPathObj;
-                SchemaComponent partType = Util.getPartType(part);
+                SchemaComponent partType = EditorUtil.getPartType(part);
                 if (partType != null) {
                     return XPathMetadataUtils.calculateXPathType(partType);
                 }
@@ -130,39 +130,6 @@ public final class BpelMapperUtils {
         //
         // Return the first item.
         return itemsList.get(0);
-    }
-    
-    /**
-     * Determines if a namespace prefix is required for the specified schema component. 
-     * @param sComp
-     * @return
-     */
-    public static boolean isPrefixRequired(SchemaComponent sComp) {
-        if (sComp instanceof LocalElement) {
-            Form form = ((LocalElement)sComp).getFormEffective();
-            if (form == Form.QUALIFIED) {
-                return true;
-            } else {
-                return false;
-            }
-        } else if (sComp instanceof GlobalElement) {
-            return true;
-        } else if (sComp instanceof LocalAttribute) {
-            Form form = ((LocalAttribute)sComp).getFormEffective();
-            if (form == Form.QUALIFIED) {
-                return true;
-            } else {
-                return false;
-            }
-        } else if (sComp instanceof GlobalElement || 
-                sComp instanceof ElementReference || 
-                sComp instanceof GlobalAttribute) {
-            // all global objects have to be with a prefix
-            return true;
-        }
-        //
-        assert true : "Unsupported schema component in the BPEL mapper tree!"; // NOI18N
-        return false;
     }
  
     /**

@@ -57,19 +57,12 @@ public interface HtmlNameManager {
             }
             
             if (refName == null && reference instanceof DocumentComponent) {
-                refName = org.netbeans.modules.bpel.editors.api.utils.Util.getTagName((DocumentComponent)reference);
+                refName = EditorUtil.getTagName((DocumentComponent)reference);
             }
             
             refName = refName == null ? "" : refName;
             
-            return org.netbeans.modules.bpel.editors.api.utils.
-                                Util.getCorrectedHtmlRenderedString(refName);
+            return EditorUtil.getCorrectedHtmlRenderedString(refName);
         }
     }
-    
-    class Util {
-        private Util() {
-        }
-    }
-    
 }
