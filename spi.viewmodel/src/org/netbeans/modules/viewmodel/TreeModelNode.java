@@ -318,6 +318,7 @@ public class TreeModelNode extends AbstractNode {
             refresh();
             return ;
         }
+        boolean refreshed = false;
         if ((ModelEvent.NodeChanged.DISPLAY_NAME_MASK & changeMask) != 0) {
             try {
                 String name = model.getDisplayName (object);
@@ -334,7 +335,9 @@ public class TreeModelNode extends AbstractNode {
                 Throwable t = ErrorManager.getDefault().annotate(e, "Model: "+model);
                 ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, t);
             }
-        } else if ((ModelEvent.NodeChanged.ICON_MASK & changeMask) != 0) {
+            refreshed = true;
+        }
+        if ((ModelEvent.NodeChanged.ICON_MASK & changeMask) != 0) {
             try {
                 String iconBase = model.getIconBaseWithExtension (object);
                 if (iconBase != null)
@@ -345,23 +348,29 @@ public class TreeModelNode extends AbstractNode {
                 Throwable t = ErrorManager.getDefault().annotate(e, "Model: "+model);
                 ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, t);
             }
-        } else if ((ModelEvent.NodeChanged.SHORT_DESCRIPTION_MASK & changeMask) != 0) {
+            refreshed = true;
+        }
+        if ((ModelEvent.NodeChanged.SHORT_DESCRIPTION_MASK & changeMask) != 0) {
             fireShortDescriptionChange(null, null);
-        } else if ((ModelEvent.NodeChanged.CHILDREN_MASK & changeMask) != 0) {
+            refreshed = true;
+        }
+        if ((ModelEvent.NodeChanged.CHILDREN_MASK & changeMask) != 0) {
             getRequestProcessor ().post (new Runnable () {
                 public void run () {
                     refreshTheChildren(false);
                 }
             });
-        } else {
+            refreshed = true;
+        }
+        if (!refreshed) {
             refresh();
         }
     }
     
     private static RequestProcessor requestProcessor;
-    public static RequestProcessor getRequestProcessor () {
+    static RequestProcessor getRequestProcessor () {
         if (requestProcessor == null)
-            requestProcessor = new RequestProcessor ("TreeModel");
+            requestProcessor = new RequestProcessor ("TreeModel", 1);
         return requestProcessor;
     }
 
@@ -649,7 +658,7 @@ public class TreeModelNode extends AbstractNode {
     // innerclasses ............................................................
     
     /** Special locals subnodes (children) */
-    private static final class TreeModelChildren extends Children.Keys<Object>
+    static final class TreeModelChildren extends Children.Keys<Object>
                                                  implements LazyEvaluator.Evaluable {
             
         private boolean             initialezed = false;
@@ -803,6 +812,7 @@ public class TreeModelNode extends AbstractNode {
                     int i, k = ch.length;
                     for (i = 0; i < k; i++)
                         try {
+                            DefaultTreeExpansionManager.get(model).setChildrenToActOn(getTreeDepth());
                             if (model.isExpanded (ch [i])) {
                                 TreeTable treeTable = treeModelRoot.getTreeTable ();
                                 if (treeTable.isExpanded(object)) {
@@ -814,6 +824,22 @@ public class TreeModelNode extends AbstractNode {
                         }
                 }
             });
+        }
+        
+        private Integer depth;
+        
+        Integer getTreeDepth() {
+            Node p = getNode();
+            if (p == null) {
+                return 0;
+            } else if (depth != null) {
+                return depth;
+            } else {
+                int d = 1;
+                while ((p = p.getParentNode()) != null) d++;
+                depth = new Integer(d);
+                return depth;
+            }
         }
         
         private void applyWaitChildren() {
@@ -940,7 +966,6 @@ public class TreeModelNode extends AbstractNode {
                 //System.out.println("\nTreeModelNode.evaluateLazily("+TreeModelNode.this.getDisplayName()+", "+id+"): value = "+value+", fire = "+fire);
                 if (fire) {
                     firePropertyChange (id, null, value);
-                    refreshTheChildren(true);
                 }
                 
             }
@@ -963,7 +988,6 @@ public class TreeModelNode extends AbstractNode {
             treeModelRoot.getValuesEvaluator().evaluate(this);
             
             Object ret = null;
-            boolean refreshChildren = false;
             
             synchronized (evaluated) {
                 if (evaluated[0] != 1) {
@@ -973,8 +997,6 @@ public class TreeModelNode extends AbstractNode {
                     if (evaluated[0] != 1) {
                         evaluated[0] = -1; // timeout
                         ret = EVALUATING_STR;
-                    } else {
-                        refreshChildren = true;
                     }
                 }
             }
@@ -984,13 +1006,6 @@ public class TreeModelNode extends AbstractNode {
                 }
             }
             
-            if (refreshChildren) {
-                RequestProcessor.getDefault().post(new Runnable() {
-                    public void run() {
-                        refreshTheChildren(true);
-                    }
-                });
-            }
             if (ret == EVALUATING_STR &&
                     getValueType() != null && getValueType() != String.class) {
                 ret = null; // Must not provide String when the property type is different.
