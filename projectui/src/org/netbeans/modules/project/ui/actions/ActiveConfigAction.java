@@ -51,6 +51,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.ListCellRenderer;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.border.Border;
 import javax.swing.plaf.UIResource;
@@ -109,7 +110,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                     activeConfigurationChanged(pcp != null ? getActiveConfiguration(pcp) : null);
                     pcp.customize();
                 } else if (o != null) {
-                    activeConfigurationSelected((ProjectConfiguration) o);
+                    activeConfigurationSelected((ProjectConfiguration) o, null);
                 }
             }
         });
@@ -162,7 +163,12 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                 ComboBoxModel m = configListCombo.getModel();
                 for (int i = 0; i < m.getSize(); i++) {
                     if (config.equals(m.getElementAt(i))) {
-                        configListCombo.setSelectedIndex(i);
+                        final int selIndex = i;
+                        SwingUtilities.invokeLater(new Runnable() {
+                            public void run() {
+                                configListCombo.setSelectedIndex(selIndex);
+                            }
+                        });
                         break;
                     }
                 }
@@ -171,18 +177,22 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
             listeningToCombo = true;
         }
     }
-
-    private synchronized void activeConfigurationSelected(ProjectConfiguration cfg) {
+    
+    private synchronized void activeConfigurationSelected(ProjectConfiguration cfg, ProjectConfigurationProvider ppcp) {
+        ProjectConfigurationProvider lpcp = pcp;
+        if (ppcp != null) {
+            lpcp = ppcp;
+        } 
         LOGGER.log(Level.FINER, "activeConfigurationSelected: {0}", cfg);
-        if (pcp != null && cfg != null && !cfg.equals(getActiveConfiguration(pcp))) {
+        if (lpcp != null && cfg != null && !cfg.equals(getActiveConfiguration(lpcp))) {
             try {
-                setActiveConfiguration(pcp, cfg);
+                setActiveConfiguration(lpcp, cfg);
             } catch (IOException x) {
                 LOGGER.log(Level.WARNING, null, x);
             }
         }
     }
-
+    
     public HelpCtx getHelpCtx() {
         return new HelpCtx(ActiveConfigAction.class);
     }
@@ -241,7 +251,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
 
     }
 
-    class ConfigMenu extends JMenu implements DynamicMenuContent {
+    class ConfigMenu extends JMenu implements DynamicMenuContent, ActionListener {
 
         private final Lookup context;
 
@@ -254,20 +264,23 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
             }
         }
 
-        public JComponent[] getMenuPresenters() {
-            removeAll();
-            final ProjectConfigurationProvider<?> pcp;
+        private ProjectConfigurationProvider<?> findPCP() {
             if (context != null) {
                 Collection<? extends Project> projects = context.lookupAll(Project.class);
                 if (projects.size() == 1) {
-                    pcp = projects.iterator().next().getLookup().lookup(ProjectConfigurationProvider.class);
+                    return projects.iterator().next().getLookup().lookup(ProjectConfigurationProvider.class);
                 } else {
                     // No selection, or multiselection.
-                    pcp = null;
+                    return null;
                 }
             } else {
-                pcp = ActiveConfigAction.this.pcp; // global menu item; take from main project
+                return ActiveConfigAction.this.pcp; // global menu item; take from main project
             }
+        }
+        
+        public JComponent[] getMenuPresenters() {
+            removeAll();
+            final ProjectConfigurationProvider<?> pcp = findPCP();
             if (pcp != null) {
                 boolean something = false;
                 ProjectConfiguration activeConfig = getActiveConfiguration(pcp);
@@ -275,7 +288,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                     JRadioButtonMenuItem jmi = new JRadioButtonMenuItem(config.getDisplayName(), config.equals(activeConfig));
                     jmi.addActionListener(new ActionListener() {
                         public void actionPerformed(ActionEvent e) {
-                            activeConfigurationSelected(config);
+                            activeConfigurationSelected(config, findPCP());
                         }
                     });
                     add(jmi);
@@ -288,11 +301,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                     something = true;
                     JMenuItem customize = new JMenuItem();
                     Mnemonics.setLocalizedText(customize, NbBundle.getMessage(ActiveConfigAction.class, "ActiveConfigAction.customize"));
-                    customize.addActionListener(new ActionListener() {
-                        public void actionPerformed(ActionEvent e) {
-                            pcp.customize();
-                        }
-                    });
+                    customize.addActionListener(this);
                     add(customize);
                 }
                 setEnabled(something);
@@ -308,6 +317,13 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
             // Always rebuild submenu.
             // For performance, could try to reuse it if context == null and nothing has changed.
             return getMenuPresenters();
+        }
+
+        public void actionPerformed(ActionEvent e) {
+            ProjectConfigurationProvider<?> pcp = findPCP();
+            if (pcp != null) {
+                pcp.customize();
+            }
         }
 
     }
