@@ -7,32 +7,33 @@
  * and open the template in the editor.
  */
 
-package org.netbeans.test.mercurial.main.archeology;
+package org.netbeans.test.clearcase.ui;
 
 import java.io.File;
 import java.io.PrintStream;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.OutputOperator;
-import org.netbeans.jellytools.OutputTabOperator;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
+import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.junit.NbTestSuite;
-import org.netbeans.test.mercurial.utils.RepositoryMaintenance;
-import org.netbeans.test.mercurial.utils.TestKit;
 
 /**
  *
  * @author pvcs
  */
-public class AnnotationsTest extends JellyTestCase {
+public class ActionsTest extends JellyTestCase {
     
+    public static final String TMP_PATH = "/tmp";
+    public static final String REPO_PATH = "repo";
+    public static final String WORK_PATH = "work";
     public static final String PROJECT_NAME = "JavaApp";
+    public File projectPath;
     public PrintStream stream;
     String os_name;
+    Operator.DefaultStringComparator comOperator;
+    Operator.DefaultStringComparator oldOperator;
     
     /** Creates a new instance of AnnotationsTest */
-    public AnnotationsTest(String name) {
+    public ActionsTest(String name) {
         super(name);
     }
     
@@ -58,31 +59,14 @@ public class AnnotationsTest extends JellyTestCase {
     
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new AnnotationsTest("testShowAnnotations"));
+        suite.addTest(new ActionsTest("testActions"));
         return suite;
     }
     
-    public void testShowAnnotations() throws Exception {
+    public void testActions() throws Exception {
         //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
         //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);
-        try {
-            TestKit.closeProject(PROJECT_NAME);
-            OutputOperator oo = OutputOperator.invoke();
-
-            stream = new PrintStream(new File(getWorkDir(), getName() + ".log"))
-;
-            TestKit.loadOpenProject(PROJECT_NAME, getDataDir());
-            Node node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|Main.java");
-            node.performPopupAction("Mercurial|Show Annotations");
-            OutputTabOperator oto = new OutputTabOperator("Mercurial");
-            oto.waitText("INFO: End of Annotate");
+        System.out.println("Test!!!");
             
-            stream.flush();
-            stream.close();
-        } catch (Exception e) {
-            throw new Exception("Test failed: " + e);
-        } finally {
-            TestKit.closeProject(PROJECT_NAME);
-        }
     }
 }
