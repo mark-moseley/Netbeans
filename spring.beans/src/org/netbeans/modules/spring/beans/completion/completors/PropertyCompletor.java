@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,10 +31,17 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.spring.beans.hyperlink;
+package org.netbeans.modules.spring.beans.completion.completors;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.StringTokenizer;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
@@ -49,44 +50,49 @@ import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.ElementUtilities;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.Task;
-import org.netbeans.api.java.source.ui.ElementOpen;
+import org.netbeans.modules.spring.beans.completion.CompletionContext;
+import org.netbeans.modules.spring.beans.completion.Completor;
+import org.netbeans.modules.spring.beans.completion.SpringXMLConfigCompletionItem;
 import org.netbeans.modules.spring.beans.editor.BeanClassFinder;
+import org.netbeans.modules.spring.beans.editor.SpringXMLConfigEditorUtils;
 import org.netbeans.modules.spring.java.JavaUtils;
 import org.netbeans.modules.spring.java.Property;
 import org.netbeans.modules.spring.java.PropertyFinder;
+import org.netbeans.modules.xml.text.syntax.dom.Tag;
 import org.openide.util.Exceptions;
 
 /**
  *
  * @author Rohan Ranade (Rohan.Ranade@Sun.COM)
  */
-public class PropertyHyperlinkProcessor extends HyperlinkProcessor {
+public class PropertyCompletor extends Completor {
 
-    public PropertyHyperlinkProcessor() {
+    public PropertyCompletor() {
     }
 
-    public void process(HyperlinkEnv env) {
+    @Override
+    public List<SpringXMLConfigCompletionItem> doCompletion(final CompletionContext context) {
+        final List<SpringXMLConfigCompletionItem> results = new ArrayList<SpringXMLConfigCompletionItem>();
+        final String propertyPrefix = context.getTypedPrefix();
+        final JavaSource js = JavaUtils.getJavaSource(context.getFileObject());
+        if (js == null) {
+            return Collections.emptyList();
+        }
+
         try {
-            final String className = new BeanClassFinder(env.getBeanAttributes(), 
-                                env.getFileObject()).findImplementationClass();
-            if (className == null) {
-                return;
-            }
+            // traverse the properties
+            final int dotIndex = propertyPrefix.lastIndexOf("."); // NOI18N
 
-            final String propChain = getPropertyChainUptoPosition(env);
-            if (propChain == null || propChain.equals("")) { // NOI18N
-                return;
-            }
-
-            JavaSource js = JavaUtils.getJavaSource(env.getFileObject());
-            if (js == null) {
-                return;
-            }
-
-            final int dotIndex = propChain.lastIndexOf(".");
             js.runUserActionTask(new Task<CompilationController>() {
 
                 public void run(CompilationController cc) throws Exception {
+                    Tag beanTag = (Tag) SpringXMLConfigEditorUtils.getBean(context.getTag());
+                    String className = new BeanClassFinder(
+                            SpringXMLConfigEditorUtils.getTagAttributes(beanTag),
+                            context.getFileObject()).findImplementationClass();
+                    if (className == null) {
+                        return;
+                    }
                     TypeElement te = JavaUtils.findClassElementByBinaryName(className, cc);
                     if (te == null) {
                         return;
@@ -96,7 +102,7 @@ public class PropertyHyperlinkProcessor extends HyperlinkProcessor {
 
                     // property chain
                     if (dotIndex != -1) {
-                        String getterChain = propChain.substring(0, dotIndex);
+                        String getterChain = propertyPrefix.substring(0, dotIndex);
                         StringTokenizer tokenizer = new StringTokenizer(getterChain, "."); // NOI18N
                         while (tokenizer.hasMoreTokens() && startType != null) {
                             String propertyName = tokenizer.nextToken();
@@ -121,43 +127,31 @@ public class PropertyHyperlinkProcessor extends HyperlinkProcessor {
                         return;
                     }
 
-                    String setterProp = propChain.substring(dotIndex + 1);
-                    Property[] sProps = new PropertyFinder(startType, setterProp, eu).findProperties();
-                    if (sProps.length > 0 && sProps[0].getSetter() != null) {
-                        ElementOpen.open(cc.getClasspathInfo(), sProps[0].getSetter());
+                    String setterPrefix = "";
+                    if (dotIndex != propertyPrefix.length() - 1) {
+                        setterPrefix = propertyPrefix.substring(dotIndex + 1);
                     }
+
+                    Property[] props = new PropertyFinder(startType, setterPrefix, eu).findProperties();
+                    int substitutionOffset = context.getCurrentToken().getOffset() + 1;
+                    if (dotIndex != -1) {
+                        substitutionOffset += dotIndex + 1;
+                    }
+
+                    for (Property prop : props) {
+                        if (prop.getSetter() == null) {
+                            continue;
+                        }
+                        results.add(SpringXMLConfigCompletionItem.createPropertyItem(substitutionOffset, prop));
+                    }
+
+                    setAnchorOffset(substitutionOffset);
                 }
-            }, true);
+            }, false);
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
-    }
 
-    @Override
-    public int[] getSpan(HyperlinkEnv env) {
-        int addOffset = env.getTokenStartOffset() + 1;
-        String propChain = getPropertyChainUptoPosition(env);
-        if(propChain == null || propChain.equals("")) { // NOI18N
-            return null;
-        }
-        
-        int endPos = env.getTokenStartOffset() + propChain.length() + 1;
-        int startPos = propChain.lastIndexOf("."); // NOI18N
-        startPos = (startPos == -1) ? 0 : ++startPos;
-        startPos += addOffset;
-        
-        return new int[] { startPos, endPos };
-    }
-
-    private String getPropertyChainUptoPosition(HyperlinkEnv env) {
-        int relOffset = env.getOffset() - env.getTokenStartOffset() - 1;
-        
-        int endPos = env.getValueString().indexOf(".", relOffset); // NOI18N
-        // no . after the current pos, return full string
-        if(endPos == -1) {
-            return env.getValueString();
-        } else {
-            return env.getValueString().substring(0, endPos);
-        }
+        return results;
     }
 }
