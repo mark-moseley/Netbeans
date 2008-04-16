@@ -31,7 +31,7 @@ import org.netbeans.modules.bpel.design.model.patterns.Pattern;
 
 import org.netbeans.modules.bpel.editors.api.diagram.Diagram;
 import org.netbeans.modules.bpel.editors.api.diagram.DiagramElement;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import static org.netbeans.modules.soa.core.util.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -47,11 +47,11 @@ public final class DiagramImpl implements Diagram {
     return myView;
   }
 
-  public List<DiagramElement> getElements(boolean useSelection) {
+  public List<DiagramElement> getElements(boolean inSelectionOnly) {
     DiagramModel model = myView.getModel();
     List<DiagramElement> elements = new ArrayList<DiagramElement>();
 
-    travel(getRoot(model, useSelection), elements, ""); // NOI18N
+    travel(getRoot(model, inSelectionOnly), elements, ""); // NOI18N
 
     return elements;
   }
@@ -86,8 +86,8 @@ public final class DiagramImpl implements Diagram {
     }
   }
 
-  private Pattern getRoot(DiagramModel model, boolean useSelection) {
-    if (useSelection) {
+  private Pattern getRoot(DiagramModel model, boolean inSelectionOnly) {
+    if (inSelectionOnly) {
       return model.getView().getSelectionModel().getSelectedPattern();
     }
     return model.getRootPattern();

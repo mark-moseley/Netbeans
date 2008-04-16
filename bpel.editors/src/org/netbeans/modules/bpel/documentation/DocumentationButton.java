@@ -50,7 +50,7 @@ import org.netbeans.modules.bpel.model.api.ExtensibleElements;
 import org.netbeans.modules.bpel.model.api.events.VetoException;
 
 import org.netbeans.modules.bpel.design.decoration.components.AbstractGlassPaneButton;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import static org.netbeans.modules.soa.core.util.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -64,7 +64,14 @@ public final class DocumentationButton extends AbstractGlassPaneButton {
 //out();
 //out("event: '" + event.getSource().toString() + "'");
         try {
-          element.setDocumentation(event.getSource().toString());
+          if (element.getModel() == null) { // is deleted
+            return;
+          }
+          String documentation = event.getSource().toString();
+
+          if ( !documentation.equals(element.getDocumentation())) {
+            element.setDocumentation(documentation);
+          }
 //out("get: '" + element.getDocumentation() + "'");
         }
         catch (VetoException e) {
