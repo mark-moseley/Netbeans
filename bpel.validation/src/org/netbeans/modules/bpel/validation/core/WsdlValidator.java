@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,32 +38,68 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.search.impl.ui;
+package org.netbeans.modules.bpel.validation.core;
 
-import org.netbeans.api.progress.ProgressHandle;
-import org.netbeans.api.progress.ProgressHandleFactory;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
-import org.netbeans.modules.bpel.search.api.SearchEvent;
-import org.netbeans.modules.bpel.search.spi.SearchListener;
+import org.netbeans.modules.xml.xam.Component;
+import org.netbeans.modules.xml.xam.Model;
+import org.netbeans.modules.xml.xam.spi.Validation;
+import org.netbeans.modules.xml.xam.spi.Validation.ValidationType;
+import org.netbeans.modules.xml.xam.spi.ValidationResult;
+import org.netbeans.modules.xml.xam.spi.Validator.ResultType;
+
+import org.netbeans.modules.xml.wsdl.model.WSDLModel;
+import org.netbeans.modules.xml.wsdl.model.Definitions;
+import org.netbeans.modules.xml.wsdl.model.visitor.WSDLVisitor;
+
+import org.netbeans.modules.bpel.model.api.BpelModel;
+import org.netbeans.modules.bpel.model.api.Process;
 import static org.netbeans.modules.soa.core.util.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2007.01.25
+ * @version 2008.02.15
  */
-final class Progress implements SearchListener {
+public abstract class WsdlValidator extends CoreValidator {
 
-  public void searchStarted(SearchEvent event) {
-    myProgress = ProgressHandleFactory.createHandle(
-      i18n(Progress.class, "LBL_Search_Progress")); // NOI18N
-    myProgress.start();
+  public abstract WSDLVisitor getVisitor();
+
+  public synchronized ValidationResult validate(Model model, Validation validation, ValidationType type) {
+    if ( !(model instanceof WSDLModel)) {
+      return null;
+    }
+//out();
+//out("VALIDATE WSDL");
+    WSDLModel wsdlModel = (WSDLModel) model;
+
+    if (wsdlModel.getState() == Model.State.NOT_WELL_FORMED) {
+//out("11");
+      return null;
+    }
+//out("22");
+    init(validation, type);
+
+    if ( !isValidationComplete()) {
+//out("33");
+      return null;
+    }
+    Definitions definitions = wsdlModel.getDefinitions();
+//out("44");
+
+    if (definitions == null) {
+//out("55");
+      return null;
+    }
+//out("66");
+    startTime();
+    definitions.accept(getVisitor());
+    endTime(getDisplayName());
+
+    return new ValidationResult(getResultItems(), Collections.singleton(model));
   }
-
-  public void searchFinished(SearchEvent event) {
-    myProgress.finish();
-  }
-
-  public void searchFound(SearchEvent event) {}
-
-  private ProgressHandle myProgress;
 }

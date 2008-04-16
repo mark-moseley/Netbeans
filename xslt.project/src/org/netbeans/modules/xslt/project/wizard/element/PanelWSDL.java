@@ -49,7 +49,7 @@ import javax.swing.JPanel;
 
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import static org.netbeans.modules.soa.core.util.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -102,6 +102,7 @@ final class PanelWSDL<T> extends Panel<T> {
     myWebService.createPanel(panel, c);
 
     mainPanel.add(panel, cc);
+    mainPanel.getAccessibleContext().setAccessibleDescription(i18n("ACSD_LBL_NewRRService2"));
   }
 
   @Override

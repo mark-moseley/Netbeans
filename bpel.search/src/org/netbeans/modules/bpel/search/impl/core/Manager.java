@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -53,7 +53,7 @@ import org.netbeans.modules.bpel.search.spi.SearchEngine;
 import org.netbeans.modules.bpel.search.impl.action.SearchAction;
 import org.netbeans.modules.bpel.search.impl.ui.Find;
 import org.netbeans.modules.bpel.search.impl.ui.Search;
-import org.netbeans.modules.bpel.search.impl.util.Util;
+import static org.netbeans.modules.soa.core.util.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -62,7 +62,7 @@ import org.netbeans.modules.bpel.search.impl.util.Util;
 public final class Manager extends SearchManager {
 
   public Manager() {
-    myEngines = Util.getInstances(SearchEngine.class);
+    myEngines = getInstances(SearchEngine.class);
     mySearch = new Search();
   }
 

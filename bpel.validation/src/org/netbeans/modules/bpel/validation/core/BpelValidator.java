@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,81 +38,78 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.search.impl.diagram;
+package org.netbeans.modules.bpel.validation.core;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import org.w3c.dom.NamedNodeMap;
-import org.w3c.dom.Node;
+import java.util.Set;
 
 import org.netbeans.modules.xml.xam.Component;
-import org.netbeans.modules.xml.xam.dom.DocumentComponent;
-import org.netbeans.modules.bpel.editors.api.diagram.Diagram;
-import org.netbeans.modules.bpel.editors.api.diagram.DiagramElement;
+import org.netbeans.modules.xml.xam.Model;
+import org.netbeans.modules.xml.xam.spi.Validation;
+import org.netbeans.modules.xml.xam.spi.Validation.ValidationType;
+import org.netbeans.modules.xml.xam.spi.ValidationResult;
+import org.netbeans.modules.xml.xam.spi.Validator.ResultType;
 
-import org.netbeans.modules.bpel.search.api.SearchException;
-import org.netbeans.modules.bpel.search.api.SearchOption;
+import org.netbeans.modules.bpel.model.api.BpelModel;
+import org.netbeans.modules.bpel.model.api.CreateInstanceActivity;
+import org.netbeans.modules.bpel.model.api.Process;
+import org.netbeans.modules.bpel.model.api.support.Initiate;
+import org.netbeans.modules.bpel.model.api.support.TBoolean;
 import static org.netbeans.modules.soa.core.util.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2006.12.05
+ * @version 2008.02.15
  */
-public final class Construct extends Engine {
+public abstract class BpelValidator extends CoreValidator {
 
-  public void search(SearchOption option) throws SearchException {
-    Diagram diagram = (Diagram) option.getSource();
-    diagram.clearHighlighting();
+  public synchronized ValidationResult validate(Model model, Validation validation, ValidationType type) {
+    if ( !(model instanceof BpelModel)) {
+      return null;
+    }
+    final BpelModel bpelModel = (BpelModel) model;
+    
+    if (bpelModel.getState() == Model.State.NOT_WELL_FORMED) {
+      return null;
+    }
+    init(validation, type);
+
+    Runnable run = new Runnable() {
+      public void run() {
+        startTime();
+        Process process = bpelModel.getProcess();
+
+        if (process != null) {
+          process.accept(BpelValidator.this);
+        }
+        endTime(getDisplayName());
+      }
+    };
+    bpelModel.invoke(run);
+//if (getName().contains("custom")) {
 //out();
-    fireSearchStarted(option);
-    search(diagram, option.useSelection());
-    fireSearchFinished(option);
+//out();
+//out("!!! ERRORS: " + getResultItems().size());
+//out();
+//out();
+//}
+    return new ValidationResult(getResultItems(), Collections.singleton(model));
   }
-  
-  private void search(Diagram diagram, boolean useSelection) {
-    List<DiagramElement> elements = diagram.getElements(useSelection);
 
-    for (DiagramElement element : elements) {
-      Component component = element.getComponent();
+  protected final boolean isCreateInstanceYes(CreateInstanceActivity activity) {
+    return activity != null && activity.getCreateInstance() == TBoolean.YES;
+  }
 
-      if (acceptsAttribute(component) || acceptsComponent(component)) {
-//out(indent + "      add.");
-        fireSearchFound(new Element(element));
-      }
+  protected final CreateInstanceActivity getCreateInstanceActivity(Component component) {
+    if (component instanceof CreateInstanceActivity) {
+      return (CreateInstanceActivity) component;
     }
-  }
-  
-  private boolean acceptsAttribute(Component component) {
-    if ( !(component instanceof DocumentComponent)) {
-      return false;
+    if (component.getParent() instanceof CreateInstanceActivity) {
+      return (CreateInstanceActivity) component.getParent();
     }
-    NamedNodeMap attributes = ((DocumentComponent) component).
-      getPeer().getAttributes();
-
-    for (int i=0; i < attributes.getLength(); i++) {
-      Node attribute = attributes.item(i);
-     
-      if (accepts(attribute.getNodeName())) {
-        return true;
-      }
-      if (accepts(attribute.getNodeValue())) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private boolean acceptsComponent(Component component) {
-    if ( !(component instanceof DocumentComponent)) {
-      return false;
-    }
-    return accepts(((DocumentComponent) component).getPeer().getTagName());
-  }
-
-  public String getDisplayName() {
-    return i18n(Engine.class, "LBL_Construct_Display_Name"); // NOI18N
-  }
-
-  public String getShortDescription() {
-    return i18n(Engine.class, "LBL_Construct_Short_Description"); // NOI18N
+    return null;
   }
 }

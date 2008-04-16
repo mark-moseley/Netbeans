@@ -47,7 +47,7 @@ import javax.swing.JPanel;
 
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import static org.netbeans.modules.soa.core.util.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -58,7 +58,7 @@ final class PanelWSDLs<T> extends Panel<T> {
   PanelWSDLs(Project project, Panel<T> parent) {
     super(project, parent);
     myWebServiceImplement = new PanelWebService<T>(project, parent);
-    myWebServiceCall = new PanelWebService<T>(project, parent);
+    myWebServiceCall = new PanelWebService<T>(project, parent, i18n("LBL_Web_Service_File2")); // NOI18N
  }
 
   @Override
@@ -111,6 +111,7 @@ final class PanelWSDLs<T> extends Panel<T> {
     myWebServiceCall.createPanel(panel, c);
 
     mainPanel.add(panel, cc);
+    mainPanel.getAccessibleContext().setAccessibleDescription(i18n("ACSD_LBL_NewBridgeService2"));
   }
 
   private Panel<T> myWebServiceImplement;
