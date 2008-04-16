@@ -48,7 +48,6 @@ import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.spi.BpelModelFactory;
 import org.netbeans.modules.xml.retriever.catalog.Utilities;
 import org.netbeans.modules.xml.validation.ShowCookie;
-import org.netbeans.modules.xml.validation.ValidationOutputWindowController;
 import org.netbeans.modules.xml.xam.Model;
 import org.netbeans.modules.xml.xam.ModelSource;
 import org.netbeans.modules.xml.xam.Model.State;
@@ -76,9 +75,10 @@ import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 import org.netbeans.modules.soa.ui.UndoRedoManagerProvider;
-import org.netbeans.modules.bpel.editors.api.utils.EditorUtil;
+import org.netbeans.modules.bpel.editors.api.EditorUtil;
 import org.openide.cookies.SaveCookie;
 import org.openide.util.UserCancelException;
+import org.netbeans.modules.soa.ui.SoaUtil;
 
 /**
  * @author ads
@@ -133,12 +133,47 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
     public void initializeCloneableEditor(CloneableEditor editor) {
         super.initializeCloneableEditor(editor);
 
-        EventQueue.invokeLater(new Runnable() {
+        EventQueue.invokeLater(new Runnable(){
             public void run() {
                 updateTitles();
             }
         });
         getValidationController().attach();
+    }
+
+    @Override
+    protected void notifyClosed() {
+        QuietUndoManager undo = getUndoManager();
+        StyledDocument doc = getDocument();
+        synchronized (undo) {
+            // May be null when closing the editor.
+            if (doc != null) {
+                doc.removeUndoableEditListener(undo);
+                undo.endCompound();
+                undo.setDocument(null);
+            }
+
+            BpelModel model = getBpelModel();
+            if (model != null) {
+                model.removeUndoableEditListener(undo);
+            }
+            // Must unset the model when no longer listening to it.
+            undo.setModel(null);
+
+        }
+        super.notifyClosed();
+        getUndoManager().discardAllEdits();
+        prepareTask = null;
+        getValidationController().detach();
+    }
+
+    public boolean validateXML(CookieObserver cookieObserver) {
+      getValidationController().runValidation();
+      return true;
+    }
+
+    private BPELValidationController getValidationController() {
+      return (BPELValidationController) getEnv().getBpelDataObject().getLookup().lookup(BPELValidationController.class);
     }
 
     @Override
@@ -409,7 +444,7 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
                 else if (mvp.preferredID().equals(
                         BPELSourceMultiViewElementDesc.PREFERED_ID))
                 {
-                    Line line = EditorUtil.getLine(resultItem);
+                    Line line = SoaUtil.getLine(resultItem);
 
                     if (line != null) {
                       line.show(Line.SHOW_GOTO);
@@ -418,30 +453,6 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
             }
         });
 
-    }
-
-    // Implement Validate XML action.
-    public boolean validateXML( CookieObserver cookieObserver ) {
-        List<ResultItem> validationResults;
-
-        ValidationOutputWindowController validationController = 
-            new ValidationOutputWindowController();
-        validationResults = validationController
-                .validate((Model) ((BPELDataObject) this.getDataObject())
-                        .getLookup().lookup(Model.class));
-
-        /* Send the complete/slow validation results to the validation
-         * controller
-         * so that clients can be notified.
-         */ 
-        BPELValidationController controller = 
-            (BPELValidationController) ((BPELDataObject) getDataObject()).
-                    getLookup().lookup(BPELValidationController.class);
-        if (controller != null) {
-            controller.notifyValidationResult(validationResults);
-        }
-
-        return true;
     }
 
     protected CloneableEditorSupport.Pane createPane() {
@@ -456,35 +467,6 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
         return (Pane) multiview;
     }
 
-    @Override
-    protected void notifyClosed() {
-        QuietUndoManager undo = getUndoManager();
-        StyledDocument doc = getDocument();
-        synchronized (undo) {
-            // May be null when closing the editor.
-            if (doc != null) {
-                doc.removeUndoableEditListener(undo);
-                undo.endCompound();
-                undo.setDocument(null);
-            }
-
-            BpelModel model = getBpelModel();
-            if (model != null) {
-                model.removeUndoableEditListener(undo);
-            }
-            // Must unset the model when no longer listening to it.
-            undo.setModel(null);
-
-        }
-        super.notifyClosed();
-        getUndoManager().discardAllEdits();
-        prepareTask = null;
-        getValidationController().detach();
-    }
-
-    /*
-     * Update presence of SaveCookie on first keystroke.
-     */
     @Override
     protected boolean notifyModified() {
         boolean notify = super.notifyModified();
@@ -561,15 +543,6 @@ public class BPELDataEditorSupport extends DataEditorSupport implements
         return new QuietUndoManager(super.createUndoRedoManager());
         // Note we cannot set the document on the undo manager right
         // now, as CES is probably trying to open the document.
-    }
-
-    
-
-    public BPELValidationController getValidationController() {
-        BPELValidationController controller = (BPELValidationController) getEnv()
-                .getBpelDataObject().getLookup().lookup(
-                        BPELValidationController.class);
-        return controller;
     }
 
     /**

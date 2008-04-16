@@ -50,7 +50,7 @@ import org.netbeans.modules.bpel.design.decoration.providers.ToolbarDecorationPr
 import org.netbeans.modules.bpel.design.model.patterns.ProcessPattern;
 import org.netbeans.modules.bpel.design.model.patterns.SequencePattern;
 import org.netbeans.modules.bpel.editors.api.nodes.NodeType;
-import org.netbeans.modules.bpel.editors.api.utils.EditorUtil;
+import org.netbeans.modules.bpel.editors.api.EditorUtil;
 import org.netbeans.modules.bpel.editors.multiview.DesignerMultiViewElement;
 import org.netbeans.modules.bpel.design.DiagramView;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
@@ -346,14 +346,9 @@ public class DesignView extends JPanel implements
         return selectionModel;
     }
 
-
-
-
     public FlowlinkTool getFlowLinkTool() {
         return flowLinkTool;
     }
-
-
 
     public DecorationManager getDecorationManager() {
         return decorationManager;
