@@ -43,6 +43,7 @@ package gui.actions;
 
 import javax.swing.tree.TreePath;
 
+import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.RuntimeTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 
@@ -54,6 +55,7 @@ import org.netbeans.jemmy.EventTool;
 import org.netbeans.progress.module.Controller;
 import org.netbeans.progress.spi.InternalHandle;
 import org.netbeans.progress.spi.TaskModel;
+import org.openide.util.Exceptions;
 
 /**
  * Measure application server Startup time via NetBeans TaskModel API.
@@ -62,6 +64,8 @@ import org.netbeans.progress.spi.TaskModel;
  *
  */
 public class StartAppserver extends org.netbeans.performance.test.utilities.PerformanceTestCase {
+    public static final int WAIT_SERVER_TASK_HANDLE_TIMEOUT = 40000;
+    public static final int WAIT_FOR_APP_SERVER_TASK = 120000;
     
     private RuntimeTabOperator rto;
     private Node asNode;
@@ -91,7 +95,11 @@ public class StartAppserver extends org.netbeans.performance.test.utilities.Perf
         TreePath path = null;
         
         try {
-            path = rto.tree().findPath("Servers|GlassFish V2"); // NOI18N
+            // "Server"
+            String server = Bundle.getStringTrimmed("org.netbeans.modules.server.ui.manager.Bundle", "Server_Registry_Node_Name");
+            // "GlassFish V2"
+            String glassfishv2 = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.sun.ide.Bundle", "LBL_GlassFishV2");
+            path = rto.tree().findPath(server + "|" + glassfishv2); // NOI18N
         } catch (TimeoutExpiredException exc) {
             exc.printStackTrace(System.err);
             throw new Error("Cannot find Application Server Node");
@@ -122,17 +130,19 @@ public class StartAppserver extends org.netbeans.performance.test.utilities.Perf
     
     public void close(){
         log("::close");
-        String serverIDEName = asNode.getText();
-        
-        JPopupMenuOperator popup = asNode.callPopup();
-        if (popup == null) {
-            throw new Error("Cannot get context menu for Application server node ");
+        if (asNode != null) {
+            String serverIDEName = asNode.getText();
+
+            JPopupMenuOperator popup = asNode.callPopup();
+            if (popup == null) {
+                throw new Error("Cannot get context menu for Application server node ");
+            }
+            boolean stopEnabled = popup.showMenuItem("Stop").isEnabled(); // NOI18N
+            if(stopEnabled) {
+                popup.pushMenuNoBlock("Stop"); // NOI18N
+                waitForAppServerTask("Stopping", serverIDEName);
+            }
         }
-        boolean startEnabled = popup.showMenuItem("Stop").isEnabled(); // NOI18N
-        if(startEnabled) {
-            popup.pushMenuNoBlock("Stop"); // NOI18N
-        }
-        waitForAppServerTask("Stopping", serverIDEName);
     }
     
     private void waitForAppServerTask(String taskName, String serverIDEName) {
@@ -144,20 +154,23 @@ public class StartAppserver extends org.netbeans.performance.test.utilities.Perf
         
         log("task started at : "+taskTimestamp);
         
-        while(true) {
+        long end = System.currentTimeMillis() + WAIT_FOR_APP_SERVER_TASK;
+        while(System.currentTimeMillis() < end) {
             int state = task.getState();
             if(state == task.STATE_FINISHED) { return; }
-            try {
+            try {                
                 Thread.sleep(50);
             } catch (InterruptedException exc) {
                 exc.printStackTrace(System.err);
-                return;
+                fail(exc);
             }
         }
+        fail("AppServer task wasn't finished during " + WAIT_FOR_APP_SERVER_TASK + " ms");
     }
     
     private InternalHandle waitServerTaskHandle(TaskModel model, String serverIDEName) {
-        while(true) {
+        long end = System.currentTimeMillis() + WAIT_SERVER_TASK_HANDLE_TIMEOUT;
+        while(System.currentTimeMillis() < end) {
             InternalHandle[] handles =  model.getHandles();
             InternalHandle  serverTask = getServerTaskHandle(handles,serverIDEName);
             if(serverTask != null) {
@@ -169,13 +182,17 @@ public class StartAppserver extends org.netbeans.performance.test.utilities.Perf
                 Thread.sleep(50);
             } catch (InterruptedException exc) {
                 exc.printStackTrace(System.err);
+                fail(exc);
             }
         }
+        fail("No task handle obtained during " + WAIT_SERVER_TASK_HANDLE_TIMEOUT + " ms");
+        // Not reachable
+        return null;
     }
     
     private InternalHandle getServerTaskHandle(InternalHandle[] handles, String taskName) {
         if(handles.length == 0)  {
-            log("Empty tasks queue");
+//            log("Empty tasks queue");
             return null;
         }
         
