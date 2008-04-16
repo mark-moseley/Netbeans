@@ -150,8 +150,8 @@
                 </dependency>
             </module-dependencies>
             <friend-packages>
-                <friend>org.netbeans.modules.etl.editor</friend>
                 <friend>org.netbeans.modules.bpel.core</friend>
+                <friend>org.netbeans.modules.bpel.model</friend>
                 <friend>org.netbeans.modules.bpel.debugger.ui</friend>
                 <friend>org.netbeans.modules.bpel.editors</friend>
                 <friend>org.netbeans.modules.bpel.editors.api</friend>
@@ -159,7 +159,9 @@
                 <friend>org.netbeans.modules.bpel.refactoring</friend>
                 <friend>org.netbeans.modules.bpel.search</friend>
                 <friend>org.netbeans.modules.bpel.validation</friend>
+                <friend>org.netbeans.modules.soa.core</friend>
                 <friend>org.netbeans.modules.soa.mapper</friend>
+                <friend>org.netbeans.modules.etl.editor</friend>
                 <friend>org.netbeans.modules.xslt.core</friend>
                 <friend>org.netbeans.modules.xslt.mapper</friend>
                 <friend>org.netbeans.modules.xslt.project</friend>
