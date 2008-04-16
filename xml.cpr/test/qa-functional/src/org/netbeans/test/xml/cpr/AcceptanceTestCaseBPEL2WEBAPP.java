@@ -90,11 +90,11 @@ import javax.swing.text.BadLocationException;
  * @author michaelnazarov@netbeans.org
  */
 
-public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
+public class AcceptanceTestCaseBPEL2WEBAPP extends AcceptanceTestCaseXMLCPR {
     
     static final String [] m_aTestMethods = {
         "CreateBluePrint1Sample",
-        "CreateMYSQLModule",
+        "CreateWEBAPPModule",
         "AddProjectReference",
         "DeleteProjectReference",
         "AddSampleSchema",
@@ -134,24 +134,24 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
 
     static final String SAMPLE_CATEGORY_NAME = "Samples|SOA|BPEL BluePrints";
     static final String SAMPLE_PROJECT_NAME = "BluePrint 1";
-    static final String SAMPLE_NAME = "SampleApplication2Sql";
+    static final String SAMPLE_NAME = "SampleApplication2WebApp";
     static final String COMPOSITE_APPLICATION_NAME = SAMPLE_NAME + "Application";
 
-    static final String MODULE_CATEGORY_NAME = "SOA";
-    static final String MODULE_PROJECT_NAME = "SQL Module";
-    static final String MODULE_NAME = "SQLModule";
+    static final String MODULE_CATEGORY_NAME = "Web";
+    static final String MODULE_PROJECT_NAME = "Web Application";
+    static final String MODULE_NAME = "WebApplication";
 
     static final String SAMPLE_SCHEMA_PATH = "Source Packages|<default package>";
 
-    public AcceptanceTestCaseBPEL2MYSQL(String arg0) {
+    public AcceptanceTestCaseBPEL2WEBAPP(String arg0) {
         super(arg0);
     }
     
     public static TestSuite suite() {
-        TestSuite testSuite = new TestSuite(AcceptanceTestCaseBPEL2MYSQL.class.getName());
+        TestSuite testSuite = new TestSuite(AcceptanceTestCaseBPEL2WEBAPP.class.getName());
         
         for (String strMethodName : m_aTestMethods) {
-            testSuite.addTest(new AcceptanceTestCaseBPEL2MYSQL(strMethodName));
+            testSuite.addTest(new AcceptanceTestCaseBPEL2WEBAPP(strMethodName));
         }
         
         return testSuite;
@@ -170,7 +170,7 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
         endTest( );
     }
     
-    public void CreateMYSQLModule( )
+    public void CreateWEBAPPModule( )
     {
         startTest( );
 
@@ -183,6 +183,7 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
         NewProjectNameLocationStepOperator opNewProjectNameLocationStep = new NewProjectNameLocationStepOperator( );
         opNewProjectNameLocationStep.txtProjectLocation( ).setText( System.getProperty( "xtest.ide.open.projects" ) );
         opNewProjectNameLocationStep.txtProjectName( ).setText( MODULE_NAME );
+        opNewProjectWizard.next( );
         opNewProjectWizard.finish( );
 
         endTest( );
@@ -221,25 +222,25 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
     {
       new CImportClickData( true, 0, 0, 2, 4, "Unknown import table state after first click, number of rows: ", null ),
       new CImportClickData( true, 1, 0, 2, 5, "Unknown import table state after second click, number of rows: ", null ),
-      new CImportClickData( true, 2, 0, 2, 7, "Unknown import table state after third click, number of rows: ", null ),
-      new CImportClickData( true, 5, 0, 2, 8, "Unknown import table state after forth click, number of rows: ", null ),
-      new CImportClickData( true, 6, 0, 2, 9, "Unknown import table state after fifth click, number of rows: ", null ),
-      new CImportClickData( true, 7, 0, 2, 10, "Unknown import table state after sixth click, number of rows: ", null ),
-      new CImportClickData( false, 3, 1, 1, 10, "Unknown to click on checkbox. #", null ),
-      new CImportClickData( true, 8, 1, 1, 10, "Unknown to click on checkbox. #", null )
+      new CImportClickData( true, 2, 0, 2, 7, "Unknown import table state after forth click, number of rows: ", null ),
+      new CImportClickData( true, 5, 0, 2, 11, "Unknown import table state after forth click, number of rows: ", null ),
+      new CImportClickData( true, 8, 0, 2, 12, "Unknown import table state after fifth click, number of rows: ", null ),
+      new CImportClickData( true, 9, 0, 2, 13, "Unknown import table state after sixth click, number of rows: ", null ),
+      new CImportClickData( false, 3, 1, 1, 13, "Unknown to click on checkbox. #", null ),
+      new CImportClickData( true, 10, 1, 1, 13, "Unknown to click on checkbox. #", null )
     };
 
     private CImportClickData[] acliCheck =
     {
       new CImportClickData( true, 0, 0, 2, 4, "Unknown import table state after first click, number of rows: ", null ),
       new CImportClickData( true, 1, 0, 2, 5, "Unknown import table state after second click, number of rows: ", null ),
-      new CImportClickData( true, 2, 0, 2, 7, "Unknown import table state after third click, number of rows: ", null ),
-      new CImportClickData( true, 5, 0, 2, 8, "Unknown import table state after forth click, number of rows: ", null ),
-      new CImportClickData( true, 6, 0, 2, 9, "Unknown import table state after fifth click, number of rows: ", null ),
-      new CImportClickData( true, 7, 0, 2, 10, "Unknown import table state after sixth click, number of rows: ", null ),
-      new CImportClickData( true, 3, 1, 1, 10, "Unknown to click on checkbox. #", "Selected document is already referenced." ),
-      new CImportClickData( true, 4, 1, 1, 10, "Unknown to click on checkbox. #", "Document cannot reference itself." ),
-      new CImportClickData( true, 8, 1, 1, 10, "Unknown to click on checkbox. #", "Selected document is already referenced." )
+      new CImportClickData( true, 2, 0, 2, 7, "Unknown import table state after forth click, number of rows: ", null ),
+      new CImportClickData( true, 5, 0, 2, 11, "Unknown import table state after forth click, number of rows: ", null ),
+      new CImportClickData( true, 8, 0, 2, 12, "Unknown import table state after fifth click, number of rows: ", null ),
+      new CImportClickData( true, 9, 0, 2, 13, "Unknown import table state after sixth click, number of rows: ", null ),
+      new CImportClickData( true, 3, 1, 1, 13, "Unknown to click on checkbox. #", "Selected document is already referenced." ),
+      new CImportClickData( true, 4, 1, 1, 13, "Unknown to click on checkbox. #", "Document cannot reference itself." ),
+      new CImportClickData( true, 10, 1, 1, 13, "Unknown to click on checkbox. #", "Selected document is already referenced." )
     };
 
     public void ImportReferencedSchema( )
@@ -336,7 +337,6 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
 
       endTest( );
     }
-
     public void AddComplex( )
     {
       startTest( );

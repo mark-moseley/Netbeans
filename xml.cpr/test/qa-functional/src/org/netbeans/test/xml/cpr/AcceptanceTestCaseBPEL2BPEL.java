@@ -41,60 +41,35 @@
 
 package org.netbeans.test.xml.cpr;
 
-import java.awt.Point;
-import java.util.zip.CRC32;
 import javax.swing.tree.TreePath;
 import junit.framework.TestSuite;
-import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
-import org.netbeans.jellytools.NewFileWizardOperator;
-import org.netbeans.jellytools.OutputOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.TopComponentOperator;
-import org.netbeans.jellytools.WizardOperator;
-import org.netbeans.jellytools.actions.SaveAllAction;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.nodes.ProjectRootNode;
-import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JDialogOperator;
-import org.netbeans.jemmy.operators.JListOperator;
-import org.netbeans.jemmy.operators.JPopupMenuOperator;
-import org.netbeans.jemmy.operators.JRadioButtonOperator;
-import org.netbeans.jemmy.operators.JTextFieldOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
-//import org.netbeans.test.xml.schema.lib.SchemaMultiView;
-//import org.netbeans.test.xml.schema.lib.util.Helpers;
 
-import org.netbeans.jemmy.operators.JFileChooserOperator;
-import org.netbeans.jemmy.operators.JMenuBarOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
-import java.io.File;
-import org.netbeans.jellytools.MainWindowOperator;
-import java.awt.event.KeyEvent;
-//import java.awt.Robot;
-import org.netbeans.jellytools.FilesTabOperator;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jemmy.operators.*;
 import org.netbeans.api.project.ProjectInformation;
-import javax.swing.ListModel;
+import org.netbeans.test.xml.schema.lib.util.Helpers;
 import org.netbeans.test.xml.schema.lib.SchemaMultiView;
-import java.awt.Rectangle;
-import javax.swing.text.BadLocationException;
+
+
+import org.netbeans.jellytools.MainWindowOperator;
+import org.netbeans.jellytools.EditorOperator;
+import java.awt.event.KeyEvent;
+import java.awt.Point;
+import java.awt.event.InputEvent;
+
+
 
 /**
  *
  * @author michaelnazarov@netbeans.org
  */
 
-public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
+public class AcceptanceTestCaseBPEL2BPEL extends AcceptanceTestCaseXMLCPR {
     
     static final String [] m_aTestMethods = {
         "CreateBluePrint1Sample",
-        "CreateMYSQLModule",
+        "CreateBPELModule",
         "AddProjectReference",
         "DeleteProjectReference",
         "AddSampleSchema",
@@ -116,8 +91,7 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
         "UndoRedoElement",
         "AddSimple",
         "ExploreSimple",
-        "DeleteSimple",
-        "UndoRedoSimple",
+        "ManipulateSimple",
         "RenameSampleSchema",
         "UndoRenameSampleSchema",
         "RedoRenameSampleSchema",
@@ -134,24 +108,24 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
 
     static final String SAMPLE_CATEGORY_NAME = "Samples|SOA|BPEL BluePrints";
     static final String SAMPLE_PROJECT_NAME = "BluePrint 1";
-    static final String SAMPLE_NAME = "SampleApplication2Sql";
+    static final String SAMPLE_NAME = "SampleApplication2Bpel";
     static final String COMPOSITE_APPLICATION_NAME = SAMPLE_NAME + "Application";
 
     static final String MODULE_CATEGORY_NAME = "SOA";
-    static final String MODULE_PROJECT_NAME = "SQL Module";
-    static final String MODULE_NAME = "SQLModule";
+    static final String MODULE_PROJECT_NAME = "BPEL Module";
+    static final String MODULE_NAME = "BpelModule";
 
-    static final String SAMPLE_SCHEMA_PATH = "Source Packages|<default package>";
-
-    public AcceptanceTestCaseBPEL2MYSQL(String arg0) {
+    static final String SAMPLE_SCHEMA_PATH = "Process Files";
+    
+    public AcceptanceTestCaseBPEL2BPEL(String arg0) {
         super(arg0);
     }
     
     public static TestSuite suite() {
-        TestSuite testSuite = new TestSuite(AcceptanceTestCaseBPEL2MYSQL.class.getName());
+        TestSuite testSuite = new TestSuite(AcceptanceTestCaseBPEL2BPEL.class.getName());
         
         for (String strMethodName : m_aTestMethods) {
-            testSuite.addTest(new AcceptanceTestCaseBPEL2MYSQL(strMethodName));
+            testSuite.addTest(new AcceptanceTestCaseBPEL2BPEL(strMethodName));
         }
         
         return testSuite;
@@ -170,7 +144,7 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
         endTest( );
     }
     
-    public void CreateMYSQLModule( )
+    public void CreateBPELModule( )
     {
         startTest( );
 
@@ -211,10 +185,18 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
     public void AddSampleSchema( )
     {
       startTest( );
-      
+
       AddSampleSchemaInternal( MODULE_NAME, SAMPLE_SCHEMA_PATH );
 
       endTest( );
+    }
+
+    class CFulltextStringComparator implements Operator.StringComparator
+    {
+      public boolean equals( java.lang.String caption, java.lang.String match )
+      {
+        return caption.equals( match );
+      }
     }
 
     private CImportClickData[] acliImport =
@@ -223,10 +205,9 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       new CImportClickData( true, 1, 0, 2, 5, "Unknown import table state after second click, number of rows: ", null ),
       new CImportClickData( true, 2, 0, 2, 7, "Unknown import table state after third click, number of rows: ", null ),
       new CImportClickData( true, 5, 0, 2, 8, "Unknown import table state after forth click, number of rows: ", null ),
-      new CImportClickData( true, 6, 0, 2, 9, "Unknown import table state after fifth click, number of rows: ", null ),
-      new CImportClickData( true, 7, 0, 2, 10, "Unknown import table state after sixth click, number of rows: ", null ),
-      new CImportClickData( false, 3, 1, 1, 10, "Unknown to click on checkbox. #", null ),
-      new CImportClickData( true, 8, 1, 1, 10, "Unknown to click on checkbox. #", null )
+      new CImportClickData( true, 6, 0, 2, 9, "Unknown import table state after third click, number of rows: ", null ),
+      new CImportClickData( false, 3, 1, 1, 9, "Unknown to click on checkbox. #", null ),
+      new CImportClickData( true, 7, 1, 1, 9, "Unknown to click on checkbox. #", null )
     };
 
     private CImportClickData[] acliCheck =
@@ -235,17 +216,16 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       new CImportClickData( true, 1, 0, 2, 5, "Unknown import table state after second click, number of rows: ", null ),
       new CImportClickData( true, 2, 0, 2, 7, "Unknown import table state after third click, number of rows: ", null ),
       new CImportClickData( true, 5, 0, 2, 8, "Unknown import table state after forth click, number of rows: ", null ),
-      new CImportClickData( true, 6, 0, 2, 9, "Unknown import table state after fifth click, number of rows: ", null ),
-      new CImportClickData( true, 7, 0, 2, 10, "Unknown import table state after sixth click, number of rows: ", null ),
-      new CImportClickData( true, 3, 1, 1, 10, "Unknown to click on checkbox. #", "Selected document is already referenced." ),
-      new CImportClickData( true, 4, 1, 1, 10, "Unknown to click on checkbox. #", "Document cannot reference itself." ),
-      new CImportClickData( true, 8, 1, 1, 10, "Unknown to click on checkbox. #", "Selected document is already referenced." )
+      new CImportClickData( true, 6, 0, 2, 9, "Unknown import table state after third click, number of rows: ", null ),
+      new CImportClickData( true, 3, 1, 1, 9, "Unknown to click on checkbox. #", "Selected document is already referenced." ),
+      new CImportClickData( true, 4, 1, 1, 9, "Unknown to click on checkbox. #", "Document cannot reference itself." ),
+      new CImportClickData( true, 7, 1, 1, 9, "Unknown to click on checkbox. #", "Selected document is already referenced." )
     };
 
     public void ImportReferencedSchema( )
     {
       startTest( );
-      
+
       ImportReferencedSchemaInternal(
           SAMPLE_NAME,
           MODULE_NAME,
@@ -297,6 +277,69 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       ValidateAndBuildInternal( SAMPLE_NAME );
 
       endTest( );
+    }
+
+    private boolean HasChild( JTreeOperator tree, TreePath path, String child )
+    {
+      int iCnt = tree.getChildCount( path );
+      for( int i = 0; i < iCnt; i++ )
+      {
+        TreePath subpath = tree.getChildPath( path, i );
+        Object o = subpath.getLastPathComponent( );
+        if( o.toString( ).startsWith( child ) )
+          return true;
+      }
+      return false;
+    }
+
+    private TreePath GetSubPath( JTreeOperator tree, TreePath path, String name )
+    {
+      String[] asPaths = name.split( "\\|" );
+      for( String chunk : asPaths )
+      {
+        int iCnt = tree.getChildCount( path );
+        for( int i = 0; i < iCnt; i++ )
+        {
+          System.out.println( "*** Checking chunk " + chunk );
+          TreePath subpath = tree.getChildPath( path, i );
+          Object o = subpath.getLastPathComponent( );
+          if( o.toString( ).startsWith( chunk ) )
+          {
+            System.out.println( "*** Chunk found" );
+            path = subpath;
+
+            tree.selectPath( path );
+            tree.clickOnPath( path );
+
+            break;
+          }
+        }
+      }
+      return path;
+    }
+
+    private TreePath FindMultiwayPath(
+        JTreeOperator tree,
+        String schema,
+        String name
+      )
+    {
+      // First level is always Referenced schemas
+      TreePath path = tree.findPath( "Referenced Schemas" );
+      System.out.println( "*** Referenced Schemas found" );
+      // Then find path with required subpath (tricky but...)
+      int iChild = tree.getChildCount( path );
+      TreePath subpath = null;
+      for( int i = 0; i < iChild; i++ )
+      {
+        subpath = tree.getChildPath( path, i );
+        if( HasChild( tree, subpath, schema ) )
+        {
+          System.out.println( "*** Correct import found" );
+          return GetSubPath( tree, subpath, name );
+        }
+      }
+      return null;
     }
 
     public void AddAttribute( )
@@ -356,7 +399,58 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
     {
       startTest( );
 
+      // Select in schema
+      // Select newAttribute
+      SchemaMultiView opMultiView = new SchemaMultiView( PURCHASE_SCHEMA_FILE_NAME );
+      JListOperator opList = opMultiView.getColumnListOperator( 1 );
+      opList.selectItem( COMPLEX_NAMES[ 0 ] );
 
+      // Go to : schema -> definition
+      // Check definition view
+      // Check definition selection
+      // Close definition
+      CheckSchemaViewDefinition( opList, COMPLEX_NAMES[ 0 ], "CarType" );
+
+      // Go to : Schema -> Design
+      GotoSchemaDesign( opList, COMPLEX_NAMES[ 0 ] );
+
+      // Check selected element
+
+      // Go to : Design -> Source
+      new JMenuBarOperator(MainWindowOperator.getDefault()).pushMenu("View|Editors|Source");
+
+      // Check selected code line
+
+      // Go to : source -> definition
+      // Check definition view
+      // Check definition selection
+      // Close definition
+      /*
+      CheckSourceViewDefinition(
+          "<xs:complexType name=\"" + COMPLEX_NAMES[ 0 ] + "\">"
+        );
+      */
+
+      // Go to : Source -> Schema
+      // Check selected element
+      //GotoSourceSchema( COMPLEX_NAMES[ 0 ] );
+      new JMenuBarOperator(MainWindowOperator.getDefault()).pushMenu("View|Editors|Schema");
+
+      // Go to : Schema -> Source
+      // Check selected element
+      GotoSchemaSource(
+          opList,
+          COMPLEX_NAMES[ 0 ],
+          "<xs:complexType name=\"" + COMPLEX_NAMES[ 0 ] + "\">"
+        );
+
+      // Go to : Source -> Design
+      new JMenuBarOperator(MainWindowOperator.getDefault()).pushMenu("View|Editors|Design");
+
+      // Check selected element
+
+      // Go to : Design -> Schema
+      new JMenuBarOperator(MainWindowOperator.getDefault()).pushMenu("View|Editors|Schema");
 
       endTest( );
     }
@@ -386,7 +480,7 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       AddItInternal(
           "Elements",
           "Add Element",
-          "Use Existing Type", 
+          "Use Existing Type",
           "Referenced Schemas|import|Complex Types|AddressType",
           "newElement"
         );
@@ -398,7 +492,45 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
     {
       startTest( );
 
+      // Select in schema
 
+      // Go to : schema -> definition
+
+      // Check definition view
+
+      // Check definition selection
+
+      // Close definition
+
+      // Go to : schema -> Design
+
+      // Check selected element
+
+      // Go to : Design -> Source
+
+      // Check selected code line
+
+      // Go to : source -> definition
+
+      // Check definition view
+
+      // Check definition selection
+
+      // Close definition
+
+      // Go to : Source -> Schema
+
+      // Check selected element
+
+      // Go to : Schema -> Source
+
+      // Check selected element
+
+      // Go to : Source -> Design
+
+      // Check selected element
+
+      // Go to : Design -> Schema
 
       endTest( );
     }
@@ -450,20 +582,11 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       endTest( );
     }
 
-    public void DeleteSimple( )
+    public void ManipulateSimple( )
     {
       startTest( );
 
-
-
-      endTest( );
-    }
-
-    public void UndoRedoSimple( )
-    {
-      startTest( );
-
-
+      ManipulateSimpleInternal( SAMPLE_NAME );
 
       endTest( );
     }

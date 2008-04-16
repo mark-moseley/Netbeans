@@ -90,14 +90,14 @@ import javax.swing.text.BadLocationException;
  * @author michaelnazarov@netbeans.org
  */
 
-public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
+public class AcceptanceTestCaseBPEL2XSLT extends AcceptanceTestCaseXMLCPR {
     
     static final String [] m_aTestMethods = {
         "CreateBluePrint1Sample",
-        "CreateMYSQLModule",
         "AddProjectReference",
         "DeleteProjectReference",
         "AddSampleSchema",
+
         "ImportReferencedSchema",
         "ImportReferencedSchema2",
         "DeleteReferencedSchema",
@@ -134,24 +134,22 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
 
     static final String SAMPLE_CATEGORY_NAME = "Samples|SOA|BPEL BluePrints";
     static final String SAMPLE_PROJECT_NAME = "BluePrint 1";
-    static final String SAMPLE_NAME = "SampleApplication2Sql";
+    static final String SAMPLE_NAME = "SampleApplication2Xslt";
     static final String COMPOSITE_APPLICATION_NAME = SAMPLE_NAME + "Application";
 
-    static final String MODULE_CATEGORY_NAME = "SOA";
-    static final String MODULE_PROJECT_NAME = "SQL Module";
-    static final String MODULE_NAME = "SQLModule";
+    static final String MODULE_NAME = "NotifyManager";
 
-    static final String SAMPLE_SCHEMA_PATH = "Source Packages|<default package>";
+    static final String SAMPLE_SCHEMA_PATH = "Transformation Files";
 
-    public AcceptanceTestCaseBPEL2MYSQL(String arg0) {
+    public AcceptanceTestCaseBPEL2XSLT(String arg0) {
         super(arg0);
     }
     
     public static TestSuite suite() {
-        TestSuite testSuite = new TestSuite(AcceptanceTestCaseBPEL2MYSQL.class.getName());
+        TestSuite testSuite = new TestSuite(AcceptanceTestCaseBPEL2XSLT.class.getName());
         
         for (String strMethodName : m_aTestMethods) {
-            testSuite.addTest(new AcceptanceTestCaseBPEL2MYSQL(strMethodName));
+            testSuite.addTest(new AcceptanceTestCaseBPEL2XSLT(strMethodName));
         }
         
         return testSuite;
@@ -170,24 +168,6 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
         endTest( );
     }
     
-    public void CreateMYSQLModule( )
-    {
-        startTest( );
-
-        // Create BluePrint1 Sample
-        NewProjectWizardOperator opNewProjectWizard = NewProjectWizardOperator.invoke( );
-        opNewProjectWizard.selectCategory( MODULE_CATEGORY_NAME );
-        opNewProjectWizard.selectProject( MODULE_PROJECT_NAME );
-        opNewProjectWizard.next( );
-
-        NewProjectNameLocationStepOperator opNewProjectNameLocationStep = new NewProjectNameLocationStepOperator( );
-        opNewProjectNameLocationStep.txtProjectLocation( ).setText( System.getProperty( "xtest.ide.open.projects" ) );
-        opNewProjectNameLocationStep.txtProjectName( ).setText( MODULE_NAME );
-        opNewProjectWizard.finish( );
-
-        endTest( );
-    }
-
     public void AddProjectReference( )
     {
       startTest( );
@@ -211,8 +191,22 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
     public void AddSampleSchema( )
     {
       startTest( );
-      
-      AddSampleSchemaInternal( MODULE_NAME, SAMPLE_SCHEMA_PATH );
+
+      ProjectsTabOperator pto = new ProjectsTabOperator( );
+      ProjectRootNode prn = pto.getProjectRootNode( MODULE_NAME );
+      prn.select( );
+
+      NewFileWizardOperator opNewFileWizard = NewFileWizardOperator.invoke( );
+      opNewFileWizard.selectCategory( "XML" );
+      opNewFileWizard.selectFileType( "Loan Application Sample Schema" );
+      opNewFileWizard.next( );
+      opNewFileWizard.finish( );
+
+      // Check created schema in project tree
+      if( null == ( new Node( prn, SAMPLE_SCHEMA_PATH + "|newLoanApplication.xsd" ) ) )
+      {
+        fail( "Unable to check created sample schema." );
+      }
 
       endTest( );
     }
@@ -223,10 +217,9 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       new CImportClickData( true, 1, 0, 2, 5, "Unknown import table state after second click, number of rows: ", null ),
       new CImportClickData( true, 2, 0, 2, 7, "Unknown import table state after third click, number of rows: ", null ),
       new CImportClickData( true, 5, 0, 2, 8, "Unknown import table state after forth click, number of rows: ", null ),
-      new CImportClickData( true, 6, 0, 2, 9, "Unknown import table state after fifth click, number of rows: ", null ),
-      new CImportClickData( true, 7, 0, 2, 10, "Unknown import table state after sixth click, number of rows: ", null ),
-      new CImportClickData( false, 3, 1, 1, 10, "Unknown to click on checkbox. #", null ),
-      new CImportClickData( true, 8, 1, 1, 10, "Unknown to click on checkbox. #", null )
+      new CImportClickData( true, 6, 0, 2, 12, "Unknown import table state after third click, number of rows: ", null ),
+      new CImportClickData( false, 3, 1, 1, 12, "Unknown to click on checkbox. #", null ),
+      new CImportClickData( true, 9, 1, 1, 12, "Unknown to click on checkbox. #", null )
     };
 
     private CImportClickData[] acliCheck =
@@ -235,17 +228,16 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       new CImportClickData( true, 1, 0, 2, 5, "Unknown import table state after second click, number of rows: ", null ),
       new CImportClickData( true, 2, 0, 2, 7, "Unknown import table state after third click, number of rows: ", null ),
       new CImportClickData( true, 5, 0, 2, 8, "Unknown import table state after forth click, number of rows: ", null ),
-      new CImportClickData( true, 6, 0, 2, 9, "Unknown import table state after fifth click, number of rows: ", null ),
-      new CImportClickData( true, 7, 0, 2, 10, "Unknown import table state after sixth click, number of rows: ", null ),
-      new CImportClickData( true, 3, 1, 1, 10, "Unknown to click on checkbox. #", "Selected document is already referenced." ),
-      new CImportClickData( true, 4, 1, 1, 10, "Unknown to click on checkbox. #", "Document cannot reference itself." ),
-      new CImportClickData( true, 8, 1, 1, 10, "Unknown to click on checkbox. #", "Selected document is already referenced." )
+      new CImportClickData( true, 6, 0, 2, 12, "Unknown import table state after third click, number of rows: ", null ),
+      new CImportClickData( true, 3, 1, 1, 12, "Unknown to click on checkbox. #", "Selected document is already referenced." ),
+      new CImportClickData( true, 4, 1, 1, 12, "Unknown to click on checkbox. #", "Document cannot reference itself." ),
+      new CImportClickData( true, 9, 1, 1, 12, "Unknown to click on checkbox. #", "Selected document is already referenced." )
     };
 
     public void ImportReferencedSchema( )
     {
       startTest( );
-      
+
       ImportReferencedSchemaInternal(
           SAMPLE_NAME,
           MODULE_NAME,
@@ -297,6 +289,69 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       ValidateAndBuildInternal( SAMPLE_NAME );
 
       endTest( );
+    }
+
+    private boolean HasChild( JTreeOperator tree, TreePath path, String child )
+    {
+      int iCnt = tree.getChildCount( path );
+      for( int i = 0; i < iCnt; i++ )
+      {
+        TreePath subpath = tree.getChildPath( path, i );
+        Object o = subpath.getLastPathComponent( );
+        if( o.toString( ).startsWith( child ) )
+          return true;
+      }
+      return false;
+    }
+
+    private TreePath GetSubPath( JTreeOperator tree, TreePath path, String name )
+    {
+      String[] asPaths = name.split( "\\|" );
+      for( String chunk : asPaths )
+      {
+        int iCnt = tree.getChildCount( path );
+        for( int i = 0; i < iCnt; i++ )
+        {
+          System.out.println( "*** Checking chunk " + chunk );
+          TreePath subpath = tree.getChildPath( path, i );
+          Object o = subpath.getLastPathComponent( );
+          if( o.toString( ).startsWith( chunk ) )
+          {
+            System.out.println( "*** Chunk found" );
+            path = subpath;
+
+            tree.selectPath( path );
+            tree.clickOnPath( path );
+
+            break;
+          }
+        }
+      }
+      return path;
+    }
+
+    private TreePath FindMultiwayPath(
+        JTreeOperator tree,
+        String schema,
+        String name
+      )
+    {
+      // First level is always Referenced schemas
+      TreePath path = tree.findPath( "Referenced Schemas" );
+      System.out.println( "*** Referenced Schemas found" );
+      // Then find path with required subpath (tricky but...)
+      int iChild = tree.getChildCount( path );
+      TreePath subpath = null;
+      for( int i = 0; i < iChild; i++ )
+      {
+        subpath = tree.getChildPath( path, i );
+        if( HasChild( tree, subpath, schema ) )
+        {
+          System.out.println( "*** Correct import found" );
+          return GetSubPath( tree, subpath, name );
+        }
+      }
+      return null;
     }
 
     public void AddAttribute( )
@@ -386,7 +441,7 @@ public class AcceptanceTestCaseBPEL2MYSQL extends AcceptanceTestCaseXMLCPR {
       AddItInternal(
           "Elements",
           "Add Element",
-          "Use Existing Type", 
+          "Use Existing Type",
           "Referenced Schemas|import|Complex Types|AddressType",
           "newElement"
         );
