@@ -52,7 +52,7 @@ import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.TreePathHandle;
-import org.netbeans.api.java.source.UiUtils;
+import org.netbeans.api.java.source.ui.ElementHeaders;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
@@ -87,8 +87,13 @@ public class WhereUsedQueryUI implements RefactoringUI {
         this.query.getContext().add(info.getClasspathInfo());
         this.element = handle;
         Element el = handle.resolveElement(info);
-        name = UiUtils.getHeader(el, info, UiUtils.PrintPart.NAME);
-        kind = el.getKind();
+        if (el!=null) {
+            name = ElementHeaders.getHeader(el, info, ElementHeaders.NAME);
+            kind = el.getKind();
+        } else {
+            name = ""; //NOI18N
+            kind = ElementKind.OTHER;
+        }
     }
     
     public WhereUsedQueryUI(TreePathHandle jmiObject, String name, AbstractRefactoring delegate) {
@@ -97,7 +102,7 @@ public class WhereUsedQueryUI implements RefactoringUI {
         //this.query.getContext().add(info.getClasspathInfo());
         this.element = jmiObject;
         //Element el = jmiObject.resolveElement(info);
-        //name = UiUtils.getHeader(el, info, UiUtils.PrintPart.NAME);
+        //name = ElementHeaders.getHeader(el, info, ElementHeaders.NAME);
         //kind = el.getKind();
         this.name = name;
     }
