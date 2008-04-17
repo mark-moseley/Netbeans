@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -40,6 +40,8 @@
  */
 package org.netbeans.modules.bpel.documentation;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.ExtensibleElements;
 
@@ -50,7 +52,7 @@ import org.netbeans.modules.bpel.design.decoration.DecorationProvider;
 import org.netbeans.modules.bpel.design.decoration.DecorationProviderFactory;
 import org.netbeans.modules.bpel.design.decoration.Descriptor;
 import org.netbeans.modules.bpel.design.selection.DiagramSelectionListener;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import static org.netbeans.modules.soa.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -59,7 +61,9 @@ import static org.netbeans.modules.soa.ui.util.UI.*;
 public final class DocumentationDecorator extends DecorationProvider
   implements DecorationProviderFactory, DiagramSelectionListener {
 
-  public DocumentationDecorator() {}
+  public DocumentationDecorator() {
+    init();
+  }
 
   public DecorationProvider createInstance(DesignView view) {
     return new DocumentationDecorator(view);
@@ -68,6 +72,11 @@ public final class DocumentationDecorator extends DecorationProvider
   private DocumentationDecorator(DesignView view) {
     super(view);
     getDesignView().getSelectionModel().addSelectionListener(this);
+    init();
+  }
+
+  private void init() {
+    myDecorationKey = DocumentationDecorator.class;
   }
 
   @Override
@@ -78,15 +87,24 @@ public final class DocumentationDecorator extends DecorationProvider
 //out(" docum: " + documentation);
 
     if (entity != mySelectedElement && documentation == null) {
+      entity.removeCookie(myDecorationKey);
       return null;
     }
-    DocumentationButton button =
-      new DocumentationButton((ExtensibleElements) entity, documentation);
+    Decoration decoration = (Decoration) entity.getCookie(myDecorationKey);
 
-    ComponentsDescriptor descriptor = new ComponentsDescriptor();
-    descriptor.add(button, ComponentsDescriptor.RIGHT_TB);
+    if (decoration == null) {
+      DocumentationButton button =
+        new DocumentationButton((ExtensibleElements) entity, documentation);
+      ComponentsDescriptor descriptor = new ComponentsDescriptor();
+      descriptor.add(button, ComponentsDescriptor.RIGHT_TB);
+      decoration = new Decoration(descriptor);
+      entity.setCookie(myDecorationKey, decoration);
+    }
+    ComponentsDescriptor descriptor = (ComponentsDescriptor) decoration.getDescriptor();
+    DocumentationButton button = (DocumentationButton) descriptor.getComponent();
+    button.updateText(documentation);
 
-    return new Decoration(new Descriptor[]{descriptor});
+    return decoration;
   }
 
   public void selectionChanged(BpelEntity oldSelection, BpelEntity newSelection) {
@@ -102,6 +120,7 @@ public final class DocumentationDecorator extends DecorationProvider
 
   @Override
   public void release() {
+    myDecorationKey = null;
     mySelectedElement = null;
     getDesignView().getSelectionModel().removeSelectionListener(this);
   }
@@ -113,5 +132,6 @@ public final class DocumentationDecorator extends DecorationProvider
     return ((ExtensibleElements) entity).getDocumentation();
   }
 
+  private Object myDecorationKey;
   private ExtensibleElements mySelectedElement;
 }
