@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -45,7 +45,6 @@ import java.awt.Container;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
 
-import java.util.ArrayList;
 import java.util.List;
 import javax.swing.Action;
 
@@ -61,13 +60,12 @@ import org.netbeans.modules.xml.schema.ui.basic.SchemaTreeView;
 import org.netbeans.modules.xml.validation.ShowCookie;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 
-import org.netbeans.modules.bpel.core.helper.api.CoreUtil;
-import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.search.api.SearchManager;
 import org.netbeans.modules.bpel.search.api.SearchTarget;
+import org.netbeans.modules.bpel.search.spi.SearchProvider;
+import org.netbeans.modules.bpel.search.impl.output.View;
 import org.netbeans.modules.bpel.search.impl.ui.Search;
-import org.netbeans.modules.bpel.search.impl.util.Util;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import static org.netbeans.modules.soa.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -83,130 +81,24 @@ public final class SearchAction extends IconAction {
     super(
       i18n(SearchAction.class, name),
       i18n(SearchAction.class, toolTip),
-      icon(Util.class, icon)
+      icon(View.class, icon)
     );
     setEnabled(false);
   }
 
   public void actionPerformed(ActionEvent event) {
-    Node node = getSelectedNode();
-    Model model = getModel(node);
-    ShowCookie cookie = getShowCookie(node);
-    Object view = getView();
-//out();
-//out("ShowCookie: " + cookie);
-//out("SchemaTreeView: " + view);
-    List<Object> list = new ArrayList<Object>();
-
-    list.add(model);
-    list.add(cookie);
-    list.add(view);
-
-    SearchManager.getDefault().createSearch(list, getTargets(model));
+    SearchManager.getDefault().showSearch(getProvider(getLastNode()));
   }
 
-  private ShowCookie getShowCookie(Node node) {
-    DataObject data = getDataObject(node);
+  private SearchProvider getProvider(Node node) {
+    List<SearchProvider> providers = getInstances(SearchProvider.class);
 
-    if (data == null) {
-      return null;
-    }
-    return data.getCookie(ShowCookie.class);
-  }
-
-  private Object getView() {
-    Container container = getActivateTopComponent();
-    Object view = getTreeView(container, "  "); // NOI18N
-
-    if (view != null) {
-      return view;
-    }
-    return getColumnView(container, "  "); // NOI18N
-  }
-
-  private SchemaTreeView getTreeView(Container container, String indent) {
-//out(indent + container.getClass().getName());
-    if (container instanceof SchemaTreeView) {
-      return (SchemaTreeView) container;
-    }
-    Component[] components = container.getComponents();
-    SchemaTreeView view;
-
-    for (Component component : components) {
-      if (component instanceof Container) {
-        view = getTreeView((Container) component, "    " + indent); // NOI18N
-
-        if (view != null) {
-          return view;
-        }
+    for (SearchProvider provider : providers) {
+      if (provider.isApplicable(node)) {
+        return provider;
       }
     }
     return null;
-  }
-
-  private SchemaColumnsView getColumnView(
-    Container container,
-    String indent)
-  {
-//out(indent + container.getClass().getName());
-    if (container instanceof SchemaColumnsView) {
-      return (SchemaColumnsView) container;
-    }
-    Component[] components = container.getComponents();
-    SchemaColumnsView view;
-
-    for (Component component : components) {
-      if (component instanceof Container) {
-        view = getColumnView((Container) component, "    " + indent); // NOI18N
-
-        if (view != null) {
-          return view;
-        }
-      }
-    }
-    return null;
-  }
-  
-  private SearchTarget [] getTargets(Model model) {
-    if (model instanceof BpelModel) {
-      return Target.BPEL;
-    }
-    if (model instanceof WSDLModel) {
-      return Target.WSDL;
-    }
-    if (model instanceof SchemaModel) {
-      return Target.SCHEMA;
-    }
-    return new SearchTarget [] {};
-  }
-
-  private Model getModel(Node node) {
-//out();
-//out("get model");
-//out("node: " + node);
-    DataObject data = getDataObject(node);
-//out("data: " + data);
-
-    if (data == null) {
-      return null;
-    }
-    Model model = CoreUtil.getBpelModel(data);
-//out("model: " + model);
-
-    if (model != null) {
-      return model;
-    }
-    ModelCookie cookie = data.getCookie(ModelCookie.class);
-
-    if (cookie == null) {
-      return null;
-    }
-    try {
-      return cookie.getModel();
-    } 
-    catch (IOException e) {
-      return null;
-    }
   }
 
   @Override
@@ -215,6 +107,5 @@ public final class SearchAction extends IconAction {
     return true;
   }
 
-  private Search mySearch;
   public static final Action DEFAULT = new SearchAction();
 }

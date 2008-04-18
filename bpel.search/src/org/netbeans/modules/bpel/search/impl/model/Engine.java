@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -44,14 +44,13 @@ import java.util.List;
 import org.netbeans.modules.xml.xam.Component;
 import org.netbeans.modules.xml.xam.Model;
 import org.netbeans.modules.xml.xam.Named;
-import org.netbeans.modules.bpel.editors.api.utils.Util;
 
 import org.netbeans.modules.bpel.search.api.SearchException;
-import org.netbeans.modules.bpel.search.api.SearchMatch;
 import org.netbeans.modules.bpel.search.api.SearchOption;
 import org.netbeans.modules.bpel.search.api.SearchTarget;
 import org.netbeans.modules.bpel.search.spi.SearchEngine;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import org.netbeans.modules.bpel.search.spi.SearchProvider;
+import static org.netbeans.modules.soa.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -60,17 +59,18 @@ import static org.netbeans.modules.soa.ui.util.UI.*;
 public final class Engine extends SearchEngine.Adapter {
 
   public void search(SearchOption option) throws SearchException {
-    myClazz = null;
-    myOption = option;
-    myList = (List) option.getSource();
+    myProvider = option.getProvider();
     SearchTarget target = option.getTarget();
 
-    if (target != null) {
+    if (target == null) {
+      myClazz = null;
+    }
+    else {
       myClazz = target.getClazz();
     }
 //out();
     fireSearchStarted(option);
-    search(Util.getRoot((Model) myList.get(0)), ""); // NOI18N
+    search(myProvider.getRoot(), ""); // NOI18N
     fireSearchFinished(option);
   }
 
@@ -91,7 +91,7 @@ public final class Engine extends SearchEngine.Adapter {
 //out(indent + " see: " + component);
     if (checkClazz(component) && checkName(component)) {
 //out(indent + "      add.");
-      fireSearchFound(new Element(component, myList.get(1), myList.get(2)));
+      fireSearchFound(myProvider.getElement(component));
     }
   }
 
@@ -103,33 +103,16 @@ public final class Engine extends SearchEngine.Adapter {
   }
 
   private boolean checkName(Component component) {
-    if (anyName()) {
-      return true;
+    String name = ""; // NOI18N
+
+    if (component instanceof Named) {
+      name = ((Named) component).getName();
     }
-    if ( !(component instanceof Named)) {
-      return false;
-    }
-    return accepts(((Named) component).getName());
+    return accepts(name);
   }
 
-  private boolean anyName() {
-    String text = myOption.getText();
-    SearchMatch match = myOption.getSearchMatch();
-
-    if (match == SearchMatch.PATTERN && text.equals("*")) { // NOI18N
-      return true;
-    }
-    if (match == SearchMatch.REGULAR_EXPRESSION && text.equals("\\.*")) { // NOI18N
-      return true;
-    }
-    if (match == null && text.equals("")) { // NOI18N
-      return true;
-    }
-    return false;
-  }
-
-  public boolean accepts(Object source) {
-    return source instanceof List;
+  public boolean isApplicable(Object root) {
+    return root instanceof Component;
   }
 
   public String getDisplayName() {
@@ -140,7 +123,6 @@ public final class Engine extends SearchEngine.Adapter {
     return i18n(Engine.class, "LBL_Engine_Short_Description"); // NOI18N
   }
 
-  private List myList;
-  private SearchOption myOption;
-  private Class<? extends Component> myClazz;
+  private SearchProvider myProvider;
+  private Class<? extends Object> myClazz;
 }

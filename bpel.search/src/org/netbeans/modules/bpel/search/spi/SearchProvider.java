@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -38,88 +38,93 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.search.impl.model;
+package org.netbeans.modules.bpel.search.spi;
 
-import javax.swing.Icon;
-import org.netbeans.modules.xml.xam.Component;
+import java.util.Map;
+import java.util.WeakHashMap;
 
-import org.netbeans.modules.bpel.editors.api.utils.Util;
-import org.netbeans.modules.bpel.editors.api.utils.RefactorUtil;
 import org.netbeans.modules.bpel.search.api.SearchElement;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import org.netbeans.modules.bpel.search.api.SearchTarget;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2006.11.17
+ * @version 2008.04.16
  */
-final class Element extends SearchElement.Adapter {
+public interface SearchProvider {
 
-  Element(Component component, Object cookie, Object view) {
-    super(
-      getName(component),
-      getToolTip(component),
-      getIcon(component),
-      getParent(component, cookie, view));
+  /**
+   * Returns true if provider can search in given object.
+   * @param object is given object
+   * @return true if provider can search in given object
+   */
+  boolean isApplicable(Object object);
 
-    myComponent = component;
-    myCookie = cookie;
-    myView = view;
-  }
+  /**
+   * Returns root.
+   * @return root
+   */
+  Object getRoot();
 
-  @Override
-  public void gotoSource()
-  {
-    Util.goToSource(myComponent);
-  }
+  /**
+   * Returns targets.
+   * @return targets
+   */
+  SearchTarget [] getTargets();
 
-  @Override
-  public void gotoDesign()
-  {
-//out("GO TO DESIGN");
-    Util.goToDesign(myComponent, myCookie, myView);
-  }
+  /**
+   * Returns element by given object.
+   * @param object is given object
+   * @return element by given object
+   */
+  SearchElement getElement(Object object);
 
-  @Override
-  public boolean equals(Object object)
-  {
-    if ( !(object instanceof Element)) {
+  // ---------------------------------------------
+  public class Adapter implements SearchProvider {
+
+    public Adapter(Object root) {
+      myRoot = root;
+      myElements = new WeakHashMap<Object,SearchElement>();
+    }
+
+    public boolean isApplicable(Object object) {
       return false;
     }
-    return ((Element) object).myComponent.equals(myComponent);
-  }
 
-  @Override
-  public int hashCode()
-  {
-    return myComponent.hashCode();
-  }
+    public Object getRoot() {
+      return myRoot;
+    }
 
-  private static String getName(Component component) {
-    return RefactorUtil.getName(component);
-  }
-
-  private static String getToolTip(Component component) {
-    return RefactorUtil.getToolTip(component);
-  }
-
-  private static SearchElement getParent(
-    Component component,
-    Object cookie,
-    Object view)
-  {
-    Component parent = component.getParent();
-
-    if (parent == null) {
+    public SearchTarget [] getTargets() {
       return null;
     }
-    return new Element(parent, cookie, view);
-  }
 
-  private static Icon getIcon(Component component) {
-    return RefactorUtil.getIcon(component);
-  }
+    public SearchElement getElement(Object object) {
+      SearchElement element = myElements.get(object);
 
-  private Component myComponent;
-  private Object myCookie;
-  private Object myView;
+      if (element != null) {
+        return element;
+      }
+      Object father = getFather(object);
+      SearchElement parent = null;
+
+      if (father != null) {
+        parent = getElement(father);
+      }
+      element = createElement(object, parent);
+      myElements.put(object, element);
+
+      return element;
+    }
+
+    protected SearchElement createElement(Object object, SearchElement parent) {
+      return null;
+    }
+
+    protected Object getFather(Object object) {
+      return null;
+    }
+
+    private Object myRoot;
+    private Map<Object,SearchElement> myElements;
+  }
 }

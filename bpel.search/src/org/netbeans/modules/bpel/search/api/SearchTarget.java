@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -40,7 +40,7 @@
  */
 package org.netbeans.modules.bpel.search.api;
 
-import org.netbeans.modules.xml.xam.Component;
+import static org.netbeans.modules.soa.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -52,5 +52,39 @@ public interface SearchTarget {
    * Returns the class of target.
    * @return the class of target
    */
-  Class<? extends Component> getClazz();
+  Class<? extends Object> getClazz();
+
+
+  // -------------------------------------------
+  public class Adapter implements SearchTarget {
+
+    public Adapter(Class bundle, Class<? extends Object> clazz) {
+      myClazz = clazz;
+      myBundle = bundle;
+    }
+
+    public Class<? extends Object> getClazz() {
+      return myClazz;
+    }
+
+    @Override
+    public String toString()
+    {
+      return i18n(myBundle, name());
+    }
+
+    private String name() {
+      String name = myClazz.getName();
+
+      int k = name.lastIndexOf("."); // NOI18N
+
+      if (k == -1) {
+        return name;
+      }
+      return name.substring(k + 1);
+    }
+
+    private Class myBundle;
+    private Class<? extends Object> myClazz;
+  }
 }

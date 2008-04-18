@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -40,7 +40,7 @@
  */
 package org.netbeans.modules.bpel.search.spi;
 
-import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.regex.PatternSyntaxException;
 
@@ -64,11 +64,11 @@ public interface SearchEngine {
   void search(SearchOption option) throws SearchException;
   
   /**
-   * Returns true if search can be performed in source.
-   * @param source where search will be perfromed
-   * @return true if search can be performed in source
+   * Returns true if search is applicable for root.
+   * @param root where search will be perfromed
+   * @return true if search is applicable for root
    */
-  boolean accepts(Object source);
+  boolean isApplicable(Object root);
 
   /**
    * Addes search listener.
@@ -77,10 +77,9 @@ public interface SearchEngine {
   void addSearchListener(SearchListener listener);
 
   /**
-   * Removes search listener.
-   * @param listener to be removed
+   * Removes all search listeners.
    */
-  void removeSearchListener(SearchListener listener);
+  void removeSearchListeners();
 
   /**
    * Returns display name of engine.
@@ -97,8 +96,8 @@ public interface SearchEngine {
   // ----------------------------------------------------
   public abstract class Adapter implements SearchEngine {
 
-    protected Adapter() {
-      mySearchListeners = new ArrayList<SearchListener>();
+    public Adapter() {
+      removeSearchListeners();
     }
 
     public Object [] getTargets() {
@@ -109,18 +108,18 @@ public interface SearchEngine {
       mySearchListeners.add(listener);
     }
 
-    public synchronized void removeSearchListener(SearchListener listener) {
-      mySearchListeners.remove(listener);
+    public synchronized void removeSearchListeners() {
+      mySearchListeners = new LinkedList<SearchListener>();
     }
 
-    protected synchronized void fireSearchStarted(SearchOption option)
+    protected final synchronized void fireSearchStarted(SearchOption option)
       throws SearchException
     {
       try {
         createSearchPattern(option);
       }
       catch (PatternSyntaxException e) {
-        throw new SearchException(e);
+        throw new SearchException(e.getMessage());
       }
       SearchEvent event = new SearchEvent.Adapter(option, null);
 
@@ -129,7 +128,7 @@ public interface SearchEngine {
       }
     }
 
-    protected synchronized void fireSearchFound(SearchElement element) {
+    protected final synchronized void fireSearchFound(SearchElement element) {
       SearchEvent event = new SearchEvent.Adapter(null, element);
 
       for (SearchListener listener : mySearchListeners) {
@@ -137,7 +136,7 @@ public interface SearchEngine {
       }
     }
 
-    protected synchronized void fireSearchFinished(SearchOption option) {
+    protected final synchronized void fireSearchFinished(SearchOption option) {
       SearchEvent event = new SearchEvent.Adapter(option, null);
 
       for (SearchListener listener : mySearchListeners) {
@@ -145,10 +144,7 @@ public interface SearchEngine {
       }
     }
 
-    protected boolean accepts(String text) {
-      if (text == null) {
-        return false;
-      }
+    protected final boolean accepts(String text) {
       return mySearchPattern.accepts(text);
     }
 

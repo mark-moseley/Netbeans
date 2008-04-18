@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -50,7 +50,6 @@ import java.util.List;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -61,7 +60,9 @@ import org.netbeans.modules.bpel.search.api.SearchMatch;
 import org.netbeans.modules.bpel.search.api.SearchOption;
 import org.netbeans.modules.bpel.search.api.SearchTarget;
 import org.netbeans.modules.bpel.search.spi.SearchEngine;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import org.netbeans.modules.bpel.search.spi.SearchProvider;
+import org.netbeans.modules.bpel.search.impl.output.View;
+import static org.netbeans.modules.soa.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -69,25 +70,29 @@ import static org.netbeans.modules.soa.ui.util.UI.*;
  */
 public final class Search extends Dialog {
 
-  public Component getUIComponent(
-    List<SearchEngine> engines,
-    Object source,
-    SearchTarget [] targets)
-  {
-    mySource = source;
-    myTargets = targets;
-    mySearchEngine = engines.get(0);
-    mySearchEngine.addSearchListener(new Tree());
+  public void show(SearchEngine engine, SearchProvider provider) {
+    if (engine == null) {
+      return;
+    }
+    myTargets = provider.getTargets();
+    myProvider = provider;
+    mySearchEngine = engine;
+
+    mySearchEngine.removeSearchListeners();
+    mySearchEngine.addSearchListener(new View());
     mySearchEngine.addSearchListener(new Progress());
+
     show();
 
-    return getUIComponent();
+    a11y(getUIComponent(), i18n("ACS_Advanced_Search")); // NOI18N
   }
 
   @Override
-  protected void updated()
+  protected final void updated()
   {
+//out("UPDATED");
     setItems(myTarget, myTargets);
+    myTarget.init();
   }
 
   private JPanel createPanel() {
@@ -124,7 +129,7 @@ public final class Search extends Dialog {
     c.insets = new Insets(TINY_INSET, SMALL_INSET, TINY_INSET, 0);
     c.fill = GridBagConstraints.HORIZONTAL;
     c.weightx = 1.0;
-    myName = new TextField(ASTERISK);
+    myName = new Field(ASTERISK);
     setWidth(myName.getUIComponent(), TEXT_WIDTH);
     label.setLabelFor(myName.getUIComponent());
     panel.add(myName.getUIComponent(), c);
@@ -134,13 +139,14 @@ public final class Search extends Dialog {
     c.fill = GridBagConstraints.NONE;
     c.weightx = 0.0;
     c.insets = new Insets(TINY_INSET, 0, TINY_INSET, 0);
-    label = createLabel(i18n("LBL_Type")); // NOI18N
+    label = createLabel(i18n("LBL_Target")); // NOI18N
     panel.add(label, c);
 
     c.fill = GridBagConstraints.HORIZONTAL;
     c.insets = new Insets(TINY_INSET, SMALL_INSET, TINY_INSET, 0);
     c.weightx = 1.0;
-    myTarget = new JComboBox(myTargets);
+    myTarget = createComboBox(myTargets);
+    a11y(myTarget, i18n("ACS_Target")); // NOI18N
     label.setLabelFor(myTarget);
     panel.add(myTarget, c);
 
@@ -221,7 +227,7 @@ public final class Search extends Dialog {
     );
     SearchOption option = new SearchOption.Adapter(
       myName.getText().trim(),
-      mySource,
+      myProvider,
       (SearchTarget) myTarget.getSelectedItem(),
       getMatch(),
       myMatchCase.isSelected(),
@@ -243,11 +249,12 @@ public final class Search extends Dialog {
   private void close() {
     myName.save();
     mySearchEngine = null;
-    mySource = null;
+    myProvider = null;
+    myTargets = null;
   }
 
   @Override
-  protected DialogDescriptor createDescriptor()
+  protected final DialogDescriptor createDescriptor()
   {
     Object [] buttons = getButtons();
     myDescriptor = new DialogDescriptor(
@@ -282,13 +289,13 @@ public final class Search extends Dialog {
     };
   }
 
-  private Object mySource;
-  private TextField myName;
+  private Field myName;
   private JButton mySearchButton;
-  private JComboBox myTarget;
   private JCheckBox myMatchCase;
   private JCheckBox myPatternMatch;
   private JCheckBox myRegularExpression;
+  private MyComboBox myTarget;
+  private SearchProvider myProvider;
   private SearchTarget [] myTargets;
   private SearchEngine mySearchEngine;
   private DialogDescriptor myDescriptor;

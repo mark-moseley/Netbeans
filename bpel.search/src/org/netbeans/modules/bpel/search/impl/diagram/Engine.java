@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -47,7 +47,7 @@ import org.netbeans.modules.bpel.editors.api.diagram.DiagramElement;
 import org.netbeans.modules.bpel.search.api.SearchException;
 import org.netbeans.modules.bpel.search.api.SearchOption;
 import org.netbeans.modules.bpel.search.spi.SearchEngine;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import static org.netbeans.modules.soa.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -56,7 +56,7 @@ import static org.netbeans.modules.soa.ui.util.UI.*;
 public class Engine extends SearchEngine.Adapter {
 
   public void search(SearchOption option) throws SearchException {
-    Diagram diagram = (Diagram) option.getSource();
+    Diagram diagram = (Diagram) option.getProvider().getRoot();
     diagram.clearHighlighting();
 //out();
     fireSearchStarted(option);
@@ -78,8 +78,8 @@ public class Engine extends SearchEngine.Adapter {
     }
   }
 
-  public boolean accepts(Object source) {
-    return source instanceof Diagram;
+  public boolean isApplicable(Object root) {
+    return root instanceof Diagram;
   }
 
   public String getDisplayName() {
