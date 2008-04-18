@@ -37,7 +37,7 @@
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.dwarfdiscovery.provider;
+package org.netbeans.modules.cnd.discovery.project;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -61,15 +61,23 @@ import org.openide.util.Exceptions;
  *
  * @author Alexander Simon
  */
-public class LogReader {
+public class SolarisLogReader {
     private static boolean TRACE = false;
+    // environment variable  path to prototype
+    // ROOT=/export/opensolaris/testws80/proto/root_i386
+    private static final String ENV_ROOT = "ROOT=";
+    // environment variable path to sources
+    // SRC=/export/opensolaris/testws80/usr/src
+    private static final String ENV_SRC = "SRC=";
     
     private String workingDir;
     private final String root;
     private final String fileName;
     private List<SourceFileProperties> result;
+    private String buidMashinePrototype;
+    private String buidMashineSources;
     
-    public LogReader(String fileName, String root){
+    public SolarisLogReader(String fileName, String root){
         this.root = root;
         this.fileName = fileName;
        
@@ -92,6 +100,22 @@ public class LogReader {
                         break;
                     }
                     line = line.trim();
+                    if (buidMashinePrototype == null || buidMashineSources == null){
+                        if (line.startsWith(ENV_ROOT)){
+                            buidMashinePrototype = line.substring(ENV_ROOT.length());
+                            if (TRACE) {
+                                System.out.println("Environment variable path to prototype: " + buidMashinePrototype); //NOI18N
+                            }
+                            continue;
+                        }
+                        if (line.startsWith(ENV_SRC)){
+                            buidMashineSources = line.substring(ENV_SRC.length());
+                            if (TRACE) {
+                                System.out.println("Environment variable path to sources: " + buidMashineSources); //NOI18N
+                            }
+                            continue;
+                        }
+                    }
                     while (line.endsWith("\\")) { // NOI18N
                         String oneMoreLine = in.readLine();
                         if (oneMoreLine == null) {
@@ -152,13 +176,14 @@ public class LogReader {
         if (workDir == null) {
             return false;
         }
-
+        workDir = relocate(workDir);
+        
         if (new File(workDir).exists()) {
             if (TRACE) System.err.print(message);
             setWorkingDir(workDir);
             return true;
         } else {
-            workDir = workingDir + File.separator + workDir;
+            workDir = getWorkingDir() + File.separator + workDir;
             if (new File(workDir).exists()) {
                 if (TRACE) System.err.print(message);
                 setWorkingDir(workDir);
@@ -166,6 +191,33 @@ public class LogReader {
             }
         }
         return false;
+    }
+
+    private String relocate(String path){
+        String res = path;
+        if (buidMashineSources != null && root.length() > 0 && res.startsWith(buidMashineSources)){
+            // buidMashineSources=/export/opensolaris/testws80/usr/src
+            // root=/export/opensolaris/testws80
+            int i = buidMashineSources.lastIndexOf("/usr/src"); //NOI18N
+            if (i > 0) {
+                res = root+path.substring(i); //NOI18N
+            }
+        } else if (buidMashinePrototype != null && root.length() > 0 && res.startsWith(buidMashinePrototype)){
+            // buidMashinePrototype=/export/opensolaris/testws80/proto/root_i386
+            // root=/export/opensolaris/testws80
+            int i = buidMashinePrototype.lastIndexOf("/proto/"); //NOI18N
+            if (i > 0) {
+                res = root+path.substring(i); //NOI18N
+            }
+        }
+        if (TRACE && !path.equals(res)) {
+            System.out.println("Relocate path from: "+path+" to "+res); //NOI18N
+        }
+        return res;
+    }
+    
+    public String getWorkingDir() {
+        return workingDir;
     }
     
     private enum CompilerType {
@@ -274,10 +326,10 @@ public class LogReader {
 //           workingDir= line.substring(CURRENT_DIRECTORY.length()+1).trim();
 //           return false;
 //       }
-       if (workingDir == null) {
+       if (getWorkingDir() == null) {
            return false;
        }
-       if (!workingDir.startsWith(root)){
+       if (!getWorkingDir().startsWith(root)){
            return false;
        }
        
@@ -323,12 +375,14 @@ public class LogReader {
         }
         String file = null;
         if (what.startsWith("/")){  //NOI18N
-            file = what;
+            file = relocate(what);
+            what = file;
         } else {
-            file = workingDir+"/"+what;  //NOI18N
+            file = getWorkingDir()+"/"+what;  //NOI18N
         }
         List<String> userIncludesCached = new ArrayList<String>(userIncludes.size());
         for(String s : userIncludes){
+            s = relocate(s);
             userIncludesCached.add(PathCache.getString(s));
         }
         Map<String, String> userMacrosCached = new HashMap<String, String>(userMacros.size());
@@ -354,7 +408,7 @@ public class LogReader {
                         if (TRACE) System.err.println("** And there is no such file under root"); 
                     } else {
                         if (areThereOnlyOne) {
-                            result.add(new CommandLineSource(isCPP, out[0], what, userIncludes, userMacros));
+                            result.add(new CommandLineSource(isCPP, out[0], what, userIncludesCached, userMacrosCached));
                             if (TRACE) System.err.println("** Gotcha: " + out[0] + File.separator + what);
                             // kinda adventure but it works
                             setWorkingDir(out[0]);
@@ -373,10 +427,10 @@ public class LogReader {
         } else if (TRACE) {
             if (TRACE) System.err.println("**** Gotcha: " + file);
         }
-        result.add(new CommandLineSource(isCPP, workingDir, what, userIncludesCached, userMacrosCached));
+        result.add(new CommandLineSource(isCPP, getWorkingDir(), what, userIncludesCached, userMacrosCached));
         return true;
     }
-
+    
     private static class CommandLineSource implements SourceFileProperties {
 
         private String compilePath;
@@ -456,8 +510,8 @@ public class LogReader {
         }
         String objFileName = args[0];
         String root = args[1];
-        LogReader.TRACE = true;
-        LogReader clrf = new LogReader(objFileName, root);
+        SolarisLogReader.TRACE = true;
+        SolarisLogReader clrf = new SolarisLogReader(objFileName, root);
         List<SourceFileProperties> list = clrf.getResults();
         System.err.print("\n*** Results: ");
         for (SourceFileProperties sourceFileProperties : list) {
