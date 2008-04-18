@@ -48,6 +48,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.netbeans.modules.cnd.discovery.api.Configuration;
+import org.netbeans.modules.cnd.discovery.api.ProjectImpl;
 import org.netbeans.modules.cnd.discovery.api.ProjectProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
 import org.netbeans.modules.cnd.discovery.api.ProviderProperty;
@@ -177,7 +178,10 @@ public class AnalyzeExecutable extends BaseDwarfProvider {
         if (set == null || set.length() == 0) {
             return 0;
         }
-        return 70;
+        if (sizeComilationUnit(set) > 0) {
+            return 70;
+        }
+        return 0;
     }
     
     public List<Configuration> analyze(ProjectProxy project) {
@@ -189,7 +193,7 @@ public class AnalyzeExecutable extends BaseDwarfProvider {
                 private List<SourceFileProperties> myFileProperties;
                 private List<String> myIncludedFiles;
                 public List<ProjectProperties> getProjectConfiguration() {
-                    return divideByLanguage(getSourcesConfiguration());
+                    return ProjectImpl.divideByLanguage(getSourcesConfiguration());
                 }
                 
                 public List<Configuration> getDependencies() {
