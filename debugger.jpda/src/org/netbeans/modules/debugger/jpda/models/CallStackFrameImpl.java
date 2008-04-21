@@ -53,6 +53,7 @@ import com.sun.jdi.ThreadReference;
 import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.Value;
 
+import com.sun.jdi.request.EventRequest;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -255,12 +256,12 @@ public class CallStackFrameImpl implements CallStackFrame {
                 if (local instanceof Local) {
                     Local localImpl = (Local) local;
                     localImpl.setFrame(this);
-                    localImpl.setInnerValue(v);
+                    //localImpl.setInnerValue(v);
                     localImpl.setClassName(className);
                 } else {
                     ObjectLocalVariable localImpl = (ObjectLocalVariable) local;
                     localImpl.setFrame(this);
-                    localImpl.setInnerValue(v);
+                    //localImpl.setInnerValue(v);
                     localImpl.setClassName(className);
                 }
                 locals[i] = local;
@@ -272,6 +273,42 @@ public class CallStackFrameImpl implements CallStackFrame {
             throw new AbsentInformationException ("thread is running");
         } catch (VMDisconnectedException ex) {
             return new LocalVariable [0];
+        }
+    }
+    
+    /**
+     * Returns local variable.
+     * @param name The name of the variable
+     * @return local variable
+     */
+    org.netbeans.api.debugger.jpda.LocalVariable getLocalVariable(String name) 
+    throws AbsentInformationException {
+        try {
+            String className = getStackFrame ().location ().declaringType ().name ();
+            com.sun.jdi.LocalVariable lv = getStackFrame ().visibleVariableByName(name);
+            if (lv == null) {
+                return null;
+            }
+            Value v = getStackFrame ().getValue (lv);
+            LocalVariable local = (LocalVariable) debugger.getLocalVariable(lv, v);
+            if (local instanceof Local) {
+                Local localImpl = (Local) local;
+                localImpl.setFrame(this);
+                localImpl.setInnerValue(v);
+                localImpl.setClassName(className);
+            } else {
+                ObjectLocalVariable localImpl = (ObjectLocalVariable) local;
+                localImpl.setFrame(this);
+                localImpl.setInnerValue(v);
+                localImpl.setClassName(className);
+            }
+            return local;
+        } catch (NativeMethodException ex) {
+            throw new AbsentInformationException ("native method");
+        } catch (InvalidStackFrameException ex) {
+            throw new AbsentInformationException ("thread is running");
+        } catch (VMDisconnectedException ex) {
+            return null;
         }
     }
     
@@ -319,7 +356,7 @@ public class CallStackFrameImpl implements CallStackFrame {
                 step.setSuspendPolicy(com.sun.jdi.request.StepRequest.SUSPEND_EVENT_THREAD);
                 step.enable();
                 step.putProperty("silent", Boolean.TRUE);
-                final boolean[] stepDone = new boolean[] { false };
+                final Boolean[] stepDone = new Boolean[] { null };
                 debugger.getOperator().register(step, new Executor() {
                     public boolean exec(com.sun.jdi.event.Event event) {
                         synchronized (stepDone) {
@@ -328,13 +365,23 @@ public class CallStackFrameImpl implements CallStackFrame {
                         }
                         return false;
                     }
+
+                    public void removed(EventRequest eventRequest) {
+                        synchronized (stepDone) {
+                            stepDone[0] = false;
+                            stepDone.notify();
+                        }
+                    }
                 });
                 tr.resume();
                 synchronized (stepDone) {
-                    if (!stepDone[0]) {
+                    if (stepDone[0] == null) {
                         try {
                             stepDone.wait();
                         } catch (InterruptedException iex) {}
+                    }
+                    if (Boolean.FALSE.equals(stepDone[0])) {
+                        return null; // Step was canceled
                     }
                 }
                 StackFrame sf = null;
@@ -347,6 +394,7 @@ public class CallStackFrameImpl implements CallStackFrame {
                     return null;
                 } finally {
                     vm.eventRequestManager().deleteEventRequest(step);
+                    debugger.getOperator().unregister(step);
                     try {
                         if (sf != null) {
                             tr.popFrames(sf);
@@ -531,11 +579,30 @@ public class CallStackFrameImpl implements CallStackFrame {
     }
 
     public boolean equals (Object o) {
+        if (!(o instanceof CallStackFrameImpl)) {
+            return false;
+        }
+        CallStackFrameImpl frame = (CallStackFrameImpl) o;
+        boolean valid;
+        synchronized (this) {
+            valid = this.valid;
+        }
+        if (valid) {
+            synchronized (frame) {
+                valid = frame.valid;
+            }
+        }
+        if (!valid) {
+            //System.err.println(" FRAMES INVALID (#"+hashCode()+", #"+o.hashCode()+") (S#"+System.identityHashCode(this)+", S#"+System.identityHashCode(o)+") equals = "+super.equals(o));//(sf == ((CallStackFrameImpl) o).sf));
+            return super.equals(o);//sf == ((CallStackFrameImpl) o).sf;
+        }
         try {
-            return  (o instanceof CallStackFrameImpl) &&
-                    (sf.equals (((CallStackFrameImpl) o).sf));
+            //System.err.println(" FRAMES (#"+hashCode()+":"+getLineNumber(null)+", #"+o.hashCode()+":"+frame.getLineNumber(null)+") (S#"+System.identityHashCode(this)+", S#"+System.identityHashCode(o)+") equals = "+
+            //        ((sf.equals (frame.sf) && getFrameDepth() == frame.getFrameDepth()) ? "T" : "F"));
+            return  sf.equals (frame.sf) && getFrameDepth() == frame.getFrameDepth();
         } catch (InvalidStackFrameException isfex) {
-            return sf == ((CallStackFrameImpl) o).sf;
+            //System.err.println(" FRAMES Invalid (#"+hashCode()+", #"+o.hashCode()+") (S#"+System.identityHashCode(this)+", S#"+System.identityHashCode(o)+") equals = "+super.equals(o));//(sf == ((CallStackFrameImpl) o).sf));
+            return super.equals(o);//sf == ((CallStackFrameImpl) o).sf;
         }
     }
     
@@ -544,11 +611,13 @@ public class CallStackFrameImpl implements CallStackFrame {
     public synchronized int hashCode () {
         if (hashCode == null) {
             try {
-                hashCode = new Integer(sf.hashCode());
+                hashCode = new Integer(sf.hashCode() << 4 + getFrameDepth());// + getLineNumber(null));
             } catch (InvalidStackFrameException isfex) {
                 valid = false;
                 hashCode = new Integer(super.hashCode());
             }
+            
+            //System.err.println("CREATED  HASH CODE: "+hashCode+"   line = "+getLineNumber(null)+", valid = "+valid);
         }
         return hashCode.intValue();
     }
