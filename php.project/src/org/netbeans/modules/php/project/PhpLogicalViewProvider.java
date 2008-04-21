@@ -44,6 +44,7 @@ import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -51,18 +52,20 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
-import java.util.logging.Logger;
 import javax.swing.Action;
+import javax.swing.JSeparator;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
+import org.netbeans.api.queries.VisibilityQuery;
+import org.netbeans.modules.php.project.ui.customizer.PhpProjectProperties;
 import org.netbeans.modules.php.rt.spi.providers.Command;
 import org.netbeans.modules.php.rt.spi.providers.CommandProvider;
 import org.netbeans.modules.php.rt.spi.providers.WebServerProvider;
 import org.netbeans.modules.php.rt.utils.PhpCommandUtils;
-import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.support.ant.AntProjectEvent;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.AntProjectListener;
@@ -110,9 +113,8 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
 
     static final String SOURCE_ROOT_NODE_NAME = "LBL_PhpFiles";
 
-    PhpLogicalViewProvider(PhpProject project, SubprojectProvider provider) {
+    PhpLogicalViewProvider(PhpProject project) {
         myProject = project;
-        mySubProjectProvider = provider;
         myActionsByCommand = new HashMap<Command, Action>();
         getProject().getHelper().addAntProjectListener(this);
     }
@@ -216,10 +218,6 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
         return myProject;
     }
 
-    private SubprojectProvider getSubProjectProvider() {
-        return mySubProjectProvider;
-    }
-
     private class PhpLogicalViewRootNode extends AbstractNode {
 
         private PhpLogicalViewRootNode() {
@@ -251,15 +249,30 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
             }
 
             // get our project actions
-            for (Action action : getProjectActions()){
+            /* removed run.script from project root node
+             for (Action action : getProjectActions()){
                 list.add(action);
-            }
+            }*/
                 
             // get standard project actions
             for (Action action : getStandardProjectActions()){
                 list.add(action);
             }
-                
+	    
+	    //Custom Actions for Project Nodes - #57874
+            Collection<? extends Object> res = Lookups.forPath("Projects/Actions").lookupAll(Object.class); // NOI18N
+            if (!res.isEmpty()) {
+                list.add(null);
+                for (Object next : res) {
+                    if (next instanceof Action) {
+                        list.add((Action) next);
+                    } else if (next instanceof JSeparator) {
+                        list.add(null);
+                    }
+                }
+            }
+            list.add(null);
+            list.add(CommonProjectActions.customizeProjectAction());            
             return list.toArray(new Action[list.size()]);
         }
 
@@ -290,9 +303,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
                         CommonProjectActions.renameProjectAction(), 
                         CommonProjectActions.moveProjectAction(), 
                         CommonProjectActions.copyProjectAction(), 
-                        CommonProjectActions.deleteProjectAction(), 
-                        null, 
-                        CommonProjectActions.customizeProjectAction()
+                        CommonProjectActions.deleteProjectAction()
             };
             
         }
@@ -400,7 +411,12 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
          * sources change
          */
         public void stateChanged(ChangeEvent e) {
-            createNodes();
+            // #132877 - discussed with tomas zezula
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    createNodes();
+                }
+            });
         }
 
         /*
@@ -408,8 +424,13 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
          */
         public void propertyChange(PropertyChangeEvent evt) {
             String property = evt.getPropertyName();
-            if (property.startsWith(PhpProject.SRC_) && property.endsWith(PhpProject._DIR)) {
-                createNodes();
+            if (PhpProjectProperties.SRC_DIR.equals(property)) {
+                // #132877 - discussed with tomas zezula
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        createNodes();
+                    }
+                });
             }
         }
 
@@ -608,13 +629,15 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
             list.add(0, CommonProjectActions.newFileAction());
 
             // the same provider actions as for project
-            for (Action action : getProviderActions()){
+            /* removed run, debug actions from src node
+             for (Action action : getProviderActions()){
                 list.add(action);
             }
 
+            //removed  run.script from src node
             for (Action action : getSrcActions()){
                 list.add(action);
-            }
+            }*/
 
             for (Action action : getStandardSrcActions()){
                 list.add(action);
@@ -624,14 +647,12 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
         }
         
         private Action[] getSrcActions(){
-            ImportCommand importComm = new ImportCommand(getProject());
+            //ImportCommand importComm = new ImportCommand(getProject());
             RunLocalCommand runLocalComm = new RunLocalCommand(getProject());
 
             Action[] actions = new Action[]{
-                ProjectSensitiveActions.projectCommandAction(
-                        importComm.getId(), importComm.getLabel(), null),
-                ProjectSensitiveActions.projectCommandAction(
-                        runLocalComm.getId(), runLocalComm.getLabel(), null)
+                //ProjectSensitiveActions.projectCommandAction(importComm.getId(), importComm.getLabel(), null),
+                ProjectSensitiveActions.projectCommandAction(runLocalComm.getId(), runLocalComm.getLabel(), null)
             };
             return actions;
         }
@@ -691,29 +712,29 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
         }
         
         private Action[] getAdditionalActions(){
-                if (myActions == null) {
-                    List<Action> actions = new LinkedList<Action>();
-                    
-                    for (Action action : super.getActions(false)){
-                        actions.add(action);
-                    }
+            List<Action> actions = new LinkedList<Action>();
 
-                    // want to add recent after 'NewFile' action.
-                    // use fixed index not to search for 'NewFile' 
-                    // in seper actions each time (this wuill need to create 
-                    // CommonProjectActions.newFileAction() and check equals() )
-                    int pos = 2;
-                    for (Action action : getProviderActions()){
-                        actions.add(pos++, action);
-                    }
-                    
-                    for (Action action : getFolderActions()){
-                        actions.add(pos++, action);
-                    }
+            for (Action action : super.getActions(false)) {
+                actions.add(action);
+            }
 
-                    myActions = actions.toArray(new Action[]{});
-                }
-                return myActions;
+            // want to add recent after 'NewFile' action.
+            // use fixed index not to search for 'NewFile' 
+            // in seper actions each time (this wuill need to create 
+            // CommonProjectActions.newFileAction() and check equals() )
+            
+	    /* no run, debug, run.script actions on any node representing folder anymore
+	     int pos = 2;
+            for (Action action : getProviderActions()) {
+                actions.add(pos++, action);
+            }
+
+            for (Action action : getFolderActions()) {
+                actions.add(pos++, action);
+            }
+	     */ 
+
+            return actions.toArray(new Action[]{});
         }
 
         private Action[] getFolderActions() {
@@ -725,11 +746,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
                 null,
                 SystemAction.get(FileSystemAction.class)};
             return actions;
-        }
-        
-        Action[] myActions;
-
-        
+        }                
     }
 
     private boolean isInvokedForProject(){
@@ -774,7 +791,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
 
                     public void perform(Object[] nodes) {
                         PhpActionProvider.PhpCommandRunner
-                                .runCommand(command);
+                                .runCommand(command,getProject());
                     }
                 },
                 Models.MULTISELECTION_TYPE_ANY);
@@ -796,29 +813,25 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
             }
         }
         
-        private Action[] getAdditionalActions(){
-                if (myActions == null) {
-                    List<Action> actions = new LinkedList<Action>();
-                    
-                    actions.add(SystemAction.get(OpenAction.class));
-                    actions.add(null);
-                        
-                    for (Action action : getProviderActions()){
-                        actions.add(action);
-                    }
-                    
-                    for (Action action : getObjectActions()){
-                        actions.add(action);
-                    }
+        private Action[] getAdditionalActions() {
+            List<Action> actions = new LinkedList<Action>();
 
-                    for (Action action : super.getActions(false)){
-                        actions.add(action);
-                    }
-                    
-                    myActions = actions.toArray(new Action[]{});
-                }
-                
-                return myActions;
+            actions.add(SystemAction.get(OpenAction.class));
+            actions.add(null);
+
+            for (Action action : getProviderActions()) {
+                actions.add(action);
+            }
+
+            for (Action action : getObjectActions()) {
+                actions.add(action);
+            }
+
+            for (Action action : super.getActions(false)) {
+                actions.add(action);
+            }
+            
+            return actions.toArray(new Action[]{});
         }
         
         private Action[] getObjectActions(){
@@ -839,9 +852,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
                 SystemAction.get(FileSystemAction.class)
             };
             return actions;
-        }
-
-        Action[] myActions;
+        }        
 
     }
 
@@ -886,7 +897,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
         if (provider != null) {
             CommandProvider commandProvider = provider.getCommandProvider();
             
-            commands = commandProvider.getCommands(getProject());
+            commands = commandProvider.getEnabledCommands(getProject());
         }
         if (commands == null){
             commands = new Command[]{};
@@ -905,7 +916,8 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
          */
         public boolean acceptDataObject(DataObject object) {
                 return     isNotTemporaryFile(object)
-                        && isNotProjectFile(object);
+                        && isNotProjectFile(object)
+                        && VisibilityQuery.getDefault().isVisible(object.getPrimaryFile());
         }
 
         private boolean isNotProjectFile(DataObject object){
@@ -925,7 +937,7 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
         
         private boolean isNotTemporaryFile(DataObject object){
                 String name = object.getPrimaryFile().getNameExt();
-                return !name.endsWith(PhpProject.TMP_FILE_POSTFIX);
+                return !name.endsWith(PhpProjectProperties.TMP_FILE_POSTFIX);
         }
         
         private final File PROJECT_XML = getProject().getHelper()
@@ -935,5 +947,4 @@ class PhpLogicalViewProvider implements LogicalViewProvider, AntProjectListener 
     private final Map<Command, Action> myActionsByCommand;
 
     private final PhpProject myProject;
-    private final SubprojectProvider mySubProjectProvider;
 }
