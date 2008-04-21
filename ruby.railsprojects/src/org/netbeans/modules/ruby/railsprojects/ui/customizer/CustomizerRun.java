@@ -52,8 +52,12 @@ import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.text.Collator;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -76,6 +80,7 @@ import org.netbeans.modules.ruby.railsprojects.server.ServerRegistry;
 import org.netbeans.modules.ruby.railsprojects.server.spi.RubyInstance;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.filesystems.FileObject;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -91,6 +96,8 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
     private Map<String/*|null*/,Map<String,String/*|null*/>/*|null*/> configs;
     RailsProjectProperties uiProperties;
     private PlatformChangeListener platformListener;
+    
+    private static final Logger LOGGER = Logger.getLogger(CustomizerRun.class.getName());
     
     public CustomizerRun( RailsProjectProperties uiProperties ) {
         this.uiProperties = uiProperties;
@@ -216,7 +223,18 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
     
     private void initRailsEnvCombo() {
         //XXX: may need to make dependent on the server combo when the V3 plugin is available
-        railsEnvCombo.setModel(new DefaultComboBoxModel(new String[]{"development", "production", "test"})); //NOI18N
+        // search for environments in config/environments
+        List<String> environments = new ArrayList<String>();
+        FileObject envFolder = project.getProjectDirectory().getFileObject("config/environments"); //NOI18N
+        if (envFolder != null) {
+            for (FileObject each : envFolder.getChildren()) {
+                if (!each.isFolder() && "rb".equals(each.getExt())) { //NOI18N
+                    environments.add(each.getName());
+                }
+            }
+        }
+        Collections.sort(environments);
+        railsEnvCombo.setModel(new DefaultComboBoxModel(environments.toArray(new String[environments.size()]))); //NOI18N
         String definedEnv = project.evaluator().getProperty(RailsProjectProperties.RAILS_ENV);
         if (definedEnv != null && !"".equals(definedEnv.trim())) {
             railsEnvCombo.setSelectedItem(definedEnv);
@@ -237,7 +255,7 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
                 uiProperties.setPlatform(((RubyPlatform) platforms.getSelectedItem()));
             }
         };
-        PlatformComponentFactory.addPlatformChangeListener(platforms, platformListener);;
+        PlatformComponentFactory.addPlatformChangeListener(platforms, platformListener);
     }
     
     public @Override void removeNotify() {
@@ -245,14 +263,6 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
         super.removeNotify();
     }
     
-    private String[] getEnvironmentNames() {
-        return new String[] {
-            NbBundle.getMessage(CustomizerRun.class, "Development"),
-            NbBundle.getMessage(CustomizerRun.class, "Testing"),
-            NbBundle.getMessage(CustomizerRun.class, "Production")
-        };
-    }
-        
     private void handleEncodingChange() {
         Charset enc = (Charset)encoding.getSelectedItem();
         String encName;
@@ -346,6 +356,7 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
             }
         });
 
+        serverLabel.setLabelFor(serverComboBox);
         org.openide.awt.Mnemonics.setLocalizedText(serverLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "ServerLabel")); // NOI18N
 
         railsEnvCombo.setEditable(true);
@@ -420,7 +431,11 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
                 .addContainerGap())
         );
 
-        portField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(CustomizerRun.class).getString("AD_jTextFieldArgs")); // NOI18N
+        portLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_ServerPort")); // NOI18N
+        portField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(CustomizerRun.class).getString("AD_ServerPort")); // NOI18N
+        serverComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_ServerEnvironment")); // NOI18N
+        railsEnvCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RailsEnv")); // NOI18N
+        railsEnvLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RailsEnv")); // NOI18N
         encoding.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_Encoding")); // NOI18N
         rakeTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RakeArguments")); // NOI18N
 
@@ -468,6 +483,8 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
 
         configCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_Configuration")); // NOI18N
         configNew.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_NewConfiguration")); // NOI18N
+        platforms.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RubyPlatformLabel")); // NOI18N
+        manageButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RubyHomeBrowse")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
     private void portFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_portFieldActionPerformed
