@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -45,10 +45,12 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import javax.swing.text.JTextComponent;
 import org.netbeans.modules.gsf.api.DeclarationFinder.DeclarationLocation;
@@ -72,6 +74,7 @@ import org.netbeans.modules.ruby.rubyproject.ScriptDescProvider;
 import org.netbeans.modules.ruby.rubyproject.TestNotifier;
 import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
 import org.netbeans.modules.ruby.platform.execution.OutputRecognizer;
+import org.netbeans.modules.ruby.rubyproject.UpdateHelper;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
 import org.openide.ErrorManager;
@@ -540,6 +543,14 @@ public class RailsActionProvider implements ActionProvider, ScriptDescProvider {
         File pwd = FileUtil.toFile(project.getProjectDirectory());
         String script = "script" + File.separator + "console"; // NOI18N
         String classPath = project.evaluator().getProperty(RailsProjectProperties.JAVAC_CLASSPATH);
+        String noreadlineArg = "--irb=irb --noreadline"; //NOI18N
+        String railsEnv = project.evaluator().getProperty(RailsProjectProperties.RAILS_ENV);
+        String[] additionalArgs = null;
+        if (railsEnv != null && !"".equals(railsEnv.trim())) {
+            additionalArgs = new String[]{noreadlineArg, railsEnv};
+        } else {
+            additionalArgs = new String[]{noreadlineArg};
+        }
 
         new RubyExecution(new ExecutionDescriptor(getPlatform(), displayName, pwd, script).
                 showSuspended(false).
@@ -547,7 +558,7 @@ public class RailsActionProvider implements ActionProvider, ScriptDescProvider {
                 classPath(classPath).
                 allowInput().
                 // see #130264
-                additionalArgs("--irb=irb --noreadline"). //NOI18N
+                additionalArgs(additionalArgs). //NOI18N
                 fileLocator(new RailsFileLocator(context, project)).
                 addStandardRecognizers(),
                 project.evaluator().getProperty(RailsProjectProperties.SOURCE_ENCODING)
