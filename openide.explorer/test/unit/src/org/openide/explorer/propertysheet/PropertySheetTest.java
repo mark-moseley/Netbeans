@@ -208,8 +208,43 @@ public class PropertySheetTest extends NbTestCase {
                 window.remove( ps );
             }
         });
-        assertNull( "PropertySheet still holds some Nodes even when not in component hierarchy",
-                ps.helperNodes );
+        assertGC("PropertySheet still holds some Nodes even when not in component hierarchy", ps.helperNodes);
+    }
+    
+    public void testSetNodesSurvivesMultipleAdd_RemoveNotifyCalls() throws Exception {
+        final PropertySheet ps = new PropertySheet();
+        Node n = new AbstractNode( Children.LEAF );
+        JWindow window = new JWindow();
+        ps.setNodes( new Node[] {n} );
+        window.add( ps );
+        window.remove( ps );
+        window.add( ps );
+        window.remove( ps );
+        window.add( ps );
+        window.remove( ps );
+        window.setVisible(true);
+        assertNotNull(ps.helperNodes);
+        assertEquals("Helper nodes are still available even after several addNotify()/removeNotify() calls",
+                ps.helperNodes.get()[0], n);
+    }
+    
+    public void testSheetCleared_126818 () throws Exception {
+        if (Boolean.getBoolean("ignore.random.failures")) {
+            return;
+        }
+        final PropertySheet ps = new PropertySheet();
+        Node n = new AbstractNode( Children.LEAF );
+        ps.setNodes( new Node[] {n} );
+        Thread.sleep(70);
+        ps.setNodes(null);
+        
+        for (int i = 0; i < 10; i++) {
+            Node[] curNodes = ps.getCurrentNodes();
+            assertTrue("Cur nodes should be empty", 
+                    curNodes == null || curNodes.length == 0);
+            Thread.sleep(50);
+        }
+        
     }
     
     //Node definition
