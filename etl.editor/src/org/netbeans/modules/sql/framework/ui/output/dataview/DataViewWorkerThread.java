@@ -56,7 +56,6 @@ import java.util.Map;
 import net.java.hulp.i18n.Logger;
 import org.axiondb.ExternalConnectionProvider;
 import org.netbeans.modules.etl.logger.Localizer;
-import org.netbeans.modules.etl.logger.LogUtil;
 import org.netbeans.modules.sql.framework.codegen.DB;
 import org.netbeans.modules.sql.framework.codegen.DBFactory;
 import org.netbeans.modules.sql.framework.codegen.StatementContext;
@@ -90,7 +89,7 @@ class DataViewWorkerThread extends SwingWorker {
     private SQLObject dbTable;
     private String errMsg;
     DataOutputPanel dataOutputPanel;
-    private static transient final Logger mLogger = LogUtil.getLogger(DataViewWorkerThread.class.getName());
+    private static transient final Logger mLogger = Logger.getLogger(DataViewWorkerThread.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
 
     public DataViewWorkerThread(SQLObject table, DataOutputPanel dataOutputPanel) {
@@ -114,8 +113,8 @@ class DataViewWorkerThread extends SwingWorker {
     public void finished() {
 
         if (this.errMsg != null) {
-            String nbBundle = mLoc.t("PRSR001: Error fetching data for table {0}.Cause:{1}", dbTable.getDisplayName(), this.errMsg);
-            String errorMsg = Localizer.parse(nbBundle);
+            String nbBundle = mLoc.t("BUND349: Error fetching data for table {0}.Cause:{1}", dbTable.getDisplayName(), this.errMsg);
+            String errorMsg = nbBundle.substring(15);
             DialogDisplayer.getDefault().notify(new Message(errorMsg, NotifyDescriptor.ERROR_MESSAGE));
         }
         UIUtil.stopProgressDialog();
@@ -124,7 +123,7 @@ class DataViewWorkerThread extends SwingWorker {
         }
         dataOutputPanel.refreshButton.setEnabled(true);
         dataOutputPanel.refreshField.setEnabled(true);
-        if (this.dbTable instanceof SQLDBTable) {
+        if (this.dbTable instanceof SQLDBTable){
             if (((dataOutputPanel.nowCount - dataOutputPanel.maxRows) > 0) && (dataOutputPanel.totalCount != 0)) {
                 dataOutputPanel.first.setEnabled(true);
                 dataOutputPanel.previous.setEnabled(true);
@@ -152,10 +151,10 @@ class DataViewWorkerThread extends SwingWorker {
             }
             dataOutputPanel.insert.setEnabled(true);
         } else {
-            dataOutputPanel.first.setEnabled(false);
-            dataOutputPanel.next.setEnabled(false);
-            dataOutputPanel.last.setEnabled(false);
-            dataOutputPanel.previous.setEnabled(false);
+            dataOutputPanel.first.setEnabled(true);
+            dataOutputPanel.next.setEnabled(true);
+            dataOutputPanel.last.setEnabled(true);
+            dataOutputPanel.previous.setEnabled(true);
             dataOutputPanel.commit.setEnabled(false);
             dataOutputPanel.deleteRow.setEnabled(false);
             dataOutputPanel.insert.setEnabled(false);
@@ -223,11 +222,11 @@ class DataViewWorkerThread extends SwingWorker {
             String psSql = SQLUtils.createPreparedStatement(sql, attribMap, paramList);
             PreparedStatement pstmt = conn.prepareStatement(psSql);
             SQLUtils.populatePreparedStatement(pstmt, attribMap, paramList);
-            mLogger.infoNoloc(mLoc.t("PRSR155: Select statement used for show data:{0}for {1}", DataOutputPanel.NL, sql));
+            mLogger.infoNoloc(mLoc.t("EDIT175: Select statement used for show data:{0}for {1}", DataOutputPanel.NL, sql));
             ResultSet rs = pstmt.executeQuery();
 
             dataOutputPanel.queryView.setEditable(true);
-            dataOutputPanel.queryView.setResultSet(rs, dataOutputPanel.maxRows, dataOutputPanel.nowCount - 1);
+            dataOutputPanel.queryView.setResultSet(rs, dataOutputPanel.maxRows, dataOutputPanel.nowCount-1);
 
             rs.close();
             pstmt.close();
@@ -235,7 +234,7 @@ class DataViewWorkerThread extends SwingWorker {
             context.putClientProperty("limit", "");
             SQLPart sqlPart = db.getStatements().getRowCountStatement(meta.getTable(), context);
             String countSql = db.getStatements().normalizeSQLForExecution(sqlPart).getSQL();
-            mLogger.infoNoloc(mLoc.t("PRSR156: Select count(*) statement used for total rows:{0}for {1}", DataOutputPanel.NL, countSql));
+            mLogger.infoNoloc(mLoc.t("EDIT176: Select count(*) statement used for total rows:{0}for {1}", DataOutputPanel.NL, countSql));
             paramList.clear();
             psSql = SQLUtils.createPreparedStatement(countSql, attribMap, paramList);
             pstmt = conn.prepareStatement(psSql);
@@ -252,7 +251,7 @@ class DataViewWorkerThread extends SwingWorker {
 
         } catch (Exception e) {
             this.errMsg = e.getMessage();
-            mLogger.errorNoloc(mLoc.t("PRSR157: Can\'t get contents for table{0}", ((dbTable != null) ? dbTable.getDisplayName() : "")), e);
+            mLogger.errorNoloc(mLoc.t("EDIT177: Cannot get contents for table{0}", ((dbTable != null) ? dbTable.getDisplayName() : "")), e);
             dataOutputPanel.queryView.clearView();
             dataOutputPanel.totalRowsLabel.setText("0");
         } finally {
@@ -355,7 +354,7 @@ class DataViewWorkerThread extends SwingWorker {
             } catch (SQLException e) {
             }
         } catch (Exception ex1) {
-            mLogger.errorNoloc(mLoc.t("PRSR158: Can\'t get contents for table{0}", ((dbTable != null) ? dbTable.getDisplayName() : "")), ex1);
+            mLogger.errorNoloc(mLoc.t("EDIT177: Cannot get contents for table{0}", ((dbTable != null) ? dbTable.getDisplayName() : "")), ex1);
             dataOutputPanel.queryView.clearView();
             dataOutputPanel.totalRowsLabel.setText("0");
         } finally {
@@ -401,7 +400,7 @@ class DataViewWorkerThread extends SwingWorker {
                 } catch (ClassNotFoundException e) {
                 }
                 conn = DBExplorerUtil.createConnection("org.axiondb.jdbc.AxionDriver", "jdbc:axiondb:joinview", "sa", "sa");
-                stmt = conn.createStatement();
+                stmt = conn.createStatement();        
                 it = joinView.getSourceTables().iterator();
                 StatementContext joinContext = new StatementContext();
                 while (it.hasNext()) {
@@ -437,7 +436,7 @@ class DataViewWorkerThread extends SwingWorker {
             stmt = conn.createStatement();
             rs = stmt.executeQuery(buf.toString().trim());
             dataOutputPanel.queryView.setEditable(false);
-            dataOutputPanel.queryView.setResultSet(rs, dataOutputPanel.recordToRefresh, 0);
+            dataOutputPanel.queryView.setResultSet(rs, dataOutputPanel.maxRows,dataOutputPanel.nowCount-1);
             rs.close();
             stmt.close();
             try {
@@ -447,11 +446,12 @@ class DataViewWorkerThread extends SwingWorker {
             } catch (SQLException e) {
             }
         } catch (Exception e) {
-            mLogger.errorNoloc(mLoc.t("PRSR159: Can\'t get contents for table{0}", ((dbTable != null) ? dbTable.getDisplayName() : "")), e);
+            mLogger.errorNoloc(mLoc.t("EDIT177: Cannot get contents for table{0}", ((dbTable != null) ? dbTable.getDisplayName() : "")), e);
             dataOutputPanel.queryView.clearView();
             dataOutputPanel.totalRowsLabel.setText("0");
         } finally {
             closeConnection(conn);
         }
+        
     }
 }
