@@ -60,22 +60,20 @@ import org.openide.filesystems.FileUtil;
 public final class TestEntry {
     
     private static final String JAR_NAME = "tests.jar"; // NOI18N
-    private static final String QA_FUNCTIONAL = "qa-functional"; // NOI18N
-    private static final String UNIT = "unit"; // NOI18N;
-    /** Hardcoded location of testdistribution relatively to nb cvs. */
+    /** Hardcoded location of testdistribution relatively to nb source root. */
     private static final String TEST_DIST_DIR = "nbbuild/build/testdist"; // NOI18N;
     private final String codeNameBase;
-    private final boolean unit;
+    private final String testType;
     private final String cluster;
     private final File jarFile;
     
     /**
      * Creates a new instance of TestEntry
      */
-    private TestEntry(File jarFile,String codeNameBase,boolean unit,String cluster) {
+    private TestEntry(File jarFile, String codeNameBase, String testType, String cluster) {
         this.jarFile = jarFile;
         this.codeNameBase = codeNameBase;
-        this.unit = unit;
+        this.testType = testType;
         this.cluster = cluster;
         
     }
@@ -95,15 +93,7 @@ public final class TestEntry {
                String cnb = tokens[len - 2].replace('-','.') ;
                String cluster = tokens[len - 3];
                String testType = tokens[len - 4];
-               boolean unit = true;
-               if (!testType.equals(UNIT)) {
-                   if (testType.equals(QA_FUNCTIONAL)) {
-                       unit = false;
-                   } else {
-                       return null;
-                   }
-               }
-               return new TestEntry(jarFile,cnb,unit,cluster);
+               return new TestEntry(jarFile, cnb, testType, cluster);
             }
         }
         return null;
@@ -111,10 +101,6 @@ public final class TestEntry {
     
     public String getCodeNameBase() {
         return codeNameBase;
-    }
-
-    public boolean isUnit() {
-        return unit;
     }
 
     public String getCluster() {
@@ -138,7 +124,7 @@ public final class TestEntry {
     public URL getSrcDir() throws IOException {
         String nborgPath = getNetBeansOrgPath();
         if (nborgPath != null) {
-            return new File(getNBCVSRoot(),nborgPath).toURI().toURL(); 
+            return new File(getNBRoot(),nborgPath).toURI().toURL(); 
         } 
         File prjDir = getTestDistRoot();
         // find parent when dir was not created
@@ -158,7 +144,7 @@ public final class TestEntry {
                     if (p instanceof NbModuleProject) {
                         NbModuleProject nbm = (NbModuleProject) p;
                         if (nbm != null && nbm.getCodeNameBase().equals(getCodeNameBase())) {
-                            FileObject file = (isUnit()) ? nbm.getTestSourceDirectory() : nbm.getFunctionalTestSourceDirectory();
+                            FileObject file = nbm.getTestSourceDirectory(testType);
                             if (file != null) {
                                 return file.getURL();
                             }
@@ -170,21 +156,21 @@ public final class TestEntry {
         return null;
     }
     
-    File getNBCVSRoot() {
+    File getNBRoot() {
         File rootDir = getTestDistRoot();
         String path = rootDir.getAbsolutePath().replace(File.separatorChar,'/');
-        File nbcvs = null;
-        // hardcoded location of testdistribution relatively to nb cvs
+        File nbroot = null;
+        // hardcoded location of testdistribution relatively to nb source root
         if (path.endsWith(TEST_DIST_DIR)) { 
-            nbcvs = rootDir.getParentFile().getParentFile().getParentFile();
+            nbroot = rootDir.getParentFile().getParentFile().getParentFile();
         }
-        return nbcvs;
+        return nbroot;
     } 
     
     public String getNetBeansOrgPath () throws IOException {
-        File nbcvs =  getNBCVSRoot();
-        if (nbcvs != null && ModuleList.isNetBeansOrg(nbcvs) ) {
-            ModuleList list = ModuleList.findOrCreateModuleListFromNetBeansOrgSources(nbcvs);
+        File nbroot =  getNBRoot();
+        if (nbroot != null && ModuleList.isNetBeansOrg(nbroot) ) {
+            ModuleList list = ModuleList.findOrCreateModuleListFromNetBeansOrgSources(nbroot);
             ModuleEntry entry = list.getEntry(codeNameBase);
             if (entry == null) {
                 return null;
@@ -195,7 +181,7 @@ public final class TestEntry {
     }
 
     public String getTestType() {
-        return (isUnit()) ? UNIT : QA_FUNCTIONAL;
+        return testType;
     }
 
     /** 
