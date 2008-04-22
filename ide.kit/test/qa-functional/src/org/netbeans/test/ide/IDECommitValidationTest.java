@@ -41,7 +41,9 @@
 
 package org.netbeans.test.ide;
 
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestSuite;
 
 /**
@@ -50,45 +52,44 @@ import org.netbeans.junit.NbTestSuite;
  *
  * @author Jiri.Skrivanek@sun.com
  */
-public class IDECommitValidation extends JellyTestCase {
+public class IDECommitValidationTest extends JellyTestCase {
     
     
     /** Need to be defined because of JUnit */
-    public IDECommitValidation(String name) {
+    public IDECommitValidationTest(String name) {
         super(name);
     }
     
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new IDEValidation("testInitGCProjects"));
-        suite.addTest(new IDEValidation("testMainMenu"));
-        suite.addTest(new IDEValidation("testHelp"));
-        suite.addTest(new IDEValidation("testOptions"));
-        suite.addTest(new IDEValidation("testNewProject"));
+    public static Test suite() {
+        NbModuleSuite.Configuration conf = NbModuleSuite.createConfiguration(
+            IDEValidation.class
+        ).clusters(".*").enableModules(".*");
+
+        
+        if (System.getProperty("xtest.ide.blacklist") != null) {
+            conf = conf.addTest("testBlacklistedClassesHandler");
+        }
+        conf = conf.addTest("testInitGCProjects");
+        conf = conf.addTest("testMainMenu");
+        conf = conf.addTest("testHelp");
+        conf = conf.addTest("testOptions");
+        conf = conf.addTest("testNewProject");
         // sample project must exist before testShortcuts
-        suite.addTest(new IDEValidation("testShortcuts"));
-        suite.addTest(new IDEValidation("testNewFile"));
-        suite.addTest(new IDEValidation("testCVSLite"));
-        suite.addTest(new IDEValidation("testProjectsView"));
-        suite.addTest(new IDEValidation("testFilesView"));
-        suite.addTest(new IDEValidation("testEditor"));
-        suite.addTest(new IDEValidation("testBuildAndRun"));
-        suite.addTest(new IDEValidation("testDebugging"));
-        suite.addTest(new IDEValidation("testJUnit"));
-        suite.addTest(new IDEValidation("testXML"));
-        suite.addTest(new IDEValidation("testDb"));
-        suite.addTest(new IDEValidation("testWindowSystem"));
-        suite.addTest(new IDEValidation("testGCProjects"));
+        conf = conf.addTest("testShortcuts");
+        conf = conf.addTest("testNewFile");
+        conf = conf.addTest("testCVSLite");
+        conf = conf.addTest("testProjectsView");
+        conf = conf.addTest("testFilesView");
+        conf = conf.addTest("testEditor");
+        conf = conf.addTest("testBuildAndRun");
+        conf = conf.addTest("testDebugging");
+        conf = conf.addTest("testJUnit");
+        conf = conf.addTest("testXML");
+        conf = conf.addTest("testDb");
+        conf = conf.addTest("testWindowSystem");
+        conf = conf.addTest("testGCProjects");
         // not in commit suite because it needs net connectivity
         // suite.addTest(new IDEValidation("testPlugins"));
-        return suite;
-    }
-    
-    /** Use for execution inside IDE */
-    public static void main(java.lang.String[] args) {
-        // run whole suite
-        junit.textui.TestRunner.run(suite());
-        // run only selected test case
-        //junit.textui.TestRunner.run(new IDEValidation("testMainMenu"));
+        return NbModuleSuite.create(conf);
     }
 }
