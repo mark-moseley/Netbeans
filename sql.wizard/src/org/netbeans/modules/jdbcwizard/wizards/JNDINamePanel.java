@@ -38,6 +38,7 @@
 package org.netbeans.modules.jdbcwizard.wizards;
 
 import java.awt.Component;
+import java.awt.FlowLayout;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -48,10 +49,13 @@ import java.io.FileOutputStream;
 
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ChangeEvent;
+import javax.swing.SwingConstants;
 
 import org.openide.NotifyDescriptor;
 import org.openide.WizardDescriptor;
 import org.openide.util.HelpCtx;
+
+import org.openide.util.NbBundle;
 
 import org.netbeans.modules.jdbcwizard.builder.dbmodel.DBColumn;
 import org.netbeans.modules.jdbcwizard.builder.dbmodel.DBTable;
@@ -98,22 +102,12 @@ public class JNDINamePanel extends javax.swing.JPanel implements WizardDescripto
         this.jTextField1 = new javax.swing.JTextField();
         this.jTextField1.setText(JNDINamePanel.JNDI_DEFAULT_NAME);
 
-        this.jLabel1.setText("JNDI Name:");
+        this.jLabel1.setText(NbBundle.getMessage(JDBCWizardTablePanel.class,"LBL_JNDI_NAME"));
+		this.jLabel1.setHorizontalAlignment(SwingConstants.RIGHT);
 
-        org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
-        this.setLayout(layout);
-        layout.setHorizontalGroup(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING).add(
-                layout.createSequentialGroup().add(55, 55, 55).add(this.jLabel1,
-                        org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 70,
-                        org.jdesktop.layout.GroupLayout.PREFERRED_SIZE).add(28, 28, 28).add(this.jTextField1,
-                        org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 179,
-                        org.jdesktop.layout.GroupLayout.PREFERRED_SIZE).addContainerGap(68, Short.MAX_VALUE)));
-        layout.setVerticalGroup(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING).add(
-                layout.createSequentialGroup().add(133, 133, 133).add(
-                        layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE).add(this.jLabel1).add(
-                                this.jTextField1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE,
-                                org.jdesktop.layout.GroupLayout.DEFAULT_SIZE,
-                                org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)).addContainerGap(128, Short.MAX_VALUE)));
+		this.setLayout(new FlowLayout());
+		this.add(jLabel1);
+		this.add(jTextField1);
     }
 
     /**
