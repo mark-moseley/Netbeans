@@ -9,13 +9,18 @@ package org.netbeans.modules.debugger.jpda.ui.debugging;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -43,7 +48,9 @@ import org.openide.explorer.ExplorerUtils;
 import org.openide.explorer.view.Visualizer;
 import org.openide.nodes.Node;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 import org.openide.util.Utilities;
+import org.openide.util.WeakListeners;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 
@@ -59,12 +66,14 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     private static final int ICON_WIDTH = 16;
     private static final int BAR_WIDTH = 8;
     
-    transient Color hitsPanelColor = new Color(255, 255, 153); // [TODO]
+    static final Color hitsPanelColor = new Color(255, 255, 153); // [TODO]
     private transient Color greenBarColor = new Color(189, 230, 170);
     private transient Color treeBackgroundColor = UIManager.getDefaults().getColor("Tree.background"); // NOI18N
     
     private transient ExplorerManager manager = new ExplorerManager();
     private transient ViewModelListener viewModelListener;
+    private Preferences preferences = NbPreferences.forModule(getClass()).node("debugging"); // NOI18N
+    private PreferenceChangeListener prefListener;
 
     private transient ImageIcon resumeIcon;
     private transient ImageIcon focusedResumeIcon;
@@ -74,7 +83,6 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     private transient ImageIcon pressedSuspendIcon;
     
     private DebugTreeView treeView;
-    private JPanel treePanel;
     private TapPanel tapPanel;
     private InfoPanel infoPanel;
     private JPDADebugger debugger;
@@ -90,15 +98,16 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
      */
     private static Reference<DebuggingView> instance = null;
     
-    
     /** Creates new form DebuggingView */
     public DebuggingView() {
-        setIcon (Utilities.loadImage ("org/netbeans/modules/debugger/jpda/resources/debugging.png")); // NOI18N
+        setIcon(Utilities.loadImage ("org/netbeans/modules/debugger/jpda/resources/debugging.png")); // NOI18N
         // Remember the location of the component when closed.
         putClientProperty("KeepNonPersistentTCInModelWhenClosed", Boolean.TRUE); // NOI18N
         
         initComponents();
     
+        setSuspendTableVisible(preferences.getBoolean(FiltersDescriptor.SHOW_SUSPEND_TABLE, true));
+        
         threadsListener = new ThreadsListener(this);
         
         resumeIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_16.png"));
@@ -110,33 +119,37 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         
         treeView = new DebugTreeView();
         treeView.setRootVisible(false);
-//        treeView.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
-//        treeView.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+        treeView.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        treeView.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
 
-        treePanel = new ZebraPanel(12,12);
-        mainPanel.add(treePanel, BorderLayout.CENTER);
-        
-        treePanel.setLayout(new BorderLayout());
-        treePanel.add(treeView, BorderLayout.CENTER);
+        mainPanel.add(treeView, BorderLayout.CENTER);
         
         tapPanel = new TapPanel();
-        tapPanel.setBackground(hitsPanelColor);
         tapPanel.setOrientation(TapPanel.DOWN);
-        // tapPanel.setExpanded(false);
+        tapPanel.setExpanded(true);
         // tooltip
-        KeyStroke toggleKey = KeyStroke.getKeyStroke(KeyEvent.VK_T,
-            Toolkit.getDefaultToolkit().getMenuShortcutKeyMask());
+        KeyStroke toggleKey = KeyStroke.getKeyStroke(KeyEvent.VK_T, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()); // [TODO]
         String keyText = Utilities.keyToString(toggleKey);
-        tapPanel.setToolTipText(NbBundle.getMessage(DebuggingView.class, "LBL_TapPanel", keyText)); //NOI18N
-        mainPanel.add(tapPanel, BorderLayout.SOUTH);
         
+        tapPanel.setToolTipText(NbBundle.getMessage(DebuggingView.class, "LBL_TapPanel", keyText)); //NOI18N
         infoPanel = new InfoPanel(tapPanel);
         tapPanel.add(infoPanel);
+        add(tapPanel, BorderLayout.SOUTH);
         
+        treeView.setHorizontalScrollBar(treeScrollBar);
+        
+//        remove(scrollBarPanel);
+//        scrollBarPanel.setVisible(false);
+
         manager.addPropertyChangeListener(this);
         treeView.addTreeExpansionListener(this);
         TreeModel model = treeView.getTree().getModel();
         model.addTreeModelListener(this);
+        
+        prefListener = new DebuggingPreferenceChangeListener();
+        preferences.addPreferenceChangeListener(WeakListeners.create(PreferenceChangeListener.class, prefListener, preferences));
+        
+        // [TODO] do not hardcode component sizes
     }
  
     /** This method is called from within the constructor to
@@ -148,16 +161,26 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
+        sessionComboBox = new javax.swing.JComboBox();
         mainScrollPane = new javax.swing.JScrollPane();
         mainPanel = new javax.swing.JPanel();
         leftPanel = new javax.swing.JPanel();
         rightPanel = new javax.swing.JPanel();
-        sessionComboBox = new javax.swing.JComboBox();
+        scrollBarPanel = new javax.swing.JPanel();
+        treeScrollBar = new javax.swing.JScrollBar();
+        leftPanel1 = new javax.swing.JPanel();
+        rightPanel1 = new javax.swing.JPanel();
 
         setLayout(new java.awt.BorderLayout());
 
+        sessionComboBox.setMaximumRowCount(1);
+        sessionComboBox.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Java Project" }));
+        sessionComboBox.setMaximumSize(new java.awt.Dimension(32767, 20));
+        add(sessionComboBox, java.awt.BorderLayout.NORTH);
+
         mainScrollPane.setBorder(null);
         mainScrollPane.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        mainScrollPane.setPreferredSize(new java.awt.Dimension(32, 10));
 
         mainPanel.setLayout(new java.awt.BorderLayout());
 
@@ -171,22 +194,40 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         rightPanel.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 0, 0));
         mainPanel.add(rightPanel, java.awt.BorderLayout.EAST);
 
-        sessionComboBox.setMaximumRowCount(1);
-        sessionComboBox.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Java Project" }));
-        mainPanel.add(sessionComboBox, java.awt.BorderLayout.NORTH);
-
         mainScrollPane.setViewportView(mainPanel);
 
         add(mainScrollPane, java.awt.BorderLayout.CENTER);
+
+        scrollBarPanel.setMaximumSize(new java.awt.Dimension(2147483647, 17));
+        scrollBarPanel.setLayout(new java.awt.BorderLayout());
+
+        treeScrollBar.setOrientation(javax.swing.JScrollBar.HORIZONTAL);
+        scrollBarPanel.add(treeScrollBar, java.awt.BorderLayout.CENTER);
+
+        leftPanel1.setBackground(new java.awt.Color(255, 102, 255));
+        leftPanel1.setPreferredSize(new java.awt.Dimension(8, 0));
+        leftPanel1.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0));
+        scrollBarPanel.add(leftPanel1, java.awt.BorderLayout.WEST);
+
+        rightPanel1.setBackground(new java.awt.Color(255, 102, 255));
+        rightPanel1.setPreferredSize(new java.awt.Dimension(24, 0));
+        rightPanel1.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 0, 0));
+        scrollBarPanel.add(rightPanel1, java.awt.BorderLayout.EAST);
+
+        add(scrollBarPanel, java.awt.BorderLayout.SOUTH);
     }// </editor-fold>//GEN-END:initComponents
 
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPanel leftPanel;
+    private javax.swing.JPanel leftPanel1;
     private javax.swing.JPanel mainPanel;
     private javax.swing.JScrollPane mainScrollPane;
     private javax.swing.JPanel rightPanel;
+    private javax.swing.JPanel rightPanel1;
+    private javax.swing.JPanel scrollBarPanel;
     private javax.swing.JComboBox sessionComboBox;
+    private javax.swing.JScrollBar treeScrollBar;
     // End of variables declaration//GEN-END:variables
 
     public void setRootContext(Models.CompoundModel model, DebuggerEngine engine) {
@@ -236,6 +277,10 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         }
         return view;
     }
+
+    public void setSuspendTableVisible(boolean visible) {
+        rightPanel.setVisible(visible);
+    }
     
     /**
      * Singleton accessor reserved for the window systemm only. The window
@@ -278,18 +323,10 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             viewModelListener.setUp();
             return;
         }
-//        if (debuggingPanel == null) {
-//            setLayout(new BorderLayout ());
-//            debuggingPanel = new DebuggingPanel();
-//            debuggingPanel.setName(NbBundle.getMessage (DebuggingView2.class, "CTL_Debugging_tooltip")); // NOI18N
-//            add(debuggingPanel, BorderLayout.CENTER);
-//        }
-        if (viewModelListener != null)
+        if (viewModelListener != null) {
             throw new InternalError ();
-        viewModelListener = new ViewModelListener (
-            "DebuggingView",
-            this
-        );
+        }
+        viewModelListener = new ViewModelListener ("DebuggingView", this);
     }
     
     @Override
@@ -373,6 +410,10 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     // **************************************************************************
     // **************************************************************************
     
+    InfoPanel getInfoPanel() {
+        return infoPanel;
+    }
+    
     void refreshView() {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
@@ -381,22 +422,30 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
                 int sy = 0;
                 int sx = (rightPanel.getWidth() - ICON_WIDTH) / 2;
                 JPDAThread currentThread = debugger != null ? debugger.getCurrentThread() : null;
+                int mainPanelHeight = 0;
+                int treeViewWidth = 0;
                 boolean isCurrent = false;
+                boolean isAtBreakpoint = false;
                 for (TreePath path : treeView.getVisiblePaths()) {
                     Node node = Visualizer.findNode(path.getLastPathComponent());
                     JPDAThread jpdaThread = node.getLookup().lookup(JPDAThread.class);
                     if (jpdaThread != null) {
                         isCurrent = jpdaThread == currentThread;
+                        isAtBreakpoint = infoPanel.isBreakpointHit(jpdaThread);
                     }
                     
                     JTree tree = treeView.getTree();
                     Rectangle rect = tree.getRowBounds(tree.getRowForPath(path));
-                    int height = (int)Math.round(rect.getHeight());
+                    int height = rect != null ? (int)Math.round(rect.getHeight()) : 0; // [TODO] NPE
+                    mainPanelHeight += height;
+                    treeViewWidth = Math.max(treeViewWidth, (int)Math.round(rect.getX() + rect.getWidth()));
                     
                     JComponent label = new JPanel();
                     label.setPreferredSize(new Dimension(BAR_WIDTH, height));
                     if (isCurrent) {
                         label.setBackground(greenBarColor);
+                    } else if (isAtBreakpoint) {
+                        label.setBackground(hitsPanelColor);
                     } else {
                         label.setBackground(treeBackgroundColor);
                         label.setOpaque(false);
@@ -419,6 +468,12 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
                 leftPanel.repaint();
                 rightPanel.revalidate();
                 rightPanel.repaint();
+                treeView.getTree().setPreferredSize(new Dimension(treeViewWidth, 10)); // [TODO] 10
+                mainPanel.setPreferredSize(new Dimension(10, mainPanelHeight)); // [TODO] 10
+                treeView.getTree().revalidate(); // [TODO] reduce revalidate calls
+                treeView.revalidate();
+                mainScrollPane.revalidate();
+                mainPanel.revalidate();
                 
                 sessionComboBox.removeAllItems();
                 Node root = manager.getRootContext();
@@ -435,13 +490,18 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             }
         });
     }
+
+    // **************************************************************************
     
-    void refreshBreakpointHits() {
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                infoPanel.refreshBreakpointHits(threadsListener.getHitsCount());
+    private final class DebuggingPreferenceChangeListener implements PreferenceChangeListener {
+
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            String key = evt.getKey();
+            if (FiltersDescriptor.SHOW_SUSPEND_TABLE.equals(key)) {
+                setSuspendTableVisible(evt.getNewValue().equals("true")); // [TODO]
             }
-        });
+        }
+
     }
     
 }
