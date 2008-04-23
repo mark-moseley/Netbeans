@@ -46,6 +46,7 @@ import java.util.List;
 import org.netbeans.modules.mercurial.FileInformation;
 import org.netbeans.modules.mercurial.FileStatus;
 import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.mercurial.OutputLogger;
 import org.netbeans.modules.mercurial.util.HgUtils;
 
 /**
@@ -53,10 +54,10 @@ import org.netbeans.modules.mercurial.util.HgUtils;
  * @author jr140578
  */
 public class HgLogMessage {
-    private char mod = 'M';
-    private char add = 'A';
-    private char del = 'R';
-    private char copy = 'C';
+    public static char HgModStatus = 'M';
+    public static char HgAddStatus = 'A';
+    public static char HgDelStatus = 'R';
+    public static char HgCopyStatus = 'C';
     
     private List<HgLogMessageChangedPath> mpaths;
     private List<HgLogMessageChangedPath> apaths;
@@ -67,6 +68,8 @@ public class HgLogMessage {
     private String desc;
     private Date date;
     private String id;
+    private String timeZoneOffset;
+    
     public HgLogMessage(String changeset){
     }
     
@@ -80,36 +83,39 @@ public class HgLogMessage {
         splits = date.split(" ");
         this.date = new Date(Long.parseLong(splits[0]) * 1000); // UTC in miliseconds       
         this.id = id;
-        this.mpaths = new ArrayList();
-        this.apaths = new ArrayList();
-        this.dpaths = new ArrayList();
-        this.cpaths = new ArrayList();
+        this.mpaths = new ArrayList<HgLogMessageChangedPath>();
+        this.apaths = new ArrayList<HgLogMessageChangedPath>();
+        this.dpaths = new ArrayList<HgLogMessageChangedPath>();
+        this.cpaths = new ArrayList<HgLogMessageChangedPath>();
         
-        if( fm != null && !fm.equals("")){
-            splits = fm.split(" ");
-            for(String s: splits){
-                this.mpaths.add(new HgLogMessageChangedPath(s, mod));             
-                logCopied(s);
-            }
-        }
         if( fa != null && !fa.equals("")){
             splits = fa.split(" ");
             for(String s: splits){
-                this.apaths.add(new HgLogMessageChangedPath(s, add));                
+                this.apaths.add(new HgLogMessageChangedPath(s, HgAddStatus));                
                 logCopied(s);
+            }
+        }    
+        if( fm != null && !fm.equals("")){
+            splits = fm.split(" ");
+            for(String s: splits){
+                //#132984: range of issues with upgrade to Hg 1.0, incorrectly reporting files as added and modified in same changeset
+                if(!this.apaths.contains(s)){
+                    this.mpaths.add(new HgLogMessageChangedPath(s, HgModStatus));             
+                    logCopied(s);
+                }
             }
         }
         if( fd != null && !fd.equals("")){
             splits = fd.split(" ");
             for(String s: splits){
-                this.dpaths.add(new HgLogMessageChangedPath(s, del));                
+                this.dpaths.add(new HgLogMessageChangedPath(s, HgDelStatus));                
                 logCopied(s);
             }
         }
         if( fc != null && !fc.equals("")){
             splits = fc.split(" ");
             for(String s: splits){
-                this.cpaths.add(new HgLogMessageChangedPath(s, copy));                
+                this.cpaths.add(new HgLogMessageChangedPath(s, HgCopyStatus));                
                 logCopied(s);
             }
         }
@@ -120,13 +126,15 @@ public class HgLogMessage {
         FileInformation fi = Mercurial.getInstance().getFileStatusCache().getStatus(file);
         FileStatus fs = fi != null? fi.getStatus(file): null;
         if (fs != null && fs.isCopied()) {
-            HgUtils.outputMercurialTabInRed("*** Copied: " + s + " : " +
-                    fs.getFile() != null ? fs.getFile().getAbsolutePath() : "no filepath");
+            OutputLogger logger = OutputLogger.getLogger(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE);
+            
+            logger.outputInRed("*** Copied: " + s + " : " + fs.getFile() != null ? fs.getFile().getAbsolutePath() : "no filepath");
+            logger.closeLog();
         }
     }
     
     public HgLogMessageChangedPath [] getChangedPaths(){
-        List<HgLogMessageChangedPath> paths = new ArrayList();
+        List<HgLogMessageChangedPath> paths = new ArrayList<HgLogMessageChangedPath>();
         if(!mpaths.isEmpty()) paths.addAll(mpaths);
         if(!apaths.isEmpty()) paths.addAll(apaths);
         if(!dpaths.isEmpty()) paths.addAll(dpaths);
@@ -136,14 +144,35 @@ public class HgLogMessage {
     public String getRevision() {
         return rev;
     }
+    public long getRevisionAsLong() {
+        long revLong;
+        try{
+            revLong = Long.parseLong(rev);
+        }catch(NumberFormatException ex){
+            // Ignore number format errors
+            return 0;
+        }
+        return revLong;
+    }
+    
     public Date getDate() {
         return date;
     }
     public String getAuthor() {
         return author;
     }
+    public String getCSetShortID() {
+        return id;
+    }
     public String getMessage() {
         return desc;
+    }
+    public String getTimeZoneOffset() {
+        return timeZoneOffset;
+    }
+
+    public void setTimeZoneOffset(String timeZoneOffset) {
+        this.timeZoneOffset = timeZoneOffset;
     }
     
     @Override
