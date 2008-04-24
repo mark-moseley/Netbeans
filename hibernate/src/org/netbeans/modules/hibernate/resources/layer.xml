@@ -135,17 +135,26 @@ made subject to such option by the copyright holder.
                     <file name="org-openide-actions-DeleteAction.instance">
                         <attr name="position" intvalue="900"/>
                     </file>
-                    <file name="org-openide-actions-RenameAction.instance">
+                    <file name="sep-3.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1000"/>
                     </file>
-                    <file name="sep-3.instance">
+                    <file name="RefactoringWhereUsed.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.refactoring.api.ui.RefactoringActionsFactory.whereUsedAction"/>
+                        <attr name="position" intvalue="1050"/>
+                    </file>
+                    <file name="RefactoringAll.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.refactoring.api.ui.RefactoringActionsFactory.popupSubmenuAction"/>
+                        <attr name="position" intvalue="1100"/>
+                    </file>
+                    <file name="sep-4.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1200"/>
                     </file>
                     <file name="org-openide-actions-SaveAsTemplateAction.instance">
                         <attr name="position" intvalue="1300"/>
                     </file>
-                    <file name="sep-4.instance">
+                    <file name="sep-5.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1400"/>
                     </file>
@@ -155,7 +164,7 @@ made subject to such option by the copyright holder.
                     <file name="org-netbeans-modules-xml-tools-actions-ValidateAction.instance">
                         <attr name="position" intvalue="1600"/>
                     </file>
-                    <file name="sep-5.instance">
+                    <file name="sep-6.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1700"/>
                     </file> 
@@ -259,6 +268,14 @@ made subject to such option by the copyright holder.
    		<attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/hibernate/resources/HibernateMappingFile.html"/>
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.hibernate.resources.Bundle"/>
             </file>
+            <file name="Hibernate.reveng.xml" url="HibernateReveng.xml">
+                <attr name="position" intvalue="300"/>
+                <attr name="template" boolvalue="true"/>
+                <!--attr name="instantiatingIterator" methodvalue="org.netbeans.modules.hibernate.wizards.HibernateMappingWizard.create"/-->
+                <attr name="templateCategory" stringvalue="web-types"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/hibernate/resources/HibernateRevengFile.html"/>
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.hibernate.resources.Bundle"/>         
+            </file>
             <file name="HibernateUtil.java" url="HibernateUtil.javax">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.hibernate.resources.Bundle"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/java/resources/class.gif"/>
@@ -267,14 +284,8 @@ made subject to such option by the copyright holder.
                 <attr name="template" boolvalue="true"/>
                 <attr name="templateCategory" stringvalue="web-types"/>
                 <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/hibernate/resources/HibernateUtilFile.html"/>
-                <attr name="position" intvalue="300"/>
-            </file>
-        </folder>
-        <folder name="Other">
-            <file name="HibernateRevengTemplate.xml" url="HibernateRevengTemplate.xml">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.hibernate.resources.Bundle"/>
-                <attr name="template" boolvalue="true"/>
-            </file>
+                <attr name="position" intvalue="400"/>
+            </file>            
         </folder>
     </folder>
        <folder name="Editors">
@@ -335,4 +346,5 @@ made subject to such option by the copyright holder.
             </folder>
         </folder>
     </folder>
+   
 </filesystem>
