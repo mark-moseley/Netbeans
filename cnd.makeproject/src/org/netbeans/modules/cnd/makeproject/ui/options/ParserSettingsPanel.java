@@ -54,10 +54,11 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.makeproject.NativeProjectProvider;
+import org.netbeans.modules.cnd.ui.options.IsChangedListener;
 import org.netbeans.modules.cnd.ui.options.ToolsPanel;
 import org.openide.util.NbBundle;
 
-public class ParserSettingsPanel extends JPanel implements ChangeListener, ActionListener {
+public class ParserSettingsPanel extends JPanel implements ChangeListener, ActionListener, IsChangedListener {
 
     private HashMap predefinedPanels = new HashMap();
     private boolean updating = false;
@@ -81,6 +82,7 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
             // This gets called from commitValidation and tp is null - its not a run-time problem
             // because the "real" way we create this a ToolsPanel exists. But not the commitValidation way!
             tp.addCompilerSetChangeListener(this);
+            tp.addIsChangedListener(this);
         }
     }
 
@@ -122,11 +124,11 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
             toolSet.add(cppCompiler);
         }
         for (Tool tool : toolSet) {
-            PredefinedPanel predefinedPanel = (PredefinedPanel) predefinedPanels.get(tool.getPath());
+            PredefinedPanel predefinedPanel = (PredefinedPanel) predefinedPanels.get(compilerCollection.getName() + tool.getPath());
             if (predefinedPanel == null) {
                 predefinedPanel = new PredefinedPanel((CCCCompiler) tool, this);
-                predefinedPanels.put(tool.getPath(), predefinedPanel);
-                modified = true;
+                predefinedPanels.put(compilerCollection.getName() + tool.getPath(), predefinedPanel);
+                //modified = true; // See 126368
             }
             tabbedPane.addTab(tool.getDisplayName(), predefinedPanel);
         }
@@ -283,7 +285,7 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
         return isDataValid;
     }
 
-    boolean isChanged() {
+    public boolean isChanged() {
         boolean isChanged = false;
         PredefinedPanel[] viewedPanels = getPredefinedPanels();
         for (int i = 0; i < viewedPanels.length; i++) {
