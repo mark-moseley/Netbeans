@@ -49,6 +49,7 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JToggleButton;
 import org.netbeans.modules.debugger.jpda.ui.models.DebuggingMonitorModel;
+import org.netbeans.modules.debugger.jpda.ui.models.DebuggingNodeModel;
 import org.netbeans.modules.debugger.jpda.ui.models.DebuggingTreeModel;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
@@ -62,7 +63,7 @@ public final class FiltersDescriptor {
     public static final String SHOW_QUALIFIED_NAMES = "show_fqn";
     public static final String SHOW_MONITORS = "show_monitors";
     public static final String SHOW_SYSTEM_THREADS = "show_system_threads";
-    public static final String SHOW_SUSPEND_TABLE = "show_suspend_table";
+    public static final String SHOW_SUSPEND_TABLE = "show.suspend_table";
     public static final String SHOW_THREAD_GROUPS = "thread_group";
 
     /** List of <Item> describing filters properties */
@@ -238,6 +239,10 @@ public final class FiltersDescriptor {
                         !preferences.getBoolean(DebuggingTreeModel.SORT_SUSPEND, false); // [TODO]
             } else if (name.equals(SHOW_MONITORS)) {
                 isSelected = preferences.getBoolean(DebuggingMonitorModel.SHOW_MONITORS, false);
+            } else if (name.equals(SHOW_QUALIFIED_NAMES)) {
+                isSelected = preferences.getBoolean(DebuggingNodeModel.SHOW_PACKAGE_NAMES, false);
+            } else if (name.equals(SHOW_SUSPEND_TABLE)){
+                isSelected = preferences.getBoolean(SHOW_SUSPEND_TABLE, true);
             } else {
                 isSelected = false; // [TODO]
             }
@@ -254,6 +259,10 @@ public final class FiltersDescriptor {
                 keyName = DebuggingTreeModel.SORT_SUSPEND;
             } else if (name.equals(SHOW_MONITORS)) {
                 keyName = DebuggingMonitorModel.SHOW_MONITORS;
+            } else if (name.equals(SHOW_QUALIFIED_NAMES)) {
+                keyName = DebuggingNodeModel.SHOW_PACKAGE_NAMES;
+            } else if (name.equals(SHOW_SUSPEND_TABLE)) {
+                keyName = SHOW_SUSPEND_TABLE;
             }
             if (keyName != null) {
                 preferences.putBoolean(keyName, isSelected);
