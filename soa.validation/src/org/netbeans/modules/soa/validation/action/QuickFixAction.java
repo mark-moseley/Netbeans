@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.validation.action;
+package org.netbeans.modules.soa.validation.action;
 
 import java.awt.event.ActionEvent;
 import java.io.IOException;
@@ -47,20 +47,19 @@ import java.util.List;
 
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
-//import org.openide.text.DataEditorSupport;
+import org.openide.text.DataEditorSupport;
 import org.openide.windows.IOProvider;
 import org.openide.windows.InputOutput;
+import org.openide.windows.OutputWriter;
 
 import org.netbeans.modules.xml.xam.spi.Validation;
 import org.netbeans.modules.xml.xam.spi.Validation.ValidationType;
+import org.netbeans.modules.xml.xam.spi.Validator.ResultItem;
 
-import org.netbeans.modules.bpel.model.api.BpelModel;
-import org.netbeans.modules.bpel.core.helper.api.CoreUtil;
-import org.netbeans.modules.bpel.core.util.BPELValidationController;
-import org.netbeans.modules.bpel.validation.util.QuickFix;
-import org.netbeans.modules.bpel.validation.util.ResultItem;
-import org.netbeans.modules.bpel.validation.util.Util;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import org.netbeans.modules.soa.validation.core.Controller;
+import org.netbeans.modules.soa.validation.core.QuickFix;
+import org.netbeans.modules.soa.validation.core.QuickFixable;
+import static org.netbeans.modules.xml.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -72,94 +71,74 @@ public final class QuickFixAction extends IconAction {
     super(
       i18n(QuickFixAction.class, "CTL_Quick_Fix_Action"), // NOI18N
       i18n(QuickFixAction.class, "TLT_Quick_Fix_Action"), // NOI18N
-      icon(Util.class, "quickfix") // NOI18N
+      icon(QuickFixAction.class, "quickfix") // NOI18N
     );
   }
 
   public void actionPerformed(ActionEvent event) {
-    Node node = getSelectedNode();
-    BpelModel model = getBpelModel(node);
-    List<ResultItem> items = getResultItems(model);
-
-    if (items == null) {
-      items = new ArrayList<ResultItem>();
-    }
-//out("SIZE: " + items.size());
     InputOutput io = IOProvider.getDefault().getIO(i18n(QuickFixAction.class, "LBL_Quick_Fix_Window"), false); // NOI18N
+    OutputWriter out = io.getOut();
 
     try {
-      io.getOut().reset();
+      out.reset();
     }
     catch (IOException e) {
       e.printStackTrace();
     }
     io.select();
 
-    if (items.size() == 0) {
-      io.getOut().println(i18n(QuickFixAction.class, "MSG_Nothing_to_do")); // NOI18N
+    out.println(i18n(QuickFixAction.class, "MSG_Quick_Fix_started")); // NOI18N
+    doQuickFix(getQuickFixes(getSelectedNode()), out);
+    out.println();
+    out.print(i18n(QuickFixAction.class,"MSG_Quick_Fix_finished")); // NOI18N
+  }
+
+  private void doQuickFix(List<QuickFix> quickFixes, OutputWriter out) {
+    if (quickFixes.size() == 0) {
+      out.println();
+      out.println(i18n(QuickFixAction.class, "MSG_Nothing_to_do")); // NOI18N
       return;
     }
-    io.getOut().println(i18n(QuickFixAction.class, "MSG_Quick_Fix_started")); // NOI18N
-    QuickFix quickFix;
+    for (QuickFix quickFix: quickFixes) {
+      if (quickFix.canFix()) {
+        quickFix.doFix();
+      }
+      out.println();
+      out.println(i18n(QuickFixAction.class, "MSG_Quick_Fix", quickFix.getDescription())); // NOI18N
+    }
+  }
 
-    for (ResultItem item : items) {
-      quickFix = item.getQuickFix();
+  private List<QuickFix> getQuickFixes(Node node) {
+    List<QuickFix> quickFixes = new ArrayList<QuickFix>();
 
-      if (quickFix == null) {
+    if (node == null) {
+      return quickFixes;
+    }
+//out();
+//out("NODE: " + node);
+
+    if (myController == null) {
+      myController = node.getLookup().lookup(Controller.class);
+//out("CONTROLLER: " + myController);
+    }
+    if (myController == null) {
+//out("CONTROLLER is NULL");
+      return quickFixes;
+    }
+    List<ResultItem> result = myController.getResult();
+
+    for (ResultItem item : result) {
+      if ( !(item instanceof QuickFixable)) {
         continue;
       }
-      quickFix.doFix();
-      io.getOut().println();
-      io.getOut().println("Error: " + quickFix.getFixDescription());
-    }
-    io.getOut().println();
+      QuickFix quickFix = ((QuickFixable) item).getQuickFix();
 
-//1 Error(s),  0 Warning(s).
-
-    io.getOut().print(i18n(QuickFixAction.class,"MSG_Quick_Fix_finished")); // NOI18N
-//    io.select();
-  }
-
-  private BpelModel getBpelModel(Node node) {
-    DataObject data = getDataObject(node);
-
-    if (data == null) {
-      return null;
-    }
-    return CoreUtil.getBpelModel(data);
-  }
-
-// to do r?
-//  private List<ResultItem> getResultItems(Node node) {
-////out("MODE: " + node);
-//    if (myValidationController == null) {
-//      BPELDataEditorSupport support = (BPELDataEditorSupport) node.getLookup().lookup(DataEditorSupport.class);
-//      myValidationController = support.getValidationController();
-//    }
-//    if (myValidationController == null) {
-////out("CONTROLLER is NULL");
-//      return null;
-//    }
-//    return myValidationController.getResultItems();
-//  }
-
-  private List<ResultItem> getResultItems(BpelModel model) {
-    if (model == null) {
-      return null;
-    }
-    Validation validation = new Validation();
-    validation.validate(model, ValidationType.COMPLETE);
-
-    List<org.netbeans.modules.xml.xam.spi.Validator.ResultItem> items = validation.getValidationResult();
-    List<ResultItem> resultItems = new ArrayList<ResultItem>();
-
-    for (org.netbeans.modules.xml.xam.spi.Validator.ResultItem item : items) {
-      if (item instanceof ResultItem) {
-        resultItems.add((ResultItem) item);
+      if (quickFix != null) {
+        quickFixes.add(quickFix);
       }
     }
-    return resultItems;
+    return quickFixes;
   }
 
-  private BPELValidationController myValidationController;
+  private Controller myController;
 }

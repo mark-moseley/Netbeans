@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -40,11 +40,14 @@
  */
 package org.netbeans.modules.bpel.validation.reference;
 
+import java.util.LinkedList;
 import java.util.List;
-
+import org.netbeans.modules.xml.xam.Named;
 import org.netbeans.modules.xml.xam.Reference;
 import org.netbeans.modules.xml.xam.Referenceable;
 
+import org.netbeans.modules.soa.validation.core.QuickFix.Adapter;
+import org.netbeans.modules.soa.validation.util.SetUtil;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.api.NamedElement;
@@ -54,9 +57,7 @@ import org.netbeans.modules.bpel.model.api.VariableContainer;
 import org.netbeans.modules.bpel.model.api.VariableDeclaration;
 import org.netbeans.modules.bpel.model.api.VariableReference;
 import org.netbeans.modules.bpel.model.api.references.ReferenceCollection;
-import org.netbeans.modules.bpel.validation.util.QuickFix.Adapter;
-import org.netbeans.modules.bpel.validation.util.Util;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import static org.netbeans.modules.xml.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -86,25 +87,31 @@ class QuickFix {
       myName = name;
     }
 
-    public void doFix() {
-      Variable [] variables = getAppropriateVariables();
+    public boolean canFix() {
+      myVariables = getAppropriateVariables();
 
-      if (variables == null || variables.length == 0) {
-        myDescription = "No suggestions."; // NOI18N // todo
+      if (myVariables == null) {
+        return false;
       }
-      else if (variables.length == 1) {
-        myDescription = "Find ONE variable to: " + variables [0].getName(); // NOI18N // todo
-        // tdoo
-        myReference.setVariable(
-          ((ReferenceCollection) myReference).createReference(variables [0], VariableDeclaration.class));
+      if (myVariables.length == 0) {
+        return false;
       }
-      else {
-        myDescription = "Find variables: " + variables.length; // NOI18N // todo
-        // todo
+      if (myVariables.length != 1) { // todo m
+        return false;
       }
+      return true;
     }
 
-    public String getFixDescription() {
+    public void doFix() {
+      Variable variable = myVariables [0];
+
+      myDescription = i18n(QuickFix.class, "QUICK_FIX_Change_varibale_name", variable.getName()); // NOI18N
+
+      myReference.setVariable(
+        ((ReferenceCollection) myReference).createReference(variable, VariableDeclaration.class));
+    }
+
+    public String getDescription() {
       return myDescription; 
     }
 
@@ -129,7 +136,7 @@ class QuickFix {
       if (variables == null) {
         return null;
       }
-      List<NamedElement> named = Util.getAppropriate(variables, myName);
+      List<Named> named = SetUtil.getAppropriate(toList(variables), myName);
       Variable [] appropriate = new Variable [named.size()];
 
       for (int i=0; i < named.size(); i++) {
@@ -138,8 +145,18 @@ class QuickFix {
       return appropriate;
     }
 
+    private List<Named> toList(Variable [] elements) {
+      List<Named> list = new LinkedList<Named>();
+
+      for (NamedElement element : elements) {
+        list.add(element);
+      }
+      return list;
+    }
+
     private String myName;
     private String myDescription;
+    private Variable [] myVariables;
     private VariableReference myReference;
   }
 }

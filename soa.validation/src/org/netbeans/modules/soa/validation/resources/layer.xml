@@ -25,7 +25,7 @@
   Contributor(s):
 
   The Original Software is NetBeans. The Initial Developer of the Original
-  Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+  Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
   Microsystems, Inc. All Rights Reserved.
 
   If you wish your version of this file to be governed by only the CDDL
@@ -42,16 +42,8 @@
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.0//EN" "http://www.netbeans.org/dtds/filesystem-1_0.dtd">
 <filesystem>
     <folder name="Editors">
-        <folder name="text">
-            <folder name="x-bpel+xml">
-                <folder name="Toolbars">
-                    <folder name="Default">
-                        <file name="org-netbeans-modules-soa-validation-action-QuickFixAction.instance">
-                            <attr name="position" intvalue="19291"/>
-                        </file>
-                    </folder>
-                </folder>
-            </folder>
+        <folder name="AnnotationTypes">
+            <file name="validation-annotation.xml" url="validation-annotation.xml"/>
         </folder>
-    </folder>
+    </folder>    
 </filesystem>
