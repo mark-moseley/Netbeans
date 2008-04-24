@@ -59,6 +59,7 @@ import org.netbeans.modules.jdbcwizard.builder.model.OracleQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.DB2QueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.SQLServerQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.JdbcQueryGenerator;
+import org.netbeans.modules.jdbcwizard.builder.model.MySQLQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.util.XMLCharUtil;
 
 
@@ -363,8 +364,8 @@ public class WSDLGenerator {
             this.dbDataAccessObject = this.getQueryGenerator();
             this.dbDataAccessObject.init(this.mTable);
 
-            this.mTableName = this.mTable.getSchema()+"."+this.mTable.getName();
-
+            //this.mTableName = this.mTable.getSchema()+"."+this.mTable.getName();
+            this.mTableName = this.mTable.getName();
             // Generate Queries
             insertQuery = this.dbDataAccessObject.createInsertQuery();
             updateQuery = this.dbDataAccessObject.createUpdateQuery();
@@ -773,6 +774,8 @@ public class WSDLGenerator {
             objDataAccess = DB2QueryGenerator.getInstance();
         } else if (this.mDBType.equalsIgnoreCase("SQLServer")) {
             objDataAccess = SQLServerQueryGenerator.getInstance();
+        } else if (this.mDBType.equalsIgnoreCase("MYSQL")) {
+            objDataAccess = MySQLQueryGenerator.getInstance();
         }else {
             objDataAccess = JdbcQueryGenerator.getInstance();
         }
@@ -894,8 +897,9 @@ public class WSDLGenerator {
     private void writeWsdl() throws WSDLException {
         try {
             final WSDLWriter writer = WSDLGenerator.factory.newWSDLWriter();
-            final String outputFileName = this.wsdlFileLocation + "/" + this.mWSDLFileName + ".wsdl";
-            final Writer sink = new FileWriter(outputFileName);
+            final String outputFileName = this.wsdlFileLocation + File.separator + this.mWSDLFileName + ".wsdl";
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFileName);
+            final Writer sink = new java.io.OutputStreamWriter(fos);
             writer.writeWSDL(this.def, sink);
             WSDLGenerator.logger.log(Level.INFO, "Successfully generated wsdl file :" + outputFileName);
         } catch (final Exception e) {
