@@ -44,7 +44,6 @@ package org.netbeans.modules.form;
 import com.sun.source.tree.*;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.Trees;
-import java.lang.ref.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.beans.*;
@@ -59,6 +58,7 @@ import javax.lang.model.type.TypeKind;
 import javax.swing.JList;
 import javax.swing.JTable;
 import javax.swing.JComboBox;
+import javax.swing.JFormattedTextField;
 import javax.swing.JSlider;
 import javax.swing.JSpinner;
 import javax.swing.text.JTextComponent;
@@ -224,6 +224,15 @@ public class BindingDesignSupport {
             } else if (JSpinner.class.isAssignableFrom(clazz)) {
                 PropertyDescriptor desc = new PropertyDescriptor("value", JSpinner.class); // NOI18N
                 descs.add(desc);                
+            } else if (JFormattedTextField.class.isAssignableFrom(clazz)) {
+                for (PropertyDescriptor pd : descs) {
+                    if ("text".equals(pd.getName())) { // NOI18N
+                        descs.remove(pd);
+                        break;
+                    }
+                }
+                PropertyDescriptor desc = new PropertyDescriptor("value", JFormattedTextField.class); // NOI18N
+                descs.add(desc);
             }
         } catch (Exception ex) {
             Logger.getLogger(getClass().getName()).log(Level.INFO, ex.getMessage(), ex);
@@ -1004,10 +1013,12 @@ public class BindingDesignSupport {
                             title = capitalize(title);
                         }
                     }
-                    buf.append(columnVariable);
-                    buf.append(".setColumnName(\""); // NOI18N
-                    buf.append(title);
-                    buf.append("\");\n"); // NOI18N
+                    if ((title != null) && (!"null".equals(title))) { // NOI18N
+                        buf.append(columnVariable);
+                        buf.append(".setColumnName(\""); // NOI18N
+                        buf.append(title);
+                        buf.append("\");\n"); // NOI18N
+                    }
                     String columnClass = sub.getParameter(MetaBinding.TABLE_COLUMN_CLASS_PARAMETER);
                     if (columnClass != null) {
                         buf.append(columnVariable);
@@ -1420,7 +1431,7 @@ public class BindingDesignSupport {
         }
     }
 
-    private static String capitalize(String title) {
+    public static String capitalize(String title) {
         StringBuilder builder = new StringBuilder(title);
         boolean lastWasUpper = false;
         for (int i = 0; i < builder.length(); i++) {
