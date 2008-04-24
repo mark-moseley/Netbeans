@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,21 +42,22 @@
 package org.netbeans.modules.ruby.debugger;
 
 import java.io.File;
+import java.io.IOException;
+import junit.framework.AssertionFailedError;
 import org.netbeans.api.debugger.ActionsManager;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
+import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.api.ruby.platform.RubyPlatformManager;
-import org.netbeans.junit.MockServices;
 import org.netbeans.modules.ruby.debugger.breakpoints.RubyBreakpoint;
 import org.netbeans.modules.ruby.debugger.breakpoints.RubyBreakpointManager;
 import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
+import org.netbeans.modules.ruby.platform.gems.GemManager;
+import org.netbeans.modules.ruby.platform.spi.RubyDebuggerImplementation;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.RequestProcessor;
 
-/**
- * @author Martin Krauskopf
- */
 public final class RubyDebuggerTest extends TestBase {
     
     private static final boolean VERBOSE = false;
@@ -67,9 +68,9 @@ public final class RubyDebuggerTest extends TestBase {
     
     @Override
     protected void setUp() throws Exception {
+        clearWorkDir();
         super.setUp();
         watchStepping = false;
-        clearWorkDir();
     }
     
     public void testBasics() throws Exception {
@@ -330,7 +331,6 @@ public final class RubyDebuggerTest extends TestBase {
     }
     
 //    public void testDoNotStepIntoNonResolvedPath() throws Exception { // issue #106115
-//        MockServices.setServices(DialogDisplayerImpl.class, IFL.class);
 //        switchToJRuby();
 //        String[] testContent = {
 //            "require 'java'",
@@ -349,12 +349,64 @@ public final class RubyDebuggerTest extends TestBase {
 //        p.waitFor();
 //    }
     
-    public void testCheckAndTuneSettings() {
-        ExecutionDescriptor descriptor = new ExecutionDescriptor(RubyPlatformManager.getDefaultPlatform());
+    public void testCheckAndTuneSettings() throws IOException {
+        RubyPlatform jruby = RubyPlatformManager.getDefaultPlatform();
+        ExecutionDescriptor descriptor = new ExecutionDescriptor(jruby);
         // DialogDisplayerImpl.createDialog() assertion would fail if dialog is shown
         assertTrue("default setting OK with JRuby", RubyDebugger.checkAndTuneSettings(descriptor));
+        FileObject gemRepo = FileUtil.toFileObject(getWorkDir()).createFolder("gem-repo");
+        GemManager.initializeRepository(gemRepo);
+        File origGemHome = jruby.getGemManager().getGemHomeF();
+        try {
+            jruby.setGemHome(FileUtil.toFile(gemRepo));
+            jruby.getInfo().setGemPath("");
+            assertFalse("does not have fast debugger", jruby.hasFastDebuggerInstalled());
+
+            forceClassicDebugger(false);
+            try {
+                assertTrue("fail when no fast debugger available", RubyDebugger.checkAndTuneSettings(descriptor));
+            } catch (AssertionFailedError afe) {
+                // OK, expected
+            }
+
+            installFakeFastRubyDebugger(jruby);
+            assertTrue("succeed when fast debugger available", RubyDebugger.checkAndTuneSettings(descriptor));
+        } finally {
+            jruby.setGemHome(origGemHome);
+        }
+    }
+    
+    public void testJRubyFastDebugging() throws Exception {
+        forceClassicDebugger(false);
+        String[] testContent = {
+            "puts 'aaa'",
+            "puts 'bbb'",
+            "puts 'ccc'",
+            "puts 'ddd'",
+            "puts 'eee'",
+        };
+        File testF = createScript(testContent);
+        FileObject testFO = FileUtil.toFileObject(testF);
+        addBreakpoint(testFO, 2);
+        addBreakpoint(testFO, 4);
+        System.out.println("jruby: " + RubyPlatformManager.getDefaultPlatform());
+        Process p = startDebugging(testF, RubyPlatformManager.getDefaultPlatform());
+        doContinue(); // 2 -> 4
+        doAction(ActionsManager.ACTION_STEP_OVER); // 4 -> 5
+        doContinue(); // finish
+        p.waitFor();
     }
 
+    public void testRubiniusDebugging() throws IOException {
+        RubyPlatform rubinius = RubyPlatformManager.addPlatform(setUpRubinius());
+        ExecutionDescriptor descriptor = new ExecutionDescriptor(rubinius);
+        // DialogDisplayerImpl.createDialog() assertion would fail if dialog is shown
+        RubyDebuggerImplementation rdi = new RubyDebugger();
+        rdi.describeProcess(descriptor);
+        assertFalse("Rubinius debuggin is not supported yet", rdi.canDebug());
+        assertFalse("Rubinius debuggin is not supported yet", RubyDebugger.checkAndTuneSettings(descriptor));
+    }
+    
     private DebuggerEngine getEngineManager() {
         return DebuggerManager.getDebuggerManager().getCurrentEngine();
     }
