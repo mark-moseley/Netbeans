@@ -38,70 +38,29 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.documentation;
+package org.netbeans.modules.xslt.validation.reference;
 
-import java.awt.Color;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import javax.swing.Icon;
-import javax.swing.ToolTipManager;
-
-import org.netbeans.modules.bpel.model.api.ExtensibleElements;
-import org.netbeans.modules.bpel.model.api.events.VetoException;
-import org.netbeans.modules.bpel.model.api.support.UniqueId;
-
-import org.netbeans.modules.bpel.design.decoration.components.AbstractGlassPaneButton;
+import org.netbeans.modules.xslt.model.Stylesheet;
+import org.netbeans.modules.xslt.model.Template;
+import org.netbeans.modules.xslt.model.XslVisitor;
+import org.netbeans.modules.xslt.model.XslVisitorAdapter;
+import org.netbeans.modules.xslt.validation.core.XsltValidator;
 import static org.netbeans.modules.xml.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2007.08.15
+ * @version 2007.05.03
  */
-public final class DocumentationButton extends AbstractGlassPaneButton {
+public final class Validator extends XsltValidator {
 
-  public DocumentationButton(final ExtensibleElements element, String text) {
-    super(ICON, text, true, new ActionListener() {
-      public void actionPerformed(ActionEvent event) {
-//out();
-//out("event: '" + event.getSource().toString() + "'");
-        try {
-          if (element.getModel() == null) { // is deleted
-            return;
-          }
-          String documentation = event.getSource().toString();
-
-          if ( !documentation.equals(element.getDocumentation())) {
-            element.setDocumentation(documentation);
-          }
-//out("get: '" + element.getDocumentation() + "'");
-        }
-        catch (VetoException e) {
-          e.printStackTrace();
-        }
-      }
-    });
-    myElementID = element.getUID();
-    addTitle(ICON, TITLE, Color.BLUE);
-    ToolTipManager.sharedInstance().registerComponent(this);
-  }
+  public XslVisitor getVisitor() { return new XslVisitorAdapter() {
 
   @Override
-  public String getToolTipText()
+  public void visit(Template template)
   {
-    String text =
-      ((ExtensibleElements) myElementID.getModel().getEntity(myElementID)).getDocumentation();
-
-    if (text != null) {
-      return "<html>" + text + "</html>"; // NOI18N
-    }
-    return null;
+//out();
+//out("TEMPLATE: " + template);
+    addError("FIX_", template);
   }
 
-  private UniqueId myElementID;
-
-  private static final String TITLE =
-    i18n(DocumentationButton.class, "LBL_Documentation"); // NOI18N
-
-  private static final Icon ICON =
-    icon(DocumentationButton.class, "documentation"); // NOI18N
-}
+};}}
