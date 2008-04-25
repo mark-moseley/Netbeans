@@ -38,38 +38,58 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.project;
+package org.netbeans.modules.php.project.ui.actions;
 
-import org.netbeans.api.project.Project;
-import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
-import org.openide.filesystems.FileObject;
-
+import java.net.MalformedURLException;
+import org.netbeans.modules.php.project.PhpProject;
+import org.netbeans.modules.php.project.spi.XDebugStarter;
+import org.netbeans.spi.project.ActionProvider;
+import org.openide.util.Exceptions;
+import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 
 /**
- * @author ads
- *
+ * @author Radek Matous
  */
-public final class Utils {
+public class DebugCommand extends Command implements Displayable {
 
-    // avoid instantiation
-    private Utils() {
+    public static final String ID = ActionProvider.COMMAND_DEBUG;
+
+    public DebugCommand(PhpProject project) {
+        super(project);
     }
 
-    public static SourceGroup[] getSourceGroups(Project phpProject) {
-        Sources sources = ProjectUtils.getSources(phpProject);
-        //SourceGroup[] groups = sources.getSourceGroups(Sources.TYPE_GENERIC);
-        SourceGroup[] groups = sources.getSourceGroups(PhpProject.SOURCES_TYPE_PHP);
-        return groups;
-    }
-    public static FileObject[] getSourceObjects(Project phpProject) {
-        SourceGroup[] groups = getSourceGroups(phpProject);
-
-        FileObject[] fileObjects = new FileObject[groups.length];
-        for (int i = 0; i < groups.length; i++) {
-            fileObjects[i] = groups[i].getRootFolder();
+    @Override
+    public void invokeAction(final Lookup context) throws IllegalArgumentException {
+        Runnable runnable = new Runnable() {
+            public void run() {
+                try {
+                    showURLForDebugProjectFile();
+                } catch (MalformedURLException ex) {
+                    //TODO: improve error handling
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        };
+        //temporary; after narrowing deps. will be changed
+        XDebugStarter dbgStarter = XDebugStarterFactory.getInstance();
+        if (dbgStarter != null) {
+            dbgStarter.start(getProject(), runnable, fileForProject());
         }
-        return fileObjects;
+    }
+
+    @Override
+    public boolean isActionEnabled(Lookup context) throws IllegalArgumentException {
+        return true && XDebugStarterFactory.getInstance() != null;
+    }
+
+    @Override
+    public String getCommandId() {
+        return ID;
+    }
+
+    public String getDisplayName() {
+        return NbBundle.getMessage(RunCommand.class, "LBL_DebugProject");//NOI18N
+
     }
 }
