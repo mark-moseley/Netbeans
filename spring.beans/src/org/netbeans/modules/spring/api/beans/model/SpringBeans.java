@@ -41,8 +41,8 @@
 
 package org.netbeans.modules.spring.api.beans.model;
 
-import java.io.File;
 import java.util.List;
+import org.openide.filesystems.FileObject;
 
 /**
  * Encapsulates the root of a Spring config model. It provides access to the
@@ -56,21 +56,27 @@ public interface SpringBeans {
     // XXX aliases.
 
     /**
-     * Finds a bean by its id.
+     * Finds a bean by its id or name.
      *
-     * @param  beanId the bean id; never null.
-     * @return the bean with the specified id or {@code null}.
+     * @param  idOrName the bean id or name; never null.
+     * @return the bean with the specified id or name; {@code null} if no such
+     *         bean was found.
      */
-    SpringBean findBean(String beanId);
+    SpringBean findBean(String idOrName);
 
     /**
      * Returns the list of beans in the specified beans config file.
      *
-     * @param  file the beans config file.
-     * @return the list of beans.
+     * @param  fo the beans config file.
+     * @return the list of beans or {@code null} if {@code fo} was not
+     *         used to create the contents of this {@code SpringBeans}.
      */
-    List<SpringBean> getBeans(File file);
+    FileSpringBeans getFileBeans(FileObject fo);
 
-    // Probably also:
-    // List<SpringBean> getBeans();
+    /**
+     * Returns the list of beans in the Spring config model.
+     *
+     * @return the list of beans; never {@code null}.
+     */
+    List<SpringBean> getBeans();
 }
