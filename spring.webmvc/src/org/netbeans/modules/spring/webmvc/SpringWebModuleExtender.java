@@ -53,8 +53,10 @@ import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -89,6 +91,9 @@ import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
+import org.openide.filesystems.Repository;
+import org.openide.loaders.DataFolder;
+import org.openide.loaders.DataObject;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
@@ -280,19 +285,18 @@ public class SpringWebModuleExtender extends WebModuleExtender implements Change
             
             // CREATE WEB-INF/JSP FOLDER
             FileObject webInf = webModule.getWebInf();
-            FileObject jsp = webInf.createFolder("jsp");
-
+            FileObject jsp = FileUtil.createFolder(webInf, "jsp");
             // COPY TEMPLATE SPRING RESOURCES (JSP, XML, PROPERTIES)
-            copyResource("index.jsp", FileUtil.createData(jsp, "index.jsp")); // NOI18N
-            copyResource("jdbc.properties", FileUtil.createData(webInf, "jdbc.properties")); // NOI18N
+            DataFolder webInfDO = DataFolder.findFolder(webInf);
             final List<File> newFiles = new ArrayList<File>(2);
             FileObject configFile;
-            configFile = copyResource("applicationContext.xml", FileUtil.createData(webInf, "applicationContext.xml")); // NOI18N
+            configFile = createFromTemplate("applicationContext.xml", webInfDO, "applicationContext"); // NOI18N
             addFileToOpen(configFile);
             newFiles.add(FileUtil.toFile(configFile));
-            configFile = copyResource("dispatcher-servlet.xml", FileUtil.createData(webInf, getComponent().getDispatcherName() + "-servlet.xml")); // NOI18N
+            configFile = createFromTemplate("dispatcher-servlet.xml", webInfDO, getComponent().getDispatcherName() + "-servlet"); // NOI18N
             addFileToOpen(configFile);
             newFiles.add(FileUtil.toFile(configFile));
+            addFileToOpen(createFromTemplate("index.jsp", DataFolder.findFolder(jsp), "index")); // NOI18N
 
             SpringScope scope = SpringScope.getSpringScope(configFile);
             if (scope != null) {
@@ -335,6 +339,12 @@ public class SpringWebModuleExtender extends WebModuleExtender implements Change
             return filesToOpen;
         }
 
+        private FileObject createFromTemplate(String templateName, DataFolder targetDO, String fileName) throws IOException {
+            FileObject templateFO = Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject("SpringFramework/Templates/" + templateName);
+            DataObject templateDO = DataObject.find(templateFO);
+            return templateDO.createFromTemplate(targetDO, fileName).getPrimaryFile();
+        }                
+
         protected FileObject copyResource(String resourceName, FileObject target) throws UnsupportedEncodingException, IOException {
             InputStream in = getClass().getResourceAsStream("resources/templates/" + resourceName); // NOI18N
             String lineSeparator = System.getProperty("line.separator"); // NOI18N
@@ -349,10 +359,7 @@ public class SpringWebModuleExtender extends WebModuleExtender implements Change
                     }
                     if (resourceName.equals("redirect.jsp")) { // NOI18N
                         line = SpringWebFrameworkUtils.reviseRedirectJsp(line, dispatcherMapping);
-                    }
-                    if (resourceName.equals("index.jsp")) { // NOI18N
-                        line = SpringWebFrameworkUtils.getWelcomePageText();
-                    }
+                    }                 
                     buffer.append(line);
                     buffer.append(lineSeparator);
                     line = reader.readLine();
