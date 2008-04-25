@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.subversion;
+package org.netbeans.modules.clearcase;
 
 import junit.framework.*;
 import java.io.File;
@@ -49,6 +49,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestSuite;
+import org.netbeans.modules.clearcase.client.CheckinCommand;
+import org.netbeans.modules.clearcase.client.ClearcaseClient;
 import org.netbeans.modules.masterfs.filebasedfs.BaseFileObjectTestHid;
 import org.netbeans.modules.masterfs.filebasedfs.FileBasedFileSystem;
 import org.netbeans.modules.masterfs.filebasedfs.FileBasedURLMapper;
@@ -61,25 +63,26 @@ import org.openide.filesystems.FileSystemTestHid;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileUtilTestHidden;
 import org.openide.filesystems.URLMapperTestHidden;
-import org.tigris.subversion.svnclientadapter.ISVNClientAdapter;
-import org.tigris.subversion.svnclientadapter.ISVNStatus;
-import org.tigris.subversion.svnclientadapter.SVNClientException;
-import org.tigris.subversion.svnclientadapter.SVNRevision;
-import org.tigris.subversion.svnclientadapter.SVNStatusKind;
-import org.tigris.subversion.svnclientadapter.SVNUrl;
 
 /**
  * @author Tomas Stupka
  */
-public class SvnFileSystemTest extends FileSystemFactoryHid {
+public class ClearcaseFileSystemTest extends FileSystemFactoryHid {
 
-    public SvnFileSystemTest(Test test) {
+    private String MOCKUP_KEY = "org.netbeans.modules.clearcase.client.mockup.vobRoot";
+    private String MOCKUP_ROOT = System.getProperty("mockup.root.dir");
+    private FileStatusCache cache;
+        
+    public ClearcaseFileSystemTest(Test test) {
         super(test);
     }
     
     protected void setUp() throws Exception {
         super.setUp();
         MockServices.setServices(new Class[] {FileBasedURLMapper.class});                
+        
+        cache = new FileStatusCache();    
+        System.setProperty(MOCKUP_KEY, MOCKUP_ROOT);        
     }
     
     protected void tearDown() throws Exception {
@@ -92,12 +95,18 @@ public class SvnFileSystemTest extends FileSystemFactoryHid {
     
     public static Test suite() {
         NbTestSuite suite = new NbTestSuite();        
+        
         suite.addTestSuite(FileSystemTestHid.class);
-        suite.addTestSuite(FileObjectTestHid.class);
+        suite.addTestSuite(FileObjectTestHid.class);        
         suite.addTestSuite(URLMapperTestHidden.class);
         suite.addTestSuite(FileUtilTestHidden.class);                
-        suite.addTestSuite(BaseFileObjectTestHid.class);            
-        return new SvnFileSystemTest(suite);
+        suite.addTestSuite(BaseFileObjectTestHid.class);                                
+
+//      XXX failing        
+//        suite.addTest(new BaseFileObjectTestHid("testLockFileAfterCrash"));                                
+//        suite.addTest(new FileObjectTestHid("testFireFileDeletedEvent2"));        
+//        suite.addTest(new FileObjectTestHid("testMove1_Fs"));        
+        return new ClearcaseFileSystemTest(suite);
     }
     
     private File getWorkDir() {
@@ -106,17 +115,7 @@ public class SvnFileSystemTest extends FileSystemFactoryHid {
         return new File(workDirProperty);
     }
 
-    private File getRepoDir() {
-        return new File(new File(System.getProperty("data.root.dir")), "repo");
-    }
-
     protected FileSystem[] createFileSystem(String testName, String[] resources) throws IOException {
-        try {                                 
-            repoinit();            
-        } catch (Exception ex) {
-            throw new IOException(ex.getMessage());
-        } 
-                    
         FileObjectFactory.reinitForTests();
         FileObject workFo = FileBasedFileSystem.getFileObject(getWorkDir());
         assertNotNull(workFo);
@@ -133,10 +132,10 @@ public class SvnFileSystemTest extends FileSystemFactoryHid {
             }            
             files.add(FileUtil.toFile(fo));            
         }
-        commit(files);               
-//            for (File file : files) {
-//                assertStatus(file);    
-//            }        
+        checkin(files);               
+//        for (File file : files) {
+//            assertStatus(file);
+//        }
         
         return new FileSystem[]{workFo.getFileSystem()};
     }
@@ -146,77 +145,18 @@ public class SvnFileSystemTest extends FileSystemFactoryHid {
     protected String getResourcePrefix(String testName, String[] resources) {
         return FileBasedFileSystem.getFileObject(getWorkDir()).getPath();
     }
+    
+    private void checkin(List<File> files) throws IOException {       
+        getClient().exec(new CheckinCommand(files.toArray(new File[files.size()]), "checkin", true, false), false);                                
+    }
 
-    private void repoinit() throws IOException {                        
-        try {
-            File repoDir = getRepoDir();
-            File wc = getWorkDir();
-            
-            if (!repoDir.exists()) {
-                repoDir.mkdirs();                
-                String[] cmd = {"svnadmin", "create", repoDir.getAbsolutePath()};
-                Process p = Runtime.getRuntime().exec(cmd);
-                p.waitFor();                
-            }            
-            
-            ISVNClientAdapter client = getClient(getRepoUrl());
-            SVNUrl url = getRepoUrl().appendPath(getWorkDir().getName());
-            client.mkdir(url, "mkdir");            
-            client.checkout(url, wc, SVNRevision.HEAD, true);
-        } catch (Exception ex) {
-            throw new IOException(ex.getMessage());
-        } 
+    private ClearcaseClient getClient() {
+        return Clearcase.getInstance().getClient();
     }
     
-    private void commit(List<File> files) throws IOException {       
-        try {   
-            ISVNClientAdapter client = getClient(getRepoUrl());            
-            List<File> filesToAdd = new ArrayList<File>();
-            for (File file : files) {
-                
-                ISVNStatus status = getStatus(file);
-                if(status.getTextStatus().equals(SVNStatusKind.UNVERSIONED)) {                   
-                    filesToAdd.add(file);
-
-                    File parent = file.getParentFile();
-                    while (!getWorkDir().equals(parent)) {
-                        status = getStatus(parent);
-                        if(status.getTextStatus().equals(SVNStatusKind.UNVERSIONED)) {
-                            filesToAdd.add(0, parent);
-                            parent = parent.getParentFile();
-                        } else {
-                            break;
-                        }
-                    }                                    
-                }    
-            }            
-            client.addFile(filesToAdd.toArray(new File[filesToAdd.size()]), true);                                                      
-            client.commit(new File[] {getWorkDir()}, "commit", true);
-            
-        } catch (SVNClientException ex) {
-            throw new IOException(ex.getMessage());
-        }
-    }
-    
-    private ISVNClientAdapter getClient(SVNUrl url) throws SVNClientException {
-        return Subversion.getInstance().getClient(url);
-    }
-
     private void assertStatus(File f) throws IOException {
-        try {
-            ISVNStatus status = getStatus(f);
-            assertEquals(SVNStatusKind.NORMAL, status.getTextStatus());
-        } catch (SVNClientException ex) {
-            throw new IOException(ex.getMessage());
-        }
+        FileInformation info = cache.getInfo(f);
+        assertEquals(FileInformation.STATUS_VERSIONED_UPTODATE, info.getStatus());        
     }    
-
-    private ISVNStatus getStatus(File f) throws SVNClientException, MalformedURLException {
-        return getClient(getRepoUrl()).getSingleStatus(f);
-    }
     
-    private SVNUrl getRepoUrl() throws MalformedURLException {
-        return new SVNUrl("file:///" + getRepoDir().getAbsolutePath());
-    }
-
 }
