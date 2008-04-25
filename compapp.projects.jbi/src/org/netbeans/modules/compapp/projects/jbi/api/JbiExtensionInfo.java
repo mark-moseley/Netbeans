@@ -68,7 +68,8 @@ public class JbiExtensionInfo implements Serializable {
     private String type;
 
     /**
-     * Name of the target component, e.x., "sun-http-binding", "all"
+     * Name of the target component in regular expression, 
+     * e.x., "sun-http-binding", ".*".
      */
     private String target;
 
@@ -90,6 +91,11 @@ public class JbiExtensionInfo implements Serializable {
     /**
      * DOCUMENT ME!
      */
+    private String provider;
+
+    /**
+     * DOCUMENT ME!
+     */
     private List<JbiExtensionElement> elements;
 
     /**
@@ -97,7 +103,8 @@ public class JbiExtensionInfo implements Serializable {
      *
      * @param name      extension name, e.x., "ConfigExtension"
      * @param type      extension type, e.x., "endpoint", "connection"
-     * @param target    extension target, e.x., "sun-http-binding", "all".
+     * @param target    extension target component name in regular expression, 
+     *                  e.x., "sun-http-binding", ".*".
      * @param file      schema file
      * @param ns        extension namespace
      * @param description   extension description
@@ -106,13 +113,14 @@ public class JbiExtensionInfo implements Serializable {
      */
     public JbiExtensionInfo(String name, String type, String target,
                             String file, String ns, String description, URL icon,
-                            List<JbiExtensionElement> elements) {
+                            String provider, List<JbiExtensionElement> elements) {
         this.name = name;
         this.type = type;
         this.target = target;
         this.file = file;
         this.ns = ns;
         this.icon = icon;
+        this.provider = provider;
         this.description = description;
         this.elements = elements;
     }
@@ -145,9 +153,9 @@ public class JbiExtensionInfo implements Serializable {
     }
 
     /**
-     * DOCUMENT ME!
+     * Gets the regular expression of the extension target component name.
      *
-     * @return the description
+     * @return the extension target component name in regular expression
      */
     public String getTarget() {
         return this.target;
@@ -184,6 +192,15 @@ public class JbiExtensionInfo implements Serializable {
     /**
      * DOCUMENT ME!
      *
+     * @return the provider
+     */
+    public String getProvider() {
+        return this.provider;
+    }
+
+    /**
+     * DOCUMENT ME!
+     *
      * @return the extension elements
      */
     public List<JbiExtensionElement> getElements() {
@@ -200,6 +217,7 @@ public class JbiExtensionInfo implements Serializable {
                 .append(" ns=").append(getNameSpace())
                 .append(" target=").append(getTarget())
                 .append(" icon=").append(getIcon())
+                .append(" provider=").append(getProvider())
                 .append(" description=").append(getDescription());
         
         for (JbiExtensionElement element : getElements()) {
