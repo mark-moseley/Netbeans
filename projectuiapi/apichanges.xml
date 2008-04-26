@@ -105,6 +105,53 @@ is the proper place.
 
     <changes>
         
+        <change id="project-encoding-property">
+           <api name="general"/>
+           <summary>Adding template attribute <code>project.encoding</code></summary>
+           <version major="1" minor="29"/>
+           <date day="26" month="3" year="2008"/>
+           <author login="abadea"/>
+           <compatibility addition="yes"/>
+           <description>
+                Added the template attribute <code>project.encoding</code> for templates using scripting language.
+           </description>
+           <issue number="129685"/>
+        </change>
+        
+        <change id="folder-based-privileged-templates">
+            <api name="general"/>
+            <summary>PrivilegedTemplates instance in global action context is preferred</summary>
+            <version major="1" minor="28"/>
+            <date day="21" month="3" year="2008"/>
+            <author login="mkleint"/>
+            <compatibility addition="yes" binary="compatible" deletion="no" deprecation="no" modification="no" semantic="compatible" source="compatible"/>
+            <description>
+                The previous scope of PrivilegedTemplates was the whole project. Now the selected Node (active context) can
+                also provide an instance in it's lookup and it will be used instead of the default one from project's lookup.
+                In this case the last used templates will not be considered.
+            </description>
+            <class package="org.netbeans.spi.project.ui" name="PrivilegedTemplates"/>
+            <issue number="122942"/>
+        </change>
+        
+        <change id="observe-opening-closing">
+            <api name="general"/>
+            <summary>Added ways to track projects opening and closing</summary>
+            <version major="1" minor="27"/>
+            <date day="6" month="2" year="2008"/>
+            <author login="mkubec"/>
+            <compatibility addition="yes" binary="compatible" deletion="no" deprecation="no" modification="no" semantic="compatible" source="compatible"/>
+            <description>
+                Added a method to track progress of projects opening and closing. As the
+                opening of a project may take long time, and as there can be multiple
+                projects open at once, it may be necessary to be notified that the process
+                of open project list modification started or that it has
+                finished.
+            </description>
+            <class package="org.netbeans.api.project.ui" name="OpenProjects"/>
+            <issue number="124980"/>
+        </change>
+        
         <change id="store-listener-added">
             <api name="general"/>
             <summary>Added methods for creating customizer UI with additional listener for saving outside of AWT EQ</summary>
