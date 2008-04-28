@@ -177,7 +177,10 @@ public class EditorSettingsImpl extends EditorSettings {
             FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
             FileObject fo = fs.findResource (EDITORS_FOLDER);
             if (fo != null) {
-                currentFontColorProfile = (String) fo.getAttribute(FATTR_CURRENT_FONT_COLOR_PROFILE);
+                Object o = fo.getAttribute(FATTR_CURRENT_FONT_COLOR_PROFILE);
+                if (o instanceof String) {
+                    currentFontColorProfile = (String) o;
+                }
             }
             if (currentFontColorProfile == null) {
                 currentFontColorProfile = DEFAULT_PROFILE;
@@ -254,7 +257,7 @@ public class EditorSettingsImpl extends EditorSettings {
     }
     
     private final Map<String, Map<String, AttributeSet>> highlightings = new HashMap<String, Map<String, AttributeSet>>();
-    private final StorageImpl<String, AttributeSet> highlightingsStorage = new StorageImpl<String, AttributeSet>(new ColoringStorage(false));
+    private final StorageImpl<String, AttributeSet> highlightingsStorage = new StorageImpl<String, AttributeSet>(new ColoringStorage(false), null);
     
     /**
      * Returns highlighting properties for given profile or null, if the 
@@ -406,9 +409,15 @@ public class EditorSettingsImpl extends EditorSettings {
         if (currentKeyMapProfile == null) {
             FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
             FileObject fo = fs.findResource (KEYMAPS_FOLDER);
-            currentKeyMapProfile = fo == null ? null : (String) fo.getAttribute (FATTR_CURRENT_KEYMAP_PROFILE);
-            if (currentKeyMapProfile == null)
+            if (fo != null) {
+                Object o = fo.getAttribute (FATTR_CURRENT_KEYMAP_PROFILE);
+                if (o instanceof String) {
+                    currentKeyMapProfile = (String) o;
+                }
+            }
+            if (currentKeyMapProfile == null) {
                 currentKeyMapProfile = DEFAULT_PROFILE;
+            }
         }
         return currentKeyMapProfile;
     }
