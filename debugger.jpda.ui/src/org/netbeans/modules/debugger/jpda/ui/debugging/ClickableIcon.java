@@ -39,9 +39,7 @@
 
 package org.netbeans.modules.debugger.jpda.ui.debugging;
 
-import java.awt.Container;
 import java.awt.Point;
-import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import javax.swing.ImageIcon;
@@ -83,10 +81,10 @@ class ClickableIcon extends JLabel implements MouseListener {
         this.jpdaThread = jpdaThread;
     }
 
-    void initializeState() {
-        Rectangle rect = getBounds();
+    void initializeState(int sx, int sy, int width, int height) {
         Point point = getParent().getMousePosition(true);
-        state = point != null && rect.contains(point) ? STATE_FOCUSED : STATE_NORMAL;
+        state = point != null && sx <= point.x && point.x < sx + width && sy <= point.y && point.y < sy + height
+                ? STATE_FOCUSED : STATE_NORMAL;
         changeIcon();
         addMouseListener(this);
     }
