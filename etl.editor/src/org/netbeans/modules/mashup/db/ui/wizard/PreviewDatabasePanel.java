@@ -55,9 +55,12 @@ import org.netbeans.modules.mashup.tables.wizard.MashupTableWizardIterator;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.WizardDescriptor;
-import org.openide.util.NbBundle;
 
 import com.sun.sql.framework.exception.BaseException;
+import java.io.File;
+import net.java.hulp.i18n.Logger;
+import org.netbeans.modules.etl.logger.Localizer;
+import org.netbeans.modules.sql.framework.common.utils.DBExplorerUtil;
 import org.netbeans.modules.sql.framework.model.DBConnectionDefinition;
 
 /**
@@ -71,7 +74,8 @@ public class PreviewDatabasePanel extends AbstractWizardPanel implements
         ActionListener, WizardDescriptor.FinishablePanel {
     
     private PreviewDatabaseVisualPanel component;
-    
+    private static transient final Logger mLogger = Logger.getLogger(PreviewDatabasePanel.class.getName());
+    private static transient final Localizer mLoc = Localizer.get();
     /** Creates a new instance of PreviewDatabasePanel */
     public PreviewDatabasePanel() {
         component = new PreviewDatabaseVisualPanel(this);
@@ -101,7 +105,8 @@ public class PreviewDatabasePanel extends AbstractWizardPanel implements
     }
     
     public String getStepLabel() {
-        return NbBundle.getMessage(PreviewDatabasePanel.class, "STEP_configure_ffdb");
+        String nbBundle1 = mLoc.t("BUND226: Preview Flat File Database Definition");
+        return nbBundle1.substring(15);
     }
     
     public String getTitle() {
@@ -133,6 +138,7 @@ public class PreviewDatabasePanel extends AbstractWizardPanel implements
      * @see org.openide.WizardDescriptor.Panel#storeSettings
      */
     public void storeSettings(Object settings) {
+        String dbDir = null;
         if (settings instanceof WizardDescriptor) {
             WizardDescriptor wd = (WizardDescriptor) settings;
             
@@ -144,6 +150,7 @@ public class PreviewDatabasePanel extends AbstractWizardPanel implements
                     FlatfileDatabaseModel model = component.getModel();
                     DBConnectionDefinition def = model.getFlatfileDBConnectionDefinition(true);
                     conn = FlatfileDBConnectionFactory.getInstance().getConnection(def.getConnectionURL());
+                    dbDir = (DBExplorerUtil.parseConnUrl(def.getConnectionURL()))[1];
                     List tables = model.getTables();
                     Iterator it = tables.iterator();
                     while(it.hasNext()) {
@@ -170,6 +177,10 @@ public class PreviewDatabasePanel extends AbstractWizardPanel implements
                             stmt.execute("shutdown");
                             stmt.close();
                             conn.close();
+                            if(dbDir != null){
+                                File dbExplorerNeedRefresh = new File(dbDir + "/dbExplorerNeedRefresh");
+                                dbExplorerNeedRefresh.createNewFile();
+                            }
                         } catch (Exception ex) {
                             //ignore
                         }
