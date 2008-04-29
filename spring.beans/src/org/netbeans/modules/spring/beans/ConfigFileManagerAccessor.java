@@ -42,38 +42,33 @@
 package org.netbeans.modules.spring.beans;
 
 import org.netbeans.modules.spring.api.beans.ConfigFileManager;
-import org.netbeans.modules.spring.api.beans.SpringScope;
-import org.netbeans.modules.spring.api.beans.model.SpringConfigModel;
-import org.openide.filesystems.FileObject;
 
 /**
  *
  * @author Andrei Badea
  */
-public abstract class SpringScopeAccessor {
+public abstract class ConfigFileManagerAccessor {
 
-    private static volatile SpringScopeAccessor accessor;
+    private static volatile ConfigFileManagerAccessor accessor;
 
-    public static void setDefault(SpringScopeAccessor accessor) {
-        if (SpringScopeAccessor.accessor != null) {
+    public static void setDefault(ConfigFileManagerAccessor accessor) {
+        if (ConfigFileManagerAccessor.accessor != null) {
             throw new IllegalStateException();
         }
-        SpringScopeAccessor.accessor = accessor;
+        ConfigFileManagerAccessor.accessor = accessor;
     }
 
-    public static SpringScopeAccessor getDefault() {
+    public static ConfigFileManagerAccessor getDefault() {
         if (accessor != null) {
             return accessor;
         }
         try {
-            Class.forName(SpringScope.class.getName(), true, SpringScope.class.getClassLoader());
+            Class.forName(ConfigFileManager.class.getName(), true, ConfigFileManager.class.getClassLoader());
         } catch (ClassNotFoundException e) {
             throw new AssertionError(e);
         }
         return accessor;
     }
 
-    public abstract SpringScope createSpringScope(ConfigFileManager manager);
-
-    public abstract SpringConfigModel getConfigModel(SpringScope scope, FileObject fo);
+    public abstract ConfigFileManager createConfigFileManager(ConfigFileManagerImplementation impl);
 }
