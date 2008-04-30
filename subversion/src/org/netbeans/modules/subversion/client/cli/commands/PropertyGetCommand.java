@@ -41,47 +41,61 @@ package org.netbeans.modules.subversion.client.cli.commands;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import org.netbeans.modules.subversion.client.cli.SvnCommand;
-import org.netbeans.modules.subversion.client.cli.SvnCommand.Arguments;
-import org.tigris.subversion.svnclientadapter.SVNClientException;
+import org.tigris.subversion.svnclientadapter.SVNRevision;
+import org.tigris.subversion.svnclientadapter.SVNUrl;
 
 /**
  *
  * @author Tomas Stupka
  */
-public class GetPropertiesCommand extends SvnCommand {
+public class PropertyGetCommand extends SvnCommand {
 
-    private List<String> output = new ArrayList<String>();
-    private final File file;
-    private final boolean rec;
-
-    public GetPropertiesCommand(File file, boolean rec) {
-        this.file = file;
-        this.rec = rec;
+    private enum GetType {
+        url,
+        file
     }
     
-    @Override
-    public void prepareCommand(Arguments arguments) throws IOException {
-        // XXX what if empty url list?
-        arguments.add("proplist");
-        if (rec) {
-            arguments.add("-R");
-        }			
-        arguments.add(file);
-    }
-
-    @Override
-    public void outputText(String lineString) {
-        if(lineString == null || lineString.trim().equals("") || lineString.startsWith("Properties on '")) {
-            return;
-        }
-        output.add(lineString.trim());
+    private final File file;    
+    private final SVNUrl url;
+    private final SVNRevision rev;
+    private final SVNRevision peg;
+    private final String name;
+    private final GetType type;
+    
+    public PropertyGetCommand(File file, String name) {        
+        this.file = file;                
+        this.name = name; 
+        url = null;
+        rev = null;
+        peg = null;
+        type = GetType.file;
     }
     
-    public List<String> getPropertyNames() throws SVNClientException {        
-        return output;
+    public PropertyGetCommand(SVNUrl url, SVNRevision rev, SVNRevision peg, String name) {        
+        this.url = url;                
+        this.name = name; 
+        this.rev = rev; 
+        this.peg = peg; 
+        file = null;
+        type = GetType.url;
     }
-
+        
+    @Override
+    public void prepareCommand(Arguments arguments) throws IOException {        
+        arguments.add("propget");
+	arguments.add("--strict");
+	arguments.add(name);
+        switch (type) {
+            case file:
+                arguments.add(file);        
+                break;
+            case url:
+                arguments.add(rev);
+                arguments.add(url, peg);        
+                break;
+            default: 
+                throw new IllegalStateException("Illegal gettype: " + type);    
+        }	
+    }    
 }
