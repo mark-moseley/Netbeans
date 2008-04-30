@@ -670,6 +670,11 @@ public class RegistriesManagerImpl implements RegistriesManager {
                 "nb-platform",
                 "nb-base",
                 "nb-cnd");
+
+        final List<String> php = Arrays.asList(
+                "nb-platform",
+                "nb-base",
+                "nb-php");
         
         final List<String> full = Arrays.asList(
                 "nb-platform",
@@ -681,7 +686,6 @@ public class RegistriesManagerImpl implements RegistriesManager {
                 "nb-soa",
                 "nb-uml",
                 "nb-ruby",
-                "nb-php",
                 "glassfish",
                 "openesb",
                 "sjsam",
@@ -691,6 +695,7 @@ public class RegistriesManagerImpl implements RegistriesManager {
         final List<String> hidden = Arrays.asList(
                 "nb-platform",
                 //"nb-base",
+                //"nb-php",
                 "openesb",
                 "sjsam",
                 "jdk");
@@ -799,6 +804,10 @@ public class RegistriesManagerImpl implements RegistriesManager {
                 if (cnd.contains(product.getUid())) {
                     properties += " | PROPERTY_CND";
                 }
+                if (php.contains(product.getUid())) {
+                    properties += " | PROPERTY_PHP";
+                }
+
                 if (full.contains(product.getUid())) {
                     properties += " | PROPERTY_FULL";
                 }
