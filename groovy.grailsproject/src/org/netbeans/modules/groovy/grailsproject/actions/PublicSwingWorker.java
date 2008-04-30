@@ -40,13 +40,12 @@
 package org.netbeans.modules.groovy.grailsproject.actions;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
-import org.netbeans.modules.groovy.grails.api.GrailsServer;
-import org.netbeans.modules.groovy.grails.api.GrailsServerFactory;
 import org.netbeans.modules.groovy.grailsproject.StreamInputThread;
 import org.netbeans.modules.groovy.grailsproject.StreamRedirectThread;
 import org.openide.DialogDisplayer;
@@ -56,6 +55,11 @@ import org.openide.windows.InputOutput;
 import org.openide.windows.OutputWriter;
 import org.netbeans.api.project.Project;
 import org.openide.util.Cancellable;
+import java.util.concurrent.CountDownLatch;
+import org.netbeans.modules.groovy.grails.api.ExecutionSupport;
+import org.netbeans.modules.groovy.grails.api.GrailsProjectConfig;
+import org.netbeans.modules.groovy.grails.api.GrailsServerState;
+
 
 /**
  *
@@ -65,33 +69,57 @@ import org.openide.util.Cancellable;
 
         private final Logger LOG = Logger.getLogger(PublicSwingWorker.class.getName());
     
+        int PROGRESS_MAX = 100;
         BufferedReader procOutput;
         OutputWriter writer = null;
         String command = null;
+        String dirName = null;
         Project prj = null;
         LineSnooper snooper = null;
-        Process process;
-        ProgressHandle progress;
+        Process process = null;
+        ProgressHandle progress = null;
+        CountDownLatch serverFinished = null;
         
+        
+        // Version A
         public PublicSwingWorker(Project prj, String command) {
             this.prj = prj;
             this.command = command;
         }
 
+        // Version B
         public PublicSwingWorker(Project prj, String command, LineSnooper snooper) {
             this(prj, command);
             this.snooper = snooper;
-        }        
+        }              
+        
+        // Version C
+        // this constructor is used to migrate the WizardSwingWorker output to
+        // the i/o tabs.
+        
+        public PublicSwingWorker(Project prj, String command, String dirName, ProgressHandle handle, CountDownLatch serverFinished) {
+            this.prj = prj;
+            this.command = command;
+            this.dirName = dirName;
+            this.progress = handle;
+            this.serverFinished = serverFinished;
+        }
         
         OutputWriter getWriter() {
             return writer;
         }
                 
         
+        @Override
         public void run() {
 
-            String tabName = "grails : " + prj.getProjectDirectory().getName() 
-                                                + " (" + command +")";
+            String prjName = "<new project>";
+            
+            if (prj != null) {
+                prjName = prj.getProjectDirectory().getName();
+            }
+            
+            String tabName = "grails : " + prjName + " (" + command +")";
             
             InputOutput io = IOProvider.getDefault().getIO(tabName, true);
             
@@ -100,12 +128,17 @@ import org.openide.util.Cancellable;
             io.select();
             writer = io.getOut();
 
-            GrailsServer server = GrailsServerFactory.getServer();
-            process = server.runCommand(prj, command, io, null);
-
-            if (process == null) {
-                displayGrailsProcessError(server.getLastError());
-                return;
+            // FIXME hack that should be cleaned
+            if (command.startsWith("create-app")) {
+                process = ExecutionSupport.getInstance().executeCreateApp(new File(dirName));
+            } else if (command.startsWith("run-app")) {
+                process = ExecutionSupport.getInstance().executeRunApp(GrailsProjectConfig.forProject(prj));
+                GrailsServerState state = prj.getLookup().lookup(GrailsServerState.class);
+                if (state != null) {
+                    state.setProcess(process);
+                }
+            } else {
+                process = ExecutionSupport.getInstance().executeSimpleCommand(command, GrailsProjectConfig.forProject(prj));
             }
 
             assert process != null;
@@ -115,10 +148,42 @@ import org.openide.util.Cancellable;
             //    a snooper an one single thread for stderr or 
             // b) a bunch of threads taking care for I/O.
             
-            progress = ProgressHandleFactory.createHandle(tabName, this);
-            progress.start();
             
-            if(snooper != null ) {
+            // We create a new progress indicator in case of Cstr. A + B,
+            // in case C we get the indicator from the Cstr. since it is already
+            // located on the Wizard's pane. 
+            
+            if (progress == null) {
+                progress = ProgressHandleFactory.createHandle(tabName, this);
+                progress.start();
+            }
+
+            if(serverFinished != null){
+                progress.start(PROGRESS_MAX);
+                
+                procOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            
+                assert procOutput != null;
+                
+                String errString;
+                int progressMeter = 0;
+                
+                while ((errString = procOutput.readLine()) != null) {
+                    writer.println(errString);
+                    
+                    progressMeter = progressMeter + 2;
+                    
+                    if(progressMeter > PROGRESS_MAX) {
+                        progressMeter = PROGRESS_MAX;
+                        }
+                    
+                    progress.progress(progressMeter);
+                    }
+                
+                progress.progress(PROGRESS_MAX);
+                serverFinished.countDown();
+                
+            } else if(snooper != null ) {
                 procOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
                 assert procOutput != null;
                 
@@ -164,12 +229,25 @@ import org.openide.util.Cancellable;
             "Problem creating Process: " + reason.getLocalizedMessage(),
             NotifyDescriptor.Message.WARNING_MESSAGE
             ));
+                        
+        if (serverFinished != null) {
+                    serverFinished.countDown();
+                }
         }
 
     public boolean cancel() {
-        process.destroy();
-        progress.finish();
-        return true;
-    }
+            if (prj != null) {
+                GrailsServerState serverState = prj.getLookup().lookup(GrailsServerState.class);
+
+                if (serverState != null) {
+                    serverState.destroy();
+                } else {
+                    LOG.log(Level.WARNING, "Could not get serverState through lookup");
+                }
+            }
+
+            progress.finish();
+            return true;
+        }
         
     }
