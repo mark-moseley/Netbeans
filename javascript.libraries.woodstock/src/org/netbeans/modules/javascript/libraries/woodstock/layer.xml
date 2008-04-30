@@ -1,8 +1,9 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
+
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
-Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
 
 
 The contents of this file are subject to the terms of either the GNU
@@ -40,27 +41,13 @@ However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
-<project xmlns="http://www.netbeans.org/ns/project/1">
-    <type>org.netbeans.modules.apisupport.project</type>
-    <configuration>
-        <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
-            <code-name-base>org.netbeans.modules.javascript.libraries.kit</code-name-base>
-            <module-dependencies>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.javascript.libraries</code-name-base>
-                    <run-dependency>
-                        <specification-version>0.1</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.javascript.libraries.woodstock</code-name-base>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>0.1</specification-version>
-                    </run-dependency>
-                </dependency>
-            </module-dependencies>
-            <public-packages/>
-        </data>
-    </configuration>
-</project>
+
+<!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.0//EN" "http://www.netbeans.org/dtds/filesystem-1_0.dtd">
+
+<filesystem>
+  <folder name="org-netbeans-api-project-libraries">
+    <folder name="Libraries">
+      <file name="woodstock.xml" url="woodstock.xml"/>
+    </folder>
+  </folder>
+</filesystem>
