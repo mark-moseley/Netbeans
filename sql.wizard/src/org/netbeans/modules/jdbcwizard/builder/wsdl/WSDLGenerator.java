@@ -26,10 +26,16 @@ import java.util.HashMap;
 
 import java.net.URL;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.Writer;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.io.UnsupportedEncodingException;
 
+import java.nio.charset.Charset;
+import java.nio.charset.UnsupportedCharsetException;
 import javax.wsdl.factory.WSDLFactory;
 import javax.wsdl.xml.WSDLWriter;
 import javax.wsdl.xml.WSDLReader;
@@ -59,6 +65,7 @@ import org.netbeans.modules.jdbcwizard.builder.model.OracleQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.DB2QueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.SQLServerQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.JdbcQueryGenerator;
+import org.netbeans.modules.jdbcwizard.builder.model.MySQLQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.util.XMLCharUtil;
 
 
@@ -363,8 +370,8 @@ public class WSDLGenerator {
             this.dbDataAccessObject = this.getQueryGenerator();
             this.dbDataAccessObject.init(this.mTable);
 
-            this.mTableName = this.mTable.getSchema()+"."+this.mTable.getName();
-
+            //this.mTableName = this.mTable.getSchema()+"."+this.mTable.getName();
+            this.mTableName = this.mTable.getName();
             // Generate Queries
             insertQuery = this.dbDataAccessObject.createInsertQuery();
             updateQuery = this.dbDataAccessObject.createUpdateQuery();
@@ -773,6 +780,8 @@ public class WSDLGenerator {
             objDataAccess = DB2QueryGenerator.getInstance();
         } else if (this.mDBType.equalsIgnoreCase("SQLServer")) {
             objDataAccess = SQLServerQueryGenerator.getInstance();
+        } else if (this.mDBType.equalsIgnoreCase("MYSQL")) {
+            objDataAccess = MySQLQueryGenerator.getInstance();
         }else {
             objDataAccess = JdbcQueryGenerator.getInstance();
         }
@@ -894,13 +903,35 @@ public class WSDLGenerator {
     private void writeWsdl() throws WSDLException {
         try {
             final WSDLWriter writer = WSDLGenerator.factory.newWSDLWriter();
-            final String outputFileName = this.wsdlFileLocation + "/" + this.mWSDLFileName + ".wsdl";
-            final Writer sink = new FileWriter(outputFileName);
+            final String outputFileName = this.wsdlFileLocation + File.separator + this.mWSDLFileName + ".wsdl";
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFileName);
+            final Writer sink = new java.io.OutputStreamWriter(fos);
             writer.writeWSDL(this.def, sink);
             WSDLGenerator.logger.log(Level.INFO, "Successfully generated wsdl file :" + outputFileName);
         } catch (final Exception e) {
-            throw new WSDLException(WSDLException.OTHER_ERROR, e.getMessage());
+           if(e instanceof UnsupportedEncodingException){
+                //System.out.println(e.getMessage()+"UnsupportedEncodingException");
+               try{ 
+               final WSDLWriter writer = WSDLGenerator.factory.newWSDLWriter();
+               final String outputFileName = this.wsdlFileLocation + File.separator + this.mWSDLFileName + ".wsdl";
+               java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFileName);
+               final Writer sink = new java.io.OutputStreamWriter(fos,"UTF-8");
+               writer.writeWSDL(this.def, sink);
+               }catch(Exception ex){
+                   ex.printStackTrace();
+               }
+            }
+            if(e instanceof FileNotFoundException){
+                System.out.println(e.getMessage()+"FileNotFoundException");
+            }
+            if(e instanceof IOException){
+                    System.out.println(e.getMessage()+"IOException");
+            }
+            if(e instanceof UnsupportedCharsetException){ 
+                   System.out.println(((UnsupportedCharsetException)e).getCharsetName());
+            }
         }
 
     }
+    
 }
