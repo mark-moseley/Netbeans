@@ -38,47 +38,45 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.project;
+package org.netbeans.modules.php.project.ui.actions;
 
-import java.io.IOException;
-
-import org.netbeans.api.project.Project;
-import org.netbeans.spi.project.support.ant.AntBasedProjectType;
-import org.netbeans.spi.project.support.ant.AntProjectHelper;
-
+import java.net.MalformedURLException;
+import org.netbeans.modules.php.project.PhpProject;
+import org.netbeans.spi.project.ActionProvider;
+import org.openide.LifecycleManager;
+import org.openide.util.Exceptions;
+import org.openide.util.Lookup;
 
 /**
- * @author ads
+ * @author Radek Matous
  */
-public final class PhpProjectType implements AntBasedProjectType {
-
-    public static final String TYPE = PhpProjectType.class.getPackage().getName();
-    public static final String PROJECT_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project/1"; // NOI18N
-    private static final String PROJECT_CONFIGURATION_NAME = "data"; // NOI18N
-
-    private static final String PRIVATE_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project-private/1"; // NOI18N
-    private static final String PRIVATE_CONFIGURATION_NAME = "data"; // NOI18N
-
-    public Project createProject(AntProjectHelper helper) throws IOException {
-        assert helper != null;
-        return new PhpProject(helper);
+public class RunSingleCommand extends RunCommand {
+    public static final String ID = ActionProvider.COMMAND_RUN_SINGLE;
+    /**
+     * @param project
+     */
+    public RunSingleCommand(PhpProject project) {
+        super(project);
     }
 
-    public String getPrimaryConfigurationDataElementName( boolean shared ) {
-        /*
-         * Copied from MakeProjectType.
-         */
-        return shared ? PROJECT_CONFIGURATION_NAME : PRIVATE_CONFIGURATION_NAME;
+    @Override
+    public void invokeAction(Lookup context) throws IllegalArgumentException {
+        LifecycleManager.getDefault().saveAll();
+        try {
+            showURLForContext(context);
+        } catch (MalformedURLException ex) {
+            //TODO improve error handling
+            Exceptions.printStackTrace(ex);
+        }
     }
 
-    public String getPrimaryConfigurationDataElementNamespace( boolean shared ) {
-        /*
-         * Copied from MakeProjectType.
-         */
-        return shared ? PROJECT_CONFIGURATION_NAMESPACE : PRIVATE_CONFIGURATION_NAMESPACE;
+    @Override
+    public boolean isActionEnabled(Lookup context) throws IllegalArgumentException {
+        return fileForContext(context) != null;
     }
 
-    public String getType() {
-        return TYPE;
+    @Override
+    public String getCommandId() {
+        return ID;
     }
 }

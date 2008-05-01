@@ -38,47 +38,37 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.project;
+package org.netbeans.modules.php.project.ui.actions;
 
-import java.io.IOException;
-
-import org.netbeans.api.project.Project;
-import org.netbeans.spi.project.support.ant.AntBasedProjectType;
-import org.netbeans.spi.project.support.ant.AntProjectHelper;
+import org.netbeans.modules.php.project.spi.XDebugStarter;
+import org.openide.util.Lookup;
+import org.openide.util.Union2;
 
 
 /**
- * @author ads
+ * @author Radek Matous
+ *
  */
-public final class PhpProjectType implements AntBasedProjectType {
+public final class XDebugStarterFactory {
+    private static Union2<XDebugStarter, Boolean> INSTANCE;
 
-    public static final String TYPE = PhpProjectType.class.getPackage().getName();
-    public static final String PROJECT_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project/1"; // NOI18N
-    private static final String PROJECT_CONFIGURATION_NAME = "data"; // NOI18N
-
-    private static final String PRIVATE_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project-private/1"; // NOI18N
-    private static final String PRIVATE_CONFIGURATION_NAME = "data"; // NOI18N
-
-    public Project createProject(AntProjectHelper helper) throws IOException {
-        assert helper != null;
-        return new PhpProject(helper);
+    private XDebugStarterFactory() {
     }
 
-    public String getPrimaryConfigurationDataElementName( boolean shared ) {
-        /*
-         * Copied from MakeProjectType.
-         */
-        return shared ? PROJECT_CONFIGURATION_NAME : PRIVATE_CONFIGURATION_NAME;
-    }
-
-    public String getPrimaryConfigurationDataElementNamespace( boolean shared ) {
-        /*
-         * Copied from MakeProjectType.
-         */
-        return shared ? PROJECT_CONFIGURATION_NAMESPACE : PRIVATE_CONFIGURATION_NAMESPACE;
-    }
-
-    public String getType() {
-        return TYPE;
+    public static XDebugStarter getInstance() {
+        boolean init;
+        synchronized (XDebugStarterFactory.class) {
+            init = (INSTANCE == null);
+        }
+        if (init) {
+            //TODO add lookup listener
+            XDebugStarter debugStarter = Lookup.getDefault().lookup(XDebugStarter.class);
+            if (debugStarter != null) {
+                INSTANCE = Union2.createFirst(debugStarter);
+            } else {
+                INSTANCE = Union2.createSecond(Boolean.FALSE);
+            }
+        }
+        return INSTANCE.hasFirst() ? INSTANCE.first() : null;
     }
 }

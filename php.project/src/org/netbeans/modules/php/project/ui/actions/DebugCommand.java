@@ -38,47 +38,58 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.project;
+package org.netbeans.modules.php.project.ui.actions;
 
-import java.io.IOException;
-
-import org.netbeans.api.project.Project;
-import org.netbeans.spi.project.support.ant.AntBasedProjectType;
-import org.netbeans.spi.project.support.ant.AntProjectHelper;
-
+import java.net.MalformedURLException;
+import org.netbeans.modules.php.project.PhpProject;
+import org.netbeans.modules.php.project.spi.XDebugStarter;
+import org.netbeans.spi.project.ActionProvider;
+import org.openide.util.Exceptions;
+import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 
 /**
- * @author ads
+ * @author Radek Matous
  */
-public final class PhpProjectType implements AntBasedProjectType {
+public class DebugCommand extends Command implements Displayable {
 
-    public static final String TYPE = PhpProjectType.class.getPackage().getName();
-    public static final String PROJECT_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project/1"; // NOI18N
-    private static final String PROJECT_CONFIGURATION_NAME = "data"; // NOI18N
+    public static final String ID = ActionProvider.COMMAND_DEBUG;
 
-    private static final String PRIVATE_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project-private/1"; // NOI18N
-    private static final String PRIVATE_CONFIGURATION_NAME = "data"; // NOI18N
-
-    public Project createProject(AntProjectHelper helper) throws IOException {
-        assert helper != null;
-        return new PhpProject(helper);
+    public DebugCommand(PhpProject project) {
+        super(project);
     }
 
-    public String getPrimaryConfigurationDataElementName( boolean shared ) {
-        /*
-         * Copied from MakeProjectType.
-         */
-        return shared ? PROJECT_CONFIGURATION_NAME : PRIVATE_CONFIGURATION_NAME;
+    @Override
+    public void invokeAction(final Lookup context) throws IllegalArgumentException {
+        Runnable runnable = new Runnable() {
+            public void run() {
+                try {
+                    showURLForDebugProjectFile();
+                } catch (MalformedURLException ex) {
+                    //TODO improve error handling
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        };
+        //temporary; after narrowing deps. will be changed
+        XDebugStarter dbgStarter = XDebugStarterFactory.getInstance();
+        if (dbgStarter != null) {
+            dbgStarter.start(getProject(), runnable, fileForProject());
+        }
     }
 
-    public String getPrimaryConfigurationDataElementNamespace( boolean shared ) {
-        /*
-         * Copied from MakeProjectType.
-         */
-        return shared ? PROJECT_CONFIGURATION_NAMESPACE : PRIVATE_CONFIGURATION_NAMESPACE;
+    @Override
+    public boolean isActionEnabled(Lookup context) throws IllegalArgumentException {
+        return XDebugStarterFactory.getInstance() != null;
     }
 
-    public String getType() {
-        return TYPE;
+    @Override
+    public String getCommandId() {
+        return ID;
+    }
+
+    public String getDisplayName() {
+        return NbBundle.getMessage(RunCommand.class, "LBL_DebugProject");
+
     }
 }

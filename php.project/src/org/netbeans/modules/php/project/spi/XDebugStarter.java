@@ -38,47 +38,20 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.project;
-
-import java.io.IOException;
+package org.netbeans.modules.php.project.spi;
 
 import org.netbeans.api.project.Project;
-import org.netbeans.spi.project.support.ant.AntBasedProjectType;
-import org.netbeans.spi.project.support.ant.AntProjectHelper;
-
+import org.openide.filesystems.FileObject;
 
 /**
- * @author ads
+ * @author Radek Matous
  */
-public final class PhpProjectType implements AntBasedProjectType {
-
-    public static final String TYPE = PhpProjectType.class.getPackage().getName();
-    public static final String PROJECT_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project/1"; // NOI18N
-    private static final String PROJECT_CONFIGURATION_NAME = "data"; // NOI18N
-
-    private static final String PRIVATE_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project-private/1"; // NOI18N
-    private static final String PRIVATE_CONFIGURATION_NAME = "data"; // NOI18N
-
-    public Project createProject(AntProjectHelper helper) throws IOException {
-        assert helper != null;
-        return new PhpProject(helper);
-    }
-
-    public String getPrimaryConfigurationDataElementName( boolean shared ) {
-        /*
-         * Copied from MakeProjectType.
-         */
-        return shared ? PROJECT_CONFIGURATION_NAME : PRIVATE_CONFIGURATION_NAME;
-    }
-
-    public String getPrimaryConfigurationDataElementNamespace( boolean shared ) {
-        /*
-         * Copied from MakeProjectType.
-         */
-        return shared ? PROJECT_CONFIGURATION_NAMESPACE : PRIVATE_CONFIGURATION_NAMESPACE;
-    }
-
-    public String getType() {
-        return TYPE;
-    }
+public interface XDebugStarter {
+    /**
+     * @param project
+     * @param run code that should initiate connection. Is called after listening
+     *            on defined port (typically 9000) started.
+     * @param startFile file to debug.
+     */
+    void start(Project project, Runnable run, FileObject startFile);
 }
