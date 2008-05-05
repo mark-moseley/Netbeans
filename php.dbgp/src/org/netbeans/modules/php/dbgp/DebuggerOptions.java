@@ -36,42 +36,32 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.php.dbgp;
 
-package org.netbeans.modules.php.project.api;
+import org.netbeans.modules.php.project.api.PhpOptions;
 
 /**
- * Helper class to get actual PHP properties like debugger port etc.
- * Use {@link #getInstance()} to get class instance.
- * @author Tomas Mysik
- * @since 1.2
+ * @author Radek Matous
  */
-public final class PhpOptions {
-    private static final PhpOptions INSTANCE = new PhpOptions();
+public final class DebuggerOptions {
 
-    private PhpOptions() {
+    public static int getPort() {
+        return PhpOptions.getInstance().getDebuggerPort();
     }
 
-    public static PhpOptions getInstance() {
-        return INSTANCE;
+    public static boolean isDebugForFirstPageOnly() {
+        return false;
     }
 
-    private org.netbeans.modules.php.project.ui.options.PhpOptions getPhpOptions() {
-        return org.netbeans.modules.php.project.ui.options.PhpOptions.getInstance();
+    public static boolean isDebugForAllPages() {
+        return !isDebugForFirstPageOnly();
     }
 
-    public String getPhpInterpreter() {
-        return getPhpOptions().getPhpInterpreter();
+    public static boolean isDebuggerStoppedAtTheFirstLine() {
+        return PhpOptions.getInstance().isDebuggerStoppedAtTheFirstLine();
     }
 
-    public int getDebuggerPort() {
-        return getPhpOptions().getDebuggerPort();
-    }
-
-    public boolean isDebuggerStoppedAtTheFirstLine() {
-        return getPhpOptions().isDebuggerStoppedAtTheFirstLine();
-    }
-
-    public String getPhpGlobalIncludePath() {
-        return getPhpOptions().getPhpGlobalIncludePath();
+    public static String getPhpInterpreter() {
+        return PhpOptions.getInstance().getPhpInterpreter();
     }
 }
