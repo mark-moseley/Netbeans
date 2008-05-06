@@ -36,6 +36,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.openide.WizardDescriptor;
 import org.openide.WizardValidationException;
+import org.openide.util.ChangeSupport;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
@@ -45,13 +46,12 @@ import org.openide.util.NbBundle;
  */
 public class GetProjectLocationStep implements  WizardDescriptor.Panel, 
                                                 WizardDescriptor.ValidatingPanel,
-                                                WizardDescriptor.FinishablePanel,
-                                                GrailsServerOutputReceiver
+                                                WizardDescriptor.FinishablePanel
                                                 {
 
     private GetProjectLocationPanel component;
     private WizardDescriptor wizardDescriptor;
-    private final Set<ChangeListener> listeners = new HashSet<ChangeListener>(1);
+    private final ChangeSupport changeSupport = new ChangeSupport(this);
     boolean        serverRunning = false;
     boolean        serverConfigured = true;
 
@@ -96,26 +96,15 @@ public class GetProjectLocationStep implements  WizardDescriptor.Panel,
     }
 
     public void addChangeListener(ChangeListener l) {
-        synchronized (listeners) {
-            listeners.add(l);
-        }
+        changeSupport.addChangeListener(l);
     }
 
     public void removeChangeListener(ChangeListener l) {
-        synchronized (listeners) {
-            listeners.remove(l);
-        }
+        changeSupport.removeChangeListener(l);
     }
 
     public void fireChangeEvent() {
-        Iterator it;
-        synchronized (listeners) {
-            it = new HashSet<ChangeListener>(listeners).iterator();
-        }
-        ChangeEvent ev = new ChangeEvent(this);
-        while (it.hasNext()) {
-            ((ChangeListener)it.next()).stateChanged(ev);
-        }
+        changeSupport.fireChange();
     }
     
     
@@ -128,9 +117,4 @@ public class GetProjectLocationStep implements  WizardDescriptor.Panel,
         return true;
     }
 
-    public javax.swing.JTextArea getGrailsServerOutputTextArea() {
-        return component.getGrailsServerOutputTextArea();
-    }
-    
-    
 }

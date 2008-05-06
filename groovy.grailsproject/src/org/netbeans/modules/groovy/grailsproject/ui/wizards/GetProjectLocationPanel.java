@@ -12,6 +12,7 @@ import javax.swing.JFileChooser;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import java.io.File;
+import java.text.MessageFormat;
 import org.netbeans.spi.project.ui.support.ProjectChooser;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -23,22 +24,41 @@ import javax.swing.text.Document;
  * @author  schmidtm
  */
 public class GetProjectLocationPanel extends WizardSettingsPanel implements DocumentListener {
-    GetProjectLocationStep parentStep;
-    
-        
+
+    private GetProjectLocationStep parentStep;
+
     boolean valid(WizardDescriptor settings) {
-        
-        if(projectNameTextField.getText().length() > 0 && 
-                (new File(projectLocationTextField.getText()).isDirectory()) 
-                ) {
+        if(projectNameTextField.getText().length() > 0
+                && (new File(projectLocationTextField.getText()).isDirectory())) {
             return true;
-            }
-        
-            return false;
         }
+
+        return false;
+    }
     
     void read (WizardDescriptor d) {
-        //TODO:
+        File projectLocation = (File) d.getProperty ("projectFolder");  //NOI18N
+        if (projectLocation == null || projectLocation.getParentFile() == null || !projectLocation.getParentFile().isDirectory ()) {
+            projectLocation = ProjectChooser.getProjectsFolder();
+        } else {
+            projectLocation = projectLocation.getParentFile();
+        }
+        
+        Integer count = (Integer) d.getProperty("WizardPanel_GrailsProjectCounter");
+        String formater = NbBundle.getMessage(GetProjectLocationPanel.class, "TXT_GrailsApplication");
+        
+        int baseCount = count.intValue();
+        
+        String newPrjName = (String) d.getProperty ("name"); //NOI18N
+        if (newPrjName == null) {        
+            while ((newPrjName = validFreeProjectName(projectLocation, formater, baseCount)) == null) {
+                baseCount++;
+            }
+        }
+        
+        projectLocationTextField.setText(projectLocation.getAbsolutePath());
+        projectFolderTextField.setText( projectLocation.getAbsolutePath() + File.separatorChar + projectNameTextField.getText() );        
+        projectNameTextField.setText(newPrjName);
     }
     
     void validate (WizardDescriptor d) throws WizardValidationException {
@@ -47,9 +67,10 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
 
     void store( WizardDescriptor d ) {
         // d.putProperty( "setAsMain", setAsMainCheckBox.isSelected() && setAsMainCheckBox.isVisible() ? Boolean.TRUE : Boolean.FALSE ); // NOI18N
-        d.putProperty( "projectFolder", projectFolderTextField.getText() ); // NOI18N
+        d.putProperty( "projectFolder", new File(projectFolderTextField.getText().trim()) ); // NOI18N
+        d.putProperty( "projectName", projectNameTextField.getText() ); // NOI18N
         parentStep.fireChangeEvent();
-        }
+    }
     
     
     
@@ -59,12 +80,6 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
         initComponents();
         
         setName(NbBundle.getMessage(GetProjectLocationPanel.class,"LAB_ConfigureProject")); // NOI18N
-        
-        // set the default project directory 
-        
-        String projectsFolderPath = ProjectChooser.getProjectsFolder().getPath();
-        projectLocationTextField.setText(projectsFolderPath);
-        projectFolderTextField.setText( projectsFolderPath + File.separatorChar + projectNameTextField.getText() );
         
         // register event listeners to auto-update some fields.
         
@@ -89,9 +104,6 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
         projectFolderTextField = new javax.swing.JTextField();
         browsLocationJButton = new javax.swing.JButton();
         setAsMainCheckBox = new javax.swing.JCheckBox();
-        jScrollPane1 = new javax.swing.JScrollPane();
-        grailsServerOutputTextArea = new javax.swing.JTextArea();
-        jLabel1 = new javax.swing.JLabel();
 
         projectNameLabel.setText(org.openide.util.NbBundle.getMessage(GetProjectLocationPanel.class, "GetProjectLocationPanel.projectNameLabel.text")); // NOI18N
 
@@ -116,22 +128,12 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
         setAsMainCheckBox.setSelected(true);
         setAsMainCheckBox.setText(org.openide.util.NbBundle.getMessage(GetProjectLocationPanel.class, "GetProjectLocationPanel.setAsMainCheckBox.text")); // NOI18N
 
-        grailsServerOutputTextArea.setColumns(20);
-        grailsServerOutputTextArea.setEditable(false);
-        grailsServerOutputTextArea.setRows(5);
-        jScrollPane1.setViewportView(grailsServerOutputTextArea);
-
-        jLabel1.setText(org.openide.util.NbBundle.getMessage(GetProjectLocationPanel.class, "GetProjectLocationPanel.jLabel1.text")); // NOI18N
-
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
                 .add(setAsMainCheckBox)
-                .addContainerGap())
-            .add(layout.createSequentialGroup()
-                .add(jLabel1)
                 .addContainerGap())
             .add(layout.createSequentialGroup()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -141,12 +143,11 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(layout.createSequentialGroup()
-                        .add(projectLocationTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 202, Short.MAX_VALUE)
+                        .add(projectLocationTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 216, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(browsLocationJButton))
-                    .add(projectNameTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 286, Short.MAX_VALUE)
-                    .add(projectFolderTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 286, Short.MAX_VALUE)))
-            .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 401, Short.MAX_VALUE)
+                    .add(projectNameTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 300, Short.MAX_VALUE)
+                    .add(projectFolderTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 300, Short.MAX_VALUE)))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -165,10 +166,7 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
                     .add(projectFolderTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .add(18, 18, 18)
                 .add(setAsMainCheckBox)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jLabel1)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 175, Short.MAX_VALUE))
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -193,9 +191,6 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton browsLocationJButton;
-    private javax.swing.JTextArea grailsServerOutputTextArea;
-    private javax.swing.JLabel jLabel1;
-    private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JLabel projectFolderLabel;
     private javax.swing.JTextField projectFolderTextField;
     private javax.swing.JLabel projectLocationLabel;
@@ -230,7 +225,7 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
             String projectName = projectNameTextField.getText();
             String projectFolder = projectLocationTextField.getText(); 
              
-            getProjectFolderTextField().setText( projectFolder + File.separatorChar + projectName );
+            getProjectFolderTextField().setText( new File(projectFolder, projectName).getAbsolutePath() );
             
             parentStep.fireChangeEvent();
             
@@ -241,11 +236,11 @@ public class GetProjectLocationPanel extends WizardSettingsPanel implements Docu
     public javax.swing.JTextField getProjectFolderTextField() {
         return projectFolderTextField;
     }
-
-    public javax.swing.JTextArea getGrailsServerOutputTextArea() {
-        return grailsServerOutputTextArea;
-    }
-
     
+    private String validFreeProjectName (final File parentFolder, final String formater, final int index) {
+        String name = MessageFormat.format(formater, index);
+        File file = new File (parentFolder, name);
+        return file.exists() ? null : name;
+    }
     
 }
