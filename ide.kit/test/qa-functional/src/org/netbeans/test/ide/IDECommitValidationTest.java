@@ -39,41 +39,58 @@
  * made subject to such option by the copyright holder.
  */
 
+package org.netbeans.test.ide;
 
-/*
- * DefaultType.java
- *
- * Created on December 6, 2005, 4:58 PM
- *
- */
-
-package org.netbeans.test.umllib.values;
-
+import junit.framework.Test;
+import org.netbeans.jellytools.JellyTestCase;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.junit.NbTestSuite;
 
 /**
+ * Overall sanity check suite for IDE before commit.<br>
+ * Look at IDEValidation.java for test specification and implementation.
  *
- * @author Alexandr Scherbatiy
+ * @author Jiri.Skrivanek@sun.com
  */
-public enum DefaultType implements Type {
+public class IDECommitValidationTest extends JellyTestCase {
+    
+    
+    /** Need to be defined because of JUnit */
+    public IDECommitValidationTest(String name) {
+        super(name);
+    }
+    
+    public static Test suite() {
+        NbModuleSuite.Configuration conf = NbModuleSuite.createConfiguration(
+            IDEValidation.class
+        ).clusters(".*").enableModules(".*");
 
-    NONE(ValueConstant.TYPE_NONE),               // for Constructors
-    VOID(ValueConstant.TYPE_VOID),
-    INT(ValueConstant.TYPE_INT),
-    STRING(ValueConstant.TYPE_STRING);
-   
-   
-   private  ElementType type;
-   
-   DefaultType(String type){
-       this.type = new ElementType(type);
-   }
-    public String getValue() {
-        return type.getValue();
+        
+        if (System.getProperty("xtest.ide.blacklist") != null
+                || System.getProperty("xtest.ide.whitelist") != null) {
+            conf = conf.addTest("testBlacklistedClassesHandler");
+        }
+        conf = conf.addTest("testInitGCProjects");
+        conf = conf.addTest("testMainMenu");
+        conf = conf.addTest("testHelp");
+        conf = conf.addTest("testOptions");
+        conf = conf.addTest("testNewProject");
+        // sample project must exist before testShortcuts
+        conf = conf.addTest("testShortcuts");
+        conf = conf.addTest("testNewFile");
+        conf = conf.addTest("testCVSLite");
+        conf = conf.addTest("testProjectsView");
+        conf = conf.addTest("testFilesView");
+        conf = conf.addTest("testEditor");
+        conf = conf.addTest("testBuildAndRun");
+        conf = conf.addTest("testDebugging");
+        conf = conf.addTest("testJUnit");
+        conf = conf.addTest("testXML");
+        conf = conf.addTest("testDb");
+        conf = conf.addTest("testWindowSystem");
+        conf = conf.addTest("testGCProjects");
+        // not in commit suite because it needs net connectivity
+        // suite.addTest(new IDEValidation("testPlugins"));
+        return NbModuleSuite.create(conf);
     }
-    
-    public boolean isEqual(Type type) {
-        return this.type.isEqual(type);
-    }
-    
-    
 }
