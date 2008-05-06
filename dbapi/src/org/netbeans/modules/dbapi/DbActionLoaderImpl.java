@@ -45,65 +45,37 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import org.netbeans.modules.db.api.explorer.NodeProvider;
-import org.netbeans.modules.db.explorer.DbNodeLoader;
-import org.openide.nodes.Node;
+import javax.swing.Action;
+import org.netbeans.modules.db.api.explorer.ActionProvider;
+import org.netbeans.modules.db.explorer.DbActionLoader;
 import org.openide.util.lookup.Lookups;
 
 /**
- * Loads nodes from all registered node providers and delivers them to
- * the caller of getAllNodes().
+ * Loads actions from all registered action providers and delivers them to
+ * the caller of getAllActions().
  *  
  * @author David Van Couvering
  */
-public class DbNodeLoaderImpl implements DbNodeLoader, ChangeListener {
+public class DbActionLoaderImpl implements DbActionLoader {
     
             /** 
      * Not private because used in the tests.
      */
-    static final String NODE_PROVIDER_PATH = "Databases/NodeProviders"; // NOI18N
-    static Collection providers;
-    
-    final CopyOnWriteArrayList<ChangeListener> listeners = 
-            new CopyOnWriteArrayList<ChangeListener>();
-    
-    public List<Node> getAllNodes() {
-        List<Node> nodes = new ArrayList<Node>();
-        
-        if ( providers == null ) {
-            providers = Lookups.forPath(NODE_PROVIDER_PATH).lookupAll(NodeProvider.class);    
-        }
+    static final String ACTION_PROVIDER_PATH = "Databases/ActionProviders"; // NOI18N
+
+    public List<Action> getAllActions() {
+        List<Action> actions = new ArrayList<Action>();
+        Collection providers = Lookups.forPath(ACTION_PROVIDER_PATH).
+                lookupAll(ActionProvider.class);
         
         for (Iterator i = providers.iterator(); i.hasNext();) {
-            NodeProvider provider = (NodeProvider)i.next();
-            List<Node> nodeList = provider.getNodes();
-            if (nodeList != null) {
-                nodes.addAll(provider.getNodes());
+            ActionProvider provider = (ActionProvider)i.next();
+            List<Action> actionList = provider.getActions();
+            if (actionList != null) {
+                actions.addAll(provider.getActions());
             }
-            
-            provider.addChangeListener(this);
         }
         
-        return nodes;
-    }
-
-    public void addChangeListener(ChangeListener listener) {
-        listeners.add(listener);
-    }
-
-    public void removeChangeListener(ChangeListener listener) {
-        listeners.remove(listener);
-    }
-
-    public synchronized void stateChanged(ChangeEvent evt) {
-        // At this point, any state change simply means that the consumer 
-        // should re-call getAllNodes(), so delegate the state change up to 
-        // the consumer.
-        for ( ChangeListener listener : listeners ) {
-            listener.stateChanged(new ChangeEvent(this));
-        }
+        return actions;
     }
 }
