@@ -76,10 +76,10 @@ import org.netbeans.junit.ide.ProjectSupport;
  */
 public class PropertiesEditorTestCase extends JellyTestCase {
     
-    protected static final String defaultProjectName = "properties_test";
-    private String projectName;
+    protected static final String DEFAULT_PROJECT_NAME = "properties_test";
+    public String projectName;
     private String treeSubPackagePathToFile;
-    protected String treeSeparator = "|";
+    protected String TREE_SEPARATOR = "|";
     protected String menuSeparator = "#";
     protected String defaultPackage = "<default package>";
     protected final String WIZARD_CATEGORY = "Standard";
@@ -128,6 +128,7 @@ public class PropertiesEditorTestCase extends JellyTestCase {
     
     private final String WIZARD_TREE_STRING = "";//Bundle.getStringTrimmed("org.netbeans.modules.text.Bundle", "Templates/Other")+"|"+Bundle.getStringTrimmed("org.netbeans.modules.properties.Bundle", "Templates/Other/properties.properties"); // String : "Other|Properties File";
     
+    public EditorOperator eo;
     
     /** This constructor only creates operator's object and then does nothing. */
     public PropertiesEditorTestCase(String testMethodName) {
@@ -183,7 +184,7 @@ public class PropertiesEditorTestCase extends JellyTestCase {
     
     
     protected void openDefaultProject() {
-        openProject(defaultProjectName);
+        openProject(DEFAULT_PROJECT_NAME);
     }
     
     
@@ -201,7 +202,7 @@ public class PropertiesEditorTestCase extends JellyTestCase {
         pto.invoke();
         ProjectRootNode prn = pto.getProjectRootNode(projectName);
         prn.select();
-        Node node = new Node(prn,"Source Packages"+treeSeparator+packageName);
+        Node node = new Node(prn,"Source Packages"+TREE_SEPARATOR+packageName);
         return node;
     }
     
@@ -217,12 +218,12 @@ public class PropertiesEditorTestCase extends JellyTestCase {
      */
     // public void openExistedPropertiesFile(String filePath) {
     public void openExistedPropertiesFile(String treeSubPackagePathToFile, String fileName) {
-        this.treeSubPackagePathToFile = "Source Packages"+this.treeSeparator+treeSubPackagePathToFile;
+        this.treeSubPackagePathToFile = "Source Packages"+this.TREE_SEPARATOR+treeSubPackagePathToFile;
         ProjectsTabOperator pto = new ProjectsTabOperator();
         pto.invoke();
         ProjectRootNode prn = pto.getProjectRootNode(projectName);
         prn.select();
-        Node node = new Node(prn,treeSubPackagePathToFile+treeSeparator+fileName);
+        Node node = new Node(prn,treeSubPackagePathToFile+TREE_SEPARATOR+fileName);
         node.performPopupAction("Open");
     }
     
@@ -286,14 +287,15 @@ public class PropertiesEditorTestCase extends JellyTestCase {
      */
     public void closePropertiesFile(String fileName) {
         EditorOperator eo = new EditorOperator(fileName);
-        eo.close();
+        eo.close(false);
     }
     
     /** This close all files in editor. This method should be called in teardown method
      */
     public void closeFiles() {
-        EditorOperator.closeDiscardAll();
+        eo.closeDiscardAll();
     }
+   
     
     
     /** This fill three textafields in 'New property' dialog.
@@ -732,7 +734,7 @@ public class PropertiesEditorTestCase extends JellyTestCase {
         ProjectRootNode prn = pto.getProjectRootNode(projectName);
         prn.select();
         String packageName = node.getPath();
-        new Node(prn, "Source Packages"+this.treeSeparator+packageName+this.treeSeparator+fileName).performPopupAction(this.POPUP_MENU_EDIT);
+        new Node(prn, "Source Packages"+this.TREE_SEPARATOR+packageName+this.TREE_SEPARATOR+fileName).performPopupAction(this.POPUP_MENU_EDIT);
         
     }
     
@@ -1014,7 +1016,7 @@ public class PropertiesEditorTestCase extends JellyTestCase {
         pto.invoke();
         ProjectRootNode prn = pto.getProjectRootNode(projectName);
         prn.select();
-        Node node = new Node(prn,"Source Packages"+this.treeSeparator+fileName);
+        Node node = new Node(prn,"Source Packages"+this.TREE_SEPARATOR+fileName);
         String[] strs =  node.getChildren();
         if ( strs.length != locales.length ) {
             throw new Exception("> There is bad count of locales in Explorer window. ("+strs.length+"<>"+locales.length+")");
@@ -1032,8 +1034,8 @@ public class PropertiesEditorTestCase extends JellyTestCase {
             ProjectsTabOperator pto = ProjectsTabOperator.invoke();
             //ProjectRootNode prn = pto.getProjectRootNode(projectName);
             //prn.select();
-            //Node node = new Node(prn,treeSubPackagePathToFile+treeSeparator+fileName);
-            SourcePackagesNode sourcePackagesNode = new SourcePackagesNode(defaultProjectName);
+            //Node node = new Node(prn,treeSubPackagePathToFile+TREE_SEPARATOR+fileName);
+            SourcePackagesNode sourcePackagesNode = new SourcePackagesNode(DEFAULT_PROJECT_NAME);
             log("source node:"+sourcePackagesNode.getPath());
             Node packageNode = new Node(sourcePackagesNode,packageName);
             log("package node:"+packageNode.getPath());
@@ -1069,8 +1071,8 @@ public class PropertiesEditorTestCase extends JellyTestCase {
     public boolean existsFileInEditor(String fileName) {
         try {
             log("Testing name of file in tab of Editor window : \""+fileName+"\"");
-            EditorOperator ewo = new EditorOperator(fileName);
-            ewo.close();
+            eo = new EditorOperator(fileName);
+            eo.close();
             return true;
         } catch (TimeoutExpiredException ex) {
             return false;
