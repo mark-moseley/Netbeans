@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -38,47 +38,46 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bpel.samples;
+package org.netbeans.modules.soa.validation.core;
 
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import org.openide.text.Annotatable;
 
-import org.openide.WizardDescriptor;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
-import org.openide.util.NbBundle;
-
-public class SynchronousSampleWizardIterator extends SampleWizardIterator {
-    private static final long serialVersionUID = 1L;
+/**
+ * @author Vladimir Yaroslavskiy
+ * @version 2008.02.01
+ */
+final class Annotation extends org.openide.text.Annotation implements PropertyChangeListener {
     
-    public SynchronousSampleWizardIterator() {}
-    
-    public static SynchronousSampleWizardIterator createIterator() {
-      return new SynchronousSampleWizardIterator();
+  public Annotation(Annotatable annotatable, String message) {
+    myMessage = message;
+
+    if (annotatable != null) {
+      attach(annotatable);
+      annotatable.addPropertyChangeListener(this);
     }
-    
-    protected String[] createSteps() {
-      return new String[] { NbBundle.getMessage(SynchronousSampleWizardIterator.class, "MSG_CreateSynchronousSampleProject")}; // NOI18N
-    }
-    
-    protected WizardDescriptor.Panel[] createPanels() {
-      return new WizardDescriptor.Panel[] { new SynchronousSampleWizardPanel() };
-    }
-    
-    protected Set<FileObject> createCompositeApplicationProject(FileObject projectDir, String name) throws IOException {
-      Set<FileObject> resultSet = new HashSet<FileObject>();
-      FileObject compAppProjectDir = projectDir.createFolder(name);                
-      
-      FileObject trsCompositeApp = Repository.getDefault().
-              getDefaultFileSystem().findResource("org-netbeans-modules-bpel-samples-resources-zip/SynchronousSampleApplication.zip"); // NOI18N
+  }
 
-      Util.unZipFile(trsCompositeApp.getInputStream(), compAppProjectDir);
-      Util.setProjectName(compAppProjectDir, Util.COMPAPP_PROJECT_CONFIGURATION_NAMESPACE, name, "SynchronousSampleApplication"); // NOI18N
-
-      Util.addJbiModule(compAppProjectDir, getProjectDir());
-      resultSet.add(compAppProjectDir);               
-
-      return resultSet;
+  public String getAnnotationType() {
+    return "validation-annotation"; // NOI18N
+  }
+  
+  public String getShortDescription() {
+    return myMessage;
+  }
+  
+  public void propertyChange( PropertyChangeEvent propertyChangeEvent ) {
+    if (Annotatable.PROP_ANNOTATION_COUNT.equals(propertyChangeEvent.getPropertyName())) {
+      return;
     }
+    Annotatable annotatable = (Annotatable) propertyChangeEvent.getSource();
+
+    if (annotatable != null) {
+      annotatable.removePropertyChangeListener(this);
+      detach();
+    }
+  }
+
+  private String myMessage;
 }

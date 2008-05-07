@@ -18,9 +18,10 @@
  */
 package org.netbeans.modules.bpel.nodes.actions;
 
+import org.netbeans.modules.bpel.nodes.actions.BpelNodeAction;
+import org.netbeans.modules.bpel.editors.api.nodes.actions.ActionType;
 import java.util.concurrent.Callable;
 import javax.swing.KeyStroke;
-import javax.swing.text.StyledDocument;
 import org.netbeans.api.debugger.ActionsManager;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.core.api.multiview.MultiViewHandler;
@@ -35,7 +36,6 @@ import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.text.Line;
-import org.openide.text.NbDocument;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.windows.TopComponent;
@@ -61,16 +61,14 @@ public class ToggleBreakpointAction extends BpelNodeAction {
         return NbBundle.getMessage(getClass(), "CTL_ToggleBreakpointAction"); // NOI18N
     }
     
-    
     public ActionType getType() {
         return ActionType.TOGGLE_BREAKPOINT;
     }
     
-    
+    @Override
     public boolean isChangeAction() {
         return false;
     }
-    
     
     protected void performAction(BpelEntity[] bpelEntities) {
         DebuggerManager.getDebuggerManager().getActionsManager().doAction(
