@@ -132,7 +132,7 @@ public class Parser {
         ASTToken token = ASTToken.create (
             language,
             tokenType.getTypeID (),
-            input.getString (originalIndex, input.getIndex ()),
+            input.getString (originalIndex, input.getIndex ()).toString (),
             originalIndex
         );
         if (tokenProperties != null &&
@@ -140,6 +140,8 @@ public class Parser {
         ) {
             input.setIndex(originalIndex);
             Object[] r = (Object[]) tokenProperties.getValue ("call", new Object[] {input});
+            if (r == null)
+                throw new NullPointerException ("Method " + tokenProperties.getMethodName ("call") + " returns null!\n");
             token = (ASTToken) r [0];
             if (r [1] != null)
                 cookie.setState (getState((String) r [1]));

@@ -52,6 +52,7 @@ import javax.swing.text.Position.Bias;
 import javax.swing.text.StyledDocument;
 import org.netbeans.api.languages.ASTNode;
 import org.netbeans.api.languages.ASTPath;
+import org.netbeans.api.languages.ParserResult;
 import org.netbeans.api.languages.database.DatabaseContext;
 import org.netbeans.api.languages.database.DatabaseDefinition;
 import org.netbeans.api.languages.database.DatabaseItem;
@@ -163,7 +164,8 @@ public class JSRefactoringsFactory implements RefactoringPluginFactory {
             doc = (StyledDocument)lookup.lookup(Document.class);
             dataObject = NbEditorUtilities.getDataObject(doc);
             ASTPath path = (ASTPath)lookup.lookup(ASTPath.class);
-            DatabaseContext root = DatabaseManager.getRoot((ASTNode) path.getRoot());
+            ParserResult parserResult = (ParserResult) lookup.lookup (ParserResult.class);
+            DatabaseContext root = parserResult.getSemanticStructure ();
             if (root == null)
                 return new Problem(true, getString("LBL_CannotFindUsages"));
             item = root.getDatabaseItem (path.getLeaf ().getOffset ());
@@ -263,7 +265,8 @@ public class JSRefactoringsFactory implements RefactoringPluginFactory {
             ASTPath path = (ASTPath)lookup.lookup(ASTPath.class);
             document = (StyledDocument)lookup.lookup(StyledDocument.class);
             dataObject = NbEditorUtilities.getDataObject(document);
-            DatabaseContext root = DatabaseManager.getRoot((ASTNode) path.getRoot());
+            ParserResult parserResult = (ParserResult) lookup.lookup (ParserResult.class);
+            DatabaseContext root = parserResult.getSemanticStructure ();
             if (root == null)
                 return new Problem(true, getString("LBL_CannotRename"));
             item = root.getDatabaseItem (path.getLeaf ().getOffset ());
@@ -274,9 +277,9 @@ public class JSRefactoringsFactory implements RefactoringPluginFactory {
         
         public Problem checkParameters() {
             String newName = refactoring.getNewName();
-            String oldName = item instanceof DatabaseDefinition ?
-                ((DatabaseDefinition) item).getName() :
-                ((DatabaseUsage) item).getName();
+            DatabaseDefinition def = item instanceof DatabaseDefinition ?
+                (DatabaseDefinition) item : ((DatabaseUsage)item).getDefinition();
+            String oldName = def.getName();
             if (newName.equals(oldName)) {
                 return new Problem(true, getString("LBL_NameNotChanged"));
             }
@@ -292,6 +295,29 @@ public class JSRefactoringsFactory implements RefactoringPluginFactory {
                     );
                     return new Problem(true, msg);
                 }
+            }
+            Lookup lookup = refactoring.getRefactoringSource();
+            ASTPath path = (ASTPath)lookup.lookup(ASTPath.class);
+            document = (StyledDocument)lookup.lookup(StyledDocument.class);
+            dataObject = NbEditorUtilities.getDataObject(document);
+            ParserResult parserResult = (ParserResult) lookup.lookup (ParserResult.class);
+            DatabaseContext rootCtx = parserResult.getSemanticStructure ();
+            DatabaseContext dbCtx = rootCtx.getClosestContext(def.getOffset());
+            DatabaseDefinition origDef = dbCtx != null ? dbCtx.getDefinition(newName, dbCtx.getOffset()) : null;
+            if (origDef != null) {
+                String itemKind = origDef.getType();
+                String itemKindName = getString("LBL_Field");
+                if ("parameter".equals(itemKind)) {
+                    itemKindName = getString("LBL_Parameter");
+                } else if ("method".equals(itemKind)) {
+                    itemKindName = getString("LBL_Method");
+                } else if ("local".equals(itemKind)) {
+                    itemKindName = getString("LBL_Variable");
+                }
+                String msg = new MessageFormat(NbBundle.getMessage(RenameRefactoringUI.class, "LBL_NameAlreadyUsed")).format (
+                    new Object[] {itemKindName, newName}
+                );
+                return new Problem(false, msg);
             }
             return null;
         }

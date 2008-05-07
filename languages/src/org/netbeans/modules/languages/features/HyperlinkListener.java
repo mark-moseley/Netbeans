@@ -51,6 +51,9 @@ import java.awt.Color;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.io.File;
+import java.net.URISyntaxException;
+import java.net.URL;
 import javax.swing.text.StyledDocument;
 import javax.swing.JEditorPane;
 import javax.swing.text.AttributeSet;
@@ -58,17 +61,11 @@ import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import org.netbeans.api.languages.ASTItem;
 
-import org.netbeans.api.languages.ASTPath;
-import org.netbeans.api.languages.Highlighting;
 import org.netbeans.api.languages.Highlighting.Highlight;
-import org.netbeans.api.languages.ParseException;
 import org.netbeans.api.languages.ASTPath;
-import org.netbeans.api.languages.ASTToken;
-import org.netbeans.api.languages.SyntaxContext;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
-import org.netbeans.api.languages.Context;
 import org.netbeans.api.languages.Context;
 import org.netbeans.api.languages.SyntaxContext;
 import org.netbeans.api.languages.ASTNode;
@@ -84,12 +81,14 @@ import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.languages.Feature;
 import org.netbeans.modules.languages.Language;
 import org.netbeans.modules.languages.LanguagesManager;
-import org.netbeans.modules.languages.ParserManagerImpl;
 
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.LineCookie;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
+import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.nodes.Node;
 import org.openide.text.Line;
 import org.openide.text.NbDocument;
 
@@ -148,117 +147,157 @@ public class HyperlinkListener implements MouseMotionListener, MouseListener,
         final NbEditorDocument  document,
         int                     offset
     ) {
-        try {
-            ASTNode ast = ParserManagerImpl.getImpl (document).getAST ();
-            if (ast == null) {
-                String mimeType = (String) document.getProperty ("mimeType");
-                TokenHierarchy tokenHierarchy = TokenHierarchy.get (document);
-                document.readLock ();
-                try {
-                    TokenSequence tokenSequence = tokenHierarchy.tokenSequence ();
-                    tokenSequence.move (offset);
-                    tokenSequence.moveNext ();
-                    Language language = LanguagesManager.getDefault ().getLanguage (mimeType);
-                    Token token = tokenSequence.token ();
-                    if (token == null) return;
-                    Feature hyperlinkFeature = language.getFeatureList ().getFeature 
-                        ("HYPERLINK", token.id ().name ());
-                    if (hyperlinkFeature == null) return;
-                    ASTToken stoken = ASTToken.create (
-                        language,
-                        token.id ().ordinal (),
-                        token.text ().toString (),
-                        tokenSequence.offset ()
-                    );
-                    highlight = Highlighting.getHighlighting (document).highlight (
-                        tokenSequence.offset (),
-                        tokenSequence.offset () + token.length (),
-                        getHyperlinkAS ()
-                    );
-                    runnable = (Runnable) hyperlinkFeature.getValue (Context.create (document, offset));
-                } finally {
-                    document.readUnlock ();
-                }
-                return;
-            }
-            ASTPath path = ast.findPath (offset);
-            if (path == null) return;
-            int i, k = path.size ();
-            for (i = 0; i < k; i++) {
-                ASTPath p = path.subPath (i);
-                Language language = (Language) p.getLeaf ().getLanguage ();
-                if (language == null) continue;
-                Feature hyperlinkFeature = language.getFeatureList ().getFeature ("HYPERLINK", p);
-                if (hyperlinkFeature == null) continue;
-                highlight = Highlighting.getHighlighting (document).highlight (
-                    p.getLeaf ().getOffset (),
-                    p.getLeaf ().getEndOffset (),
-                    getHyperlinkAS ()
-                );
-                runnable = (Runnable) hyperlinkFeature.getValue (SyntaxContext.create (document, p));
-            }
-            DatabaseContext root = DatabaseManager.getRoot (ast);
-            if (root != null) {
-                final DatabaseItem item = root.getDatabaseItem (offset);
-                if (item != null && item instanceof DatabaseUsage) {
-                    highlight = Highlighting.getHighlighting (document).highlight (
-                        path.getLeaf ().getOffset (),
-                        path.getLeaf ().getEndOffset (),
-                        getHyperlinkAS ()
-                    );
-                    runnable = new Runnable () {
-                        public void run () {
-                            DatabaseDefinition definition = ((DatabaseUsage) item).getDefinition ();
-                            int definitionOffset = definition.getOffset ();
-                            DataObject dobj = NbEditorUtilities.getDataObject (document);
-                            LineCookie lc = dobj.getCookie (LineCookie.class);
-                            Line.Set lineSet = lc.getLineSet ();
-                            Line line = lineSet.getCurrent (NbDocument.findLineNumber (document, definitionOffset));
-                            int column = NbDocument.findLineColumn (document, definitionOffset);
-                            line.show (Line.SHOW_GOTO, column);
-                        }
-                    };
-                }
-                if (item == null) {
-                    FileObject fileObject = NbEditorUtilities.getFileObject (document);
-                    ASTItem leaf = path.getLeaf ();
-                    if (!(leaf instanceof ASTToken)) return;
-                    String name = ((ASTToken) leaf).getIdentifier ();
-                    try {
-                        Map<FileObject,List<DatabaseDefinition>> map = Index.getGlobalItem (fileObject, name, false);
-                        if (!map.isEmpty ()) {
-                            final FileObject fo = map.keySet ().iterator ().next ();
-                            final DatabaseDefinition definition = map.get (fo).iterator ().next ();
-                            highlight = Highlighting.getHighlighting (document).highlight (
-                                path.getLeaf ().getOffset (),
-                                path.getLeaf ().getEndOffset (),
-                                getHyperlinkAS ()
-                            );
-                            runnable = new Runnable () {
-                                public void run () {
-                                    int definitionOffset = definition.getOffset ();
-                                    try {
-                                        DataObject dobj = DataObject.find (fo);
-                                        EditorCookie ec = dobj.getCookie (EditorCookie.class);
-                                        StyledDocument doc2 = ec.openDocument ();
-                                        LineCookie lc = dobj.getCookie (LineCookie.class);
-                                        Line.Set lineSet = lc.getLineSet ();
-                                        Line line = lineSet.getCurrent (NbDocument.findLineNumber (doc2, definitionOffset));
-                                        int column = NbDocument.findLineColumn (doc2, definitionOffset);
-                                        line.show (Line.SHOW_GOTO, column);
-                                    } catch (IOException ex) {
-                                        ex.printStackTrace ();
-                                    }
-                                }
-                            };
-                        }
-                    } catch (FileNotParsedException ex) {
-                    }
-                }
-            }
-        } catch (ParseException ex) {
-        }
-        return;
+//!reimplement!
+//        try {
+//            ASTNode ast = ParserManagerImpl.getImpl (document).getAST ();
+//            if (ast == null) {
+//                String mimeType = (String) document.getProperty ("mimeType");
+//                TokenHierarchy tokenHierarchy = TokenHierarchy.get (document);
+//                document.readLock ();
+//                try {
+//                    TokenSequence tokenSequence = tokenHierarchy.tokenSequence ();
+//                    tokenSequence.move (offset);
+//                    tokenSequence.moveNext ();
+//                    Language language = LanguagesManager.getDefault ().getLanguage (mimeType);
+//                    Token token = tokenSequence.token ();
+//                    if (token == null) return;
+//                    Feature hyperlinkFeature = language.getFeatureList ().getFeature 
+//                        ("HYPERLINK", token.id ().name ());
+//                    if (hyperlinkFeature == null) return;
+//                    ASTToken stoken = ASTToken.create (
+//                        language,
+//                        token.id ().ordinal (),
+//                        token.text ().toString (),
+//                        tokenSequence.offset ()
+//                    );
+//                    highlight = Highlighting.getHighlighting (document).highlight (
+//                        tokenSequence.offset (),
+//                        tokenSequence.offset () + token.length (),
+//                        getHyperlinkAS ()
+//                    );
+//                    runnable = (Runnable) hyperlinkFeature.getValue (Context.create (document, offset));
+//                } finally {
+//                    document.readUnlock ();
+//                }
+//                return;
+//            }
+//            ASTPath path = ast.findPath (offset);
+//            if (path == null) return;
+//            int i, k = path.size ();
+//            for (i = 0; i < k; i++) {
+//                ASTPath p = path.subPath (i);
+//                Language language = (Language) p.getLeaf ().getLanguage ();
+//                if (language == null) continue;
+//                Feature hyperlinkFeature = language.getFeatureList ().getFeature ("HYPERLINK", p);
+//                if (hyperlinkFeature == null) continue;
+//                highlight = Highlighting.getHighlighting (document).highlight (
+//                    p.getLeaf ().getOffset (),
+//                    p.getLeaf ().getEndOffset (),
+//                    getHyperlinkAS ()
+//                );
+//                runnable = (Runnable) hyperlinkFeature.getValue (SyntaxContext.create (document, p));
+//            }
+//            DatabaseContext root = DatabaseManager.getRoot (ast);
+//            if (root != null) {
+//                final DatabaseItem item = root.getDatabaseItem (offset);
+//                if (item != null && item instanceof DatabaseUsage) {
+//                    highlight = Highlighting.getHighlighting (document).highlight (
+//                        path.getLeaf ().getOffset (),
+//                        path.getLeaf ().getEndOffset (),
+//                        getHyperlinkAS ()
+//                    );
+//                    runnable = new Runnable () {
+//                        public void run () {
+//                            DatabaseDefinition definition = ((DatabaseUsage) item).getDefinition();
+//                            int offset = definition.getOffset();
+//                            DataObject dobj = null;
+//                            StyledDocument docToGo = null;
+//                            URL url = definition.getSourceFileUrl();
+//                            if (url == null) {
+//                                dobj = NbEditorUtilities.getDataObject(document);
+//                                docToGo = document;
+//                            } else {
+//                                File file = null;
+//                                try {
+//                                    file = new File(url.toURI());
+//                                } catch (URISyntaxException ex) {
+//                                    ex.printStackTrace();
+//                                }
+//
+//                                if (file != null && file.exists()) {
+//                                    /** convert file to an uni absolute pathed file (../ etc will be coverted) */
+//                                    file = FileUtil.normalizeFile(file);
+//                                    FileObject fobj = FileUtil.toFileObject(file);
+//                                    try {
+//                                        dobj = DataObject.find(fobj);
+//                                    } catch (DataObjectNotFoundException ex) {
+//                                        ex.printStackTrace();
+//                                    }
+//                                    if (dobj != null) {
+//                                        Node nodeOfDobj = dobj.getNodeDelegate();
+//                                        EditorCookie ec = nodeOfDobj.getCookie(EditorCookie.class);
+//                                        try {
+//                                            docToGo = ec.openDocument();
+//                                        } catch (IOException ex) {
+//                                            ex.printStackTrace();
+//                                        }
+//                                    }
+//
+//                                }
+//                            }
+//
+//                            if (dobj == null) {
+//                                return;
+//                            }
+//
+//                            LineCookie lc = (LineCookie) dobj.getCookie(LineCookie.class);
+//                            Line.Set lineSet = lc.getLineSet();
+//                            Line line = lineSet.getCurrent(NbDocument.findLineNumber(docToGo, offset));
+//                            int column = NbDocument.findLineColumn(docToGo, offset);
+//                            line.show(Line.SHOW_GOTO, column);
+//                        }
+//                    };
+//                }
+//                if (item == null) {
+//                    FileObject fileObject = NbEditorUtilities.getFileObject (document);
+//                    ASTItem leaf = path.getLeaf ();
+//                    if (!(leaf instanceof ASTToken)) return;
+//                    String name = ((ASTToken) leaf).getIdentifier ();
+//                    try {
+//                        Map<FileObject,List<DatabaseDefinition>> map = Index.getGlobalItem (fileObject, name, false);
+//                        if (!map.isEmpty ()) {
+//                            final FileObject fo = map.keySet ().iterator ().next ();
+//                            final DatabaseDefinition definition = map.get (fo).iterator ().next ();
+//                            highlight = Highlighting.getHighlighting (document).highlight (
+//                                path.getLeaf ().getOffset (),
+//                                path.getLeaf ().getEndOffset (),
+//                                getHyperlinkAS ()
+//                            );
+//                            runnable = new Runnable () {
+//                                public void run () {
+//                                    int definitionOffset = definition.getOffset ();
+//                                    try {
+//                                        DataObject dobj = DataObject.find (fo);
+//                                        EditorCookie ec = dobj.getCookie (EditorCookie.class);
+//                                        StyledDocument doc2 = ec.openDocument ();
+//                                        LineCookie lc = dobj.getCookie (LineCookie.class);
+//                                        Line.Set lineSet = lc.getLineSet ();
+//                                        Line line = lineSet.getCurrent (NbDocument.findLineNumber (doc2, definitionOffset));
+//                                        int column = NbDocument.findLineColumn (doc2, definitionOffset);
+//                                        line.show (Line.SHOW_GOTO, column);
+//                                    } catch (IOException ex) {
+//                                        ex.printStackTrace ();
+//                                    }
+//                                }
+//                            };
+//                        }
+//                    } catch (FileNotParsedException ex) {
+//                    }
+//                }
+//            }
+//        } catch (ParseException ex) {
+//        }
+//        return;
     }
     
     private static AttributeSet hyperlinkAS = null;

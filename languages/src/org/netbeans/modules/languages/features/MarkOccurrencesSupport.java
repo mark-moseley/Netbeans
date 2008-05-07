@@ -27,13 +27,10 @@
  */
 package org.netbeans.modules.languages.features;
 
-import org.netbeans.api.languages.database.DatabaseContext;
-import org.netbeans.api.languages.database.DatabaseUsage;
-import org.netbeans.api.languages.database.DatabaseDefinition;
-import org.netbeans.api.languages.database.DatabaseItem;
 import java.awt.Color;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -48,15 +45,22 @@ import javax.swing.text.JTextComponent;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 
+import org.netbeans.api.languages.ParserResult;
+import org.netbeans.api.languages.database.DatabaseContext;
+import org.netbeans.api.languages.database.DatabaseUsage;
+import org.netbeans.api.languages.database.DatabaseDefinition;
+import org.netbeans.api.languages.database.DatabaseItem;
 import org.netbeans.api.languages.ASTItem;
 import org.netbeans.api.languages.ASTNode;
 import org.netbeans.api.languages.Highlighting;
 import org.netbeans.api.languages.Highlighting.Highlight;
-import org.netbeans.api.languages.ParserManager.State;
 import org.netbeans.editor.Utilities;
 import org.netbeans.modules.editor.NbEditorDocument;
-import org.netbeans.modules.languages.ParserManagerImpl;
 import org.netbeans.modules.languages.features.AnnotationManager.LanguagesAnnotation;
+import org.netbeans.modules.parsing.api.MultiLanguageUserTask;
+import org.netbeans.modules.parsing.api.ParserManager;
+import org.netbeans.modules.parsing.api.ResultIterator;
+import org.netbeans.modules.parsing.api.Source;
 import org.openide.util.RequestProcessor;
 
 
@@ -85,19 +89,20 @@ public class MarkOccurrencesSupport implements CaretListener {
         }
         parsingTask = RequestProcessor.getDefault ().post (new Runnable () {
             public void run () {
-                refresh (e.getDot ());
+                Source source = Source.create (editor.getDocument ());
+                ParserManager.parse (Collections.<Source>singleton (source), new MultiLanguageUserTask<ParserResult> () {
+                    @Override
+                    public void run (ResultIterator<ParserResult> resultIterator) {
+                        ParserResult parserResult = resultIterator.getParserResult ();
+                        refresh (e.getDot (), parserResult);
+                    }
+                });
             }
         }, 1000);
     }
     
-    private void refresh (int offset) {
-        ParserManagerImpl parserManager = ParserManagerImpl.getImpl (editor.getDocument ());
-        if (parserManager.getState () == State.PARSING) {
-            return;
-        }
-        removeHighlights ();
-        ASTNode node = parserManager.getAST ();
-        DatabaseContext root = DatabaseManager.getRoot (node);
+    private void refresh (int offset, ParserResult parserResult) {
+        DatabaseContext root = parserResult.getSemanticStructure ();
         if (root == null) {
             // I keep getting NPEs on the next line while editing RHTML
             // files - please check
@@ -107,7 +112,8 @@ public class MarkOccurrencesSupport implements CaretListener {
         if (item == null)
             item = root.getDatabaseItem (offset - 1);
         if (item == null) return;
-        addHighlights (getUssages (item, node));
+        removeHighlights ();
+        addHighlights (getUsages (item, parserResult.getRootNode ()));
     }
     
     private void addHighlights (final List<ASTItem> ussages) {
@@ -150,14 +156,16 @@ public class MarkOccurrencesSupport implements CaretListener {
         });
     }
     
-    static List<ASTItem> getUssages (DatabaseItem item, ASTNode root) {
+    static List<ASTItem> getUsages (DatabaseItem item, ASTNode root) {
         List<ASTItem> result = new ArrayList<ASTItem> ();
         DatabaseDefinition definition = null;
         if (item instanceof DatabaseDefinition)
             definition = (DatabaseDefinition) item;
         else
             definition = ((DatabaseUsage) item).getDefinition ();
-        result.add (root.findPath (definition.getOffset ()).getLeaf ());
+        if (definition.getSourceFileUrl() == null) 
+            // It's a local definition
+            result.add (root.findPath (definition.getOffset ()).getLeaf ());
         Iterator<DatabaseUsage> it = definition.getUsages ().iterator ();
         while (it.hasNext ()) {
             DatabaseUsage databaseUsage =  it.next();
