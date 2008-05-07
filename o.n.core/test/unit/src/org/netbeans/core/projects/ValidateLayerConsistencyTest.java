@@ -66,7 +66,9 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import junit.framework.Test;
 import org.netbeans.core.startup.layers.LayerCacheManager;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestCase;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileObject;
@@ -94,6 +96,14 @@ public class ValidateLayerConsistencyTest extends NbTestCase {
     public ValidateLayerConsistencyTest(String name) {
         super (name);
     }
+
+    @Override
+    protected int timeOut() {
+        // sometimes can deadlock and then we need to see the thread dump
+        return 1000 * 60 * 10;
+    }
+    
+    
     
     public @Override void setUp() throws Exception {
         clearWorkDir();
@@ -118,6 +128,20 @@ public class ValidateLayerConsistencyTest extends NbTestCase {
     protected @Override boolean runInEQ() {
         return true;
     }
+
+    public static Test suite() {
+        return NbModuleSuite.create(
+            NbModuleSuite.createConfiguration(ValidateLayerConsistencyTest.class).
+                clusters(".*").enableModules(".*").gui(false)
+        );
+    }
+
+    /* Causes mysterious failure in otherwise OK-looking UI/Runtime/org-netbeans-modules-db-explorer-nodes-RootNode.instance: 
+    @Override
+    protected Level logLevel() {
+        return Level.FINER;
+    }
+    */
     
     public void testAreAttributesFine () {
         List<String> errors = new ArrayList<String>();
