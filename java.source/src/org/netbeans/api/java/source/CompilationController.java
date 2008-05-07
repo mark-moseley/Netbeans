@@ -43,7 +43,6 @@ package org.netbeans.api.java.source;
 
 
 import java.io.IOException;
-import static org.netbeans.api.java.source.JavaSource.Phase.*;
 
 /** Class for explicit invocation of compilation phases on a java source.
  *  The implementation delegates to the {@link CompilationInfo} to get the data,
@@ -56,7 +55,7 @@ import static org.netbeans.api.java.source.JavaSource.Phase.*;
 public class CompilationController extends CompilationInfo {
     
     
-    CompilationController(final CompilationInfoImpl impl) {        
+    CompilationController(final JavaParserResult impl) {        
         super(impl);
 
     }
@@ -77,7 +76,6 @@ public class CompilationController extends CompilationInfo {
      * @throws IOException when the file cannot be red
      */    
     public JavaSource.Phase toPhase(JavaSource.Phase phase ) throws IOException {
-        checkConfinement();
-        return this.impl.toPhase(phase);
+        return impl.toPhase (phase);
     }                
 }
