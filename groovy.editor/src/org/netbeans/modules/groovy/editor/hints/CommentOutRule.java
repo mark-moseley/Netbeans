@@ -27,59 +27,131 @@
  */
 package org.netbeans.modules.groovy.editor.hints;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.prefs.Preferences;
-import javax.swing.JComponent;
-import org.netbeans.modules.groovy.editor.NodeType;
-import org.netbeans.modules.groovy.editor.hints.spi.AstRule;
 import org.netbeans.modules.groovy.editor.hints.spi.Description;
 import org.netbeans.modules.groovy.editor.hints.spi.HintSeverity;
 import org.netbeans.modules.groovy.editor.hints.spi.RuleContext;
+import org.netbeans.modules.groovy.editor.hints.spi.SelectionRule;
 import org.netbeans.modules.gsf.api.CompilationInfo;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.codehaus.groovy.ast.ASTNode;
+import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.groovy.editor.AstUtilities;
+import org.netbeans.modules.groovy.editor.hints.spi.EditList;
+import org.netbeans.modules.groovy.editor.hints.spi.Fix;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.openide.util.Exceptions;
+import org.openide.util.NbBundle;
 
-
-public class CommentOutRule implements AstRule {
-    public CommentOutRule() {
-    }
-
-    public Set<NodeType> getKinds() {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
+public class CommentOutRule implements SelectionRule {
+    
+    public static final Logger LOG = Logger.getLogger(CommentOutRule.class.getName()); // NOI18N
+    
+    String bulbDesc = NbBundle.getMessage(CommentOutRule.class, "CommentOutRuleHintDescription");
 
     public void run(RuleContext context, List<Description> result) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
+        CompilationInfo info = context.compilationInfo;
+        int start = context.selectionStart;
+        int end = context.selectionEnd;
+        
+        assert start < end;
+        
+        BaseDocument baseDoc;
+        try {
+            baseDoc = (BaseDocument) info.getDocument();
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+            return;
+        }
+        
+        if (end > baseDoc.getLength()) {
+            return;
+        }
 
-    public String getId() {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    public String getDescription() {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    public boolean getDefaultEnabled() {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    public JComponent getCustomizer(Preferences node) {
-        throw new UnsupportedOperationException("Not supported yet.");
+        if (end-start > 1000) {
+            // Avoid doing tons of work when the user does a Ctrl-A to select all in a really
+            // large buffer.
+            return;
+        }
+        
+        ASTNode root = AstUtilities.getRoot(info);
+        
+        if (root == null) {
+            return;
+        }
+        
+        // create only but one fix to comment-out the selection
+        
+        Fix fix = new SimpleFix(bulbDesc, baseDoc, context);
+        OffsetRange range = new OffsetRange(start, end);
+        
+        List<Fix> fixList = new ArrayList<Fix>(1);
+        fixList.add(fix);
+        Description desc = new Description(this, fix.getDescription(), info.getFileObject(), range,
+                fixList, 292);
+        result.add(desc);
+        
+        return;
     }
 
     public boolean appliesTo(CompilationInfo compilationInfo) {
-        throw new UnsupportedOperationException("Not supported yet.");
+        return true;
     }
 
     public String getDisplayName() {
-        throw new UnsupportedOperationException("Not supported yet.");
+        return bulbDesc;
     }
 
     public boolean showInTasklist() {
-        throw new UnsupportedOperationException("Not supported yet.");
+        return false;
     }
 
     public HintSeverity getDefaultSeverity() {
-        throw new UnsupportedOperationException("Not supported yet.");
+        return HintSeverity.WARNING;
     }
+    
+    
+    private class SimpleFix implements Fix {
+        BaseDocument baseDoc;
+        String desc;
+        RuleContext context;
+
+        public SimpleFix(String desc, BaseDocument baseDoc, RuleContext context) {
+            this.desc = desc;
+            this.baseDoc = baseDoc;
+            this.context = context;
+        }
+
+        public String getDescription() {
+            return desc;
+        }
+
+        public void implement() throws Exception {
+            EditList edits = new EditList(baseDoc);
+            
+            int start = context.selectionStart;
+            int end = context.selectionEnd;
+            
+            edits.replace(end, 0, "*/", false, 0);
+            edits.replace(start, 0, "/*", false, 1);
+            edits.apply();
+            
+            return;
+        }
+
+        public boolean isSafe() {
+            return false;
+        }
+
+        public boolean isInteractive() {
+            return false;
+        }
+        
+    }
+    
+    
+
 }
