@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -43,46 +43,56 @@ package org.netbeans.modules.spring.api.beans.model;
 
 import java.util.List;
 import java.util.Set;
-import org.openide.filesystems.FileObject;
 
 /**
- * Encapsulates the root of a Spring config model. It provides access to the
- * list of bean definitions and useful methods for retrieving beans
- * by id, etc.
+ * Encapsulates the Spring beans in a file. All beans obtained through
+ * this interface are guaranteed to return a non-null value from
+ * {@link SpringBean#getLocation}, and the location is guaranteed to
+ * provide a valid start offset.
  *
  * @author Andrei Badea
  */
-public interface SpringBeans {
+public interface FileSpringBeans {
 
     /**
-     * Finds a bean by its id or name or alias.
+     * Finds a bean by its id or name.
      *
-     * @param  idOrName the bean id or name or alias; never null.
+     * @param  idOrName the bean id or name; never null.
      * @return the bean with the specified id or name; {@code null} if no such
      *         bean was found.
      */
     SpringBean findBean(String idOrName);
 
     /**
-     * Returns the list of beans in the specified beans config file.
+     * Finds a bean by its id.
      *
-     * @param  fo the beans config file.
-     * @return the list of beans or {@code null} if {@code fo} was not
-     *         used to create the contents of this {@code SpringBeans}.
+     * @param  name the bean id or name; never null.
+     * @return the bean with the specified id or name; {@code null} if no such
+     *         bean was found.
      */
-    FileSpringBeans getFileBeans(FileObject fo);
+    SpringBean findBeanByID(String id);
 
     /**
-     * Returns the list of beans in the Spring config model.
+     * Returns the list of beans in this beans config file.
      *
-     * @return the list of beans; never {@code null}.
+     * @param  file the beans config file.
+     * @return the list of beans; never null.
      */
     List<SpringBean> getBeans();
     
     /**
-     * Returns all registered alias names in the Spring config model
+     * Returns the name of the bean (or another alias) that the specied alias
+     * aliases
      * 
-     * @return registered aliases; never {@code null}.
+     * @param name alias name
+     * @return name of bean or alias; {@code null} if no such alias was found
+     */
+    String findAliasSource(String alias);
+    
+    /**
+     * Returns all registered aliases in this beans config file
+     * 
+     * @return aliases; never null
      */
     Set<String> getAliases();
 }

@@ -42,9 +42,17 @@
 package org.netbeans.modules.spring.beans.model;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.netbeans.modules.spring.api.beans.model.FileSpringBeans;
 import org.netbeans.modules.spring.api.beans.model.SpringBean;
 import org.netbeans.modules.spring.api.beans.model.SpringBeans;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 /**
  * The {@link SpringBeans} implementation for multiple config files.
@@ -53,29 +61,56 @@ import org.netbeans.modules.spring.api.beans.model.SpringBeans;
  */
 public class ConfigModelSpringBeans implements SpringBeans {
 
-    private final SpringConfigModelController.Access modelAccess;
+    private final Map<File, SpringBeanSource> file2BeanSource;
 
-    public ConfigModelSpringBeans(SpringConfigModelController.Access modelAccess) {
-        this.modelAccess = modelAccess;
+    public ConfigModelSpringBeans(Map<File, SpringBeanSource> file2BeanSource) {
+        this.file2BeanSource = file2BeanSource;
     }
 
-    public SpringBean findBean(String beanName) {
-        assert modelAccess.isValid() : "The SpringBeans instance has escaped the Action.run() method";
-        for (SpringBeanSource beanSource : modelAccess.getBeanSources()) {
-            SpringBean bean = beanSource.findBean(beanName);
+    public SpringBean findBean(String name) {
+        assert ExclusiveAccess.getInstance().isCurrentThreadAccess() : "The SpringBeans instance has escaped the Action.run() method";
+        for (SpringBeanSource beanSource : file2BeanSource.values()) {
+            SpringBean bean = beanSource.findBean(name);
             if (bean != null) {
                 return bean;
             }
         }
+        
+        // handle aliases
+        for(SpringBeanSource beanSource : file2BeanSource.values()) {
+            String pName = beanSource.findAliasSource(name);
+            if (pName != null) {
+                return findBean(pName);
+            }
+        }
+        
         return null;
     }
 
-    public List<SpringBean> getBeans(File file) {
-        assert modelAccess.isValid() : "The SpringBeans instance has escaped the Action.run() method";
-        SpringBeanSource beanSource = modelAccess.getBeanSource(file);
-        if (beanSource != null) {
-            return beanSource.getBeans();
+    public FileSpringBeans getFileBeans(FileObject fo) {
+        assert ExclusiveAccess.getInstance().isCurrentThreadAccess() : "The SpringBeans instance has escaped the Action.run() method";
+        File file = FileUtil.toFile(fo);
+        if (file != null) {
+            return file2BeanSource.get(file);
         }
         return null;
+    }
+
+    public List<SpringBean> getBeans() {
+        assert ExclusiveAccess.getInstance().isCurrentThreadAccess() : "The SpringBeans instance has escaped the Action.run() method";
+        List<SpringBean> result = new ArrayList<SpringBean>(file2BeanSource.size() * 20);
+        for (SpringBeanSource beanSource : file2BeanSource.values()) {
+            result.addAll(beanSource.getBeans());
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    public Set<String> getAliases() {
+        assert ExclusiveAccess.getInstance().isCurrentThreadAccess() : "The SpringBeans instance has escaped the Action.run() method";
+        Set<String> aliases = new HashSet<String>(file2BeanSource.size() * 5);
+        for (SpringBeanSource beanSource : file2BeanSource.values()) {
+            aliases.addAll(beanSource.getAliases());
+        }
+        return Collections.unmodifiableSet(aliases);
     }
 }
