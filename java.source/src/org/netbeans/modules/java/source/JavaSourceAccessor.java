@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.java.source;
 
+import com.sun.tools.javac.api.ClassNamesForFileOraculum;
 import com.sun.tools.javac.api.JavacTaskImpl;
 import java.io.IOException;
 import java.util.Collection;
@@ -49,11 +50,13 @@ import javax.tools.DiagnosticListener;
 import javax.tools.JavaFileObject;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.ClasspathInfo;
+import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.PositionConverter;
-import org.openide.ErrorManager;
+import org.netbeans.modules.java.source.parsing.CompilationInfoImpl;
 import org.openide.filesystems.FileObject;
+import org.openide.util.Exceptions;
 
 /**
  *
@@ -61,25 +64,37 @@ import org.openide.filesystems.FileObject;
  */
 public abstract class JavaSourceAccessor {
 
-
-    static {
-        try {
-            Class.forName("org.netbeans.api.java.source.JavaSource", true, JavaSourceAccessor.class.getClassLoader());   //NOI18N
-        } catch (ClassNotFoundException e) {
-            ErrorManager.getDefault().notify (e);
+        
+    public static synchronized JavaSourceAccessor getINSTANCE () {
+        if (INSTANCE == null) {
+            try {
+                Class.forName("org.netbeans.api.java.source.JavaSource", true, JavaSourceAccessor.class.getClassLoader());   //NOI18N            
+                assert INSTANCE != null;
+            } catch (ClassNotFoundException e) {
+                Exceptions.printStackTrace(e);
+            }
         }
+        return INSTANCE;
     }
     
-    public static JavaSourceAccessor INSTANCE;
+    public static void setINSTANCE (JavaSourceAccessor instance) {
+        assert instance != null;
+        INSTANCE = instance;
+    }
     
-    
+    private static volatile JavaSourceAccessor INSTANCE;
+        
     public void runSpecialTask (final CancellableTask<CompilationInfo> task, final JavaSource.Priority priority) {
         INSTANCE.runSpecialTaskImpl (task, priority);
     }
     
     protected abstract void runSpecialTaskImpl (CancellableTask<CompilationInfo> task, JavaSource.Priority priority);
         
-    public abstract JavacTaskImpl createJavacTask(ClasspathInfo cpInfo, DiagnosticListener<? super JavaFileObject> diagnosticListener, String sourceLevel);
+    public final JavacTaskImpl createJavacTask(ClasspathInfo cpInfo, DiagnosticListener<? super JavaFileObject> diagnosticListener, String sourceLevel) {
+        return createJavacTask(cpInfo, diagnosticListener, sourceLevel, null);
+    }
+    
+    public abstract JavacTaskImpl createJavacTask(ClasspathInfo cpInfo, DiagnosticListener<? super JavaFileObject> diagnosticListener, String sourceLevel, ClassNamesForFileOraculum cnih);
     
     
     /**
@@ -106,6 +121,20 @@ public abstract class JavaSourceAccessor {
     public abstract JavaSource create(final ClasspathInfo cpInfo, final PositionConverter binding, final Collection<? extends FileObject> files) throws IllegalArgumentException;
     
     public abstract PositionConverter create(final FileObject fo, int offset, int length, final JTextComponent component);
+    
+    /**
+     * Creates CompilationInfo for given CompilationInfoImpl
+     * @param impl the spi
+     * @return the api wrapper
+     */
+    public abstract CompilationInfo createCompilationInfo (CompilationInfoImpl impl);
+    
+    /**
+     * Creates CompilationController for given CompilationInfoImpl
+     * @param impl the spi
+     * @return the api wrapper
+     */
+    public abstract CompilationController createCompilationController (CompilationInfoImpl impl);
     
     /**
      * Returns true when the caller is a {@link JavaSource} worker thread
