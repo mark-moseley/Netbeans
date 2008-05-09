@@ -43,9 +43,9 @@ package org.netbeans.modules.ruby.rubyproject.classpath;
 import java.beans.PropertyChangeEvent;
 import java.util.regex.Pattern;
 import org.netbeans.api.ruby.platform.RubyInstallation;
-import org.netbeans.spi.gsfpath.classpath.ClassPathImplementation;
-import org.netbeans.spi.gsfpath.classpath.PathResourceImplementation;
-import org.netbeans.spi.gsfpath.classpath.support.ClassPathSupport;
+import org.netbeans.modules.gsfpath.spi.classpath.ClassPathImplementation;
+import org.netbeans.modules.gsfpath.spi.classpath.PathResourceImplementation;
+import org.netbeans.modules.gsfpath.spi.classpath.support.ClassPathSupport;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.net.URL;
@@ -137,6 +137,7 @@ final class BootClassPathImplementation implements ClassPathImplementation, Prop
             RubyPlatform platform = new RubyPlatformProvider(evaluator).getPlatform();
             if (platform == null) {
                 LOGGER.severe("Cannot resolve platform for project");
+                return Collections.emptyList();
             }
 
             if (!platform.hasRubyGemsInstalled()) {
