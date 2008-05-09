@@ -65,6 +65,7 @@ import javax.swing.text.AbstractDocument;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 
+import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.SourceUtils;
@@ -74,6 +75,8 @@ import org.netbeans.editor.*;
 import org.netbeans.editor.ext.ExtSettingsDefaults;
 import org.netbeans.editor.ext.ExtSettingsNames;
 import org.netbeans.editor.ext.java.JavaTokenContext;
+import org.netbeans.modules.java.editor.options.JavaOptions;
+import org.openide.util.Lookup;
 
 /**
  *
@@ -150,7 +153,19 @@ public class Utilities {
         lazyInit();
         showDeprecatedMembers = b;
     }
-    
+
+    public static boolean guessMethodArguments() {
+        Lookup lkp = MimeLookup.getLookup("text/x-java"); //NOI18N
+        JavaOptions opt = lkp != null ? lkp.lookup(JavaOptions.class) : null;
+        return opt.getGuessMethodArguments();
+    }
+
+    public static boolean pairCharactersCompletion() {
+        Lookup lkp = MimeLookup.getLookup("text/x-java"); //NOI18N
+        JavaOptions opt = lkp != null ? lkp.lookup(JavaOptions.class) : null;
+        return opt.getPairCharactersCompletion();
+    }
+
     private static void lazyInit() {
         if (!inited) {
             inited = true;
@@ -336,16 +351,13 @@ public class Utilities {
         return result;
     }
 
-    public static boolean isInMethod(TreePath tp) {
-        while (tp != null) {
-            if (tp.getLeaf().getKind() == Tree.Kind.METHOD) {
-                return true;
-            }
-            
-            tp = tp.getParentPath();
-        }
-        
-        return false;
+    public static boolean inAnonymousOrLocalClass(TreePath path) {
+        if (path == null)
+            return false;
+        TreePath parentPath = path.getParentPath();
+        if (path.getLeaf().getKind() == Tree.Kind.CLASS && parentPath.getLeaf().getKind() != Tree.Kind.COMPILATION_UNIT && parentPath.getLeaf().getKind() != Tree.Kind.CLASS)                
+            return true;
+        return inAnonymousOrLocalClass(parentPath);
     }
         
     private static List<String> varNamesForType(TypeMirror type, Types types, Elements elements) {
@@ -550,6 +562,7 @@ public class Utilities {
 
         @Override
         public StringBuilder visitWildcard(WildcardType t, Boolean p) {
+            int len = DEFAULT_VALUE.length();
             DEFAULT_VALUE.append("?"); //NOI18N
             TypeMirror bound = t.getSuperBound();
             if (bound == null) {
@@ -559,7 +572,7 @@ public class Utilities {
                     if (bound.getKind() == TypeKind.WILDCARD)
                         bound = ((WildcardType)bound).getSuperBound();
                     visit(bound, p);
-                } else {
+                } else if (len == 0) {
                     bound = SourceUtils.getBound(t);
                     if (bound != null && (bound.getKind() != TypeKind.DECLARED || !((TypeElement)((DeclaredType)bound).asElement()).getQualifiedName().contentEquals("java.lang.Object"))) { //NOI18N
                         DEFAULT_VALUE.append(" extends "); //NOI18N
@@ -573,6 +586,7 @@ public class Utilities {
             return DEFAULT_VALUE;
         }
 
+        @Override
         public StringBuilder visitError(ErrorType t, Boolean p) {
             Element e = t.asElement();
             if (e instanceof TypeElement) {
@@ -621,7 +635,8 @@ public class Utilities {
             switch (mit.getMethodSelect().getKind()) {
                 case IDENTIFIER:
                     Scope s = info.getTrees().getScope(path);
-                    on = s.getEnclosingClass().asType();
+                    TypeElement enclosingClass = s.getEnclosingClass();
+                    on = enclosingClass != null ? enclosingClass.asType() : null;
                     methodName = ((IdentifierTree) mit.getMethodSelect()).getName().toString();
                     break;
                 case MEMBER_SELECT:
