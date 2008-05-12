@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,51 +38,93 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.print.impl.provider;
+package org.netbeans.modules.xml.search.api;
 
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import javax.swing.JComponent;
-
-import org.netbeans.modules.print.spi.PrintPage;
+import org.netbeans.modules.xml.search.spi.SearchProvider;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2005.12.22
+ * @version 2007.05.25
  */
-final class ComponentPage implements PrintPage {
+public interface SearchOption {
 
-  ComponentPage (JComponent component, Rectangle piece, double zoom, int row, int column) {
-    myComponent = component;
-    myPiece = piece;
-    myZoom = zoom;
-    myRow = row;
-    myColumn = column;
+  /**
+   * Returns text to be found.
+   * @return text to be found
+   */
+  String getText();
+
+  /**
+   * Returns provider.
+   * @return provider
+   */
+  SearchProvider getProvider();
+
+  /**
+   * Returns target to be found.
+   * @return target to be found
+   */
+  SearchTarget getTarget();
+
+  /**
+   * Returns search match.
+   * @return search match
+   */
+  SearchMatch getSearchMatch();
+
+  /**
+   * Returns true if search is case sensitive.
+   * @return true if search is case sensitive
+   */
+  boolean isCaseSensitive();
+
+  /**
+   * Returns true if search will be performed in selection.
+   * @return true if search will be performed in selection
+   */
+  boolean useSelection();
+
+  // ------------------------------------------
+  public class Adapter implements SearchOption {
+
+    public Adapter(String text, SearchProvider provider, SearchTarget target, SearchMatch match, boolean caseSensitive, boolean useSelection) {
+      myText = text;
+      myProvider = provider;
+      myTarget = target;
+      mySearchMatch = match;
+      myCaseSensitive = caseSensitive;
+      myUseSelection = useSelection;
+    }
+
+    public String getText() {
+      return myText;
+    }
+
+    public SearchProvider getProvider() {
+      return myProvider;
+    }
+
+    public SearchTarget getTarget() {
+      return myTarget;
+    }
+
+    public SearchMatch getSearchMatch() {
+      return mySearchMatch;
+    }
+
+    public boolean isCaseSensitive() {
+      return myCaseSensitive;
+    }
+
+    public boolean useSelection() {
+      return myUseSelection;
+    }
+
+    private String myText;
+    private SearchTarget myTarget;
+    private SearchProvider myProvider;
+    private SearchMatch mySearchMatch;
+    private boolean myCaseSensitive;
+    private boolean myUseSelection;
   }
-
-  int getRow() {
-    return myRow;
-  }
-
-  int getColumn() {
-    return myColumn;
-  }
-
-  public void print(Graphics graphics) {
-    Graphics2D g = (Graphics2D)graphics.create(0, 0, myPiece.width, myPiece.height);
-
-    g.translate(-myPiece.x, -myPiece.y);
-    g.scale(myZoom, myZoom);
-
-    myComponent.print(g);
-
-    g.dispose();
-  }
-
-  private int myRow;
-  private int myColumn;
-  private double myZoom;
-  private JComponent myComponent;
-  private Rectangle myPiece;
 }

@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,51 +38,52 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.print.impl.provider;
+package org.netbeans.modules.xml.search.api;
 
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import javax.swing.JComponent;
-
-import org.netbeans.modules.print.spi.PrintPage;
+import static org.netbeans.modules.xml.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2005.12.22
+ * @version 2007.05.29
  */
-final class ComponentPage implements PrintPage {
+public interface SearchTarget {
 
-  ComponentPage (JComponent component, Rectangle piece, double zoom, int row, int column) {
-    myComponent = component;
-    myPiece = piece;
-    myZoom = zoom;
-    myRow = row;
-    myColumn = column;
+  /**
+   * Returns the class of target.
+   * @return the class of target
+   */
+  Class<? extends Object> getClazz();
+
+
+  // -------------------------------------------
+  public class Adapter implements SearchTarget {
+
+    public Adapter(Class bundle, Class<? extends Object> clazz) {
+      myClazz = clazz;
+      myBundle = bundle;
+    }
+
+    public Class<? extends Object> getClazz() {
+      return myClazz;
+    }
+
+    @Override
+    public String toString() {
+      return i18n(myBundle, name());
+    }
+
+    private String name() {
+      String name = myClazz.getName();
+
+      int k = name.lastIndexOf("."); // NOI18N
+
+      if (k == -1) {
+        return name;
+      }
+      return name.substring(k + 1);
+    }
+
+    private Class myBundle;
+    private Class<? extends Object> myClazz;
   }
-
-  int getRow() {
-    return myRow;
-  }
-
-  int getColumn() {
-    return myColumn;
-  }
-
-  public void print(Graphics graphics) {
-    Graphics2D g = (Graphics2D)graphics.create(0, 0, myPiece.width, myPiece.height);
-
-    g.translate(-myPiece.x, -myPiece.y);
-    g.scale(myZoom, myZoom);
-
-    myComponent.print(g);
-
-    g.dispose();
-  }
-
-  private int myRow;
-  private int myColumn;
-  private double myZoom;
-  private JComponent myComponent;
-  private Rectangle myPiece;
 }

@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,37 +38,80 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.print.impl.action;
+package org.netbeans.modules.bpel.search;
 
-import org.openide.util.HelpCtx;
-import org.openide.util.actions.CallableSystemAction;
+import java.util.List;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 
-import org.netbeans.modules.print.impl.util.Option;
-import static org.netbeans.modules.print.impl.ui.UI.*;
+import org.netbeans.modules.xml.xam.dom.DocumentComponent;
+import org.netbeans.modules.bpel.model.api.BpelEntity;
+import org.netbeans.modules.xml.search.api.SearchException;
+import org.netbeans.modules.xml.search.api.SearchOption;
+import static org.netbeans.modules.xml.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2007.03.09
+ * @version 2006.12.05
  */
-public final class PageSetupAction extends CallableSystemAction {
+public final class Construct extends Engine {
 
   @Override
-  public synchronized void performAction() {
-    Option.getDefault().showPageSetup();
+  public void search(SearchOption option) throws SearchException {
+    Diagram diagram = (Diagram) option.getProvider().getRoot();
+    diagram.clearHighlighting();
+//out();
+    fireSearchStarted(option);
+    search(diagram, option.useSelection());
+    fireSearchFinished(option);
   }
+  
+  private void search(Diagram diagram, boolean useSelection) {
+    List<Diagram.Element> elements = diagram.getElements(useSelection);
 
-  @Override
-  protected boolean asynchronous() {
+    for (Diagram.Element element : elements) {
+      BpelEntity entity = element.getBpelEntity();
+
+      if (acceptsAttribute(entity) || acceptsComponent(entity)) {
+//out(indent + "      add.");
+        fireSearchFound(new Element(element));
+      }
+    }
+  }
+  
+  private boolean acceptsAttribute(BpelEntity entity) {
+    if ( !(entity instanceof DocumentComponent)) {
+      return false;
+    }
+    NamedNodeMap attributes = ((DocumentComponent) entity).getPeer().getAttributes();
+
+    for (int i=0; i < attributes.getLength(); i++) {
+      Node attribute = attributes.item(i);
+     
+      if (accepts(attribute.getNodeName())) {
+        return true;
+      }
+      if (accepts(attribute.getNodeValue())) {
+        return true;
+      }
+    }
     return false;
   }
 
-  @Override
-  public String getName() {
-    return i18n(PageSetupAction.class, "LBL_PageSetup_Action"); // NOI18N
+  private boolean acceptsComponent(BpelEntity entity) {
+    if ( !(entity instanceof DocumentComponent)) {
+      return false;
+    }
+    return accepts(((DocumentComponent) entity).getPeer().getTagName());
   }
-  
+
   @Override
-  public HelpCtx getHelpCtx() {
-    return HelpCtx.DEFAULT_HELP;
+  public String getDisplayName() {
+    return i18n(Engine.class, "LBL_Construct_Display_Name"); // NOI18N
+  }
+
+  @Override
+  public String getShortDescription() {
+    return i18n(Engine.class, "LBL_Construct_Short_Description"); // NOI18N
   }
 }

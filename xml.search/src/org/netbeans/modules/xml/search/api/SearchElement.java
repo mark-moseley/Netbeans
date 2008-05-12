@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,51 +38,112 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.print.impl.provider;
+package org.netbeans.modules.xml.search.api;
 
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import javax.swing.JComponent;
-
-import org.netbeans.modules.print.spi.PrintPage;
+import javax.swing.Icon;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2005.12.22
+ * @version 2007.05.25
  */
-final class ComponentPage implements PrintPage {
+public interface SearchElement {
 
-  ComponentPage (JComponent component, Rectangle piece, double zoom, int row, int column) {
-    myComponent = component;
-    myPiece = piece;
-    myZoom = zoom;
-    myRow = row;
-    myColumn = column;
+  /**
+   * Returns name of element.
+   * @return name of element
+   */
+  String getName();
+
+  /**
+   * Returns tool tip of element.
+   * @return tool tip of element
+   */
+  String getToolTip();
+
+  /**
+   * Returns icon of element.
+   * @return icon of element
+   */
+  Icon getIcon();
+
+  /**
+   * Returns parent of element.
+   * @return parent of element
+   */
+  SearchElement getParent();
+  
+  /**
+   * Goes to the source of element.
+   */
+  void gotoSource();
+
+  /**
+   * Goes to the visual of element.
+   */
+  void gotoVisual();
+
+  /**
+   * Returns true if element is deleted.
+   * @return true if element is deleted
+   */
+  boolean isDeleted();
+
+  /**
+   * Highlights element.
+   */
+  void highlight();
+
+  /**
+   * Unhighlights element.
+   */
+  void unhighlight();
+
+  // --------------------------------------------
+  public class Adapter implements SearchElement {
+
+    public Adapter(String name, String toolTip, Icon icon, SearchElement parent) {
+      myName = name;
+      myToolTip = toolTip;
+      myIcon = icon;
+      myParent = parent;
+    }
+
+    public String getName() {
+      return myName;
+    }
+
+    public String getToolTip() {
+      return myToolTip;
+    }
+
+    public Icon getIcon() {
+      return myIcon;
+    }
+
+    public SearchElement getParent() {
+      return myParent;
+    }
+
+    public boolean isDeleted() {
+      return false;
+    }
+
+    public void gotoSource() {}
+
+    public void gotoVisual() {}
+
+    public void highlight() {}
+
+    public void unhighlight() {}
+
+    @Override
+    public String toString() {
+      return getName();
+    }
+
+    private Icon myIcon;
+    private String myName;
+    private String myToolTip;
+    private SearchElement myParent;
   }
-
-  int getRow() {
-    return myRow;
-  }
-
-  int getColumn() {
-    return myColumn;
-  }
-
-  public void print(Graphics graphics) {
-    Graphics2D g = (Graphics2D)graphics.create(0, 0, myPiece.width, myPiece.height);
-
-    g.translate(-myPiece.x, -myPiece.y);
-    g.scale(myZoom, myZoom);
-
-    myComponent.print(g);
-
-    g.dispose();
-  }
-
-  private int myRow;
-  private int myColumn;
-  private double myZoom;
-  private JComponent myComponent;
-  private Rectangle myPiece;
 }

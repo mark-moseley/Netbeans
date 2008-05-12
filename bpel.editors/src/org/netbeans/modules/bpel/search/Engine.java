@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,60 +38,85 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.print.impl.ui;
+package org.netbeans.modules.bpel.search;
 
-import java.awt.Graphics;
-import java.awt.print.PageFormat;
-import java.awt.print.Printable;
-import java.awt.print.PrinterException;
-import java.awt.print.PrinterJob;
 import java.util.List;
-
-import org.openide.ErrorManager;
-
-import org.netbeans.modules.print.impl.util.Option;
-import static org.netbeans.modules.print.impl.ui.UI.*;
+import org.netbeans.modules.xml.search.api.SearchElement;
+import org.netbeans.modules.xml.search.api.SearchException;
+import org.netbeans.modules.xml.search.api.SearchOption;
+import org.netbeans.modules.xml.search.spi.SearchEngine;
+import static org.netbeans.modules.xml.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2005.12.21
+ * @version 2006.11.13
  */
-final class Printer implements Printable {
+public class Engine extends SearchEngine.Adapter {
 
-  void print(List<Paper> papers) {
-    PrinterJob job = PrinterJob.getPrinterJob();
-    myPapers = papers;
-//out("SET PAPER: " + myPapers);
+  public void search(SearchOption option) throws SearchException {
+    Diagram diagram = (Diagram) option.getProvider().getRoot();
+    diagram.clearHighlighting();
+//out();
+    fireSearchStarted(option);
+    search(diagram, option.useSelection());
+    fireSearchFinished(option);
+  }
 
-    if (job == null) {
-      return;
-    }
-    job.setPrintable(this, Option.getDefault().getPageFormat());
-    
-    try {
-      if (job.printDialog()) {
-        job.print();
+  private void search(Diagram diagram, boolean useSelection) {
+    List<Diagram.Element> elements = diagram.getElements(useSelection);
+
+    for (Diagram.Element element : elements) {
+      String text = element.getName();
+//out(indent + " see: " + text);
+
+      if (accepts(text)) {
+//out(indent + "      add.");
+        fireSearchFound(new Element(element));
       }
     }
-    catch (PrinterException e) {
-      String msg = i18n(
-        Printer.class, "ERR_Printer_Problem", e.getLocalizedMessage()); // NOI18N
-      ErrorManager.getDefault().annotate(e, msg);
-      ErrorManager.getDefault().notify(ErrorManager.USER, e);
-    }
-    myPapers = null;
   }
 
-  public int print(Graphics g, PageFormat pageFormat, int index) throws PrinterException {
-//out("PAPER IS: " + myPapers.size());
-    if (index == myPapers.size()) {
-      return NO_SUCH_PAGE;
-    }
-//out("  print: " + index);
-    myPapers.get(index).print(g);
-  
-    return PAGE_EXISTS;
+  public boolean isApplicable(Object root) {
+    return root instanceof Diagram;
   }
 
-  private List<Paper> myPapers;
+  public String getDisplayName() {
+    return i18n(Engine.class, "LBL_Engine_Display_Name"); // NOI18N
+  }
+
+  public String getShortDescription() {
+    return i18n(Engine.class, "LBL_Engine_Short_Description"); // NOI18N
+  }
+
+  // -----------------------------------------------------------
+  protected static class Element extends SearchElement.Adapter {
+
+    Element(Diagram.Element element) {
+      super(element.getName(), element.getName(), null, null);
+      myElement = element;
+      highlight();
+    }
+
+    @Override
+    public void gotoSource() {
+      myElement.gotoSource();
+    }
+
+    @Override
+    public void gotoVisual() {
+      myElement.gotoDesign();
+    }
+
+    @Override
+    public void highlight() {
+      myElement.highlight();
+    }
+
+    @Override
+    public void unhighlight() {
+      myElement.unhighlight();
+    }
+
+    private Diagram.Element myElement;
+  }
 }
