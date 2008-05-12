@@ -19,6 +19,7 @@
 
 package org.netbeans.modules.php.dbgp.models;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -150,10 +151,9 @@ public class CallStackModel extends ViewModelSupport
             Stack stack = (Stack)node;
             String commandName = stack.getCurrentCommandName();
             if ( commandName == null ) {
-                return getFile(stack) + ":" + ( stack.getLine() -1 );
-            }
-            else {
-                return getFile(stack) + "." +commandName +":" + ( stack.getLine() -1 );
+                return getFile(stack) + ":" + stack.getLine();
+            } else {
+                return getFile(stack) + "." +commandName +":" + stack.getLine();
             }
         }
         else if (node == ROOT) {
@@ -291,8 +291,14 @@ public class CallStackModel extends ViewModelSupport
         }
         else {
             Project project = FileOwnerQuery.getOwner( fileObject );
-            return FileUtil.getRelativePath(  project.getProjectDirectory() , 
-                    fileObject );
+            if (project != null) {
+                String retval = FileUtil.getRelativePath(project.getProjectDirectory() ,fileObject );
+                if (retval != null) {
+                    return retval;
+                }
+            }
+            File f = FileUtil.toFile(fileObject);
+            return f != null ? f.getAbsolutePath() : fileName;
         }
     }
     
