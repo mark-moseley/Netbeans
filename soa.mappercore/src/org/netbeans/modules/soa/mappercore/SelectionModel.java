@@ -182,6 +182,27 @@ public class SelectionModel extends MapperPropertyAccess {
         }
     }
     
+    public void setSelected(TreePath treePath, GraphSubset graphSubset) {
+        boolean changed = setSelectedPathImpl(treePath);
+        selected.clear();
+
+        for (int i = 0; i < graphSubset.getVertexCount(); i++) {
+            Vertex vertex = graphSubset.getVertex(i);
+            selected.add(vertex);
+            changed = true;
+        }
+
+        for (int i = 0; i < graphSubset.getLinkCount(); i++) {
+            Link link = graphSubset.getLink(i);
+            selected.add(link);
+            changed = true;
+        }
+
+        if (changed) {
+            fireSelectionChanged();
+        }
+    }
+    
     
     public void clearSelection(TreePath treePath) {
         boolean changed = setSelectedPathImpl(treePath);
@@ -364,7 +385,9 @@ public class SelectionModel extends MapperPropertyAccess {
     private class ListenersImpl implements GraphListener, TreeModelListener, 
             PropertyChangeListener, TreeExpansionListener 
     {
-        public void graphBoundsChanged(Graph graph) {}
+        public void graphBoundsChanged(Graph graph) {
+            updateSelectedItems();
+        }
 
         public void graphLinksChanged(Graph graph) {
             updateSelectedItems();
