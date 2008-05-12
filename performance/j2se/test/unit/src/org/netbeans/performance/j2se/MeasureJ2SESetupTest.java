@@ -39,58 +39,42 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.menus;
+package org.netbeans.performance.j2se;
 
-import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.modules.performance.utilities.PerformanceTestCase;
-import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.MainWindowOperator;
-import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.performance.j2se.setup.IDESetup;
 
-import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JMenuBarOperator;
-import org.netbeans.jemmy.operators.JDialogOperator;
-import org.netbeans.jemmy.operators.JTextFieldOperator;
-import org.netbeans.jemmy.EventTool;
-import org.netbeans.jemmy.operators.JButtonOperator;
-
+import org.netbeans.junit.NbTestSuite;
 
 /**
+ * Test suite that actually does not perform any test but sets up user directory
+ * for UI responsiveness tests
  *
- * @author tester
+ * @author  rkubacki@netbeans.org, mmirilovic@netbeans.org
  */
-public class MenuSetup  extends PerformanceTestCase {
+public class MeasuringSetup extends NbTestSuite {
 
-    private String MENU, TITLE;
-    
-    public MenuSetup(String testName) {
-       super(testName);
+    public MeasuringSetup (java.lang.String testName) {
+        super(testName);
     }
-    
-   public void testSetup() {
-//       ProjectSupport.openProject("../../../nbextra/qa/projectized/PerformanceTestData1");
-        MENU = Bundle.getStringTrimmed("org.netbeans.core.Bundle","Menu/File") + "|" + Bundle.getStringTrimmed("org.netbeans.modules.project.ui.actions.Bundle","LBL_OpenProjectAction_Name");
-        TITLE = Bundle.getStringTrimmed("org.netbeans.modules.project.ui.Bundle","LBL_PrjChooser_Title");
-        new JMenuBarOperator(MainWindowOperator.getDefault().getJMenuBar()).pushMenuNoBlock(MENU,"|");
-        NbDialogOperator nbd=new NbDialogOperator(TITLE);
-   
-        new JTextFieldOperator(nbd,1).typeText("c:/work/perftests/nbextra/qa/projectized/PerformanceTestData");
-        new JButtonOperator(nbd,"Open Project").push();
-        CommonUtilities.waitProjectTasksFinished();
+
+    public static NbTestSuite suite() {
+        NbTestSuite suite = new NbTestSuite("UI Responsiveness Setup suite");
+
+        suite.addTest(new IDESetup("closeMemoryToolbar"));
         
-   }
+        suite.addTest(new IDESetup("closeWelcome"));
 
-    @Override
-    public void prepare() {
+        suite.addTest(new IDESetup("testAddAppServer"));
         
+        suite.addTest(new IDESetup("openFoldersProject"));
+        suite.addTest(new IDESetup("openDataProject"));
+
+	suite.addTest(new IDESetup("openWebProject"));
+        suite.addTest(new IDESetup("openNBProject"));
+
+        suite.addTest(new IDESetup("closeAllDocuments"));
+        
+        return suite;
     }
-
-    @Override
-    public ComponentOperator open() {
-        return null;
-    }
-
-
+    
 }
