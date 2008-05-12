@@ -660,6 +660,13 @@ public class LinkTool extends MapperPropertyAccess {
         
         if (sourcePin != null && targetPin != null && targetPath != null) {
             model.connect(targetPath, sourcePin, targetPin, oldTreePath, oldLink);
+            
+            if (sourcePin instanceof Constant) {
+                 Constant constant = (Constant) sourcePin;
+                 if (constant.getItemCount() > 0) {
+                    getCanvas().startEdit(targetPath, constant.getItem(0));
+                 }
+            }
         }
         
         getMapper().repaint();
@@ -667,7 +674,7 @@ public class LinkTool extends MapperPropertyAccess {
     }
     
     
-    public void dragDone() {
+    public void done() {
         if (!isActive()) return;
         reset();
         getMapper().repaint();
@@ -685,6 +692,7 @@ public class LinkTool extends MapperPropertyAccess {
     public void setTarget(TreePath targetPath, TargetPin targetPin, 
             JComponent c, Point p) 
     {
+        this.targetPath = targetPath;
         this.targetPin = targetPin;
         this.targetComponent = c;
         this.x2 = p.x;
@@ -948,13 +956,18 @@ public class LinkTool extends MapperPropertyAccess {
         Graph graph = (Graph) targetPin;
 
         if (oldLink != null) {
-            return oldLink.getTarget() == graph 
-                    && Utils.equal(oldTreePath, treePath);
+            if (oldLink.getTarget() == graph) {
+                return Utils.equal(oldTreePath, treePath) || 
+                        oldLink.getSource() instanceof TreeSourcePin;
+            } else {
+                return !graph.hasOutgoingLinks() && 
+                        (Utils.equal(oldTreePath, treePath) ||
+                        oldLink.getSource() instanceof TreeSourcePin);
+            }
         } 
         
         return !graph.hasOutgoingLinks();
     }
-    
     
     private boolean canConnectIngoing(TreePath treePath, SourcePin sourcePin) {
         if (sourcePin instanceof Vertex) {
