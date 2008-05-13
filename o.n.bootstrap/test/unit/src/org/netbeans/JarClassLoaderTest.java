@@ -51,10 +51,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import junit.framework.AssertionFailedError;
-import org.fakepkg.FakeHandler;
 import org.netbeans.junit.NbTestCase;
-import org.openide.util.Exceptions;
+import org.openide.util.test.TestFileUtils;
 
 /** Tests that cover some basic aspects of a Proxy/JarClassLoader.
  *
@@ -62,23 +63,24 @@ import org.openide.util.Exceptions;
  */
 public class JarClassLoaderTest extends NbTestCase {
 
+    private static Logger LOGGER = Logger.getLogger(ProxyClassLoader.class.getName());
+
+
     public JarClassLoaderTest(String name) {
         super(name);
     }
 
-    /** directory full of JAR files to test */
-    protected File jars;
-    /** directory full of testing roots */
-    protected File dirs;
-
+    @Override
     protected void setUp() throws Exception {
-        jars = new File(JarClassLoaderTest.class.getResource("jars").getFile());
-        dirs = new File(JarClassLoaderTest.class.getResource("dirs").getFile());
+        LOGGER.setUseParentHandlers(false);
+        LOGGER.setLevel(Level.OFF);
+        clearWorkDir();
     }
 
 
     public void testCanLoadFromDefaultPackage() throws Exception {
-        File jar = new File(jars, "default-package-resource.jar");
+        File jar = new File(getWorkDir(), "default-package-resource.jar");
+        TestFileUtils.writeZipFile(jar, "resource.txt:content", "package/resource.txt:content");
         JarClassLoader jcl = new JarClassLoader(Collections.singletonList(jar), new ProxyClassLoader[0]);
         
         assertStreamContent(jcl.getResourceAsStream("package/resource.txt"), "content");
@@ -94,7 +96,8 @@ public class JarClassLoaderTest extends NbTestCase {
 
 
     public void testCanLoadFromDefaultPackageCached() throws Exception {
-        final File jar = new File(jars, "default-package-resource-cached.jar");
+        final File jar = new File(getWorkDir(), "default-package-resource-cached.jar");
+        TestFileUtils.writeZipFile(jar, "resource.txt:content", "package/resource.txt:content", "META-INF/MANIFEST.MF:Covered-Packages: META-INF,/MANIFEST.MF,package,\n");
 
         Module fake = new Module(null, null, null, null) {
 	    public List<File> getAllJars() {throw new UnsupportedOperationException();}
@@ -131,7 +134,10 @@ public class JarClassLoaderTest extends NbTestCase {
     }
 
     public void testCanLoadFromDefaultPackageDirs() throws Exception {
-        File dir = new File(dirs, "default-package-resource");
+        File dir = getWorkDir();
+        TestFileUtils.writeFile(new File(dir, "resource.txt"), "content");
+        TestFileUtils.writeFile(new File(dir, "package/resource.txt"), "content");
+        TestFileUtils.writeFile(new File(dir, "META-INF/services/resource.txt"), "content");
         JarClassLoader jcl = new JarClassLoader(Collections.singletonList(dir), new ProxyClassLoader[0]);
         
         assertStreamContent(jcl.getResourceAsStream("package/resource.txt"), "content");
