@@ -47,6 +47,7 @@ import java.awt.event.ActionListener;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -71,8 +72,8 @@ import org.openide.util.RequestProcessor;
  */
 public class AntCustomizer extends JPanel implements ActionListener {
     
-    private List<File> classpath;
-    private Map<String,String> properties;
+    private List<File> classpath = Collections.emptyList();
+    private Map<String,String> properties = Collections.emptyMap();
     private boolean         changed = false;
     private boolean         listen = false;
     private File            originalAntHome;
