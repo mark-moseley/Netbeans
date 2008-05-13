@@ -45,24 +45,27 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import javax.swing.JToolTip;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import org.netbeans.api.editor.completion.Completion;
-import org.netbeans.api.gsf.CompletionProposal;
-import org.netbeans.api.gsf.Completable;
-import org.netbeans.api.gsf.Parser;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsf.Completable.QueryType;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementHandle;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.NameKind;
-import org.netbeans.api.gsf.ParameterInfo;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.mimelookup.MimePath;
+import org.netbeans.api.editor.settings.SimpleValueNames;
+import org.netbeans.modules.gsf.api.CompletionProposal;
+import org.netbeans.modules.gsf.api.Completable;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsf.api.Completable.QueryType;
+import org.netbeans.modules.gsf.api.ElementHandle;
+import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.gsf.api.ParameterInfo;
 import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.napi.gsfret.source.CompilationController;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
@@ -71,13 +74,6 @@ import org.netbeans.napi.gsfret.source.Source;
 import org.netbeans.napi.gsfret.source.SourceUtils;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Registry;
-import org.netbeans.editor.Settings;
-import org.netbeans.editor.SettingsChangeEvent;
-import org.netbeans.editor.SettingsChangeListener;
-import org.netbeans.editor.SettingsUtil;
-import org.netbeans.editor.ext.ExtSettingsDefaults;
-import org.netbeans.editor.ext.ExtSettingsNames;
-import org.netbeans.modules.gsf.GsfEditorKitFactory;
 import org.netbeans.modules.gsf.GsfHtmlFormatter;
 import org.netbeans.modules.gsf.Language;
 import org.netbeans.modules.gsf.LanguageRegistry;
@@ -86,18 +82,25 @@ import org.netbeans.spi.editor.completion.support.AsyncCompletionQuery;
 import org.netbeans.spi.editor.completion.support.AsyncCompletionTask;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
 
 
 /**
  * Code completion provider - delegates to language plugin for actual population of result set.
  * Based on JavaCompletionProvider by Dusan Balek.
+ * 
+ * @todo I may be able to rip out the code I had in here to work around the
+ *   automatic completion vs "No Suggestions" issue; see 
+ *    http://hg.netbeans.org/main?cmd=changeset;node=6740db8e6988
  *
  * @author Tor Norbye
  */
 public class GsfCompletionProvider implements CompletionProvider {
+    
+    private static final String COMMENT_CATEGORY_NAME = "comment";
+    
     /** 
      * Flag which is set when we're in a query that was initiated 
      * automatically rather than through an explicit gesture 
@@ -105,17 +108,26 @@ public class GsfCompletionProvider implements CompletionProvider {
     private static boolean isAutoQuery;
     private static boolean expectingCreateTask;
         
-    private static Completable getCompletable(Document doc) {
-        DataObject dobj = (DataObject)doc.getProperty(Document.StreamDescriptionProperty);
-        if (dobj == null) {
+    public static Completable getCompletable(CompilationInfo info, int offset) {
+        try {
+            return getCompletable(info.getDocument(), offset);
+        } catch (IOException ioe) {
+            Exceptions.printStackTrace(ioe);
             return null;
         }
-        FileObject fo = dobj.getPrimaryFile();
-        Language language = LanguageRegistry.getInstance().getLanguageByMimeType(fo.getMIMEType());
-
-        return (language != null) ? language.getCompletionProvider() : null;
+    }
+    
+    static Completable getCompletable(Document doc, int offset) {
+        BaseDocument baseDoc = (BaseDocument)doc;
+        List<Language> list = LanguageRegistry.getInstance().getEmbeddedLanguages(baseDoc, offset);
+        for (Language l : list) {
+            if (l.getCompletionProvider() != null) {
+                return l.getCompletionProvider();
             }
-            
+        }
+
+        return null;
+    }
     private static boolean isInCompletion(JTextComponent component) {
         Object o = component.getClientProperty("completion-active"); // NOI18N
         return o == Boolean.TRUE;
@@ -123,14 +135,14 @@ public class GsfCompletionProvider implements CompletionProvider {
     
     public static int autoQueryTypes(JTextComponent component, String typedText) {
         if (typedText.length() > 0) {
-            Completable provider = getCompletable(component.getDocument());
+            Completable provider = getCompletable(component.getDocument(), component.getCaretPosition());
             if (provider != null) {
                 QueryType autoQuery = provider.getAutoQuery(component, typedText);
                 switch (autoQuery) {
                 case NONE: return 0;
                 case STOP: {
                     isAutoQuery = false;
-                    Completion.get().hideCompletion();
+                    Completion.get().hideAll();
                     return 0;
                 }
                 case COMPLETION: return COMPLETION_QUERY_TYPE;
@@ -174,10 +186,19 @@ public class GsfCompletionProvider implements CompletionProvider {
             if (!ts.moveNext() || ts.move(offset) == 0) {
                 return true;
             }
-            ts.moveNext(); // Move to the next token after move(offset)
+            if (!ts.moveNext()) { // Move to the next token after move(offset)
+                return false;
+            }
 
-            TokenId tokenId = ts.token().id();
-            return !language.tokenCategoryMembers("comment").contains(tokenId); //NOI18N
+// I used to block completion in comments... but why should I do that?            
+//            TokenId tokenId = ts.token().id();
+//            
+//            Set s = language.tokenCategories().contains(COMMENT_CATEGORY_NAME) 
+//                    ? language.tokenCategoryMembers(COMMENT_CATEGORY_NAME) 
+//                    : null;
+//            
+//            return s == null || !s.contains(tokenId); //NOI18N
+            return true;
         } finally {
             if (doc instanceof AbstractDocument) {
                 ((AbstractDocument) doc).readUnlock();
@@ -208,14 +229,9 @@ public class GsfCompletionProvider implements CompletionProvider {
         return null;
     }
 
-    static CompletionTask createDocTask(Element element, CompilationInfo info) { // TODO - use ComObjectHandle ??
+    static CompletionTask createDocTask(ElementHandle element, CompilationInfo info) { // TODO - use ComObjectHandle ??
         JavaCompletionQuery query = new JavaCompletionQuery(DOCUMENTATION_QUERY_TYPE, -1);
-
-        Language language = info.getLanguage();
-        Parser parser = language.getParser();
-        if (parser != null) {
-            query.element = parser.createHandle(info, element);
-        }
+        query.element = element;
 
         return new AsyncCompletionTask(query, Registry.getMostActiveComponent());
     }
@@ -225,6 +241,7 @@ public class GsfCompletionProvider implements CompletionProvider {
         private JToolTip toolTip;
         private CompletionDocumentation documentation;
         private int anchorOffset;
+        //private int toolTipOffset;
         private JTextComponent component;
         private int queryType;
         private int caretOffset;
@@ -390,12 +407,11 @@ public class GsfCompletionProvider implements CompletionProvider {
 
         public void cancel() {
         }
-
+        
         private void resolveToolTip(final CompilationController controller) throws IOException {
             CompletionProposal proposal = GsfCompletionItem.tipProposal;
             Env env = getCompletionEnvironment(controller, false);
-            Language language = controller.getLanguage();
-            Completable completer = language.getCompletionProvider();
+            Completable completer = env.getCompletable();
 
             if (completer != null) {
                 int offset = env.getOffset();
@@ -434,6 +450,12 @@ public class GsfCompletionProvider implements CompletionProvider {
                     int index = info.getCurrentIndex();
                     anchorOffset = info.getAnchorOffset();
                     toolTip = new MethodParamsTipPaintComponent(parameterList, index, component);
+                    //startPos = (int)sourcePositions.getEndPosition(env.getRoot(), mi.getMethodSelect());
+                    //String text = controller.getText().substring(startPos, offset);
+                    //anchorOffset = startPos + controller.getPositionConverter().getOriginalPosition(text.indexOf('(')); //NOI18N
+                    //toolTipOffset = startPos + controller.getPositionConverter().getOriginalPosition(text.lastIndexOf(',')); //NOI18N
+                    //if (toolTipOffset < anchorOffset)
+                    //    toolTipOffset = anchorOffset;
                     return;
 
                 }
@@ -453,8 +475,7 @@ public class GsfCompletionProvider implements CompletionProvider {
                 results = new ArrayList<CompletionItem>();
                 anchorOffset = env.getOffset() - ((prefix != null) ? prefix.length() : 0);
 
-                Language language = controller.getLanguage();
-                Completable completer = language.getCompletionProvider();
+                Completable completer = env.getCompletable();
 
                 if (completer != null) {
                     List<CompletionProposal> proposals =
@@ -463,19 +484,14 @@ public class GsfCompletionProvider implements CompletionProvider {
 
                     if (proposals != null) {
                         for (CompletionProposal proposal : proposals) {
-                            Element element = proposal.getElement();
+                            ElementHandle element = proposal.getElement();
                             if (element != null) {
-                                Parser parser = language.getParser();
-                                if (parser != null) {
-                                    ElementHandle handle = parser.createHandle(controller, element);
-                                    documentation = GsfCompletionDoc.create(controller, handle);
-                                    // TODO - find some way to show the multiple overloaded methods?
-                                    if (documentation.getText() != null && documentation.getText().length() > 0) {
-                                        // Make sure we at least pick an alternative that has documentation
-                                        break;
-                                    }
+                                documentation = GsfCompletionDoc.create(controller, element);
+                                // TODO - find some way to show the multiple overloaded methods?
+                                if (documentation.getText() != null && documentation.getText().length() > 0) {
+                                    // Make sure we at least pick an alternative that has documentation
+                                    break;
                                 }
-                                
                             }
                         }
                     }
@@ -491,8 +507,7 @@ public class GsfCompletionProvider implements CompletionProvider {
             results = new ArrayList<CompletionItem>();
             anchorOffset = env.getOffset() - ((prefix != null) ? prefix.length() : 0);
 
-            Language language = controller.getLanguage();
-            Completable completer = language.getCompletionProvider();
+            Completable completer = env.getCompletable();
 
             if (completer != null) {
                 List<CompletionProposal> proposals =
@@ -575,10 +590,9 @@ public class GsfCompletionProvider implements CompletionProvider {
             // Look at the parse tree, and find the corresponding end node
             // offset...
             
+            Completable completer = getCompletable(controller, offset);
             try {
                 // TODO: use the completion helper to get the contxt
-                Language language = controller.getLanguage();
-                Completable completer = language.getCompletionProvider();
                 if (completer != null) {
                     prefix = completer.getPrefix(controller, offset, upToOffset);
                 }
@@ -607,19 +621,21 @@ public class GsfCompletionProvider implements CompletionProvider {
             
             controller.toPhase(Phase.PARSED);
 
-            return new Env(offset, prefix, controller);
+            return new Env(offset, prefix, controller, completer);
         }
-
+        
         private class Env {
             private int offset;
             private String prefix;
             private CompilationController controller;
+            private Completable completable;
             private boolean autoCompleting;
 
-            private Env(int offset, String prefix, CompilationController controller) {
+            private Env(int offset, String prefix, CompilationController controller, Completable completable) {
                 this.offset = offset;
                 this.prefix = prefix;
                 this.controller = controller;
+                this.completable = completable;
             }
 
             public int getOffset() {
@@ -640,6 +656,10 @@ public class GsfCompletionProvider implements CompletionProvider {
 
             public CompilationController getController() {
                 return controller;
+            }
+            
+            public Completable getCompletable() {
+                return completable;
             }
         }
     }
@@ -736,23 +756,29 @@ public class GsfCompletionProvider implements CompletionProvider {
     private static boolean caseSensitive = true;
     private static boolean inited;
 
-    public static boolean isCaseSensitive() {
+    private static boolean isCaseSensitive() {
         lazyInit();
         return caseSensitive;
     }
 
-    private static class SettingsListener implements SettingsChangeListener {
+    private static class SettingsListener implements PreferenceChangeListener {
 
-        public void settingsChange(SettingsChangeEvent evt) {
-            setCaseSensitive(SettingsUtil.getBoolean(GsfEditorKitFactory.GsfEditorKit.class,
-                    ExtSettingsNames.COMPLETION_CASE_SENSITIVE,
-                    ExtSettingsDefaults.defaultCompletionCaseSensitive));
+//        public void settingsChange(SettingsChangeEvent evt) {
+//            setCaseSensitive(SettingsUtil.getBoolean(GsfEditorKitFactory.GsfEditorKit.class,
+//                    ExtSettingsNames.COMPLETION_CASE_SENSITIVE,
+//                    ExtSettingsDefaults.defaultCompletionCaseSensitive));
+//        }
+
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            if (evt.getKey() == null || SimpleValueNames.COMPLETION_CASE_SENSITIVE.equals(evt.getKey())) {
+                setCaseSensitive(Boolean.valueOf(evt.getNewValue()));
+            }
         }
     }
 
-    private static SettingsChangeListener settingsListener = new SettingsListener();
+    private static PreferenceChangeListener settingsListener = new SettingsListener();
 
-    public static void setCaseSensitive(boolean b) {
+    private static void setCaseSensitive(boolean b) {
         lazyInit();
         caseSensitive = b;
     }
@@ -760,10 +786,15 @@ public class GsfCompletionProvider implements CompletionProvider {
     private static void lazyInit() {
         if (!inited) {
             inited = true;
-            Settings.addSettingsChangeListener(settingsListener);
-            setCaseSensitive(SettingsUtil.getBoolean(GsfEditorKitFactory.GsfEditorKit.class,
-                    ExtSettingsNames.COMPLETION_CASE_SENSITIVE,
-                    ExtSettingsDefaults.defaultCompletionCaseSensitive));
+            
+            // correctly we should use a proper mime type for the document where the completion runs,
+            // but at the moment this is enough, because completion settings are mainted globaly for all mime types
+            // (ie. their the same for all mime types). Also, if using a specific mime type
+            // this code should hold the prefs instance somewhere, but not in a static field!
+            Preferences prefs = MimeLookup.getLookup(MimePath.EMPTY).lookup(Preferences.class);
+            prefs.addPreferenceChangeListener(WeakListeners.create(PreferenceChangeListener.class, settingsListener, prefs));
+            
+            setCaseSensitive(prefs.getBoolean(SimpleValueNames.COMPLETION_CASE_SENSITIVE, false));
         }
     }
 }
