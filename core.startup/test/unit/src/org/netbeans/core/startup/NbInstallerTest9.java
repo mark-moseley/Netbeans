@@ -43,13 +43,10 @@ package org.netbeans.core.startup;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
-import junit.textui.TestRunner;
 import org.netbeans.ModuleInstaller;
-import org.netbeans.core.startup.SetupHid.FakeEvents;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.Stamps;
 
 /** Test the NetBeans module installer implementation.
  * Broken into pieces to ensure each runs in its own VM.
@@ -61,47 +58,20 @@ public class NbInstallerTest9 extends SetupHid {
         super(name);
     }
     
-    public static void main(String[] args) {
-        // Turn on verbose logging while developing tests:
-        System.setProperty("org.netbeans.core.modules", "0");
-        // In case run standalone, need a work dir.
-        if (System.getProperty("nbjunit.workdir") == null) {
-            // Hope java.io.tmpdir is set...
-            System.setProperty("nbjunit.workdir", System.getProperty("java.io.tmpdir"));
-        }
-        TestRunner.run(new NbTestSuite(NbInstallerTest9.class));
-    }
-    
-    protected void setUp() throws Exception {
-        super.setUp();
-        clearWorkDir();
-        File workdir = getWorkDir();
-        String[] jarnames = new String[] {
-            "little-manifest.jar",
-            "medium-manifest.jar",
-            "big-manifest.jar",
-        };
-        for (int i = 0; i < jarnames.length; i++) {
-            copy(new File(jars, jarnames[i]), new File(workdir, jarnames[i]));
-        }
-    }
-    
     /** Test #26786/#28755: manifest caching can be buggy.
      */
     public void testManifestCaching() throws Exception {
-        File workdir = getWorkDir();
-        System.setProperty("netbeans.user", workdir.getAbsolutePath());
+        System.setProperty("netbeans.user", getWorkDirPath());
         ModuleInstaller inst = new org.netbeans.core.startup.NbInstaller(new FakeEvents());
-        File littleJar = new File(workdir, "little-manifest.jar");
+        File littleJar = new File(jars, "little-manifest.jar");
         //inst.loadManifest(littleJar).write(System.out);
         assertEquals(getManifest(littleJar), inst.loadManifest(littleJar));
-        File mediumJar = new File(workdir, "medium-manifest.jar");
+        File mediumJar = new File(jars, "medium-manifest.jar");
         assertEquals(getManifest(mediumJar), inst.loadManifest(mediumJar));
-        File bigJar = new File(workdir, "big-manifest.jar");
+        File bigJar = new File(jars, "big-manifest.jar");
         assertEquals(getManifest(bigJar), inst.loadManifest(bigJar));
-        // trigger cache saving - this is sort of a hack, there is no API to do it
-        inst.load(Collections.EMPTY_LIST);
-        File allManifestsDat = new File(new File(new File(workdir, "var"), "cache"), "all-manifests.dat");
+        Stamps.getModulesJARs().shutdown();
+        File allManifestsDat = new File(new File(new File(getWorkDir(), "var"), "cache"), "all-manifest.dat");
         assertTrue("File " + allManifestsDat + " exists", allManifestsDat.isFile());
         // Create a new NbInstaller, since otherwise it turns off caching...
         inst = new org.netbeans.core.startup.NbInstaller(new FakeEvents());
