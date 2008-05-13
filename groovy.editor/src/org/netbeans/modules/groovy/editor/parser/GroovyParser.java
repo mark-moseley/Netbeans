@@ -45,9 +45,6 @@ import groovy.lang.GroovyClassLoader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -83,6 +80,7 @@ import org.netbeans.modules.gsf.api.SourceFileReader;
 import org.netbeans.modules.groovy.editor.AstNodeAdapter;
 import org.netbeans.modules.groovy.editor.AstUtilities;
 import org.netbeans.modules.groovy.editor.GroovyUtils;
+import org.netbeans.modules.groovy.editor.GroovyCompilerErrorID;
 import org.netbeans.modules.groovy.editor.elements.AstElement;
 import org.netbeans.modules.groovy.editor.elements.AstRootElement;
 import org.netbeans.modules.groovy.editor.elements.CommentElement;
@@ -92,13 +90,13 @@ import org.netbeans.modules.groovy.editor.elements.KeywordElement;
 import org.netbeans.modules.gsf.spi.DefaultError;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import java.util.logging.Logger;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.modules.groovy.editor.lexer.GroovyTokenId;
+import org.netbeans.modules.gsf.api.annotations.NonNull;
+import org.netbeans.modules.gsf.api.annotations.Nullable;
 
 /**
  *
@@ -111,6 +109,10 @@ public class GroovyParser implements Parser {
     private final PositionManager positions = createPositionManager();
     private final Logger LOG = Logger.getLogger(GroovyParser.class.getName());
     private JavaSource javaSource;
+
+    public GroovyParser() {
+        // LOG.setLevel(Level.FINEST);
+    }
 
     public void parseFiles(Job job) {
         ParseListener listener = job.listener;
@@ -140,8 +142,29 @@ public class GroovyParser implements Parser {
         return positions;
     }
 
-    protected GroovyParserResult createParseResult(ParserFile file, AstRootElement rootElement, AstTreeNode ast) {
-        return new GroovyParserResult(this, file, rootElement, ast);
+    protected GroovyParserResult createParseResult(ParserFile file, AstRootElement rootElement, AstTreeNode ast, ErrorCollector errorCollector) {
+        
+        GroovyParserResult parserResult = new GroovyParserResult(this, file, rootElement, ast, errorCollector);
+        
+        // Register parsing result with parsing-manager:
+        
+//        Lookup lkp = Lookup.getDefault();
+//        
+//        if(lkp != null){
+//            GroovyParserManager parserManager = lkp.lookup(GroovyParserManager.class);
+//            if(parserManager != null){
+//                FileObject fo = file.getFileObject();
+//                if (fo != null) {
+//                    parserManager.registerParsing(fo, parserResult);
+//                }
+//            } else {
+//                LOG.log(Level.FINEST, "Couldn't get GroovyParserManager from global lookup");
+//            }
+//        } else {
+//            LOG.log(Level.FINEST, "Couldn't get global lookup");
+//        }
+        
+        return parserResult;
     }
     
     private boolean sanitizeSource(Context context, Sanitize sanitizing) {
@@ -345,7 +368,7 @@ public class GroovyParser implements Parser {
 
         switch (sanitizing) {
         case NEVER:
-            return createParseResult(context.file, null, null);
+            return createParseResult(context.file, null, null, null);
 
         case NONE:
 
@@ -403,7 +426,7 @@ public class GroovyParser implements Parser {
         case MISSING_END:
         default:
             // We're out of tricks - just return the failed parse result
-            return createParseResult(context.file, null, null);
+            return createParseResult(context.file, null, null, null);
         }
     }
 
@@ -513,7 +536,8 @@ public class GroovyParser implements Parser {
         FileObject fo = context.file.getFileObject();
         ClassPath bootPath = ClassPath.getClassPath(fo, ClassPath.BOOT);
         ClassPath compilePath = ClassPath.getClassPath(fo, ClassPath.COMPILE);
-        ClassPath cp = ClassPathSupport.createProxyClassPath(bootPath, compilePath);
+        ClassPath sourcePath = ClassPath.getClassPath(fo, ClassPath.SOURCE);
+        ClassPath cp = ClassPathSupport.createProxyClassPath(bootPath, compilePath, sourcePath);
         
         ClassLoader parentLoader = cp.getClassLoader(true);
         
@@ -521,7 +545,6 @@ public class GroovyParser implements Parser {
         GroovyClassLoader classLoader = new GroovyClassLoader(parentLoader, configuration);
         
         if (javaSource == null) {
-            ClassPath sourcePath = ClassPath.getClassPath(fo, ClassPath.SOURCE);
             ClasspathInfo cpInfo = ClasspathInfo.create(
                     // we should try to load everything by javac instead of classloader,
                     // but for now it is faster to use javac only for sources
@@ -598,7 +621,7 @@ public class GroovyParser implements Parser {
                 }
             }
 
-            if (!ignoreErrors && isRealError(errorMessage)) {
+            if (!ignoreErrors) {
                 notifyError(context, null, Severity.ERROR, errorMessage, localizedMessage, offset, sanitizing);
             }
         }
@@ -621,7 +644,7 @@ public class GroovyParser implements Parser {
             context.sanitized = sanitizing;
             AstRootElement astRootElement = new AstRootElement(context.file.getFileObject(), module);
             AstNodeAdapter ast = new AstNodeAdapter(null, module, context.document);
-            GroovyParserResult r = createParseResult(context.file, astRootElement, ast);
+            GroovyParserResult r = createParseResult(context.file, astRootElement, ast, compilationUnit.getErrorCollector());
             r.setSanitized(context.sanitized, context.sanitizedRange, context.sanitizedContents);
             return r;
         } else {
@@ -653,9 +676,16 @@ public class GroovyParser implements Parser {
             key = description;
         }
         
+        // FIXME: we silently drop errors which have no description here.
+        // There might be still a way to recover.
+        if(description == null) {
+            return;
+        }
+        
         Error error =
-            new DefaultError(key, description, details, context.file.getFileObject(),
-                startOffset, endOffset, severity);
+            new GroovyError(key, description, details, context.file.getFileObject(),
+                startOffset, endOffset, severity, getIdForErrorMessage(description));
+        
         context.listener.error(error);
 
         if (sanitizing == Sanitize.NONE) {
@@ -664,6 +694,20 @@ public class GroovyParser implements Parser {
         }
     }
 
+    static GroovyCompilerErrorID getIdForErrorMessage(String errorMessage) {
+        String ERR_PREFIX = "unable to resolve class "; // NOI18N
+
+        if (errorMessage != null) {
+            if (errorMessage.startsWith(ERR_PREFIX)) {
+                return GroovyCompilerErrorID.CLASS_NOT_FOUND;
+            }
+        }
+
+        return GroovyCompilerErrorID.UNDEFINED;
+    }
+    
+    
+    
     private static void handleErrorCollector(ErrorCollector errorCollector, Context context, ModuleNode moduleNode, boolean ignoreErrors, Sanitize sanitizing) {
         if (!ignoreErrors && errorCollector != null) {
             List errors = errorCollector.getErrors();
@@ -671,14 +715,12 @@ public class GroovyParser implements Parser {
                 for (Object object : errors) {
                     if (object instanceof SyntaxErrorMessage) {
                         SyntaxException ex = ((SyntaxErrorMessage)object).getCause();
-                        if (isRealError(ex.getMessage())) {
-                            String sourceLocator = ex.getSourceLocator();
-                            String name = moduleNode != null ? moduleNode.getContext().getName() : null;
-                            if (sourceLocator != null && name != null && sourceLocator.equals(name)) {
-                                int startOffset = AstUtilities.getOffset(context.document, ex.getStartLine(), ex.getStartColumn());
-                                int endOffset = AstUtilities.getOffset(context.document, ex.getLine(), ex.getEndColumn());
-                                notifyError(context, null, Severity.ERROR, ex.getMessage(), null, startOffset, endOffset, sanitizing);
-                            }
+                        String sourceLocator = ex.getSourceLocator();
+                        String name = moduleNode != null ? moduleNode.getContext().getName() : null;
+                        if (sourceLocator != null && name != null && sourceLocator.equals(name)) {
+                            int startOffset = AstUtilities.getOffset(context.document, ex.getStartLine(), ex.getStartColumn());
+                            int endOffset = AstUtilities.getOffset(context.document, ex.getLine(), ex.getEndColumn());
+                            notifyError(context, null, Severity.ERROR, ex.getMessage(), null, startOffset, endOffset, sanitizing);
                         }
                     } else if (object instanceof SimpleMessage) {
                         String message = ((SimpleMessage)object).getMessage();
@@ -689,17 +731,6 @@ public class GroovyParser implements Parser {
                 }
             }
         }
-    }
-    
-    /**
-     * Hack to remove errors about unresolved class,
-     * we don't have full integration with Java yet, so it's just less evil
-     */
-    private static boolean isRealError(String errorMessage) {
-//        if (errorMessage.startsWith("unable to resolve class ")) { // NOI18N
-//            return false;
-//        }
-        return true;
     }
     
     private static ASTNode find(ASTNode oldRoot, ASTNode oldObject, ASTNode newRoot) {
@@ -849,5 +880,97 @@ public class GroovyParser implements Parser {
             return errorOffset;
         }
     }
+    
+    /**
+     * This is a copy of DefaultError with the additional Groovy
+     * information.
+     * 
+     */
+    
+    
+    public static class GroovyError implements Error {
+    private String displayName;
+    private String description;
+
+    private FileObject file;
+    private int start;
+    private int end;
+    private String key;
+    private Severity severity;
+    private Object[] parameters;
+    
+    private GroovyCompilerErrorID id;
+    
+    /** Creates a new instance of GroovyError */
+    public GroovyError(
+            @Nullable String key, 
+            @NonNull String displayName, 
+            @Nullable String description, 
+            @NonNull FileObject file, 
+            @NonNull int start, 
+            @NonNull int end, 
+            @NonNull Severity severity,
+            @NonNull GroovyCompilerErrorID id) {
+        this.key = key;
+        this.displayName = displayName;
+        this.description = description;
+        this.file = file;
+        this.start = start;
+        this.end = end;
+        this.severity = severity;
+        this.id = id;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    // TODO rename to getStartOffset
+    public int getStartPosition() {
+        return start;
+    }
+
+    // TODO rename to getEndOffset
+    public int getEndPosition() {
+        return end;
+    }
+
+    @Override
+    public String toString() {
+        return "GroovyError[" + displayName + ", " + description + ", " + severity + "]";
+    }
+
+    public String getKey() {
+        return key;
+    }
+
+    public Object[] getParameters() {
+        return parameters;
+    }
+
+    public void setParameters(final Object[] parameters) {
+        this.parameters = parameters;
+    }
+
+    public Severity getSeverity() {
+        return severity;
+    }
+
+    public FileObject getFile() {
+        return file;
+    }
+    
+    public GroovyCompilerErrorID getId(){
+        return id;
+    }
+    
+}
+
+    
+    
 
 }
