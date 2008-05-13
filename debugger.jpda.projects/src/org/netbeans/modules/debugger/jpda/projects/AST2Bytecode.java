@@ -71,6 +71,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
+import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Types;
@@ -141,7 +142,8 @@ class AST2Bytecode {
                     }
                 } while (true);
                 if (from < to) { // We have the method call
-                    if (!ci.getTreeUtilities().isSynthetic(ci.getTrees().getPath(cu, node))) {
+                    TreePath nodePath = trees.getPath(cu, node);
+                    if (nodePath != null && !ci.getTreeUtilities().isSynthetic(nodePath)) {
                         int pos = (int) sp.getStartPosition(cu, node);
                         EditorContext.Position startPosition =
                                 opCreationDelegate.createPosition(
@@ -195,6 +197,11 @@ class AST2Bytecode {
                                     return null;
                                 }
                                 TypeElement te;
+                                String array = "";
+                                while (type.getKind() == TypeKind.ARRAY) {
+                                    type = ((ArrayType) type).getComponentType();
+                                    array += "[]";
+                                }
                                 if (type.getKind() == TypeKind.DECLARED) {
                                     te = (TypeElement) types.asElement(type);
                                 } else if (type.getKind() == TypeKind.TYPEVAR) {
@@ -214,7 +221,7 @@ class AST2Bytecode {
                                     ErrorManager.getDefault().notify(new IllegalStateException("Unexpected type "+type+" in "+treeNodes));
                                     return null;
                                 }
-                                methodClassType = ElementUtilities.getBinaryName(te);
+                                methodClassType = ElementUtilities.getBinaryName(te)+array;
                             }
                         }
                         pos = (int) sp.getEndPosition(cu, identifier);
