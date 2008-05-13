@@ -47,9 +47,9 @@ import org.netbeans.junit.NbTestCase;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.junit.NbModuleSuite;
 
-public class MeasureMenusTest extends NbTestCase {
+public class MeasureJ2SEMenusTest extends NbTestCase {
 
-    public MeasureMenusTest(String name) {
+    public MeasureJ2SEMenusTest(String name) {
         super(name);
     }
 
