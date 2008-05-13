@@ -38,64 +38,20 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.project.ui.actions;
+package org.netbeans.modules.php.project.spi;
 
-import java.net.MalformedURLException;
-import org.netbeans.modules.php.project.PhpProject;
-import org.netbeans.modules.php.project.spi.XDebugStarter;
-import org.netbeans.spi.project.ActionProvider;
-import org.openide.util.Exceptions;
-import org.openide.util.Lookup;
-import org.openide.util.NbBundle;
+import org.netbeans.api.project.Project;
+import org.openide.filesystems.FileObject;
 
 /**
  * @author Radek Matous
  */
-public class DebugCommand extends Command implements Displayable {
-
-    public static final String ID = ActionProvider.COMMAND_DEBUG;
-    private final DebugLocalCommand debugLocalCommand;
-
-    public DebugCommand(PhpProject project) {
-        super(project);
-        debugLocalCommand = new DebugLocalCommand(project);        
-    }
-
-    @Override
-    public void invokeAction(final Lookup context) throws IllegalArgumentException {
-        if (useInterpreter()) {
-            debugLocalCommand.invokeAction(null);
-        } else {
-            Runnable runnable = new Runnable() {
-                public void run() {
-                        try {
-                            showURLForDebugProjectFile();
-                        } catch (MalformedURLException ex) {
-                        //TODO improve error handling
-                            Exceptions.printStackTrace(ex);
-                        }
-                    }
-            };
-            //temporary; after narrowing deps. will be changed
-            XDebugStarter dbgStarter = XDebugStarterFactory.getInstance();
-            if (dbgStarter != null) {
-                dbgStarter.start(getProject(), runnable, fileForProject(), useInterpreter());
-            }
-        }
-    }
-
-    @Override
-    public boolean isActionEnabled(Lookup context) throws IllegalArgumentException {
-        return XDebugStarterFactory.getInstance() != null;
-    }
-
-    @Override
-    public String getCommandId() {
-        return ID;
-    }
-
-    public String getDisplayName() {
-        return NbBundle.getMessage(RunCommand.class, "LBL_DebugProject");
-
-    }
+public interface XDebugStarter {
+    /**
+     * @param project
+     * @param run code that should initiate connection. Is called after listening
+     *            on defined port (typically 9000) started.
+     * @param startFile file to debug.
+     */
+    void start(Project project, Runnable run, FileObject startFile, boolean closeSession);
 }
