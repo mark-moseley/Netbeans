@@ -39,87 +39,77 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.footprint;
+package org.netbeans.performance.j2se.actions;
 
-import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.TopComponentOperator;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.FavoritesOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
-
 
 /**
- * Measure Find Usages Memory footprint
+ * Tests Add to Favorites.
  *
- * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
+public class AddToFavorites extends PerformanceTestCase {
+
+    protected static String ADD_TO_FAVORITES = Bundle.getStringTrimmed("org.openide.actions.Bundle","CTL_Tools") + "|" + Bundle.getStringTrimmed("org.netbeans.modules.favorites.Bundle","ACT_Add"); // Tools|Add to Favorites
+    
+    protected static String REMOVE_FROM_FAVORITES = Bundle.getStringTrimmed("org.netbeans.modules.favorites.Bundle","ACT_Remove"); // Remove from Favorites
+    
+    private String fileProject, filePackage, fileName;
+    
+    private Node addToFavoritesNode;
+    
+    private FavoritesOperator favoritesWindow;
     
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of AddToFavorites
      * @param testName the name of the test
      */
-    public FindUsages(String testName) {
+    public AddToFavorites(String testName) {
         super(testName);
-        prefix = "Find Usages |";
+        expectedTime = WINDOW_OPEN;
     }
     
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of AddToFavorites
      * @param testName the name of the test
      * @param performanceDataName measured values will be saved under this name
      */
-    public FindUsages(String testName, String performanceDataName) {
+    public AddToFavorites(String testName, String performanceDataName) {
         super(testName, performanceDataName);
-        prefix = "Find Usages |";
+        expectedTime = WINDOW_OPEN;
     }
     
-    @Override
-    public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
-    }
-
-    @Override
-    public void setUp() {
-        //do nothing
-    }
-    
-    public void prepare() {
+    public void testAddJavaFile(){
+        fileProject = "PerformanceTestData";
+        filePackage = "org.netbeans.test.performance";
+        fileName = "Main20kB.java";
+        doMeasurement();
     }
     
     public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
-        
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
-        
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+        addToFavoritesNode.performMenuAction(ADD_TO_FAVORITES);
+        favoritesWindow = new FavoritesOperator();
+        return favoritesWindow;
+    }
+
+    @Override
+    public void close() {
+	Node n=new Node(favoritesWindow.tree(), fileName);
+	n.performPopupAction(REMOVE_FROM_FAVORITES);
+        favoritesWindow.close();
     }
     
-    @Override
-    public void close(){
-        ProjectSupport.closeProject("jEdit");
+    public void prepare() {
+        addToFavoritesNode = new Node(new SourcePackagesNode(fileProject), filePackage + '|' + fileName);
     }
     
     public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
+        junit.textui.TestRunner.run(new AddToFavorites("testAddJavaFile"));
     }
     
 }

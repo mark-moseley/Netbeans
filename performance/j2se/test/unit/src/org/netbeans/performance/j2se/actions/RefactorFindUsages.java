@@ -39,87 +39,72 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.footprint;
+package org.netbeans.performance.j2se.actions;
 
-import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.operators.ComponentOperator;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
-
 
 /**
- * Measure Find Usages Memory footprint
+ * Test of Find Usages
  *
- * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
+public class RefactorFindUsages extends PerformanceTestCase {
     
-    /**
-     * Creates a new instance of FindUsages
-     * @param testName the name of the test
-     */
-    public FindUsages(String testName) {
+    private static Node testNode;
+    private String TITLE, ACTION, NEXT;
+    
+    private static NbDialogOperator refactorDialog;
+    private static TopComponentOperator usagesWindow;
+    
+    /** Creates a new instance of RefactorFindUsagesDialog */
+    public RefactorFindUsages(String testName) {
         super(testName);
-        prefix = "Find Usages |";
+        expectedTime = 120000; // the action has progress indication and it is expected it will last
     }
     
-    /**
-     * Creates a new instance of FindUsages
-     * @param testName the name of the test
-     * @param performanceDataName measured values will be saved under this name
-     */
-    public FindUsages(String testName, String performanceDataName) {
-        super(testName, performanceDataName);
-        prefix = "Find Usages |";
+    /** Creates a new instance of RefactorFindUsagesDialog */
+    public RefactorFindUsages(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = 120000; // the action has progress indication and it is expected it will last
     }
     
     @Override
     public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
-    }
-
-    @Override
-    public void setUp() {
-        //do nothing
+        String BUNDLE = "org.netbeans.modules.refactoring.ui.Bundle";
+        NEXT = Bundle.getStringTrimmed("org.netbeans.modules.refactoring.api.ui.Bundle","CTL_Finish");  // "Next >"
+        TITLE = Bundle.getStringTrimmed(BUNDLE,"LBL_WhereUsed");  // "Find Usages"
+        ACTION = Bundle.getStringTrimmed(BUNDLE,"LBL_WhereUsedAction"); // "Find Usages..."
+        testNode = new Node(new SourcePackagesNode("jEdit"),"org.gjt.sp.jedit|jEdit.java");
     }
     
     public void prepare() {
+        // invoke Find Usages from the popup menu
+        testNode.performPopupAction(ACTION);
+        refactorDialog = new NbDialogOperator(TITLE);
     }
     
-    public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
+    public ComponentOperator open() {
+        new JButtonOperator(refactorDialog, NEXT).push();
         
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
+        long timeout = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
+        JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 360000);
+        usagesWindow = new TopComponentOperator("Usages"); // NOI18N
+        JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", timeout);
         
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+        return usagesWindow;
     }
+
     
     @Override
-    public void close(){
-        ProjectSupport.closeProject("jEdit");
+    public void close() {
+        usagesWindow.close();
     }
-    
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
-    }
-    
 }

@@ -38,41 +38,66 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.dialogs;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.MainWindowOperator;
+import org.netbeans.jellytools.modules.javacvs.VersioningOperator;
 
-public class MeasureMenusTest extends NbTestCase {
+import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.jemmy.operators.JMenuBarOperator;
 
-    public MeasureMenusTest(String name) {
-        super(name);
+/**
+ * Test opening Versioning Tab.
+ *
+ * @author  mmirilovic@netbeans.org
+ */
+public class VersioningWindow extends PerformanceTestCase {
+
+    private String MENU;
+
+    /** Creates a new instance of VersioningWindow */
+    public VersioningWindow(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;
+    }
+    
+    /** Creates a new instance of VersioningWindow */
+    public VersioningWindow(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
+    }
+    
+    public void prepare() {
+        // do nothing
+    }
+    
+    @Override
+    protected void initialize() {
+        MENU = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Window") + '|' + 
+               Bundle.getStringTrimmed("org.netbeans.modules.versioning.Bundle","Menu/Window/Versioning") + '|' +
+               Bundle.getStringTrimmed("org.netbeans.modules.versioning.system.cvss.ui.actions.status.Bundle", "BK0001"); // Window | Versioning | CVS
+    }
+    
+    public ComponentOperator open() {
+        // invoke Versioning from the main menu
+        new JMenuBarOperator(MainWindowOperator.getDefault().getJMenuBar()).pushMenu(MENU,"|");
+        return new VersioningOperator();
+    }
+    
+    @Override
+    public void close() {
+        if(testedComponentOperator!=null && testedComponentOperator.isShowing())
+            ((VersioningOperator)testedComponentOperator).close();
     }
 
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    /** Test could be executed internaly in IDE without XTest
+     * @param args arguments from command line
+     */
+    public static void main(String[] args) {
+        junit.textui.TestRunner.run(new VersioningWindow("measureTime"));
     }
+ 
 }

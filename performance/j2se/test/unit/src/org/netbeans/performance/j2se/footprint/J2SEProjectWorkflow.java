@@ -42,52 +42,36 @@
 package org.netbeans.performance.j2se.footprint;
 
 import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.TopComponentOperator;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
-
 
 /**
- * Measure Find Usages Memory footprint
+ * Measure J2SE Project Workflow Memory footprint
  *
  * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
-    
+public class J2SEProjectWorkflow extends MemoryFootprintTestCase {
+
+    private String j2seproject;
+
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of J2SEProjectWorkflow
      * @param testName the name of the test
      */
-    public FindUsages(String testName) {
+    public J2SEProjectWorkflow(String testName) {
         super(testName);
-        prefix = "Find Usages |";
+        prefix = "J2SE Project Workflow |";
     }
     
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of J2SEProjectWorkflow
      * @param testName the name of the test
      * @param performanceDataName measured values will be saved under this name
      */
-    public FindUsages(String testName, String performanceDataName) {
+    public J2SEProjectWorkflow(String testName, String performanceDataName) {
         super(testName, performanceDataName);
-        prefix = "Find Usages |";
+        prefix = "J2SE Project Workflow |";
     }
     
-    @Override
-    public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
-    }
-
     @Override
     public void setUp() {
         //do nothing
@@ -96,30 +80,35 @@ public class FindUsages extends MemoryFootprintTestCase {
     public void prepare() {
     }
     
+    @Override
+    public void initialize() {
+        super.initialize();
+        FootprintUtilities.closeAllDocuments();
+        FootprintUtilities.closeMemoryToolbar();
+    }
+    
     public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
+        // Create, edit, build and execute a sample J2SE project
+        j2seproject = FootprintUtilities.createproject("Samples|Java", "Anagram Game", true);
         
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
+        FootprintUtilities.openFile(j2seproject, "com.toy.anagrams.ui", "Anagrams.java", false);
+        FootprintUtilities.editFile(j2seproject, "com.toy.anagrams.ui", "Anagrams.java");
+        FootprintUtilities.buildproject(j2seproject);
+        //runProject(j2seproject,true);
+        //debugProject(j2seproject,true);
+        //testProject(j2seproject);
+        //collapseProject(j2seproject);
         
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+        return null;
     }
     
     @Override
     public void close(){
-        ProjectSupport.closeProject("jEdit");
+        FootprintUtilities.deleteProject(j2seproject);
     }
     
     public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
+        junit.textui.TestRunner.run(new J2SEProjectWorkflow("measureMemoryFooprint"));
     }
     
 }

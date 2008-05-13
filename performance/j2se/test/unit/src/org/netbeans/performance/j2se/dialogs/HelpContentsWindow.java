@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,41 +38,49 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.dialogs;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
 
-public class MeasureMenusTest extends NbTestCase {
+import org.netbeans.jellytools.HelpOperator;
+import org.netbeans.jellytools.actions.HelpAction;
 
-    public MeasureMenusTest(String name) {
-        super(name);
+import org.netbeans.jemmy.operators.ComponentOperator;
+
+/**
+ * Test of Help Contents window
+ *
+ * @author  anebuzelsky@netbeans.org
+ */
+public class HelpContentsWindow extends PerformanceTestCase {
+
+    /** Creates a new instance of HelpContentsWindow */
+    public HelpContentsWindow(String testName) {
+        super(testName);
+        expectedTime = 1000; // 4.1 : 5475, N/A, 8945, 8790, 5062, 6229
     }
-
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    
+    /** Creates a new instance of HelpContentsWindow */
+    public HelpContentsWindow(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = 1000; // 4.1 : 5475, N/A, 8945, 8790, 5062, 6229
     }
+    
+    public void prepare() {
+        // do nothing
+    }
+    
+    public ComponentOperator open() {
+        // invoke Help / Contents from the main menu
+        new HelpAction().performShortcut();
+        return new HelpOperator();
+    }
+    
+    @Override
+    public void close() {
+        if(testedComponentOperator!=null && testedComponentOperator.isShowing())
+            ((HelpOperator)testedComponentOperator).close();
+    }
+    
 }

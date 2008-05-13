@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,30 +38,71 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.setup.J2SESetup;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+package org.netbeans.performance.j2se.dialogs;
+
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.RuntimeTabOperator;
+import org.netbeans.jellytools.nodes.Node;
+
+import org.netbeans.jemmy.operators.ComponentOperator;
+
 
 /**
- * Test suite that actually does not perform any test but sets up user directory
- * for UI responsiveness tests
+ * Test of Add Catalog dialog
  *
- * @author  rkubacki@netbeans.org, mmirilovic@netbeans.org
+ * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
  */
-public class MeasureJ2SESetupTest extends NbTestCase {
+public class AddXMLandDTDSchemaCatalog extends PerformanceTestCase {
 
-    public MeasureJ2SESetupTest(java.lang.String testName) {
+    private String BUNDLE, MENU, TITLE;
+    private Node thenode;
+
+    /**
+     * Creates a new instance of AddXMLandDTDSchemaCatalog
+     */
+    public AddXMLandDTDSchemaCatalog(String testName) {
         super(testName);
+        expectedTime = WINDOW_OPEN;
     }
-
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite("UI Responsiveness J2SE Setup suite");
-
-        suite.addTest(NbModuleSuite.create(J2SESetup.class, ".*", ".*"));
-
-        return suite;
+    
+    /**
+     * Creates a new instance of AddXMLandDTDSchemaCatalog
+     */
+    public AddXMLandDTDSchemaCatalog(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
     }
+    
+    @Override
+    public void initialize() {
+        BUNDLE = "org.netbeans.modules.xml.catalog.Bundle";
+        MENU = Bundle.getStringTrimmed(BUNDLE,"LBL_mount");
+        TITLE = Bundle.getStringTrimmed(BUNDLE,"PROP_Mount_Catalog");
+        // show Runtime tab and select XML Entity Catalogs node
+        thenode = new Node (RuntimeTabOperator.invoke().getRootNode(), Bundle.getStringTrimmed(BUNDLE,"TEXT_catalog_root"));
+        thenode.select();
+    }
+    
+    public void prepare() {
+        // do nothing
+    }
+    
+    public ComponentOperator open() {
+        // invoke Mount Catalog item from the popup
+        thenode.callPopup().pushMenu(MENU);
+        return new NbDialogOperator(TITLE);
+    }
+ 
+    /** Test could be executed internaly in IDE without XTest
+     * @param args arguments from command line
+     */
+    public static void main(String[] args) {
+        junit.textui.TestRunner.run(new AddXMLandDTDSchemaCatalog("measureTime"));
+    }
+    
+    
 }

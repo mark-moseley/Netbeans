@@ -38,41 +38,70 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.menus;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
+import org.netbeans.modules.performance.guitracker.ActionTracker;
+
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.nodes.SourcePackagesNode;
+
 import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
 
-public class MeasureMenusTest extends NbTestCase {
-
-    public MeasureMenusTest(String name) {
-        super(name);
+/**
+ * Performance test for tools menu invoked when a various node is selected.</p>
+ * <p>Each test method reads the label of tested menu.
+ * During @link prepare given node is selected and menu is pushed using mouse.
+ * The menu is then closed using escape key.
+ * @author Radim Kubacki, mmirilovic@netbeans.org
+ */
+public class ToolsMenu extends MainMenu {
+    
+    protected static Node dataObjectNode;
+    
+    /** Creates a new instance of ToolsMenu */
+    public ToolsMenu(String testName) {
+        super(testName);
+        expectedTime = UI_RESPONSE;
+        track_mouse_event = ActionTracker.TRACK_MOUSE_PRESS;
+    }
+    
+    /** Creates a new instance of ToolsMenu */
+    public ToolsMenu(String testName, String performanceDataName) {
+        this(testName);
+        expectedTime = UI_RESPONSE;
+        track_mouse_event = ActionTracker.TRACK_MOUSE_PRESS;
+        setTestCaseName(testName, performanceDataName);
+    }
+    
+    public static NbTestSuite suite() {
+        NbTestSuite suite = new NbTestSuite();
+        suite.addTest(new ToolsMenu("testJavaToolsMenu"));
+        suite.addTest(new ToolsMenu("testXmlToolsMenu"));
+        suite.addTest(new ToolsMenu("testTxtToolsMenu"));
+        return suite;
+    }
+    
+    public void testJavaToolsMenu(){
+        testToolsMenu("Main.java");
+    }
+    
+    public void testXmlToolsMenu(){
+        testToolsMenu("xmlfile.xml");
+    }
+    
+    public void testTxtToolsMenu(){
+        testToolsMenu("textfile.txt");
+    }
+    
+    @Override
+    public void prepare() {
+        dataObjectNode.select();
+    }
+    
+    private void testToolsMenu(String file) {
+        dataObjectNode = new Node(new SourcePackagesNode("PerformanceTestData"),"org.netbeans.test.performance|" + file);
+        super.testMenu("org.netbeans.core.Bundle","Menu/Tools");
     }
 
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
-    }
 }

@@ -39,87 +39,73 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.footprint;
+package org.netbeans.performance.j2se.dialogs;
 
-import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.modules.performance.utilities.CommonUtilities;
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.MainWindowOperator;
 import org.netbeans.jellytools.TopComponentOperator;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.jellytools.EditorOperator;
+
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
-
+import org.netbeans.jemmy.operators.JMenuBarOperator;
 
 /**
- * Measure Find Usages Memory footprint
+ * Test of Auto Comment Window
  *
  * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
+public class AutoCommentWindow extends PerformanceTestCase {
+
+    private static EditorOperator editor;
+    private String MENU, TITLE;
     
-    /**
-     * Creates a new instance of FindUsages
-     * @param testName the name of the test
-     */
-    public FindUsages(String testName) {
+    /** Creates a new instance of AutoCommentWindow */
+    public AutoCommentWindow(String testName) {
         super(testName);
-        prefix = "Find Usages |";
+        expectedTime = WINDOW_OPEN;
     }
     
-    /**
-     * Creates a new instance of FindUsages
-     * @param testName the name of the test
-     * @param performanceDataName measured values will be saved under this name
-     */
-    public FindUsages(String testName, String performanceDataName) {
-        super(testName, performanceDataName);
-        prefix = "Find Usages |";
+    /** Creates a new instance of AutoCommentWindow */
+    public AutoCommentWindow(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
     }
     
     @Override
     public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
-    }
-
-    @Override
-    public void setUp() {
-        //do nothing
+        MENU = Bundle.getStringTrimmed("org.netbeans.core.Bundle","Menu/Tools") + "|" + Bundle.getStringTrimmed("org.netbeans.modules.javadoc.comments.Bundle","CTL_AUTOCOMMENT_MenuItem");
+        TITLE = Bundle.getStringTrimmed("org.netbeans.modules.javadoc.comments.Bundle","CTL_AUTOCOMMENT_WindowTitle");
+    
+        // open a java file in the editor
+        editor = CommonUtilities.openFile("PerformanceTestData","org.netbeans.test.performance", "Main20kB.java", true);
     }
     
     public void prepare() {
-    }
+        // do nothing
+   }
     
-    public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
-        
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
-        
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+    public ComponentOperator open() {
+        // invoke Tools / Auto Comment from the main menu
+        new JMenuBarOperator(MainWindowOperator.getDefault().getJMenuBar()).pushMenuNoBlock(MENU,"|");
+        return new TopComponentOperator(TITLE);
     }
     
     @Override
-    public void close(){
-        ProjectSupport.closeProject("jEdit");
+    public void close() {
+        // close the tab
+        new TopComponentOperator(TITLE).close();
+    }
+    
+    @Override
+    public void shutdown(){
+        if(editor!=null && editor.isShowing())
+            editor.closeDiscard();
     }
     
     public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
+        junit.textui.TestRunner.run(new AutoCommentWindow("measureTime"));
     }
     
 }

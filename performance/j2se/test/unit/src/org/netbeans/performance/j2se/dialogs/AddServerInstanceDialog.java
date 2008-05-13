@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,30 +38,64 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.setup.J2SESetup;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+package org.netbeans.performance.j2se.dialogs;
+
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.RuntimeTabOperator;
+import org.netbeans.jellytools.nodes.Node;
+
+import org.netbeans.jemmy.operators.ComponentOperator;
 
 /**
- * Test suite that actually does not perform any test but sets up user directory
- * for UI responsiveness tests
+ * Test of Add Server Instance dialog
  *
- * @author  rkubacki@netbeans.org, mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org
  */
-public class MeasureJ2SESetupTest extends NbTestCase {
+public class AddServerInstanceDialog extends PerformanceTestCase {
 
-    public MeasureJ2SESetupTest(java.lang.String testName) {
+    private String BUNDLE, MENU, TITLE;
+    private Node thenode;
+
+    /** Creates a new instance of AddServerInstanceDialog */
+    public AddServerInstanceDialog(String testName) {
         super(testName);
+        expectedTime = WINDOW_OPEN;
     }
-
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite("UI Responsiveness J2SE Setup suite");
-
-        suite.addTest(NbModuleSuite.create(J2SESetup.class, ".*", ".*"));
-
-        return suite;
+    
+    /** Creates a new instance of AddServerInstanceDialog */
+    public AddServerInstanceDialog(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
     }
+    
+    @Override
+    public void initialize() {
+        MENU = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.actions.Bundle", "LBL_Add_Server_Instance"); //"Add Server..."
+        TITLE = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.wizard.Bundle", "LBL_ASIW_Title"); //"Add Server Instance"
+        
+        String path = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.Bundle", "ACSN_ServerList"); //"Servers"
+        
+        // show Runtime tab and select Servers
+        thenode = new Node (RuntimeTabOperator.invoke().getRootNode(), path);
+        thenode.select();
+    }
+    
+    public void prepare() {
+        // do nothing
+    }
+    
+    public ComponentOperator open() {
+        // invoke Add Servers item from the popup
+        thenode.callPopup().pushMenu(MENU);
+        return new NbDialogOperator(TITLE);
+    }
+    
+    public static void main(java.lang.String[] args) {
+        junit.textui.TestRunner.run(new AddServerInstanceDialog("measureTime"));
+    }
+    
 }

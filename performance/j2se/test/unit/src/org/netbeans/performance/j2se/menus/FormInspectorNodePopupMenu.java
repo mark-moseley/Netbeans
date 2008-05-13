@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,41 +38,49 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
+package org.netbeans.performance.j2se.menus;
 
-import org.netbeans.performance.j2se.menus.*;
+import org.netbeans.modules.performance.utilities.CommonUtilities;
+import org.netbeans.jellytools.EditorOperator;
+import org.netbeans.jellytools.modules.form.ComponentInspectorOperator;
+import org.netbeans.jellytools.nodes.Node;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+/**
+ * Test of popup menu on node in Component Inspector.
+ * @author  juhrik@netbeans.org, mmirilovic@netbeans.org
+ */
+public class FormInspectorNodePopupMenu extends ValidatePopupMenuOnNodes {
 
-public class MeasureMenusTest extends NbTestCase {
 
-    public MeasureMenusTest(String name) {
-        super(name);
+    /** Creates a new instance of FormInspectorNodePopupMenu */
+    public FormInspectorNodePopupMenu(String testName) {
+        super(testName);
+        WAIT_AFTER_PREPARE = 1000;
     }
-
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    
+    /** Creates a new instance of FormInspectorNodePopupMenu */
+    public FormInspectorNodePopupMenu(String testName, String performanceDataName) {
+        super(testName, performanceDataName);
+        WAIT_AFTER_PREPARE = 1000;
+    }
+    
+    public void testFormNodePopupMenuInspector(){
+        doMeasurement();
+    }
+   
+    @Override
+     public void initialize(){
+        CommonUtilities.openSmallFormFile();
+     }
+    
+    @Override
+    public void shutdown(){
+        EditorOperator.closeDiscardAll();
+    }    
+    @Override
+    public void prepare(){
+        String path = "[JFrame]";
+        dataObjectNode = new Node(new ComponentInspectorOperator().treeComponents(), path);
+        super.prepare();
     }
 }

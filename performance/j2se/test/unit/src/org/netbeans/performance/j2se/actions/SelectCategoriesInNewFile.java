@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,87 +39,80 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.footprint;
+package org.netbeans.performance.j2se.actions;
 
-import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.TopComponentOperator;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.jellytools.NewFileWizardOperator;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
 
 
 /**
- * Measure Find Usages Memory footprint
+ * Test of expanding nodes in the New File Wizard tree.
  *
- * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
-    
+public class SelectCategoriesInNewFile extends PerformanceTestCase {
+
+    /** Category name */
+    private static String category;
+
+    /** Jelly Operator for New Wizard */
+    private static NewFileWizardOperator newFile;
+
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of SelectCategoriesInNewFile
      * @param testName the name of the test
      */
-    public FindUsages(String testName) {
+    public SelectCategoriesInNewFile(String testName) {
         super(testName);
-        prefix = "Find Usages |";
+        expectedTime = WINDOW_OPEN;
     }
     
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of SelectCategoriesInNewFile
      * @param testName the name of the test
      * @param performanceDataName measured values will be saved under this name
      */
-    public FindUsages(String testName, String performanceDataName) {
+    public SelectCategoriesInNewFile(String testName, String performanceDataName) {
         super(testName, performanceDataName);
-        prefix = "Find Usages |";
+        expectedTime = WINDOW_OPEN;
     }
     
-    @Override
-    public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
-    }
-
-    @Override
-    public void setUp() {
-        //do nothing
+    
+    public void testSelectGUIForms(){
+        testCategory("org.netbeans.modules.form.resources.Bundle", "Templates/GUIForms");
     }
     
-    public void prepare() {
+    public void testSelectXML(){
+        testCategory("org.netbeans.api.xml.resources.Bundle", "Templates/XML");
+    }
+    
+    public void testSelectOther(){
+        testCategory("org.netbeans.modules.favorites.Bundle", "Templates/Other");
+    }
+    
+    
+    protected void testCategory(String bundle, String key) {
+        category = org.netbeans.jellytools.Bundle.getStringTrimmed(bundle,key);
+        doMeasurement();
+    }
+   
+    @Override
+    protected void initialize(){
+    }
+    
+    public void prepare(){
+        newFile = NewFileWizardOperator.invoke();
     }
     
     public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
-        
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
-        
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+        newFile.selectCategory(category);
+        return null;
     }
     
     @Override
     public void close(){
-        ProjectSupport.closeProject("jEdit");
-    }
-    
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
+        newFile.cancel();        
     }
     
 }

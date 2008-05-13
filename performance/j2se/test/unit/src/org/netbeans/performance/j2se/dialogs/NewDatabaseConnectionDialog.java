@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,41 +38,61 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.dialogs;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
 
-public class MeasureMenusTest extends NbTestCase {
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.RuntimeTabOperator;
+import org.netbeans.jellytools.nodes.Node;
 
-    public MeasureMenusTest(String name) {
-        super(name);
+import org.netbeans.jemmy.operators.ComponentOperator;
+
+
+/**
+ * Test of New Database Connection dialog
+ *
+ * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ */
+public class NewDatabaseConnectionDialog extends PerformanceTestCase {
+
+    private Node thenode;
+    private String BUNDLE, MENU, TITLE;
+    
+    /** Creates a new instance of NewDatabaseConnectionDialog */
+    public NewDatabaseConnectionDialog(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;
     }
-
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    
+    /** Creates a new instance of NewDatabaseConnectionDialog */
+    public NewDatabaseConnectionDialog(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
     }
+    
+    @Override
+    public void initialize() {
+        BUNDLE = "org.netbeans.modules.db.resources.Bundle";
+        MENU = Bundle.getStringTrimmed(BUNDLE,"ConnectUsing");
+        TITLE = Bundle.getStringTrimmed(BUNDLE,"NewConnectionDialogTitle");
+        
+        String NODE = Bundle.getStringTrimmed(BUNDLE,"NDN_Databases") + "|" + Bundle.getStringTrimmed(BUNDLE,"NDN_Drivers") + "|" + "JDBC-ODBC Bridge"; //NOI18N impossible
+        // show Runtime tab and select Databases / Drivers /JDBC-ODBC Bridge node
+        thenode = new Node (RuntimeTabOperator.invoke().getRootNode(), NODE);
+        thenode.select();
+    }
+    
+    public void prepare() {
+        // do nothing
+    }
+        
+    public ComponentOperator open() {
+        // invoke Connect Using from the popup
+        thenode.callPopup().pushMenu(MENU);
+        return new NbDialogOperator(TITLE);
+    }
+    
 }

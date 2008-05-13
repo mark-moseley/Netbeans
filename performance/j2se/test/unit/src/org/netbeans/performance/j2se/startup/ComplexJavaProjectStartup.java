@@ -38,41 +38,37 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.startup;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.utilities.MeasureStartupTimeTestCase;
 
-public class MeasureMenusTest extends NbTestCase {
-
-    public MeasureMenusTest(String name) {
-        super(name);
+/**
+ * Measure startup time by org.netbeans.core.perftool.StartLog.
+ * Number of starts with new userdir is defined by property
+ * <br> <code> org.netbeans.performance.repeat.with.new.userdir </code>
+ * <br> and number of starts with old userdir is defined by property
+ * <br> <code> org.netbeans.performance.repeat </code>
+ * Run measurement defined number times, but forget first measured value,
+ * it's a attempt to have still the same testing conditions with
+ * loaded and cached files.
+ *
+ * @author mmirilovic@netbeans.org
+ */
+public class ComplexJavaProjectStartup extends MeasureStartupTimeTestCase {
+    
+    /** Define testcase
+     * @param testName name of the testcase
+     */
+    public ComplexJavaProjectStartup(String testName) {
+        super(testName);
     }
-
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    
+    /** Testing start of IDE with measurement of the startup time.
+     * @throws IOException
+     */
+    public void testStartIDEWithOpenedFiles() throws java.io.IOException {
+        measureComplexStartupTime("Startup Time with 10 opened java files");
     }
+    
 }

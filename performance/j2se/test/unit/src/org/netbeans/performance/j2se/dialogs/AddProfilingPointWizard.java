@@ -39,87 +39,94 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.footprint;
+package org.netbeans.performance.j2se.dialogs;
 
-import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+
+import java.awt.Component;
+import javax.swing.JButton;
 import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.TopComponentOperator;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.jellytools.actions.Action;
+import org.netbeans.jemmy.ComponentChooser;
 import org.netbeans.jemmy.operators.ComponentOperator;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
-
 
 /**
- * Measure Find Usages Memory footprint
  *
- * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ * @author mkhramov@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
+public class AddProfilingPointWizard  extends PerformanceTestCase {
+
+    private static final String menuPrefix = "Window|Profiling|"; //NOI18N
+    
+    private String commandName;
+    private String windowName;
+    private TopComponentOperator ppointsPane;
+    private JButtonOperator addPointButton;
+    private NbDialogOperator wizard;
     
     /**
-     * Creates a new instance of FindUsages
-     * @param testName the name of the test
+     * @param testName 
      */
-    public FindUsages(String testName) {
+    public AddProfilingPointWizard(String testName) {
         super(testName);
-        prefix = "Find Usages |";
+        expectedTime = WINDOW_OPEN;        
     }
-    
     /**
-     * Creates a new instance of FindUsages
-     * @param testName the name of the test
-     * @param performanceDataName measured values will be saved under this name
+     * @param testName 
+     * @param performanceDataName
      */
-    public FindUsages(String testName, String performanceDataName) {
-        super(testName, performanceDataName);
-        prefix = "Find Usages |";
+    public AddProfilingPointWizard(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;        
     }
-    
     @Override
     public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
+        log(":: initialize");
+        commandName = "Profiling Points"; //NOI18N
+        windowName = "Profiling Points"; ////NOI18N
+        new Action(menuPrefix+commandName,null).performMenu(); // NOI18N  
+        ppointsPane = new TopComponentOperator(windowName);
+        
+        addPointButton = new JButtonOperator(ppointsPane,new ComponentChooser() {
+
+            public boolean checkComponent(Component component) {
+
+	try{
+                if ( (((JButton)component).getToolTipText()).equals("Add Profiling Point") ) //NOI18N
+                      return true; 
+                else  return false;
+	} catch (java.lang.NullPointerException npe) {}
+
+             return false;
+            }
+
+            public String getDescription() {
+                return "Selecting button by tooltip";
+            }
+        });
+
     }
 
-    @Override
-    public void setUp() {
-        //do nothing
-    }
-    
     public void prepare() {
+        log(":: prepare");        
+        
     }
-    
-    public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
-        
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
-        
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+
+    public ComponentOperator open() {
+        addPointButton.pushNoBlock();
+        wizard =new NbDialogOperator("New Profiling Point"); //NOI18N
+        return null;
+    }
+    @Override
+    public void close() {
+        wizard.close();
     }
     
     @Override
-    public void close(){
-        ProjectSupport.closeProject("jEdit");
+    public void shutdown() {
+        ppointsPane.closeWindow();
     }
-    
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
-    }
-    
+
 }

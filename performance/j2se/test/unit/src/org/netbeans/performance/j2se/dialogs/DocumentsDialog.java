@@ -38,41 +38,72 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.dialogs;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.modules.performance.utilities.CommonUtilities;
+import org.netbeans.jellytools.DocumentsDialogOperator;
+import org.netbeans.jellytools.EditorWindowOperator;
+import org.netbeans.jellytools.actions.DocumentsAction;
 
-public class MeasureMenusTest extends NbTestCase {
+import org.netbeans.jemmy.operators.ComponentOperator;
 
-    public MeasureMenusTest(String name) {
-        super(name);
+/**
+ * Test of Documents dialog
+ *
+ * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ */
+public class DocumentsDialog extends PerformanceTestCase {
+
+    /** Creates a new instance of DocumentsDialog */
+    public DocumentsDialog(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;
+    }
+    
+    /** Creates a new instance of DocumentsDialog */
+    public DocumentsDialog(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
+    }
+    
+    @Override
+    public void initialize(){
+        CommonUtilities.openFiles("jEdit", getTenSelectedFiles());
+        waitNoEvent(20000);
+    }
+    
+    public void prepare() {
+        // do nothing
+   }
+    
+    public ComponentOperator open() {
+        // invoke Window / Documents from the main menu
+        new DocumentsAction().performMenu();
+        return new DocumentsDialogOperator();
     }
 
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    @Override
+    public void shutdown(){
+        EditorWindowOperator.closeDiscard();
     }
+    
+    private static String[][] getTenSelectedFiles(){
+        String[][] files_path = {
+            {"bsh","Interpreter.java"},
+            {"bsh","JThis.java"},
+            {"bsh","Name.java"},
+            {"bsh","Parser.java"},
+            {"bsh","Primitive.java"},
+            {"com.microstar.xml","XmlParser.java"},
+            {"org.gjt.sp.jedit","BeanShell.java"},
+            {"org.gjt.sp.jedit","Buffer.java"},
+            {"org.gjt.sp.jedit","EditPane.java"},
+            {"org.gjt.sp.jedit","EditPlugin.java"},
+            {"org.gjt.sp.jedit","EditServer.java"}
+        };
+        return files_path;
+    }
+    
 }

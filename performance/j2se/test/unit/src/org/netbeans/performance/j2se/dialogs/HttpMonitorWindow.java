@@ -38,41 +38,66 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.dialogs;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
 
-public class MeasureMenusTest extends NbTestCase {
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.MainWindowOperator;
+import org.netbeans.jellytools.TopComponentOperator;
 
-    public MeasureMenusTest(String name) {
-        super(name);
+import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.jemmy.operators.JMenuBarOperator;
+
+/**
+ * Test of HTTP Monitor Window
+ *
+ * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ */
+public class HttpMonitorWindow extends PerformanceTestCase {
+
+    private String MENU, TITLE;
+
+    /** Creates a new instance of HttpMonitorWindow */
+    public HttpMonitorWindow(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;
     }
-
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    
+    /** Creates a new instance of HttpMonitorWindow */
+    public HttpMonitorWindow(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
+    }
+    
+    @Override
+    public void initialize() {
+        MENU = Bundle.getStringTrimmed("org.netbeans.core.Bundle","Menu/Window") + "|" + Bundle.getStringTrimmed("org.netbeans.modules.web.monitor.client.Bundle", "MON_HTTP_Transaction_13");
+        TITLE = Bundle.getStringTrimmed("org.netbeans.modules.web.monitor.client.Bundle", "MON_Title");        
+    }
+    
+    public void prepare() {
+        // do nothing
+    }
+    
+    public ComponentOperator open() {
+        // invoke Window / HTTP Monitor from the main menu
+        new JMenuBarOperator(MainWindowOperator.getDefault().getJMenuBar()).pushMenu(MENU,"|");
+        return new TopComponentOperator(TITLE);
+    }
+    
+    @Override
+    public void close() {
+        // close the tab
+        new TopComponentOperator(TITLE).close();
+    }
+    
+    /** Test could be executed internaly in IDE without XTest
+     * @param args arguments from command line
+     */
+    public static void main(String[] args) {
+        repeat = 3;
+        junit.textui.TestRunner.run(new HttpMonitorWindow("measureTime"));
     }
 }

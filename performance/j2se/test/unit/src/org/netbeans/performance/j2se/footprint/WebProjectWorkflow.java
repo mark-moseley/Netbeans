@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,30 +38,75 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.setup.J2SESetup;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+package org.netbeans.performance.j2se.footprint;
+
+
+import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
 
 /**
- * Test suite that actually does not perform any test but sets up user directory
- * for UI responsiveness tests
+ * Measure Web Project Workflow Memory footprint
  *
- * @author  rkubacki@netbeans.org, mmirilovic@netbeans.org
+ * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
  */
-public class MeasureJ2SESetupTest extends NbTestCase {
+public class WebProjectWorkflow extends MemoryFootprintTestCase {
 
-    public MeasureJ2SESetupTest(java.lang.String testName) {
+    private String webproject;
+
+    /**
+     * Creates a new instance of WebProjectWorkflow
+     * @param testName the name of the test
+     */
+    public WebProjectWorkflow(String testName) {
         super(testName);
+        prefix = "Web Project Workflow |";
     }
 
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite("UI Responsiveness J2SE Setup suite");
-
-        suite.addTest(NbModuleSuite.create(J2SESetup.class, ".*", ".*"));
-
-        return suite;
+    /**
+     * Creates a new instance of WebProjectWorkflow
+     * @param testName the name of the test
+     * @param performanceDataName measured values will be saved under this name
+     */
+    public WebProjectWorkflow(String testName, String performanceDataName) {
+        super(testName, performanceDataName);
+        prefix = "Web Project Workflow |";
     }
+    
+    @Override
+    public void initialize() {
+        super.initialize();
+        FootprintUtilities.closeAllDocuments();
+        FootprintUtilities.closeMemoryToolbar();
+    }
+    
+    @Override
+    public void setUp() {
+        //do nothing
+    }
+    
+    public void prepare() {
+    }
+    
+    public ComponentOperator open(){
+        // Web project
+        webproject = FootprintUtilities.createproject("Samples|Web", "Tomcat Servlet Example", false);
+        
+        FootprintUtilities.openFile(webproject, "<default package>", "SessionExample.java", true);
+        FootprintUtilities.buildproject(webproject);
+        FootprintUtilities.deployProject(webproject);
+        //FootprintUtilities.collapseProject(webproject);
+        
+        return null;
+    }
+    
+    @Override
+    public void close(){
+        FootprintUtilities.deleteProject(webproject);
+    }
+    
+    public static void main(java.lang.String[] args) {
+        junit.textui.TestRunner.run(new WebProjectWorkflow("measureMemoryFooprint"));
+    }
+    
 }

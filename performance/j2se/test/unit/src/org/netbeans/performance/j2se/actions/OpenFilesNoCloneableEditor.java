@@ -39,87 +39,95 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.footprint;
+package org.netbeans.performance.j2se.actions;
 
-import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.TopComponentOperator;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
-
+import org.netbeans.jemmy.operators.JPopupMenuOperator;
 
 /**
- * Measure Find Usages Memory footprint
+ * Test of opening files, where CloneableEditor isn't super class of their editor.
  *
- * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
-    
+public class OpenFilesNoCloneableEditor extends OpenFiles {
+
+    private String compName;
+
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of OpenFilesNoCloneableEditor
      * @param testName the name of the test
      */
-    public FindUsages(String testName) {
+    public OpenFilesNoCloneableEditor(String testName) {
         super(testName);
-        prefix = "Find Usages |";
     }
     
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of OpenFilesNoCloneableEditor
      * @param testName the name of the test
      * @param performanceDataName measured values will be saved under this name
      */
-    public FindUsages(String testName, String performanceDataName) {
+    public OpenFilesNoCloneableEditor(String testName, String performanceDataName) {
         super(testName, performanceDataName);
-        prefix = "Find Usages |";
     }
     
-    @Override
-    public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
+    public void testOpening20kBPropertiesFile(){
+        WAIT_AFTER_OPEN = 2500;
+        fileProject = "PerformanceTestData";
+        filePackage = "org.netbeans.test.performance";
+        fileName = "Bundle20kB.properties";
+        compName = "Bundle20kB.properties";
+        menuItem = OPEN;
+        doMeasurement();
     }
 
+    public void testOpening20kBPictureFile(){
+        WAIT_AFTER_OPEN = 2000;
+        fileProject = "PerformanceTestData";
+        filePackage = "org.netbeans.test.performance";
+        fileName = "splash.gif";
+        compName = "splash.gif";
+        menuItem = OPEN;
+        doMeasurement();
+    }
+        
     @Override
-    public void setUp() {
-        //do nothing
+    protected void initialize() {
+        EditorOperator.closeDiscardAll();
     }
     
-    public void prepare() {
+    @Override
+    protected void shutdown(){
+        EditorOperator.closeDiscardAll();
     }
     
+    @Override
     public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
+        JPopupMenuOperator popup =  this.openNode.callPopup();
+        if (popup == null) {
+            throw new Error ("Cannot get context menu for node [" + openNode.getPath() + "] in project [" + fileProject + "]");
+        }
+        log("------------------------- after popup invocation ------------");
         
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
-        
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+        try {
+            popup.pushMenu(this.menuItem);
+        }
+        catch (org.netbeans.jemmy.TimeoutExpiredException tee) {
+            tee.printStackTrace(getLog());
+            throw new Error ("Cannot push menu item ["+this.menuItem+"] of node [" + openNode.getPath() + "] in project [" + fileProject + "]");
+        }
+        log("------------------------- after open ------------");
+        return new TopComponentOperator(compName);
     }
     
     @Override
     public void close(){
-        ProjectSupport.closeProject("jEdit");
-    }
-    
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
-    }
-    
+/*        if (testedComponentOperator != null) {
+            ((TopComponentOperator)testedComponentOperator).close();
+        }
+        else {
+            throw new Error ("no component to close");
+        }
+*/    }
 }

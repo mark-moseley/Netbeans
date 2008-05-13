@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,87 +39,79 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.footprint;
+package org.netbeans.performance.j2se.actions;
 
-import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.TopComponentOperator;
+import org.netbeans.jellytools.actions.CloseViewAction;
+import org.netbeans.jellytools.actions.OpenAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
+
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
-
 
 /**
- * Measure Find Usages Memory footprint
+ * Test of Closing Editor tabs.
  *
- * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
+public class CloseEditorModified extends PerformanceTestCase {
+    
+    /** Editor with opened file */
+    public static EditorOperator editorOperator;
+    
+    /** Dialog with asking for Save */
+    private static NbDialogOperator dialog;
     
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of CloseEditor
      * @param testName the name of the test
      */
-    public FindUsages(String testName) {
+    public CloseEditorModified(String testName) {
         super(testName);
-        prefix = "Find Usages |";
+        expectedTime = WINDOW_OPEN;
+        WAIT_AFTER_OPEN=1500;
     }
     
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of CloseEditor
      * @param testName the name of the test
      * @param performanceDataName measured values will be saved under this name
      */
-    public FindUsages(String testName, String performanceDataName) {
+    public CloseEditorModified(String testName, String performanceDataName) {
         super(testName, performanceDataName);
-        prefix = "Find Usages |";
+        expectedTime = WINDOW_OPEN;
+        WAIT_AFTER_OPEN=1500;
     }
     
     @Override
-    public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
+    public void initialize(){
+        EditorOperator.closeDiscardAll();
+        new OpenAction().performPopup(new Node(new SourcePackagesNode("PerformanceTestData"), "org.netbeans.test.performance|Main.java"));
+        editorOperator = new EditorOperator("Main.java");
     }
 
     @Override
-    public void setUp() {
-        //do nothing
+    public void shutdown(){
+        EditorOperator.closeDiscardAll();
     }
     
-    public void prepare() {
+    public void prepare(){
+        editorOperator.txtEditorPane().typeText("XXX");
     }
     
     public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
-        
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
-        
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+        //TODO issue 44593 new CloseViewAction().performPopup(editorOperator); 
+        new CloseViewAction().performMenu(editorOperator); 
+
+        dialog = new NbDialogOperator(org.netbeans.jellytools.Bundle.getStringTrimmed("org.openide.text.Bundle", "LBL_SaveFile_Title"));
+        return dialog;
     }
     
     @Override
     public void close(){
-        ProjectSupport.closeProject("jEdit");
-    }
-    
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
+        dialog.cancel();
     }
     
 }

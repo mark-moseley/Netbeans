@@ -38,41 +38,56 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.dialogs;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
 
-public class MeasureMenusTest extends NbTestCase {
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.nodes.SourcePackagesNode;
 
-    public MeasureMenusTest(String name) {
-        super(name);
+import org.netbeans.jemmy.operators.ComponentOperator;
+
+/**
+ * Test of Find Usages Dialog
+ *
+ * @author  mmirilovic@netbeans.org
+ */
+public class RefactorFindUsagesDialog extends PerformanceTestCase {
+
+    private static Node testNode;
+    private String TITLE, ACTION;
+
+    /** Creates a new instance of RefactorFindUsagesDialog */
+    public RefactorFindUsagesDialog(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;
     }
-
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    
+    /** Creates a new instance of RefactorFindUsagesDialog */
+    public RefactorFindUsagesDialog(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
     }
+    
+    @Override
+    public void initialize() {
+        String BUNDLE = "org.netbeans.modules.refactoring.ui.Bundle";
+        TITLE = Bundle.getStringTrimmed(BUNDLE,"LBL_WhereUsed");  // "Find Usages"
+        ACTION = Bundle.getStringTrimmed(BUNDLE,"LBL_WhereUsedAction"); // "Find Usages..."
+        testNode = new Node(new SourcePackagesNode("jEdit"),"org.gjt.sp.jedit|jEdit.java");
+    }
+    
+    public void prepare() {
+        // do nothing
+    }
+    
+    public ComponentOperator open() {
+        // invoke Find Usages from the popup menu
+        testNode.performPopupAction(ACTION);
+        return new NbDialogOperator(TITLE);
+    }
+    
 }

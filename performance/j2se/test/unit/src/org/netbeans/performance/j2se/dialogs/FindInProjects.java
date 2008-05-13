@@ -38,41 +38,55 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.dialogs;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
 
-public class MeasureMenusTest extends NbTestCase {
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.MainWindowOperator;
+import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.nodes.SourcePackagesNode;
 
-    public MeasureMenusTest(String name) {
-        super(name);
+import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.jemmy.operators.JMenuBarOperator;
+
+/**
+ * Test of Find In Projects dialog.
+ *
+ * @author  mmirilovic@netbeans.org
+ */
+public class FindInProjects extends PerformanceTestCase {
+
+    private String MENU, TITLE;
+    
+    /** Creates a new instance of FindInProjects */
+    public FindInProjects(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;
     }
-
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    
+    /** Creates a new instance of FindInProjects */
+    public FindInProjects(String testName, String performanceDataName) {
+        super(testName, performanceDataName);
+        expectedTime = WINDOW_OPEN;
     }
+    
+    @Override
+    public void initialize(){
+        MENU = Bundle.getStringTrimmed("org.netbeans.core.Bundle","Menu/Edit") + "|" + Bundle.getStringTrimmed("org.netbeans.modules.search.Bundle","LBL_Action_FindInProjects");
+        TITLE = Bundle.getStringTrimmed("org.netbeans.modules.search.Bundle","LBL_FindInProjects");
+    }
+    
+    public void prepare(){
+        new SourcePackagesNode("jEdit").select();
+    }
+    
+    public ComponentOperator open(){
+//TODO doesn't work after refactoring merge        new FindAction().performShortcut();
+        new JMenuBarOperator(MainWindowOperator.getDefault().getJMenuBar()).pushMenuNoBlock(MENU,"|");
+        
+        return new NbDialogOperator(TITLE);
+    }
+    
 }

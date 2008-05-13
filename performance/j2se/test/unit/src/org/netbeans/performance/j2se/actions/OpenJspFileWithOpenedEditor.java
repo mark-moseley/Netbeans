@@ -38,41 +38,56 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.menus.*;
+package org.netbeans.performance.j2se.actions;
 
-import junit.framework.Test;
-import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.nodes.SourcePackagesNode;
+import org.netbeans.jellytools.actions.OpenAction;
 
-public class MeasureMenusTest extends NbTestCase {
+/**
+ * Test of opening JSP file if Editor is opened.
+ *
+ * @author  mmirilovic@netbeans.org
+ */
+public class OpenJspFileWithOpenedEditor extends OpenJspFile {
 
-    public MeasureMenusTest(String name) {
-        super(name);
+    /**
+     * Creates a new instance of OpenFiles
+     * @param testName the name of the test
+     */
+    public OpenJspFileWithOpenedEditor(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;
     }
-
-    public static Test suite() {
-
-        NbTestSuite s = new NbTestSuite("UI Responsiveness J2SE Menus suite");
-
-        s.addTest(NbModuleSuite.create(MainMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(MainSubMenus.class, ".*", ".*"));
-
-/* TBD        
-
-        s.addTest(NbModuleSuite.create(EditorDownButtonPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FilesViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(FormInspectorNodePopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ProjectsViewSubMenus.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(RuntimeViewPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(SourceEditorPopupMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ToolsMenu.class, ".*", ".*"));
-        s.addTest(NbModuleSuite.create(ValidatePopupMenuOnNodes.class, ".*", ".*"));
-
-*/ 
-        return s;
+    
+    /**
+     * Creates a new instance of OpenFiles
+     * @param testName the name of the test
+     * @param performanceDataName measured values will be saved under this name
+     */
+    public OpenJspFileWithOpenedEditor(String testName, String performanceDataName) {
+        super(testName, performanceDataName);
+        expectedTime = WINDOW_OPEN;
     }
+    
+    @Override
+    public void testOpening20kBJSPFile(){
+        WAIT_AFTER_OPEN = 3000;
+        setJSPEditorCaretFilteringOn();
+        fileProject = "PerformanceTestWebApplication";
+        fileName = "Test.jsp";
+        menuItem = OPEN;
+        doMeasurement();
+    }
+    
+    /**
+     * Initialize test - open Main.java file in the Source Editor.
+     */
+    @Override
+    public void initialize(){
+        super.initialize();
+        new OpenAction().performAPI(new Node(new SourcePackagesNode("PerformanceTestData"),"org.netbeans.test.performance|Main.java"));
+    }
+    
 }

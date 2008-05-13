@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,87 +39,89 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2se.footprint;
+package org.netbeans.performance.j2se.actions;
 
-import org.netbeans.modules.performance.utilities.MemoryFootprintTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.actions.OpenAction;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
-//import org.netbeans.junit.ide.ProjectSupport;
-import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
-
-//import org.netbeans.junit.ide.ProjectSupport;
-
 
 /**
- * Measure Find Usages Memory footprint
+ * Test of opening files if Editor is already opened.
+ * OpenFiles is used as a base for tests of opening files
+ * when editor is already opened.
  *
- * @author  anebuzelsky@netbeans.org, mmirilovic@netbeans.org
+ * @author  mmirilovic@netbeans.org
  */
-public class FindUsages extends MemoryFootprintTestCase {
-    
+public class OpenFilesWithOpenedEditor extends OpenFiles {
+
+    /** Name of file to pre-open */
+    public static String fileName_preopen;
+
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of OpenFilesWithOpenedEditor
      * @param testName the name of the test
      */
-    public FindUsages(String testName) {
+    public OpenFilesWithOpenedEditor(String testName) {
         super(testName);
-        prefix = "Find Usages |";
     }
     
     /**
-     * Creates a new instance of FindUsages
+     * Creates a new instance of OpenFilesWithOpenedEditor
      * @param testName the name of the test
      * @param performanceDataName measured values will be saved under this name
      */
-    public FindUsages(String testName, String performanceDataName) {
+    public OpenFilesWithOpenedEditor(String testName, String performanceDataName) {
         super(testName, performanceDataName);
-        prefix = "Find Usages |";
-    }
-    
-    @Override
-    public void initialize() {
-        super.initialize();
-        FootprintUtilities.closeAllDocuments();
-        FootprintUtilities.closeMemoryToolbar();
     }
 
     @Override
-    public void setUp() {
-        //do nothing
-    }
-    
-    public void prepare() {
-    }
-    
-    public ComponentOperator open(){
-        // jEdit project
-        log("Opening project jEdit");
-        FootprintUtilities.waitProjectOpenedScanFinished(System.getProperty("xtest.tmpdir")+ java.io.File.separator +"jEdit41");
-        FootprintUtilities.waitForPendingBackgroundTasks();
-        
-        // invoke Find Usages
-        Node filenode = new Node(new SourcePackagesNode("jEdit"), "org.gjt.sp.jedit" + "|" + "jEdit.java");
-        filenode.callPopup().pushMenuNoBlock("Find Usages"); // NOI18N
-        
-        NbDialogOperator findusagesdialog = new NbDialogOperator("Find Usages"); // NOI18N
-        new JCheckBoxOperator(findusagesdialog,"Search in Comments").setSelected(true); // NOI18N
-        new JButtonOperator(findusagesdialog,"Find").push(); // NOI18N
-        
-        return new TopComponentOperator("Usages"); // NOI18N
+    public void testOpening20kBJavaFile(){
+        WAIT_AFTER_OPEN = 1500;
+        setJavaEditorCaretFilteringOn();
+        fileProject = "PerformanceTestData";
+        filePackage = "org.netbeans.test.performance";
+        fileName = "Main20kB.java";
+        fileName_preopen = "Main.java";
+        menuItem = OPEN;
+        doMeasurement();
     }
     
     @Override
-    public void close(){
-        ProjectSupport.closeProject("jEdit");
+    public void testOpening20kBTxtFile(){
+        WAIT_AFTER_OPEN = 1000;
+        setPlainTextEditorCaretFilteringOn();
+        fileProject = "PerformanceTestData";
+        filePackage = "org.netbeans.test.performance";
+        fileName = "textfile20kB.txt";
+        fileName_preopen = "textfile.txt";
+        menuItem = OPEN;
+        doMeasurement();
     }
     
+    @Override
+    public void testOpening20kBXmlFile(){
+        WAIT_AFTER_OPEN = 1000;
+        setXMLEditorCaretFilteringOn();
+        fileProject = "PerformanceTestData";
+        filePackage = "org.netbeans.test.performance";
+        fileName = "xmlfile20kB.xml";
+        fileName_preopen = "xmlfile.xml";
+        menuItem = EDIT;
+        doMeasurement();
+    }
+    
+    /**
+     * Initialize test - open Main.java file in the Source Editor.
+     */
+    @Override
+    public void initialize(){
+        super.initialize();
+        new OpenAction().performAPI(new Node(new SourcePackagesNode("PerformanceTestData"), "org.netbeans.test.performance|" + fileName_preopen));
+    }
+    
+    
     public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new FindUsages("measureMemoryFooprint"));
+        junit.textui.TestRunner.run(new OpenFilesWithOpenedEditor("testOpening20kBTxtFile"));
     }
     
 }

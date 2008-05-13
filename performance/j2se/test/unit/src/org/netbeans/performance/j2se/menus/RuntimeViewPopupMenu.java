@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,30 +38,68 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se;
 
-import org.netbeans.performance.j2se.setup.J2SESetup;
-import org.netbeans.junit.NbTestCase;
+package org.netbeans.performance.j2se.menus;
+
+import org.netbeans.jellytools.RuntimeTabOperator;
+import org.netbeans.jellytools.nodes.Node;
+
 import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
 
 /**
- * Test suite that actually does not perform any test but sets up user directory
- * for UI responsiveness tests
- *
- * @author  rkubacki@netbeans.org, mmirilovic@netbeans.org
+ * Test of popup menu on nodes in Runtime View
+ * @author  juhrik@netbeans.org, mmirilovic@netbeans.org
  */
-public class MeasureJ2SESetupTest extends NbTestCase {
 
-    public MeasureJ2SESetupTest(java.lang.String testName) {
+
+public class RuntimeViewPopupMenu extends ValidatePopupMenuOnNodes{
+
+    private static RuntimeTabOperator runtimeTab;
+
+    private final String SERVER_REGISTRY = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.Bundle", "SERVER_REGISTRY_NODE");
+    
+    /** Creates a new instance of RuntimeViewPopupMenu */
+    public RuntimeViewPopupMenu(String testName) {
         super(testName);
     }
-
+    
+    /** Creates a new instance of RuntimeViewPopupMenu */
+    public RuntimeViewPopupMenu(String testName, String performanceDataName) {
+        super(testName, performanceDataName);
+    }
+    
     public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite("UI Responsiveness J2SE Setup suite");
-
-        suite.addTest(NbModuleSuite.create(J2SESetup.class, ".*", ".*"));
-
+        NbTestSuite suite = new NbTestSuite();
+        suite.addTest(new RuntimeViewPopupMenu("testServerRegistryPopupMenuRuntime", "Servers node popup in Runtime View"));
+        suite.addTest(new RuntimeViewPopupMenu("testTomcatPopupMenuRuntime", "Bundled Tomcat node popup in Runtime View"));
         return suite;
     }
+    
+
+    public void testServerRegistryPopupMenuRuntime(){
+        testMenu(SERVER_REGISTRY);
+    }
+    
+    public void testTomcatPopupMenuRuntime(){
+        testMenu(SERVER_REGISTRY + "|Bundled Tomcat");
+    }
+    
+    private void testMenu(String path){
+        runtimeTab = new RuntimeTabOperator();
+        dataObjectNode = new Node(runtimeTab.getRootNode(), path);
+        doMeasurement();
+    }
+
+    @Override
+    public void shutdown(){
+        // do nothing runtimeTab.close();
+    } 
+
+    /** Test could be executed internaly in IDE without XTest
+     * @param args arguments from command line
+     */
+    public static void main(String[] args) {
+        junit.textui.TestRunner.run(new RuntimeViewPopupMenu("testTomcatPopupMenuRuntime"));
+    }
+
 }
