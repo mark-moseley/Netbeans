@@ -65,11 +65,12 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
 
     /** unique ID of <code>TopComponent</code> (singleton) */
     private static final String ID = "debugging"; //NOI18N
-    private static final int ICON_WIDTH = 16;
+    private static final int CLICKABLE_ICON_WIDTH = 16;
     private static final int BAR_WIDTH = 8;
     
-    static final Color hitsColor = new Color(255, 255, 178); // [TODO]
-    static final Color deadlockColor = UIManager.getDefaults().getColor("nb.errorForeground"); // [TODO]
+    static final Color hitsColor = new Color(255, 255, 178);
+    static final Color hitsBarColor = new Color(230, 230, 130);
+    static final Color deadlockColor = UIManager.getDefaults().getColor("nb.errorForeground");
     
     private transient Color greenBarColor = new Color(189, 230, 170);
     private transient Color treeBackgroundColor = UIManager.getDefaults().getColor("Tree.background"); // NOI18N
@@ -143,9 +144,6 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         
         treeView.setHorizontalScrollBar(treeScrollBar);
         
-//        remove(scrollBarPanel);
-//        scrollBarPanel.setVisible(false);
-
         manager.addPropertyChangeListener(this);
         treeView.addTreeExpansionListener(this);
         TreeModel model = treeView.getTree().getModel();
@@ -431,7 +429,7 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         public void preferenceChange(PreferenceChangeEvent evt) {
             String key = evt.getKey();
             if (FiltersDescriptor.SHOW_SUSPEND_TABLE.equals(key)) {
-                setSuspendTableVisible(evt.getNewValue().equals("true")); // [TODO]
+                setSuspendTableVisible(evt.getNewValue().equals("true"));
             }
         }
 
@@ -444,7 +442,7 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             leftPanel.removeAll();
             rightPanel.removeAll();
             int sy = 0;
-            int sx = (rightPanel.getWidth() - ICON_WIDTH) / 2;
+            int sx = (rightPanel.getWidth() - CLICKABLE_ICON_WIDTH) / 2;
 
             JPDAThread currentThread = debugger != null ? debugger.getCurrentThread() : null;
             // collect all deadlocked threads
@@ -480,18 +478,18 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
 
                 JTree tree = treeView.getTree();
                 Rectangle rect = tree.getRowBounds(tree.getRowForPath(path));
-                int height = rect != null ? (int) Math.round(rect.getHeight()) : 0; // [TODO] NPE
+                int height = rect != null ? (int) Math.round(rect.getHeight()) : 0;
                 mainPanelHeight += height;
                 treeViewWidth = rect != null ? Math.max(treeViewWidth, (int) Math.round(rect.getX() + rect.getWidth())) : treeViewWidth;
                 leftBarHeight += height;
 
-                JLabel icon = jpdaThread != null ? new ClickableIcon(resumeIcon, focusedResumeIcon, pressedResumeIcon, suspendIcon, focusedSuspendIcon, pressedSuspendIcon, jpdaThread) : new JLabel();
-                icon.setPreferredSize(new Dimension(ICON_WIDTH, height));
+                JComponent icon = jpdaThread != null ? new ClickableIcon(resumeIcon, focusedResumeIcon, pressedResumeIcon, suspendIcon, focusedSuspendIcon, pressedSuspendIcon, jpdaThread) : new JLabel();
+                icon.setPreferredSize(new Dimension(CLICKABLE_ICON_WIDTH, height));
                 icon.setBackground(treeBackgroundColor);
                 icon.setOpaque(false);
                 rightPanel.add(icon);
                 if (icon instanceof ClickableIcon) {
-                    ((ClickableIcon) icon).initializeState(sx, sy, ICON_WIDTH, height);
+                    ((ClickableIcon) icon).initializeState(sx, sy, CLICKABLE_ICON_WIDTH, height);
                 }
                 sy += height;
             } // for
@@ -503,8 +501,8 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             leftPanel.repaint();
             rightPanel.revalidate();
             rightPanel.repaint();
-            treeView.getTree().setPreferredSize(new Dimension(treeViewWidth, 10)); // [TODO] 10
-            mainPanel.setPreferredSize(new Dimension(10, mainPanelHeight)); // [TODO] 10
+            treeView.getTree().setPreferredSize(new Dimension(treeViewWidth, 10));
+            mainPanel.setPreferredSize(new Dimension(10, mainPanelHeight));
             treeView.getTree().revalidate(); // [TODO] reduce revalidate calls
             treeView.revalidate();
             mainScrollPane.revalidate();
@@ -519,7 +517,9 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
                         comboItemText = session.getName();
                     }
                 }
-                sessionComboBox.addItem(comboItemText != null && comboItemText.length() > 0 ? comboItemText : "Java Project"); // NOI18N [TODO]
+                sessionComboBox.addItem(comboItemText != null && comboItemText.length() > 0 ?
+                    comboItemText : 
+                    NbBundle.getMessage(DebuggingView.class, "LBL_Java_Project")); // [TODO]
             }
         }
 
@@ -527,14 +527,14 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             JComponent label = new JPanel();
             String toolTipText = null;
             label.setPreferredSize(new Dimension(BAR_WIDTH, height));
-            if (isInDeadlock) {
+            if (isInDeadlock) { // [TODO] what to do when current thread is in deadlock?
                 label.setBackground(deadlockColor);
                 toolTipText = NbBundle.getMessage(DebuggingView.class, "LBL_DEADLOCKED_THREAD_TIP");
             } else if (isCurrent) {
                 label.setBackground(greenBarColor);
                 toolTipText = NbBundle.getMessage(DebuggingView.class, "LBL_CURRENT_BAR_TIP");
             } else if (isAtBreakpoint) {
-                label.setBackground(hitsColor);
+                label.setBackground(hitsBarColor);
                 toolTipText = NbBundle.getMessage(DebuggingView.class, "LBL_BREAKPOINT_HIT_TIP");
             } else {
                 label.setBackground(treeBackgroundColor);

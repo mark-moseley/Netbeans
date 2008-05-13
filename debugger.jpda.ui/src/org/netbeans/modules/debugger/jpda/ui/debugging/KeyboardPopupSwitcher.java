@@ -41,8 +41,12 @@
 
 package org.netbeans.modules.debugger.jpda.ui.debugging;
 
+import java.awt.AWTEvent;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
+import java.awt.event.AWTEventListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
@@ -62,7 +66,6 @@ import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.awt.StatusDisplayer;
 import org.openide.util.Utilities;
-import org.openide.windows.WindowManager;
 
 /**
  * Represents Popup for "Keyboard document switching" which is shown after
@@ -75,7 +78,7 @@ import org.openide.windows.WindowManager;
 public final class KeyboardPopupSwitcher implements WindowFocusListener {
     
     /** Number of milliseconds to show popup if interruption didn't happen. */
-    private static final int TIME_TO_SHOW = 0; // 200;
+    private static final int TIME_TO_SHOW = 200;
     
     /** Singleton */
     private static KeyboardPopupSwitcher instance;
@@ -94,6 +97,9 @@ public final class KeyboardPopupSwitcher implements WindowFocusListener {
      * releases <code>triggerKey</code> key in that time.
      */
     private static Timer invokerTimer;
+
+    // [TODO]
+    private static AWTListener awtListener;
     
     /**
      * Safely indicating whether a <code>invokerTimer</code> is running or not.
@@ -199,7 +205,8 @@ public final class KeyboardPopupSwitcher implements WindowFocusListener {
         invokerTimer.setRepeats(false);
         invokerTimer.start();
         invokerTimerRunning = true;
-        // Toolkit.getDefaultToolkit().addAWTEventListener(this, AWTEvent.KEY_EVENT_MASK);
+        awtListener = new AWTListener();
+        Toolkit.getDefaultToolkit().addAWTEventListener(awtListener, AWTEvent.KEY_EVENT_MASK);
     }
     
     /** Stop invoker timer and detach interrupter listener. */
@@ -220,6 +227,7 @@ public final class KeyboardPopupSwitcher implements WindowFocusListener {
         }
         /** Timer just hit the specified time_to_show */
         public void actionPerformed(ActionEvent e) {
+            Toolkit.getDefaultToolkit().removeAWTEventListener(awtListener);
             if (invokerTimerRunning) {
                 cleanupInterrupter();
                 instance = new KeyboardPopupSwitcher( forward ? hits + 1 : items.length - hits - 1, forward);
@@ -278,7 +286,8 @@ public final class KeyboardPopupSwitcher implements WindowFocusListener {
             descr.setClosingOptions(new Object [0]);
             
             InputMap inputMap = pTable.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-            inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0, true), "escape");
+            inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, KeyEvent.CTRL_DOWN_MASK, true), "escape");
+            inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, KeyEvent.CTRL_DOWN_MASK | KeyEvent.SHIFT_DOWN_MASK, true), "escape");
             inputMap.put(KeyStroke.getKeyStroke(releaseKey, 0, true), "close");
             inputMap.put(KeyStroke.getKeyStroke(releaseKey, KeyEvent.SHIFT_DOWN_MASK, true), "close");
             inputMap.put(KeyStroke.getKeyStroke(triggerKey, KeyEvent.CTRL_DOWN_MASK), "triggerKeyPressed");
@@ -334,8 +343,8 @@ public final class KeyboardPopupSwitcher implements WindowFocusListener {
             
             SwingUtilities.invokeLater(new Runnable() {
                 public void run () {
-                    WindowManager.getDefault().getMainWindow().
-                            addWindowFocusListener(KeyboardPopupSwitcher.this);
+                    //WindowManager.getDefault().getMainWindow().addWindowFocusListener(KeyboardPopupSwitcher.this);
+                    popup.addWindowFocusListener(KeyboardPopupSwitcher.this);
                 }
             });
             
@@ -348,7 +357,6 @@ public final class KeyboardPopupSwitcher implements WindowFocusListener {
             popup.setAlwaysOnTop(true);
             popup.getContentPane().add(pTable);
             popup.setLocation(x, y);
-            popup.setModal(true); // [TODO] added
             popup.pack();
             popup.setVisible(true);
              */
@@ -361,7 +369,7 @@ public final class KeyboardPopupSwitcher implements WindowFocusListener {
 //                            addWindowFocusListener( KeyboardPopupSwitcher.this );
 //                }
 //            });
-            // shown = true; [TODO]
+            // shown = true;
         }
     }
     
@@ -526,7 +534,27 @@ public final class KeyboardPopupSwitcher implements WindowFocusListener {
             shown = false;
             hits = 0;
             // part of #82743 fix
-            WindowManager.getDefault().getMainWindow().removeWindowFocusListener( KeyboardPopupSwitcher.this );
+            toHide.removeWindowFocusListener(KeyboardPopupSwitcher.this);
+            // WindowManager.getDefault().getMainWindow().removeWindowFocusListener(KeyboardPopupSwitcher.this);
+        }
+    }
+    
+    private static class AWTListener implements AWTEventListener {
+
+        public void eventDispatched(AWTEvent event) {
+            if (!(event instanceof KeyEvent)) {
+                return;
+            }
+            KeyEvent keyEvent = (KeyEvent)event;
+            if (keyEvent.getKeyCode() == KeyEvent.VK_CONTROL) {
+                Toolkit.getDefaultToolkit().removeAWTEventListener(this);
+                KeyEvent kev = new KeyEvent(
+                    (Component)keyEvent.getSource(), KeyEvent.KEY_RELEASED, keyEvent.getWhen(),
+                    keyEvent.getModifiers(), keyEvent.getKeyCode(), keyEvent.getKeyChar()
+
+                );
+                KeyboardPopupSwitcher.processInterruption(kev);
+            }
         }
     }
 
