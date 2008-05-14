@@ -309,14 +309,7 @@ public class MessageDataFilter implements IMessageDataFilter
 				}
 			}
 		}
-		try
-		{
-			XMLManip.save(pDoc,m_FileLocation);
-		}
-		catch(IOException ex)
-		{
-			ex.printStackTrace();
-		}
+		XMLManip.save(pDoc,m_FileLocation);
 		
 	}
 	

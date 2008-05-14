@@ -50,6 +50,7 @@ import java.util.List;
 import org.dom4j.Document;
 import org.dom4j.Node;
 
+import org.netbeans.modules.uml.UMLCoreModule;
 import org.netbeans.modules.uml.core.support.Debug;
 import org.netbeans.modules.uml.core.support.umlsupport.StringUtilities;
 import org.netbeans.modules.uml.core.support.umlsupport.Validator;
@@ -113,6 +114,8 @@ public class ConfigManager implements IConfigManager
     {
         Debug.log(this, "uml config dir="+homeLocation);
         
+        UMLCoreModule.checkInitUml1();
+
         m_HomeLocation = homeLocation;
         
         if (!m_HomeLocation.endsWith(File.separator))

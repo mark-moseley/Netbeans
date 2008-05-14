@@ -1389,16 +1389,7 @@ public class ExternalFileManager
 								 org.dom4j.Element element)
 	{
 		UMLXMLManip.convertAbsoluteHrefs(element, m_rootFileName);
-		
-		try
-		{
-			XMLManip.save(doc, docLoc);
-		}
-		catch (IOException e)
-		{
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		XMLManip.save(doc, docLoc);
 	}
 
 	/**

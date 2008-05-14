@@ -157,15 +157,7 @@ public class PreferenceManager implements IPreferenceManager
     {
         if (m_PrefDoc != null)
         {
-            try
-            {
-                XMLManip.save(m_PrefDoc, fileName);
-            }
-            catch (IOException e)
-            {
-                e.printStackTrace();
-                // TODO: Handle this exception.
-            }
+            XMLManip.save(m_PrefDoc, fileName);
         }
     }
 

@@ -635,14 +635,12 @@ public class WorkspaceImpl extends WSProjectImpl implements IWorkspace
                      root.remove(attr);
                   }
 
-                  try
+                  boolean successful = XMLManip.save(getDocument(), fileName);
+                  XMLManip.setAttributeValue(root, "fileName", fileName);
+
+                  if (!successful)
                   {
-                     XMLManip.save(getDocument(), fileName);
-                     XMLManip.setAttributeValue(root, "fileName", fileName);
-                  }
-                  catch(IOException e)
-                  {
-                     throw new WorkspaceManagementException( e);
+                     throw new WorkspaceManagementException( );
                   }
 
                   dispatchWorkspaceSaved(this);

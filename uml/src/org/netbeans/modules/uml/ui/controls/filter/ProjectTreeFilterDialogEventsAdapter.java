@@ -44,14 +44,6 @@
 package org.netbeans.modules.uml.ui.controls.filter;
 
 import org.netbeans.modules.uml.core.support.umlsupport.IResultCell;
-import org.netbeans.modules.uml.ui.controls.projecttree.IProjectTreeControl;
-import org.netbeans.modules.uml.ui.controls.projecttree.IProjectTreeEngine;
-import org.netbeans.modules.uml.ui.controls.projecttree.IProjectTreeModel;
-import org.netbeans.modules.uml.ui.controls.projecttree.ProductProjectTreeModel;
-import org.netbeans.modules.uml.ui.products.ad.projecttreedefaultengine.ADProjectTreeEngine;
-import org.netbeans.modules.uml.ui.products.ad.projecttreedefaultengine.FilteredItemManager;
-import org.netbeans.modules.uml.ui.support.ProductHelper;
-import org.netbeans.modules.uml.ui.swing.projecttree.ProjectTreeSwingModel;
 
 /**
  * 

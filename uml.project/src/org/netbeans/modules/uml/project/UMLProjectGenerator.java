@@ -72,7 +72,6 @@ import org.netbeans.modules.uml.ui.support.ProductHelper;
 import org.netbeans.modules.uml.project.ui.common.JavaSourceRootsUI;
 import org.netbeans.modules.uml.project.ui.customizer.UMLProjectProperties;
 import org.netbeans.modules.uml.project.ui.wizards.NewUMLProjectWizardIterator;
-import org.openide.util.NbBundle;
 
 
 /**
@@ -261,20 +260,21 @@ public class UMLProjectGenerator
             int umlProjectType)
             throws IOException
     {
-        dir.mkdirs();
-        
-        // XXX clumsy way to refresh, but otherwise it doesn't work for new folders
-        File rootF = dir;
-        while (rootF.getParentFile() != null)
-        {
-            rootF = rootF.getParentFile();
-        }
-        
-        FileObject fo = FileUtil.toFileObject(rootF);
-        assert fo != null : "At least disk roots must be mounted! " + rootF; // NOI18N
-        
-        fo.getFileSystem().refresh(false);
-        FileObject dirFO = FileUtil.toFileObject(dir);
+//        dir.mkdirs();
+//        
+//        // XXX clumsy way to refresh, but otherwise it doesn't work for new folders
+//        File rootF = dir;
+//        while (rootF.getParentFile() != null)
+//        {
+//            rootF = rootF.getParentFile();
+//        }
+//        
+//        FileObject fo = FileUtil.toFileObject(rootF);
+//        assert fo != null : "At least disk roots must be mounted! " + rootF; // NOI18N
+//        
+//        fo.getFileSystem().refresh(false);
+//        FileObject dirFO = FileUtil.toFileObject(dir);
+        FileObject dirFO = FileUtil.createFolder(dir);
         assert dirFO != null: "No such dir on disk: " + dir; // NOI18N
         
         assert dirFO.isFolder() : "Not really a dir: " + dir; // NOI18N
@@ -319,7 +319,7 @@ public class UMLProjectGenerator
                     // Set the dirty state to true to have the diagram autosaved.
                     if (newDiagram != null )
                     {
-                          newDiagram.setIsDirty(true);
+                          newDiagram.setDirty(true);
                           newDiagram.save();
                     }
 
@@ -657,7 +657,7 @@ public class UMLProjectGenerator
                  createDiagram(diagramKind, namespace, diagramName, null);
            if (newDiagram != null)
            {
-              newDiagram.setIsDirty(true);
+              newDiagram.setDirty(true);
               newDiagram.save();
            }
            

@@ -43,15 +43,20 @@ package org.netbeans.modules.uml.core.support.umlsupport;
 
 import java.io.File;
 
+import java.io.IOException;
 import org.dom4j.Document;
 import java.util.List;
+import java.util.logging.Logger;
+import org.openide.filesystems.FileUtil;
 
 /**
  * @author sumitabhk
  *
  */
 public class Validator {
-	/**
+        private static final Logger logger = Logger.getLogger("org.netbeans.modules.uml.core");
+
+        /**
 	 * Makes sure that the passed in path contains a valid directory
 	 * spec
 	 *
@@ -59,40 +64,50 @@ public class Validator {
 	 * @return true if the path is a valid path, Otherwise false.
 	 */
 
-	public static boolean validatePath( final String path )
-	{
-		boolean retVal = true;
+        public static boolean validatePath(final String path) 
+        {
+            boolean retVal = true;
+            if (path == null || path.trim().length() == 0)
+            if (path.length() > 0) 
+            {
+                File testFile = new File(path);
+                if (!testFile.isAbsolute()) 
+                {
+                    testFile = testFile.getAbsoluteFile();
+                }
 
-		if( path.length() > 0 )
-		{
-			File testFile = new File(path);
-            if (!testFile.isAbsolute()) testFile = testFile.getAbsoluteFile();
-            
-            if (testFile == null)
+                if (testFile == null) 
+                {
+                    retVal = false;
+                } else if (!testFile.isDirectory()) 
+                {
+                    File dir = testFile.getParentFile();
+                    if (dir != null) 
+                    {
+                        if (dir.exists() && !dir.isDirectory()) 
+                        {
+                            retVal = false;
+                        }
+                        if (!dir.exists()) 
+                        {
+                            try {
+                                //dir.mkdir();
+                                FileUtil.createFolder(dir);
+                            } catch (IOException ex) {
+                                retVal = false;
+                                logger.warning(ex.getMessage());
+                            }
+                        }
+                    }
+                }
+            } 
+            else 
+            {
                 retVal = false;
-            else if (!testFile.isDirectory())
-			{
-				File dir = testFile.getParentFile();
-				if (dir != null)
-				{
-					if (dir.exists() && !dir.isDirectory())
-				{
-					retVal = false;
-				}
-					if (!dir.exists())
-					{
-						dir.mkdir();
-					}
-				}
-			}
-		}
-		else
-		{
-			retVal = false;
-		}
+            }
 
-		return retVal;
-	}
+            return retVal;
+        }
 
 
 	/**
