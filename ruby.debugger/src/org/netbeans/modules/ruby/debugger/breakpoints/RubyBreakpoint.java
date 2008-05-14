@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -52,19 +52,22 @@ import org.rubyforge.debugcommons.RubyDebuggerException;
 import org.rubyforge.debugcommons.RubyDebuggerProxy;
 import org.rubyforge.debugcommons.model.IRubyBreakpoint;
 
-/**
- * @author Martin Krauskopf
- */
 public final class RubyBreakpoint extends Breakpoint implements IRubyBreakpoint {
     
     static final String PROP_UPDATED = "updated"; // NOI18N
 
     private boolean enabled;
-    private final Line line;
+    private Line line;
+    private String condition;
 
     RubyBreakpoint(final Line line) {
+        this(line, null);
+    }
+
+    RubyBreakpoint(final Line line, final String condition) {
         this.line = line;
         this.enabled = true;
+        this.condition = condition;
     }
 
     private void updateBreakpoint() {
@@ -106,6 +109,21 @@ public final class RubyBreakpoint extends Breakpoint implements IRubyBreakpoint 
         return line;
     }
 
+    public void setLine(Line line) {
+        this.line = line;
+        firePropertyChange(PROP_UPDATED, false, true);
+    }
+
+    public void setCondition(final String condition) {
+        this.condition = condition;
+        updateBreakpoint();
+        firePropertyChange(RubyBreakpoint.PROP_UPDATED, null, null);
+    }
+
+    public String getCondition() {
+        return condition;
+    }
+    
     public FileObject getFileObject() {
         return getLine().getLookup().lookup(FileObject.class);
     }
@@ -122,4 +140,5 @@ public final class RubyBreakpoint extends Breakpoint implements IRubyBreakpoint 
     public @Override String toString() {
         return getFilePath() + ':' + getLineNumber();
     }
+
 }
