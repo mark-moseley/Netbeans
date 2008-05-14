@@ -61,7 +61,6 @@ import org.netbeans.modules.cnd.api.model.services.CsmFileReferences;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
 import org.netbeans.modules.cnd.highlight.semantic.options.SemanticHighlightingOptions;
-import org.netbeans.modules.cnd.model.tasks.CsmFileTaskFactory.PhaseRunner;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
 import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
 
@@ -97,9 +96,9 @@ public class SemanticHighlighter extends HighlighterBase {
         inactiveColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_INACTIVE), cleanUp);
         macroColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_MACRO), cleanUp);
         sysMacroColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_SYSMACRO), cleanUp);
+        fieldsColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_FIELDS), cleanUp);
+        functionsColors = AttributesUtilities.createImmutable(StyleConstants.Bold, Boolean.TRUE);
         if (SemanticHighlightingOptions.SEMANTIC_ADVANCED) {
-            fieldsColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_FIELDS), cleanUp);
-            functionsColors = AttributesUtilities.createImmutable(StyleConstants.Bold, Boolean.TRUE);
         }
     }
 
@@ -227,7 +226,8 @@ public class SemanticHighlighter extends HighlighterBase {
 
         boolean validate(CsmReference ref);
     }
-    // Runnable
+    
+    // PhaseRunner
     public void run(Phase phase) {
         if (phase == Phase.PARSED || phase == Phase.INIT) {
             try {
@@ -244,5 +244,9 @@ public class SemanticHighlighter extends HighlighterBase {
                 getHighlightsBag(doc).clear();
             }
         }
+    }
+
+    public boolean isValid() {
+        return true;
     }
 }
