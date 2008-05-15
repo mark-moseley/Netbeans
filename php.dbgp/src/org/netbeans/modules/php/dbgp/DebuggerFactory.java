@@ -38,22 +38,18 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.dbgp.api;
+package org.netbeans.modules.php.dbgp;
+
+import org.netbeans.modules.php.dbgp.Debugger;
+import org.openide.util.Lookup;
 
 
 /**
  * @author ads
  *
  */
-public interface Debugger {
-
-    String ID           = "netbeans-PHP-DBGP-DebugInfo";            // NOI18N
-    
-    String SESSION_ID   = "netbeans-PHP-DBGP-Session";              // NOI18N
-    
-    String ENGINE       = "PHP-Engine";                             // NOI18N
-    
-    String ENGINE_ID    = SESSION_ID + "/" +ENGINE;                 // NOI18N
-
-    public void debug( SessionId id );
+public class DebuggerFactory {
+    public static Debugger getDebugger() {
+        return Lookup.getDefault().lookup( Debugger.class );
+    }
 }

@@ -38,18 +38,26 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.dbgp.api;
+package org.netbeans.modules.php.dbgp;
 
-import org.openide.util.Lookup;
 
 
 /**
+ * <pre>
+ * This is "action" that should be supported by debugger engine.
+ * Result of this action should be some  preparation work of this engine.
+ * This work could be empty actually.
+ * ( In case of DBGP debugger we need to start server socket listening
+ * for incoming connections handling ).
+ * 
+ * This interface exists because of absence notification from debugger manager 
+ * about ActionsManager.ACTION_START event. So ActionsProvider never gets 
+ * notification via doAction() with ActionsManager.ACTION_START in argument.    
+ * </pre>  
  * @author ads
  *
  */
-public class DebuggerFactory {
+public interface StartActionProvider {
 
-    public static Debugger getDebugger() {
-        return Lookup.getDefault().lookup( Debugger.class );
-    }
+    void start(  );
 }
