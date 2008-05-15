@@ -69,11 +69,11 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.java.j2seproject.J2SEProjectUtil;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
 import org.netbeans.modules.java.j2seproject.J2SEProject;
-import org.netbeans.modules.java.j2seproject.SourceRoots;
-import org.netbeans.modules.java.j2seproject.UpdateHelper;
 import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
 import org.netbeans.spi.java.project.support.ui.PackageView;
 import org.netbeans.spi.project.ActionProvider;
@@ -93,7 +93,6 @@ import org.openide.filesystems.FileStatusEvent;
 import org.openide.filesystems.FileStatusListener;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataFolder;
 import org.openide.modules.SpecificationVersion;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Node;
@@ -153,15 +152,15 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
     }
     
     public Node findPath(Node root, Object target) {
-        Project project = root.getLookup().lookup(Project.class);
-        if (project == null) {
+        Project prj = root.getLookup().lookup(Project.class);
+        if (prj == null) {
             return null;
         }
         
         if (target instanceof FileObject) {
             FileObject fo = (FileObject) target;
             Project owner = FileOwnerQuery.getOwner(fo);
-            if (!project.equals(owner)) {
+            if (!prj.equals(owner)) {
                 return null; // Don't waste time if project does not own the fo
             }
             
@@ -193,12 +192,6 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
      */
     public void testBroken() {
         changeSupport.fireChange();
-    }
-    
-    private static Lookup createLookup( Project project ) {
-        DataFolder rootFolder = DataFolder.findFolder(project.getProjectDirectory());
-        // XXX Remove root folder after FindAction rewrite
-        return Lookups.fixed(project, rootFolder);
     }
     
     
@@ -260,8 +253,6 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
      */
     private final class J2SELogicalViewRootNode extends AbstractNode implements Runnable, FileStatusListener, ChangeListener, PropertyChangeListener {
         
-        private Image icon;
-        private Lookup lookup;
         private Action brokenLinksAction;
         private boolean broken;         //Represents a state where project has a broken reference repairable by broken reference support
         private boolean illegalState;   //Represents a state where project is not in legal state, eg invalid source/target level
@@ -359,6 +350,7 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             }
         }
         
+        @Override
         public String getHtmlDisplayName() {
             String dispName = super.getDisplayName();
             try {
@@ -370,6 +362,7 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             return broken || illegalState ? "<font color=\"#A40000\">" + dispName + "</font>" : null; //NOI18N
         }
         
+        @Override
         public Image getIcon(int type) {
             Image img = getMyIcon(type);
             
@@ -390,6 +383,7 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             return broken || illegalState ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;
         }
         
+        @Override
         public Image getOpenedIcon(int type) {
             Image img = getMyOpenedIcon(type);
             
@@ -461,33 +455,25 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             setProjectFiles(project);
         }
         
+        @Override
         public Action[] getActions( boolean context ) {
             return getAdditionalActions();
         }
         
+        @Override
         public boolean canRename() {
             return true;
         }
         
+        @Override
         public void setName(String s) {
             DefaultProjectOperations.performDefaultRenameOperation(project, s);
         }
         
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(J2SELogicalViewRootNode.class);
         }
-        
-        /*
-        public boolean canDestroy() {
-            return true;
-        }
-         
-        public void destroy() throws IOException {
-            System.out.println("Destroy " + project.getProjectDirectory());
-            LogicalViews.closeProjectAction().actionPerformed(new ActionEvent(this, 0, ""));
-            project.getProjectDirectory().delete();
-        }
-         */
         
         // Private methods -------------------------------------------------
         
@@ -545,10 +531,6 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             }
         }
         
-        private boolean isBroken() {
-            return this.broken;
-        }
-        
         private void setBroken(boolean broken) {
             this.broken = broken;
             brokenLinksAction.setEnabled(broken);
@@ -587,7 +569,7 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             
             public void actionPerformed(ActionEvent e) {
                 try {
-                    helper.requestSave();
+                    helper.requestUpdate();
                     BrokenReferencesSupport.showCustomizer(helper.getAntProjectHelper(), resolver, getBreakableProperties(), new String[] {J2SEProjectProperties.JAVA_PLATFORM});
                     run();
                 } catch (IOException ioe) {
