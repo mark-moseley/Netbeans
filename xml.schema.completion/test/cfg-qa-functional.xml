@@ -44,34 +44,18 @@ made subject to such option by the copyright holder.
 
 <mconfig name="Schema support qa-functional test config">
 
-    <testbag testattribs="stable" executor="ide" name="Property Verifier">
+    <testbag testattribs="stable,codecompl" executor="ide" name="XML Code Completion">
       <testset dir="qa-functional/src">
         <patternset>
-          <include name="org/netbeans/test/xml/schema/Synt01PropertyVerifier.class"/>
-        </patternset>
-      </testset>
-    </testbag>
-
-    <testbag testattribs="stable,commit" executor="ide" name="Acceptance">
-      <testset dir="qa-functional/src">
-        <patternset>
-          <include name="org/netbeans/test/xml/schema/AcceptanceTestCase.class"/>
-        </patternset>
-      </testset>
-    </testbag>
-
-    <testbag testattribs="" executor="ide" name="Design View">
-      <testset dir="qa-functional/src">
-        <patternset>
-          <include name="org/netbeans/test/xml/schema/DVTestCase.class"/>
-        </patternset>
-      </testset>
-    </testbag>
-
-    <testbag testattribs="generation" executor="ide" name="Design View">
-      <testset dir="qa-functional/src">
-        <patternset>
-          <include name="org/netbeans/test/xml/schema/generation/XMLGeneration_0001.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0001.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0002.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0003.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0004.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0005.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0006.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0007.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0008.class"/>
+          <include name="org/netbeans/test/xml/schema/codecompletion/XMLCodeCompletion_0009.class"/>
         </patternset>
       </testset>
     </testbag>
