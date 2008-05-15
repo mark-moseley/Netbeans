@@ -36,15 +36,17 @@
  * 
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.masterfs.filebasedfs.fileobjects;
+package org.openide.filesystems.test;
 
 import java.io.File;
 import java.io.FileDescriptor;
 import java.security.Permission;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import junit.framework.Assert;
 
 /**
  *
@@ -59,19 +61,19 @@ public class StatFiles extends SecurityManager {
     private Results results;
     private Monitor monitor;
 
-    StatFiles() {
+    public StatFiles() {
         reset();
     }
 
-    void reset() {
+    public void reset() {
         results = new Results();
     }
     
-    Results getResults() {
+    public Results getResults() {
         return results;
     }
 
-    void setMonitor(Monitor monitor) {
+    public void setMonitor(Monitor monitor) {
         this.monitor = monitor;
     }
 
@@ -147,14 +149,14 @@ public class StatFiles extends SecurityManager {
         return result;
     }
 
-    static interface Monitor {
+    public static interface Monitor {
 
         void checkRead(File file);
 
         void checkAll(File file);
     }
 
-    static class Results {
+    public static class Results {
 
         private Map<File, Integer> forRead = new HashMap<File, Integer>();
         private Map<File, Integer> forWrite = new HashMap<File, Integer>();
@@ -170,7 +172,14 @@ public class StatFiles extends SecurityManager {
             return this;
         }
 
-        Set<File> getFiles() {
+        public void assertResult(int cnt, int type) {
+            int real = statResult(type);
+            if (cnt < real) {
+                Assert.fail("Expected " + cnt + " but was " + real + "\n  Read: " + forRead + "\n  Write: " + forWrite + "\n  Delete: " + forDelete);
+            }
+        }
+
+        public Set<File> getFiles() {
             Set<File> result = new HashSet<File>();
             result.addAll(forRead.keySet());
             result.addAll(forWrite.keySet());
@@ -178,7 +187,7 @@ public class StatFiles extends SecurityManager {
             return result;
         }
 
-        int statResult(int type) {
+        public int statResult(int type) {
             Set<File> files = getFiles();
             int result = 0;
             for (File file : files) {
@@ -187,7 +196,7 @@ public class StatFiles extends SecurityManager {
             return result;
         }
 
-        int statResult(File file, int type) {
+        public int statResult(File file, int type) {
             switch (type) {
                 case READ:
                     Integer read = forRead.get(file);
@@ -205,6 +214,23 @@ public class StatFiles extends SecurityManager {
                     return all;
             }
             return -1;
+        }
+        
+        /** Dump all files sorted by name with number of accesses. */
+        public void dump() {
+            File[] files = getFiles().toArray(new File[0]);
+            Arrays.sort(files);
+            for (int i = 0; i < files.length; i++) {
+                File file = files[i];
+                System.out.print(file + "   READ=" + statResult(file, StatFiles.READ));
+                System.out.print(" WRITE=" + statResult(file, StatFiles.WRITE));
+                System.out.print(" DELETE=" + statResult(file, StatFiles.DELETE));
+                System.out.println(" ALL=" + statResult(file, StatFiles.ALL));
+            }
+            System.out.print("READ=" + statResult(StatFiles.READ));
+            System.out.print(" WRITE=" + statResult(StatFiles.WRITE));
+            System.out.print(" DELETE=" + statResult(StatFiles.DELETE));
+            System.out.println(" ALL=" + statResult(StatFiles.ALL));
         }
     }
 }
