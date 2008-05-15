@@ -66,7 +66,7 @@ public class InactiveCodeTest extends SemanticHighlightingTestBase {
         performTest(source, source + ".dat", source + ".err"); // NOI18N
     }
 
-    protected List<CsmOffsetable> getBlocks(FileImpl testFile) {
-        return SemanticHighlighter.getInactiveCodeBlocks(testFile);
+    protected List<CsmOffsetable> getBlocks(FileImpl testFile,int offset) {
+        return ModelUtils.getInactiveCodeBlocks(testFile);
     }
 }
