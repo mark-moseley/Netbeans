@@ -41,13 +41,11 @@
 
 package org.netbeans.modules.debugger.jpda.models;
 
-import com.sun.jdi.ObjectReference;
 import com.sun.jdi.PrimitiveValue;
 import com.sun.jdi.Value;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeSupport;
 import java.lang.ref.WeakReference;
 import java.util.*;
 import javax.security.auth.RefreshFailedException;
@@ -71,6 +69,7 @@ import org.netbeans.modules.debugger.jpda.expr.Expression;
 import org.netbeans.modules.debugger.jpda.expr.ParseException;
 
 import org.openide.util.RequestProcessor;
+import org.openide.util.WeakListeners;
 
 /**
  * @author   Jan Jancura
@@ -259,7 +258,6 @@ public class WatchesModel implements TreeModel {
         private Expression expression;
         private ParseException parseException;
         private boolean[] evaluating = new boolean[] { false };
-        private PropertyChangeSupport propSupp = new PropertyChangeSupport(this);
         
         public JPDAWatchEvaluating(WatchesModel model, Watch w, JPDADebuggerImpl debugger) {
             this(model, w, debugger, 0);
@@ -271,6 +269,7 @@ public class WatchesModel implements TreeModel {
             this.w = w;
             this.debugger = debugger;
             parseExpression(w.getExpression());
+            debugger.varChangeSupport.addPropertyChangeListener(WeakListeners.propertyChange(this, debugger.varChangeSupport));
         }
         
         private void parseExpression(String exprStr) {
@@ -346,7 +345,12 @@ public class WatchesModel implements TreeModel {
                 getValue(watchRef); // To init the evaluatedWatch
                 evaluatedWatch = watchRef[0];
             }
-            return evaluatedWatch.getToStringValue();
+            String e = evaluatedWatch.getExceptionDescription();
+            if (e != null) {
+                return ">" + e + "<"; // NOI18N
+            } else {
+                return evaluatedWatch.getToStringValue();
+            }
         }
 
         public String getType() {
@@ -440,15 +444,11 @@ public class WatchesModel implements TreeModel {
             }
         }
         
-        public void addPropertyChangeListener(PropertyChangeListener l) {
-            propSupp.addPropertyChangeListener(l);
-        }
-        
-        public void removePropertyChangeListener(PropertyChangeListener l) {
-            propSupp.removePropertyChangeListener(l);
-        }
-        
         public void propertyChange(PropertyChangeEvent evt) {
+            if (evt.getSource() instanceof JPDAWatchEvaluating) {
+                // Do not re-fire my own changes
+                return;
+            }
             model.fireTableValueChangedChanged (this, null);
         }
         
