@@ -48,16 +48,19 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
+import javax.swing.text.StyledDocument;
 import javax.tools.JavaFileObject;
 import org.netbeans.api.java.source.ModificationResult.CreateChange;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.java.source.JavaSourceAccessor;
 import org.netbeans.modules.java.source.JavaSourceSupportAccessor;
 import org.netbeans.modules.java.source.usages.RepositoryUpdater;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
+import org.openide.text.NbDocument;
 import org.openide.text.PositionRef;
 
 /**
@@ -111,14 +114,14 @@ public final class ModificationResult {
             RepositoryUpdater.getDefault().unlockRU();
             Set<FileObject> alreadyRefreshed = new HashSet<FileObject>();
             if (this.js != null) {
-                this.js.revalidate();
+                JavaSourceAccessor.getINSTANCE().revalidate(this.js);
                 alreadyRefreshed.addAll(js.getFileObjects());
             }
             for (FileObject currentlyVisibleInEditor : JavaSourceSupportAccessor.ACCESSOR.getVisibleEditorsFiles()) {
                 if (!alreadyRefreshed.contains(currentlyVisibleInEditor)) {
                     JavaSource source = JavaSource.forFileObject(currentlyVisibleInEditor);                
                     if (source != null) {
-                        source.revalidate();
+                        JavaSourceAccessor.getINSTANCE().revalidate(source);
                     }
                 }
             }
@@ -132,7 +135,7 @@ public final class ModificationResult {
         // writer where he wants to see changes, commit the changes to 
         // found document.
         if (ec != null && out == null) {
-            Document doc = ec.getDocument();
+            StyledDocument doc = ec.getDocument();
             if (doc != null) {
                 if (doc instanceof BaseDocument)
                     ((BaseDocument)doc).atomicLock();
@@ -141,26 +144,15 @@ public final class ModificationResult {
                     for (Difference diff : differences) {
                         if (diff.isExcluded())
                             continue;
-                        try {
-                            switch (diff.getKind()) {
-                                case INSERT:
-                                    doc.insertString(diff.getStartPosition().getOffset(), diff.getNewText(), null);
-                                    break;
-                                case REMOVE:
-                                    doc.remove(diff.getStartPosition().getOffset(), diff.getEndPosition().getOffset() - diff.getStartPosition().getOffset());
-                                    break;
-                                case CHANGE:
-                                    doc.remove(diff.getStartPosition().getOffset(), diff.getEndPosition().getOffset() - diff.getStartPosition().getOffset());
-                                    doc.insertString(diff.getStartPosition().getOffset(), diff.getNewText(), null);
-                                    break;
-                                case CREATE:
-                                    createUnit(diff, out);
-                                    break;
-                            }
-                        } catch (BadLocationException ex) {
-                            IOException ioe = new IOException();
-                            ioe.initCause(ex);
-                            throw ioe;
+                        switch (diff.getKind()) {
+                            case INSERT:
+                            case REMOVE:
+                            case CHANGE:
+                                processDocument(doc, diff);
+                                break;
+                            case CREATE:
+                                createUnit(diff, out);
+                                break;
                         }
                     }
                     success = true;
@@ -250,6 +242,49 @@ public final class ModificationResult {
                 out.close();
         }            
     }
+    
+    private void processDocument(final StyledDocument doc, final Difference diff) throws IOException {
+        final BadLocationException[] blex = new BadLocationException[1];
+        Runnable task = new Runnable() {
+
+            public void run() {
+                try {
+                    processDocumentLocked(doc, diff);
+                } catch (BadLocationException ex) {
+                    blex[0] = ex;
+                }
+            }
+        };
+        if (diff.isCommitToGuards()) {
+            NbDocument.runAtomic(doc, task);
+        } else {
+            try {
+                NbDocument.runAtomicAsUser(doc, task);
+            } catch (BadLocationException ex) {
+                blex[0] = ex;
+            }
+        }
+        if (blex[0] != null) {
+            IOException ioe = new IOException();
+            ioe.initCause(blex[0]);
+            throw ioe;
+        }
+    }
+    
+    private void processDocumentLocked(Document doc, Difference diff) throws BadLocationException {
+        switch (diff.getKind()) {
+            case INSERT:
+                doc.insertString(diff.getStartPosition().getOffset(), diff.getNewText(), null);
+                break;
+            case REMOVE:
+                doc.remove(diff.getStartPosition().getOffset(), diff.getEndPosition().getOffset() - diff.getStartPosition().getOffset());
+                break;
+            case CHANGE:
+                doc.remove(diff.getStartPosition().getOffset(), diff.getEndPosition().getOffset() - diff.getStartPosition().getOffset());
+                doc.insertString(diff.getStartPosition().getOffset(), diff.getNewText(), null);
+                break;
+        }
+    }
 
     private void createUnit(Difference diff, Writer out) {
         CreateChange change = (CreateChange) diff;
@@ -307,6 +342,7 @@ public final class ModificationResult {
         String newText;
         String description;
         private boolean excluded;
+        private boolean ignoreGuards = false;
 
         Difference(Kind kind, PositionRef startPos, PositionRef endPos, String oldText, String newText, String description) {
             this.kind = kind;
@@ -348,6 +384,26 @@ public final class ModificationResult {
         
         public void exclude(boolean b) {
             excluded = b;
+        }
+
+        /**
+         * Gets flag if it is possible to write to guarded sections.
+         * @return {@code true} in case the difference may be written even into
+         *          guarded sections.
+         * @see #guards(boolean)
+         * @since 0.33
+         */
+        public boolean isCommitToGuards() {
+            return ignoreGuards;
+        }
+        
+        /**
+         * Sets flag if it is possible to write to guarded sections.
+         * @param b flag if it is possible to write to guarded sections
+         * @since 0.33
+         */
+        public void setCommitToGuards(boolean b) {
+            ignoreGuards = b;
         }
 
         @Override
