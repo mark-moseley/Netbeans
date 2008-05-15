@@ -1,3 +1,0 @@
-OpenIDE-Module: org.foo.cyclic
-OpenIDE-Module-Module-Dependencies: org.bar.cyclic
-
