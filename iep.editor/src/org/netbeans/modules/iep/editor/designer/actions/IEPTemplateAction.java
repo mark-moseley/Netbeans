@@ -26,14 +26,14 @@ public class IEPTemplateAction extends AbstractAction {
         private WizardDescriptor.Panel[] panels;
         
         private PlanDataObject mDataObject;
-	public IEPTemplateAction(PlanDataObject dataObject) {
+    public IEPTemplateAction(PlanDataObject dataObject) {
             this.mDataObject = dataObject;
             this.putValue(Action.NAME, NbBundle.getMessage(IEPTemplateAction.class, "IEPTemplateAction_NAME"));
             this.putValue(Action.SHORT_DESCRIPTION, NbBundle.getMessage(IEPTemplateAction.class, "IEPTemplateAction_SHORT_DESCRIPTION"));
                 
-	}
-	
-	public void actionPerformed(ActionEvent e) {
+    }
+    
+    public void actionPerformed(ActionEvent e) {
             WizardDescriptor wizardDescriptor = new WizardDescriptor(getPanels());
             // {0} will be replaced by WizardDesriptor.Panel.getComponent().getName()
             wizardDescriptor.setTitleFormat(new MessageFormat("{0}"));
@@ -49,8 +49,8 @@ public class IEPTemplateAction extends AbstractAction {
                 IEPWizardHelper.processUsingExistingSchema(model, wizardDescriptor);
         
             }
-		
-	}
+        
+    }
         
         
         /**
@@ -64,8 +64,7 @@ public class IEPTemplateAction extends AbstractAction {
         
         if (panels == null) {
             panels = new WizardDescriptor.Panel[]{
-                new IEPWizardPanel2(project),
-                new IEPWizardPanel3()
+                new IEPWizardPanel3(project)
             };
         
             String[] steps = createSteps();
