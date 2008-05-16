@@ -26,8 +26,10 @@ import org.netbeans.modules.iep.model.IEPComponent;
 import org.netbeans.modules.iep.model.IEPModel;
 import org.netbeans.modules.iep.model.util.Util;
 
+import org.netbeans.modules.xml.wsdl.model.ReferenceableWSDLComponent;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentComponent;
 import org.netbeans.modules.xml.xam.dom.Attribute;
+import org.netbeans.modules.xml.xam.dom.NamedComponentReference;
 import org.w3c.dom.Comment;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -35,86 +37,102 @@ import org.w3c.dom.NodeList;
 import org.w3c.dom.Text;
 
 public abstract class IEPComponentBase extends
-		AbstractDocumentComponent<IEPComponent> implements IEPComponent {
+        AbstractDocumentComponent<IEPComponent> implements IEPComponent {
 
-	/** Creates a new instance of WSDLComponentImpl */
-	public IEPComponentBase(IEPModel model, org.w3c.dom.Element e) {
-		super(model, e);
-	}
+    /** Creates a new instance of WSDLComponentImpl */
+    public IEPComponentBase(IEPModel model, org.w3c.dom.Element e) {
+        super(model, e);
+    }
 
-	public IEPModelImpl getModel() {
-		return (IEPModelImpl) super.getModel();
-	}
+    public IEPModelImpl getModel() {
+        return (IEPModelImpl) super.getModel();
+    }
 
-	protected void populateChildren(List<IEPComponent> children) {
-		NodeList nl = getPeer().getChildNodes();
-		if (nl != null) {
-			for (int i = 0; i < nl.getLength(); i++) {
-				org.w3c.dom.Node n = nl.item(i);
-				if (n instanceof Element) {
-					IEPModel wmodel = getModel();
-					IEPComponentBase comp = (IEPComponentBase) wmodel
-							.getFactory().create((Element) n, this);
-					if (comp != null) {
-						children.add(comp);
-					}
-				}
-			}
-		}
-	}
+    protected void populateChildren(List<IEPComponent> children) {
+        NodeList nl = getPeer().getChildNodes();
+        if (nl != null) {
+            for (int i = 0; i < nl.getLength(); i++) {
+                org.w3c.dom.Node n = nl.item(i);
+                if (n instanceof Element) {
+                    IEPModel wmodel = getModel();
+                    IEPComponentBase comp = (IEPComponentBase) wmodel
+                            .getFactory().create((Element) n, this);
+                    if (comp != null) {
+                        children.add(comp);
+                    }
+                }
+            }
+        }
+    }
 
-	protected static org.w3c.dom.Element createNewElement(QName qName,
-			IEPModel model) {
-		return model.getDocument().createElementNS(qName.getNamespaceURI(),
-				qName.getLocalPart());
-	}
+    protected static org.w3c.dom.Element createNewElement(QName qName,
+            IEPModel model) {
+        return model.getDocument().createElementNS(qName.getNamespaceURI(),
+                qName.getLocalPart());
+    }
 
-	protected static org.w3c.dom.Element createPrefixedElement(QName qName,
-			IEPModel model) {
-		String qualified = qName.getPrefix() == null ? qName.getLocalPart()
-				: qName.getPrefix() + ":" + qName.getLocalPart();
-		return model.getDocument().createElementNS(qName.getNamespaceURI(),
-				qualified);
-	}
+    protected static org.w3c.dom.Element createPrefixedElement(QName qName,
+            IEPModel model) {
+        String qualified = qName.getPrefix() == null ? qName.getLocalPart()
+                : qName.getPrefix() + ":" + qName.getLocalPart();
+        return model.getDocument().createElementNS(qName.getNamespaceURI(),
+                qualified);
+    }
 
-	protected Object getAttributeValueOf(Attribute attr, String stringValue) {
-		return stringValue;
-	}
+    protected Object getAttributeValueOf(Attribute attr, String stringValue) {
+        return stringValue;
+    }
 
-	/**
-	 * This method is return corrected Text content without XML comments. See
-	 * the problem appeared in getText() method.
-	 * 
-	 */
-	protected String getCorrectedText() {
-		try {
-			StringBuilder text = new StringBuilder();
-			NodeList nodeList = getPeer().getChildNodes();
-			for (int i = 0; i < nodeList.getLength(); i++) {
-				Node node = nodeList.item(i);
-				if (node instanceof Text && !(node instanceof Comment)) {
-					text.append(node.getNodeValue());
-				}
-			}
-			/*
-			 * TODO : there is bug in XAM/XDM. XML entities such as &gt;,
-			 * &apos;, &quot; is not recognized. The method below perform
-			 * replacement in string pointed entities to corresponding values.
-			 * Usage of this method possibly should be removed when bug in
-			 * XAM/XDM will be fixed. Fix for #84651
-			 */
-			return Util.hackXmlEntities(text.toString());
-		} finally {
-		}
-	}
+    /**
+     * This method is return corrected Text content without XML comments. See
+     * the problem appeared in getText() method.
+     * 
+     */
+    protected String getCorrectedText() {
+        try {
+            StringBuilder text = new StringBuilder();
+            NodeList nodeList = getPeer().getChildNodes();
+            for (int i = 0; i < nodeList.getLength(); i++) {
+                Node node = nodeList.item(i);
+                if (node instanceof Text && !(node instanceof Comment)) {
+                    text.append(node.getNodeValue());
+                }
+            }
+            /*
+             * TODO : there is bug in XAM/XDM. XML entities such as &gt;,
+             * &apos;, &quot; is not recognized. The method below perform
+             * replacement in string pointed entities to corresponding values.
+             * Usage of this method possibly should be removed when bug in
+             * XAM/XDM will be fixed. Fix for #84651
+             */
+            return Util.hackXmlEntities(text.toString());
+        } finally {
+        }
+    }
 
-	// public <T extends ReferenceableIEPComponent> NamedComponentReference<T>
-	// createReferenceTo(T target, Class<T> type) {
-	// // TODO Auto-generated method stub
-	// return null;
-	// }
+    // public <T extends ReferenceableIEPComponent> NamedComponentReference<T>
+    // createReferenceTo(T target, Class<T> type) {
+    // // TODO Auto-generated method stub
+    // return null;
+    // }
         
         public void removeChild(IEPComponent child) {
             super.removeChild("", child);
         }
+        
+//        public <T extends ReferenceableWSDLComponent> NamedComponentReference<T> createReferenceTo(T target, Class<T> type) {
+//            return new GlobalReferenceImpl<T>(target, type, this);
+//        }
+//        
+//        protected <T extends ReferenceableWSDLComponent> NamedComponentReference<T> resolveGlobalReference(
+//            Class<T> c, Attribute attrName) {
+//            String v = getAttribute(attrName);
+//            return v == null ? null : new GlobalReferenceImpl<T>(c, this, v);
+//        }
+        
+          protected <T extends ReferenceableWSDLComponent> NamedComponentReference<T> resolveGlobalReference(
+            Class<T> c, Attribute attrName) {
+            String v = getAttribute(attrName);
+            return v == null ? null : new GlobalReferenceImpl<T>(c, this, v);
+          }  
 }
