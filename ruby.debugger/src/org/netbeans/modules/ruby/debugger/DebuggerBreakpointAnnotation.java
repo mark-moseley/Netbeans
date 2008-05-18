@@ -39,54 +39,52 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby.debugger.breakpoints;
+package org.netbeans.modules.ruby.debugger;
 
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.io.IOException;
-import org.openide.cookies.LineCookie;
-import org.openide.loaders.DataObject;
-import org.openide.text.Line;
-import org.openide.util.Exceptions;
+import org.netbeans.api.debugger.Breakpoint;
+import org.netbeans.spi.debugger.ui.BreakpointAnnotation;
+import org.openide.text.Annotatable;
+import org.openide.util.NbBundle;
 
-/** Simplified, heavily based on Java Debugger code. */
-final class BreakpointLineUpdater implements PropertyChangeListener {
-
-    private final RubyLineBreakpoint breakpoint;
-    private DataObject dataObject;
-    private Line line;
-
-    public BreakpointLineUpdater(RubyLineBreakpoint breakpoint) {
-        this.breakpoint = breakpoint;
-        try {
-            this.dataObject = DataObject.find(breakpoint.getFileObject());
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
+/**
+ * Debugger Annotation class.
+ */
+public final class DebuggerBreakpointAnnotation extends BreakpointAnnotation {
+    
+    public static final String BREAKPOINT_ANNOTATION_TYPE = "Breakpoint";
+    public static final String DISABLED_BREAKPOINT_ANNOTATION_TYPE = "DisabledBreakpoint";
+    
+    private final String type;
+    private final Breakpoint breakpoint;
+    
+    public DebuggerBreakpointAnnotation(final String type, final Annotatable annotatable,
+                                        final Breakpoint b) {
+        this.type = type;
+        this.breakpoint = b;
+        attach(annotatable);
+    }
+    
+    public String getAnnotationType() {
+        return type;
+    }
+    
+    public String getShortDescription() {
+        if (type.equals(BREAKPOINT_ANNOTATION_TYPE)) {
+            return getMessage("TOOLTIP_BREAKPOINT"); // NOI18N
+        } else if (type.equals(DISABLED_BREAKPOINT_ANNOTATION_TYPE)) {
+            return getMessage("TOOLTIP_DISABLED_BREAKPOINT"); // NOI18N
+        } else {
+            return null;
         }
     }
-
-    public synchronized void attach() throws IOException {
-        breakpoint.addPropertyChangeListener(this);
-        try {
-            LineCookie lc = dataObject.getCookie(LineCookie.class);
-            this.line = lc.getLineSet().getCurrent(breakpoint.getLineNumber() - 1);
-            line.addPropertyChangeListener(this);
-        } catch (IndexOutOfBoundsException ioobex) {
-            // ignore document changes for BP with bad line number
-        }
+    
+    private static String getMessage(final String key) {
+        return NbBundle.getBundle(DebuggerBreakpointAnnotation.class).getString(key);
     }
 
-    public synchronized void detach() {
-        breakpoint.removePropertyChangeListener(this);
-        if (line != null) {
-            line.removePropertyChangeListener(this);
-        }
+    @Override
+    public Breakpoint getBreakpoint() {
+        return breakpoint;
     }
-
-    public synchronized void propertyChange(PropertyChangeEvent evt) {
-        if (Line.PROP_LINE_NUMBER.equals(evt.getPropertyName()) && line == evt.getSource()) {
-            breakpoint.notifyUpdated();
-            return;
-        }
-    }
+    
 }

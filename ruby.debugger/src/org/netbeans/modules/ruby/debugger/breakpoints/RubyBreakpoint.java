@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -45,29 +45,41 @@ import java.util.logging.Level;
 import org.netbeans.api.debugger.Breakpoint;
 import org.netbeans.modules.ruby.debugger.ContextProviderWrapper;
 import org.netbeans.modules.ruby.debugger.Util;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
-import org.openide.text.Line;
 import org.rubyforge.debugcommons.RubyDebuggerException;
 import org.rubyforge.debugcommons.RubyDebuggerProxy;
 import org.rubyforge.debugcommons.model.IRubyBreakpoint;
 
-/**
- * @author Martin Krauskopf
- */
-public final class RubyBreakpoint extends Breakpoint implements IRubyBreakpoint {
+public abstract class RubyBreakpoint extends Breakpoint implements IRubyBreakpoint {
     
     static final String PROP_UPDATED = "updated"; // NOI18N
 
     private boolean enabled;
-    private final Line line;
-
-    RubyBreakpoint(final Line line) {
-        this.line = line;
+    
+    protected RubyBreakpoint() {
         this.enabled = true;
     }
 
-    private void updateBreakpoint() {
+    public final boolean isEnabled() {
+        return enabled;
+    }
+
+    public final void disable() {
+        if (enabled) {
+            enabled = false;
+            updateBreakpoint();
+            firePropertyChange(PROP_ENABLED, true, false);
+        }
+    }
+
+    public final void enable() {
+        if (!enabled) {
+            enabled = true;
+            updateBreakpoint();
+            firePropertyChange(PROP_ENABLED, false, true);
+        }
+    }
+
+    protected final void updateBreakpoint() {
         for (RubyDebuggerProxy proxy : RubyDebuggerProxy.PROXIES) {
             try {
                 proxy.updateBreakpoint(this);
@@ -77,49 +89,13 @@ public final class RubyBreakpoint extends Breakpoint implements IRubyBreakpoint 
         }
     }
     
-    public void notifyUpdated() {
+    protected final void notifyUpdated() {
         ContextProviderWrapper.getBreakpointModel().fireChanges();
+        fireUpdated();
+    }
+    
+    protected void fireUpdated() {
         firePropertyChange(RubyBreakpoint.PROP_UPDATED, null, null);
     }
 
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void disable() {
-        if (enabled) {
-            enabled = false;
-            updateBreakpoint();
-            firePropertyChange(PROP_ENABLED, true, false);
-        }
-    }
-
-    public void enable() {
-        if (!enabled) {
-            enabled = true;
-            updateBreakpoint();
-            firePropertyChange(PROP_ENABLED, false, true);
-        }
-    }
-
-    public Line getLine() {
-        return line;
-    }
-
-    public FileObject getFileObject() {
-        return getLine().getLookup().lookup(FileObject.class);
-    }
-
-    public String getFilePath() {
-        return FileUtil.toFile(getFileObject()).getAbsolutePath();
-    }
-
-    public int getLineNumber() {
-        // Note that Line.getLineNumber() starts at zero
-        return getLine().getLineNumber() + 1;
-    }
-
-    public @Override String toString() {
-        return getFilePath() + ':' + getLineNumber();
-    }
 }
