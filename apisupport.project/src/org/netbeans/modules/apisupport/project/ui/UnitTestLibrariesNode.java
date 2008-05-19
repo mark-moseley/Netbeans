@@ -42,6 +42,7 @@
 package org.netbeans.modules.apisupport.project.ui;
 
 import java.awt.Dialog;
+import java.awt.EventQueue;
 import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -66,7 +67,6 @@ import javax.swing.ImageIcon;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.apisupport.project.NbModuleProject;
 import org.netbeans.modules.apisupport.project.ProjectXMLManager;
-import org.netbeans.modules.apisupport.project.Util;
 import org.netbeans.modules.apisupport.project.ui.customizer.AddModulePanel;
 import org.netbeans.modules.apisupport.project.ui.customizer.EditTestDependencyPanel;
 import org.netbeans.modules.apisupport.project.ui.customizer.ModuleDependency;
@@ -82,6 +82,7 @@ import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.actions.FindAction;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
@@ -182,7 +183,7 @@ final class UnitTestLibrariesNode extends AbstractNode {
         protected void addNotify() {
             super.addNotify();
             project.getHelper().addAntProjectListener(this);
-            refreshKeys();
+            refreshKeys(false);
         }
         
         protected void removeNotify() {
@@ -191,12 +192,12 @@ final class UnitTestLibrariesNode extends AbstractNode {
             super.removeNotify();
         }
         
-        private void refreshKeys() {
+        private void refreshKeys(final boolean asynch) {
             try {
                 ProjectManager.mutex().readAccess(new Mutex.ExceptionAction<Object>() {
                     public Object run() throws Exception {
                         ProjectXMLManager pxm = new ProjectXMLManager(project);
-                        List<Object> keys = new ArrayList<Object>();
+                        final List<Object> keys = new ArrayList<Object>();
                         if(isModuleInModuleList(JUNIT_CNB)) {
                             keys.add(JUNIT);
                         }
@@ -215,7 +216,16 @@ final class UnitTestLibrariesNode extends AbstractNode {
                             }
                             keys.addAll(deps);
                         }
-                        setKeys(Collections.unmodifiableList(keys));
+                        Runnable r = new Runnable() {
+                            public void run() {
+                                setKeys(Collections.unmodifiableList(keys));
+                            }
+                        };
+                        if (asynch) {
+                            EventQueue.invokeLater(r);
+                        } else {
+                            r.run();
+                        }
                         return null;
                     }
                 });
@@ -255,7 +265,7 @@ final class UnitTestLibrariesNode extends AbstractNode {
                     ModuleEntry me = project.getModuleList().getEntry(cnb);
                     Icon icon = getLibrariesIcon(); // TODO a better icon for JUNIT
                     File junitJar = me.getJarLocation();
-                    URL junitURL = Util.urlForJar(junitJar);
+                    URL junitURL = FileUtil.urlForArchiveOrDir(junitJar);
                     assert junitURL != null;
                     FileObject junitFO = URLMapper.findFileObject(junitURL);
                     String name = me.getLocalizedName();
@@ -270,7 +280,7 @@ final class UnitTestLibrariesNode extends AbstractNode {
                 File srcF = dep.getModule().getSourceLocation();
                 if (srcF == null) {
                     File jarF = dep.getModule().getJarLocation();
-                    URL jarRootURL = Util.urlForJar(jarF);
+                    URL jarRootURL = FileUtil.urlForArchiveOrDir(jarF);
                     assert jarRootURL != null;
                     FileObject root = URLMapper.findFileObject(jarRootURL);
                     ModuleEntry me = dep.getModule();
@@ -295,7 +305,7 @@ final class UnitTestLibrariesNode extends AbstractNode {
             // XXX this is a little strange but happens during project move. Bad ordering.
             // Probably bug in moving implementation (our or in general Project API).
             if (project.getHelper().resolveFileObject(AntProjectHelper.PROJECT_XML_PATH) != null) {
-                refreshKeys();
+                refreshKeys(true);
             }
         }
         
