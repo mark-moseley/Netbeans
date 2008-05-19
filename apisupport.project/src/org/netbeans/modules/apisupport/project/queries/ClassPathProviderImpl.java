@@ -194,7 +194,7 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
                 file.equals(FileUtil.getArchiveRoot(FileUtil.getArchiveFile(file)))) {
             if (ClassPath.EXECUTE.equals(type)) {
                 List<PathResourceImplementation> roots = new ArrayList<PathResourceImplementation>();
-                roots.add(ClassPathSupport.createResource(Util.urlForJar(moduleJar)));
+                roots.add(ClassPathSupport.createResource(FileUtil.urlForArchiveOrDir(moduleJar)));
                 roots.addAll(createCompileClasspath().getResources());
                 return ClassPathSupport.createClassPath (roots);
             }
@@ -233,9 +233,11 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
     
     private void addPathFromProjectEvaluated(List<PathResourceImplementation> entries, String path) {
         if (path != null) {
-            String[] pieces = PropertyUtils.tokenizePath(path);
-            for (int i = 0; i < pieces.length; i++) {
-                entries.add(ClassPathSupport.createResource(Util.urlForDirOrJar(project.getHelper().resolveFile(pieces[i]))));
+            for (String piece : PropertyUtils.tokenizePath(path)) {
+                URL url = FileUtil.urlForArchiveOrDir(project.getHelper().resolveFile(piece));
+                if (url != null) { // #135292
+                    entries.add(ClassPathSupport.createResource(url));
+                }
             }
         }
     }
