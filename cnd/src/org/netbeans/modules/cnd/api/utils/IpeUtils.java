@@ -44,6 +44,7 @@ package org.netbeans.modules.cnd.api.utils;
 import java.awt.Component;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -54,11 +55,14 @@ import org.netbeans.modules.cnd.execution41.org.openide.loaders.ExecutionSupport
 import org.netbeans.modules.cnd.loaders.CDataObject;
 import org.netbeans.modules.cnd.loaders.CoreElfObject;
 import org.netbeans.modules.cnd.loaders.MakefileDataObject;
+import org.netbeans.modules.cnd.utils.CndUtils;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataNode;
 import org.openide.loaders.DataObject;
+import org.openide.modules.ModuleInfo;
 import org.openide.nodes.Node;
+import org.openide.util.Lookup;
 import org.openide.util.Utilities;
 
 /**
@@ -74,7 +78,7 @@ public class IpeUtils {
      * on standard output. Used for development purposes only.
      */
     static public final boolean IfdefDiagnostics = Boolean.getBoolean( "ifdef.debug.diagnostics"); // NOI18N
-    
+
     /** Same as the C library dirname function: given a path, return
      * its directory name. Unlike dirname, however, return null if
      * the file is in the current directory rather than ".".
@@ -703,7 +707,8 @@ public class IpeUtils {
                     (c == ':') || (c == '\'') ||
                     (c == '*') || (c == '\"') ||
                     (c == '[') || (c == ']') ||
-                    (c == '(') || (c == ')')) {
+                    (c == '(') || (c == ')') ||
+                    (c == ';')){
                 ret.append('\\');
             }
             ret.append(c);
@@ -839,6 +844,42 @@ public class IpeUtils {
     
     public static boolean areFilenamesEqual(String firstFile, String secondFile) {
         return isSystemCaseInsensitive() ? firstFile.equalsIgnoreCase(secondFile) : firstFile.equals(secondFile);
+    }
+    
+    /**
+     * Check if the gdb module is enabled. Don't show the gdb line if it isn't.
+     *
+     * @return true if the gdb module is enabled, false if missing or disabled
+     */
+    public static boolean isGdbEnabled() {
+        if (!CndUtils.isStandalone()) {
+            Iterator iter = Lookup.getDefault().lookup(new Lookup.Template(ModuleInfo.class)).allInstances().iterator();
+            while (iter.hasNext()) {
+                ModuleInfo info = (ModuleInfo) iter.next();
+                if (info.getCodeNameBase().equals("org.netbeans.modules.cnd.debugger.gdb") && info.isEnabled()) { // NOI18N
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if the dbxgui module is enabled. Don't show the dbxgui line if it isn't.
+     *
+     * @return true if the dbxgui module is enabled, false if missing or disabled
+     */
+    public static boolean isDbxguiEnabled() {
+        if (!CndUtils.isStandalone()) {
+            Iterator iter = Lookup.getDefault().lookup(new Lookup.Template(ModuleInfo.class)).allInstances().iterator();
+            while (iter.hasNext()) {
+                ModuleInfo info = (ModuleInfo) iter.next();
+                if (info.getCodeNameBase().indexOf("dbxgui") >= 0 && info.isEnabled()) { // NOI18N
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
 
