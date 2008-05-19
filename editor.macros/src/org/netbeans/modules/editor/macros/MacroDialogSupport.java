@@ -69,6 +69,7 @@ import org.netbeans.modules.editor.settings.storage.api.EditorSettingsStorage;
 import org.netbeans.spi.options.OptionsPanelController;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 
@@ -235,11 +236,14 @@ public final class MacroDialogSupport {
                 message = "Error in macro: " + messageKey + "; macroName = '" + macroName + "'"; //NOI18N
             }
             
-            Utilities.setStatusText(target, message);
-            Toolkit.getDefaultToolkit().beep();
-            LOG.log(Level.WARNING, null, new Throwable(message));
-        }
+            NotifyDescriptor descriptor = new NotifyDescriptor.Message(NbBundle.getMessage(MacroDialogSupport.class,
+                    "MSG_InvalidMacro", macroName)); // NOI18N
 
+            Toolkit.getDefaultToolkit().beep();
+            DialogDisplayer.getDefault().notify(descriptor);
+//            LOG.log(Level.WARNING, null, new Throwable(message));
+        }
+        
         public void actionPerformed(ActionEvent evt, JTextComponent target) {
             if (target == null) {
                 return;
@@ -356,6 +360,10 @@ public final class MacroDialogSupport {
             } finally {
                 doc.atomicUnlock();
             }
+        }
+        
+        public @Override String toString() {
+            return super.toString() + "[" + macroName;
         }
     } // End of RunMacroAction class
 }
