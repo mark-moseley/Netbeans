@@ -272,7 +272,7 @@ public class Utils {
 
     public static void phaseOnePOne(NbTestCase thiz, TestData data, String installerType) {
         try {
-            data.setWorkDir(thiz.getWorkDir());
+            data.setWorkDir(new File(System.getProperty("xtest.tmpdir")));
         } catch (IOException ex) {
             NbTestCase.fail("Can not get WorkDir");
         }
@@ -404,6 +404,24 @@ public class Utils {
 
         NbTestCase.assertEquals("NetBeans dir created", OK, Utils.dirExist(NB_DIR_NAME, data));
 
+//        NbTestCase.assertEquals("Extract uninstaller jar", OK, Utils.extractUninstallerJar(data));
+//        NbTestCase.assertEquals("Load engine classes", OK, Utils.loadEngineClasses(data));
+//        NbTestCase.assertEquals("Run uninstaller main class", OK, Utils.runUninstaller(data));
+//
+//        Utils.stepUninstall(data);
+//
+//        Utils.stepFinish();
+//
+//        Utils.waitSecond(data, 5);
+//
+//        NbTestCase.assertEquals("Uninstaller Finshed", 0, ((Integer) System.getProperties().get("nbi.exit.code")).intValue());
+//
+//        NbTestCase.assertFalse("NetBeans dir deleted", Utils.dirExist(NB_DIR_NAME, data).equals(OK));
+//        NbTestCase.assertFalse("Tomcat dir deleted", Utils.dirExist(TOMACAT_DIR_NAME, data).equals(OK));
+//        NbTestCase.assertFalse("GlassFish dir deleted", Utils.dirExist(GF_DIR_NAME, data).equals(OK));
+    }
+    
+    public static void phaseFive(TestData data) {
         NbTestCase.assertEquals("Extract uninstaller jar", OK, Utils.extractUninstallerJar(data));
         NbTestCase.assertEquals("Load engine classes", OK, Utils.loadEngineClasses(data));
         NbTestCase.assertEquals("Run uninstaller main class", OK, Utils.runUninstaller(data));
@@ -419,6 +437,7 @@ public class Utils {
         NbTestCase.assertFalse("NetBeans dir deleted", Utils.dirExist(NB_DIR_NAME, data).equals(OK));
         NbTestCase.assertFalse("Tomcat dir deleted", Utils.dirExist(TOMACAT_DIR_NAME, data).equals(OK));
         NbTestCase.assertFalse("GlassFish dir deleted", Utils.dirExist(GF_DIR_NAME, data).equals(OK));
+        
     }
 
     public static void phaseTwo(TestData data) {
