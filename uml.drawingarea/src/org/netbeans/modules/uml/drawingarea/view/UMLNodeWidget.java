@@ -80,6 +80,7 @@ import org.netbeans.modules.uml.drawingarea.persistence.data.NodeInfo;
 import org.netbeans.modules.uml.drawingarea.persistence.NodeWriter;
 import org.netbeans.modules.uml.drawingarea.persistence.PersistenceUtil;
 import org.netbeans.modules.uml.drawingarea.view.SwitchableWidget.SwitchableViewManger;
+import org.netbeans.modules.uml.util.DummyCorePreference;
 import org.openide.util.Lookup;
 import org.openide.util.NbPreferences;
 import org.openide.util.lookup.AbstractLookup;
@@ -97,6 +98,7 @@ public abstract class UMLNodeWidget extends Widget
         
     protected enum ButtonLocation {Left, op, Right, Bottom};
     public enum RESIZEMODE{PREFERREDBOUNDS,PREFERREDSIZE,MINIMUMSIZE};
+    private static final String RESIZEMODEPROPERTY = "ResizeMode";
     
     private RESIZEMODE lastResMode;
     private Widget childLayer = null;
@@ -108,7 +110,7 @@ public abstract class UMLNodeWidget extends Widget
     GraphScene scene;
     public static Preferences prefs = NbPreferences.forModule(ResourceValue.class);
     public static String DEFAULT="default";
-    protected boolean useGradient = prefs.getBoolean("useGradient", true);
+    protected boolean useGradient = NbPreferences.forModule(DummyCorePreference.class).getBoolean("UML_Gradient_Background", true);
     private ResourceTable localResourceTable = null;
     
     public UMLNodeWidget(Scene scene)
@@ -369,6 +371,7 @@ public abstract class UMLNodeWidget extends Widget
     }
       
     public void save(NodeWriter nodeWriter) {
+        nodeWriter.getProperties().put(RESIZEMODEPROPERTY, getResizeMode().toString());
         setNodeWriterValues(nodeWriter, this);
         nodeWriter.beginGraphNodeWithModelBridge();
         nodeWriter.beginContained();
@@ -382,7 +385,9 @@ public abstract class UMLNodeWidget extends Widget
             saveChildren(this, nodeWriter);
         }
         nodeWriter.endContained();
-        if (!scene.findNodeEdges(getObject(), true, true).isEmpty()) {
+//        if (!scene.findNodeEdges(getObject(), true, true).isEmpty()) {
+        if(this.getDependencies().size() > 0) 
+        {
             saveAnchorage(nodeWriter);
         }        
         nodeWriter.endGraphNode();
@@ -416,24 +421,40 @@ public abstract class UMLNodeWidget extends Widget
         PersistenceUtil.populateProperties(nodeWriter, widget);
     }
 
-    protected void saveAnchorage(NodeWriter nodeWriter) {
+    protected void saveAnchorage(NodeWriter nodeWriter)
+    {
         //write anchor info
         Collection depList = this.getDependencies();
-        if (depList.size() > 0) {
+        if (depList.size() > 0)
+        {
             Iterator iter = depList.iterator();
-            while (iter.hasNext()) {
-                Anchor anchor = (Anchor) iter.next();
-                PersistenceUtil.addAnchor(anchor); // this is to cross ref the anchor ID from the edge later on..
-                List entryList = anchor.getEntries();
-                for (int i = 0; i < entryList.size(); i++) {
-                    ConnectionWidget conWid = ((Anchor.Entry) entryList.get(i)).getAttachedConnectionWidget();
-                    nodeWriter.addAnchorEdge(anchor, PersistenceUtil.getPEID(conWid));
+            while (iter.hasNext())
+            {
+                Object obj = iter.next();
+                if (obj instanceof Anchor)
+                {
+                    Anchor anchor = (Anchor)obj;
+                    PersistenceUtil.addAnchor(anchor); // this is to cross ref the anchor ID from the edge later on..
+
+                    List entryList = anchor.getEntries();
+                    for (int i = 0; i < entryList.size(); i++)
+                    {
+                        ConnectionWidget conWid = ((Anchor.Entry) entryList.get(i)).getAttachedConnectionWidget();
+                        nodeWriter.addAnchorEdge(anchor, PersistenceUtil.getPEID(conWid));
+                    }
+                } 
+                else // assuming (obj instanceof MovableLabelWidget)
+                {       
+                    ((UMLLabelWidget)obj).save(nodeWriter);
                 }
             }
-        }
-        nodeWriter.writeAnchorage();
-        //done writing the anchoredgemap.. now time to clear it.
-        nodeWriter.clearAnchorEdgeMap();
+            if (!PersistenceUtil.isAnchorListEmpty())
+            {
+                nodeWriter.writeAnchorage();
+                //done writing the anchoredgemap.. now time to clear it.
+                nodeWriter.clearAnchorEdgeMap();
+            }
+        }        
     }
     
     protected IPresentationElement getObject()
@@ -446,8 +467,29 @@ public abstract class UMLNodeWidget extends Widget
         //get all the properties
         Hashtable<String, String> props = nodeReader.getProperties();
         //
+        String resizeMode=props.get(RESIZEMODEPROPERTY);
+         if(resizeMode!=null && resizeMode.length()>0)
+         {
+            RESIZEMODE mode=RESIZEMODE.valueOf(resizeMode);
+            setResizeMode(mode);
+         }
+        //
         if(nodeReader.getPosition()!=null)setPreferredLocation(nodeReader.getPosition());
-        if(nodeReader.getSize()!=null)setMinimumSize(nodeReader.getSize());
+        if(nodeReader.getSize()!=null)
+        {
+            switch(getResizeMode())
+            {
+                case PREFERREDSIZE:
+                setPreferredSize(nodeReader.getSize());
+                break;
+                case PREFERREDBOUNDS:
+                setPreferredBounds(new Rectangle(new Point(0,0),nodeReader.getSize()));
+                break;
+                case MINIMUMSIZE:
+                setMinimumSize(nodeReader.getSize());
+                break;
+            }
+        }
         //get the view name
         String viewName = nodeReader.getViewName();
         //Now try to see if this is a Switchable widget.. if yes, set the correct view
@@ -735,7 +777,7 @@ public abstract class UMLNodeWidget extends Widget
     
     public static boolean useGradient()
     {
-        return prefs.getBoolean("useGradient", true);
+        return NbPreferences.forModule(DummyCorePreference.class).getBoolean("UML_Gradient_Background", true);
     }
     
     /**
