@@ -133,4 +133,5 @@ public class UMLLabelWidget extends LabelWidget implements DiagramEdgeWriter, Di
     {
         customizableResTypes = resTypes;
     }
+    
 }
