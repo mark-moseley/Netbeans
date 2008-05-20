@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,9 +43,10 @@ package org.netbeans.modules.ruby.rubyproject;
 import java.awt.event.ActionEvent;
 import javax.swing.AbstractAction;
 import javax.swing.text.JTextComponent;
+import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.modules.ruby.NbUtilities;
 import org.openide.util.NbBundle;
-import org.netbeans.api.gsf.EditorAction;
+import org.netbeans.modules.gsf.api.EditorAction;
 
 /**
  * Debug the current focused test or spec (test under caret)
@@ -64,7 +65,7 @@ public class DebugFocusedTest extends AbstractAction implements EditorAction {
     }
 
     public String getActionName() {
-        return "debug-focused-test";
+        return "debug-focused-test"; // NOI18N
     }
 
     public Class getShortDescriptionBundleClass() {
@@ -82,5 +83,10 @@ public class DebugFocusedTest extends AbstractAction implements EditorAction {
         if (pane != null) {
             RunFocusedTest.runTest(pane, true);
         }
+    }
+    
+    public boolean appliesTo(String mimeType) {
+        return RubyInstallation.RHTML_MIME_TYPE.equals(mimeType) ||
+                RubyInstallation.RUBY_MIME_TYPE.equals(mimeType);
     }
 }

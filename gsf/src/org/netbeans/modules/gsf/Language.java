@@ -41,18 +41,18 @@
 package org.netbeans.modules.gsf;
 
 import javax.swing.Action;
-import org.netbeans.api.gsf.*;
-import org.netbeans.api.gsf.Completable;
-import org.netbeans.api.gsf.DeclarationFinder;
-import org.netbeans.api.gsf.InstantRenamer;
-import org.netbeans.api.gsf.Parser;
-import org.netbeans.api.gsf.GsfLanguage;
-import org.netbeans.api.gsf.annotations.CheckForNull;
-import org.netbeans.api.gsf.annotations.NonNull;
-import org.netbeans.api.gsf.BracketCompletion;
-import org.netbeans.api.gsf.Formatter;
-import org.netbeans.api.gsf.Indexer;
-import org.netbeans.api.gsf.StructureScanner;
+import org.netbeans.modules.gsf.api.*;
+import org.netbeans.modules.gsf.api.CodeCompletionHandler;
+import org.netbeans.modules.gsf.api.DeclarationFinder;
+import org.netbeans.modules.gsf.api.InstantRenamer;
+import org.netbeans.modules.gsf.api.Parser;
+import org.netbeans.modules.gsf.api.GsfLanguage;
+import org.netbeans.modules.gsf.api.annotations.CheckForNull;
+import org.netbeans.modules.gsf.api.annotations.NonNull;
+import org.netbeans.modules.gsf.api.KeystrokeHandler;
+import org.netbeans.modules.gsf.api.Formatter;
+import org.netbeans.modules.gsf.api.Indexer;
+import org.netbeans.modules.gsf.api.StructureScanner;
 //import org.netbeans.spi.palette.PaletteController;
 import org.netbeans.modules.gsfret.editor.semantic.ColoringManager;
 
@@ -103,20 +103,9 @@ public interface Language {
     @NonNull
     String getMimeType();
 
-    /** Return the set of common file extensions used for source files in this
-     * type of language. It should not include the dot.
-     * For example, for Java it would be { "java" }. For C++ it might
-     * be { "cpp", "cc", "c++", "cxx" }. The first item in the array will be
-     * considered the "primary" extension that will be used when creating new
-     * files etc.
+    /** Return a language configuration object for this language.
      */
-    String[] getExtensions();
-
-    /** Return a scanner (lexical analyzer, tokenizer) for use with this language.
-     * @todo Clarify whether clients should cache instances of this or if it will
-     *  be called only once and management done by the IDE
-     */
-    @CheckForNull
+    @NonNull
     GsfLanguage getGsfLanguage();
 
     /** Return a parser for use with this language. A parser is optional (in which
@@ -149,7 +138,7 @@ public interface Language {
      * Get a code completion handler, if any
      */
     @CheckForNull
-    Completable getCompletionProvider();
+    CodeCompletionHandler getCompletionProvider();
 
     /**
      * Get a rename helper, if any, for instant renaming
@@ -170,10 +159,10 @@ public interface Language {
     Formatter getFormatter();
     
     /**
-     * Get a BracketCompletion helper, if any, for helping with bracket completion
+     * Get a KeystrokeHandler helper, if any, for helping with bracket completion
      */
     @CheckForNull
-    BracketCompletion getBracketCompletion();
+    KeystrokeHandler getBracketCompletion();
     
     /**
      * Get an associated palette controller, if any
@@ -206,4 +195,17 @@ public interface Language {
      */
     @NonNull
     ColoringManager getColoringManager();
+    
+    /**
+     * Return the semantic analyzer for this language
+     */
+    @NonNull
+    SemanticAnalyzer getSemanticAnalyzer();
+    
+    /**
+     * Return the occurrences finder for this language
+     */
+    @NonNull
+    OccurrencesFinder getOccurrencesFinder();
+    
 }

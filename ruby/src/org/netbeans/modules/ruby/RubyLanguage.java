@@ -40,8 +40,10 @@
  */
 package org.netbeans.modules.ruby;
 
-import org.netbeans.api.gsf.GsfLanguage;
+import java.util.HashMap;
+import java.util.Map;
 import org.netbeans.api.lexer.Language;
+import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
 import org.netbeans.modules.ruby.lexer.RubyTokenId;
 
 
@@ -50,19 +52,42 @@ import org.netbeans.modules.ruby.lexer.RubyTokenId;
  *
  * @author Tor Norbye
  */
-public class RubyLanguage implements GsfLanguage {
+public class RubyLanguage extends DefaultLanguageConfig {
     public RubyLanguage() {
     }
 
+    @Override
     public String getLineCommentPrefix() {
         return RubyUtils.getLineCommentPrefix();
     }
 
+    @Override
     public boolean isIdentifierChar(char c) {
         return RubyUtils.isIdentifierChar(c);
     }
 
+    @Override
     public Language getLexerLanguage() {
         return RubyTokenId.language();
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "Ruby";
+    }
+
+    @Override
+    public String getPreferredExtension() {
+        return "rb"; // NOI18N
+    }
+
+    @Override
+    public Map<String,String> getSourceGroupNames() {
+        Map<String,String> sourceGroups = new HashMap<String,String>();
+        sourceGroups.put("RubyProject", "ruby"); // NOI18N
+        sourceGroups.put("WebProject", "ruby"); // NOI18N
+        sourceGroups.put("RailsProject", "ruby"); // NOI18N
+        
+        return sourceGroups;
     }
 }
