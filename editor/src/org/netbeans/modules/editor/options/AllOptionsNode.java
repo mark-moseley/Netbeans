@@ -47,7 +47,7 @@ import java.beans.PropertyChangeListener;
 import java.util.Collections;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.modules.editor.NbEditorSettingsInitializer;
-import org.netbeans.modules.editor.impl.KitsTracker;
+import org.netbeans.modules.editor.lib.KitsTracker;
 import org.openide.nodes.BeanNode;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
@@ -59,7 +59,7 @@ import org.openide.util.WeakListeners;
  *
  *  @author  Martin Roskanin
  *  @since 08/2001
- *  @deprecate If you think you need this class you are doing something wrong. It should've never been made public.
+ *  @deprecated If you think you need this class you are doing something wrong. It should've never been made public.
  */
 public class AllOptionsNode extends FilterNode {
     
