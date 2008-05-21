@@ -72,6 +72,7 @@ import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlChangeListener;
 import org.netbeans.modules.websvc.api.support.java.SourceUtils;
+import org.netbeans.spi.project.support.ant.GeneratedFilesHelper;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
@@ -79,7 +80,6 @@ import org.openide.nodes.AbstractNode;
 import static org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.websvc.api.jaxws.project.GeneratedFilesHelper;
 import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;
 import org.netbeans.modules.websvc.core.JaxWsUtils;
 import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
@@ -111,7 +111,7 @@ import org.xml.sax.SAXException;
  *  Children of the web service node, namely,
  *  the operations of the webservice
  */
-public class JaxWsChildren extends Children.Keys/* implements MDRChangeListener  */{
+public class JaxWsChildren extends Children.Keys<Object>/* implements MDRChangeListener  */{
     private java.awt.Image cachedIcon;   
     private static final String OPERATION_ICON = "org/netbeans/modules/websvc/core/webservices/ui/resources/wsoperation.png"; //NOI18N
     
@@ -170,8 +170,8 @@ public class JaxWsChildren extends Children.Keys/* implements MDRChangeListener 
                     wsdlChangeListener = new WsdlChangeListener() {
                         public void wsdlModelChanged(WsdlModel oldWsdlModel, WsdlModel newWsdlModel) {
                             wsdlModel=newWsdlModel;
-                            ((JaxWsNode)getNode()).changeIcon();
                             updateKeys();
+                            ((JaxWsNode)getNode()).changeIcon();
                         }
                     };
                     wsdlModeler.addWsdlChangeListener(wsdlChangeListener);
@@ -226,7 +226,7 @@ public class JaxWsChildren extends Children.Keys/* implements MDRChangeListener 
             implClass.removeFileChangeListener(fcl);
             fcl = null;
         }
-        setKeys(Collections.EMPTY_SET);
+        setKeys(Collections.<Object>emptySet());
     }
     
     private void updateKeys() {
@@ -244,7 +244,7 @@ public class JaxWsChildren extends Children.Keys/* implements MDRChangeListener 
         } else {
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
-                    final List<WebOperationInfo>[] keys = new List[]{new ArrayList<WebOperationInfo>()};
+                    final List<?>[] keys = new List<?>[1];
                     if (implClass != null) {
                         JavaSource javaSource = JavaSource.forFileObject(implClass);
                         if (javaSource!=null) {
