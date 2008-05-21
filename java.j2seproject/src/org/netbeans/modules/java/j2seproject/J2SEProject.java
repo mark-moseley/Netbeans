@@ -47,6 +47,7 @@ import java.beans.PropertyChangeSupport;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.UnsupportedCharsetException;
@@ -62,26 +63,28 @@ import javax.xml.parsers.ParserConfigurationException;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.classpath.GlobalPathRegistry;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.java.source.BuildArtifactMapper;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.ant.AntBuildExtender;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.java.api.common.ant.UpdateImplementation;
+import org.netbeans.modules.java.api.common.queries.QuerySupport;
 import org.netbeans.modules.java.j2seproject.api.J2SEPropertyEvaluator;
 import org.netbeans.modules.java.j2seproject.classpath.ClassPathProviderImpl;
 import org.netbeans.modules.java.j2seproject.classpath.J2SEProjectClassPathExtender;
 import org.netbeans.modules.java.j2seproject.classpath.J2SEProjectClassPathModifier;
-import org.netbeans.modules.java.j2seproject.queries.CompiledSourceForBinaryQuery;
-import org.netbeans.modules.java.j2seproject.queries.JavadocForBinaryQueryImpl;
-import org.netbeans.modules.java.j2seproject.queries.SourceLevelQueryImpl;
-import org.netbeans.modules.java.j2seproject.queries.UnitTestForSourceQueryImpl;
 import org.netbeans.modules.java.j2seproject.ui.J2SELogicalViewProvider;
 import org.netbeans.modules.java.j2seproject.ui.customizer.CustomizerProviderImpl;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
-import org.netbeans.modules.java.j2seproject.queries.J2SEProjectEncodingQueryImpl;
 import org.netbeans.modules.java.j2seproject.queries.BinaryForSourceQueryImpl;
 import org.netbeans.spi.java.project.support.ExtraSourceJavadocSupport;
+import org.netbeans.spi.java.project.support.LookupMergerSupport;
 import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
+import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.ant.AntArtifactProvider;
@@ -103,6 +106,7 @@ import org.netbeans.spi.project.ui.PrivilegedTemplates;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.netbeans.spi.project.ui.RecommendedTemplates;
 import org.netbeans.spi.project.ui.support.UILookupMergerSupport;
+import org.netbeans.spi.queries.FileEncodingQueryImplementation;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
@@ -142,6 +146,7 @@ public final class J2SEProject implements Project, AntProjectListener {
     private SourceRoots sourceRoots;
     private SourceRoots testRoots;
     private final ClassPathProviderImpl cpProvider;
+    private final J2SEProjectClassPathModifier cpMod;
 
     private AntBuildExtender buildExtender;
 
@@ -159,12 +164,18 @@ public final class J2SEProject implements Project, AntProjectListener {
         buildExtender = AntBuildExtenderFactory.createAntExtender(new J2SEExtenderImplementation());
     /// TODO replace this GeneratedFilesHelper with the default one when fixing #101710
         genFilesHelper = new GeneratedFilesHelper(helper, buildExtender);
-        this.updateHelper = new UpdateHelper (this, this.helper, this.aux, this.genFilesHelper,
-            UpdateHelper.createDefaultNotifier());
+        UpdateImplementation updateProject = new UpdateProjectImpl(this, helper, aux);
+        this.updateHelper = new UpdateHelper(updateProject, helper);
 
         this.cpProvider = new ClassPathProviderImpl(this.helper, evaluator(), getSourceRoots(),getTestSourceRoots()); //Does not use APH to get/put properties/cfgdata
-        lookup = createLookup(aux);
+        this.cpMod = new J2SEProjectClassPathModifier(this, this.updateHelper, eval, refHelper);
+        final J2SEActionProvider actionProvider = new J2SEActionProvider( this, this.updateHelper );
+        lookup = createLookup(aux, actionProvider);
+        actionProvider.startFSListener();
         helper.addAntProjectListener(this);
+        
+        mapBuildArtifacts("build.classes.dir", sourceRoots.getRootURLs());
+        mapBuildArtifacts("build.test.classes.dir", testRoots.getRootURLs());
     }
 
     /**
@@ -245,30 +256,31 @@ public final class J2SEProject implements Project, AntProjectListener {
         return helper;
     }
 
-    private Lookup createLookup(AuxiliaryConfiguration aux) {
-        SubprojectProvider spp = refHelper.createSubprojectProvider();
-        final J2SEProjectClassPathModifier cpMod = new J2SEProjectClassPathModifier(this, this.updateHelper, eval, refHelper);
-        Lookup base = Lookups.fixed(new Object[] {
+    private Lookup createLookup(final AuxiliaryConfiguration aux,
+            final ActionProvider actionProvider) {
+        final SubprojectProvider spp = refHelper.createSubprojectProvider();        
+        FileEncodingQueryImplementation encodingQuery = QuerySupport.createFileEncodingQuery(evaluator(), J2SEProjectProperties.SOURCE_ENCODING);
+        final Lookup base = Lookups.fixed(new Object[] {
             J2SEProject.this,
             new Info(),
             aux,
             helper.createCacheDirectoryProvider(),
             spp,
-            new J2SEActionProvider( this, this.updateHelper ),
+            actionProvider,
             new J2SELogicalViewProvider(this, this.updateHelper, evaluator(), spp, refHelper),
             // new J2SECustomizerProvider(this, this.updateHelper, evaluator(), refHelper),
             new CustomizerProviderImpl(this, this.updateHelper, evaluator(), refHelper, this.genFilesHelper),        
             new ClassPathProviderMerger(cpProvider),
-            new CompiledSourceForBinaryQuery(this.helper, evaluator(),getSourceRoots(),getTestSourceRoots()), //Does not use APH to get/put properties/cfgdata
-            new JavadocForBinaryQueryImpl(this.helper, evaluator()), //Does not use APH to get/put properties/cfgdata
+            QuerySupport.createCompiledSourceForBinaryQuery(helper, evaluator(), getSourceRoots(), getTestSourceRoots()),
+            QuerySupport.createJavadocForBinaryQuery(helper, evaluator()),
             new AntArtifactProviderImpl(),
             new ProjectXmlSavedHookImpl(),
             UILookupMergerSupport.createProjectOpenHookMerger(new ProjectOpenedHookImpl()),
-            new UnitTestForSourceQueryImpl(getSourceRoots(),getTestSourceRoots()),
-            new SourceLevelQueryImpl(evaluator()),
+            QuerySupport.createUnitTestForSourceQuery(getSourceRoots(), getTestSourceRoots()),
+            QuerySupport.createSourceLevelQuery(evaluator()),
             new J2SESources (this.helper, evaluator(), getSourceRoots(), getTestSourceRoots()),
-            new J2SESharabilityQuery (this.helper, evaluator(), getSourceRoots(), getTestSourceRoots()), //Does not use APH to get/put properties/cfgdata
-            new J2SEFileBuiltQuery (this.helper, evaluator(),getSourceRoots(),getTestSourceRoots()), //Does not use APH to get/put properties/cfgdata
+            QuerySupport.createSharabilityQuery(helper, evaluator(), getSourceRoots(), getTestSourceRoots()),
+            QuerySupport.createFileBuiltQuery(helper, evaluator(), getSourceRoots(), getTestSourceRoots()),
             new RecommendedTemplatesImpl (this.updateHelper),
             new J2SEProjectClassPathExtender(cpMod),
             buildExtender,
@@ -280,11 +292,13 @@ public final class J2SEProject implements Project, AntProjectListener {
             UILookupMergerSupport.createPrivilegedTemplatesMerger(),
             UILookupMergerSupport.createRecommendedTemplatesMerger(),
             LookupProviderSupport.createSourcesMerger(),
-            new J2SEProjectEncodingQueryImpl (evaluator()),
+            encodingQuery,
             new J2SEPropertyEvaluatorImpl(evaluator()),
-            new J2SETemplateAttributesProvider(this.helper),
-            ExtraSourceJavadocSupport.createExtraSourceQueryImplementation(helper, eval),
-            ExtraSourceJavadocSupport.createExtraJavadocQueryImplementation(helper, eval),
+            QuerySupport.createTemplateAttributesProvider(helper, encodingQuery),
+            ExtraSourceJavadocSupport.createExtraSourceQueryImplementation(this, helper, eval),
+            LookupMergerSupport.createSFBLookupMerger(),
+            ExtraSourceJavadocSupport.createExtraJavadocQueryImplementation(this, helper, eval),
+            LookupMergerSupport.createJFBLookupMerger(),
             new BinaryForSourceQueryImpl(this.sourceRoots, this.testRoots, this.helper, this.eval) //Does not use APH to get/put properties/cfgdata
         });
         return LookupProviderSupport.createCompositeLookup(base, "Projects/org-netbeans-modules-java-j2seproject/Lookup"); //NOI18N
@@ -292,6 +306,10 @@ public final class J2SEProject implements Project, AntProjectListener {
     
     public ClassPathProviderImpl getClassPathProvider () {
         return this.cpProvider;
+    }
+    
+    public J2SEProjectClassPathModifier getProjectClassPathModifier () {
+        return this.cpMod;
     }
 
     public void configurationXmlChanged(AntProjectEvent ev) {
@@ -315,14 +333,16 @@ public final class J2SEProject implements Project, AntProjectListener {
      */
     public synchronized SourceRoots getSourceRoots() {        
         if (this.sourceRoots == null) { //Local caching, no project metadata access
-            this.sourceRoots = new SourceRoots(this.updateHelper, evaluator(), getReferenceHelper(), "source-roots", false, "src.{0}{1}.dir"); //NOI18N
-        }
+            this.sourceRoots = SourceRoots.create(updateHelper, evaluator(), getReferenceHelper(),
+                    J2SEProjectType.PROJECT_CONFIGURATION_NAMESPACE, "source-roots", false, "src.{0}{1}.dir"); //NOI18N
+       }
         return this.sourceRoots;
     }
     
     public synchronized SourceRoots getTestSourceRoots() {
         if (this.testRoots == null) { //Local caching, no project metadata access
-            this.testRoots = new SourceRoots(this.updateHelper, evaluator(), getReferenceHelper(), "test-roots", true, "test.{0}{1}.dir"); //NOI18N
+            this.testRoots = SourceRoots.create(updateHelper, evaluator(), getReferenceHelper(),
+                    J2SEProjectType.PROJECT_CONFIGURATION_NAMESPACE, "test-roots", true, "test.{0}{1}.dir"); //NOI18N
         }
         return this.testRoots;
     }
@@ -361,7 +381,22 @@ public final class J2SEProject implements Project, AntProjectListener {
         });
     }
 
+    private void mapBuildArtifacts(String targetFolderProperty, URL[] sources) {
+        if (sources.length == 0) {
+            return ;
+        }
+        
+        String buildClassesDir = evaluator().getProperty(targetFolderProperty);
+        File buildClasses = buildClassesDir != null ? getAntProjectHelper().resolveFile(buildClassesDir) : null;
 
+        if (buildClasses != null) {
+            for (URL u : sources) {
+                BuildArtifactMapper.map(u, buildClasses);
+            }
+        } else {
+            //XXX: warn?
+        }
+    }
 
 
     // Private innerclasses ----------------------------------------------------
@@ -445,12 +480,11 @@ public final class J2SEProject implements Project, AntProjectListener {
                     J2SEProject.class.getResource("resources/build-impl.xsl"),
                     false);
                 genFilesHelper.refreshBuildScript(
-                    GeneratedFilesHelper.BUILD_XML_PATH,
+                    J2SEProjectUtil.getBuildXmlName(J2SEProject.this),
                     J2SEProject.class.getResource("resources/build.xsl"),
                     false);
             }
-        }
-        
+        }    
     }
     
     private final class ProjectOpenedHookImpl extends ProjectOpenedHook {
@@ -470,7 +504,7 @@ public final class J2SEProject implements Project, AntProjectListener {
                         J2SEProject.class.getResource("resources/build-impl.xsl"),
                         true);
                     genFilesHelper.refreshBuildScript(
-                        GeneratedFilesHelper.BUILD_XML_PATH,
+                        J2SEProjectUtil.getBuildXmlName(J2SEProject.this),
                         J2SEProject.class.getResource("resources/build.xsl"),
                         true);
                 }                
@@ -615,7 +649,9 @@ public final class J2SEProject implements Project, AntProjectListener {
 
         public AntArtifact[] getBuildArtifacts() {
             return new AntArtifact[] {
-                helper.createSimpleAntArtifact(JavaProjectConstants.ARTIFACT_TYPE_JAR, "dist.jar", evaluator(), "jar", "clean"), // NOI18N
+                new J2SEProjectAntArtifact (J2SEProject.this,
+                        JavaProjectConstants.ARTIFACT_TYPE_JAR,
+                        "dist.jar", "jar", "clean"), // NOI18N
             };
         }
 
@@ -647,7 +683,7 @@ public final class J2SEProject implements Project, AntProjectListener {
             // "web-types",         // NOI18N
             "junit",                // NOI18N
             // "MIDP",              // NOI18N
-            "simple-files"          // NOI18N
+            "simple-files"          // NOI18N        
         };
         
         private static final String[] LIBRARY_TYPES = new String[] { 
