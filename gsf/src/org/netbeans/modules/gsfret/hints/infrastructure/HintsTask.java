@@ -42,7 +42,12 @@ package org.netbeans.modules.gsfret.hints.infrastructure;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.api.gsf.HintsProvider;
+import java.util.Set;
+import org.netbeans.modules.gsf.api.HintsProvider;
+import org.netbeans.modules.gsf.Language;
+import org.netbeans.modules.gsf.LanguageRegistry;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.RuleContext;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.modules.gsfret.editor.semantic.ScanningCancellableTask;
 import org.netbeans.spi.editor.hints.ErrorDescription;
@@ -59,18 +64,38 @@ public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
     }
     
     public void run(CompilationInfo info) throws Exception {
-        HintsProvider provider = info.getLanguage().getHintsProvider();
-
-        if (provider == null) {
-            return;
-        }
+        resume();
         
         List<ErrorDescription> result = new ArrayList<ErrorDescription>();
-        
-        provider.computeHints(info, result);
-        
-        if (isCancelled()) {
-            return;
+        Set<String> mimeTypes = info.getEmbeddedMimeTypes();
+        for (String mimeType : mimeTypes) {
+            Language language = LanguageRegistry.getInstance().getLanguageByMimeType(mimeType);
+            if (language == null) {
+                continue;
+            }
+            
+            HintsProvider provider = language.getHintsProvider();
+
+            if (provider == null) {
+                continue;
+            }
+
+            GsfHintsManager manager = language.getHintsManager();
+            RuleContext ruleContext = manager.createRuleContext(info, language, -1, -1, -1);
+            List<Hint> hints = new ArrayList<Hint>();
+
+            if (ruleContext != null) {
+                provider.computeHints(manager, ruleContext, hints);
+            }
+            
+            if (isCancelled()) {
+                return;
+            }
+
+            for (Hint hint : hints) {
+                ErrorDescription desc = manager.createDescription(hint, ruleContext, false);
+                result.add(desc);
+            }
         }
         
         HintsController.setErrors(info.getFileObject(), HintsTask.class.getName(), result);

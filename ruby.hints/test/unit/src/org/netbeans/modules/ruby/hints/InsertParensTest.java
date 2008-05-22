@@ -28,12 +28,6 @@
 
 package org.netbeans.modules.ruby.hints;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import org.netbeans.modules.ruby.hints.HintTestBase;
-import org.openide.filesystems.FileObject;
-
 /**
  *
  * @author Tor Norbye
@@ -45,7 +39,7 @@ public class InsertParensTest extends HintTestBase {
     }
 
     public void testHint1() throws Exception {
-        findHints(this, new InsertParens(), "testfiles/insertparens.rb", null);
+        checkHints(this, new InsertParens(), "testfiles/insertparens.rb", null);
     }
 
     public void testApplyFix() throws Exception {

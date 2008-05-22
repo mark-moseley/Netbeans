@@ -28,9 +28,6 @@
 
 package org.netbeans.modules.ruby.hints;
 
-import org.netbeans.modules.ruby.hints.HintTestBase;
-import org.openide.filesystems.FileObject;
-
 /**
  *
  * @author Tor Norbye
@@ -42,7 +39,7 @@ public class CommonSyntaxErrorsTest extends HintTestBase {
     }
 
     public void testHint1() throws Exception {
-        findHints(this, new CommonSyntaxErrors(), "testfiles/beginend.rb", null);
+        checkHints(this, new CommonSyntaxErrors(), "testfiles/beginend.rb", null);
     }
 
     public void testApplyFix() throws Exception {
@@ -54,7 +51,7 @@ public class CommonSyntaxErrorsTest extends HintTestBase {
 //    public void testInsertParens() throws Exception {
 //        List<FileObject> files = getBigSourceFiles();
 //        for (FileObject f : files) {
-//            findHints(this, new InsertParens(), f, null);
+//            checkHints(this, new InsertParens(), f, null);
 //        }
 //    }
 }

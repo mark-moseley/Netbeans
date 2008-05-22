@@ -28,7 +28,6 @@
 package org.netbeans.modules.ruby.hints;
 
 import java.util.List;
-import org.netbeans.modules.ruby.hints.HintTestBase;
 import org.openide.filesystems.FileObject;
 
 /**
@@ -48,7 +47,7 @@ public class NestedLocalTest extends HintTestBase {
 //    }
     
     public void testHint1() throws Exception {
-        findHints(this, new NestedLocal(), "testfiles/nestedlocals.rb", null);
+        checkHints(this, new NestedLocal(), "testfiles/nestedlocals.rb", null);
     }
 
     public void testNestedLocals() throws Exception {

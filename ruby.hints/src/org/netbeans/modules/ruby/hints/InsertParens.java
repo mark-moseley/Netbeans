@@ -31,20 +31,22 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.jruby.ast.Node;
+import org.jruby.common.IRubyWarnings.ID;
 import org.jruby.lexer.yacc.ISourcePosition;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.Error;
-import org.netbeans.api.gsf.OffsetRange;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.EditList;
+import org.netbeans.modules.gsf.api.HintFix;
+import org.netbeans.modules.gsf.api.HintSeverity;
+import org.netbeans.modules.gsf.api.PreviewableFix;
+import org.netbeans.modules.gsf.api.RuleContext;
 import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.hints.spi.Description;
-import org.netbeans.modules.ruby.hints.spi.EditList;
-import org.netbeans.modules.ruby.hints.spi.ErrorRule;
-import org.netbeans.modules.ruby.hints.spi.Fix;
-import org.netbeans.modules.ruby.hints.spi.HintSeverity;
-import org.netbeans.modules.ruby.hints.spi.PreviewableFix;
-import org.netbeans.modules.ruby.hints.spi.RuleContext;
+import org.netbeans.modules.ruby.RubyParser.RubyError;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyErrorRule;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyRuleContext;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.util.NbBundle;
 
@@ -59,25 +61,26 @@ import org.openide.util.NbBundle;
  * 
  * @author Tor Norbye
  */
-public class InsertParens implements ErrorRule {
+public class InsertParens extends RubyErrorRule {
 
-    public Set<String> getCodes() {
+    public Set<ID> getCodes() {
        //        Set<String> s = new HashSet<String>();
        //        s.add("`*' interpreted as argument prefix");
        //        s.add("`&' interpreted as argument prefix");
        //        s.add("parenthesize argument(s) for future version");
        //        return s;
-        return Collections.singleton("parenthesize argument(s) for future version");
+        //return Collections.singleton("parenthesize argument(s) for future version");
+        return Collections.singleton(ID.PARENTHISE_ARGUMENTS);
     }
 
-    public void run(RuleContext context, Error error,
-             List<Description> result) {
+    public void run(RubyRuleContext context, RubyError error,
+             List<Hint> result) {
         CompilationInfo info = context.compilationInfo;
 
         Node root = AstUtilities.getRoot(info);
         if (root != null) {
-            int offset = error.getStartPosition().getOffset();
-            AstPath path = new AstPath(root, offset);
+            int astOffset = error.getStartPosition();
+            AstPath path = new AstPath(root, astOffset);
             Node node = path.leaf();
             if (node != null) {
                 OffsetRange range = AstUtilities.getRange(node);
@@ -90,11 +93,11 @@ public class InsertParens implements ErrorRule {
                     callNode = node;
                 }
                 if (callNode != null) {
-                    Fix fix = new InsertParenFix(info, offset, callNode);
-                    List<Fix> fixList = Collections.singletonList(fix);
+                    HintFix fix = new InsertParenFix(info, callNode);
+                    List<HintFix> fixList = Collections.singletonList(fix);
                     range = LexUtilities.getLexerOffsets(info, range);
                     if (range != OffsetRange.NONE) {
-                        Description desc = new Description(this, getDisplayName(), info.getFileObject(), range, fixList, 500);
+                        Hint desc = new Hint(this, getDisplayName(), info.getFileObject(), range, fixList, 500);
                         result.add(desc);
                     }
                 }
@@ -102,7 +105,8 @@ public class InsertParens implements ErrorRule {
         }
     }
 
-    public boolean appliesTo(CompilationInfo info) {
+    public boolean appliesTo(RuleContext context) {
+        CompilationInfo info = context.compilationInfo;
         // Skip for RHTML files for now - isn't implemented properly
         return info.getFileObject().getMIMEType().equals("text/x-ruby");
     }
@@ -122,12 +126,10 @@ public class InsertParens implements ErrorRule {
     private static class InsertParenFix implements PreviewableFix {
 
         private final CompilationInfo info;
-        private final int offset;
         private final Node node;
 
-        InsertParenFix(CompilationInfo info, int offset, Node node) {
+        InsertParenFix(CompilationInfo info, Node node) {
             this.info = info;
-            this.offset = offset;
             this.node = node;
         }
 
@@ -150,7 +152,11 @@ public class InsertParens implements ErrorRule {
 
             // Insert parentheses
             assert AstUtilities.isCall(node);
-            OffsetRange range = AstUtilities.getCallRange(node);
+            OffsetRange astRange = AstUtilities.getCallRange(node);
+            OffsetRange range = LexUtilities.getLexerOffsets(info, astRange);
+            if (range == OffsetRange.NONE) {
+                return edits;
+            }
             int insertPos = range.getEnd();
             // Check if I should remove a space; e.g. replace "foo arg" with "foo(arg"
             if (Character.isWhitespace(doc.getText(insertPos, 1).charAt(0))) {

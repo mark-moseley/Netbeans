@@ -42,10 +42,7 @@
 package org.netbeans.modules.ruby.hints;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import org.netbeans.modules.ruby.hints.HintTestBase;
-import org.openide.filesystems.FileObject;
 
 /**
  *
@@ -58,11 +55,11 @@ public class AttributeIsLocalTest extends HintTestBase {
     }
 
     public void testHint1() throws Exception {
-        findHints(this, new AttributeIsLocal(), "testfiles/localattributes.rb", null);
+        checkHints(this, new AttributeIsLocal(), "testfiles/localattributes.rb", null);
     }
 
     public void testHint2() throws Exception {
-        findHints(this, new AttributeIsLocal(), "testfiles/localattributes2.rb", null);
+        checkHints(this, new AttributeIsLocal(), "testfiles/localattributes2.rb", null);
     }
     
     public void testNoPositives() throws Exception {
@@ -86,6 +83,8 @@ public class AttributeIsLocalTest extends HintTestBase {
             exceptions.add("base.rb");
             exceptions.add("httputils.rb");
             exceptions.add("baseData.rb");
+            exceptions.add("form_helper.rb");
+            exceptions.add("url_helper_test.rb");
         
             assertNoJRubyMatches(new AttributeIsLocal(), exceptions);
             

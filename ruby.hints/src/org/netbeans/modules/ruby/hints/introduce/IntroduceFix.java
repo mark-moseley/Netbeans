@@ -54,17 +54,19 @@ import javax.swing.text.JTextComponent;
 import javax.swing.text.Position;
 import org.jruby.ast.MethodDefNode;
 import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.ast.NodeType;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
+import org.netbeans.modules.gsf.api.EditList;
+import org.netbeans.modules.gsf.api.PreviewableFix;
 import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstUtilities;
+import org.netbeans.modules.ruby.Formatter;
 import org.netbeans.modules.ruby.NbUtilities;
 import org.netbeans.modules.ruby.RubyIndex;
-import org.netbeans.modules.ruby.hints.spi.EditList;
-import org.netbeans.modules.ruby.hints.spi.PreviewableFix;
+import org.netbeans.modules.ruby.RubyMimeResolver;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -167,7 +169,7 @@ class IntroduceFix implements PreviewableFix {
         }
 
         String guessedName = AstUtilities.guessName(info, lexRange, astRange);
-        RubyIndex index = RubyIndex.get(info.getIndex());
+        RubyIndex index = RubyIndex.get(info.getIndex(RubyMimeResolver.RUBY_MIME_TYPE));
         AstPath startPath = new AstPath(AstUtilities.getRoot(info), astRange.getStart());
         List<OffsetRange> duplicates = null;
 
@@ -307,7 +309,7 @@ class IntroduceFix implements PreviewableFix {
 
         AstPath path = new AstPath(AstUtilities.getRoot(info), astRange.getStart());
         boolean addHash = false;
-        if (path.leafGrandParent() != null && path.leafGrandParent().nodeId == NodeTypes.HASHNODE) {
+        if (path.leafGrandParent() != null && path.leafGrandParent().nodeId == NodeType.HASHNODE) {
             addHash = true;
         }
         if (addHash) {
@@ -329,6 +331,8 @@ class IntroduceFix implements PreviewableFix {
         }
         
         EditList edits = new EditList(doc);
+        edits.setFormatter(new Formatter(), false);
+
         edits.replace(lexStart, lexEnd-lexStart, name, true, 1);
         edits.replace(begin, 0, sb.toString(), true, 2);
 
@@ -385,6 +389,7 @@ class IntroduceFix implements PreviewableFix {
 
         StringBuilder sb = new StringBuilder();
         EditList edits = new EditList(doc);
+        edits.setFormatter(new Formatter(), false);
         boolean isAbove = prevEnd < astRange.getStart();
         sb.append("\n");
         if (!isAbove) {
@@ -482,7 +487,7 @@ class IntroduceFix implements PreviewableFix {
         boolean found = false;
         while (it.hasNext()) {
             Node n = it.next();
-            if (n.nodeId == NodeTypes.NEWLINENODE) {
+            if (n.nodeId == NodeType.NEWLINENODE) {
                 if (prev != null) {
                     found = true;
                     // Peek ahead and see if we have another outer newline that is also on
@@ -492,7 +497,7 @@ class IntroduceFix implements PreviewableFix {
                     Node innerNewline = n;
                     while (it.hasNext()) {
                         n = it.next();
-                        if (n.nodeId == NodeTypes.NEWLINENODE) {
+                        if (n.nodeId == NodeType.NEWLINENODE) {
                             int prevNewline = Math.min(LexUtilities.getLexerOffset(info, innerNewline.getPosition().getStartOffset()), doc.getLength());
                             int newLine = Math.min(LexUtilities.getLexerOffset(info, n.getPosition().getStartOffset()), doc.getLength());
                             if (p != null && newLine != -1 && prevNewline != -1 && Utilities.getRowStart(doc, prevNewline) == Utilities.getRowStart(doc, newLine)) {
@@ -523,11 +528,11 @@ class IntroduceFix implements PreviewableFix {
         
         // Find the closest block node enclosing the given node
         for (Node curr : path) {
-            if (curr.nodeId == NodeTypes.DEFNNODE || curr.nodeId == NodeTypes.DEFSNODE) {
+            if (curr.nodeId == NodeType.DEFNNODE || curr.nodeId == NodeType.DEFSNODE) {
                 return Math.min(LexUtilities.getLexerOffset(info, curr.getPosition().getEndOffset()), doc.getLength());
             }
-            if (curr.nodeId == NodeTypes.CLASSNODE || curr.nodeId == NodeTypes.SCLASSNODE ||
-                    curr.nodeId == NodeTypes.MODULENODE) {
+            if (curr.nodeId == NodeType.CLASSNODE || curr.nodeId == NodeType.SCLASSNODE ||
+                    curr.nodeId == NodeType.MODULENODE) {
                 // End of the class:
                 //int clzEnd = LexUtilities.getLexerOffset(info, curr.getPosition().getEndOffset());
                 //// Skip over "end"

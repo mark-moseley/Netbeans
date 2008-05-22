@@ -42,7 +42,6 @@
 package org.netbeans.modules.ruby.hints;
 
 import java.util.List;
-import org.netbeans.modules.ruby.hints.HintTestBase;
 import org.openide.filesystems.FileObject;
 
 /**
@@ -56,7 +55,7 @@ public class CamelCaseNamesTest extends HintTestBase {
     }
 
     public void testHint1() throws Exception {
-        findHints(this, new CamelCaseNames(), "testfiles/camelcasenames.rb", null);
+        checkHints(this, new CamelCaseNames(), "testfiles/camelcasenames.rb", null);
     }
     
     public void testCamelCase() throws Exception {

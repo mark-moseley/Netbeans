@@ -42,7 +42,6 @@
 package org.netbeans.modules.ruby.hints;
 
 import java.util.List;
-import org.netbeans.modules.ruby.hints.HintTestBase;
 import org.openide.filesystems.FileObject;
 
 /**
@@ -74,7 +73,7 @@ public class ConstantNamesTest extends HintTestBase {
     }
 
     public void testHint1() throws Exception {
-        findHints(this, new ConstantNames(), "testfiles/constantnames.rb", null);
+        checkHints(this, new ConstantNames(), "testfiles/constantnames.rb", null);
     }
     
     public void testConstants() throws Exception {
