@@ -81,11 +81,24 @@ public class AddLabelsAction extends NodeAction
     public Action createContextAwareInstance(Lookup actionContext)
     {
         context = actionContext.lookup(WidgetContext.class);
-        if (context == null)
-            return null;
-        type = LabelManager.LabelType.valueOf(context.getContextName());
+        
+        type = LabelManager.LabelType.EDGE;
         model.reset();
         lastManager = null;
+        
+        if (context == null)
+        {
+            // (LLS) If you return null you the error message 
+            // ContextAwareAction.createContextAwareInstance(context) returns null. That is illegal!
+            // Therefore return "this".  The enable method will disable the action
+            // if the context is null.
+            return this;
+        }
+        else
+        {
+            type = LabelManager.LabelType.valueOf(context.getContextName());
+        }
+        
         
         return this;
     }
@@ -107,8 +120,8 @@ public class AddLabelsAction extends NodeAction
     protected boolean enable(Node[] activatedNodes)
     {
         boolean retVal = false;
-        if (context == null)
-            return false;
+//        if (context == null)
+//            return false;
         
         if(activatedNodes.length == 1)
         {
@@ -160,8 +173,12 @@ public class AddLabelsAction extends NodeAction
     @Override
     public JMenuItem getPopupPresenter()
     {   
-        JMenuItem item =  new Actions.SubMenu(this, model);
-        Actions.connect(item, (Action)this, true);
+        JMenuItem item = super.getPopupPresenter();
+        if(lastManager != null)
+        {
+            item =  new Actions.SubMenu(this, model);
+            Actions.connect(item, (Action)this, true);
+        }
         
         return item;
     }
@@ -201,9 +218,9 @@ public class AddLabelsAction extends NodeAction
             // menu.  This is not what we want, since it seems to be a little
             // confusing.  So, I will increment the return value.
             //
-            // the getLabele(int index) method will return null if the index
+            // the getLabel(int index) method will return null if the index
             // is greater than the number of real actions.  Returning null
-            // tells teh Actions.SubMenu implementation to add a seperator.
+            // tells the Actions.SubMenu implementation to add a seperator.
             // However, since the seperator is the last item, it will not 
             // actually add the seperator to the menu :-)
             
