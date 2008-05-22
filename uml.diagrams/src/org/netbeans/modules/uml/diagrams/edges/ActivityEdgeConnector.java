@@ -41,12 +41,14 @@
 package org.netbeans.modules.uml.diagrams.edges;
 
 import java.awt.Color;
-import org.netbeans.api.visual.anchor.AnchorShape;
+import org.netbeans.api.visual.anchor.PointShape;
 import org.netbeans.api.visual.widget.Scene;
+import org.netbeans.modules.uml.drawingarea.LabelManager;
+import org.netbeans.modules.uml.drawingarea.actions.WidgetContext;
 
 /**
  *
- * @author thuy
+ * @author Thuy
  */
 public class ActivityEdgeConnector extends AbstractUMLConnectionWidget
 {
@@ -54,10 +56,41 @@ public class ActivityEdgeConnector extends AbstractUMLConnectionWidget
     {
         super(scene);
         setForeground(Color.BLACK);
-        setSourceAnchorShape(AnchorShape.NONE);
+        //setSourceAnchorShape(AnchorShape.NONE);
+        setControlPointShape(PointShape.SQUARE_FILLED_BIG);
+        setEndPointShape(PointShape.SQUARE_FILLED_BIG);
         setTargetAnchorShape(ARROW_END);
+        
+        addToLookup(new ActivityEdgeContext(LabelManager.LabelType.EDGE) );
     }
    
+    @Override
+    protected LabelManager createLabelManager()
+    {
+        return new ActivityEdgeLabelManager(this);
+    }
+    
+    private class ActivityEdgeContext implements WidgetContext
+    {
+        private LabelManager.LabelType contextName = LabelManager.LabelType.EDGE;
+
+        public ActivityEdgeContext(LabelManager.LabelType context)
+        {
+            contextName = context;
+        }
+
+        public String getContextName()
+        {
+            return contextName.toString();
+        }
+
+        public Object[] getContextItems()
+        {
+            Object[] retVal = new Object[0];
+            return retVal;
+        }
+    }
+    
     public String getWidgetID()
     {
         return UMLWidgetIDString.ACTIVITYEDGEWIDGET.toString();
