@@ -81,6 +81,7 @@ import org.netbeans.api.visual.model.ObjectSceneEventType;
 import org.netbeans.api.visual.widget.ConnectionWidget;
 import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
+import org.netbeans.modules.uml.common.ui.SaveNotifierYesNo;
 import org.netbeans.modules.uml.core.eventframework.IEventPayload;
 import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivity;
 import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.IStateMachine;
@@ -137,6 +138,8 @@ import org.netbeans.modules.uml.ui.support.diagramsupport.DrawingAreaEventsAdapt
 import org.netbeans.modules.uml.ui.support.diagramsupport.IDrawingAreaEventDispatcher;
 import org.netbeans.spi.navigator.NavigatorLookupHint;
 import org.netbeans.spi.palette.PaletteController;
+import org.openide.ErrorManager;
+import org.openide.NotifyDescriptor;
 import org.openide.awt.Toolbar;
 import org.openide.cookies.SaveCookie;
 import org.openide.explorer.ExplorerManager;
@@ -203,8 +206,12 @@ public class UMLDiagramTopComponent extends TopComponent
     private DeleteActionPerformer deleteActionPerformer = new DeleteActionPerformer();
     private ClipboardListener clipboardListener;
     private ExplorerManager explorerManager;
-   
+    private SceneAcceptProvider provider;
 
+    private static final int RESULT_CANCEL = 0;
+    private static final int RESULT_NO = 1;
+    private static final int RESULT_YES = 2;
+    
     private UMLDiagramTopComponent()
     {
         initComponents();
@@ -323,7 +330,7 @@ public class UMLDiagramTopComponent extends TopComponent
 
     protected boolean isEdgesGrouped()
     {
-        return false;
+        return true;
     }
     
     private void initRootNode()
@@ -366,6 +373,84 @@ public class UMLDiagramTopComponent extends TopComponent
     
     ///////////////////////////////////////////////////////////////////////////
     // TopCompnent Overrides
+    
+     @Override
+    public boolean canClose() 
+     {
+         boolean safeToClose = true;
+        if (getDiagramDO() != null && getDiagramDO().getCookie(SaveCookie.class) == null)
+        {
+            return true;            
+        }
+        //prompt to save before close
+        switch (saveDiagram())
+        {
+        case RESULT_YES:
+            SaveCookie cookie = (SaveCookie) getDiagramDO().getCookie(SaveCookie.class);
+            try
+            {
+                if (cookie != null)
+                    cookie.save();
+            }
+            catch (IOException e)
+            {
+                ErrorManager.getDefault().notify(e);
+            }
+            break;
+            
+        case RESULT_NO:
+            UMLDiagramDataObject obj = getDiagramDO();
+            if (obj != null)
+            {
+                obj.setDirty(false, scene);
+            }
+//            removeSaveCookie();
+            break;
+            
+        case RESULT_CANCEL:
+            safeToClose = false;
+            break;
+        }
+        
+        return safeToClose;
+    }
+     
+     private int saveDiagram()
+    {   
+        String title = NbBundle.getMessage(UMLDiagramTopComponent.class,
+                "LBL_DIALOG_TITLE_SaveDiagram"); // NOI18N
+        
+        String objType = NbBundle.getMessage(
+                UMLDiagramTopComponent.class,
+                "LBL_DIALOG_MSG_Diagram",  // NOI18N
+                getName());
+        
+        int result = RESULT_CANCEL;
+        
+        Object response = SaveNotifierYesNo.getDefault().displayNotifier(
+                title, // NOI18N
+                objType, // NOI18N
+                getAssociatedDiagram().getNamespace().toString()+"::"+getName());
+        
+        if (response == SaveNotifierYesNo.SAVE_ALWAYS_OPTION)
+        {
+            result = RESULT_YES;
+        }
+        
+        else if (response == NotifyDescriptor.YES_OPTION)
+            result = RESULT_YES;
+        
+        else if (response == NotifyDescriptor.NO_OPTION)
+            result = RESULT_NO;
+        
+        else // cancel or closed (x button)
+        {
+            result = RESULT_CANCEL;
+        }
+        
+        return result;
+    }
+    
     @Override
     protected void componentClosed()
     {
@@ -883,6 +968,7 @@ public class UMLDiagramTopComponent extends TopComponent
         return buffer;
     }
 
+    
 
     /** This method is called from within the constructor to
      * initialize the form.
@@ -1050,8 +1136,16 @@ public class UMLDiagramTopComponent extends TopComponent
         }
         Clipboard clipboard = CopyPasteSupport.getClipboard();
         Transferable trans = clipboard.getContents(this);
-        SceneAcceptProvider provider = new SceneAcceptProvider(scene.getDiagram().getNamespace());
-        pasteActionPerformer.setEnabled(provider.isAcceptable(w, new Point(0, 0), trans).equals(ConnectorState.ACCEPT));     
+        pasteActionPerformer.setEnabled(getSceneAcceptProvider().isAcceptable(w, new Point(0, 0), trans).equals(ConnectorState.ACCEPT));     
+    }
+    
+    private SceneAcceptProvider getSceneAcceptProvider()
+    {
+        if (provider == null)
+        {
+            provider = new SceneAcceptProvider(scene.getDiagram().getNamespace());
+        }
+        return provider;
     }
     
     private void clearClipBoard()
@@ -1116,10 +1210,12 @@ public class UMLDiagramTopComponent extends TopComponent
                 if (newVal == Boolean.FALSE)
                 {
                     setDiagramDisplayName(diagramName);
+                    setDiagramDirty(false);
                 }
                 else 
                 {
                     setDiagramDisplayName(diagramName + SPACE_STAR);
+                    setDiagramDirty(true);
                 }
                 diagDataNode.setIconBaseWithExtension(ImageUtil.instance()
                         .getDiagramTypeImageName(diagramKind));
@@ -1129,6 +1225,36 @@ public class UMLDiagramTopComponent extends TopComponent
             }
         }
     }
+    
+    // the presence of save cookie in activated nodes enables/disables "Save" button
+//    private void addSaveCookie()
+//    {
+//        Node[] nodes = getActivatedNodes();
+//        if (nodes != null &&
+//                nodes.length > 0 &&
+//                nodes[0] instanceof DiagramModelElementNode)
+//        {
+//            ((DiagramModelElementNode)nodes[0]).addSaveCookie();
+//        }
+////        if (node != null)
+////            node.addSaveCookie();
+//       
+//    }
+    
+//    private void removeSaveCookie()
+//    {
+//        Node[] nodes = getActivatedNodes();
+//        if (nodes != null) {
+//            for (int i = 0; i < nodes.length; i++) {
+//                if (nodes[i] instanceof DiagramModelElementNode) {
+//                    ((DiagramModelElementNode) nodes[i]).removeSaveCookie();
+//                }
+//            }
+//        }
+////        if (node != null)
+////            node.removeSaveCookie();
+//        
+//    }
 
     public class ChangeHandler implements DrawingAreaChangeListener
     {
@@ -1221,6 +1347,18 @@ public class UMLDiagramTopComponent extends TopComponent
                             {
                                 parentWidget.removeChild(changedWidget);
                                 curPresentation.removeSubject(curPresentation.getFirstSubject());
+                            }
+                            // why not send change event to changed widget to handle further task?
+                            // see use case for deleting state region
+                            PropertyChangeEvent event = new PropertyChangeEvent(elementToNotify,
+                                    changeType.toString(),
+                                    oldValue,
+                                    newValue);
+                            if (changedWidget instanceof PropertyChangeListener)
+                            {
+                                PropertyChangeListener listener = (PropertyChangeListener) changedWidget;
+                                listener.propertyChange(event);
+                                getDiagramDO().setDirty(true, getScene());
                             }
                         }
                     }
@@ -1671,7 +1809,7 @@ public class UMLDiagramTopComponent extends TopComponent
                 {
                     e.printStackTrace();
                 }
-                getDiagramDO().setDirty(false, scene);
+//                getDiagramDO().setDirty(false, scene);
                 return State.CONSUMED;
             }
             return super.keyTyped(widget, event);
