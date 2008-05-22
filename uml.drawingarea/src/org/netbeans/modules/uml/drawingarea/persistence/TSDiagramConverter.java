@@ -44,9 +44,9 @@ package org.netbeans.modules.uml.drawingarea.persistence;
 import java.awt.Dimension;
 import java.awt.Point;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -64,6 +64,7 @@ import org.netbeans.api.visual.widget.Widget;
 
 import org.netbeans.modules.uml.common.generics.ETPairT;
 import org.netbeans.modules.uml.core.IApplication;
+import org.netbeans.modules.uml.core.eventframework.IEventPayload;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
@@ -95,10 +96,10 @@ import org.netbeans.modules.uml.drawingarea.ui.addins.diagramcreator.SQDDiagramE
 import org.netbeans.modules.uml.drawingarea.view.UMLEdgeWidget;
 import org.netbeans.modules.uml.drawingarea.view.UMLWidget.UMLWidgetIDString;
 import org.netbeans.modules.uml.drawingarea.widgets.ContainerNode;
+import org.netbeans.modules.uml.ui.support.DispatchHelper;
+import org.netbeans.modules.uml.ui.support.diagramsupport.IDrawingAreaEventDispatcher;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataFolder;
-import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Exceptions;
 
@@ -126,8 +127,8 @@ public class TSDiagramConverter
     private TSDiagramDetails diagramDetails;
     
     private XMLInputFactory factory;
-    private FileInputStream fisPres;
-    private FileInputStream fisData;
+    private InputStream fisPres;
+    private InputStream fisData;
     private XMLStreamReader readerPres;
     private XMLStreamReader readerData;
     
@@ -170,6 +171,9 @@ public class TSDiagramConverter
     private Boolean ShowAllReturnMessages;
     private Boolean ShowMessageNumbers;
 
+    private FileObject etldFO;
+
+    private FileObject etlpFO;;
     
     public TSDiagramConverter(IProxyDiagram proxyDiagram)
     {
@@ -210,11 +214,14 @@ public class TSDiagramConverter
             
             factory = XMLInputFactory.newInstance();
             factory.setProperty(XMLInputFactory.IS_COALESCING, Boolean.TRUE);
+            etldFO = FileUtil.toFileObject(new File(diagramDetails.getDiagramFileName()));
+        
+            etlpFO = FileUtil.findBrother(etldFO, FileExtensions.DIAGRAM_TS_PRESENTATION_EXT_NODOT);
             
-            fisData = new FileInputStream(diagramDetails.getDiagramFileName());
+            fisData = etldFO.getInputStream();
             readerData = factory.createXMLStreamReader(fisData, "UTF-8");
 
-            fisPres = new FileInputStream(diagramDetails.getDiagramFileName2());
+            fisPres = etlpFO.getInputStream();
             readerPres = factory.createXMLStreamReader(fisPres, "UTF-8");
         }
         
@@ -303,15 +310,29 @@ public class TSDiagramConverter
                          cont.getResizeStrategyProvider().resizingFinished(cont);
                     }
                 }
-                archiveTSDiagram();
+                scene.validate();
                 try {
                     scene.getDiagram().save();
                 } catch (IOException ex) {
                     Exceptions.printStackTrace(ex);
                 }
+                processArchiveWithValidationWait();
+                scene.revalidate();
+                scene.validate();
             }
         }, scene);
     }
+    
+    private void processArchiveWithValidationWait()
+    {
+        new AfterValidationExecutor(new ActionProvider() {
+
+            public void perfomeAction() {
+                archiveTSDiagram();
+            }
+        }, scene);
+    }     
+    
     
     private void addEdgesGeneral()
     {
@@ -336,50 +357,27 @@ public class TSDiagramConverter
         if(messagesInfo.size()>0)addMessagesToSQD(messagesInfo);
     }
     
-
-//    private void saveDiagram()
-//    {
-//        IDiagram diagram = topComponent.getAssociatedDiagram();
-//        diagram.setDirty(true);
-
-//        try
-//        {
-//            diagram.save();
-//        }
-//        
-//        catch (IOException ex)
-//        {
-//            Exceptions.printStackTrace(ex);
-//        }
-//    }
-    
     private void archiveTSDiagram()
     {
-        // automatic diagram node/file removal/backup
-        // (doesn't seem to work though)
-        // IProxyDiagramManager manager = ProxyDiagramManager.instance();
-        // manager.removeDiagram(diagramDetails.getDiagramFileName());
-        
-        // manual FileObject/DataObject diagram file/node removal/backup
-        FileObject etldFO = FileUtil.toFileObject(
-            new File(diagramDetails.getDiagramFileName()));
-        
-        FileObject etlpFO = FileUtil.findBrother(
-            etldFO, FileExtensions.DIAGRAM_TS_PRESENTATION_EXT_NODOT);
-        
         FileObject projectFO = etldFO.getParent();
         
         try
         {
             FileObject backupFO = 
                 FileUtil.createFolder(projectFO, "DiagramBackup");
-            
-            DataFolder projectDF = DataFolder.findFolder(backupFO);
-            DataObject etldDO = DataObject.find(etldFO);
-            etldDO.move(projectDF);
-
-            DataObject etlpDO = DataObject.find(etlpFO);
-            etlpDO.move(projectDF);
+            FileObject parent=etldFO.getParent();
+            String path=etldFO.getPath();
+            String path2=etlpFO.getPath();
+            String parpath=parent.getPath();
+            FileUtil.moveFile(etldFO, backupFO, etldFO.getName());
+            FileUtil.moveFile(etlpFO, backupFO, etlpFO.getName());
+            IDrawingAreaEventDispatcher dispatcher = getDispatcher();
+            if (dispatcher != null) {
+                IEventPayload payload = dispatcher.createPayload("DrawingAreaFileRemoved");
+                dispatcher.fireDrawingAreaFileRemoved(diagramDetails.getDiagramFileName(), payload);
+                dispatcher.fireDrawingAreaFileRemoved(path2, payload);
+            }
+            //FileUtil.refreshFor(new File(parpath));
         }
         
         catch (DataObjectNotFoundException ex)
@@ -419,11 +417,12 @@ public class TSDiagramConverter
         {            
             IPresentationElement presEl = (IPresentationElement) nodeInfo.getProperty(PRESENTATIONELEMENT);
             DiagramEngine engine = scene.getEngine();
-            Widget widget = engine.addWidget(presEl, nodeInfo.getPosition());
+            Widget widget = null;
+            if(presEl!=null)widget=engine.addWidget(presEl, nodeInfo.getPosition());
             postProcessNode(widget,presEl);
             //add this PE to the presLIst
             widgetsList.add(widget);
-            if (widget instanceof UMLNodeWidget)
+            if (widget!=null && widget instanceof UMLNodeWidget)
                 ((UMLNodeWidget) widget).load(nodeInfo);
         }
 
@@ -433,30 +432,34 @@ public class TSDiagramConverter
         }
     }
 
-    private void createNodesPresentationElements()
+    private boolean createNodesPresentationElements()
     {
         Collection<NodeInfo> ninfos = presIdNodeInfoMap.values();
+        boolean good=true;
         for (NodeInfo ninfo : ninfos)
         {
-            createPE(ninfo);
+            good=good&&createPE(ninfo);
         }        
+        return good;
     }
     
-    private void createPE(NodeInfo nodeInfo)
+    private boolean createPE(NodeInfo nodeInfo)
     {
+        boolean good=true;
         try
         {            
              IPresentationElement presEl = createPresentationElement(
              nodeInfo.getMEID(), nodeInfo.getPEID());
+             good=presEl!=null;
              mapEngineToView(presEl,nodeInfo);
              nodeInfo.setProperty(PRESENTATIONELEMENT, presEl);
              presEltList.add(presEl);
-       }
-
+        }
         catch (Exception e)
         {
             e.printStackTrace();
         }
+        return good;
     }
 
     private Widget addEdgeToScene(EdgeInfo edgeReader)
@@ -468,8 +471,11 @@ public class TSDiagramConverter
         //
         String sourceId=dataConnIdMap.get(edgeReader.getPEID()).getParamOne();
         String targetId=dataConnIdMap.get(edgeReader.getPEID()).getParamTwo();
-        edgeReader.setSourcePE(findNode(sourceId));
-        edgeReader.setTargetPE(findNode(targetId));
+        IPresentationElement sourcePE=findNode(sourceId);
+        IPresentationElement targetPE=findNode(targetId);
+        if(sourcePE==null || targetPE==null)return null;//target or source is missed from model
+        edgeReader.setSourcePE(sourcePE);
+        edgeReader.setTargetPE(targetPE);
         //
         processSemanricPresentation(edgeReader);
         //
@@ -514,9 +520,15 @@ public class TSDiagramConverter
         Collections.sort(einfos,new Comparator<EdgeInfo>()
         {
             public int compare(EdgeInfo o1, EdgeInfo o2) {
-                NodeInfo sourceInfo1=presIdNodeInfoMap.get(o1.getSourcePE().getXMIID());
+                //first check special null cases
+                IPresentationElement sourcePE1=o1.getSourcePE();
+                IPresentationElement sourcePE2=o2.getSourcePE();
+                if(sourcePE1==null && sourcePE2==null)return 0;
+                else if(sourcePE1==null)return -1;
+                else if(sourcePE2==null)return 1;
+                NodeInfo sourceInfo1=presIdNodeInfoMap.get(sourcePE1.getXMIID());
                 ConnectorData sourceConnector1=(ConnectorData) o1.getProperty("SOURCECONNECTOR");
-                NodeInfo sourceInfo2=presIdNodeInfoMap.get(o2.getSourcePE().getXMIID());
+                NodeInfo sourceInfo2=presIdNodeInfoMap.get(sourcePE2.getXMIID());
                 ConnectorData sourceConnector2=(ConnectorData) o2.getProperty("SOURCECONNECTOR");
                 int y1=0,y2=0;
                 if(o1.getSourcePE().getFirstSubject() instanceof Lifeline)
@@ -553,6 +565,7 @@ public class TSDiagramConverter
         {
             EdgeInfo edgeInfo=einfos.get(index1);
             IElement elt = (IElement) edgeInfo.getProperty(ELEMENT);
+            if(elt==null)continue;//skip absent model element
             Message message=(Message) elt;
             if(message.getKind()==Message.MK_RESULT)
             {
@@ -561,8 +574,11 @@ public class TSDiagramConverter
             }
             IPresentationElement pE = Util.createNodePresentationElement();
     //            pE.setXMIID(PEID);
-            Widget sourceWidget = scene.findWidget(edgeInfo.getSourcePE());
-            Widget targetWidget = scene.findWidget(edgeInfo.getTargetPE());
+            IPresentationElement sourcePE=edgeInfo.getSourcePE();
+            IPresentationElement targetPE=edgeInfo.getTargetPE();
+            if(sourcePE==null || targetPE==null)continue;//skip if source or target is missed
+            Widget sourceWidget = scene.findWidget(sourcePE);
+            Widget targetWidget = scene.findWidget(targetPE);
             NodeInfo sourceInfo=presIdNodeInfoMap.get(edgeInfo.getSourcePE().getXMIID());
             NodeInfo targetInfo=presIdNodeInfoMap.get(edgeInfo.getTargetPE().getXMIID());
             pE.addSubject(elt);
@@ -1073,6 +1089,7 @@ public class TSDiagramConverter
         String meid, String peid)
     {
         IElement element = getElement(project, meid);
+        if(element==null)return null;
         IPresentationElement presEl = Util.createNodePresentationElement();
         presEl.setXMIID(peid);
         presEl.addSubject(element);
@@ -1472,5 +1489,14 @@ public class TSDiagramConverter
         public double getProportionalOffetX() {
             return proportionalX;
         }
+    }
+    private IDrawingAreaEventDispatcher getDispatcher()
+    {
+        IDrawingAreaEventDispatcher retVal = null;
+        
+        DispatchHelper helper = new DispatchHelper();
+        retVal = helper.getDrawingAreaDispatcher();
+        
+        return retVal;
     }
 }
