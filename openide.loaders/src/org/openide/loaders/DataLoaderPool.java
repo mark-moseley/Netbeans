@@ -51,6 +51,7 @@ import org.openide.modules.ModuleInfo;
 import org.openide.nodes.*;
 import org.openide.util.*;
 import org.openide.util.actions.SystemAction;
+import org.openide.util.lookup.Lookups;
 
 /** Pool of data loaders.
  * Provides access to set of registered
@@ -285,6 +286,65 @@ implements java.io.Serializable {
         return Collections.enumeration(all);
     }
     
+    final Enumeration<DataObject.Factory> allLoaders(FileObject fo) {
+        class MimeEnum implements Enumeration<DataObject.Factory> {
+            final String mime;
+
+            public MimeEnum(String mime) {
+                this.mime = mime;
+            }
+            
+            Enumeration<? extends DataObject.Factory> delegate;
+            
+            private Enumeration<? extends DataObject.Factory> delegate() {
+                if (delegate == null) {
+                    String path = "Loaders/" + mime + "/Factories"; // NOI18N
+                    delegate = Collections.enumeration(Lookups.forPath(path).lookupAll(
+                        DataObject.Factory.class
+                    ));
+                }
+                return delegate;
+            }
+            
+            public boolean hasMoreElements() {
+                return delegate().hasMoreElements();
+            }
+
+            public DataObject.Factory nextElement() {
+                return delegate().nextElement();
+            }
+        }
+        String mime = fo.getMIMEType();
+        Enumeration<DataObject.Factory> mimeLoaders = new MimeEnum(mime);
+        if (mime.startsWith("text/") && mime.endsWith("+xml")) { // NOI18N
+            mimeLoaders = Enumerations.concat(mimeLoaders, new MimeEnum("text/xml")); // NOI18N
+        }
+        mimeLoaders = Enumerations.concat(mimeLoaders, new MimeEnum("content/unknown")); // NOI18N
+        try {
+            if (!fo.getFileSystem().isDefault()) {
+                return Enumerations.concat(mimeLoaders, allLoaders());
+            }
+        } catch (FileStateInvalidException ex) {
+            // OK
+        }
+
+
+        ArrayList<DataLoader> all = new ArrayList<DataLoader>();
+        if (preferredLoader != null) {
+            all.add(preferredLoader);
+        }
+        all.addAll(Arrays.asList(getSystemLoaders()));
+        all.add(getFolderLoader());
+        
+        return Enumerations.concat(
+            Collections.enumeration(all),
+            Enumerations.concat(
+                mimeLoaders, 
+                allLoaders()
+            )
+        );
+    }
+    
     /** Get an array of loaders that are currently registered.
      * Does not include special system loaders, etc.
      * @return array of loaders
@@ -406,13 +466,19 @@ implements java.io.Serializable {
                 return obj;
             }
         }
-        
+
+        HashSet<FileObject> recognized = new HashSet<FileObject>();
         // scan through loaders
-        java.util.Enumeration en = allLoaders ();
+        Enumeration<? extends DataObject.Factory> en = allLoaders (fo);
         while (en.hasMoreElements ()) {
-            DataLoader l = (DataLoader)en.nextElement ();
-    
-            DataObject obj = l.findDataObject (fo, r);
+            DataObject.Factory l = en.nextElement ();
+            DataObject obj = l.findDataObject (fo, recognized);
+            if (!recognized.isEmpty()) {
+                for (FileObject f : recognized) {
+                    r.markRecognized(f);
+                }
+                recognized.clear();
+            }
             if (obj != null) {
                 return obj;
             }
