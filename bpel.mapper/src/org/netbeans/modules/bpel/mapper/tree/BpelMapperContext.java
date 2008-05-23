@@ -19,10 +19,16 @@
 
 package org.netbeans.modules.bpel.mapper.tree;
 
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.Icon;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
 import javax.swing.JPopupMenu;
 import org.netbeans.modules.bpel.mapper.model.BpelMapperModel;
+import org.netbeans.modules.bpel.mapper.palette.Palette;
 import org.netbeans.modules.soa.mappercore.DefaultMapperContext;
+import org.netbeans.modules.soa.mappercore.model.GraphItem;
 import org.netbeans.modules.soa.mappercore.model.MapperModel;
 
 /**
@@ -49,6 +55,14 @@ public class BpelMapperContext extends DefaultMapperContext {
                 .getPopupMenu(value);
     }
 
+    @Override
+    public String getLeftToolTipText(MapperModel mode, Object value) {
+        return ((MapperSwingTreeModel) mode.getLeftTreeModel()).
+                getToolTipText(value);
+    }
+    
+    
+
     //==========================================================================
     
     @Override
@@ -67,4 +81,27 @@ public class BpelMapperContext extends DefaultMapperContext {
     public JPopupMenu getRightPopupMenu(MapperModel model, Object value) {
         return ((BpelMapperModel) model).getRightTreeModel().getPopupMenu(value);
     }
+
+    @Override
+    public String getRightToolTipText(MapperModel mode, Object value) {
+        return ((BpelMapperModel) mode).getRightTreeModel().getToolTipText(value);
+    }
+    
+    //==========================================================================
+    @Override
+    public JPopupMenu getCanvasPopupMenu(MapperModel mode, GraphItem item) {
+        return ((BpelMapperModel) mode).getRightTreeModel().getCanvasPopupMenu(item);
+    }
+
+    @Override
+    public List<JMenu> getMenuNewEllements(MapperModel mode) {
+        List<JMenu> menuList = new ArrayList<JMenu>();
+        JMenuBar bar = new Palette(((BpelMapperModel) mode).getMapperTcContext().getMapper()).createMenuBar();
+        for (int i = 0; i < bar.getMenuCount(); i++) {
+            menuList.add(bar.getMenu(i));
+        }
+        return menuList;
+                
+    }
+    
 }
