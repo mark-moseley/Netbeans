@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -39,24 +39,46 @@
 
 package org.netbeans.modules.soa.mappercore;
 
-import javax.swing.AbstractAction;
-import javax.swing.KeyStroke;
-
+import javax.swing.Action;
+import javax.swing.JMenu;
+import javax.swing.JPopupMenu;
+import org.netbeans.modules.soa.mappercore.model.GraphItem;
 
 /**
  *
- * @author alex
+ * @author AlexanderPermyakov
  */
-public abstract class MapperKeyboardAction extends AbstractAction {
-    protected Canvas canvas;
-    
-    public MapperKeyboardAction(Canvas canvas) {
-        this.canvas = canvas;
-    }
-    
-    public abstract String getActionKey();
-    public abstract KeyStroke[] getShortcuts();
-    protected void getName() {
+public class MapperPopupMenuFactory {
+    public static JPopupMenu createMapperPopupMenu(Canvas canvas, GraphItem graphItem) {
+        JPopupMenu menu = new JPopupMenu();
         
+        JMenu menuItem = new JMenu("new");
+        menu.add(menuItem);
+        menu.addSeparator();
+        
+        Action action = new CutMapperAction(canvas);
+        if (graphItem == null) {
+            action.setEnabled(false);
+        }
+        menu.add(action);
+        
+        action = new CopyMapperAction(canvas);
+        if (graphItem == null) {
+            action.setEnabled(false);
+        }
+        menu.add(action);
+        
+        action = new PasteMapperAction(canvas);
+        if (canvas.getBufferCopyPaste() == null) {
+            action.setEnabled(false);    
+        }
+        menu.add(action);
+        
+        action = new DeleteMapperAction(canvas);
+        if (graphItem == null) {
+            action.setEnabled(false);
+        }
+        menu.add(action);
+        return menu;
     }
 }

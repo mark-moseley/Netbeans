@@ -39,24 +39,37 @@
 
 package org.netbeans.modules.soa.mappercore;
 
-import javax.swing.AbstractAction;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import javax.swing.KeyStroke;
-
 
 /**
  *
- * @author alex
+ * @author AlexanderPermyacov
  */
-public abstract class MapperKeyboardAction extends AbstractAction {
-    protected Canvas canvas;
+public class LinkConnectDone extends MapperKeyboardAction {
     
-    public MapperKeyboardAction(Canvas canvas) {
-        this.canvas = canvas;
+    LinkConnectDone(Canvas canvas) {
+        super(canvas);
     }
     
-    public abstract String getActionKey();
-    public abstract KeyStroke[] getShortcuts();
-    protected void getName() {
-        
+    @Override
+    public String getActionKey() {
+        return "link-connect-done";
     }
+
+    @Override
+    public KeyStroke[] getShortcuts() {
+        return new KeyStroke[] {KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0)};
+    }
+    
+    public void actionPerformed(ActionEvent e) {
+        LinkTool linkTool = canvas.getLinkTool();
+        if (linkTool == null || !linkTool.isActive()) {
+            canvas.getRightTree().getActionEscape().actionPerformed(e);
+            return; 
+        }
+        linkTool.done();
+    }
+
 }

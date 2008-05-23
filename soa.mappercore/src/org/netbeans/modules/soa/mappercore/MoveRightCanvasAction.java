@@ -57,10 +57,9 @@ import org.netbeans.modules.soa.mappercore.model.VertexItem;
  * @author alex
  */
 public class MoveRightCanvasAction extends MapperKeyboardAction {
-    private Canvas canvas;
-    
+        
     public MoveRightCanvasAction(Canvas canvas) {
-        this.canvas = canvas;
+        super(canvas);
     }
     
     
@@ -71,11 +70,11 @@ public class MoveRightCanvasAction extends MapperKeyboardAction {
 
     @Override
     public KeyStroke[] getShortcuts() {
-        KeyStroke[] a = new KeyStroke[3];
-        a[0] = KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0); 
-        a[1] = KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, ActionEvent.CTRL_MASK);
-        a[2] = KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, ActionEvent.SHIFT_MASK);
-        return a;
+        return new KeyStroke[]{
+            KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0),
+            KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, ActionEvent.CTRL_MASK),
+            KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, ActionEvent.SHIFT_MASK)
+        };
     }
 
     public void actionPerformed(ActionEvent e) {
@@ -114,6 +113,9 @@ public class MoveRightCanvasAction extends MapperKeyboardAction {
                 Vertex vertex = sVertexeces.get(0);
                 Link link = vertex.getOutgoingLink();
                 if (link == null) {
+                    if (vertex.getGraph().getNextVertex(vertex) == vertex) {
+                        canvas.getRightTree().requestFocus();
+                    }
                     return;
                 }
 
