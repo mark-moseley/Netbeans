@@ -47,8 +47,6 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -83,6 +81,7 @@ import org.openide.modules.InstalledFileLocator;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Mutex;
 import org.openide.util.RequestProcessor;
+import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
 import org.w3c.dom.Element;
 
@@ -291,6 +290,7 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
         } else {
             nbroot = null;
         }
+        String codeNameBase = project.getCodeNameBase();
         if (ml != null) {
             // Register *.dir for nb.org modules. There is no equivalent for external modules.
             for (ModuleEntry e : ml.getAllEntriesSoft()) {
@@ -300,7 +300,7 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                     stock.put((nborgPath + ".dir").intern(), e.getClusterDirectory().getAbsolutePath().intern()); // NOI18N
                 }
             }
-            ModuleEntry thisEntry = ml.getEntry(project.getCodeNameBase());
+            ModuleEntry thisEntry = ml.getEntry(codeNameBase);
             if (thisEntry != null) { // can be null e.g. for a broken suite component module
                 assert nbroot == null ^ thisEntry.getNetBeansOrgPath() != null : thisEntry;
                 File clusterDir = thisEntry.getClusterDirectory();
@@ -358,7 +358,9 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
         providers.add(project.getHelper().getPropertyProvider(AntProjectHelper.PRIVATE_PROPERTIES_PATH));
         providers.add(project.getHelper().getPropertyProvider(AntProjectHelper.PROJECT_PROPERTIES_PATH));
         Map<String,String> defaults = new HashMap<String,String>();
-        defaults.put("code.name.base.dashes", project.getCodeNameBase().replace('.', '-')); // NOI18N
+        if (codeNameBase != null) { // #121856
+            defaults.put("code.name.base.dashes", codeNameBase.replace('.', '-')); // NOI18N
+        }
         defaults.put("module.jar.dir", "modules"); // NOI18N
         defaults.put("module.jar.basename", "${code.name.base.dashes}.jar"); // NOI18N
         defaults.put("module.jar", "${module.jar.dir}/${module.jar.basename}"); // NOI18N
@@ -396,15 +398,15 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                         "${test.unit.lib.cp}:" + // NOI18N
                         // XXX this is ugly, try to look for the JAR using wildcards instead
                         "${netbeans.dest.dir}/ide6/modules/ext/junit-3.8.1.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/java1/modules/ext/junit-3.8.2.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/java1/modules/ext/junit-4.1.jar:" + // NOI18N
+                        "${netbeans.dest.dir}/java2/modules/ext/junit-3.8.2.jar:" + // NOI18N
+                        "${netbeans.dest.dir}/java2/modules/ext/junit-4.1.jar:" + // NOI18N
                         "${netbeans.dest.dir}/testtools/modules/ext/nbjunit.jar:" + // NOI18N
                         "${netbeans.dest.dir}/testtools/modules/ext/insanelib.jar:" + // NOI18N
                         "${netbeans.dest.dir}/testtools/modules/org-netbeans-modules-nbjunit.jar:" + // NOI18N, new for 6.0
                         "${netbeans.dest.dir}/testtools/modules/org-netbeans-modules-nbjunit-ide.jar:" + // NOI18N, new for 6.0
                         "${netbeans.home}/../ide6/modules/ext/junit-3.8.1.jar:" + // NOI18N
-                        "${netbeans.home}/../java1/modules/ext/junit-3.8.2.jar:" + // NOI18N
-                        "${netbeans.home}/../java1/modules/ext/junit-4.1.jar:" + // NOI18N
+                        "${netbeans.home}/../java2/modules/ext/junit-3.8.2.jar:" + // NOI18N
+                        "${netbeans.home}/../java2/modules/ext/junit-4.1.jar:" + // NOI18N
                         "${netbeans.home}/../testtools/modules/ext/nbjunit.jar:" + // NOI18N
                         "${netbeans.home}/../testtools/modules/ext/insanelib.jar:" + // NOI18N
                         "${netbeans.home}/../testtools/modules/org-netbeans-modules-nbjunit.jar:" + // NOI18N, new for 6.0
@@ -490,33 +492,21 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                     for (JavaPlatform platform : JavaPlatformManager.getDefault().getInstalledPlatforms()) {
                         if (new HashSet<FileObject>(platform.getInstallFolders()).equals(Collections.singleton(homeFO))) {
                             // Matching JDK is registered, so look up its real bootcp.
-                            StringBuffer bootcpSB = new StringBuffer();
                             ClassPath boot = platform.getBootstrapLibraries();
                             boot.removePropertyChangeListener(weakListener);
                             boot.addPropertyChangeListener(weakListener);
-                            for (ClassPath.Entry entry : boot.entries()) {
-                                URL u = entry.getURL();
-                                if (u.toExternalForm().endsWith("!/")) { // NOI18N
-                                    URL nested = FileUtil.getArchiveFile(u);
-                                    if (nested != null) {
-                                        u = nested;
-                                    }
-                                }
-                                if ("file".equals(u.getProtocol())) { // NOI18N
-                                    File f = new File(URI.create(u.toExternalForm()));
-                                    if (bootcpSB.length() > 0) {
-                                        bootcpSB.append(File.pathSeparatorChar);
-                                    }
-                                    bootcpSB.append(f.getAbsolutePath());
-                                }
-                            }
-                            bootcp = bootcpSB.toString();
+                            bootcp = boot.toString(ClassPath.PathConversionMode.WARN);
                             break;
                         }
                     }
                 }
                 if (bootcp == null) {
-                    bootcp = "${nbjdk.home}/jre/lib/rt.jar".replace('/', File.separatorChar); // NOI18N
+                    if (Utilities.isMac()) {
+                        bootcp = "${nbjdk.home}/../Classes/classes.jar";    //NOI18N
+                    }
+                    else {
+                        bootcp = "${nbjdk.home}/jre/lib/rt.jar".replace('/', File.separatorChar); // NOI18N
+                    }
                 }
             }
             if (bootcp == null) {
@@ -524,7 +514,7 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                 bootcp = "${sun.boot.class.path}"; // NOI18N
             }
             props.put("nbjdk.bootclasspath", bootcp); // NOI18N
-            if (home != null) {
+            if (home != null && !Utilities.isMac()) {   //On Mac everything is in classes.jar, there is no tools.jar
                 props.put("tools.jar", home + "/lib/tools.jar".replace('/', File.separatorChar)); // NOI18N
             }
             if (Util.err.isLoggable(ErrorManager.INFORMATIONAL)) {
@@ -622,6 +612,7 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
         Element data = project.getPrimaryConfigurationData();
         Element moduleDependencies = Util.findElement(data,
             "module-dependencies", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
+        assert moduleDependencies != null : "Malformed metadata in " + project;
         StringBuffer cp = new StringBuffer();
         for (Element dep : Util.findSubElements(moduleDependencies)) {
             if (Util.findElement(dep, "compile-dependency", // NOI18N
@@ -808,6 +799,7 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                      
                 } else {
                     cps.append(module.getJarLocation().getPath());
+                    cps.append(module.getClassPathExtensions()); // #105621
                 }
         }
         return cps.toString();
