@@ -1,23 +1,23 @@
-// 
-// File:   %<%NAME%>%.cc
-// Author: %<%USER%>%
-//
-// Created on %<%DATE%>%, %<%TIME%>%
-//
+/* 
+ * File:   %<%NAME%>%.%<%EXTENSION%>%
+ * Author: %<%USER%>%
+ * 
+ * Created on %<%DATE%>%, %<%TIME%>%
+ */
 
-#include %<%QUOTES%>%%<%NAME%>%.h%<%QUOTES%>%
+#include %<%QUOTES%>%%<%NAME%>%.%<%DEFAULT_HEADER_EXT%>%%<%QUOTES%>%
 
-//
-// Constructor
-///
-%<%NAME%>%::%<%NAME%>%()
+/*
+ * Constructor
+ */
+%<%CLASSNAME%>%::%<%CLASSNAME%>%()
 {
 }
 
-//
-// Destructor
-//
-%<%NAME%>%::~%<%NAME%>%()
+/*
+ * Destructor
+ */
+%<%CLASSNAME%>%::~%<%CLASSNAME%>%()
 {
 }
 
