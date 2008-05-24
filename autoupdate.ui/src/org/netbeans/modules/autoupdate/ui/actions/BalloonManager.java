@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -53,6 +53,7 @@ import java.awt.GridBagLayout;
 import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -74,8 +75,9 @@ import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
-import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 
 /**
@@ -88,7 +90,6 @@ public class BalloonManager {
     private static Balloon currentBalloon;
     private static JLayeredPane currentPane;
     private static ComponentListener listener;
-    private static RequestProcessor.Task hideToolTipTask = null;
     
     /**
      * Show balloon-like tooltip pointing to the given component. The balloon stays
@@ -96,28 +97,16 @@ public class BalloonManager {
      * @param owner The component which the balloon will point to
      * @param content Content to be displayed in the balloon.
      * @param defaultAction Action to invoked when the balloon is clicked, can be null.
+     * @param timeoutMillies Number of milliseconds before the balloon disappears, 0 to keep it visible forever
      */
-    public static synchronized void show( final JComponent owner, JComponent content, Action defaultAction, int timeout ) {
+    public static synchronized void show( final JComponent owner, JComponent content, Action defaultAction, int timeoutMillis ) {
         assert null != owner;
         assert null != content;
         
         //hide current balloon (if any)
         dismiss();
-        if (timeout > 0) {
-            if (hideToolTipTask == null || hideToolTipTask.isFinished ()) {
-                hideToolTipTask = RequestProcessor.getDefault ().post (new Runnable () {
-                    public void run () {
-                        SwingUtilities.invokeLater (new Runnable () {
-                            public void run () {
-                                dismiss ();
-                            }
-                        });
-                    }
-                }, timeout);
-            }
-        }
         
-        currentBalloon = new Balloon( content, defaultAction );
+        currentBalloon = new Balloon( content, defaultAction, timeoutMillis );
         currentPane = JLayeredPane.getLayeredPaneAbove( owner );
         
         listener = new ComponentListener() {
@@ -147,12 +136,40 @@ public class BalloonManager {
     public static synchronized void dismiss() {
         if( null != currentBalloon ) {
             currentBalloon.setVisible( false );
+            currentBalloon.stopDismissTimer();
             currentPane.remove( currentBalloon );
             currentPane.repaint();
             currentPane.removeComponentListener( listener );
             currentBalloon = null;
             currentPane = null;
             listener = null;
+        }
+    }
+    
+    public static synchronized void dismissSlowly () {
+        if( null != currentBalloon ) {
+            if( currentBalloon.timeoutMillis > 0 ) {
+                SwingUtilities.invokeLater( new Runnable() {
+                    public void run() {
+                        currentBalloon.startDismissTimer();
+                    }
+                });
+            } else {
+                dismiss ();
+            }
+        }
+    }
+    
+    public static synchronized void stopDismissSlowly () {
+        if( null != currentBalloon ) {
+            if( currentBalloon.timeoutMillis > 0 ) {
+                currentBalloon.timeoutMillis = ToolTipManager.sharedInstance ().getDismissDelay (); // on MouseEnter cut timeout on 100ms
+                SwingUtilities.invokeLater( new Runnable() {
+                    public void run() {
+                        currentBalloon.stopDismissTimer ();
+                    }
+                });
+            }
         }
     }
     
@@ -211,11 +228,15 @@ public class BalloonManager {
         private Action defaultAction;
         private JButton btnDismiss;
         private int arrowLocation = GridBagConstraints.SOUTHEAST;
+        private float currentAlpha = 1.0f;
+        private Timer dismissTimer;
+        private int timeoutMillis;
 
-        public Balloon( final JComponent content, final Action defaultAction ) {
+        public Balloon( final JComponent content, final Action defaultAction, int timeoutMillis ) {
             super( new GridBagLayout() );
             this.content = content;
             this.defaultAction = defaultAction;
+            this.timeoutMillis = timeoutMillis;
             content.setOpaque( false );
 
             btnDismiss = new DismissButton();
@@ -247,15 +268,55 @@ public class BalloonManager {
 
                     public void mouseEntered(MouseEvent e) {
                         content.setCursor( Cursor.getPredefinedCursor( Cursor.HAND_CURSOR ) );
+                        stopDismissTimer();
+                        repaint();
                     }
 
                     public void mouseExited(MouseEvent e) {
                         content.setCursor( Cursor.getDefaultCursor() );
+                        if( Balloon.this.timeoutMillis > 0 )
+                            startDismissTimer();
                     }
 
                 });
             }
             setBorder( BorderFactory.createEmptyBorder(SHADOW_SIZE, 0, 0, SHADOW_SIZE));
+            
+            if( timeoutMillis > 0 ) {
+                SwingUtilities.invokeLater( new Runnable() {
+                    public void run() {
+                        startDismissTimer();
+                    }
+                });
+            }
+        }
+        
+        private static final float ALPHA_DECREMENT = 0.03f;
+        private static final int DISMISS_REPAINT_REPEAT = 100;
+        
+        synchronized void startDismissTimer() {
+            stopDismissTimer();
+            currentAlpha = 1.0f;
+            dismissTimer = new Timer(DISMISS_REPAINT_REPEAT, new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    currentAlpha -= ALPHA_DECREMENT;
+                    if( currentAlpha <= ALPHA_DECREMENT ) {
+                        stopDismissTimer();
+                        dismiss();
+                    }
+                    repaint();
+                }
+            });
+            dismissTimer.setInitialDelay( timeoutMillis );
+            dismissTimer.start();
+        }
+        
+        synchronized void stopDismissTimer() {
+            if( null != dismissTimer ) {
+                dismissTimer.stop();
+                dismissTimer = null;
+                currentAlpha = 1.0f;
+            }
         }
         
         void setArrowLocation( int arrowLocation) {
@@ -308,12 +369,9 @@ public class BalloonManager {
             Area area = new Area(parentMask);
 
             AffineTransform tx = new AffineTransform();
-            if( arrowLocation == GridBagConstraints.NORTHEAST || arrowLocation == GridBagConstraints.NORTHWEST ) {
-                tx.translate(SHADOW_SIZE, -SHADOW_SIZE );//Math.sin(ANGLE)*(getHeight()+SHADOW_SIZE), 0);
-            } else {
-                tx.translate(SHADOW_SIZE, SHADOW_SIZE );//Math.sin(ANGLE)*(getHeight()+SHADOW_SIZE), 0);
-            }
+            tx.translate(SHADOW_SIZE, SHADOW_SIZE );//Math.sin(ANGLE)*(getHeight()+SHADOW_SIZE), 0);
             area.transform(tx);
+            area.subtract(new Area(parentMask));
             return area;
         }
 
@@ -325,19 +383,31 @@ public class BalloonManager {
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2d = (Graphics2D)g;
+            
+            g2d.setRenderingHint( RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON );
+            
             Composite oldC = g2d.getComposite();
             Shape s = getMask( getWidth(), getHeight() );
 
-            g2d.setComposite( AlphaComposite.getInstance( AlphaComposite.SRC_OVER, 0.25f ) );
+            g2d.setComposite( AlphaComposite.getInstance( AlphaComposite.SRC_OVER, 0.25f*currentAlpha ) );
             g2d.setColor( Color.black );
             g2d.fill( getShadowMask(s) );
             
             g2d.setColor( UIManager.getColor( "ToolTip.background" ) ); //NOI18N
-//            g2d.setComposite( AlphaComposite.getInstance( AlphaComposite.SRC_OVER, 0.5f ) );
-            g2d.setComposite( oldC );
+            g2d.setComposite( AlphaComposite.getInstance( AlphaComposite.SRC_OVER, currentAlpha ) );
             g2d.fill(s);
             g2d.setColor( Color.black );
             g2d.draw(s);
+            g2d.setComposite( oldC );
+        }
+
+        @Override
+        protected void paintChildren(Graphics g) {
+            Graphics2D g2d = (Graphics2D)g;
+            Composite oldC = g2d.getComposite();
+            g2d.setComposite( AlphaComposite.getInstance( AlphaComposite.SRC_OVER, currentAlpha ) );
+            super.paintChildren(g);
+            g2d.setComposite( oldC );
         }
     }
     
