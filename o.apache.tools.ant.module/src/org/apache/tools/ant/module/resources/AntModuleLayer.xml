@@ -104,10 +104,16 @@ made subject to such option by the copyright holder.
     <folder name="Editors">
         <folder name="text">
             <folder name="x-ant+xml">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.resources.Bundle"/>
                 <folder name="Popup"> <!-- #20203 -->
                     <file name="org-apache-tools-ant-module-nodes-RunTargetsAction.instance">
                         <attr name="position" intvalue="900"/>
                     </file>
+                </folder>
+                <folder name="CodeTemplates">
+                    <folder name="Defaults">
+                        <file name="org-apache-tools-ant-module-CodeTemplates.xml" url="codetemplates.xml"/>
+                    </folder>
                 </folder>
             </folder>
         </folder>
@@ -116,6 +122,10 @@ made subject to such option by the copyright holder.
     <folder name="Loaders">
         <folder name="text">
             <folder name="x-ant+xml">
+                <folder name="Factories">
+                    <file name="org-apache-tools-ant-module-loader-AntProjectDataLoader.instance"/>
+                </folder>
+                
                 <folder name="Actions">
                     <file name="org-openide-actions-OpenAction.instance">
                         <attr name="position" intvalue="100"/>

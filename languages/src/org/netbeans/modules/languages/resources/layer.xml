@@ -52,6 +52,7 @@ made subject to such option by the copyright holder.
     <folder name="Menu">
         <folder name="Window">
             <folder name="Other">
+                <attr name="position" intvalue="1700"/>
                 <file name="TokensBrowserAction.shadow">
                     <attr name="originalFile" stringvalue="Actions/Window/org-netbeans-modules-languages-features-TokensBrowserAction.instance"/>
                     <attr name="position" intvalue="1000"/>
@@ -160,6 +161,15 @@ made subject to such option by the copyright holder.
                     </file>
                     <file name="org-openide-actions-PropertiesAction.instance">
                         <attr name="position" intvalue="1700"/>
+                    </file>
+                </folder>
+            </folder>
+        </folder>
+        <folder name="content">
+            <folder name="unknown">
+                <folder name="Factories">
+                    <file name="org-netbeans-modules-languages-dataobject-LanguagesDataLoader.instance">
+                        <attr name="position" intvalue="99999"/>
                     </file>
                 </folder>
             </folder>
