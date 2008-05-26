@@ -43,6 +43,7 @@ package org.netbeans.modules.uml.diagrams.edges;
 import java.beans.PropertyChangeEvent;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.ResourceBundle;
 import javax.swing.Action;
 import org.netbeans.api.visual.layout.LayoutFactory;
@@ -69,15 +70,6 @@ import org.openide.util.NbBundle;
  */
 public class BasicUMLLabelManager extends AbstractLabelManager
 {
-    /**
-     * The name of stereotype labels.
-     */
-    public static final String STEREOTYPE = "Stereotype"; //NOI18N
-    
-    /**
-     * The name of Name labels.
-     */
-    public static final String NAME = "Name"; //NOI18N
     
     public BasicUMLLabelManager(ConnectionWidget widget)
     {
@@ -113,6 +105,18 @@ public class BasicUMLLabelManager extends AbstractLabelManager
                                                              bundle.getString("LBL_NAME_LABEL"));
             
             actions.add(nameAction);
+            
+            IElement element = getModelElement();
+            List stereotypes = element.getAppliedStereotypes();
+            if(stereotypes.size() > 0)
+            {
+                 ToggleLabelAction stereotypeAction = new ToggleLabelAction(this, 
+                                                             STEREOTYPE, 
+                                                             thisEndType, 
+                                                             bundle.getString("LBL_STEREOTYPE_LABEL"));
+            
+                actions.add(stereotypeAction);
+            }
         }
         
         Action[] retVal = new Action[actions.size()];
