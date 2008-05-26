@@ -60,13 +60,9 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.text.EditorKit;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
-import org.netbeans.api.editor.mimelookup.MimePath;
-import org.netbeans.editor.Settings;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.api.java.source.CodeStyle;
-import org.netbeans.editor.Formatter;
-import org.netbeans.editor.SettingsNames;
 import org.netbeans.modules.java.source.save.Reformatter;
 import org.netbeans.spi.options.OptionsPanelController;
 import org.openide.util.Exceptions;
@@ -119,6 +115,7 @@ public class FmtOptions {
     public static final String redundantDoWhileBraces = "redundantDoWhileBraces"; //NOI18N
     public static final String alignMultilineMethodParams = "alignMultilineMethodParams"; //NOI18N
     public static final String alignMultilineCallArgs = "alignMultilineCallArgs"; //NOI18N
+    public static final String alignMultilineAnnotationArgs = "alignMultilineAnnotationArgs"; //NOI18N
     public static final String alignMultilineImplements = "alignMultilineImplements"; //NOI18N
     public static final String alignMultilineThrows = "alignMultilineThrows"; //NOI18N
     public static final String alignMultilineParenthesized = "alignMultilineParenthesized"; //NOI18N
@@ -139,6 +136,7 @@ public class FmtOptions {
     public static final String wrapThrowsKeyword = "wrapThrowsKeyword"; //NOI18N
     public static final String wrapThrowsList = "wrapThrowsList"; //NOI18N
     public static final String wrapMethodCallArgs = "wrapMethodCallArgs"; //NOI18N
+    public static final String wrapAnnotationArgs = "wrapAnnotationArgs"; //NOI18N
     public static final String wrapChainedMethodCalls = "wrapChainedMethodCalls"; //NOI18N
     public static final String wrapArrayInit = "wrapArrayInit"; //NOI18N
     public static final String wrapFor = "wrapFor"; //NOI18N
@@ -228,9 +226,9 @@ public class FmtOptions {
         
     public static Preferences lastValues;
     
-    private static Class<? extends EditorKit> kitClass;
-    
     private static final String DEFAULT_PROFILE = "default"; // NOI18N
+    
+    private static final String JAVA = "text/x-java"; //NOI18N
     
     private FmtOptions() {}
 
@@ -251,35 +249,23 @@ public class FmtOptions {
     }
     
     public static boolean getGlobalExpandTabToSpaces() {
-        Formatter f = (Formatter)Settings.getValue(getKitClass(), "formatter");
-        if (f != null)
-            return f.expandTabs();
-        return getDefaultAsBoolean(expandTabToSpaces);
+        Preferences prefs = MimeLookup.getLookup(JAVA).lookup(Preferences.class);
+        return prefs.getBoolean(SimpleValueNames.EXPAND_TABS, getDefaultAsBoolean(expandTabToSpaces));
     }
     
     public static int getGlobalTabSize() {
-        Integer i = (Integer)Settings.getValue(getKitClass(), SettingsNames.TAB_SIZE);
-        return i != null ? i.intValue() : getDefaultAsInt(tabSize);
+        Preferences prefs = MimeLookup.getLookup(JAVA).lookup(Preferences.class);
+        return prefs.getInt(SimpleValueNames.TAB_SIZE, getDefaultAsInt(tabSize));
     }
     
     public static int getGlobalIndentSize() {
-        Formatter f = (Formatter)Settings.getValue(getKitClass(), "formatter");
-        if (f != null)
-            return f.getShiftWidth();
-        return getDefaultAsInt(indentSize);
+        Preferences prefs = MimeLookup.getLookup(JAVA).lookup(Preferences.class);
+        return prefs.getInt(SimpleValueNames.INDENT_SHIFT_WIDTH, getDefaultAsInt(indentSize));
     }
     
     public static int getGlobalRightMargin() {
-        Integer i = (Integer)Settings.getValue(getKitClass(), SettingsNames.TEXT_LIMIT_WIDTH);
-        return i != null ? i.intValue() : getDefaultAsInt(rightMargin);
-    }
-    
-    public static Class<? extends EditorKit> getKitClass() {
-        if (kitClass == null) {
-            EditorKit kit = MimeLookup.getLookup(MimePath.get("text/x-java")).lookup(EditorKit.class); //NOI18N
-            kitClass = kit != null ? kit.getClass() : EditorKit.class;
-        }
-        return kitClass;
+        Preferences prefs = MimeLookup.getLookup(JAVA).lookup(Preferences.class);
+        return prefs.getInt(SimpleValueNames.TEXT_LIMIT_WIDTH, getDefaultAsInt(rightMargin));
     }
     
     public static void flush() {
@@ -378,6 +364,7 @@ public class FmtOptions {
             { redundantDoWhileBraces, BGS_GENERATE}, //NOI18N
             { alignMultilineMethodParams, FALSE}, //NOI18N
             { alignMultilineCallArgs, FALSE}, //NOI18N
+            { alignMultilineAnnotationArgs, FALSE}, //NOI18N
             { alignMultilineImplements, FALSE}, //NOI18N
             { alignMultilineThrows, FALSE}, //NOI18N
             { alignMultilineParenthesized, FALSE}, //NOI18N
@@ -398,6 +385,7 @@ public class FmtOptions {
             { wrapThrowsKeyword, WRAP_NEVER}, //NOI18N
             { wrapThrowsList, WRAP_NEVER}, //NOI18N
             { wrapMethodCallArgs, WRAP_NEVER}, //NOI18N
+            { wrapAnnotationArgs, WRAP_NEVER}, //NOI18N
             { wrapChainedMethodCalls, WRAP_NEVER}, //NOI18N
             { wrapArrayInit, WRAP_NEVER}, //NOI18N
             { wrapFor, WRAP_NEVER}, //NOI18N
