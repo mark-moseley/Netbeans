@@ -78,14 +78,6 @@ public class TransportSecurityProfile extends ProfileBase
     }
     
     /**
-     * Called when the profile is selected in the combo box.
-     */
-    @Override
-    public void profileSelected(WSDLComponent component, boolean updateServiceUrl) {
-        ProfilesModelHelper.setSecurityProfile(component, getDisplayName(), updateServiceUrl);
-    }
-
-    /**
      * Should return true if the profile is set on component, false otherwise
      */
     public boolean isCurrentProfile(WSDLComponent component) {
@@ -99,7 +91,7 @@ public class TransportSecurityProfile extends ProfileBase
         
         model.addUndoableEditListener(undoCounter);
 
-        JPanel profConfigPanel = new TransportSecurity(component);
+        JPanel profConfigPanel = new TransportSecurity(component, this);
         DialogDescriptor dlgDesc = new DialogDescriptor(profConfigPanel, getDisplayName());
         Dialog dlg = DialogDisplayer.getDefault().createDialog(dlgDesc);
 
@@ -127,9 +119,6 @@ public class TransportSecurityProfile extends ProfileBase
     }
     
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
-        if (ProprietarySecurityPolicyModelHelper.getCBHConfiguration((Binding) component) != null) {
-            return false;
-        }
         return true;
     }
  
