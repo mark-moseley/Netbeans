@@ -124,11 +124,12 @@ public class NodeFactorySupport {
         private List<NodeList<?>> nodeLists = new ArrayList<NodeList<?>>();
         private List<NodeFactory> factories = new ArrayList<NodeFactory>();
         private Lookup.Result<NodeFactory> result;
-        private HashMap<NodeList<?>, List<NodeListKeyWrapper>> keys;
+        private final HashMap<NodeList<?>, List<NodeListKeyWrapper>> keys;
         
         public DelegateChildren(Project proj, String path) {
             folderPath = path;
             project = proj;
+            keys = new HashMap<NodeList<?>, List<NodeListKeyWrapper>>();
         }
         
         // protected for tests..
@@ -160,38 +161,41 @@ public class NodeFactorySupport {
       
         protected @Override void addNotify() {
             super.addNotify();
-            keys = new HashMap<NodeList<?>, List<NodeListKeyWrapper>>();
-            result = createLookup().lookupResult(NodeFactory.class);
-            for (NodeFactory factory : result.allInstances()) {
-                NodeList<?> lst = factory.createNodes(project);
-                assert lst != null : "Factory " + factory.getClass() + " has broken the NodeFactory contract."; //NOI18N
-                lst.addNotify();
-                synchronized (keys) {
-                    nodeLists.add(lst);
-                    addKeys(lst);
+            synchronized (this) {
+                result = createLookup().lookupResult(NodeFactory.class);
+                for (NodeFactory factory : result.allInstances()) {
+                    NodeList<?> lst = factory.createNodes(project);
+                    assert lst != null : "Factory " + factory.getClass() + " has broken the NodeFactory contract."; //NOI18N
+                    lst.addNotify();
+                    synchronized (keys) {
+                        nodeLists.add(lst);
+                        addKeys(lst);
+                    }
+                    lst.addChangeListener(this);
+                    factories.add(factory);
                 }
-                lst.addChangeListener(this);
-                factories.add(factory);
+                result.addLookupListener(this);
             }
-            result.addLookupListener(this);
             setKeys(createKeys());
         }
         
         protected @Override void removeNotify() {
             super.removeNotify();
             setKeys(Collections.<NodeListKeyWrapper>emptySet());
-            for (NodeList elem : nodeLists) {
-                elem.removeChangeListener(this);
-                elem.removeNotify();
-            }
-            synchronized (keys) {
-                keys.clear();
-                nodeLists.clear();
-            }
-            factories.clear();
-            if (result != null) {
-                result.removeLookupListener(this);
-                result = null;
+            synchronized (this) {
+                for (NodeList elem : nodeLists) {
+                    elem.removeChangeListener(this);
+                    elem.removeNotify();
+                }
+                synchronized (keys) {
+                    keys.clear();
+                    nodeLists.clear();
+                }
+                factories.clear();
+                if (result != null) {
+                    result.removeLookupListener(this);
+                    result = null;
+                }
             }
         }
         
@@ -211,6 +215,7 @@ public class NodeFactorySupport {
         
         //to be called under lock.
         private void addKeys(NodeList list) {
+            assert Thread.holdsLock(keys);
             List<NodeListKeyWrapper> wrps = new ArrayList<NodeListKeyWrapper>();
             for (Object key : list.keys()) {
                 wrps.add(new NodeListKeyWrapper(key, list));
@@ -221,35 +226,39 @@ public class NodeFactorySupport {
         
         //to be called under lock.
         private void removeKeys(NodeList list) {
+            assert Thread.holdsLock(keys);
             keys.remove(list);
         }
 
 
         public void resultChanged(LookupEvent ev) {
             int index = 0;
-            for (NodeFactory factory : result.allInstances()) {
-                if (!factories.contains(factory)) {
-                    factories.add(index, factory);
-                    NodeList<?> lst = factory.createNodes(project);
-                    assert lst != null;
-                    synchronized (keys) {
-                        nodeLists.add(index, lst);
-                        addKeys(lst);
-                    }
-                    lst.addNotify();
-                    lst.addChangeListener(this);
-                } else {
-                    while (!factory.equals(factories.get(index))) {
-                        factories.remove(index);
+            synchronized (this) {
+                Lookup.Result<NodeFactory> res = (Lookup.Result<NodeFactory>)ev.getSource();
+                for (NodeFactory factory : res.allInstances()) {
+                    if (!factories.contains(factory)) {
+                        factories.add(index, factory);
+                        NodeList<?> lst = factory.createNodes(project);
+                        assert lst != null;
                         synchronized (keys) {
-                            NodeList<?> lst = nodeLists.remove(index);
-                            removeKeys(lst);
-                            lst.removeNotify();
-                            lst.removeChangeListener(this);                            
+                            nodeLists.add(index, lst);
+                            addKeys(lst);
+                        }
+                        lst.addNotify();
+                        lst.addChangeListener(this);
+                    } else {
+                        while (!factory.equals(factories.get(index))) {
+                            factories.remove(index);
+                            synchronized (keys) {
+                                NodeList<?> lst = nodeLists.remove(index);
+                                removeKeys(lst);
+                                lst.removeNotify();
+                                lst.removeChangeListener(this);                            
+                            }
                         }
                     }
+                    index++;
                 }
-                index++;
             }
             //#115128 prevent deadlock in Children mutex
             SwingUtilities.invokeLater(new Runnable() {
@@ -274,7 +283,7 @@ public class NodeFactorySupport {
             nodeList = list;
             object = obj;
         }
-        
+
         @Override
         public boolean equals(Object obj) {
             if (obj == null) {
@@ -295,12 +304,12 @@ public class NodeFactorySupport {
 
         @Override
         public int hashCode() {
-            int hash = 5;
-            hash = 79 * hash + (this.nodeList != null ? this.nodeList.hashCode() : 0);
-            hash = 79 * hash + (this.object != null ? this.object.hashCode() : 0);
+            int hash = 3;
+            hash = 67 * hash + (this.nodeList != null ? this.nodeList.hashCode() : 0);
+            hash = 67 * hash + (this.object != null ? this.object.hashCode() : 0);
             return hash;
         }
-        
+
     }
     
 }
