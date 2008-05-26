@@ -31,7 +31,7 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+     * 
  * Contributor(s):
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
@@ -39,84 +39,39 @@
 
 package org.netbeans.modules.parsing.spi;
 
-import javax.swing.event.ChangeListener;
-
+import java.util.List;
+import org.netbeans.modules.parsing.api.Embedding;
 import org.netbeans.modules.parsing.api.Snapshot;
-import org.netbeans.modules.parsing.api.Task;
 
 
 /**
- * Represents implementation of parser for one or more languages. 
- * Parser is always created by {@link ParserFactory}.
- * Parser fires change when some conditions are changed and sources 
- * should be reparsed.
- * 
+ * ParserBasedEmbeddingProvider returns sources for embedded 
+ * languages based on parser result for current language and snapshot. Embedded
+ * snapshot can consist from one or more blocks of original snapshot and it can contain
+ * some generated parts that has no mirror in the original text. See 
+ * {@link Snapshot} class for more information how to create embedded snapshot.
+ *
  * @author Jan Jancura
  */
-public abstract class Parser {
+public abstract class ParserBasedEmbeddingProvider<T extends Parser.Result> extends SchedulerTask {
     
     /**
-     * Called when some client needs some result of parsing. Parser must parse
-     * source based on {@link Snapshot#getText()} method call. 
+     * Returns list of {@link Embedding}s based on parser results.
      * 
-     * @param snapshot      A snapshot that should be parsed.
-     * @param task          A task asking for parsing result.
-     * @param event         A scheduler event.
+     * @param result        A parser result.
+     * @param snapshot      A snapshot that should be scanned for embeddings.
+     * @return              List of embedded sources.
      */
-    public abstract void parse (
-        Snapshot            snapshot,
-        Task                task,
-        SchedulerEvent      event
-    ) throws ParseException;
-    
-    /**
-     * Called when some client needs some result of parsing.
-     * 
-     * @param task          A task asking for parsing result.
-     * @return              Result of parsing or null.
-     */
-    public abstract Result getResult (
-        Task                task,
-        SchedulerEvent      event
-    ) throws ParseException;
-        
-    
-    /**
-     * Called by the infrastructure to stop the parser operation.
-     */
-    public abstract void cancel ();
-    
-    /**
-     * Registers new listener.
-     * 
-     * @param changeListener
-     *                      A change listener to be regiserred.
-     */
-    public abstract void addChangeListener (
-        ChangeListener      changeListener
+    public abstract List<Embedding> getEmbeddings (
+        T                   result, 
+        Snapshot            snapshot
     );
     
     /**
-     * Unregisters listener.
-     * 
-     * @param changeListener
-     *                      A change listener to be unregiserred.
+     * Returns priority of this source provider.
+     * @return              priority of this source provider
      */
-    public abstract void removeChangeListener (
-        ChangeListener      changeListener
-    );
-    
-    /**
-     * Represents result of parsing. Implementation of this class should 
-     * provide AST for parsed file, semantic information, etc.
-     */
-    public abstract static class Result {
-        
-        /**
-         * This method is called by Parsing API, when tash is finished.
-         */
-        public abstract void invalidate ();
-    }
+    public abstract int getPriority ();
 }
 
 
