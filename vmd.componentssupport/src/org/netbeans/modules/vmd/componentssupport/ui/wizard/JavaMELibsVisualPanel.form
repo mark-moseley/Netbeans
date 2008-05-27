@@ -17,8 +17,8 @@
       <Group type="103" groupAlignment="0" attributes="0">
           <Group type="102" alignment="0" attributes="0">
               <Group type="103" groupAlignment="0" attributes="0">
-                  <Component id="myCompDescrLabel" min="-2" max="-2" attributes="0"/>
-                  <Component id="jScrollPane1" pref="321" max="32767" attributes="0"/>
+                  <Component id="myDescLabel" min="-2" max="-2" attributes="0"/>
+                  <Component id="jScrollPane1" pref="330" max="32767" attributes="0"/>
               </Group>
               <EmptySpace max="-2" attributes="0"/>
               <Group type="103" groupAlignment="1" max="-2" attributes="0">
@@ -31,55 +31,79 @@
     <DimensionLayout dim="1">
       <Group type="103" groupAlignment="0" attributes="0">
           <Group type="102" alignment="0" attributes="0">
-              <Component id="myCompDescrLabel" min="-2" max="-2" attributes="0"/>
-              <EmptySpace max="-2" attributes="0"/>
+              <Component id="myDescLabel" min="-2" max="-2" attributes="0"/>
+              <EmptySpace min="-2" pref="6" max="-2" attributes="0"/>
               <Group type="103" groupAlignment="0" attributes="0">
                   <Group type="102" attributes="0">
                       <Component id="myAddButton" min="-2" max="-2" attributes="0"/>
                       <EmptySpace max="-2" attributes="0"/>
                       <Component id="myRemoveButton" min="-2" max="-2" attributes="0"/>
-                      <EmptySpace pref="228" max="32767" attributes="0"/>
+                      <EmptySpace pref="230" max="32767" attributes="0"/>
                   </Group>
-                  <Component id="jScrollPane1" pref="280" max="32767" attributes="0"/>
+                  <Component id="jScrollPane1" pref="282" max="32767" attributes="0"/>
               </Group>
           </Group>
       </Group>
     </DimensionLayout>
   </Layout>
   <SubComponents>
-    <Component class="javax.swing.JLabel" name="myCompDescrLabel">
+    <Component class="javax.swing.JLabel" name="myDescLabel">
       <Properties>
         <Property name="labelFor" type="java.awt.Component" editor="org.netbeans.modules.form.ComponentChooserEditor">
-          <ComponentRef name="myCompDescrList"/>
+          <ComponentRef name="myLibDescList"/>
         </Property>
         <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="LBL_AddedComponentDescriptors" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="LBL_AddedLibDescriptors" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </Properties>
       <AccessibilityProperties>
         <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_AddedComponentDescriptors" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_DescLabel" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
         <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSD_AddedComponentDescriptors" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ASCD_DescLabel" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </AccessibilityProperties>
       <AuxValues>
         <AuxValue name="generateMnemonicsCode" type="java.lang.Boolean" value="true"/>
       </AuxValues>
     </Component>
+    <Container class="javax.swing.JScrollPane" name="jScrollPane1">
+      <AuxValues>
+        <AuxValue name="autoScrollPane" type="java.lang.Boolean" value="true"/>
+      </AuxValues>
+
+      <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
+      <SubComponents>
+        <Component class="javax.swing.JList" name="myLibDescList">
+          <Properties>
+            <Property name="model" type="javax.swing.ListModel" editor="org.netbeans.modules.form.editors2.ListModelEditor">
+              <StringArray count="0"/>
+            </Property>
+          </Properties>
+          <AccessibilityProperties>
+            <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+              <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_DescriptorsList" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+            </Property>
+            <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+              <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSD_DescriptorsList" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+            </Property>
+          </AccessibilityProperties>
+        </Component>
+      </SubComponents>
+    </Container>
     <Component class="javax.swing.JButton" name="myAddButton">
       <Properties>
         <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="BTN_AddComponentDescr" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="BTN_AddLibDesc" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </Properties>
       <AccessibilityProperties>
         <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_AddComponentDescr" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_LibAdd" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
         <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSD_AddComponentDescr" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_LibAdd" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </AccessibilityProperties>
       <Events>
@@ -92,15 +116,15 @@
     <Component class="javax.swing.JButton" name="myRemoveButton">
       <Properties>
         <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="BTN_RemoveComponentDescr" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="BTN_LibRemove" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </Properties>
       <AccessibilityProperties>
         <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_RemoveComponentDescr" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_LibRemove" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
         <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSD_RemoveComponentDescr" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+          <ResourceString bundle="org/netbeans/modules/vmd/componentssupport/ui/wizard/Bundle.properties" key="ACSN_LibRemove" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </AccessibilityProperties>
       <Events>
@@ -110,18 +134,5 @@
         <AuxValue name="generateMnemonicsCode" type="java.lang.Boolean" value="true"/>
       </AuxValues>
     </Component>
-    <Container class="javax.swing.JScrollPane" name="jScrollPane1">
-
-      <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
-      <SubComponents>
-        <Component class="javax.swing.JList" name="myCompDescrList">
-          <Properties>
-            <Property name="model" type="javax.swing.ListModel" editor="org.netbeans.modules.form.editors2.ListModelEditor">
-              <StringArray count="0"/>
-            </Property>
-          </Properties>
-        </Component>
-      </SubComponents>
-    </Container>
   </SubComponents>
 </Form>
