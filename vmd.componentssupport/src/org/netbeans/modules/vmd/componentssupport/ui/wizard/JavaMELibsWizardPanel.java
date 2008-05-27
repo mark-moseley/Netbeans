@@ -53,15 +53,16 @@ import org.openide.WizardDescriptor.Panel;
 import org.openide.WizardDescriptor.ValidatingPanel;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
+import sun.font.TrueTypeFont;
 
 
 /**
  * @author ads
  *
  */
-class DescriptorsWizardPanel implements Panel, ValidatingPanel, FinishablePanel {
-        
-    DescriptorsWizardPanel() {
+class JavaMELibsWizardPanel implements Panel, ValidatingPanel, FinishablePanel {
+    
+    JavaMELibsWizardPanel(){
         myListeners = new CopyOnWriteArrayList<ChangeListener>();
     }
 
@@ -81,10 +82,10 @@ class DescriptorsWizardPanel implements Panel, ValidatingPanel, FinishablePanel 
      */
     public Component getComponent() {
         if (myComponent == null) {
-            myComponent = new DescriptorsVisualPanel();
+            myComponent = new JavaMELibsVisualPanel( );
             myComponent.setName(
                     NbBundle.getMessage(BasicModuleConfWizardPanel.class, 
-                    CustomComponentWizardIterator.LBL_COMPONENT_DESC));
+                    CustomComponentWizardIterator.LBL_LIBRARIES));
         }
         return myComponent;
     }
@@ -93,21 +94,21 @@ class DescriptorsWizardPanel implements Panel, ValidatingPanel, FinishablePanel 
      * @see org.openide.WizardDescriptor.Panel#getHelp()
      */
     public HelpCtx getHelp() {
-        return new HelpCtx( DescriptorsWizardPanel.class );
+        return new HelpCtx( JavaMELibsWizardPanel.class);
     }
 
     /* (non-Javadoc)
      * @see org.openide.WizardDescriptor.Panel#isValid()
      */
     public boolean isValid() {
-        // nothing to validate here
+        // TODO Auto-generated method stub
         return true;
     }
 
     /* (non-Javadoc)
      * @see org.openide.WizardDescriptor.Panel#readSettings(java.lang.Object)
      */
-    public void readSettings( Object settings ) {
+    public void readSettings( Object settings  ) {
         myWizardDescriptor = (WizardDescriptor)settings;
         myComponent.readData( myWizardDescriptor );
     }
@@ -115,7 +116,7 @@ class DescriptorsWizardPanel implements Panel, ValidatingPanel, FinishablePanel 
     /* (non-Javadoc)
      * @see org.openide.WizardDescriptor.Panel#removeChangeListener(javax.swing.event.ChangeListener)
      */
-    public void removeChangeListener( ChangeListener listener ) {
+    public void removeChangeListener( ChangeListener listener  ) {
         myListeners.remove( listener );
     }
 
@@ -123,6 +124,7 @@ class DescriptorsWizardPanel implements Panel, ValidatingPanel, FinishablePanel 
      * @see org.openide.WizardDescriptor.Panel#storeSettings(java.lang.Object)
      */
     public void storeSettings( Object settings ) {
+        //myWizardDescriptor = (WizardDescriptor)settings;
         myComponent.storeData( myWizardDescriptor );
     }
 
@@ -136,6 +138,7 @@ class DescriptorsWizardPanel implements Panel, ValidatingPanel, FinishablePanel 
     
     private List<ChangeListener> myListeners; 
     private WizardDescriptor myWizardDescriptor;
-    private DescriptorsVisualPanel myComponent;
+    private JavaMELibsVisualPanel myComponent;
+
 
 }
