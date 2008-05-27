@@ -70,19 +70,19 @@ import org.openide.DialogDisplayer;
  *
  * @author Martin Grebac
  */
-public class MutualCertificatesProfile extends ProfileBase 
+public class STSIssuedSupportingTokenProfile extends ProfileBase 
         implements SecureConversationFeature,ClientDefaultsFeature,ServiceDefaultsFeature {
     
     public int getId() {
-        return 20;
+        return 120;
     }
 
     public String getDisplayName() {
-        return ComboConstants.PROF_MUTUALCERT;
+        return ComboConstants.PROF_STSISSUEDSUPPORTING;
     }
 
     public String getDescription() {
-        return ComboConstants.PROF_MUTUALCERT_INFO;
+        return ComboConstants.PROF_STSISSUEDSUPPORTING_INFO;
     }
     
     /**
@@ -99,7 +99,7 @@ public class MutualCertificatesProfile extends ProfileBase
         
         model.addUndoableEditListener(undoCounter);
 
-        JPanel profConfigPanel = new MutualCertificates(component, this);
+        JPanel profConfigPanel = new STSIssuedSupportingToken(component, this);
         DialogDescriptor dlgDesc = new DialogDescriptor(profConfigPanel, getDisplayName());
         Dialog dlg = DialogDisplayer.getDefault().createDialog(dlgDesc);
 
@@ -114,70 +114,36 @@ public class MutualCertificatesProfile extends ProfileBase
         
         model.removeUndoableEditListener(undoCounter);
     }
-    
+
     public void setServiceDefaults(WSDLComponent component, Project p) {
+//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
 //        if (Util.isTomcat(p)) {
-            String storeLoc = Util.getStoreLocation(p, false, false);
-            ProprietarySecurityPolicyModelHelper.setStoreLocation(component, storeLoc, false, false);
+            String kstoreLoc = Util.getStoreLocation(p, false, false);
+            ProprietarySecurityPolicyModelHelper.setStoreLocation(component, kstoreLoc, false, false);
             ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, false, false);
-            ProprietarySecurityPolicyModelHelper.setStorePassword(component, Util.getDefaultPassword(p), false, false);
+            ProprietarySecurityPolicyModelHelper.setStorePassword(component, KeystorePanel.DEFAULT_PASSWORD, false, false);
 //        }
-        ProprietarySecurityPolicyModelHelper.setKeyStoreAlias(component,ProfilesModelHelper.XWS_SECURITY_SERVER, false);
-    }    
-
-    public void setClientDefaults(WSDLComponent component, WSDLComponent serviceBinding, Project p) {
-        ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, true);
-        ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, true);
-        ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);
-//        if (Util.isTomcat(p)) {
-            String kstoreLoc = Util.getStoreLocation(p, false, true);
-            ProprietarySecurityPolicyModelHelper.setStoreLocation(component, kstoreLoc, false, true);
-            ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, false, true);
-            ProprietarySecurityPolicyModelHelper.setStorePassword(component, Util.getDefaultPassword(p), false, true);
-
-            String tstoreLoc = Util.getStoreLocation(p, true, true);
-            ProprietarySecurityPolicyModelHelper.setStoreLocation(component, tstoreLoc, true, true);
-            ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, true, true);
-            ProprietarySecurityPolicyModelHelper.setStorePassword(component, Util.getDefaultPassword(p), true, true);
-//        }
-        ProprietarySecurityPolicyModelHelper.setKeyStoreAlias(component,ProfilesModelHelper.XWS_SECURITY_CLIENT, true);
-        ProprietarySecurityPolicyModelHelper.setTrustPeerAlias(component,ProfilesModelHelper.XWS_SECURITY_SERVER, true);
-    }    
-    
-    public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
-        String keyAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
-        String trustAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, true);
-        String trustPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, true);
-        String keyPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, false);
-        String keyLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, false);
-        String trustLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, true);        
-        if (ProfilesModelHelper.XWS_SECURITY_CLIENT.equals(keyAlias) && 
-            ProfilesModelHelper.XWS_SECURITY_SERVER.equals(trustAlias)) {
-                String defPassword = Util.getDefaultPassword(p);
-                String defKeyLocation = Util.getStoreLocation(p, false, true);
-                String defTrustLocation = Util.getStoreLocation(p, true, true);
-                if ((defPassword != null) && (defKeyLocation != null) && (defTrustLocation != null)) {
-                    if ((defPassword.equals(keyPasswd)) && defPassword.equals(trustPasswd) &&
-                        (defKeyLocation.equals(keyLoc)) && (defTrustLocation.equals(trustLoc))) {
-                            return true;
-                    }
-                }
-        }
-        return false;
+        ProprietarySecurityPolicyModelHelper.setKeyStoreAlias(component, ProfilesModelHelper.XWS_SECURITY_SERVER, false);
     }
 
+    public void setClientDefaults(WSDLComponent component, WSDLComponent securityBinding, Project p) {
+        ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);
+        ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, true);
+        ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, true);
+    }
+    
     public boolean isServiceDefaultSetupUsed(WSDLComponent component, Project p) {
-        String storeAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
-        String storeLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, false);
-        String storePasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, false);
-        if (ProfilesModelHelper.XWS_SECURITY_SERVER.equals(storeAlias)) {
+        String keyAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
+        String keyLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, false);
+        String keyPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, false);
+        if (ProfilesModelHelper.XWS_SECURITY_SERVER.equals(keyAlias)) {
             String defPassword = Util.getDefaultPassword(p);
             String defLocation = Util.getStoreLocation(p, false, false);
             if ((defPassword != null) && (defLocation != null)) {
-                if ((defPassword.equals(storePasswd)) && 
-                    (defLocation.equals(storeLoc))) {
+                if ((defPassword.equals(keyPasswd)) && 
+                    (defLocation.equals(keyLoc))) {
                         return true;
                 }
             }
@@ -185,6 +151,10 @@ public class MutualCertificatesProfile extends ProfileBase
         return false;
     }
 
+    public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
+        return false;
+    }
+    
     public boolean isSecureConversation(WSDLComponent component) {
         WSDLComponent topSecBinding = SecurityPolicyModelHelper.getSecurityBindingTypeElement(component);
         WSDLComponent protTokenKind = SecurityTokensModelHelper.getTokenElement(topSecBinding, ProtectionToken.class);
@@ -193,8 +163,7 @@ public class MutualCertificatesProfile extends ProfileBase
     }
 
     public void enableSecureConversation(WSDLComponent component, boolean enable) {
-        ProfilesModelHelper pmh= ProfilesModelHelper.getInstance(PolicyModelHelper.getConfigVersion(component));
-        pmh.enableSecureConversation(component, enable);
+        ProfilesModelHelper.getInstance(PolicyModelHelper.getConfigVersion(component)).enableSecureConversation(component, enable);
     }
-    
+
 }
