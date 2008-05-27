@@ -44,7 +44,6 @@ import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IControlNode;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
-import org.netbeans.modules.uml.diagrams.nodes.activity.ActivityNodeWidget;
 import org.netbeans.modules.uml.drawingarea.view.LabelNode;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.openide.nodes.Node;
@@ -76,15 +75,7 @@ public final class ToggleShowLabelAction extends CookieAction
         pe = activatedNodes[0].getLookup().lookup(IPresentationElement.class);
         Widget widget = getTargetWidget(scene, pe);
         
-        if (widget != null && widget instanceof ActivityNodeWidget)
-        {
-            ActivityNodeWidget simpleWidget = (ActivityNodeWidget) widget;
-            if (simpleWidget.getNameWidget() != null)
-            {
-                simpleWidget.setNameVisisble(!simpleWidget.isNameVisible());
-            }
-        }
-        else if (widget != null && widget instanceof LabelNode)
+        if (widget != null && widget instanceof LabelNode)
         {
             ((LabelNode)widget).showLabel(!((LabelNode)widget).getLabelWidget().isVisible());
         }
@@ -114,12 +105,7 @@ public final class ToggleShowLabelAction extends CookieAction
         String msgKey = "CTL_ShowLabel";  
         Widget widget = getTargetWidget(scene, pe);
         
-        if (widget != null && widget instanceof ActivityNodeWidget)
-        {   
-            ActivityNodeWidget simpleWidget = (ActivityNodeWidget) widget;
-            msgKey = (simpleWidget.isNameVisible() ? "CTL_HideLabel" : msgKey);
-        }
-        else if (widget != null && widget instanceof LabelNode)
+        if (widget != null && widget instanceof LabelNode)
         {
             msgKey = ((LabelNode)widget).getLabelWidget().isVisible() ? "CTL_HideLabel" : "CTL_ShowLabel";
         }

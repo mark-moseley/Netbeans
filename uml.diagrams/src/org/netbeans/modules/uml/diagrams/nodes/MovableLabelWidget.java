@@ -60,8 +60,10 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.ICreationFactory;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.IValueSpecification;
 import org.netbeans.modules.uml.drawingarea.engines.DiagramEngine;
+import org.netbeans.modules.uml.drawingarea.persistence.NodeWriter;
+import org.netbeans.modules.uml.drawingarea.persistence.PersistenceUtil;
+import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeWriter;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.netbeans.modules.uml.drawingarea.view.DesignerTools;
 
@@ -69,7 +71,7 @@ import org.netbeans.modules.uml.drawingarea.view.DesignerTools;
  *
  * @author Sheryl Su
  */
-public class MovableLabelWidget extends EditableCompartmentWidget implements Widget.Dependency
+public class MovableLabelWidget extends EditableCompartmentWidget implements Widget.Dependency, DiagramNodeWriter
 {
 
     private Widget nodeWidget;
@@ -214,7 +216,7 @@ public class MovableLabelWidget extends EditableCompartmentWidget implements Wid
             initialBeforeSelectionFG=getForeground();
             setForeground(UIManager.getColor("List.selectionForeground"));
              
-            setBorder(BorderFactory.createLineBorder(1, new Color(0xFFA400)));
+            setBorder(BorderFactory.createLineBorder(1, BORDER_HILIGHTED_COLOR));
         }
         else if((previousState.isSelected() == true) && (state.isSelected() == false))
         {
@@ -255,6 +257,17 @@ public class MovableLabelWidget extends EditableCompartmentWidget implements Wid
         
         return retVal;
     }
+
+    public void save(NodeWriter nodeWriter)
+    {
+        nodeWriter = PersistenceUtil.populateNodeWriter(nodeWriter, this);
+        nodeWriter.setTypeInfo("MovableLabel");
+        nodeWriter.setHasPositionSize(true);        
+        PersistenceUtil.populateProperties(nodeWriter, this);
+        nodeWriter.beginGraphNode();
+        nodeWriter.endGraphNode();
+    }
+    
 
     private class LabelMoveSupport implements MoveStrategy, MoveProvider
     {
