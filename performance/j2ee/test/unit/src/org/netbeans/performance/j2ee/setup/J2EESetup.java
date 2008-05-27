@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,36 +38,34 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se.setup;
+
+package org.netbeans.performance.j2ee.setup;
 
 import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
+
 import org.netbeans.jellytools.JellyTestCase;
 
-import java.io.File;
+import org.netbeans.modules.project.ui.test.ProjectSupport;
+
 import java.io.IOException;
+import java.io.File;
 
-/**
- * Test suite that actually does not perform any test but sets up user directory
- * for UI responsiveness tests
- *
- * @author  mmirilovic@netbeans.org
- */
-public class J2SESetup extends JellyTestCase {
 
-	private String workdir;
+public class J2EESetup extends JellyTestCase {
+    
+    private String workdir;
 
-    public J2SESetup(java.lang.String testName) {
+    public J2EESetup(java.lang.String testName) {
         super(testName);
         workdir = System.getProperty("nbjunit.workdir");
         try {
-            workdir = new File(workdir + "/../../../../../../../nbextra/data/").getCanonicalPath();
+            workdir = new File(workdir + "/../../../../../../../nbextra/data/j2eeApps").getCanonicalPath();
         } catch (IOException ex) {
             System.err.println("Exception: "+ex);
         }
 
     }
-
+    
     public void testCloseWelcome() {
         CommonUtilities.closeWelcome();
     }
@@ -80,50 +78,58 @@ public class J2SESetup extends JellyTestCase {
         CommonUtilities.closeMemoryToolbar();
     }
 
-        public void testAddTomcatServer() {
+        public void testAddAppServer() {
         
         CommonUtilities.addTomcatServer();
     }
 
-    public void testOpenProject() {
+    public void testOpenTestApplication() {
 
-        String projectsDir = workdir + File.separator+ "jEdit41";
+        String projectsDir = workdir + File.separator+ "TestApplication";
         Object prj=ProjectSupport.openProject(projectsDir);
         assertNotNull(prj);
         CommonUtilities.waitProjectTasksFinished();
     }
 
-    public void testOpenDataProject() {
+    public void testOpenTestApplication_ejb() {
 
-        String projectsDir = workdir + File.separator+"PerformanceTestData";
+        String projectsDir = workdir + File.separator+"TestApplication/TestApplication-ejb";
         Object prj=ProjectSupport.openProject(projectsDir);
         assertNotNull(prj);
         CommonUtilities.waitProjectTasksFinished();
     }
 
-    public void testOpenWebProject() {
+    public void testOpenTestApplication_war() {
       
-        String projectsDir = workdir +File.separator+ "PerformanceTestWebApplication";
+        String projectsDir = workdir +File.separator+ "TestApplication/TestApplication-war";
         Object prj=ProjectSupport.openProject(projectsDir);
         assertNotNull(prj);
         CommonUtilities.waitProjectTasksFinished();
     }
 
-    public void testOpenFoldersProject() {
+    public void testOpenDeployTest() {
 
-        String projectsDir = workdir + File.separator+"PerformanceTestFoldersData";
+        String projectsDir = workdir + File.separator+"DeployTest";
         Object prj=ProjectSupport.openProject(projectsDir);
         assertNotNull(prj);        
         CommonUtilities.waitProjectTasksFinished();
     }
 
-    public void testOpenNBProject() {
+    public void testOpenDeployTest_ejb() {
 
-        String projectsDir = workdir + File.separator+"SystemProperties";
+        String projectsDir = workdir + File.separator+"DeployTest/DeployTest-ejb";
         Object prj=ProjectSupport.openProject(projectsDir);
         assertNotNull(prj);        
         CommonUtilities.waitProjectTasksFinished();
     }
-  
+
+    public void testOpenDeployTest_war() {
+
+        String projectsDir = workdir + File.separator+"DeployTest/DeployTest-war";
+        Object prj=ProjectSupport.openProject(projectsDir);
+        assertNotNull(prj);        
+        CommonUtilities.waitProjectTasksFinished();
+    }
+
    
 }

@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,26 +38,26 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.performance.j2se.setup;
+
+package org.netbeans.performance.web.setup;
 
 import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.modules.project.ui.test.ProjectSupport;
+
+import org.netbeans.jellytools.MainWindowOperator;
+import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.actions.BuildProjectAction;
 import org.netbeans.jellytools.JellyTestCase;
+
+import org.netbeans.modules.project.ui.test.ProjectSupport;
 
 import java.io.File;
 import java.io.IOException;
 
-/**
- * Test suite that actually does not perform any test but sets up user directory
- * for UI responsiveness tests
- *
- * @author  mmirilovic@netbeans.org
- */
-public class J2SESetup extends JellyTestCase {
-
+public class WebSetup extends JellyTestCase {
+    
 	private String workdir;
 
-    public J2SESetup(java.lang.String testName) {
+    public WebSetup(String testName) {
         super(testName);
         workdir = System.getProperty("nbjunit.workdir");
         try {
@@ -85,45 +85,28 @@ public class J2SESetup extends JellyTestCase {
         CommonUtilities.addTomcatServer();
     }
 
-    public void testOpenProject() {
-
-        String projectsDir = workdir + File.separator+ "jEdit41";
-        Object prj=ProjectSupport.openProject(projectsDir);
-        assertNotNull(prj);
-        CommonUtilities.waitProjectTasksFinished();
-    }
-
-    public void testOpenDataProject() {
-
-        String projectsDir = workdir + File.separator+"PerformanceTestData";
-        Object prj=ProjectSupport.openProject(projectsDir);
-        assertNotNull(prj);
-        CommonUtilities.waitProjectTasksFinished();
-    }
-
     public void testOpenWebProject() {
-      
-        String projectsDir = workdir +File.separator+ "PerformanceTestWebApplication";
+
+        String projectsDir = workdir + File.separator+ "TestWebProject";
         Object prj=ProjectSupport.openProject(projectsDir);
         assertNotNull(prj);
         CommonUtilities.waitProjectTasksFinished();
+        buildProject("TestWebProject");
     }
+    
 
-    public void testOpenFoldersProject() {
+    public void testOpenWebFoldersProject() {
 
-        String projectsDir = workdir + File.separator+"PerformanceTestFoldersData";
+        String projectsDir = workdir + File.separator+ "PerformanceTestFolderWebApp";
         Object prj=ProjectSupport.openProject(projectsDir);
-        assertNotNull(prj);        
+        assertNotNull(prj);
         CommonUtilities.waitProjectTasksFinished();
+        buildProject("PerformanceTestFolderWebApp");
     }
-
-    public void testOpenNBProject() {
-
-        String projectsDir = workdir + File.separator+"SystemProperties";
-        Object prj=ProjectSupport.openProject(projectsDir);
-        assertNotNull(prj);        
-        CommonUtilities.waitProjectTasksFinished();
+        
+    private void buildProject(String name) {
+        new BuildProjectAction().perform(new ProjectsTabOperator().
+            getProjectRootNode(name));
+        MainWindowOperator.getDefault().waitStatusText("Finished building");
     }
-  
-   
 }
