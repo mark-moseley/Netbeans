@@ -1,4 +1,4 @@
-[<% request.getSession().|, void setAttribute (String arg0 , Object arg1 ), <% request.getSession().setAttribute(arg0, arg1), 483]
+[<% request.getSession().|, void setAttribute (String arg0 , Object arg1 ), <% request.getSession().setAttribute(arg0, arg1);, 517]
 boolean equals (Object obj )
 Object getAttribute (String arg0 )
 Enumeration getAttributeNames ()
@@ -25,8 +25,8 @@ String toString ()
 void wait ()
 void wait (long timeout )
 void wait (long timeout , int nanos )
-End cursor position = 525
-[<% session.|, Object getAttribute (String arg0 ), <% session.getAttribute(arg0), 619]
+End cursor position = 559
+[<% session.|, Object getAttribute (String arg0 ), <% session.getAttribute(arg0), 653]
 boolean equals (Object obj )
 Object getAttribute (String arg0 )
 Enumeration getAttributeNames ()
@@ -53,8 +53,9 @@ String toString ()
 void wait ()
 void wait (long timeout )
 void wait (long timeout , int nanos )
-End cursor position = 649
-[<%! void f() { this.|, ServletConfig getServletConfig (), <%! void f() { this.getServletConfig(), 796]
+End cursor position = 682
+[<%! void f() { this.|, ServletConfig getServletConfig (), <%! void f() { this.getServletConfig(), 830]
+long serialVersionUID
 Object clone ()
 void destroy ()
 void doDelete (HttpServletRequest arg0 , HttpS 
@@ -88,56 +89,57 @@ String toString ()
 void wait ()
 void wait (long timeout )
 void wait (long timeout , int nanos )
-End cursor position = 835
-[<%= request.|, String getContextPath (), <%= request.getContextPath(), 945]
+End cursor position = 869
+[<%= request.|, String getContextPath (), <%= request.getContextPath(), 979]
 String BASIC_AUTH
 String CLIENT_CERT_AUTH
 String DIGEST_AUTH
 String FORM_AUTH
-boolean equals (Object obj )
-Object getAttribute (String arg0 )
-Enumeration getAttributeNames ()
 String getAuthType ()
 String getCharacterEncoding ()
-Class <?> getClass ()
-int getContentLength ()
 String getContentType ()
 String getContextPath ()
-Cookie[] getCookies ()
-long getDateHeader (String arg0 )
 String getHeader (String arg0 )
-Enumeration getHeaderNames ()
-Enumeration getHeaders (String arg0 )
-ServletInputStream getInputStream ()
-int getIntHeader (String arg0 )
 String getLocalAddr ()
 String getLocalName ()
-int getLocalPort ()
-Locale getLocale ()
-Enumeration getLocales ()
 String getMethod ()
 String getParameter (String arg0 )
-Map getParameterMap ()
-Enumeration getParameterNames ()
-String[] getParameterValues (String arg0 )
 String getPathInfo ()
 String getPathTranslated ()
 String getProtocol ()
 String getQueryString ()
-BufferedReader getReader ()
 String getRealPath (String arg0 )
 String getRemoteAddr ()
 String getRemoteHost ()
-int getRemotePort ()
 String getRemoteUser ()
-RequestDispatcher getRequestDispatcher (Strin 
 String getRequestURI ()
-StringBuffer getRequestURL ()
 String getRequestedSessionId ()
 String getScheme ()
 String getServerName ()
-int getServerPort ()
 String getServletPath ()
+String toString ()
+boolean equals (Object obj )
+Object getAttribute (String arg0 )
+Enumeration getAttributeNames ()
+Class <?> getClass ()
+int getContentLength ()
+Cookie[] getCookies ()
+long getDateHeader (String arg0 )
+Enumeration getHeaderNames ()
+Enumeration getHeaders (String arg0 )
+ServletInputStream getInputStream ()
+int getIntHeader (String arg0 )
+int getLocalPort ()
+Locale getLocale ()
+Enumeration getLocales ()
+Map getParameterMap ()
+Enumeration getParameterNames ()
+String[] getParameterValues (String arg0 )
+BufferedReader getReader ()
+int getRemotePort ()
+RequestDispatcher getRequestDispatcher (Strin 
+StringBuffer getRequestURL ()
+int getServerPort ()
 HttpSession getSession ()
 HttpSession getSession (boolean arg0 )
 Principal getUserPrincipal ()
@@ -148,7 +150,6 @@ boolean isRequestedSessionIdFromUrl ()
 boolean isRequestedSessionIdValid ()
 boolean isSecure ()
 boolean isUserInRole (String arg0 )
-String toString ()
 void notify ()
 void notifyAll ()
 void removeAttribute (String arg0 )
@@ -157,4 +158,4 @@ void setCharacterEncoding (String arg0 )
 void wait ()
 void wait (long timeout )
 void wait (long timeout , int nanos )
-End cursor position = 974
+End cursor position = 1008
