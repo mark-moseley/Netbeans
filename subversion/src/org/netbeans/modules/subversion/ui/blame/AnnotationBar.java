@@ -55,7 +55,6 @@ import org.netbeans.modules.subversion.client.SvnProgressSupport;
 import org.netbeans.modules.subversion.util.SvnUtils;
 import org.netbeans.modules.subversion.util.Context;
 import org.netbeans.modules.versioning.util.Utils;
-import org.openide.*;
 import org.openide.loaders.*;
 import org.openide.filesystems.*;
 import org.openide.text.*;
@@ -77,6 +76,10 @@ import java.io.*;
 import java.text.DateFormat;
 import java.text.MessageFormat;
 import java.util.logging.Level;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.EditorStyleConstants;
+import org.netbeans.api.editor.settings.FontColorNames;
+import org.netbeans.api.editor.settings.FontColorSettings;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
 import org.tigris.subversion.svnclientadapter.ISVNNotifyListener;
 import org.tigris.subversion.svnclientadapter.SVNClientException;
@@ -191,13 +194,13 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         this.doc = editorUI.getDocument();
         this.caret = textComponent.getCaret();
         if (textComponent instanceof JEditorPane) {
-            JEditorPane jep = (JEditorPane) textComponent;
-            Class kitClass = jep.getEditorKit().getClass();
-            Object userSetHints = Settings.getValue(kitClass, SettingsNames.RENDERING_HINTS);
-            renderingHints = (userSetHints instanceof Map && ((Map)userSetHints).size() > 0) ? (Map)userSetHints : null;
+            String mimeType = org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(textComponent);
+            FontColorSettings fcs = MimeLookup.getLookup(mimeType).lookup(FontColorSettings.class);
+            renderingHints = (Map) fcs.getFontColors(FontColorNames.DEFAULT_COLORING).getAttribute(EditorStyleConstants.RenderingHints);
         } else {
             renderingHints = null;
         }
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
     }
     
     // public contract ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -611,15 +614,6 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         dim.width = width;
         dim.height *=2;  // XXX
         return dim;
-    }
-
-    /**
-     * Gets the maximum size of this component.
-     *
-     * @return the maximum size of this component
-     */
-    public Dimension getMaximumSize() {
-        return getPreferredSize();
     }
 
     /**
