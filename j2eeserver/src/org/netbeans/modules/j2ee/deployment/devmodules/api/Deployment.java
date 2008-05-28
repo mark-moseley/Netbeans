@@ -41,24 +41,48 @@
 
 package org.netbeans.modules.j2ee.deployment.devmodules.api;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
+import javax.enterprise.deploy.shared.ModuleType;
+import javax.enterprise.deploy.spi.DeploymentManager;
 import javax.enterprise.deploy.spi.Target;
+import javax.enterprise.deploy.spi.TargetModuleID;
+import javax.enterprise.deploy.spi.exceptions.TargetException;
 import javax.enterprise.deploy.spi.status.ProgressObject;
+import org.netbeans.api.java.queries.BinaryForSourceQuery;
+import org.netbeans.api.java.source.BuildArtifactMapper;
+import org.netbeans.api.java.source.BuildArtifactMapper.ArtifactsUpdated;
 import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
 import org.netbeans.modules.j2ee.deployment.common.api.ConfigurationException;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.InstanceListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
-import org.netbeans.modules.j2ee.deployment.impl.*;
-import org.netbeans.modules.j2ee.deployment.impl.projects.*;
-import org.netbeans.modules.j2ee.deployment.impl.ui.*;
+import org.netbeans.modules.j2ee.deployment.impl.ProgressObjectUtil;
+import org.netbeans.modules.j2ee.deployment.impl.Server;
+import org.netbeans.modules.j2ee.deployment.impl.ServerInstance;
+import org.netbeans.modules.j2ee.deployment.impl.ServerRegistry;
+import org.netbeans.modules.j2ee.deployment.impl.ServerString;
+import org.netbeans.modules.j2ee.deployment.impl.ServerTarget;
+import org.netbeans.modules.j2ee.deployment.impl.TargetModule;
+import org.netbeans.modules.j2ee.deployment.impl.TargetServer;
+import org.netbeans.modules.j2ee.deployment.impl.projects.DeploymentTargetImpl;
+import org.netbeans.modules.j2ee.deployment.impl.ui.ProgressUI;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.IncrementalDeployment;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.JDBCDriverDeployer;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.filesystems.URLMapper;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.Parameters;
 
@@ -117,21 +141,24 @@ public final class Deployment {
                 String msg = NbBundle.getMessage (Deployment.class, "MSG_NoTargetServer");
                 throw new DeploymentException(msg);
             }
-            
-            JDBCDriverDeployer jdbcDriverDeployer = server.getServerInstance().getJDBCDriverDeployer();
-            
-            // Currently it is not possible to select target to which modules will 
-            // be deployed. Lets use the first one.
-            ServerTarget targets[] = serverInstance.getTargets();
-            if (targets.length > 0) {
-                Target target = targets[0].getTarget();
-                Set<Datasource> moduleDatasources = jmp.getModuleDatasources();
-                if (moduleDatasources.size() > 0 && jdbcDriverDeployer != null
-                        && jdbcDriverDeployer.supportsDeployJDBCDrivers(target)) {
-                    ProgressObject po = jdbcDriverDeployer.deployJDBCDrivers(target, moduleDatasources);
-                    ProgressObjectUtil.trackProgressObject(progress, po, Long.MAX_VALUE);
+
+            // Only call getTargets() if we really need to.
+            Set<Datasource> moduleDatasources = jmp.getModuleDatasources();
+            if(moduleDatasources != null && moduleDatasources.size() > 0) {
+                JDBCDriverDeployer jdbcDriverDeployer = server.getServerInstance().getJDBCDriverDeployer();
+                if(jdbcDriverDeployer != null) {
+                    // Currently it is not possible to select target to which modules will 
+                    // be deployed. Lets use the first one.
+                    ServerTarget targets[] = serverInstance.getTargets();
+                    if (targets.length > 0) {
+                        Target target = targets[0].getTarget();
+                        if (jdbcDriverDeployer.supportsDeployJDBCDrivers(target)) {
+                            ProgressObject po = jdbcDriverDeployer.deployJDBCDrivers(target, moduleDatasources);
+                            ProgressObjectUtil.trackProgressObject(progress, po, Long.MAX_VALUE);
+                        }
+                    }
                 }
-            }
+            }            
             
             boolean serverReady = false;
             TargetServer targetserver = new TargetServer(deploymentTarget);
@@ -149,6 +176,7 @@ public final class Deployment {
             // inform the plugin about the deploy action, even if there was
             // really nothing needed to be deployed
             targetserver.notifyIncrementalDeployment(modules);
+            startListeningOnCos(jmp);
             
             if (modules != null && modules.length > 0) {
                 deploymentTarget.setTargetModules(modules);
@@ -297,6 +325,24 @@ public final class Deployment {
         return null;
     }
     
+
+    /**
+     * Returns the default server instance or <code>null</code> if no default
+     * instance configured.
+     * <p>
+     * This method is deprecated, so don't expect it will return any useful default
+     * instance. Method will be removed in near future.
+     *
+     * @return the default server instance
+     * @deprecated this API is broken by design - the client should choose the
+     *             instance by usage {@link #getServerInstanceIDs} and selection
+     *             of appropriate server instance. Method will be removed in
+     *             near future. See issue 83934.
+     */
+    public String getDefaultServerInstanceID () {
+        return null;
+    }
+
     /**
      * Determine if a server instance will attempt to use file deployment for a
      * J2eeModule.
@@ -317,18 +363,7 @@ public final class Deployment {
         }
         return retVal;
     }
-    
-    public String getDefaultServerInstanceID () {
-        ServerString defInst = ServerRegistry.getInstance ().getDefaultInstance ();
-        if (defInst != null) {
-            ServerInstance si = defInst.getServerInstance();
-            if (si != null) {
-                return si.getUrl ();
-            }
-        }
-        return null;
-    }
-    
+
     public String [] getInstancesOfServer (String id) {
         if (id != null) {
             Server server = ServerRegistry.getInstance().getServer(id);
@@ -386,7 +421,7 @@ public final class Deployment {
      * 
      * @param serverInstanceID server instance ID.
      * 
-     * @returns <code>true</code> if the given server instance is running, <code>false</code>
+     * @return <code>true</code> if the given server instance is running, <code>false</code>
      *          otherwise.
      * 
      * @throws  NullPointerException if serverInstanceID is <code>null</code>.
@@ -427,4 +462,97 @@ public final class Deployment {
     public static interface Logger {
         public void log(String message);
     }
+    
+    private static TargetModule[] forJ2eeModuleProvider(J2eeModuleProvider provider) {
+        // TODO check if running
+        DeploymentTargetImpl deploymentTarget = new DeploymentTargetImpl(provider, null);
+        TargetModule[] modules = deploymentTarget.getTargetModules();
+        
+        ServerInstance serverInstance = deploymentTarget.getServer().getServerInstance();
+        Set<String> targetNames = new HashSet<String>();
+        Set<Target> targets = new HashSet<Target>();
+        for (TargetModule module : modules) {
+            Target target = module.findTarget();
+            if (serverInstance.getStartServer().isRunning(target)) {
+                targetNames.add(target.getName());
+                targets.add(target);
+            }
+        }
+        
+        Set<TargetModule> ret = new HashSet<TargetModule>();
+        for (TargetModule module : modules) {
+            // not my module
+            if (!module.getInstanceUrl().equals(serverInstance.getUrl())
+                    || ! targetNames.contains(module.getTargetName())) {
+                continue;
+            }
+            
+            TargetModuleID tmID = (TargetModuleID) getAvailableTMIDsMap(
+                    deploymentTarget, targets.toArray(new Target[targets.size()]), serverInstance).get(module.getId());
+            
+            // no longer a deployed module on server
+            if (tmID != null) {
+                module.initDelegate(tmID);
+                ret.add(module);
+            }
+        }
+        return ret.toArray(new TargetModule[ret.size()]);
+    }
+    
+    private static Map<String, TargetModuleID> getAvailableTMIDsMap(DeploymentTargetImpl dtarget,
+            Target[] targets, ServerInstance instance) {
+        
+        DeploymentManager dm = instance.getDeploymentManager();
+        Map<String, TargetModuleID> availablesMap = new HashMap<String, TargetModuleID>();
+        try {
+            ModuleType type = (ModuleType) dtarget.getModule().getModuleType();
+            TargetModuleID[] ids = dm.getAvailableModules(type, targets);
+            if (ids == null) {
+                return availablesMap;
+            }
+            for (int i=0; i<ids.length; i++) {
+                availablesMap.put(ids[i].toString(), ids[i]);
+            }
+        } catch (TargetException te) {
+            throw new IllegalArgumentException(te);
+        }
+        return availablesMap;
+    }
+    
+    private static void startListeningOnCos(J2eeModuleProvider provider) {
+        for (FileObject file : provider.getSourceFileMap().getSourceRoots()) {         
+            try {
+                URL[] binaries = BinaryForSourceQuery.findBinaryRoots(file.getURL()).getRoots();
+                for (URL binary : binaries) {
+                    FileObject object = URLMapper.findFileObject(binary);
+                    if (object != null) {
+                        BuildArtifactMapper.map(file.getURL(), FileUtil.toFile(object), new ArtifactsUpdatedListenerImpl(provider));
+                        BuildArtifactMapper.ensureBuilt(file.getURL());
+                    }
+                }
+            } catch (IOException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+    }
+    
+    private static final class ArtifactsUpdatedListenerImpl implements ArtifactsUpdated {
+
+        private final J2eeModuleProvider provider;
+
+        public ArtifactsUpdatedListenerImpl(J2eeModuleProvider provider) {
+            this.provider = provider;
+        }
+        
+        public void artifactsUpdated(Iterable<File> artifacts) {
+            TargetModule[] modules = forJ2eeModuleProvider(provider);
+            ServerInstance instance = ServerRegistry.getInstance().getServerInstance(
+                    provider.getServerInstanceID());
+            IncrementalDeployment depl = instance.getIncrementalDeployment();
+            for (TargetModule module : modules) {
+                depl.notifyArtifactsUpdated(module.delegate(), artifacts);
+            }
+        }
+        
+    }    
 }
