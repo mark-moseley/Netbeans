@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.db.sql.editor;
 import org.netbeans.editor.LocaleSupport;
-import org.netbeans.editor.Settings;
 import org.openide.modules.ModuleInstall;
 import org.openide.util.NbBundle;
 
@@ -64,7 +63,6 @@ public class RestoreColoring extends ModuleInstall {
      * Overrides superclass method.  
      */
     public void restored() {
-        addInitializer();
         installOptions();
     }
 
@@ -75,13 +73,6 @@ public class RestoreColoring extends ModuleInstall {
      */
     public void uninstalled() {
         uninstallOptions();
-    }
-
-    /** 
-     * Adds initializer and registers editor kit. 
-     */
-    public void addInitializer() {
-        Settings.addInitializer(new SQLSettingsInitializer());
     }
 
     /** 
