@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
+<filesystem>
+    
+    <folder name="Templates">
+        <folder name="SaaSServices">
+            <file name="FacebookAuthenticator.java" 
+                  url="/org/netbeans/modules/websvc/saas/services/facebook/resources/web/FacebookAuthenticator.template">
+                <attr name="position" intvalue="3610"/>
+            </file>
+            <file name="FacebookLogin.java" 
+                  url="/org/netbeans/modules/websvc/saas/services/facebook/resources/web/FacebookLogin.template">
+                <attr name="position" intvalue="3620"/>
+            </file>
+            <file name="FacebookCallback.java" 
+                  url="/org/netbeans/modules/websvc/saas/services/facebook/resources/web/FacebookCallback.template">
+                <attr name="position" intvalue="3630"/>
+            </file>
+            <file name="FacebookAuthenticatorDesktop.java" 
+                  url="/org/netbeans/modules/websvc/saas/services/facebook/resources/desktop/FacebookAuthenticator.template">
+                <attr name="position" intvalue="3640"/>
+            </file>
+        </folder>
+    </folder>
+    
+    <folder name="SaaSServices">
+        <folder name="Facebook">
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.websvc.saas.services.facebook.Bundle"/>
+            <file name="Facebook.xml" url="/org/netbeans/modules/websvc/saas/services/facebook/resources/Facebook.xml"/>
+        </folder>
+    </folder>
+    
+</filesystem>

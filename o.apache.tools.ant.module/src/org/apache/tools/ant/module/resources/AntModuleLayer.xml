@@ -65,8 +65,6 @@ made subject to such option by the copyright holder.
     <folder name="Templates">
  
         <folder name="Other">
-            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.resources.Bundle"/>
-            <attr name="templateWizardURL" urlvalue="nbresloc:/org/apache/tools/ant/module/resources/AntDescription.html"/>
             <file name="Project.xml" url="Project.xml_">
                 <attr name="position" intvalue="800"/>
                 <attr name="template" boolvalue="true"/>
@@ -80,7 +78,7 @@ made subject to such option by the copyright holder.
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.resources.Bundle"/>
                 <!-- XXX #44054: implies a runtime dep on java/project module: -->
                 <attr name="instantiatingIterator" methodvalue="org.netbeans.spi.java.project.support.ui.templates.JavaTemplates.createJavaTemplateIterator"/>
-                <attr name="instantiatingIteratorURL" urlvalue="nbresloc:/org/apache/tools/ant/module/resources/CustomTaskDescription.html"/>
+                <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/apache/tools/ant/module/resources/CustomTaskDescription.html"/>
                 <attr name="templateCategory" stringvalue="ant-task"/>
                 <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
             </file>
@@ -104,10 +102,16 @@ made subject to such option by the copyright holder.
     <folder name="Editors">
         <folder name="text">
             <folder name="x-ant+xml">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.resources.Bundle"/>
                 <folder name="Popup"> <!-- #20203 -->
                     <file name="org-apache-tools-ant-module-nodes-RunTargetsAction.instance">
                         <attr name="position" intvalue="900"/>
                     </file>
+                </folder>
+                <folder name="CodeTemplates">
+                    <folder name="Defaults">
+                        <file name="org-apache-tools-ant-module-CodeTemplates.xml" url="codetemplates.xml"/>
+                    </folder>
                 </folder>
             </folder>
         </folder>
@@ -116,6 +120,10 @@ made subject to such option by the copyright holder.
     <folder name="Loaders">
         <folder name="text">
             <folder name="x-ant+xml">
+                <folder name="Factories">
+                    <file name="org-apache-tools-ant-module-loader-AntProjectDataLoader.instance"/>
+                </folder>
+                
                 <folder name="Actions">
                     <file name="org-openide-actions-OpenAction.instance">
                         <attr name="position" intvalue="100"/>
