@@ -73,6 +73,11 @@ import java.util.*;
 import java.util.List;
 import java.io.*;
 import java.text.MessageFormat;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.EditorStyleConstants;
+import org.netbeans.api.editor.settings.FontColorNames;
+import org.netbeans.api.editor.settings.FontColorSettings;
+import org.netbeans.modules.editor.NbEditorUtilities;
 
 /**
  * Represents annotation sidebar componnet in editor. It's
@@ -186,13 +191,13 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         this.doc = editorUI.getDocument();
         this.caret = textComponent.getCaret();
         if (textComponent instanceof JEditorPane) {
-            JEditorPane jep = (JEditorPane) textComponent;
-            Class kitClass = jep.getEditorKit().getClass();
-            Object userSetHints = Settings.getValue(kitClass, SettingsNames.RENDERING_HINTS);
-            renderingHints = (userSetHints instanceof Map && ((Map)userSetHints).size() > 0) ? (Map)userSetHints : null;
+            String mimeType = NbEditorUtilities.getMimeType(textComponent);
+            FontColorSettings fcs = MimeLookup.getLookup(mimeType).lookup(FontColorSettings.class);
+            renderingHints = (Map) fcs.getFontColors(FontColorNames.DEFAULT_COLORING).getAttribute(EditorStyleConstants.RenderingHints);
         } else {
             renderingHints = null;
         }
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
     }
     
     // public contract ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -423,7 +428,7 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
                     String message = (String) commitMessages.get(al.getRevision());
                     File file = getCurrentFile();
                     Project project = Utils.getProject(file);                
-                    Context context = Utils.getProjectsContext(new Project[] { project });
+                    Context context = Utils.getProjectContext(project, file);
                     SearchHistoryAction.openSearch(
                             context, 
                             ProjectUtils.getInformation(project).getDisplayName(),
@@ -646,15 +651,6 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         dim.width = width;
         dim.height *=2;  // XXX
         return dim;
-    }
-
-    /**
-     * Gets the maximum size of this component.
-     *
-     * @return the maximum size of this component
-     */
-    public Dimension getMaximumSize() {
-        return getPreferredSize();
     }
 
     /**
