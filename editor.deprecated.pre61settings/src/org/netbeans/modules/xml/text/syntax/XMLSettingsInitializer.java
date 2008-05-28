@@ -43,12 +43,6 @@ package org.netbeans.modules.xml.text.syntax;
 import java.util.*;
 
 import org.netbeans.editor.Settings;
-import org.netbeans.editor.SettingsUtil;
-import org.netbeans.editor.SettingsNames;
-import org.netbeans.editor.Acceptor;
-import org.netbeans.editor.AcceptorFactory;
-import org.netbeans.editor.TokenContext;
-import org.netbeans.modules.xml.text.api.XMLDefaultTokenContext;
 
 /**
  * Editor settings defaults.
@@ -65,58 +59,6 @@ public class XMLSettingsInitializer extends Settings.AbstractInitializer {
     }
 
     public void updateSettingsMap (Class kitClass, Map settingsMap) {
-        // editor breaks the contact, handle it somehow
-        if (kitClass == null) return;
-
-        /** Add editor actions to DTD Kit. */
-        if (kitClass == DTDKit.class) {
-            SettingsUtil.updateListSetting (settingsMap, SettingsNames.TOKEN_CONTEXT_LIST,
-                    new TokenContext[] { DTDTokenContext.context }
-            );
-        }
-
-
-        /** Add editor actions to XML Kit. */
-        if (kitClass == XMLKit.class) {
-            settingsMap.put(SettingsNames.CODE_FOLDING_ENABLE, Boolean.TRUE);
-            
-            SettingsUtil.updateListSetting (settingsMap, SettingsNames.TOKEN_CONTEXT_LIST,
-                    new TokenContext[] { XMLDefaultTokenContext.context }
-            );
-            
-            settingsMap.put(SettingsNames.IDENTIFIER_ACCEPTOR, getXMLIdentifierAcceptor());            
-        }
-
-
-        /* Allow '?' and '!' in abbrevirations. */
-        if (kitClass == XMLKit.class || kitClass == DTDKit.class) {
-            settingsMap.put(SettingsNames.ABBREV_RESET_ACCEPTOR,
-                            new Acceptor() {
-                                public boolean accept(char ch) {
-                                    return AcceptorFactory.NON_JAVA_IDENTIFIER.accept(ch) && ch != '!' && ch != '?';
-                                }
-                            }
-                           );
-        }
-
     }
     
-    /*
-     * Identifiers accept all NameChar [4].
-     */
-    Acceptor getXMLIdentifierAcceptor() {
-        
-        return  new Acceptor() {
-            public boolean accept(char ch) {
-                switch (ch) {
-                    case ' ': case '\t': case '\n': case '\r':          // WS
-                    case '>': case '<': case '&': case '\'': case '"': case '/':
-                    case '\\': // markup
-                        return false;
-                }
-
-                return true;
-            }
-        };
-    }
 }

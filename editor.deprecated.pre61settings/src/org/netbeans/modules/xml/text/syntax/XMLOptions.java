@@ -41,10 +41,10 @@
 package org.netbeans.modules.xml.text.syntax;
 
 import java.util.*;
+import org.netbeans.editor.BaseKit;
 import org.netbeans.editor.ext.ExtSettingsNames;
 import org.netbeans.modules.editor.NbEditorUtilities;
-import org.netbeans.modules.xml.text.indent.XMLIndentEngine;
-import org.netbeans.modules.xml.text.api.XMLDefaultTokenContext;
+import org.openide.util.Lookup;
 
 
 /**
@@ -75,11 +75,11 @@ public class XMLOptions extends AbstractBaseOptions {
 
     /** */
     public XMLOptions () {
-        super (XMLKit.class, "xml"); // NOI18N
+        super (gimeClass("org.netbeans.modules.xml.text.syntax.XMLKit", BaseKit.class), "xml"); // NOI18N
     }
 
-    protected Class getDefaultIndentEngineClass () {
-        return XMLIndentEngine.class;
+    protected @Override Class getDefaultIndentEngineClass () {
+        return gimeClass("org.netbeans.modules.xml.text.indent.XMLIndentEngine", super.getDefaultIndentEngineClass()); //NOI18N
     }
     
     public boolean getCompletionAutoPopup() {
@@ -129,7 +129,7 @@ public class XMLOptions extends AbstractBaseOptions {
      * Get coloring, possibly remap setting from previous versions
      * to new one.
      */
-    public Map getColoringMap() {
+    public @Override Map getColoringMap() {
         Map colors = super.getColoringMap();
         
         synchronized (this) {
@@ -151,6 +151,19 @@ public class XMLOptions extends AbstractBaseOptions {
             // it get saved automatically (i.e.old keys removal will apply)
             
             return colors;
+        }
+    }
+    
+    protected @Override String getContentType() {
+        return "text/xml"; //NOI18N
+    }
+
+    /* package */ static Class gimeClass(String name, Class def) {
+        try {
+            ClassLoader cl = Lookup.getDefault().lookup(ClassLoader.class);
+            return cl == null ? def : cl.loadClass(name);
+        } catch (ClassNotFoundException cnfe) {
+            return def;
         }
     }
 }

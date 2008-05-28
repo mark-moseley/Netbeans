@@ -75,9 +75,11 @@ made subject to such option by the copyright holder.
     
     <folder name="Services">
         <folder name="IndentEngine">
+            <!--
             <file name="org-netbeans-modules-xml-text-settings-XMLIndentEngine.settings" url="XMLIndentEngine.xml">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.xml.text.indent.Bundle"/>
             </file>
+            -->
             <file name="org-netbeans-modules-xml-text-settings-DTDIndentEngine.settings" url="DTDIndentEngine.xml">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.xml.text.indent.Bundle"/>
             </file>
@@ -96,6 +98,8 @@ made subject to such option by the copyright holder.
         <folder name="text">
             <folder name="xml">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.xml.text.resources.Bundle"/>
+                
+                <file name="org-netbeans-modules-xml-text-indent-XMLIndentTaskFactory.instance"/>
                 
                 <folder name="CompletionProviders">
                     <file name="org-netbeans-modules-xml-text-completion-XMLCompletionProvider.instance"/>
@@ -157,10 +161,16 @@ made subject to such option by the copyright holder.
                     </folder>
                 </folder>
                 
-                <file name="Settings.settings" url="XMLEditor-options.xml"/>
+                <folder name="Preferences">
+                    <folder name="Defaults">
+                        <file name="org-netbeans-modules-xml-text-xmlPreferences.xml" url="XMLEditor-preferences.xml"/>
+                    </folder>
+                </folder>
                 
                 <file name="EditorKit.instance">
                     <attr name="instanceClass" stringvalue="org.netbeans.modules.xml.text.syntax.XMLKit"/>
+                    <attr name="instanceOf" stringvalue="javax.swing.text.EditorKit,org.netbeans.modules.xml.text.syntax.XMLKit"/>
+                    <attr name="beaninfo" boolvalue="false"/>
                 </file>
                 
                 <!-- <folder name="Toolbars">
@@ -182,7 +192,9 @@ made subject to such option by the copyright holder.
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.xml.text.resources.Bundle"/>
                 <!-- It reuses kit only -->
                 <file name="EditorKit.instance">
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.xml.text.syntax.XMLKit"/>
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.xml.text.syntax.ENTKit"/>
+                    <attr name="instanceOf" stringvalue="javax.swing.text.EditorKit,org.netbeans.modules.xml.text.syntax.ENTKit"/>
+                    <attr name="beaninfo" boolvalue="false"/>
                 </file>
                 
                 <folder name="CompletionProviders">
@@ -283,9 +295,16 @@ made subject to such option by the copyright holder.
                     </folder>
                 </folder>
                 
-                <file name="Settings.settings" url="DTDEditor-options.xml"/>
+                <folder name="Preferences">
+                    <folder name="Defaults">
+                        <file name="org-netbeans-modules-xml-text-dtdPreferences.xml" url="DTDEditor-preferences.xml"/>
+                    </folder>
+                </folder>
+                
                 <file name="EditorKit.instance">
                     <attr name="instanceClass" stringvalue="org.netbeans.modules.xml.text.syntax.DTDKit"/>
+                    <attr name="instanceOf" stringvalue="javax.swing.text.EditorKit,org.netbeans.modules.xml.text.syntax.DTDKit"/>
+                    <attr name="beaninfo" boolvalue="false"/>
                 </file>
             </folder> <!-- xml-dtd -->
         </folder> <!-- application -->
