@@ -82,7 +82,35 @@ public final class EditorStyleConstants {
      */
     public static final Object Tooltip = new EditorStyleConstants ("tooltip"); //NOI18N
     
-    public String toString() {
+    /**
+     * Name of the top border line color.
+     * @since 1.16
+     */
+    public static final Object TopBorderLineColor = new EditorStyleConstants("top border line color"); //NOI18N
+    /**
+     * Name of the right hand side border line color.
+     * @since 1.16
+     */
+    public static final Object RightBorderLineColor = new EditorStyleConstants("right border line color"); //NOI18N
+    /**
+     * Name of the bottom border line color.
+     * @since 1.16
+     */
+    public static final Object BottomBorderLineColor = new EditorStyleConstants("bottom border line color"); //NOI18N
+    /**
+     * Name of the left hand side border line color.
+     * @since 1.16
+     */
+    public static final Object LeftBorderLineColor = new EditorStyleConstants("left border line color"); //NOI18N
+    
+    /**
+     * Name of the rendering hints <code>Map&lt;?,?&gt;</code> that are used
+     * for rendering text in the editor.
+     * @since 1.20
+     */
+    public static final Object RenderingHints = new EditorStyleConstants("rendering hints"); //NOI18N
+    
+    public @Override String toString() {
         return representation;
     }
 
