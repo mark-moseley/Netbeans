@@ -18,6 +18,8 @@
  */
 package org.netbeans.modules.jdbcwizard.builder.wsdl;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 import java.util.List;
@@ -26,10 +28,21 @@ import java.util.HashMap;
 
 import java.net.URL;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.Writer;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.RandomAccessFile;
+import java.io.UnsupportedEncodingException;
 
+import java.nio.charset.Charset;
+import java.nio.charset.UnsupportedCharsetException;
+import java.util.ArrayList;
 import javax.wsdl.factory.WSDLFactory;
 import javax.wsdl.xml.WSDLWriter;
 import javax.wsdl.xml.WSDLReader;
@@ -59,6 +72,7 @@ import org.netbeans.modules.jdbcwizard.builder.model.OracleQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.DB2QueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.SQLServerQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.model.JdbcQueryGenerator;
+import org.netbeans.modules.jdbcwizard.builder.model.MySQLQueryGenerator;
 import org.netbeans.modules.jdbcwizard.builder.util.XMLCharUtil;
 
 
@@ -363,8 +377,8 @@ public class WSDLGenerator {
             this.dbDataAccessObject = this.getQueryGenerator();
             this.dbDataAccessObject.init(this.mTable);
 
-            this.mTableName = this.mTable.getSchema()+"."+this.mTable.getName();
-
+            //this.mTableName = this.mTable.getSchema()+"."+this.mTable.getName();
+            this.mTableName = this.mTable.getName();
             // Generate Queries
             insertQuery = this.dbDataAccessObject.createInsertQuery();
             updateQuery = this.dbDataAccessObject.createUpdateQuery();
@@ -773,6 +787,8 @@ public class WSDLGenerator {
             objDataAccess = DB2QueryGenerator.getInstance();
         } else if (this.mDBType.equalsIgnoreCase("SQLServer")) {
             objDataAccess = SQLServerQueryGenerator.getInstance();
+        } else if (this.mDBType.equalsIgnoreCase("MYSQL")) {
+            objDataAccess = MySQLQueryGenerator.getInstance();
         }else {
             objDataAccess = JdbcQueryGenerator.getInstance();
         }
@@ -894,13 +910,31 @@ public class WSDLGenerator {
     private void writeWsdl() throws WSDLException {
         try {
             final WSDLWriter writer = WSDLGenerator.factory.newWSDLWriter();
-            final String outputFileName = this.wsdlFileLocation + "/" + this.mWSDLFileName + ".wsdl";
-            final Writer sink = new FileWriter(outputFileName);
+            final String outputFileName = this.wsdlFileLocation + File.separator + this.mWSDLFileName + ".wsdl";
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFileName);
+            final Writer sink = new java.io.OutputStreamWriter(fos);
             writer.writeWSDL(this.def, sink);
             WSDLGenerator.logger.log(Level.INFO, "Successfully generated wsdl file :" + outputFileName);
         } catch (final Exception e) {
-            throw new WSDLException(WSDLException.OTHER_ERROR, e.getMessage());
+           if(e instanceof FileNotFoundException){
+               WSDLGenerator.logger.log(Level.SEVERE, e.getMessage());
+            }else if(e instanceof IOException){
+               WSDLGenerator.logger.log(Level.SEVERE, e.getMessage());
+            }else if(e instanceof WSDLException){ 
+            if((((WSDLException)e).getMessage()).indexOf("Unsupported Java encoding for writing wsdl file") != -1){
+                try{ 
+                   final WSDLWriter writer = WSDLGenerator.factory.newWSDLWriter();
+                   final String outputFileName = this.wsdlFileLocation + File.separator + this.mWSDLFileName + ".wsdl";
+                   java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFileName);
+                   final Writer sink = new java.io.OutputStreamWriter(fos,"UTF-8");
+                   writer.writeWSDL(this.def, sink);
+                   WSDLGenerator.logger.log(Level.INFO, "Successfully generated wsdl file :" + outputFileName);
+                   }catch(Exception ex){
+                       WSDLGenerator.logger.log(Level.SEVERE, ex.getMessage());
+                   }
+                }else WSDLGenerator.logger.log(Level.SEVERE, e.getMessage());
+            }else WSDLGenerator.logger.log(Level.SEVERE, e.getMessage());
         }
-
     }
+    
 }
