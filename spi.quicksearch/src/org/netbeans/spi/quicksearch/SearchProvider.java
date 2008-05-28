@@ -41,6 +41,8 @@
 package org.netbeans.spi.quicksearch;
 
 import org.openide.util.Cancellable;
+import java.util.List;
+
 
 /**
  * Search Provider.
@@ -48,16 +50,14 @@ import org.openide.util.Cancellable;
  * @author  Jan Becicka
  */
 public interface SearchProvider extends Cancellable {
-    /**
-     * prefix for this group
-     * @return
-     */
-    String getCommandPrefix();
     
     /**
      * find result matching given pattern
      * @param pattern
      * @return
      */
-    SearchResultGroup evaluate(String pattern);
+    List<SearchResult> evaluate (String pattern);
+    
+    CategoryDescription getCategory ();
+    
 }
