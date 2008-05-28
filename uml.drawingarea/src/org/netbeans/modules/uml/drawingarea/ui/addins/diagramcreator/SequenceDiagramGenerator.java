@@ -62,17 +62,14 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElem
 import org.netbeans.modules.uml.core.metamodel.core.primitivetypes.IMessageKind;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagram;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagramKind;
-import org.netbeans.modules.uml.core.metamodel.diagrams.ILayoutKind;
 import org.netbeans.modules.uml.core.metamodel.dynamics.ICombinedFragment;
 import org.netbeans.modules.uml.core.metamodel.dynamics.IEventOccurrence;
 import org.netbeans.modules.uml.core.metamodel.dynamics.IInteraction;
 import org.netbeans.modules.uml.core.metamodel.dynamics.IInteractionOperand;
 import org.netbeans.modules.uml.core.metamodel.dynamics.ILifeline;
 import org.netbeans.modules.uml.core.metamodel.dynamics.IMessage;
-import org.netbeans.modules.uml.core.metamodel.dynamics.InteractionOperand;
 import org.netbeans.modules.uml.core.metamodel.structure.IComment;
 import org.netbeans.modules.uml.core.metamodel.structure.IProject;
-import org.netbeans.modules.uml.core.support.umlsupport.IETRect;
 import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.core.support.umlutils.ElementLocator;
 import org.netbeans.modules.uml.core.support.umlutils.IElementLocator;
@@ -80,7 +77,6 @@ import org.netbeans.modules.uml.drawingarea.LabelManager;
 import org.netbeans.modules.uml.drawingarea.UIDiagram;
 import org.netbeans.modules.uml.drawingarea.actions.ActionProvider;
 import org.netbeans.modules.uml.drawingarea.actions.AfterValidationExecutor;
-import org.netbeans.modules.uml.drawingarea.actions.DiscoverRelationshipAction;
 import org.netbeans.modules.uml.drawingarea.actions.ExConnectWithLocationProvider;
 import org.netbeans.modules.uml.drawingarea.engines.DiagramEngine;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
@@ -449,7 +445,6 @@ public class SequenceDiagramGenerator implements ISequenceDiagramGenerator
                 {
                     IMessage message = messages.get(i);
                     int thisLineNumber=message.getLineNumber();
-                    System.out.println("DRAW MESSAGE WITH LINE: "+thisLineNumber);
                     ILifeline sendLifeline = message.getSendingLifeline();
                     ILifeline recLifeline = message.getReceivingLifeline();
                     //TBD check cases for absent sendingLifeline or/and receivingLifeline
@@ -636,7 +631,6 @@ public class SequenceDiagramGenerator implements ISequenceDiagramGenerator
                         }
                     }
                 }
-                System.out.println("CREATED MESSAGES");
                 layoutSequenceDiagram();//we have lifelines and messages now, may want to relayout lifelines based on message labels sizes
             }
         }
@@ -814,7 +808,6 @@ public class SequenceDiagramGenerator implements ISequenceDiagramGenerator
                     {
                         emptyCFs.put(cf.getOperands().get(0).getLineNumber(), cf);
                         emptyCFList.add(cf);
-                        System.out.println("EMPTY COMBINED FRAGMENT WITH LINE: "+cf.getLineNumber()+"; FIRST IO LINE NUMBER: "+cf.getOperands().get(0).getLineNumber()+"; GATES NUM: "+cf.getGates().size());
                     }
                     allCFs.put(cf.getOperands().get(0).getLineNumber(), cf);
                 }
