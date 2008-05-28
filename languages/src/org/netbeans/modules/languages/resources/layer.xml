@@ -52,6 +52,7 @@ made subject to such option by the copyright holder.
     <folder name="Menu">
         <folder name="Window">
             <folder name="Other">
+                <attr name="position" intvalue="1700"/>
                 <file name="TokensBrowserAction.shadow">
                     <attr name="originalFile" stringvalue="Actions/Window/org-netbeans-modules-languages-features-TokensBrowserAction.instance"/>
                     <attr name="position" intvalue="1000"/>
@@ -64,6 +65,8 @@ made subject to such option by the copyright holder.
         </folder>
     </folder>
     <folder name="Editors">
+        <file name="org-netbeans-modules-languages-ParserImpl$AParserFactory.instance"/>
+        <file name="org-netbeans-modules-languages-ParserListenerFactoryImpl.instance"/>
         <folder name="AnnotationTypes">
             <file name="Error.xml" url="Error.xml"/>
             <file name="SyntaxError.xml" url="SyntaxError.xml"/>
