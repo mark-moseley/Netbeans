@@ -45,6 +45,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import org.netbeans.api.visual.action.ActionFactory;
@@ -69,7 +70,7 @@ import org.netbeans.modules.uml.drawingarea.actions.WidgetContext;
 import org.netbeans.modules.uml.drawingarea.actions.WidgetContextFactory;
 import org.netbeans.modules.uml.drawingarea.palette.context.ContextPaletteModel;
 import org.netbeans.modules.uml.drawingarea.palette.context.DefaultContextPaletteModel;
-import org.netbeans.modules.uml.drawingarea.persistence.NodeWriter;
+import org.netbeans.modules.uml.drawingarea.persistence.data.NodeInfo;
 import org.netbeans.modules.uml.drawingarea.view.DesignerTools;
 import java.util.TreeSet;
 import org.netbeans.api.visual.model.ObjectScene;
@@ -78,12 +79,11 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.metamodel.dynamics.ICombinedFragment;
 import org.netbeans.modules.uml.core.metamodel.dynamics.IInteractionFragment;
-import org.netbeans.modules.uml.core.metamodel.dynamics.InteractionOperand;
-import org.netbeans.modules.uml.core.metamodel.dynamics.InteractionOperand;
 import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.core.support.umlutils.ElementLocator;
 import org.netbeans.modules.uml.core.support.umlutils.IElementLocator;
 import org.netbeans.modules.uml.diagrams.nodes.LabeledWidget;
+import org.netbeans.modules.uml.diagrams.nodes.MovableLabelWidget;
 import org.netbeans.modules.uml.drawingarea.view.Customizable;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.netbeans.modules.uml.drawingarea.widgets.CombinedFragment;
@@ -102,10 +102,6 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
     protected CombinedFragmentContainerWidget childContainer;
     //
     private HashMap<IInteractionOperand, InteractionOperandWidget> operands = new HashMap<IInteractionOperand, InteractionOperandWidget>();
-    //
-    private int minOperandAdditionVertivcalMargin = 50;//if't marging from nearest message and bottom of combined fragment
-    //
-    private ICombinedFragment element;
     private boolean isShowWidget;
     private IMessage messageBefore;
     private MessageWidget messageBeforeW;
@@ -180,18 +176,17 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
     public void initializeNode(IPresentationElement presentation) {
         //
         ICombinedFragment src = (ICombinedFragment) presentation.getFirstSubject();
-        element = src;
         String name = ((BaseElement)src).getAttributeValue("interactionOperator");
         if (name == null || name.length() == 0) {
             name = "assert";
         }
-        String stereotype = src.getAppliedStereotypesAsString(false);//TBD need to be based on alias seting
         setOperator(name);
         //add all necessary operands
 
         for (IInteractionOperand i : src.getOperands()) {
-            i.createGuard();
+            //i.createGuard();
             InteractionOperandWidget w=addOperand(i);
+            getScene().validate();
         }
     //
 
@@ -357,7 +352,7 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
         
         if (operands.get(op) != null) {
             //it was already added, log to track possile perfomance
-            System.out.println("****WARNING: "+"Operand is already added, op:"+op.getConstraintsAsString()+"; ");
+            System.out.println("***WARNING: "+"Operand is already added, op:"+op.getConstraintsAsString()+"; ");
         } else {
             InteractionOperandWidget opW = new InteractionOperandWidget(getScene());
             ret=opW;
@@ -419,9 +414,16 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
             InteractionOperandWidget opW = operands.get(op);
             if(opW.getLocation().y>0)
             {
+                MovableLabelWidget labelWidget=opW.getLabel();
+                DesignerScene scene=(DesignerScene) getScene();
+                IPresentationElement lblPE=(IPresentationElement) scene.findObject(labelWidget);
+                if(lblPE!=null)opW.getOperand().getGuard().getSpecification().removePresentationElement(lblPE);
+                if(labelWidget!=null)labelWidget.removeFromParent();
+                IPresentationElement ioPE=(IPresentationElement) scene.findObject(opW);
                 operandsContainer.removeChild(opW);
+                if(ioPE!=null)opW.getOperand().removePresentationElement(ioPE);
                 operands.remove(op);
-                getScene().validate();
+                scene.validate();
                 return true;
             }
         }
@@ -662,8 +664,6 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
             //have no children, will look for neighbors
             int y=Integer.MIN_VALUE;
             int x=40;//???
-            System.out.println("WIDGETS BEFORE: "+messageBeforeW+"; "+cfBeforeW);
-            System.out.println("WIDGETS AFTER: "+messageAfterW+"; "+cfAfterW);
             if(messageBeforeW!=null)
             {
                 y=messageBeforeW.getSourceAnchor().getRelatedSceneLocation().y;
@@ -757,7 +757,7 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
     public void showLabels() {
         for(InteractionOperandWidget ioW:operands.values())
         {
-            if(ioW.getOperand().getGuard()!=null && ioW.getOperand().getGuard().getExpression()!=null && ioW.getOperand().getGuard().getExpression().length()>0)
+            if(ioW.getOperand().getGuard()!=null && ioW.getOperand().getGuard().getExpression()!=null && ioW.getOperand().getGuard().getExpression().length()>0 && !"[<expression>]".equals(ioW.getOperand().getGuard().getExpression()) && !"<expression>".equals(ioW.getOperand().getGuard().getExpression()))
             ioW.show(LabeledWidget.TYPE.BODY);
         }
     }
@@ -781,4 +781,54 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
         this.cfAfter=cf;
         this.cfAfterW=(CombinedFragmentWidget) cfW;
     }
+    @Override
+    protected void notifyAdded () 
+    {
+        // this is invoked when this widget or its parent gets added, only need to
+        // process the case when this widget is changed, same for notifyRemoved to 
+        // avoid concurrent modification to children list
+        for(InteractionOperandWidget ioW:operands.values())
+        {
+            MovableLabelWidget labelWidget=ioW.getLabel();
+            if (labelWidget == null || getParentWidget() == labelWidget.getParentWidget())
+            {
+                return;
+            }
+            labelWidget.removeFromParent();
+            int index = getParentWidget().getChildren().indexOf(this);
+            getParentWidget().addChild(index + 1, labelWidget);
+        }
+    }
+    
+    @Override
+    protected void notifyRemoved()
+    {
+         for(InteractionOperandWidget ioW:operands.values())
+        {
+            MovableLabelWidget labelWidget=ioW.getLabel();
+            if (labelWidget != null && getParentWidget() == null)
+            {           
+                labelWidget.removeFromParent();
+            }
+         }
+    }
+
+    @Override
+    public void load(NodeInfo nodeReader) {
+        super.load(nodeReader);
+        ArrayList<String> offsetsStr=nodeReader.getDevidersOffests();//currently deviders are used from ts import only, may be will be used in 6.5 loading later
+        for(int i=0;i<offsetsStr.size();i++)
+        {
+            int offset=Integer.parseInt(offsetsStr.get(i));
+            if(operandsContainer.getChildren().size()>(i+1))
+            {
+                Widget opW=operandsContainer.getChildren().get(i+1);//1st operand do not count
+                Point opWLoc=opW.getPreferredLocation();
+                opWLoc.y=offset;
+                opW.setPreferredLocation(opWLoc);
+            }
+        }
+    }
+    
+    
 }

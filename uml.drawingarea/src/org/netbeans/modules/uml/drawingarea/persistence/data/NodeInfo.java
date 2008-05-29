@@ -45,6 +45,8 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Paint;
 import java.awt.Point;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Hashtable;
 import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.uml.drawingarea.view.ResourceValue;
@@ -65,6 +67,8 @@ public class NodeInfo
     private Paint background;
     private Color foreground;
     private Font font;
+    private ArrayList nodeLabels=new ArrayList();
+    private ArrayList<String> deviders=new ArrayList<String>();//used in combined fragment and may be in partitions/states
 
     public NodeInfo()
     {
@@ -159,6 +163,32 @@ public class NodeInfo
         return size;
     }
     
+    public int addNodeLabel(Object label)
+    {
+        nodeLabels.add(label);
+        return nodeLabels.size();
+    }
+    
+    public int addNodeLabels(ArrayList labels)
+    {
+        nodeLabels.add(labels);
+        return nodeLabels.size();
+    }
+    
+    public ArrayList getLabels()
+    {
+        return nodeLabels;
+    }
+    public int addDeviderOffset(String offset)
+    {
+        deviders.add(offset);
+        return deviders.size();
+    }
+    
+    public ArrayList<String> getDevidersOffests()
+    {
+        return deviders;
+    }
     //it's not so simple as get(ResourceValue.BGCOLOR), keys are more complex then usual keys and need special handling
     //--
 //    //access background
