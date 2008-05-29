@@ -72,6 +72,7 @@ import javax.net.ssl.X509TrustManager;
 import javax.swing.JButton;
 import org.netbeans.modules.subversion.Subversion;
 import org.netbeans.modules.subversion.SvnModuleConfig;
+import org.netbeans.modules.subversion.client.cli.CommandlineClient;
 import org.netbeans.modules.subversion.config.CertificateFile;
 import org.netbeans.modules.subversion.config.SvnConfigFiles;
 import org.netbeans.modules.subversion.ui.repository.Repository;
@@ -97,11 +98,11 @@ public class SvnClientExceptionHandler {
     
     private final ISVNClientAdapter adapter;
     private final SvnClient client;
+    private final SvnClientDescriptor desc;    
     private final int handledExceptions;
     
     private static final String NEWLINE = System.getProperty("line.separator"); // NOI18N
     private static final String CHARSET_NAME = "ASCII7";                        // NOI18N
-  
     private class CertificateFailure {
         int mask;
         String error;
@@ -147,10 +148,11 @@ public class SvnClientExceptionHandler {
             
     static final String ACTION_CANCELED_BY_USER = org.openide.util.NbBundle.getMessage(SvnClientExceptionHandler.class, "MSG_ActionCanceledByUser");
     
-    public SvnClientExceptionHandler(SVNClientException exception, ISVNClientAdapter adapter, SvnClient client, int handledExceptions) {
+    public SvnClientExceptionHandler(SVNClientException exception, ISVNClientAdapter adapter, SvnClient client, SvnClientDescriptor desc, int handledExceptions) {
         this.exception = exception;                
         this.adapter = adapter;
         this.client = client;
+        this.desc = desc;
         this.handledExceptions = handledExceptions;
         exceptionMask = getMask(exception.getMessage());
     }      
@@ -169,7 +171,13 @@ public class SvnClientExceptionHandler {
     }
          
     private boolean handleRepositoryConnectError() {        
-        SVNUrl url = getSVNUrl();
+        // try to get the repository url from the svnclientdescriptor 
+        SVNUrl url = desc != null ? desc.getSvnUrl() : null;
+        if(url == null) { 
+            // huh ??? - try to fallback to the url given by the error msg. 
+            // unfortunatelly - this musn't be the repo url but only the the remote host url
+            url = getSVNUrl();
+        }
         Repository repository = new Repository(Repository.FLAG_SHOW_PROXY, org.openide.util.NbBundle.getMessage(SvnClientExceptionHandler.class, "MSG_Error_ConnectionParameters"));  // NOI18N
         repository.selectUrl(url, true);
         
@@ -195,7 +203,7 @@ public class SvnClientExceptionHandler {
 
     private boolean handleNoCertificateError() throws Exception {
         
-        SVNUrl url = getSVNUrl();
+        SVNUrl url = getSVNUrl(); // get the remote host url
         String realmString = url.getProtocol() + "://" + url.getHost() + ":" + url.getPort(); // NOI18N
         String hostString = SvnUtils.ripUserFromHost(url.getHost());                                
         
@@ -292,7 +300,13 @@ public class SvnClientExceptionHandler {
     }
     private String getRealmFromException() {        
         String exceptionMessage = exception.getMessage().toLowerCase();             
-        String[] errorMessages = new String[] {"host not found (", "could not connect to server (", "could not resolve hostname (", "issuer is not trusted ("};        
+        String[] errorMessages = new String[] {
+            "host not found (", 
+            "could not connect to server (", 
+            "could not resolve hostname (", 
+            "issuer is not trusted (",
+            "authorization failed ("
+        };        
         for(String errorMessage : errorMessages) {
             int idxL = exceptionMessage.indexOf(errorMessage);
             if(idxL < 0) {
@@ -542,15 +556,16 @@ public class SvnClientExceptionHandler {
         return msg.equals(ACTION_CANCELED_BY_USER);
     }
     
-    private static boolean isAuthentication(String msg) {        
+    private static boolean isAuthentication(String msg) {   
+        msg = msg.toLowerCase();       
         return msg.indexOf("authentication error from server: username not found") > - 1 || // NOI18N
                msg.indexOf("authorization failed") > - 1 ||                                 // NOI18N
                msg.indexOf("authentication error from server: password incorrect") > -1 ||  // NOI18N
                msg.indexOf("can't get password") > - 1;                                     // NOI18N
-        // XXX we also have to check for authentication messages from proxy
     }
 
     private static boolean isNoCertificate(String msg) {
+        msg = msg.toLowerCase();       
         return msg.indexOf("server certificate verification failed") > -1;                  // NOI18N
     }
     
@@ -560,6 +575,7 @@ public class SvnClientExceptionHandler {
     }
 
     private static boolean isNoHostConnection(String msg) {
+        msg = msg.toLowerCase();       
         return msg.indexOf("host not found") > -1 ||                                        // NOI18N
                msg.indexOf("could not connect to server") > -1 ||                           // NOI18N
                msg.indexOf("could not resolve hostname") > -1;                              // NOI18N
@@ -611,15 +627,18 @@ public class SvnClientExceptionHandler {
         return msg.indexOf("file not found: revision") > -1;  // NOI18N
     }      
         
-    private static boolean isAlreadyAWorkingCopy(String msg) {        
+    private static boolean isAlreadyAWorkingCopy(String msg) {   
+        msg = msg.toLowerCase();       
         return msg.indexOf("is already a working copy for a different url") > -1;           // NOI18N
     }
 
     private static boolean isClosedConnection(String msg) {
+        msg = msg.toLowerCase();       
         return msg.indexOf("could not read status line: an existing connection was forcibly closed by the remote host.") > -1; // NOI18N
     }
 
     private static boolean isCommitFailed(String msg) {
+        msg = msg.toLowerCase();       
         return msg.indexOf("commit failed (details follow)") > -1;                          // NOI18N
     }
 
@@ -630,12 +649,14 @@ public class SvnClientExceptionHandler {
     }
     
     private static boolean isOutOfDate(String msg) {
+        msg = msg.toLowerCase();       
         return msg.indexOf("out of date") > -1;                                             // NOI18N
     }
     
     private static boolean isNoSvnClient(String msg) {
         msg = msg.toLowerCase();
-        return msg.equals("command line client adapter is not available");
+        return (msg.indexOf("command line client adapter is not available") > -1) || 
+               (msg.indexOf(CommandlineClient.ERR_CLI_NOT_AVALABLE) > -1);
     }
 
     public static boolean isMissingOrLocked(String msg) {  
@@ -661,10 +682,10 @@ public class SvnClientExceptionHandler {
         if(isCancelledAction(ex.getMessage())) {
             cancelledAction();
             return;
-        }                 
-        Subversion.LOG.log(Level.WARNING, ex.getMessage(), ex);
+        }                   
+        Subversion.LOG.log(Level.INFO, ex.getMessage(), ex);
         if( annotate ) {
-            String msg = getCustomizedMessage(ex);
+            String msg = getCustomizedMessage(ex);  
             if(msg == null) {
                 if(ex instanceof SVNClientException) {
                     msg = parseExceptionMessage((SVNClientException) ex);    
@@ -713,7 +734,7 @@ public class SvnClientExceptionHandler {
         return msg;
     }
 
-    private static void annotate(String msg) {        
+    public static void annotate(String msg) {        
         CommandReport report = new CommandReport(NbBundle.getMessage(SvnClientExceptionHandler.class, "MSG_SubversionCommandError"), msg);
         JButton ok = new JButton(NbBundle.getMessage(SvnClientExceptionHandler.class, "CTL_CommandReport_OK"));
         NotifyDescriptor descriptor = new NotifyDescriptor(
