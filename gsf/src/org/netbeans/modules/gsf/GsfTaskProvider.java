@@ -41,17 +41,22 @@ package org.netbeans.modules.gsf;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import javax.swing.text.StyledDocument;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsf.Error;
-import org.netbeans.api.gsf.HintsProvider;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsf.api.Error;
+import org.netbeans.modules.gsf.api.HintsProvider;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.gsf.api.RuleContext;
+import org.netbeans.modules.gsfret.hints.infrastructure.GsfHintsManager;
 import org.netbeans.napi.gsfret.source.CompilationController;
 import org.netbeans.napi.gsfret.source.Phase;
 import org.netbeans.napi.gsfret.source.Source;
@@ -119,8 +124,10 @@ public class GsfTaskProvider extends PushTaskScanner  {
         //cancel all current operations:
         cancelAllCurrent();
         
-        this.scope = scope;
-        this.callback = callback;
+        synchronized (TASKS) {
+            this.scope = scope;
+            this.callback = callback;
+        }
         
         if (scope == null || callback == null) {
             return;
@@ -131,6 +138,8 @@ public class GsfTaskProvider extends PushTaskScanner  {
         }
         
         for (Project p : scope.getLookup().lookupAll(Project.class)) {
+            // TODO - find out which subgroups to use
+            
             for (SourceGroup sg : ProjectUtils.getSources(p).getSourceGroups(Sources.TYPE_GENERIC)) {
                 enqueue(new Work(sg.getRootFolder(), callback));
             }
@@ -167,7 +176,7 @@ public class GsfTaskProvider extends PushTaskScanner  {
     
     private static void enqueue(Work w) {
         synchronized (TASKS) {
-            if (INSTANCE != null && TASKS.size() == 0) {
+            if (INSTANCE != null && TASKS.size() == 0 && INSTANCE.callback != null) {
                INSTANCE.callback.started();
             }
             final RequestProcessor.Task task = WORKER.post(w);
@@ -178,7 +187,7 @@ public class GsfTaskProvider extends PushTaskScanner  {
                     synchronized (TASKS) {
                         if (!clearing) {
                             TASKS.remove(task);
-                            if (INSTANCE != null && TASKS.size() == 0) {
+                            if (INSTANCE != null && TASKS.size() == 0 && INSTANCE.callback != null) {
                                INSTANCE.callback.finished();
                             }
                         }
@@ -187,7 +196,7 @@ public class GsfTaskProvider extends PushTaskScanner  {
             });
             if (task.isFinished()) {
                 TASKS.remove(task);
-                if (INSTANCE != null && TASKS.size() == 0) {
+                if (INSTANCE != null && TASKS.size() == 0 && INSTANCE.callback != null) {
                    INSTANCE.callback.finished();
                 }
             }
@@ -243,13 +252,17 @@ public class GsfTaskProvider extends PushTaskScanner  {
                 }
                 return;
             }
-            Language language = LanguageRegistry.getInstance().getLanguageByMimeType(file.getMIMEType());
-            if (language == null) {
-                return;
+            final LanguageRegistry registry = LanguageRegistry.getInstance();
+            final List<Language> applicableLanguages = registry.getApplicableLanguages(file.getMIMEType());
+            boolean applicable = false;
+            for (Language language : applicableLanguages) {
+                HintsProvider provider = language.getHintsProvider();
+                if (provider != null) {
+                    applicable = true;
+                }
             }
-
-            final HintsProvider provider = language.getHintsProvider();
-            if (provider == null) {
+            if (!applicable) {
+                // No point compiling the file if there are no hintsproviders
                 return;
             }
 
@@ -271,19 +284,53 @@ public class GsfTaskProvider extends PushTaskScanner  {
                     UiUtils.getDocument(info.getFileObject(), true);
 
                     info.toPhase(Phase.RESOLVED);
-                    
-                    List<Error> errors = provider.computeErrors(info, result);
-                    provider.computeHints(info, result);
-                    for (Error error : errors) {
-                        try {
-                            int lineno = NbDocument.findLineNumber((StyledDocument)info.getDocument(), error.getStartPosition().getOffset())+1;
-                            Task task = Task.create(file, 
-                                    error.getSeverity() == org.netbeans.api.gsf.Severity.ERROR ? TASKLIST_ERROR : TASKLIST_WARNING,
-                                    error.getDisplayName(),
-                                    lineno);
-                            tasks.add(task);
-                        } catch (IOException ioe) {
-                            Exceptions.printStackTrace(ioe);
+
+                    for (String mimeType : info.getEmbeddedMimeTypes()) {
+                        Collection<? extends ParserResult> embeddedResults = info.getEmbeddedResults(mimeType);
+                        for (ParserResult parserResult : embeddedResults) {
+                            Language language = registry.getLanguageByMimeType(mimeType);
+                            HintsProvider provider = language.getHintsProvider();
+                            if (provider == null) {
+                                continue;
+                            }
+
+                            List<Error> errors = new ArrayList<Error>();
+                            GsfHintsManager manager = language.getHintsManager();
+                            RuleContext ruleContext = manager.createRuleContext(info, language, -1, -1, -1);
+                            if (ruleContext == null) {
+                                continue;
+                            }
+                            final List<Hint> hints = new ArrayList<Hint>();
+                            provider.computeErrors(manager, ruleContext, hints, errors);
+                            provider.computeHints(manager, ruleContext, hints);
+                            for (Error error : errors) {
+                                StyledDocument doc = (StyledDocument) info.getDocument();
+                                if (doc == null) {
+                                    continue;
+                                }
+
+                                int astOffset = error.getStartPosition();
+                                int lexOffset;
+                                if (parserResult.getTranslatedSource() != null) {
+                                    lexOffset = parserResult.getTranslatedSource().getLexicalOffset(astOffset);
+                                    if (lexOffset == -1) {
+                                        continue;
+                                    }
+                                } else {
+                                    lexOffset = astOffset;
+                                }
+
+                                int lineno = NbDocument.findLineNumber(doc, lexOffset) + 1;
+                                Task task = Task.create(file, 
+                                        error.getSeverity() == org.netbeans.modules.gsf.api.Severity.ERROR ? TASKLIST_ERROR : TASKLIST_WARNING,
+                                        error.getDisplayName(),
+                                        lineno);
+                                tasks.add(task);
+                            }
+                            for (Hint desc : hints) {
+                                ErrorDescription errorDesc = manager.createDescription(desc, ruleContext, false);
+                                result.add(errorDesc);
+                            }
                         }
                     }
                 }
