@@ -414,40 +414,20 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
             if (Node.PROP_DISPLAY_NAME.equals(name)) {
                 htmlDisplayName = null;
             }
-
-            SwingUtilities.invokeLater(this);
-
+            
+            QUEUE.runSafe(this);
             return;
         }
 
         // bugfix #37748, VisualizerNode ignores change of short desc if it is not read yet (set to UNKNOWN)
         if (Node.PROP_SHORT_DESCRIPTION.equals(name) && (shortDescription != UNKNOWN)) {
-            SwingUtilities.invokeLater(this);
-
+            QUEUE.runSafe(this);
             return;
         }
 
         if (Node.PROP_LEAF.equals(name)) {
-            SwingUtilities.invokeLater(
-                new Runnable() {
-                    public void run() {
-                        children = NO_REF;
-
-                        // notify models               
-                        VisualizerNode parent = VisualizerNode.this;
-
-                        while (parent != null) {
-                            Object[] listeners = parent.getListenerList();
-
-                            for (int i = listeners.length - 1; i >= 0; i -= 2) {
-                                ((NodeModel) listeners[i]).structuralChange(VisualizerNode.this);
-                            }
-
-                            parent = (VisualizerNode) parent.getParent();
-                        }
-                    }
-                }
-            );
+            QUEUE.runSafe(new PropLeafChange());
+            return;
         }
     }
 
@@ -675,7 +655,6 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
                 queue = null;
                 LOG.log(Level.FINER, "Queue emptied"); // NOI18N
             }
-
             while (en.hasMoreElements()) {
                 Runnable r = en.nextElement();
                 LOG.log(Level.FINER, "Running {0}", r); // NOI18N
@@ -684,5 +663,49 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
             }
             LOG.log(Level.FINER, "Queue processing over"); // NOI18N
         }
+    }
+
+    private class PropLeafChange implements Runnable {
+
+        public PropLeafChange() {
+        }
+
+        public void run() {
+            children = NO_REF;
+
+            // notify models
+            VisualizerNode parent = VisualizerNode.this;
+
+            while (parent != null) {
+                Object[] listeners = parent.getListenerList();
+
+                for (int i = listeners.length - 1; i >= 0; i -= 2) {
+                    ((NodeModel) listeners[i]).structuralChange(VisualizerNode.this);
+                }
+
+                parent = (VisualizerNode) parent.getParent();
+            }
+        }
+    }
+
+    /**
+     * Builds the parents of vis. node up to and including the root node
+     * from VisualizerNode hierarchy
+    */
+    VisualizerNode[] getPathToRoot() {
+        return getPathToRoot(0);
+    }
+
+    VisualizerNode[] getPathToRoot(int depth) {
+        depth++;
+        VisualizerNode[] retNodes;
+        if (parent == null || parent.parent == null) {
+            retNodes = new VisualizerNode[depth];
+        }
+        else {
+            retNodes = parent.parent.getPathToRoot(depth);
+        }
+        retNodes[retNodes.length - depth] = this;
+        return retNodes;
     }
 }
