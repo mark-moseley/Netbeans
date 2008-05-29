@@ -47,6 +47,7 @@ import java.util.List;
 import java.util.ListIterator;
 
 import org.jruby.ast.Node;
+import org.jruby.ast.NodeType;
 import org.jruby.lexer.yacc.ISourcePosition;
 
 
@@ -107,7 +108,7 @@ public class AstPath implements Iterable<Node> {
      * @param nodeType The nodeType to check
      * @return true if the given nodeType is found in the path
      */
-    public boolean contains(int nodeType) {
+    public boolean contains(NodeType nodeType) {
         for (int i = 0, n = path.size(); i < n; i++) {
             if (path.get(i).nodeId == nodeType) {
                 return true;
@@ -133,7 +134,6 @@ public class AstPath implements Iterable<Node> {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
     private Node find(Node node, int offset) {
         ISourcePosition pos = node.getPosition();
         int begin = pos.getStartOffset();
@@ -143,6 +143,9 @@ public class AstPath implements Iterable<Node> {
             List<Node> children = (List<Node>)node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 Node found = find(child, offset);
 
                 if (found != null) {
@@ -157,6 +160,9 @@ public class AstPath implements Iterable<Node> {
             List<Node> children = (List<Node>)node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 Node found = find(child, offset);
 
                 if (found != null) {
@@ -173,7 +179,6 @@ public class AstPath implements Iterable<Node> {
     /**
      * Find the path to the given node in the AST
      */
-    @SuppressWarnings("unchecked")
     public boolean find(Node node, Node target) {
         if (node == target) {
             return true;
@@ -182,6 +187,9 @@ public class AstPath implements Iterable<Node> {
         List<Node> children = (List<Node>)node.childNodes();
 
         for (Node child : children) {
+            if (child.isInvisible()) {
+                continue;
+            }
             boolean found = find(child, target);
 
             if (found) {

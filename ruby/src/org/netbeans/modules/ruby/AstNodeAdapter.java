@@ -56,12 +56,11 @@ import org.jruby.ast.ModuleNode;
 import org.jruby.ast.NewlineNode;
 import org.jruby.ast.Node;
 import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.ParserResult;
+import org.netbeans.modules.gsf.api.ParserResult;
 import org.openide.util.Enumerations;
 
 
 /** For debugging only (used by the AST Viewer */
-@SuppressWarnings("unchecked")
 class AstNodeAdapter implements ParserResult.AstTreeNode {
     private static final boolean HIDE_NEWLINE_NODES = false;
     private final Node node;
@@ -154,7 +153,12 @@ class AstNodeAdapter implements ParserResult.AstTreeNode {
         return Enumerations.array(children);
     }
 
+    @Override
     public String toString() {
+        if (node == Node.INVALID_POSITION) {
+            return "INVALID_POSITION";
+        }
+
         StringBuilder sb = new StringBuilder();
 
         sb.append("<html>");
@@ -213,7 +217,9 @@ class AstNodeAdapter implements ParserResult.AstTreeNode {
     }
 
     public int getStartOffset() {
-        if (node.getPosition() != null) {
+        if (node == Node.INVALID_POSITION) {
+            return -1;
+        } else if (node.getPosition() != null) {
             return node.getPosition().getStartOffset();
         } else {
             return -1;
@@ -221,7 +227,9 @@ class AstNodeAdapter implements ParserResult.AstTreeNode {
     }
 
     public int getEndOffset() {
-        if (node.getPosition() != null) {
+        if (node == Node.INVALID_POSITION) {
+            return -1;
+        } else if (node.getPosition() != null) {
             return node.getPosition().getEndOffset();
         } else {
             return -1;

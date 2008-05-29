@@ -2,8 +2,8 @@
 <!-- You may freely edit this file. See harness/README in the NetBeans platform -->
 <!-- for some information on what you could do (e.g. targets to override). -->
 <!-- If you delete this file and reopen the project it will be recreated. -->
-<project name="org.jruby" default="netbeans" basedir=".">
-    <description>Builds, tests, and runs the project org.jruby</description>
+<project name="o.jruby" default="netbeans" basedir=".">
+    <description>Builds, tests, and runs the project o.jruby</description>
     <import file="../nbbuild/templates/projectized.xml"/>
 
     <target name="init" depends="projectized.init">
@@ -35,22 +35,23 @@
         <copy todir="${src.dir}" overwrite="true">
             <fileset dir="patched_files" />
         </copy>
-
+<!-- The jruby.properties are now just patched in from patched_files (hardcoded buildstamp)
         <tstamp><format property="build.date" pattern="yyyy-MM-dd"/></tstamp>
         <copy todir="${src.dir}/org/jruby" overwrite="true">
             <fileset file="${patched_source}/jruby-${jruby_src_version}/src/jruby.properties" />
             <filterset>
                 <filter token="os.arch" value="${os.arch}"/>
                 <filter token="java.specification.version" value="${java.specification.version}"/>
-                <!--
+                <!- -
                 Defined in jruby-1.0.3/default.build.properties
                 <filter token="javac.version" value="${javac.version}"/>
-                -->
+                - ->
                 <filter token="javac.version" value="1.4"/>
                 <filter token="build.date" value="${build.date}"/>
             </filterset>
         </copy>
         <delete file="${patched_source}/jruby-${jruby_src_version}/src/jruby.properties" />
+-->
     </target>    
 
     <target name="release" depends="init">
@@ -58,8 +59,12 @@
         <copy todir="${cluster}/modules/ext">
             <fileset dir="${libs.dir}">
                 <include name="asm*.jar"/>
-                <include name="backport*.jar"/>
+                <include name="joni*.jar"/>
+                <include name="jna*.jar"/>
+                <include name="joda*.jar"/>
                 <include name="jline*.jar"/>
+                <include name="jvyamlb*.jar"/>
+                <include name="bytelist*.jar"/>
             </fileset>
         </copy>
     </target>

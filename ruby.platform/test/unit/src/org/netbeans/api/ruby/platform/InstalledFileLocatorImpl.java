@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,10 +21,8 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,44 +36,35 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-package org.netbeans.modules.ruby.platform;
+package org.netbeans.api.ruby.platform;
 
 import java.io.File;
-import java.util.Arrays;
-import org.netbeans.api.ruby.platform.RubyTestBase;
-import org.netbeans.api.ruby.platform.TestUtil;
-import org.openide.util.Utilities;
+import org.openide.modules.InstalledFileLocator;
 
-public class RubyExecutionTest extends RubyTestBase {
+public final class InstalledFileLocatorImpl extends InstalledFileLocator {
 
-    public RubyExecutionTest(String testName) {
-        super(testName);
+    public InstalledFileLocatorImpl() {
     }
 
-    public void testComputeJRubyClassPath() {
-        String[] expectedJars = {
-            "bsf.jar",
-            "jruby.jar",
-            "profile.jar",
-        };
-        Arrays.sort(expectedJars);
-        File jrubyLib = new File(TestUtil.getXTestJRubyHome(), "lib");
-        String cp = RubyExecution.computeJRubyClassPath(null, jrubyLib);
-        String finalCP;
-        if (Utilities.isWindows()) {
-            assertTrue(cp.startsWith("\""));
-            assertTrue(cp.endsWith("\""));
-            finalCP = cp.substring(1, cp.length() - 1);
+    public @Override File locate( String relativePath, String codeNameBase, boolean localized) {
+        if (relativePath.equals("ruby/debug-commons-0.9.5/classic-debug.rb")) {
+            File rubydebugDir = RubyTestBase.getDirectory("rubydebug.dir", true);
+            File cd = new File(rubydebugDir, "classic-debug.rb");
+            if (!cd.isFile()) {
+                throw new RuntimeException("classic-debug found in " + rubydebugDir);
+            }
+            return cd;
+        } else if (relativePath.equals("jruby-1.1.2")) {
+            return TestUtil.getXTestJRubyHome();
+        } else if (relativePath.equals("platform_info.rb")) {
+            String script = System.getProperty("xtest.platform_info.rb");
+            if (script == null) {
+                throw new RuntimeException("xtest.platform_info.rb property has to be set when running within binary distribution");
+            }
+            return new File(script);
         } else {
-            finalCP = cp;
-        }
-        String[] jars = finalCP.split(File.pathSeparator);
-        // assertEquals(Arrays.asList(expectedJars), Arrays.asList(jars));
-        assertEquals(expectedJars.length, jars.length);
-        Arrays.sort(jars);
-        for (int i = 0; i < jars.length; i++) {
-            assertTrue(jars[i] + " ends with " + expectedJars[i], jars[i].endsWith(expectedJars[i]));
+            return null;
         }
     }
+    
 }

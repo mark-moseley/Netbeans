@@ -44,33 +44,29 @@ import java.util.List;
 
 import org.jruby.ast.Node;
 import org.jruby.lexer.yacc.ISourcePosition;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.api.gsf.ParserResult;
-import org.netbeans.api.gsf.PositionManager;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.ElementHandle;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.gsf.api.PositionManager;
 import org.netbeans.modules.ruby.elements.AstElement;
-
+import org.netbeans.modules.ruby.elements.RubyElement;
 
 /**
- *
  * @author Tor Norbye
  */
 public class RubyPositionManager implements PositionManager {
-    /**
-     * Creates a new instance of JRubyPositionManager
-     */
-    public RubyPositionManager() {
-    }
 
-    public OffsetRange getOffsetRange(Element file, Element object) {
+    public OffsetRange getOffsetRange(CompilationInfo info, ElementHandle objectHandle) {
+        RubyElement object = RubyParser.resolveHandle(info, objectHandle);
         if (object instanceof AstElement) {
             Node target = ((AstElement)object).getNode();
             ISourcePosition pos = target.getPosition();
 
             return new OffsetRange(pos.getStartOffset(), pos.getEndOffset());
         } else {
-            throw new IllegalArgumentException((("Foreign element: " + object + " of type " +
-                object) != null) ? object.getClass().getName() : "null");
+            throw new IllegalArgumentException("Foreign element: " + object + " of type " +
+                    (object != null ? object.getClass().getName() : "null"));
         }
     }
 
@@ -79,7 +75,6 @@ public class RubyPositionManager implements PositionManager {
      * passed in path list.
      * @todo Build up an AstPath instead!
      */
-    @SuppressWarnings("unchecked")
     public static Node findPathTo(Node node, List<Node> path, int offset) {
         Node result = find(node, path, offset);
         path.add(node);
@@ -87,7 +82,6 @@ public class RubyPositionManager implements PositionManager {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
     private static Node find(Node node, List<Node> path, int offset) {
         ISourcePosition pos = node.getPosition();
         int begin = pos.getStartOffset();
@@ -97,6 +91,9 @@ public class RubyPositionManager implements PositionManager {
             List<Node> children = (List<Node>)node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 Node found = find(child, path, offset);
 
                 if (found != null) {
@@ -111,6 +108,9 @@ public class RubyPositionManager implements PositionManager {
             List<Node> children = (List<Node>)node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 Node found = find(child, path, offset);
 
                 if (found != null) {
@@ -127,7 +127,6 @@ public class RubyPositionManager implements PositionManager {
     /**
      * Find the path to the given node in the AST
      */
-    @SuppressWarnings("unchecked")
     public static boolean find(Node node, List<Node> path, Node target) {
         if (node == target) {
             return true;
@@ -136,6 +135,9 @@ public class RubyPositionManager implements PositionManager {
         List<Node> children = (List<Node>)node.childNodes();
 
         for (Node child : children) {
+            if (child.isInvisible()) {
+                continue;
+            }
             boolean found = find(child, path, target);
 
             if (found) {

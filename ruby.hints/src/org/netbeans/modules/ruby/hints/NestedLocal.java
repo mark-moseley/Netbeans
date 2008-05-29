@@ -38,21 +38,22 @@ import org.jruby.ast.LocalAsgnNode;
 import org.jruby.ast.LocalVarNode;
 import org.jruby.ast.MethodDefNode;
 import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
+import org.jruby.ast.NodeType;
 import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.EditRegions;
-import org.netbeans.api.gsf.OffsetRange;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.EditRegions;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.EditList;
+import org.netbeans.modules.gsf.api.HintFix;
+import org.netbeans.modules.gsf.api.HintSeverity;
+import org.netbeans.modules.gsf.api.PreviewableFix;
+import org.netbeans.modules.gsf.api.RuleContext;
 import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.hints.spi.AstRule;
-import org.netbeans.modules.ruby.hints.spi.Description;
-import org.netbeans.modules.ruby.hints.spi.EditList;
-import org.netbeans.modules.ruby.hints.spi.Fix;
-import org.netbeans.modules.ruby.hints.spi.HintSeverity;
-import org.netbeans.modules.ruby.hints.spi.PreviewableFix;
-import org.netbeans.modules.ruby.hints.spi.RuleContext;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyRuleContext;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.util.NbBundle;
 
@@ -67,17 +68,17 @@ import org.openide.util.NbBundle;
  *
  * @author Tor Norbye
  */
-public class NestedLocal implements AstRule {
+public class NestedLocal extends RubyAstRule {
 
     public NestedLocal() {
     }
 
-    public boolean appliesTo(CompilationInfo info) {
+    public boolean appliesTo(RuleContext context) {
         return true;
     }
 
-    public Set<Integer> getKinds() {
-        return Collections.singleton(NodeTypes.FORNODE);
+    public Set<NodeType> getKinds() {
+        return Collections.singleton(NodeType.FORNODE);
     }
 
     public void cancel() {
@@ -96,16 +97,15 @@ public class NestedLocal implements AstRule {
         return NbBundle.getMessage(NestedLocal.class, "NestedLocalDesc");
     }
 
-    public void run(RuleContext context, List<Description> result) {
+    public void run(RubyRuleContext context, List<Hint> result) {
         Node node = context.node;
         AstPath path = context.path;
         CompilationInfo info = context.compilationInfo;
 
-        if (node.nodeId == NodeTypes.FORNODE) {
+        if (node.nodeId == NodeType.FORNODE) {
             // Check the children and see if we have a LocalAsgnNode; tbese are the
             // loop variables which are NOT local to the for block; if found, go and see
             // if it's a reuse!
-            @SuppressWarnings(value = "unchecked")
             List<Node> list = node.childNodes();
 
             for (Node child : list) {
@@ -114,7 +114,7 @@ public class NestedLocal implements AstRule {
                     Node method = AstUtilities.findLocalScope(null, path);
                     if (method != null && isUsed(method, name, child, new boolean[1])) {
                         OffsetRange range = AstUtilities.getNameRange(child);
-                        List<Fix> fixList = new ArrayList<Fix>(2);
+                        List<HintFix> fixList = new ArrayList<HintFix>(2);
                         Node root = AstUtilities.getRoot(info);
                         AstPath childPath = new AstPath(root, child);
                         fixList.add(new RenameVarFix(info, childPath, node, false));
@@ -127,7 +127,7 @@ public class NestedLocal implements AstRule {
                         
                         range = LexUtilities.getLexerOffsets(info, range);
                         if (range != OffsetRange.NONE) {
-                            Description desc = new Description(this, displayName, info.getFileObject(), range, fixList, 100);
+                            Hint desc = new Hint(this, displayName, info.getFileObject(), range, fixList, 100);
                             result.add(desc);
                         }
                     }
@@ -142,16 +142,18 @@ public class NestedLocal implements AstRule {
             return false;
         }
 
-        if (node.nodeId == NodeTypes.LOCALVARNODE || node.nodeId == NodeTypes.LOCALASGNNODE) {
+        if (node.nodeId == NodeType.LOCALVARNODE || node.nodeId == NodeType.LOCALASGNNODE) {
             if (name.equals(((INameNode)node).getName())) {
                 return true;
             }
         }
 
-        @SuppressWarnings(value = "unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             boolean found = isUsed(child, name, target, done);
             
             if (found) {
@@ -230,10 +232,12 @@ public class NestedLocal implements AstRule {
                 }
             }
 
-            @SuppressWarnings(value = "unchecked")
             List<Node> list = node.childNodes();
 
             for (Node child : list) {
+                if (child.isInvisible()) {
+                    continue;
+                }
 
                 // Skip inline method defs
                 if (child instanceof MethodDefNode) {

@@ -44,17 +44,14 @@ package org.netbeans.modules.ruby.lexer;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.netbeans.api.gsf.annotations.NonNull;
+import org.netbeans.modules.gsf.api.annotations.NonNull;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.modules.ruby.RubyUtils;
-import org.openide.util.Exceptions;
 import org.openide.util.Exceptions;
 
 /**
@@ -145,7 +142,6 @@ public class Call {
      * This method will also try to be smart such that if you have a block or array
      * call, it will return the relevant classnames (e.g. for [1,2].x| it returns "Array").
      */
-    @SuppressWarnings("unchecked")
     @NonNull
     public static Call getCallType(BaseDocument doc, TokenHierarchy<Document> th, int offset) {
         TokenSequence<?extends RubyTokenId> ts = LexUtilities.getRubyTokenSequence(th, offset);

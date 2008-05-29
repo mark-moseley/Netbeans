@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -47,6 +47,9 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.Stack;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -59,29 +62,27 @@ import org.netbeans.api.ruby.platform.TestUtil;
 import org.netbeans.junit.MockServices;
 import org.netbeans.modules.ruby.RubyTestBase;
 import org.netbeans.modules.ruby.debugger.breakpoints.RubyBreakpoint;
+import org.netbeans.modules.ruby.debugger.breakpoints.RubyLineBreakpoint;
 import org.netbeans.modules.ruby.debugger.breakpoints.RubyBreakpointManager;
-import org.netbeans.modules.ruby.platform.DebuggerPreferences;
 import org.netbeans.modules.ruby.platform.execution.DirectoryFileLocator;
 import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.text.Line;
+import org.openide.util.Exceptions;
 import org.openide.util.lookup.Lookups;
 import org.rubyforge.debugcommons.RubyDebugEvent;
 import org.rubyforge.debugcommons.RubyDebugEventListener;
 import org.rubyforge.debugcommons.RubyDebuggerException;
 import org.rubyforge.debugcommons.RubyDebuggerProxy;
 
-/**
- * @author Martin Krauskopf
- */
 public abstract class TestBase extends RubyTestBase {
 
     static {
         RubySession.TEST = true;
     }
-    
+
     private enum Engine { CLASSIC, RDEBUG_IDE }
     
     protected static boolean watchStepping = false;
@@ -100,10 +101,13 @@ public abstract class TestBase extends RubyTestBase {
     
     @Override
     protected void setUp() throws Exception {
+        MockServices.setServices(DialogDisplayerImpl.class, IFL.class);
+        touch(getWorkDir(), "config/Services/org-netbeans-modules-debugger-Settings.properties");
         super.setUp();
         platform = RubyPlatformManager.addPlatform(TestBase.getFile("ruby.executable", true));
+        assertFalse("is native Ruby", platform.isJRuby());
         assertTrue(platform.getInterpreter() + " has RubyGems installed", platform.hasRubyGemsInstalled());
-        String problems = platform.getFastDebuggerProblems();
+        String problems = platform.getFastDebuggerProblemsInHTML();
         assertNull("fast debugger installed: " + problems, problems);
         
         engines = new Stack<Engine>();
@@ -114,9 +118,15 @@ public abstract class TestBase extends RubyTestBase {
         doCleanUp();
     }
 
+    @Override
+    protected void tearDown() throws Exception {
+        super.tearDown();
+        doCleanUp();
+    }
+
     private void doCleanUp() {
         for (RubyBreakpoint bp : RubyBreakpointManager.getBreakpoints()) {
-            RubyBreakpointManager.removeBreakpoint(bp);
+            DebuggerManager.getDebuggerManager().addBreakpoint(bp);
         }
         DebuggerManager.getDebuggerManager().finishAllSessions();
     }
@@ -130,12 +140,20 @@ public abstract class TestBase extends RubyTestBase {
         return startDebugging(f, true);
     }
     
+    protected Process startDebugging(final File toTest, final RubyPlatform platform) throws RubyDebuggerException, IOException, InterruptedException {
+        return startDebugging(toTest, true, platform);
+    }
+    
     protected Process startDebugging(final File toTest, final boolean waitForSuspension) throws RubyDebuggerException, IOException, InterruptedException {
-        MockServices.setServices(DialogDisplayerImpl.class, IFL.class);
+        return startDebugging(toTest, waitForSuspension, platform);
+    }
+    
+    private Process startDebugging(final File toTest, final boolean waitForSuspension, final RubyPlatform platform) throws RubyDebuggerException, IOException, InterruptedException {
         ExecutionDescriptor desc = new ExecutionDescriptor(platform,
                 toTest.getName(), toTest.getParentFile(), toTest.getAbsolutePath());
         desc.fileLocator(new DirectoryFileLocator(FileUtil.toFileObject(toTest.getParentFile())));
-        Process process = RubyDebugger.startDebugging(desc);
+        RubySession session = RubyDebugger.startDebugging(desc);
+        Process process = session.getProxy().getDebugTarged().getProcess();
         if (waitForSuspension) {
             waitForSuspension();
         }
@@ -157,10 +175,10 @@ public abstract class TestBase extends RubyTestBase {
         Engine engine = engines.pop();
         switch (engine) {
             case CLASSIC:
-                DebuggerPreferences.getInstance().setUseClassicDebugger(platform, true);
+                forceClassicDebugger(true);
                 break;
             case RDEBUG_IDE:
-                switchToRDebugIDE();
+                forceClassicDebugger(false);
                 break;
             default:
                 fail("Unknown engine type: " + engine);
@@ -172,16 +190,11 @@ public abstract class TestBase extends RubyTestBase {
         assertFalse("JRuby Fast debugger not supported yet", platform.isJRuby());
         boolean available = isRDebugExecutableCorrectlySet();
         if (available) {
-            switchToRDebugIDE();
+            forceClassicDebugger(false);
         }
         return available;
     }
     
-    protected void switchToRDebugIDE() {
-        assertFalse("JRuby Fast debugger not supported yet", platform.isJRuby());
-        DebuggerPreferences.getInstance().setUseClassicDebugger(platform, false);
-    }
-
     protected void switchToJRuby() {
         platform = RubyPlatformManager.getDefaultPlatform();
     }
@@ -220,11 +233,11 @@ public abstract class TestBase extends RubyTestBase {
         return FileUtil.toFile(script);
     }
     
-    protected static RubyBreakpoint addBreakpoint(final FileObject fo, final int line) throws RubyDebuggerException {
-        return RubyBreakpointManager.addBreakpoint(createDummyLine(fo, line - 1));
+    protected static RubyLineBreakpoint addBreakpoint(final FileObject fo, final int line) throws RubyDebuggerException {
+        return RubyBreakpointManager.addLineBreakpoint(createDummyLine(fo, line - 1));
     }
     
-    static void doAction(final Object action) throws InterruptedException {
+    public static void doAction(final Object action) throws InterruptedException {
         if (watchStepping) {
             Thread.sleep(3000);
         }
@@ -245,7 +258,26 @@ public abstract class TestBase extends RubyTestBase {
             }
         });
     }
-    
+
+    protected void waitFor(final Process p) throws InterruptedException {
+        final CountDownLatch latch = new CountDownLatch(1);
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    p.waitFor();
+                    latch.countDown();
+                } catch (InterruptedException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        }).start();
+        latch.await(10, TimeUnit.SECONDS);
+        if (latch.getCount() > 0) {
+            fail("Process " + p + " was not finished.");
+            p.destroy();
+        }
+    }
+
     protected void waitForEvents(RubyDebuggerProxy proxy, int n, Runnable block) throws InterruptedException {
         final CountDownLatch events = new CountDownLatch(n);
         RubyDebugEventListener listener = new RubyDebugEventListener() {
@@ -273,8 +305,13 @@ public abstract class TestBase extends RubyTestBase {
             public void unmarkCurrentLine() { throw new UnsupportedOperationException("Not supported."); }
         };
     }
-    
+
+    protected void forceClassicDebugger(boolean force) {
+        RubyDebugger.FORCE_CLASSIC = force;
+    }
+
     public static final class IFL extends InstalledFileLocator {
+
         public IFL() {}
         @Override
         public File locate(String relativePath, String codeNameBase, boolean localized) {
@@ -283,7 +320,7 @@ public abstract class TestBase extends RubyTestBase {
                 File cd = new File(rubydebugDir, "classic-debug.rb");
                 assertTrue("classic-debug found in " + rubydebugDir, cd.isFile());
                 return cd;
-            } else if (relativePath.equals("jruby-1.1RC1")) {
+            } else if (relativePath.equals("jruby-1.1.2")) {
                 return TestUtil.getXTestJRubyHome();
             } else {
                 return null;
