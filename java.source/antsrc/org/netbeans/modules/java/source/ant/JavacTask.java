@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,13 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
+ * Contributor(s):
+ *
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,28 +37,45 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
- * Contributor(s):
- * 
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.spi.java.project.runner;
+package org.netbeans.modules.java.source.ant;
+
+import java.io.File;
 import java.io.IOException;
-import java.util.List;
-import java.util.Properties;
-import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.java.platform.JavaPlatform;
-import org.openide.filesystems.FileObject;
-import org.openide.windows.InputOutput;
+import org.apache.tools.ant.BuildException;
+import org.apache.tools.ant.Project;
+import org.apache.tools.ant.taskdefs.Javac;
+import org.netbeans.modules.java.source.usages.BuildArtifactMapperImpl;
+import org.netbeans.spi.project.support.ant.PropertyUtils;
 
 /**
  *
  * @author Jan Lahoda
  */
-public interface ProjectRunnerImplementation {
+public class JavacTask extends Javac {
 
-    public void run(JavaPlatform p, Properties props, FileObject toRun) throws IOException;
-    public void test(JavaPlatform p, List<FileObject> toRun) throws IOException;
+    @Override
+    public void execute() throws BuildException {
+        Project p = getProject();
+        
+        p.log("Overridden Javac task called", Project.MSG_DEBUG);
+        
+        String ensureBuilt = p.getProperty("ensure.built.source.roots");
+        
+        if (ensureBuilt != null) {
+            for (String path : PropertyUtils.tokenizePath(ensureBuilt)) {
+                File f = new File(path);
+                
+                try {
+                    BuildArtifactMapperImpl.ensureBuilt(f.toURI().toURL());
+                } catch (IOException ex) {
+                    throw new BuildException(ex);
+                }
+            }
+        } else {
+            super.execute();
+        }
+    }
 
 }
