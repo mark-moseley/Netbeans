@@ -43,7 +43,7 @@ package org.netbeans.performance.j2ee;
 
 
 import org.netbeans.junit.NbTestSuite;
-import org.netbeans.performance.j2ee.setup.*;
+import org.netbeans.performance.j2ee.memory.*;
 import org.netbeans.junit.NbModuleSuite;
 
 
@@ -53,13 +53,13 @@ import org.netbeans.junit.NbModuleSuite;
  *
  * @author  Radim Kubacki
  */
-public class MeasureJ2EESetupTest {
+public class MeasureJ2EEStartupTest {
     
     public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite("UI Responsiveness J2EE Setup suite");
+        NbTestSuite suite = new NbTestSuite("J2EE Memory suite");
 
-        suite.addTest(NbModuleSuite.create(J2EESetup.class, ".*", ".*"));
-       
+        suite.addTest(NbModuleSuite.create(MeasureBaselineMemoryFootprint.class, ".*", ".*"));
+
         return suite;
     }
     

@@ -39,68 +39,93 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2ee.dialogs;
+package org.netbeans.performance.j2ee.menus;
 
-import org.netbeans.modules.performance.utilities.PerformanceTestCase;
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.nodes.ProjectRootNode;
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
-import org.netbeans.jemmy.operators.Operator;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+
+import org.netbeans.jellytools.RuntimeTabOperator;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jemmy.operators.JPopupMenuOperator;
 
 /**
- * Test of Project Properties Window
- *
- * @author  mmirilovic@netbeans.org
+ * Test of popup menu on nodes in Runtime View
+ * @author  juhrik@netbeans.org, mmirilovic@netbeans.org
  */
-public class SelectJ2EEModuleDialog extends PerformanceTestCase {
+
+
+public class AppServerPopupMenu extends PerformanceTestCase {
     
-    private static Node testNode;
-    private String TITLE;
+    private static RuntimeTabOperator runtimeTab;
+    protected static Node dataObjectNode;
+    
+    private final String SERVER_REGISTRY = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.Bundle", "SERVER_REGISTRY_NODE");
+    
+    public static final String suiteName="UI Responsiveness J2EE Menus";    
     
     /**
-     * Creates a new instance of SelectJ2EEModuleDialog 
+     * Creates a new instance of AppServerPopupMenu 
      */
-    public SelectJ2EEModuleDialog(String testName) {
+    public AppServerPopupMenu(String testName) {
         super(testName);
-        expectedTime = WINDOW_OPEN;
-        WAIT_AFTER_OPEN = 2000;
     }
     
     /**
-     * Creates a new instance of SelectJ2EEModuleDialog 
+     * Creates a new instance of AppServerPopupMenu 
      */
-    public SelectJ2EEModuleDialog(String testName, String performanceDataName) {
-        super(testName,performanceDataName);
-        expectedTime = WINDOW_OPEN;
-        WAIT_AFTER_OPEN = 2000;
+    public AppServerPopupMenu(String testName, String performanceDataName) {
+        super(testName, performanceDataName);
     }
     
-    public void testJ2EEModuleDialog() {
-        doMeasurement();
-    }    
+    
+    public void testAppServerPopupMenuRuntime(){
+        testMenu(SERVER_REGISTRY + "|" + "GlassFish V2");
+    }
+    
+    private void testMenu(String path){
+        try {
+            runtimeTab = new RuntimeTabOperator();
+            dataObjectNode = new Node(runtimeTab.getRootNode(), path);
+            doMeasurement();
+        } catch (Exception e) {
+            throw new Error("Exception thrown",e);
+        }
+    }
+    
+            /**
+     * Closes the popup by sending ESC key event.
+     */
+    @Override
+    public void close(){
+        //testedComponentOperator.pressKey(java.awt.event.KeyEvent.VK_ESCAPE);
+        // Above sometimes fails in QUEUE mode waiting to menu become visible.
+        // This pushes Escape on underlying JTree which should be always visible
+        dataObjectNode.tree().pushKey(java.awt.event.KeyEvent.VK_ESCAPE);
+    }
+    
+    
+    @Override
+    public void prepare() {
+        dataObjectNode.select();
+    }
+
+    @Override
+    public ComponentOperator open() {
+        java.awt.Point point = dataObjectNode.tree().getPointToClick(dataObjectNode.getTreePath());
+        int button = dataObjectNode.tree().getPopupMouseButton();
+        dataObjectNode.tree().clickMouse(point.x, point.y, 1, button);
+        return new JPopupMenuOperator();
+    }
     
     @Override
     public void initialize() {
-        JTreeOperator tree = new ProjectsTabOperator().tree();
-        tree.setComparator(new Operator.DefaultStringComparator(true, true));
-        String JAVA_EE_MODULES = Bundle.getStringTrimmed(
-                "org.netbeans.modules.j2ee.earproject.ui.Bundle",
-                "LBL_LogicalViewNode");
-        testNode = new Node(new ProjectRootNode(tree, "TestApplication"), JAVA_EE_MODULES);
+        //Utils.startStopServer(true);
     }
     
-    public void prepare() {
-        // do nothing
+    @Override
+    public void shutdown() {
+        //Utils.startStopServer(false);
     }
-    
-    public ComponentOperator open() {
-        // invoke Window / Properties from the main menu
-        testNode.performPopupActionNoBlock("Add Java EE Module...");
-        return new NbDialogOperator("Add Java EE Module");
-    }
-    
+
+ 
 }
