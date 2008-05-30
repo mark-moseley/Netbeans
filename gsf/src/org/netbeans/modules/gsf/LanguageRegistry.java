@@ -40,24 +40,40 @@
  */
 package org.netbeans.modules.gsf;
 
+import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import org.netbeans.api.gsf.annotations.NonNull;
-import org.netbeans.modules.gsf.DefaultLanguage;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.netbeans.modules.gsf.api.EmbeddingModel;
+import org.netbeans.modules.gsf.api.GsfLanguage;
+import org.netbeans.modules.gsf.api.annotations.CheckForNull;
+import org.netbeans.modules.gsf.api.annotations.NonNull;
+import org.netbeans.api.lexer.TokenHierarchy;
+import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
+import org.netbeans.modules.gsfret.source.usages.ClassIndexManager;
+import org.netbeans.modules.gsfpath.spi.classpath.ClassPathFactory;
+import org.netbeans.modules.gsfpath.spi.classpath.ClassPathImplementation;
+import org.netbeans.modules.gsfpath.spi.classpath.PathResourceImplementation;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.filesystems.Repository;
 import org.openide.util.Exceptions;
+import org.openide.util.Lookup;
 
 /**
  * Registry which locates and provides information about languages supported
@@ -68,9 +84,7 @@ import org.openide.util.Exceptions;
 public class LanguageRegistry implements Iterable<Language> {
 
     private static LanguageRegistry instance;
-    private static final String DISPLAY_NAME = "displayName";
     private static final String ICON_BASE = "iconBase";
-    private static final String EXTENSIONS = "extensions";
     private static final String LANGUAGE = "language.instance";
     private static final String PARSER = "parser.instance";
     private static final String COMPLETION = "completion.instance";
@@ -79,14 +93,18 @@ public class LanguageRegistry implements Iterable<Language> {
     private static final String BRACKET_COMPLETION = "bracket.instance";
     private static final String DECLARATION_FINDER = "declarationfinder.instance";
     private static final String INDEXER = "indexer.instance";
-    private static final String PALETTE = "palette.instance";
+    //private static final String PALETTE = "palette.instance";
     private static final String STRUCTURE = "structure.instance";
     private static final String HINTS = "hints.instance";
+    private static final String SEMANTIC = "semantic.instance";
+    private static final String OCCURRENCES = "occurrences.instance";
 
     /** Location in the system file system where languages are registered */
     private static final String FOLDER = "GsfPlugins";
     private List<Language> languages;
+    private Map<String,Language> mimeToLanguage;
     private boolean languagesInitialized;
+    private Collection<? extends EmbeddingModel> embeddingModels;
 
     /**
      * Creates a new instance of LanguageRegistry
@@ -102,6 +120,13 @@ public class LanguageRegistry implements Iterable<Language> {
         }
 
         this.languages = newLanguages;
+        
+        mimeToLanguage = new HashMap<String,Language>(2*languages.size());
+        for (Language language : languages) {
+            String mimeType = language.getMimeType();
+            assert mimeType.equals(mimeType.toLowerCase()) : mimeType;
+            mimeToLanguage.put( mimeType,language);
+        }
     }
 
     public static synchronized LanguageRegistry getInstance() {
@@ -113,40 +138,218 @@ public class LanguageRegistry implements Iterable<Language> {
     }
 
     /**
-     * Return a language implementation that corresponds to the given file extension,
+     * Return a language implementation that corresponds to the given mimeType,
      * or null if no such language is supported
      */
-    public Language getLanguageByExtension(@NonNull String extension) {
-        extension = extension.toLowerCase();
+    public Language getLanguageByMimeType(@NonNull String mimeType) {
+        if (mimeToLanguage == null) {
+            return null;
+        }
 
-        // TODO - create a map if this is slow
-        for (Language language : this) {
-            String[] extensions = language.getExtensions();
+        return mimeToLanguage.get(mimeType);
+    }
 
-            for (int i = 0; i < extensions.length; i++) {
-                if (extension.equals(extensions[i])) {
-                    return language;
-                }
+    @CheckForNull
+    public EmbeddingModel getEmbedding(@NonNull String targetMimeType, @NonNull String sourceMimeType) {
+        Collection<? extends EmbeddingModel> models = getEmbeddingModels();
+        
+        for (EmbeddingModel model : models) {
+            if (model.getTargetMimeType().equals(targetMimeType) &&
+                model.getSourceMimeTypes().contains(sourceMimeType)) {
+                return model;
             }
         }
 
         return null;
     }
 
-    /**
-     * Return a language implementation that corresponds to the given mimeType,
-     * or null if no such language is supported
-     */
-    public Language getLanguageByMimeType(@NonNull String mimeType) {
-        assert mimeType.equals(mimeType.toLowerCase());
+    private Collection<? extends EmbeddingModel> getEmbeddingModels() {
+        if (embeddingModels == null) {
+            embeddingModels = Lookup.getDefault().lookupAll(EmbeddingModel.class);
+        }
+        
+        return embeddingModels;
+    }
+    
+    private Map<String,Map<String,Boolean>> relevantMimes = new HashMap<String,Map<String,Boolean>>();
 
-        for (Language language : this) {
-            if (language.getMimeType().equals(mimeType)) {
-                return language;
-            }
+    /** Return true iff the given file object is relevant for the given mimeType.
+     * This is true when the file is of a mime type that we're looking for, or if there
+     * is an embedding model mapping available for the given file's mime type targeting
+     * the requested mime type.
+     */
+    public boolean isRelevantFor(FileObject fo, String targetMimeType) {
+        final String fileMimeType = fo.getMIMEType();
+        if (targetMimeType.equals(fileMimeType)) {
+            return true;
         }
 
-        return null;
+        Map<String,Boolean> mimeMap = relevantMimes.get(targetMimeType);
+        if (mimeMap == null) {
+            mimeMap = new  HashMap<String,Boolean>();
+            relevantMimes.put(targetMimeType, mimeMap);
+        }
+
+        Boolean result = mimeMap.get(fileMimeType);
+        if (result == null) {
+            // Check to see if the file is relevant
+            result = Boolean.FALSE;
+
+            Collection<? extends EmbeddingModel> models = getEmbeddingModels();
+            for (EmbeddingModel model : models) {
+                if (model.getTargetMimeType().equals(targetMimeType) && 
+                    model.getSourceMimeTypes().contains(fileMimeType)) {
+                    result = Boolean.TRUE;
+                    break;
+                }
+            }
+
+            mimeMap.put(fileMimeType, result);
+        }
+        
+        return result.booleanValue();
+    }
+    
+    @NonNull
+    public List<Language> getApplicableLanguages(String mimeType) {
+        // TODO - cache the answer since this is called a lot (for example during
+        // task list scanning)
+        Collection<? extends EmbeddingModel> models = getEmbeddingModels();
+        
+        List<Language> result = new ArrayList<Language>(5);
+
+        final Language origLanguage = getLanguageByMimeType(mimeType);
+        if (origLanguage != null) {
+            result.add(origLanguage);
+        }
+        
+        for (EmbeddingModel model : models) {
+            if (model.getSourceMimeTypes().contains(mimeType)) {
+                Language language = getLanguageByMimeType(model.getTargetMimeType());
+                if (language != null && !result.contains(language)) {
+                    result.add(language);
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    private ClassPath libraryPath;
+    private List<URL> urls;
+
+    
+    public List<URL> getLibraryUrls() {
+        if (urls == null) {
+            urls = new ArrayList<URL>();
+            for (Language language : this) {
+                GsfLanguage gsfLanguage = language.getGsfLanguage();
+                if (gsfLanguage != null) {
+                    for (FileObject fo : gsfLanguage.getCoreLibraries()) {
+                        try {
+                            URL url = FileUtil.toFile(fo).toURI().toURL();
+                            urls.add(url);
+                            ClassIndexManager.get(language).addBootRoot(url);
+                        } catch (MalformedURLException ex) {
+                            Exceptions.printStackTrace(ex);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return urls;
+    }
+
+    public List<FileObject> getLibraryFos() {
+        List<FileObject> fos = new ArrayList<FileObject>();
+        for (Language language : this) {
+            GsfLanguage gsfLanguage = language.getGsfLanguage();
+            if (gsfLanguage != null) {
+                for (FileObject fo : gsfLanguage.getCoreLibraries()) {
+                    fos.add(fo);
+                }
+            }
+        }
+        
+        return fos;
+    }
+    
+    public ClassPath getLibraryPaths() {
+        if (libraryPath == null) {
+            List<URL> urlList = getLibraryUrls();
+            final URL[] urlArray = urlList.toArray(new URL[urlList.size()]);
+            
+            libraryPath = ClassPathFactory.createClassPath(new ClassPathImplementation() {
+
+                public List<? extends PathResourceImplementation> getResources() {
+                    return Collections.<PathResourceImplementation>singletonList(new PathResourceImplementation() {
+                        public URL[] getRoots() {
+                            return urlArray;
+                        }
+
+                        public ClassPathImplementation getContent() {
+                            return null;
+                        }
+
+                        public void addPropertyChangeListener(PropertyChangeListener listener) {
+                        }
+
+                        public void removePropertyChangeListener(PropertyChangeListener listener) {
+                        }
+                    });
+                }
+
+                public void addPropertyChangeListener(PropertyChangeListener listener) {
+                }
+
+                public void removePropertyChangeListener(PropertyChangeListener listener) {
+                }
+                
+            });
+        }
+        
+        return libraryPath;
+    }
+    
+    private void addLanguages(List<Language> result, TokenSequence ts, int offset) {
+        ts.move(offset);
+        if (ts.moveNext() || ts.movePrevious()) {
+            TokenSequence ets = ts.embedded();
+            if (ets != null) {
+                addLanguages(result, ets, offset); // Recurse
+            }
+            String mimeType = ts.language().mimeType();
+            Language language = getLanguageByMimeType(mimeType);
+
+            if (language != null) {
+                result.add(language);
+            }
+        }
+    }
+    
+    public List<Language> getEmbeddedLanguages(BaseDocument doc, int offset) {
+        List<Language> result = new ArrayList<Language>();
+
+        doc.readLock(); // Read-lock due to Token hierarchy use
+        try {
+            TokenSequence ts = TokenHierarchy.get(doc).tokenSequence();
+            if (ts != null) {
+                addLanguages(result, ts, offset);
+            }
+        } finally {
+            doc.readUnlock();
+        }
+
+        String mimeType = (String) doc.getProperty("mimeType"); // NOI18N
+        if (mimeType != null) {
+            Language language = getLanguageByMimeType(mimeType);
+            if (language != null && (result.size() == 0 || result.get(result.size()-1) != language))  {
+                result.add(language);
+            }
+        }
+        
+        return result;
     }
 
     /**
@@ -157,14 +360,17 @@ public class LanguageRegistry implements Iterable<Language> {
         if (mimeType == null) {
             return false;
         }
-        for (Language language : this) {
-            if (mimeType.equals(language.getMimeType())) {
-                return true;
-            }
-        }
-
-        return false;
+        
+        return getLanguageByMimeType(mimeType) != null;
     }
+    
+    //private void listCustomEditorKits() {
+    //    for (Language language : this) {
+    //        if (language.useCustomEditorKit()) {
+    //            System.out.println(language.getDisplayName());
+    //        }
+    //    }
+    //}
     
     public String getLanguagesDisplayName() {
         StringBuilder sb = new StringBuilder();
@@ -201,6 +407,15 @@ public class LanguageRegistry implements Iterable<Language> {
     private synchronized void initialize() {
         if (languages == null) {
             readSfs();
+            
+            if (languages != null) {
+                mimeToLanguage = new HashMap<String,Language>(2*languages.size());
+                for (Language language : languages) {
+                    String mimeType = language.getMimeType();
+                    assert mimeType.equals(mimeType.toLowerCase()) : mimeType;
+                    mimeToLanguage.put( mimeType,language);
+                }
+            }
 
             initializeLanguages();
         }
@@ -277,31 +492,8 @@ public class LanguageRegistry implements Iterable<Language> {
                 FileObject mimeFile = innerChildren[j];
 
                 String mime = mimePrefixFile.getName() + "/" + mimeFile.getName();
-                DefaultLanguage language = new DefaultLanguage(mime);
+                Language language = new Language(mime);
                 languages.add(language);
-
-                String displayName = (String)mimeFile.getAttribute(DISPLAY_NAME);
-
-                /*
-                public String getLanguageName (String mimeType) {
-                if (!mimeTypeToName.containsKey (mimeType)) {
-                FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-                FileObject fo = fs.findResource ("Editors/" + mimeType);
-                if (fo == null) return "???";
-                String bundleName = (String) fo.getAttribute ("SystemFileSystem.localizingBundle");
-                String name = mimeType;
-                if (bundleName != null)
-                try {
-                name = NbBundle.getBundle (bundleName).getString (mimeType);
-                } catch (MissingResourceException ex) {}
-                mimeTypeToName.put (mimeType, name);
-                }
-                return (String) mimeTypeToName.get (mimeType);
-                }
-                 */
-                if ((displayName != null) && (displayName.length() > 0)) {
-                    language.setDisplayName(displayName);
-                }
 
                 Boolean useCustomEditorKit = (Boolean)mimeFile.getAttribute("useCustomEditorKit"); // NOI18N
                 if (useCustomEditorKit != null && useCustomEditorKit.booleanValue()) {
@@ -318,89 +510,43 @@ public class LanguageRegistry implements Iterable<Language> {
                         language.setIconBase(iconBase);
                     }
                 }
-
-                //Local icon registration in the Languages/ folder
-                //String iconBase = (String)mimeFile.getAttribute(ICON_BASE);
-                //
-                //if ((iconBase != null) && (iconBase.length() > 0)) {
-                //    language.setIconBase(iconBase);
-                //}
-                // Look for extensions, scanners, parsers, etc.
-                FileObject extensionsDir = mimeFile.getFileObject(EXTENSIONS, null);
-
-                if ((extensionsDir != null) && extensionsDir.isFolder()) {
-                    FileObject[] extensionFiles = extensionsDir.getChildren();
-
-                    for (int k = 0; k < extensionFiles.length; k++) {
-                        String extension = extensionFiles[k].getName();
-                        language.addExtension(extension);
+                
+                boolean foundConfig = false;
+                for (FileObject fo : mimeFile.getChildren()) {
+                    String name = fo.getNameExt();
+                    if (LANGUAGE.equals(name)) {
+                        foundConfig = true;
+                        language.setGsfLanguageFile(fo);
+                    } else if (HINTS.equals(name)) {
+                        language.setHintsProviderFile(fo);
+                    } else if (STRUCTURE.equals(name)) {
+                        language.setStructureFile(fo);
+                    } else if (PARSER.equals(name)) {
+                        language.setParserFile(fo);
+                    } else if (COMPLETION.equals(name)) {
+                        language.setCompletionProviderFile(fo);
+                    } else if (RENAMER.equals(name)) {
+                        language.setInstantRenamerFile(fo);
+                    } else if (FORMATTER.equals(name)) {
+                        language.setFormatterFile(fo);
+                    } else if (DECLARATION_FINDER.equals(name)) {
+                        language.setDeclarationFinderFile(fo);
+                    } else if (BRACKET_COMPLETION.equals(name)) {
+                        language.setBracketCompletionFile(fo);
+                    } else if (INDEXER.equals(name)) {
+                        language.setIndexerFile(fo);
+                    //} else if (PALETTE.equals(name)) {
+                    //    language.setPaletteFile(fo);
+                    } else if (SEMANTIC.equals(name)) {
+                        language.setSemanticAnalyzer(fo);
+                    } else if (OCCURRENCES.equals(name)) {
+                        language.setOccurrencesFinderFile(fo);
                     }
                 }
 
-                FileObject languageFile = mimeFile.getFileObject(LANGUAGE, null);
-
-                if (languageFile != null) {
-                    language.setGsfLanguageFile(languageFile);
-                }
-
-                FileObject parserFile = mimeFile.getFileObject(PARSER, null);
-
-                if (parserFile != null) {
-                    language.setParserFile(parserFile);
-                }
-
-                FileObject completionFile = mimeFile.getFileObject(COMPLETION, null);
-
-                if (completionFile != null) {
-                    language.setCompletionProviderFile(completionFile);
-                }
-
-                FileObject renamerFile = mimeFile.getFileObject(RENAMER, null);
-
-                if (renamerFile != null) {
-                    language.setInstantRenamerFile(renamerFile);
-                }
-
-                FileObject formatterFile = mimeFile.getFileObject(FORMATTER, null);
-
-                if (formatterFile != null) {
-                    language.setFormatterFile(formatterFile);
-                }
-
-                FileObject finderFile = mimeFile.getFileObject(DECLARATION_FINDER, null);
-
-                if (finderFile != null) {
-                    language.setDeclarationFinderFile(finderFile);
-                }
-
-                FileObject bracketFile = mimeFile.getFileObject(BRACKET_COMPLETION, null);
-
-                if (bracketFile != null) {
-                    language.setBracketCompletionFile(bracketFile);
-                }
-
-                FileObject indexerFile = mimeFile.getFileObject(INDEXER, null);
-
-                if (indexerFile != null) {
-                    language.setIndexerFile(indexerFile);
-                }
-
-                FileObject structureFile = mimeFile.getFileObject(STRUCTURE, null);
-
-                if (structureFile != null) {
-                    language.setStructureFile(structureFile);
-                }
-
-                FileObject hintsFile = mimeFile.getFileObject(HINTS, null);
-
-                if (hintsFile != null) {
-                    language.setHintsProviderFile(hintsFile);
-                }
-
-                FileObject paletteFile = mimeFile.getFileObject(PALETTE, null);
-
-                if (paletteFile != null) {
-                    language.setPaletteFile(paletteFile);
+                if (!foundConfig) {
+                    // Emit warning
+                    Logger.getLogger(getClass().getName()).log(Level.WARNING, "No GSF language registered for mime type " + mime);
                 }
             }
         }
@@ -417,7 +563,7 @@ public class LanguageRegistry implements Iterable<Language> {
         // I can't call language.getStructure() here - it causes initialization
         // of the language objects too early (before registry is populated),
         // so just check if we potentially have a structure scanner
-        if (((DefaultLanguage)language).hasStructureScanner()) {
+        if (language.hasStructureScanner()) {
             String navFileName = "Navigator/Panels/" + language.getMimeType() + "/org-netbeans-modules-gsfret-navigation-ClassMemberPanel.instance";
 
             FileObject fo = fs.findResource(navFileName);
@@ -694,6 +840,15 @@ public class LanguageRegistry implements Iterable<Language> {
         }
         }
          */
+        
+        // Highlighting layers
+        if (root.getFileObject("org-netbeans-modules-gsfret-editor-semantic-HighlightsLayerFactoryImpl.instance") == null) {
+            try {
+                FileObject fo = FileUtil.createData(root, "org-netbeans-modules-gsfret-editor-semantic-HighlightsLayerFactoryImpl.instance");
+            } catch (IOException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
 
         // Code completion
         String completionProviders = "CompletionProviders";
@@ -723,8 +878,8 @@ public class LanguageRegistry implements Iterable<Language> {
                     completion.createData(provider);
                 } catch (IOException ex) {
                     Exceptions.printStackTrace(ex);
-                }
-                
+        }
+
             }
             if (checkUserdirUpgrade) {
                 // Delete old name present up to and including beta2
@@ -794,7 +949,22 @@ public class LanguageRegistry implements Iterable<Language> {
                 }
             }
         }
+        
+        // Glyph gutter actions
+        // No longer necessary as of changeset cb8074b378e9
+        //if (l.hasHints()) {
+        //    FileObject gf = root.getFileObject("GlyphGutterActions/org-netbeans-modules-editor-hints-FixAction.instance");
+        //    if (gf == null) {
+        //        try {
+        //            FileObject fo = FileUtil.createData(root, "GlyphGutterActions/org-netbeans-modules-editor-hints-FixAction.instance");
+        //            fo.setAttribute("position", 200);
+        //        } catch (IOException ex) {
+        //            Exceptions.printStackTrace(ex);
+        //        }
+        //    }
+        //}
 
+        
         // Temporarily disabled; each language does it instead
         //initializeColoring(l);
     }
