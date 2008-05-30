@@ -104,8 +104,8 @@ final public class PersistenceHandler implements PersistenceObserver {
     }
     
     // XXX helper method
-    public boolean isTopComponentPersistentWhenClosed(TopComponent tc) {
-        return PersistenceManager.getDefault().isTopComponentPersistentWhenClosed(tc);
+    public static boolean isTopComponentPersistentWhenClosed(TopComponent tc) {
+        return PersistenceManager.isTopComponentPersistentWhenClosed(tc);
     }
     
     public void load() {
@@ -214,7 +214,7 @@ final public class PersistenceHandler implements PersistenceObserver {
             }
             //some TopComponents want to be always active when the window system starts (e.g. welcome screen)
             for( TopComponent tc : mode.getOpenedTopComponents() ) {
-                Object val = tc.getClientProperty( "activateAtStartup" ); //NOI18N
+                Object val = tc.getClientProperty( Constants.ACTIVATE_AT_STARTUP );
                 if( null != val && val instanceof Boolean && ((Boolean)val).booleanValue() ) {
                     activeTopComponentOverride = tc;
                     break;
@@ -362,7 +362,7 @@ final public class PersistenceHandler implements PersistenceObserver {
                 if (previous != null) {
                     WindowManagerImpl.getInstance().setPreviousModeForTopComponent(tcRefConfig.tc_id, mode, previous, tcRefConfig.previousIndex);
                 } else {
-                    Logger.getLogger(PersistenceHandler.class.getName()).log(Level.WARNING, null,
+                    Logger.getLogger(PersistenceHandler.class.getName()).log(Level.INFO, null,
                                       new java.lang.NullPointerException("Cannot find previous mode named \'" +
                                                                          tcRefConfig.previousMode +
                                                                          "\'")); 
