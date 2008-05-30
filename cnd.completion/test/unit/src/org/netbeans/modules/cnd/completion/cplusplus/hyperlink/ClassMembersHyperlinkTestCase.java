@@ -172,6 +172,10 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("ClassA.cc", 69, 30, "ClassA.h", 33, 5); // /*static*/ void ClassA::privateFooSt()
     }
     
+    public void testInitList() throws Exception {
+        performTest("ClassA.cc", 8, 25, "ClassA.h", 46, 5); // privateMemberInt in "ClassA::ClassA() : privateMemberInt(1)"
+    }
+    
     public void testConstructors() throws Exception {
         // declaration do definition
         performTest("ClassA.h", 7, 10, "ClassA.cc", 8, 1); // public ClassA();
@@ -294,6 +298,11 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("ClassA.h", 69, 25, "ClassA.cc", 102, 1); // friend ostream& operator<< (ostream&, const ClassA&);
         // from definition to declaration
         performTest("ClassA.cc", 102, 15, "ClassA.h", 69, 5); // ostream& operator <<(ostream& output, const ClassA& item) {
+    }
+
+    public void testIZ136102() throws Exception {
+        // from usage to definition
+        performTest("IZ136102.cc", 15, 8, "IZ136102.cc", 6, 12);
     }
 
     public static class Failed extends HyperlinkBaseTestCase {
