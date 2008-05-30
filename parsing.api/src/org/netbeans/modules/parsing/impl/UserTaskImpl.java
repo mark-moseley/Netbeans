@@ -37,33 +37,50 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.parsing.impl;
 
-import java.util.Collection;
-import org.netbeans.modules.parsing.api.Snapshot;
+import org.netbeans.modules.parsing.api.Embedding;
+import org.netbeans.modules.parsing.api.MultiLanguageUserTask;
+import org.netbeans.modules.parsing.api.ResultIterator;
+import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.api.UserTask;
+import org.netbeans.modules.parsing.spi.ParseException;
 
 
 /**
- * Creates new instance of Parser for some specific collection of {@link Snapshot}s.
- * ParserFactory implemementation can be registerred for some concrete 
- * mimeType, or generally for all languages. So it can be registerred 
- * in manifest.xml in <code>"Editors/" + mimeType</code> folder, or directly in
- * <code>"Editors"</code>.
- *
+ * This {@link MultiLanguageUserTask} implementation implements 
+ * {@link UserTask} call based on {@link MultiLanguageUserTask} call.
+ * 
  * @author Jan Jancura
  */
-public abstract class ParserFactory {
+public class UserTaskImpl extends MultiLanguageUserTask {
 
-    /**
-     * Returns new instance of {@link Parser} for given collection of 
-     * {@link Snapshot}s or <code>null</code>.
-     * 
-     * @param snapshots     A snapshots.
-     * @return              A new instance of parser.
-     */
-    public abstract Parser createParser (Collection<Snapshot> snapshots);
+    private Source          source;
+    private UserTask        userTask;
+    private int             offset;
+    
+    public UserTaskImpl (
+        Source              source,
+        UserTask            userTask, 
+        int                 offset
+    ) {
+        this.source =       source;
+        this.userTask =     userTask;
+        this.offset =       offset;
+    }
+    
+    @Override
+    public void run (ResultIterator resultIterator) throws Exception {
+        run (resultIterator, source);
+    }
+    
+    private void run (ResultIterator resultIterator, Source source) throws Exception {
+        for (Embedding embedding : resultIterator.getEmbeddings ()) {
+            if (embedding.containsOriginalOffset (offset)) {
+                run (resultIterator.getResultIterator (embedding), source);
+                return;
+            }
+        }
+        userTask.run (resultIterator.getParserResult (), resultIterator.getSnapshot ());
+    }
 }
-
-
-
-

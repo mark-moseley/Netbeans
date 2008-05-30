@@ -31,37 +31,33 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+     * 
  * Contributor(s):
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.parsing.api;
 
-import java.util.Collection;
-import org.netbeans.modules.parsing.api.Snapshot;
+import org.netbeans.modules.parsing.spi.Parser;
 
 
 /**
- * Creates new instance of Parser for some specific collection of {@link Snapshot}s.
- * ParserFactory implemementation can be registerred for some concrete 
- * mimeType, or generally for all languages. So it can be registerred 
- * in manifest.xml in <code>"Editors/" + mimeType</code> folder, or directly in
- * <code>"Editors"</code>.
+ * Task that process result of parsing of one block of code written 
+ * in one specific language. 
  *
  * @author Jan Jancura
  */
-public abstract class ParserFactory {
+public abstract class UserTask extends Task {
 
     /**
-     * Returns new instance of {@link Parser} for given collection of 
-     * {@link Snapshot}s or <code>null</code>.
+     * Called when parser is finished.
      * 
-     * @param snapshots     A snapshots.
-     * @return              A new instance of parser.
+     * @param result        A result of parsing.
+     * @param snapshot      A snapshot that was parsed.
+     * @throws Exception rethrown by the infrastructure as a {@link org.netbeans.modules.parsing.spi.ParseException}.
      */
-    public abstract Parser createParser (Collection<Snapshot> snapshots);
+    public abstract void run (Parser.Result result, Snapshot snapshot) throws Exception;
 }
 
 
