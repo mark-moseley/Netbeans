@@ -87,6 +87,18 @@ public abstract class OptionalDeploymentManagerFactory {
         return null;
     }
     
+
+    /**
+     * Returns <code>true</code> if the common UI (like the wizard in common
+     * add dialog) should be handled by insfrastructure of the j2eeserver.
+     *
+     * @return <code>true</code> if the common UI is required by the plugin
+     * @since 1.38.0
+     */
+    public boolean isCommonUIRequired() {
+        return true;
+    }
+    
     /**
      * Creates an Ant deployment provider for the specified deployment manager.
      *
@@ -142,5 +154,17 @@ public abstract class OptionalDeploymentManagerFactory {
     public MessageDestinationDeployment getMessageDestinationDeployment(DeploymentManager dm) {
         return null;
     }
-    
+
+    /**
+     * Creates a <code>ServerInstanceDescriptor</code> for the given deployment manager
+     * or <code>null</code> if descriptor is not supported.
+     *
+     * @param dm the deployment manager
+     * @return instance descriptor or <code>null</code> if descriptor is not supported
+     * @since 1.46
+     */
+    public ServerInstanceDescriptor getServerInstanceDescriptor(DeploymentManager dm) {
+        return null;
+    }
+
 }
