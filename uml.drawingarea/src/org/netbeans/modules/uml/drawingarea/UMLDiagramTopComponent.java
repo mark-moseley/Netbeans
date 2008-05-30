@@ -85,7 +85,9 @@ import org.netbeans.modules.uml.common.ui.SaveNotifierYesNo;
 import org.netbeans.modules.uml.core.eventframework.IEventPayload;
 import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivity;
 import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.IStateMachine;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.Expression;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.FactoryRetriever;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.IConstraint;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
@@ -100,6 +102,7 @@ import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure
 import org.netbeans.modules.uml.core.metamodel.structure.IProject;
 import org.netbeans.modules.uml.core.support.umlsupport.FileExtensions;
 import org.netbeans.modules.uml.core.support.umlsupport.IResultCell;
+import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.drawingarea.ZoomManager.ZoomEvent;
 import org.netbeans.modules.uml.drawingarea.actions.CopyPasteSupport;
 import org.netbeans.modules.uml.drawingarea.actions.SceneAcceptAction;
@@ -1049,14 +1052,26 @@ public class UMLDiagramTopComponent extends TopComponent
     protected List<IPresentationElement> getPresentationElements(IElement element)
     {
         List<IPresentationElement> retVal = new ArrayList<IPresentationElement>();
-        
+
         if (element != null)
         {
+            // temp solution to fire events when constraint is changed
+            if (element instanceof IConstraint)
+            {
+                ArrayList<IPresentationElement> pes = new ArrayList<IPresentationElement>();
+                ETList<IElement> list = ((IConstraint) element).constrainedElements();
+
+                for (IElement e : list)
+                {
+                    pes.addAll(e.getPresentationElements());
+                }
+                return pes;
+            }
             retVal = element.getPresentationElements();
-            
-            // what's the reason for that?? in case presentation element of an element is 
-            // deleted, it finds its parent's pe and then delete it, very dangerous. It needs
-            // to be reviewed.
+
+        // what's the reason for that?? in case presentation element of an element is 
+        // deleted, it finds its parent's pe and then delete it, very dangerous. It needs
+        // to be reviewed.
 //            if((retVal == null) || (retVal.size() == 0))
 //            {
 //                retVal = getPresentationElements(element.getOwner());
@@ -1143,7 +1158,7 @@ public class UMLDiagramTopComponent extends TopComponent
     {
         if (provider == null)
         {
-            provider = new SceneAcceptProvider(scene.getDiagram().getNamespace());
+            provider = new SceneAcceptProvider(scene.getDiagram().getNamespaceForCreatedElements());
         }
         return provider;
     }
