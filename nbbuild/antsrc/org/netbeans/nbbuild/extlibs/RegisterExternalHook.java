@@ -34,7 +34,7 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.nbbuild.extlibs;
@@ -102,6 +102,7 @@ public class RegisterExternalHook extends Task {
             }
         } catch (IOException x) {
             log("Could not verify Hg configuration: " + x, Project.MSG_WARN);
+            // XXX if running on Windows, hg.cmd will not work; might instead try: cmd /c hg showconfig
         }
         File[] repos = {
             root,
@@ -135,7 +136,7 @@ public class RegisterExternalHook extends Task {
                 }
                 if (Pattern.compile("(?m)^external *=").matcher(config).find()) {
                     log("Hook already registered in " + hgrc + " in wrong location, correcting...", Project.MSG_WARN);
-                    config = config.replaceFirst("(?m)^external *=.*$", "external = " + hook);
+                    config = config.replaceFirst("(?m)^external *=.*$", "external = " + hook.toString().replaceAll("\\\\", "\\\\\\\\"));
                 } else {
                     log("Registering hook in " + hgrc);
                     String nl = System.getProperty("line.separator");
@@ -152,6 +153,7 @@ public class RegisterExternalHook extends Task {
                     }
                     config += "[decode]" + nl + BINARIES + " = download: http://hg.netbeans.org/binaries/" + nl;
                 }
+                // XXX should also register hooks.pretxncommit.crlf=python:hgext.win32text.forbidcrlf (for Hg 1.0+ only)
                 OutputStream os = new FileOutputStream(hgrc);
                 try {
                     os.write(config.getBytes());
@@ -245,7 +247,7 @@ begin
 <title>Uploaded #{name}</title>
 </head>
 <body>
-<p>Uploaded. Add to your manifest:</p>
+<p>Uploaded as:</p>
 <pre>#{sha1} #{name}</pre>
 </body>
 </html>
