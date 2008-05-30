@@ -48,6 +48,8 @@ import javax.swing.ComboBoxModel;
 import javax.swing.JFileChooser;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import org.netbeans.installer.product.Registry;
+import org.netbeans.installer.product.components.Product;
 import org.netbeans.installer.utils.helper.swing.NbiButton;
 import org.netbeans.installer.utils.helper.swing.NbiLabel;
 import org.netbeans.installer.utils.ResourceUtils;
@@ -126,8 +128,27 @@ public class NbBasePanel extends DestinationPanel {
                     JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY,
                     getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY));
         }
+        List <Product> toInstall = Registry.getInstance().getProductsToInstall();
+        jdkLocationPanel.setJreAllowed(true);
+        for(Product product : toInstall) {
+            String uid = product.getUid();
+            if(uid.startsWith("nb-") && !uid.matches("nb-(base|cnd|php|ruby)")) {
+                jdkLocationPanel.setJreAllowed(false);
+                break;
+            }
+        }
         
         jdkLocationPanel.initialize();
+        
+        //This makes it possible to perform silent installation with emptry state files 
+        //that means that JDK_LOCATION_PROPERTY property is explicitely set to the first location
+        //that fits the requirements
+        //TODO: Investigate the prons&cons and side affects of moving
+        //this code to the end of JdkLocationPanel.initialize() method        
+        File jdkLocation = jdkLocationPanel.getSelectedLocation();        
+        if(jdkLocation!=null && !jdkLocation.getPath().equals(StringUtils.EMPTY_STRING)) {
+            jdkLocationPanel.setLocation(jdkLocation);
+        }        
     }
     
     public JdkLocationPanel getJdkLocationPanel() {
