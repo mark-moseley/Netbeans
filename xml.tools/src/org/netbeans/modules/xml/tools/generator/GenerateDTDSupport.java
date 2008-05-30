@@ -58,6 +58,7 @@ import java.util.Stack;
 import java.util.Vector;
 import org.netbeans.api.xml.services.UserCatalog;
 import org.netbeans.modules.xml.XMLDataObject;
+import org.netbeans.modules.xml.api.EncodingUtil;
 import org.netbeans.modules.xml.lib.GuiUtil;
 import org.netbeans.tax.TreeUtilities;
 import org.openide.cookies.SaveCookie;
@@ -126,18 +127,17 @@ public final class GenerateDTDSupport implements XMLGenerateCookie  {
             String name = primFile.getName();
             FileObject folder = primFile.getParent();
 
-            FileObject generFile = (new SelectFileDialog(folder, name, DTD_EXT, Util.NONEMPTY_CHECK)).getFileObject();
-            name = generFile.getName();
-
             // IANA encoding name
-            String encoding = "UTF-8";
+            String encoding = EncodingUtil.getProjectEncoding(primFile);
             String dtd = xml2dtd(name, encoding);
             if (dtd == null) {
                 String msg = NbBundle.getMessage(GenerateDTDSupport.class, "BK0009");
                 GuiUtil.notifyWarning(msg + "\n" + warning); // NOI18N
                 return;
             }
-
+            //finally
+            FileObject generFile = (new SelectFileDialog(folder, name, DTD_EXT, Util.NONEMPTY_CHECK)).getFileObject();
+            name = generFile.getName();
             // write to file
             FileLock lock = null;
             Writer writer = null;
