@@ -40,10 +40,10 @@
  */
 package org.netbeans.modules.ruby;
 
-import org.netbeans.api.gsf.ElementHandle;
+import org.netbeans.modules.gsf.api.ElementHandle;
+import org.netbeans.modules.gsf.api.Index;
 import org.netbeans.modules.ruby.elements.CommentElement;
 import java.io.BufferedInputStream;
-import java.io.IOException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -71,45 +71,45 @@ import org.jruby.ast.ListNode;
 import org.jruby.ast.LocalAsgnNode;
 import org.jruby.ast.MethodDefNode;
 import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
+import org.jruby.ast.NodeType;
 import org.jruby.ast.types.INameNode;
 import org.jruby.lexer.yacc.ISourcePosition;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.Completable;
-import org.netbeans.api.gsf.CompletionProposal;
-import org.netbeans.api.gsf.DeclarationFinder.DeclarationLocation;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.netbeans.api.gsf.HtmlFormatter;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.CodeCompletionHandler;
+import org.netbeans.modules.gsf.api.CompletionProposal;
+import org.netbeans.modules.gsf.api.DeclarationFinder.DeclarationLocation;
+import org.netbeans.modules.ruby.elements.Element;
+import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.modules.gsf.api.HtmlFormatter;
 import org.netbeans.modules.ruby.elements.IndexedField;
-import static org.netbeans.api.gsf.Index.*;
-import org.netbeans.api.gsf.Modifier;
-import org.netbeans.api.gsf.NameKind;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.api.gsf.ParameterInfo;
+import static org.netbeans.modules.gsf.api.Index.*;
+import org.netbeans.modules.gsf.api.Modifier;
+import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.gsf.api.ParameterInfo;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
-import org.netbeans.editor.Utilities;
+import org.netbeans.modules.gsf.api.CodeCompletionContext;
+import org.netbeans.modules.gsf.api.CodeCompletionResult;
+import org.netbeans.modules.gsf.spi.DefaultCompletionResult;
 import org.netbeans.modules.ruby.RubyParser.Sanitize;
 import org.netbeans.modules.ruby.elements.AstElement;
 import org.netbeans.modules.ruby.elements.AstFieldElement;
 import org.netbeans.modules.ruby.elements.AstVariableElement;
 import org.netbeans.modules.ruby.elements.ClassElement;
 import org.netbeans.modules.ruby.elements.IndexedClass;
-import org.netbeans.modules.ruby.elements.IndexedClass;
 import org.netbeans.modules.ruby.elements.IndexedElement;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.netbeans.modules.ruby.elements.KeywordElement;
+import org.netbeans.modules.ruby.elements.RubyElement;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.netbeans.modules.ruby.lexer.Call;
 import org.netbeans.modules.ruby.lexer.RubyStringTokenId;
 import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
@@ -177,10 +177,7 @@ import org.openide.util.NbBundle;
  *    { } and do/end !!
  * @author Tor Norbye
  */
-public class CodeCompleter implements Completable {
-    /** Include call items in code completion? */
-    private static final boolean INCLUDE_CALL_ITEMS = true;
-    
+public class RubyCodeCompleter implements CodeCompletionHandler {
     /** Another good logical parameter would be SINGLE_WHITESPACE which would insert a whitespace separator IF NEEDED */
     /** Live code template parameter: require the given file, if not already done so */
     private static final String KEY_REQUIRE = "require"; // NOI18N
@@ -401,7 +398,7 @@ public class CodeCompleter implements Completable {
     private boolean caseSensitive;
     private int anchor;
 
-    public CodeCompleter() {
+    public RubyCodeCompleter() {
     }
 
     private boolean startsWith(String theString, String prefix) {
@@ -425,6 +422,9 @@ public class CodeCompleter implements Completable {
     public String getPrefix(CompilationInfo info, int lexOffset, boolean upToOffset) {
         try {
             BaseDocument doc = (BaseDocument)info.getDocument();
+            if (doc == null) {
+                return null;
+            }
 
             TokenHierarchy<Document> th = TokenHierarchy.get((Document)doc);
             doc.readLock(); // Read-lock due to token hierarchy use
@@ -671,8 +671,6 @@ public class CodeCompleter implements Completable {
                 doc.readUnlock();
             }
             // Else: normal identifier: just return null and let the machinery do the rest
-        } catch (IOException ioe) {
-            Exceptions.printStackTrace(ioe);
         } catch (BadLocationException ble) {
             Exceptions.printStackTrace(ble);
         }
@@ -937,7 +935,7 @@ public class CodeCompleter implements Completable {
                 if (method != null) {
                     // TODO - if the lhs is "foo.bar." I need to split this
                     // up and do it a bit more cleverly
-                    TypeAnalyzer analyzer = new TypeAnalyzer(/*request.info.getParserResult(),*/ index, method, node, astOffset, lexOffset, doc, fileObject);
+                    RubyTypeAnalyzer analyzer = new RubyTypeAnalyzer(/*request.info.getParserResult(),*/ index, method, node, astOffset, lexOffset, doc, fileObject);
                     type = analyzer.getType(lhs);
                 }
             }
@@ -947,9 +945,9 @@ public class CodeCompleter implements Completable {
             if ((type != null) && (type.length() > 0)) {
                 if ("self".equals(lhs)) {
                     type = fqn;
-                    skipPrivate = false;
+                    skipPrivate = true;
                 } else if ("super".equals(lhs)) {
-                    skipPrivate = false;
+                    skipPrivate = true;
 
                     IndexedClass sc = index.getSuperclass(fqn);
 
@@ -1295,7 +1293,7 @@ public class CodeCompleter implements Completable {
     }
     
     private static int callLineStart = -1;
-    private static IndexedMethod callMethod;
+    static IndexedMethod callMethod;
 
     /** Compute the current method call at the given offset. Returns false if we're not in a method call. 
      * The argument index is returned in parameterIndexHolder[0] and the method being
@@ -1322,12 +1320,15 @@ public class CodeCompleter implements Completable {
 
             // Adjust offset to the left
             BaseDocument doc = (BaseDocument) info.getDocument();
+            if (doc == null) {
+                return false;
+            }
             int newLexOffset = LexUtilities.findSpaceBegin(doc, lexOffset);
             if (newLexOffset < lexOffset) {
                 astOffset -= (lexOffset-newLexOffset);
             }
 
-            RubyParseResult rpr = (RubyParseResult)info.getParserResult();
+            RubyParseResult rpr = AstUtilities.getParseResult(info);
             OffsetRange range = rpr.getSanitizedRange();
             if (range != OffsetRange.NONE && range.containsInclusive(astOffset)) {
                 if (astOffset != range.getStart()) {
@@ -1366,7 +1367,7 @@ public class CodeCompleter implements Completable {
                     Node node = it.next();
                     if (AstUtilities.isCall(node) &&
                             name.equals(AstUtilities.getCallName(node))) {
-                        if (node.nodeId == NodeTypes.CALLNODE) {
+                        if (node.nodeId == NodeType.CALLNODE) {
                             Node argsNode = ((CallNode)node).getArgsNode();
 
                             if (argsNode != null) {
@@ -1381,7 +1382,7 @@ public class CodeCompleter implements Completable {
                                     anchorOffset = argsNode.getPosition().getStartOffset();
                                 }
                             }
-                        } else if (node.nodeId == NodeTypes.FCALLNODE) {
+                        } else if (node.nodeId == NodeType.FCALLNODE) {
                             Node argsNode = ((FCallNode)node).getArgsNode();
 
                             if (argsNode != null) {
@@ -1396,7 +1397,7 @@ public class CodeCompleter implements Completable {
                                     anchorOffset = argsNode.getPosition().getStartOffset();
                                 }
                             }
-                        } else if (node.nodeId == NodeTypes.VCALLNODE) {
+                        } else if (node.nodeId == NodeType.VCALLNODE) {
                             // We might be completing at the end of a method call
                             // and we don't have parameters yet so it just looks like
                             // a vcall, e.g.
@@ -1439,7 +1440,7 @@ public class CodeCompleter implements Completable {
                 while (it.hasNext()) {
                     Node node = it.next();
 
-                    if (node.nodeId == NodeTypes.CALLNODE) {
+                    if (node.nodeId == NodeType.CALLNODE) {
                         final OffsetRange callRange = AstUtilities.getCallRange(node);
                         if (haveSanitizedComma && originalAstOffset > callRange.getEnd() && it.hasNext()) {
                             for (int i = 0; i < 3; i++) {
@@ -1480,7 +1481,7 @@ public class CodeCompleter implements Completable {
                                 break;
                             }
                         }
-                    } else if (node.nodeId == NodeTypes.FCALLNODE) {
+                    } else if (node.nodeId == NodeType.FCALLNODE) {
                         final OffsetRange callRange = AstUtilities.getCallRange(node);
                         if (haveSanitizedComma && originalAstOffset > callRange.getEnd() && it.hasNext()) {
                             for (int i = 0; i < 3; i++) {
@@ -1514,7 +1515,7 @@ public class CodeCompleter implements Completable {
                                 break;
                             }
                         }
-                    } else if (node.nodeId == NodeTypes.VCALLNODE) {
+                    } else if (node.nodeId == NodeType.VCALLNODE) {
                         // We might be completing at the end of a method call
                         // and we don't have parameters yet so it just looks like
                         // a vcall, e.g.
@@ -1551,13 +1552,13 @@ public class CodeCompleter implements Completable {
 
             if (index != -1 && haveSanitizedComma && call != null) {
                 Node an = null;
-                if (call.nodeId == NodeTypes.FCALLNODE) {
+                if (call.nodeId == NodeType.FCALLNODE) {
                     an = ((FCallNode)call).getArgsNode();
-                } else if (call.nodeId == NodeTypes.CALLNODE) {
+                } else if (call.nodeId == NodeType.CALLNODE) {
                     an = ((CallNode)call).getArgsNode();
                 }
                 if (an != null && index < an.childNodes().size() &&
-                        ((Node)an.childNodes().get(index)).nodeId == NodeTypes.HASHNODE) {
+                        ((Node)an.childNodes().get(index)).nodeId == NodeType.HASHNODE) {
                     // We should stay within the hashnode, so counteract the
                     // index++ which follows this if-block
                     index--;
@@ -1575,7 +1576,7 @@ public class CodeCompleter implements Completable {
             } else if (targetMethod == null) {
                 // Look up the
                 // See if we can find the method corresponding to this call
-                targetMethod = new DeclarationFinder().findMethodDeclaration(info, call, path, 
+                targetMethod = new RubyDeclarationFinder().findMethodDeclaration(info, call, path, 
                         alternativesHolder);
                 if (targetMethod == null) {
                     return false;
@@ -1593,9 +1594,6 @@ public class CodeCompleter implements Completable {
                 anchorOffset = call.getPosition().getStartOffset(); // TODO - compute
             }
             anchorOffsetHolder[0] = anchorOffset;
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-            return false;
         } catch (BadLocationException ble) {
             Exceptions.printStackTrace(ble);
             return false;
@@ -1622,22 +1620,20 @@ public class CodeCompleter implements Completable {
         IndexedMethod targetMethod = methodHolder[0];
         int index = paramIndexHolder[0];
         
-        if (INCLUDE_CALL_ITEMS) {
-            CallItem callItem = new CallItem(targetMethod, index, anchor, request);
-            proposals.add(callItem);
-            // Also show other documented, not nodoc'ed items (except for those
-            // with identical signatures, such as overrides of the same method)
-            if (alternatesHolder[0] != null) {
-                Set<String> signatures = new HashSet<String>();
-                signatures.add(targetMethod.getSignature().substring(targetMethod.getSignature().indexOf('#')+1));
-                for (IndexedMethod m : alternatesHolder[0]) {
-                    if (m != targetMethod && m.isDocumented() && !m.isNoDoc()) {
-                        String sig = m.getSignature().substring(m.getSignature().indexOf('#')+1);
-                        if (!signatures.contains(sig)) {
-                            CallItem item = new CallItem(m, index, anchor, request);
-                            proposals.add(item);
-                            signatures.add(sig);
-                        }
+        CallItem callItem = new CallItem(targetMethod, index, anchor, request);
+        proposals.add(callItem);
+        // Also show other documented, not nodoc'ed items (except for those
+        // with identical signatures, such as overrides of the same method)
+        if (alternatesHolder[0] != null) {
+            Set<String> signatures = new HashSet<String>();
+            signatures.add(targetMethod.getSignature().substring(targetMethod.getSignature().indexOf('#')+1));
+            for (IndexedMethod m : alternatesHolder[0]) {
+                if (m != targetMethod && m.isDocumented() && !m.isNoDoc()) {
+                    String sig = m.getSignature().substring(m.getSignature().indexOf('#')+1);
+                    if (!signatures.contains(sig)) {
+                        CallItem item = new CallItem(m, index, anchor, request);
+                        proposals.add(item);
+                        signatures.add(sig);
                     }
                 }
             }
@@ -2046,9 +2042,14 @@ public class CodeCompleter implements Completable {
     
 
     // TODO: Move to the top
-    public List<CompletionProposal> complete(final CompilationInfo info, int lexOffset, String prefix,
-        final NameKind kind, final QueryType queryType, final boolean caseSensitive, final HtmlFormatter formatter) {
-        this.caseSensitive = caseSensitive;
+    public CodeCompletionResult complete(CodeCompletionContext context) {
+        CompilationInfo info = context.getInfo();
+        int lexOffset = context.getCaretOffset();
+        String prefix = context.getPrefix();
+        NameKind kind = context.getNameKind();
+        QueryType queryType = context.getQueryType();
+        this.caseSensitive = context.isCaseSensitive();
+        HtmlFormatter formatter = context.getFormatter();
 
         final int astOffset = AstUtilities.getAstOffset(info, lexOffset);
         if (astOffset == -1) {
@@ -2061,16 +2062,14 @@ public class CodeCompleter implements Completable {
         }
 
         List<CompletionProposal> proposals = new ArrayList<CompletionProposal>();
+        DefaultCompletionResult completionResult = new DefaultCompletionResult(proposals, false);
 
         anchor = lexOffset - prefix.length();
 
-        final RubyIndex index = RubyIndex.get(info.getIndex());
+        final RubyIndex index = RubyIndex.get(info.getIndex(RubyMimeResolver.RUBY_MIME_TYPE));
 
-        final Document document;
-        try {
-            document = info.getDocument();
-        } catch (Exception e) {
-            Exceptions.printStackTrace(e);
+        final Document document = info.getDocument();
+        if (document == null) {
             return null;
         }
 
@@ -2119,6 +2118,7 @@ public class CodeCompleter implements Completable {
         // and I don't want to pass dozens of parameters from method to method; just pass
         // a request context with supporting info needed by the various completion helpers i
         CompletionRequest request = new CompletionRequest();
+        request.completionResult = completionResult;
         request.formatter = formatter;
         request.lexOffset = lexOffset;
         request.astOffset = astOffset;
@@ -2135,7 +2135,7 @@ public class CodeCompleter implements Completable {
         // do completions applicable to strings - require-completion,
         // escape codes for quoted strings and regular expressions, etc.
         if (completeStrings(proposals, request)) {
-            return proposals;
+            return completionResult;
         }
         
         Call call = Call.getCallType(doc, th, lexOffset);
@@ -2147,7 +2147,7 @@ public class CodeCompleter implements Completable {
         if (root == null) {
             completeKeywords(proposals, request, showSymbols);
 
-            return proposals;
+            return completionResult;
         }
 
         // Compute the bounds of the line that the caret is on, and suppress nodes overlapping the line.
@@ -2185,10 +2185,12 @@ public class CodeCompleter implements Completable {
                 
                 Node method = AstUtilities.findLocalScope(closest, path);
 
-                @SuppressWarnings("unchecked")
                 List<Node> list2 = method.childNodes();
 
                 for (Node child : list2) {
+                    if (child.isInvisible()) {
+                        continue;
+                    }
                     addLocals(child, variables);
                 }
             }
@@ -2226,10 +2228,12 @@ public class CodeCompleter implements Completable {
 
             // $ is neither upper nor lower 
             if ((prefix.length() == 0) || (first == '$') || showSymbols) {
-                @SuppressWarnings("unchecked")
                 List<Node> list = root.childNodes();
 
                 for (Node child : list) {
+                    if (child.isInvisible()) {
+                        continue;
+                    }
                     addGlobals(child, globals);
                 }
             }
@@ -2254,12 +2258,12 @@ public class CodeCompleter implements Completable {
 
                 if ((fqn != null) && queryType == QueryType.COMPLETION && // doesn't apply to (or work with) documentation/tooltip help
                         completeDefOrInclude(proposals, request, fqn)) {
-                    return proposals;
+                    return completionResult;
                 }
 
                 if ((fqn != null) &&
                         completeObjectMethod(proposals, request, fqn, call)) {
-                    return proposals;
+                    return completionResult;
                 }
 
                 // Only call local and inherited methods if we don't have an LHS, such as Foo::
@@ -2335,7 +2339,7 @@ public class CodeCompleter implements Completable {
             if (showUpper) {
                 if (queryType == QueryType.COMPLETION && // doesn't apply to (or work with) documentation/tooltip help
                         completeDefOrInclude(proposals, request, "")) {
-                    return proposals;
+                    return completionResult;
                 }
             }
             if ((showUpper && ((prefix != null && prefix.length() > 0) ||
@@ -2356,7 +2360,7 @@ public class CodeCompleter implements Completable {
                 Node node = variables.get(variable);
 
                 if (!overlapsLine(node, astLineBegin, astLineEnd)) {
-                    AstVariableElement co = new AstVariableElement(node, variable);
+                    AstVariableElement co = new AstVariableElement(info, node, variable);
                     PlainItem item = new PlainItem(co, anchor, request);
                     item.setSmart(true);
 
@@ -2378,7 +2382,7 @@ public class CodeCompleter implements Completable {
                     continue;
                 }
 
-                Element co = new AstFieldElement(node);
+                Element co = new AstFieldElement(info, node);
                 FieldItem item = new FieldItem(co, anchor, request);
                 item.setSmart(true);
 
@@ -2401,7 +2405,7 @@ public class CodeCompleter implements Completable {
                     continue;
                 }
 
-                AstElement co = new AstVariableElement(node, variable);
+                AstElement co = new AstVariableElement(info, node, variable);
                 PlainItem item = new PlainItem(co, anchor, request);
                 item.setSmart(true);
 
@@ -2433,7 +2437,7 @@ public class CodeCompleter implements Completable {
                 //                } else {
                 //                    co = new DefaultComVariable(variable, false, -1, -1);
                 //                    ((DefaultComVariable)co).setNode(node);
-                AstElement co = new AstVariableElement(node, variable);
+                AstElement co = new AstVariableElement(info, node, variable);
                 PlainItem item = new PlainItem(co, anchor, request);
                 item.setSmart(true);
 
@@ -2446,7 +2450,7 @@ public class CodeCompleter implements Completable {
         }
 
         if (completeKeywords(proposals, request, showSymbols)) {
-            return proposals;
+            return completionResult;
         }
 
         if (queryType == QueryType.DOCUMENTATION) {
@@ -2457,7 +2461,7 @@ public class CodeCompleter implements Completable {
             doc.readUnlock();
         }
 
-        return proposals;
+        return completionResult;
     }
         
     private void addActionViewMethods(Set<IndexedMethod> inheritedMethods, FileObject fileObject, RubyIndex index, String prefix, 
@@ -2530,6 +2534,7 @@ public class CodeCompleter implements Completable {
      * (since the framework will just use the first produced result), and in particular, the -best-
      * alternative
      */
+    // TODO - pass in request object here!
     private List<CompletionProposal> filterDocumentation(List<CompletionProposal> proposals,
         Node root, BaseDocument doc, CompilationInfo info, int astOffset, int lexOffset, String name,
         AstPath path, RubyIndex index) {
@@ -2543,7 +2548,7 @@ public class CodeCompleter implements Completable {
         Set<IndexedClass> classes = new HashSet<IndexedClass>();
 
         for (CompletionProposal proposal : proposals) {
-            Element e = proposal.getElement();
+            RubyElement e = (RubyElement) proposal.getElement();
 
             if (e instanceof IndexedElement) {
                 IndexedElement ie = (IndexedElement)e;
@@ -2569,7 +2574,11 @@ public class CodeCompleter implements Completable {
         // for File, not the standard one defined elsewhere.
         for (CompletionProposal candidate : candidates) {
             // See if the candidate corresponds to the caret position
-            IndexedElement e = (IndexedElement)candidate.getElement();
+            RubyElement re = (RubyElement) candidate.getElement();
+            if (!(re instanceof IndexedElement)) {
+                continue;
+            }
+            IndexedElement e = (IndexedElement)re;
             String signature = e.getSignature();
             Node node = AstUtilities.findBySignature(root, signature);
 
@@ -2599,11 +2608,11 @@ public class CodeCompleter implements Completable {
         // Try to pick the best match among many documentation entries: Heuristic time.
         // Similar to heuristics used for Go To Declaration: Prefer long documentation,
         // prefer documentation related to the require-statements in this file, etc.
-        DeclarationFinder finder = new DeclarationFinder();
+        RubyDeclarationFinder finder = new RubyDeclarationFinder();
         IndexedElement candidate = null;
 
         if (classes.size() > 0) {
-            candidate = finder.findBestClassMatch(classes, doc, path, path.leaf(), index);
+            candidate = finder.findBestClassMatch(classes, path, path.leaf(), index);
         } else if (methods.size() > 0) {
             candidate = finder.findBestMethodMatch(name, methods, doc, astOffset, lexOffset, path,
                     path.leaf(), index);
@@ -2660,10 +2669,9 @@ public class CodeCompleter implements Completable {
     //        return true;
     //    }
 
-    @SuppressWarnings("unchecked")
     static void addLocals(Node node, Map<String, Node> variables) {
         switch (node.nodeId) {
-        case NodeTypes.LOCALASGNNODE: {
+        case LOCALASGNNODE: {
             String name = ((INameNode)node).getName();
 
             if (!variables.containsKey(name)) {
@@ -2671,13 +2679,13 @@ public class CodeCompleter implements Completable {
             }
             break;
         }
-        case NodeTypes.ARGSNODE: {
+        case ARGSNODE: {
             // TODO - use AstUtilities.getDefArgs here - but avoid hitting them twice!
             //List<String> parameters = AstUtilities.getDefArgs(def, true);
             // However, I've gotta find the parameter nodes themselves too!
             ArgsNode an = (ArgsNode)node;
 
-            if (an.getArgsCount() > 0) {
+            if (an.getRequiredArgsCount() > 0) {
                 List<Node> args = (List<Node>)an.childNodes();
 
                 for (Node arg : args) {
@@ -2729,12 +2737,15 @@ public class CodeCompleter implements Completable {
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             switch (child.nodeId) {
-            case NodeTypes.DEFNNODE:
-            case NodeTypes.DEFSNODE:
-            case NodeTypes.CLASSNODE:
-            case NodeTypes.SCLASSNODE:
-            case NodeTypes.MODULENODE:
+            case DEFNNODE:
+            case DEFSNODE:
+            case CLASSNODE:
+            case SCLASSNODE:
+            case MODULENODE:
                 // Don't look in nested context for local vars
                 continue;
             }
@@ -2744,7 +2755,7 @@ public class CodeCompleter implements Completable {
     }
 
     static void addDynamic(Node node, Map<String, Node> variables) {
-        if (node.nodeId == NodeTypes.DASGNNODE) {
+        if (node.nodeId == NodeType.DASGNNODE) {
             String name = ((INameNode)node).getName();
 
             if (!variables.containsKey(name)) {
@@ -2787,18 +2798,20 @@ public class CodeCompleter implements Completable {
             //            }
         }
 
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             switch (child.nodeId) {
-            case NodeTypes.ITERNODE:
-            //case NodeTypes.BLOCKNODE:
-            case NodeTypes.DEFNNODE:
-            case NodeTypes.DEFSNODE:
-            case NodeTypes.CLASSNODE:
-            case NodeTypes.SCLASSNODE:
-            case NodeTypes.MODULENODE:
+            case ITERNODE:
+            //case BLOCKNODE:
+            case DEFNNODE:
+            case DEFSNODE:
+            case CLASSNODE:
+            case SCLASSNODE:
+            case MODULENODE:
                 continue;
             }
 
@@ -2807,7 +2820,7 @@ public class CodeCompleter implements Completable {
     }
 
     private void addGlobals(Node node, Map<String, Node> globals) {
-        if (node.nodeId == NodeTypes.GLOBALASGNNODE) {
+        if (node.nodeId == NodeType.GLOBALASGNNODE) {
             String name = ((INameNode)node).getName();
 
             if (!globals.containsKey(name)) {
@@ -2815,23 +2828,27 @@ public class CodeCompleter implements Completable {
             }
         }
 
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             addGlobals(child, globals);
         }
     }
 
     private void addConstants(Node node, Map<String, Node> constants) {
-        if (node.nodeId == NodeTypes.CONSTDECLNODE) {
+        if (node.nodeId == NodeType.CONSTDECLNODE) {
             constants.put(((INameNode)node).getName(), node);
         }
 
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             addConstants(child, constants);
         }
     }
@@ -2842,7 +2859,7 @@ public class CodeCompleter implements Completable {
         StringBuilder sb = new StringBuilder();
 
         try {
-            is = new BufferedInputStream(CodeCompleter.class.getResourceAsStream("resources/" +
+            is = new BufferedInputStream(RubyCodeCompleter.class.getResourceAsStream("resources/" +
                     basename));
             //while (is)
             while (true) {
@@ -3016,22 +3033,16 @@ public class CodeCompleter implements Completable {
         Document doc = null;
         BaseDocument baseDoc = null;
 
-        try {
-            if (element instanceof IndexedElement) {
-                doc = ((IndexedElement)element).getDocument();
-                info = null;
-            } else if (info != null) {
-                doc = info.getDocument();
-            }
+        if (element instanceof IndexedElement) {
+            doc = ((IndexedElement)element).getDocument();
+            info = null;
+        } else if (info != null) {
+            doc = info.getDocument();
+        }
 
-            if (doc instanceof BaseDocument) {
-                baseDoc = (BaseDocument)doc;
-            } else {
-                return null;
-            }
-        } catch (IOException ioe) {
-            ErrorManager.getDefault().notify(ioe);
-
+        if (doc instanceof BaseDocument) {
+            baseDoc = (BaseDocument)doc;
+        } else {
             return null;
         }
 
@@ -3067,7 +3078,27 @@ public class CodeCompleter implements Completable {
         return comments;
     }
     
-    public String document(CompilationInfo info, Element element) {
+    public String document(CompilationInfo info, ElementHandle handle) {
+        Element element = null;
+        if (handle instanceof ElementHandle.UrlHandle) {
+            String url = ((ElementHandle.UrlHandle)handle).getUrl();
+            DeclarationLocation loc = new RubyDeclarationFinder().findLinkedMethod(info, url);
+            if (loc != DeclarationLocation.NONE) {
+                //element = loc.getElement();
+                ElementHandle h = loc.getElement();
+                if (handle != null) {
+                    element = RubyParser.resolveHandle(info, h);
+                    if (element == null) {
+                        return null;
+                    }
+                }
+            }
+        } else {
+            element = RubyParser.resolveHandle(info, handle);
+        }
+        if (element == null) {
+            return null;
+        }
         if (element instanceof KeywordElement) {
             return getKeywordHelp(((KeywordElement)element).getName());
         } else if (element instanceof CommentElement) {
@@ -3092,26 +3123,15 @@ public class CodeCompleter implements Completable {
             }
             String html = formatter.toHtml();
             return html;
-        } else if (element instanceof ElementHandle.UrlHandle) {
-            String url = ((ElementHandle.UrlHandle)element).getUrl();
-            DeclarationLocation loc = new DeclarationFinder().findLinkedMethod(info, url);
-            if (loc != DeclarationLocation.NONE) {
-                element = loc.getElement();
-                if (element == null) {
-                    return null;
-                }
-            } else {
-                return null;
-            }
         }
         
         List<String> comments = getComments(info, element);
         if (comments == null) {
             if (element.getName().startsWith("find_by_") ||
                 element.getName().startsWith("find_all_by_")) {
-                return new RDocFormatter().getSignature(element) + NbBundle.getMessage(CodeCompleter.class, "DynamicMethod");
+                return new RDocFormatter().getSignature(element) + NbBundle.getMessage(RubyCodeCompleter.class, "DynamicMethod");
             }
-            String html = new RDocFormatter().getSignature(element) + "\n<hr>\n<i>" + NbBundle.getMessage(CodeCompleter.class, "NoCommentFound") +"</i>";
+            String html = new RDocFormatter().getSignature(element) + "\n<hr>\n<i>" + NbBundle.getMessage(RubyCodeCompleter.class, "NoCommentFound") +"</i>";
 
             return html;
         }
@@ -3135,11 +3155,11 @@ public class CodeCompleter implements Completable {
     }
 
     public ElementHandle resolveLink(String link, ElementHandle elementHandle) {
-        if (link.indexOf("#") != -1) {
+        if (link.indexOf("#") != -1 && elementHandle.getMimeType().equals(RubyMimeResolver.RUBY_MIME_TYPE)) {
             final RubyParser parser = new RubyParser();
             if (link.startsWith("#")) {
                 // Put the current class etc. in front of the method call if necessary
-                Element surrounding = parser.resolveHandle(null, elementHandle);
+                Element surrounding = RubyParser.resolveHandle(null, elementHandle);
                 if (surrounding != null && surrounding.getKind() != ElementKind.KEYWORD) {
                     String name = surrounding.getName();
                     ElementKind kind = surrounding.getKind();
@@ -3184,6 +3204,9 @@ public class CodeCompleter implements Completable {
                     selectionEnd = temp;
                 }
                 BaseDocument doc = (BaseDocument) info.getDocument();
+                if (doc == null) {
+                    return Collections.emptySet();
+                }
 
                 boolean startLineIsEmpty = Utilities.isRowEmpty(doc, selectionBegin);
                 boolean endLineIsEmpty = Utilities.isRowEmpty(doc, selectionEnd);
@@ -3217,8 +3240,6 @@ public class CodeCompleter implements Completable {
                 }
             } catch (BadLocationException ble) {
                 Exceptions.printStackTrace(ble);
-            } catch (IOException ex) {
-                Exceptions.printStackTrace(ex);
             }
         } else {
             valid = true;
@@ -3379,8 +3400,9 @@ public class CodeCompleter implements Completable {
             ClassNode node = AstUtilities.findClass(path);
 
             if (node != null) {
-                if (info.getIndex() != null) {
-                    RubyIndex index = RubyIndex.get(info.getIndex());
+                Index idx = info.getIndex(RubyMimeResolver.RUBY_MIME_TYPE);
+                if (idx != null) {
+                    RubyIndex index = RubyIndex.get(idx);
                     IndexedClass cls = index.getSuperclass(AstUtilities.getFqnName(path));
 
                     if (cls != null) {
@@ -3447,6 +3469,7 @@ public class CodeCompleter implements Completable {
     }
     
     private static class CompletionRequest {
+        private DefaultCompletionResult completionResult;
         private TokenHierarchy<Document> th;
         private CompilationInfo info;
         private AstPath path;
@@ -3499,7 +3522,7 @@ public class CodeCompleter implements Completable {
             return getName();
         }
 
-        public Element getElement() {
+        public ElementHandle getElement() {
             return element;
         }
 
@@ -3752,7 +3775,7 @@ public class CodeCompleter implements Completable {
                 sb.append("${cursor}"); // NOI18N
             }
             
-            // Facility method parameter completion on this item
+            // Facilitate method parameter completion on this item
             try {
                 callLineStart = Utilities.getRowStart(request.doc, anchorOffset);
                 callMethod = method;
@@ -3936,7 +3959,7 @@ public class CodeCompleter implements Completable {
         }
         
         @Override
-        public Element getElement() {
+        public ElementHandle getElement() {
             // For completion documentation
             return new KeywordElement(keyword);
         }
@@ -4103,11 +4126,6 @@ public class CodeCompleter implements Completable {
             this.index = parameterIndex;
         }
 
-        @Override
-        public String getRhsHtml() {
-            return super.getRhsHtml();//null;
-        }
-        
         @Override
         public ElementKind getKind() {
             return ElementKind.CALL;

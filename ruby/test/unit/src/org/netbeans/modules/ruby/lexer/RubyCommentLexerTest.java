@@ -39,47 +39,50 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.ruby.lexer;
 
-import java.util.List;
-import javax.swing.text.BadLocationException;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
-import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.openide.filesystems.FileObject;
+import org.netbeans.modules.ruby.lexer.RubyCommentTokenId;
+import org.netbeans.junit.NbTestCase;
+import org.netbeans.lib.lexer.test.LexerTestUtilities;
 
 /**
- * Lex all files in the ruby distribution to make sure there are no problems
- * 
+ *
  * @author Tor Norbye
  */
-public class RubyLexAllTest extends RubyTestBase {
-    public RubyLexAllTest(String testName) {
+public class RubyCommentLexerTest extends NbTestCase {
+    
+    public RubyCommentLexerTest(String testName) {
         super(testName);
     }
+    
+    @Override
+    protected void setUp() throws java.lang.Exception {
+        // Set-up testing environment
+        LexerTestUtilities.setTesting(true);
+    }
 
-    public void testLexAll() throws BadLocationException {
-        // Find ruby files
-        List<FileObject> files = findJRubyRubyFiles();
-        assertTrue(files.size() > 0);
+    @SuppressWarnings("unchecked")
+    public void testClassLink() {
+        String text = "Clz#mtd";
+        TokenHierarchy hi = TokenHierarchy.create(text, RubyCommentTokenId.language());
+        TokenSequence ts = hi.tokenSequence();
+        LexerTestUtilities.assertNextTokenEquals(ts, RubyCommentTokenId.COMMENT_LINK, "Clz#mtd");
+    }
 
-        // indent each one
-        for (FileObject fo : files) {
-            //System.out.println("Formatting file " /*+ count*/ + " : " + FileUtil.getFileDisplayName(fo));
-            
-            // check that we end up at indentation level 0
-            BaseDocument doc = getDocument(fo);
-            
-            String text = doc.getText(0, doc.getLength());
-            TokenHierarchy hi = TokenHierarchy.create(text, RubyTokenId.language());
-            @SuppressWarnings("unchecked")
-            TokenSequence<?extends RubyTokenId> ts = hi.tokenSequence();
-            // Just iterate through the sequence to make sure it's okay - this throws an exception because of bug 93990
-            while (ts.moveNext()) {
-                ;
-            }
-        }
+    @SuppressWarnings("unchecked")
+    public void testClassLink2() {
+        String text = "my Clz#mtd,";
+        TokenHierarchy hi = TokenHierarchy.create(text, RubyCommentTokenId.language());
+        TokenSequence ts = hi.tokenSequence();
+        LexerTestUtilities.assertNextTokenEquals(ts, RubyCommentTokenId.COMMENT_TEXT, "my ");
+        LexerTestUtilities.assertNextTokenEquals(ts, RubyCommentTokenId.COMMENT_LINK, "Clz#mtd");
+        LexerTestUtilities.assertNextTokenEquals(ts, RubyCommentTokenId.COMMENT_TEXT, ",");
+    }
+
+    public void test() throws Exception {
+        LexerTestUtilities.checkTokenDump(this, "testfiles/testComments.rb.txt",
+                RubyCommentTokenId.language());
     }
 }
