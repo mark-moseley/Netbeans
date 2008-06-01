@@ -38,127 +38,58 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.html.editor.gsf;
 
-import java.util.HashMap;
-import java.util.Map;
+import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.modules.gsf.api.CodeCompletionHandler;
-import org.netbeans.modules.gsf.api.DeclarationFinder;
-import org.netbeans.modules.gsf.api.Formatter;
-import org.netbeans.modules.gsf.api.Indexer;
-import org.netbeans.modules.gsf.api.InstantRenamer;
-import org.netbeans.modules.gsf.api.KeystrokeHandler;
-import org.netbeans.modules.gsf.api.OccurrencesFinder;
 import org.netbeans.modules.gsf.api.Parser;
 import org.netbeans.modules.gsf.api.SemanticAnalyzer;
 import org.netbeans.modules.gsf.api.StructureScanner;
 import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
 
-
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-public class RubyLanguage extends DefaultLanguageConfig {
-    public RubyLanguage() {
-    }
-
-    @Override
-    public String getLineCommentPrefix() {
-        return RubyUtils.getLineCommentPrefix();
-    }
-
-    @Override
-    public boolean isIdentifierChar(char c) {
-        return RubyUtils.isIdentifierChar(c);
+public class HtmlLanguage extends DefaultLanguageConfig {
+    
+    //XXX no line comment in html!
+    private static final String LINE_COMMENT_PREFIX = "<!--";
+    
+    public HtmlLanguage() {
     }
 
     @Override
     public Language getLexerLanguage() {
-        return RubyTokenId.language();
+        return HTMLTokenId.language();
+    }
+
+    @Override
+    public String getLineCommentPrefix() {
+        return LINE_COMMENT_PREFIX;
+    }
+
+    @Override
+    public boolean isIdentifierChar(char c) {
+        return Character.isLetter(c);
     }
 
     @Override
     public String getDisplayName() {
-        return "Ruby";
+        return "HTML";
     }
-
+    
     @Override
     public String getPreferredExtension() {
-        return "rb"; // NOI18N
+        return "html"; // NOI18N
     }
 
+    // Service registrations
+    
     @Override
-    public Map<String,String> getSourceGroupNames() {
-        Map<String,String> sourceGroups = new HashMap<String,String>();
-        sourceGroups.put("RubyProject", "ruby"); // NOI18N
-        sourceGroups.put("WebProject", "ruby"); // NOI18N
-        sourceGroups.put("RailsProject", "ruby"); // NOI18N
-        
-        return sourceGroups;
-    }
-
-    @Override
-    public CodeCompletionHandler getCompletionHandler() {
-        return new RubyCodeCompleter();
-    }
-
-    @Override
-    public DeclarationFinder getDeclarationFinder() {
-        return new RubyDeclarationFinder();
-    }
-
-    @Override
-    public boolean hasFormatter() {
+    public boolean isUsingCustomEditorKit() {
         return true;
-    }
-
-    @Override
-    public Formatter getFormatter() {
-        return new RubyFormatter();
-    }
-
-    @Override
-    public Indexer getIndexer() {
-        return new RubyIndexer();
-    }
-
-    @Override
-    public InstantRenamer getInstantRenamer() {
-        return new RubyRenameHandler();
-    }
-
-    @Override
-    public KeystrokeHandler getKeystrokeHandler() {
-        return new RubyKeystrokeHandler();
-    }
-
-    @Override
-    public boolean hasOccurrencesFinder() {
-        return true;
-    }
-
-    @Override
-    public OccurrencesFinder getOccurrencesFinder() {
-        return new RubyOccurrencesFinder();
     }
 
     @Override
     public Parser getParser() {
-        return new RubyParser();
-    }
-
-    @Override
-    public SemanticAnalyzer getSemanticAnalyzer() {
-        return new RubySemanticAnalyzer();
+        return new HtmlGSFParser();
     }
 
     @Override
@@ -168,6 +99,11 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public StructureScanner getStructureScanner() {
-        return new RubyStructureAnalyzer();
+        return new HtmlStructureScanner();
+    }
+
+    @Override
+    public SemanticAnalyzer getSemanticAnalyzer() {
+        return new HtmlSemanticAnalyzer();
     }
 }

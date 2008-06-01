@@ -38,127 +38,60 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.css.gsf;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.netbeans.api.lexer.Language;
+import org.netbeans.modules.css.lexer.api.CSSTokenId;
 import org.netbeans.modules.gsf.api.CodeCompletionHandler;
-import org.netbeans.modules.gsf.api.DeclarationFinder;
 import org.netbeans.modules.gsf.api.Formatter;
-import org.netbeans.modules.gsf.api.Indexer;
-import org.netbeans.modules.gsf.api.InstantRenamer;
 import org.netbeans.modules.gsf.api.KeystrokeHandler;
-import org.netbeans.modules.gsf.api.OccurrencesFinder;
 import org.netbeans.modules.gsf.api.Parser;
 import org.netbeans.modules.gsf.api.SemanticAnalyzer;
 import org.netbeans.modules.gsf.api.StructureScanner;
 import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
 
-
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
+/**
+ * Configuration for CSS
  */
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-public class RubyLanguage extends DefaultLanguageConfig {
-    public RubyLanguage() {
-    }
-
-    @Override
-    public String getLineCommentPrefix() {
-        return RubyUtils.getLineCommentPrefix();
+public class CSSLanguage extends DefaultLanguageConfig {
+    
+    public CSSLanguage() {
     }
 
     @Override
     public boolean isIdentifierChar(char c) {
-        return RubyUtils.isIdentifierChar(c);
+         /** Includes things you'd want selected as a unit when double clicking in the editor */
+        return Character.isJavaIdentifierPart(c) 
+                || (c == '-') || (c == '@') 
+                || (c == '&') || (c == '_')
+                || (c == '#');
     }
 
     @Override
     public Language getLexerLanguage() {
-        return RubyTokenId.language();
+        return CSSTokenId.language();
     }
 
     @Override
     public String getDisplayName() {
-        return "Ruby";
+        return "CSS";
     }
-
+    
     @Override
     public String getPreferredExtension() {
-        return "rb"; // NOI18N
+        return "css"; // NOI18N
     }
 
+    // Service Registrations
+    
     @Override
-    public Map<String,String> getSourceGroupNames() {
-        Map<String,String> sourceGroups = new HashMap<String,String>();
-        sourceGroups.put("RubyProject", "ruby"); // NOI18N
-        sourceGroups.put("WebProject", "ruby"); // NOI18N
-        sourceGroups.put("RailsProject", "ruby"); // NOI18N
-        
-        return sourceGroups;
-    }
-
-    @Override
-    public CodeCompletionHandler getCompletionHandler() {
-        return new RubyCodeCompleter();
-    }
-
-    @Override
-    public DeclarationFinder getDeclarationFinder() {
-        return new RubyDeclarationFinder();
-    }
-
-    @Override
-    public boolean hasFormatter() {
-        return true;
-    }
-
-    @Override
-    public Formatter getFormatter() {
-        return new RubyFormatter();
-    }
-
-    @Override
-    public Indexer getIndexer() {
-        return new RubyIndexer();
-    }
-
-    @Override
-    public InstantRenamer getInstantRenamer() {
-        return new RubyRenameHandler();
-    }
-
-    @Override
-    public KeystrokeHandler getKeystrokeHandler() {
-        return new RubyKeystrokeHandler();
-    }
-
-    @Override
-    public boolean hasOccurrencesFinder() {
-        return true;
-    }
-
-    @Override
-    public OccurrencesFinder getOccurrencesFinder() {
-        return new RubyOccurrencesFinder();
+    public SemanticAnalyzer getSemanticAnalyzer() {
+        return new CSSSemanticAnalyzer();
     }
 
     @Override
     public Parser getParser() {
-        return new RubyParser();
-    }
-
-    @Override
-    public SemanticAnalyzer getSemanticAnalyzer() {
-        return new RubySemanticAnalyzer();
+        return new CSSGSFParser();
     }
 
     @Override
@@ -168,6 +101,26 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public StructureScanner getStructureScanner() {
-        return new RubyStructureAnalyzer();
+        return new CSSStructureScanner();
+    }
+
+    @Override
+    public boolean hasFormatter() {
+        return true;
+    }
+
+    @Override
+    public Formatter getFormatter() {
+        return new CSSFormatter();
+    }
+
+    @Override
+    public CodeCompletionHandler getCompletionHandler() {
+        return new CSSCompletion();
+    }
+
+    @Override
+    public KeystrokeHandler getKeystrokeHandler() {
+        return new CssBracketCompleter();
     }
 }
