@@ -72,7 +72,7 @@ import org.netbeans.modules.cnd.api.model.CsmNamespaceAlias;
 
 public abstract class CsmPaintComponent extends JPanel {
             
-    protected DrawState drawState = new DrawState();
+    DrawState drawState = new DrawState();
     
     protected Font drawFont;
            
@@ -1056,6 +1056,18 @@ public abstract class CsmPaintComponent extends JPanel {
             }
             return buf.toString();            
         }        
+    }
+
+    public static class FileLocalFunctionPaintComponent extends MethodPaintComponent {
+        private Color FUN_COLOR = Color.red.darker().darker();
+        
+        public FileLocalFunctionPaintComponent(){
+            super();
+        }
+        
+        public Color getNameColor() {
+            return FUN_COLOR;
+        }
     }
     
     public static class GlobalFunctionPaintComponent extends MethodPaintComponent {
