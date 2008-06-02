@@ -39,52 +39,62 @@
 
 package org.netbeans.modules.quicksearch;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import org.netbeans.spi.quicksearch.SearchProvider;
-
+import java.util.*;
+import javax.swing.AbstractListModel;
+import org.netbeans.spi.quicksearch.SearchResult;
 /**
- * Command Evaluator. It evaluates commands from toolbar and creates results
+ * ListModel for SearchGroupResults 
  * @author Jan Becicka
  */
-public class CommandEvaluator {
-    
-    /**
-     * command pattern is:
-     * "command arguments"
-     */
-    private static Pattern COMMAND_PATTERN = Pattern.compile("(\\w+)(\\s+)(.+)");
-    
-    /**
-     * if command is in form "command arguments" then only providers registered 
-     * for given command are called. Otherwise all providers are called.
-     * @param command
-     * @return 
-     */
-    public static Iterable<? extends CategoryResult> evaluate(String command) {
-        
-        List<CategoryResult> l = new ArrayList<CategoryResult>();
-        Matcher m = COMMAND_PATTERN.matcher(command);
-        boolean isCommand = m.matches() && ProviderRegistry.getInstance().getProviders().isKnownCommand(m.group(1));
-        
-        for (ProviderModel.Category cat : ProviderRegistry.getInstance().getProviders().getCategories()) {
-            CategoryResult curRes = new CategoryResult(cat);
-            for (SearchProvider provider : cat.getProviders()) {
-                if (isCommand) {
-                    String commandPrefix = provider.getCategory().getCommandPrefix();
-                    if (commandPrefix != null && commandPrefix.equalsIgnoreCase(m.group(1))) {
-                        curRes.addAll(provider.evaluate(m.group(3)));
-                    }
-                } else {
-                    curRes.addAll(provider.evaluate(command));
-                }
-            }
-            l.add(curRes);
-        }
+class ResultsModel extends AbstractListModel {
 
-        return l;
+    private static final int MAX_RESULTS = 5;
+    private Iterable<? extends CategoryResult> results;
+    private ArrayList ar = new ArrayList();
+    
+    private Map<SearchResult, ProviderModel.Category> items2Cats = new HashMap<SearchResult, ProviderModel.Category>();
+    
+    private HashSet<SearchResult> isFirstInCat = new HashSet<SearchResult>();
+
+    public ResultsModel(String text) {
+        super();
+        results = CommandEvaluator.evaluate(text);
+        for (CategoryResult cr : results) {
+            boolean first = true;
+            Iterator<? extends SearchResult> it = cr.getItems().iterator();
+            SearchResult curSr = null;
+            for (int i = 0; i < Math.min(cr.getItems().size(), MAX_RESULTS); i++) {
+                curSr = it.next();
+                ar.add(curSr);
+                items2Cats.put(curSr, cr.getCategory());
+                if (first) {
+                    isFirstInCat.add(curSr);
+                    first=false;
+                }
+                
+            }
+        }
     }
 
+    public int getSize() {
+        int size = 0;
+        for (CategoryResult cr : results) {
+            size += Math.min(MAX_RESULTS, cr.getItems().size());
+        }
+        return size;
+    }
+
+    public Object getElementAt(int arg0) {
+        return ar.get(arg0);
+    }
+    
+    public ProviderModel.Category getCategory (SearchResult sr) {
+        return items2Cats.get(sr);
+    } 
+    
+    public boolean isFirstinCat(SearchResult sr) {
+        return isFirstInCat.contains(sr);
+    }
+    
+    
 }
