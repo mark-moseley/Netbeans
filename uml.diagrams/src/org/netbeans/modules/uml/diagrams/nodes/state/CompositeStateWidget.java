@@ -42,20 +42,25 @@ package org.netbeans.modules.uml.diagrams.nodes.state;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.beans.PropertyChangeEvent;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import org.netbeans.api.visual.graph.GraphScene;
 import org.netbeans.api.visual.layout.LayoutFactory;
 import org.netbeans.api.visual.model.ObjectScene;
 import org.netbeans.api.visual.widget.LayerWidget;
 import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.IRegion;
+import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.ITransition;
 import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.State;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.TypedFactoryRetriever;
+import org.netbeans.modules.uml.diagrams.UMLRelationshipDiscovery;
 import org.netbeans.modules.uml.diagrams.border.UMLRoundedBorder;
 import org.netbeans.modules.uml.diagrams.nodes.UMLNameWidget;
-import org.netbeans.modules.uml.diagrams.nodes.UMLNodeBackgroundWidget;
 import org.netbeans.modules.uml.drawingarea.util.Util;
 import org.netbeans.modules.uml.drawingarea.view.UMLNodeWidget;
 import org.netbeans.modules.uml.drawingarea.view.UMLWidget;
@@ -73,6 +78,9 @@ public class CompositeStateWidget extends Widget
     private boolean horizontal = true;
     private LinkedHashSet<RegionWidget> regionWidgets = new LinkedHashSet<RegionWidget>();
     private UMLNameWidget nameWidget;
+    // variable to hold all region contained elements for discovering relationships after the all regions
+    // are initialized
+    private ArrayList<IElement> elements = new ArrayList<IElement>(); 
 
     public CompositeStateWidget(Scene scene, State state)
     {
@@ -95,7 +103,7 @@ public class CompositeStateWidget extends Widget
 
         tabbg.addChild(nameWidget);
         tabWidget.addChild(tabbg);
-        bodyWidget = new UMLNodeBackgroundWidget(
+        bodyWidget = new BackgroundWidget(
                 scene, getWidgetID() + "." + UMLNodeWidget.DEFAULT, "Default", 15, 15);
 
         UMLRoundedBorder border = new UMLRoundedBorder(15, 15, 0, 0, null, Color.BLACK);
@@ -118,14 +126,18 @@ public class CompositeStateWidget extends Widget
     protected void initRegions()
     {      
         List<IRegion> regions = state.getContents();
-         
+        
         for (int i = 0; i < regions.size(); i++)
         {
             IRegion region = regions.get(i);
             addRegion(region);
+            for (IElement e: region.getElements())
+            {
+                if (!(e instanceof ITransition))
+                    elements.add(e);                    
+            }
         }
     }
-    
     
     private void updateConstraint()
     {
@@ -137,19 +149,25 @@ public class CompositeStateWidget extends Widget
             RegionWidget w = regions[i];
             bodyWidget.setChildConstraint(w, i == regions.length - 1 ? 1 : 0);
             w.showSeparator(i == regions.length - 1 ? false : true);
-//            w.getNameWidget().setVisible(true);
+            w.getNameWidget().setVisible(true);
         }
-//        if (regions.length == 1)
-//        {
-//            regions[0].getNameWidget().setVisible(false);
-//        }
+        if (regions.length == 1)
+        {
+            regions[0].getNameWidget().setVisible(false);
+        }
         scene.validate();
     }
     
     
     public void removeRegion(RegionWidget widget)
     {
-        regionWidgets.remove(widget);     
+        regionWidgets.remove(widget);  
+        if (regionWidgets.isEmpty())
+        {
+            IRegion region = new TypedFactoryRetriever<IRegion>().createType("Region");
+            state.addContent(region);
+            addRegion(region);
+        }
         updateConstraint();
     }
     
@@ -206,5 +224,12 @@ public class CompositeStateWidget extends Widget
     public State getElement()
     {
         return state;
+    }
+    
+    public void notifyAdded()
+    {
+        // discover relationships (inter or inner) after all regions are loaded
+        UMLRelationshipDiscovery relationshipD = new UMLRelationshipDiscovery((GraphScene) scene);
+        relationshipD.discoverCommonRelations(elements);
     }
 }
