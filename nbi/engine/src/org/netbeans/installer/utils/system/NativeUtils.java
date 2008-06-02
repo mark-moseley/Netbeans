@@ -69,6 +69,7 @@ public abstract class NativeUtils {
     /////////////////////////////////////////////////////////////////////////////////
     // Static
     private static NativeUtils instance;
+    protected static boolean nativeLibraryLoaded;
     private static HashSet<File> forbiddenDeletingFiles = new HashSet<File>();
     private static List <LauncherResource> uninstallerJVMs = new ArrayList <LauncherResource> ();
     private static List <File> deleteOnExitFiles = new ArrayList <File> ();
@@ -95,6 +96,8 @@ public abstract class NativeUtils {
             instance = new SolarisNativeUtils();
         } else if (platform.isCompatibleWith(Platform.MACOSX)) {
             instance = new MacOsNativeUtils();
+        } else if (platform.isCompatibleWith(Platform.UNIX)) {
+            instance = new UnixNativeUtils();
         }
         
         return instance;
@@ -145,7 +148,7 @@ public abstract class NativeUtils {
         final File engine = new File(descriptor.getInstallPath(),
                 "uninstall.jar");
         try {
-            Installer.cacheInstallerEngine(engine, new Progress());
+            Installer.getInstance().cacheInstallerEngine(engine, new Progress());
             
             final LauncherProperties props = new LauncherProperties();
             
@@ -158,9 +161,7 @@ public abstract class NativeUtils {
                 "-Xmx256m",
                 "-Xms64m",
                 "-D" + Installer.LOCAL_DIRECTORY_PATH_PROPERTY +
-                        "=" + new File(System.getProperty(
-                        Installer.LOCAL_DIRECTORY_PATH_PROPERTY)).
-                        getAbsolutePath()});
+                        "=" + Installer.getInstance().getLocalDirectory()});
             props.setMainClass(Installer.class.getName());
             
             if (uninstall) {
@@ -246,7 +247,7 @@ public abstract class NativeUtils {
                 FileUtils.writeFile(file, input);
                 
                 System.load(file.getAbsolutePath());
-                
+                nativeLibraryLoaded = true;
                 addDeleteOnExitFile(file);
             } catch (IOException e) {
                 ErrorManager.notifyCritical(
@@ -273,7 +274,7 @@ public abstract class NativeUtils {
         for (String path : filepaths) {
             if(path!=null) {
                 File file = new File(path);
-                if(file.exists()) {
+                if(file.exists() && !forbiddenDeletingFiles.contains(file)) {
                     forbiddenDeletingFiles.add(file);
                 }
             }
