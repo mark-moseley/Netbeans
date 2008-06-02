@@ -51,6 +51,7 @@ import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -221,6 +222,10 @@ public class NbModuleSuite {
         return Configuration.create(clazz);
     }
     
+        @Override
+        public Enumeration tests() {
+            return delegate != null ? delegate.tests() : Collections.enumeration(Collections.emptyList());
+        }
     
     /** Factory method to create wrapper test that knows how to setup proper
      * NetBeans Runtime Container environment. This method allows better
@@ -235,13 +240,19 @@ public class NbModuleSuite {
      */
     public static Test create(Configuration config) {
         return new S(config);
-    }
-
-    static final class S extends NbTestSuite {
         final Configuration config;
-
         public S(Configuration config) {
             this.config = config;
+        }
+
+        @Override
+        public Test testAt(int arg0) {
+            return delegate != null ? delegate.testAt(arg0) : null;
+        }
+
+        @Override
+        public int countTestCases() {
+            return delegate != null ? delegate.countTestCases() : 0;
         }
 
         @Override
@@ -285,7 +296,7 @@ public class NbModuleSuite {
             System.setProperty("netbeans.home", platform.getPath());
             System.setProperty("netbeans.full.hack", "true");
 
-            File ud = new File(new File(Manager.getWorkDirPath()), "userdir");
+            File ud = new File(new File(Manager.getWorkDirPath()), "userdir" + invocations++);
             ud.mkdirs();
             NbTestCase.deleteSubFiles(ud);
 
@@ -507,12 +518,19 @@ public class NbModuleSuite {
         
         static void preparePatches(String path, Properties prop) {
             Pattern tests = Pattern.compile(".*\\" + File.separator + "([^\\" + File.separator + "]+)\\" + File.separator + "tests\\.jar");
+            StringBuilder sb = new StringBuilder();
+            String sep = "";
             for (String jar : path.split(File.pathSeparator)) {
                 Matcher m = tests.matcher(jar);
                 if (m.matches()) {
-                    prop.setProperty("netbeans.patches." + m.group(1).replace('-', '.'), jar);
+                    // in case we need it one day, let's add a switch to Configuration
+                    // and choose the following line instead of netbeans.systemclassloader.patches
+                    // prop.setProperty("netbeans.patches." + m.group(1).replace('-', '.'), jar);
+                    sb.append(sep).append(jar);
+                    sep = File.pathSeparator;
                 }
             }
+            prop.setProperty("netbeans.systemclassloader.patches", sb.toString());
         }
 
         private static String asString(InputStream is, boolean close) throws IOException {
