@@ -3,18 +3,13 @@
 <filesystem>
     <folder name="Editors">
         <folder name="text">
-            <folder name="x-ruby">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
+            <folder name="javascript">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.javascript.editing.Bundle"/>
 
                 <file name="language.instance">
-                    <attr name="instanceCreate" methodvalue="org.netbeans.modules.ruby.lexer.RubyTokenId.language"/>
+                    <attr name="instanceCreate" methodvalue="org.netbeans.modules.javascript.editing.lexer.JsTokenId.language"/>
                     <attr name="instanceOf" stringvalue="org.netbeans.api.lexer.Language"/>
                 </file>
-                
-                <folder name="Actions">
-                    <file name="org-netbeans-modules-ruby-rubyproject-RunFocusedTest.instance"/>
-                    <file name="org-netbeans-modules-ruby-rubyproject-DebugFocusedTest.instance"/>
-                </folder>
                 
                 <!-- TODO - this should not be necessary; I'm doing this now to work around
                     bugs in color initialization -->
@@ -22,13 +17,7 @@
                     <folder name="NetBeans">
                         <folder name="Defaults">
                             <file name="coloring.xml" url="fontsColors.xml">
-                                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
-                            </file>
-                        </folder>
-                    </folder>
-                    <folder name="BlueTheme">
-                        <folder name="Defaults">
-                            <file name="org-netbeans-modules-editor-ruby-token-colorings.xml" url="BlueTheme-Ruby-fontsColors.xml">
+                                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.javascript.editing.Bundle"/>
                             </file>
                         </folder>
                     </folder>
@@ -37,118 +26,84 @@
                 <folder name="CodeTemplates">
                     <folder name="Defaults">
                         <file name="codetemplates.xml" url="codetemplates.xml">
-                            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
+                            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.javascript.editing.Bundle"/>
                         </file>
                     </folder>
                 </folder>
-                
+
                 <folder name="Keybindings">
                     <folder name="NetBeans">
                         <folder name="Defaults">
-                            <file name="org-netbeans-modules-ruby-keybindings.xml" url="DefaultKeyBindings.xml"/>
-                            <file name="org-netbeans-modules-ruby-keybindings-mac.xml" url="DefaultKeyBindings-Mac.xml">
+                            <file name="org-netbeans-modules-javascript-editing-keybindings.xml" url="DefaultKeyBindings.xml"/>
+                            <!--
+                            <file name="org-netbeans-modules-javascript-editing-keybindings-mac.xml" url="DefaultKeyBindings-Mac.xml">
                                 <attr name="nbeditor-settings-targetOS" stringvalue="OS_MAC"/>
                             </file>
-                        </folder>
-                    </folder>
-                </folder>
-            </folder>
-            
-            <!-- Embedded double-quoted strings -->
-            <folder name="x-ruby-string-double">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
-                <file name="language.instance">
-                    <attr name="instanceCreate" methodvalue="org.netbeans.modules.ruby.lexer.RubyStringTokenId.languageDouble"/>
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.lexer.Language"/>
-                </file>
-                <folder name="FontsColors">
-                    <folder name="NetBeans">
-                        <folder name="Defaults">
-                            <file name="coloring.xml" url="stringColors.xml">
-                                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
-                            </file>
-                        </folder>
-                    </folder>
-                </folder>
-            </folder>
-            
-            <!-- Embedded single-quoted strings -->
-            <folder name="x-ruby-string-single">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
-                <file name="language.instance">
-                    <attr name="instanceCreate" methodvalue="org.netbeans.modules.ruby.lexer.RubyStringTokenId.languageSingle"/>
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.lexer.Language"/>
-                </file>
-                <folder name="FontsColors">
-                    <folder name="NetBeans">
-                        <folder name="Defaults">
-                            <file name="coloring.xml" url="stringColors.xml">
-                                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
-                            </file>
-                        </folder>
-                    </folder>
-                </folder>
-            </folder>
-            
-            <!-- Embedded rdoc comments -->
-            <folder name="x-ruby-comment">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
-                <file name="language.instance">
-                    <attr name="instanceCreate" methodvalue="org.netbeans.modules.ruby.lexer.RubyCommentTokenId.language"/>
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.lexer.Language"/>
-                </file>
-                <folder name="FontsColors">
-                    <folder name="NetBeans">
-                        <folder name="Defaults">
-                            <file name="coloring.xml" url="commentColors.xml">
-                                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.Bundle"/>
-                            </file>
+                            -->
                         </folder>
                     </folder>
                 </folder>
             </folder>
         </folder>
     </folder>
-    
-    <folder name="OptionsDialog">
-        <folder name="PreviewExamples">
-            <folder name="text">
-                <file name="x-ruby" url="RubyExample"/>
-            </folder>
-        </folder>
-        <file name="RubyOptions.instance">
-            <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.RubyOptionsCategory"/>
-            <attr name="position" intvalue="305"/>
-        </file>     
-    </folder>
-    
-    <folder name="org.netbeans.modules.ruby">
-        <folder name="options">
-            <file name="Formatting.instance">
-                <attr name="position" intvalue="150"/>
-                <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.options.FormatingAdvancedOption"/>
+
+      <folder name="Services">
+        <folder name="MIMEResolver">
+            <file name="javascript.xml" url="jsresolver.xml">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.javascript.editing.Bundle"/>
+                <attr name="position" intvalue="190"/>
             </file>
         </folder>
     </folder>
+
+    <folder name="OptionsDialog">
+        <folder name="PreviewExamples">
+            <folder name="text">
+                <file name="javascript" url="JsExample"/>
+            </folder>
+        </folder>
+        <folder name="Advanced">
+            <file name="JsOptions.instance">
+                <attr name="instanceClass" stringvalue="org.netbeans.modules.javascript.editing.options.JsOptions"/>
+            </file>
+        </folder>        
+        <!--
+        <file name="JsOptions.instance">
+            <attr name="instanceClass" stringvalue="org.netbeans.modules.javascript.editing.JsOptionsCategory"/>
+            <attr name="position" intvalue="305"/>
+        </file>     
+        -->
+    </folder>
+
+    <!--
+    <folder name="org.netbeans.modules.javascript.editing">
+        <folder name="options">
+            <file name="Formatting.instance">
+                <attr name="position" intvalue="150"/>
+                <attr name="instanceClass" stringvalue="org.netbeans.modules.javascript.editing.options.FormatingAdvancedOption"/>
+            </file>
+        </folder>
+    </folder>
+    -->
     
     <folder name="GsfPlugins">
         <folder name="text">
-            <folder name="x-ruby">
+            <folder name="javascript">
                 <file name="language.instance">
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.RubyLanguage"/>
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.javascript.editing.JsLanguage"/>
                 </file>
                 <file name="structure.instance">
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.RubyStructureAnalyzer"/>
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.javascript.editing.JsAnalyzer"/>
                 </file> 
-            </folder>
+            `</folder>
         </folder>
     </folder>
     
     <folder name="Loaders">
         <folder name="text">
-            <folder name="x-ruby">
-                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/ruby/jrubydoc.png"/>
-                <attr name="iconBase" stringvalue="org/netbeans/modules/ruby/jrubydoc.png"/>
+            <folder name="javascript">
+                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/javascript/editing/javascript.png"/>
+                <attr name="iconBase" stringvalue="org/netbeans/modules/javascript/editing/javascript.png"/>
                 <folder name="Actions">
                     <file name="OpenAction.instance">
                         <attr name="instanceClass" stringvalue="org.openide.actions.OpenAction"/>
@@ -218,12 +173,58 @@
             </folder>
         </folder>
     </folder>
+    <!--
     <folder name="Actions">
         <folder name="Edit">
-            <file name="org-netbeans-modules-ruby-ReflowParagraphAction.instance">
-                <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.ReflowParagraphAction"/>
+            <file name="org-netbeans-modules-javascript-editing-ReflowParagraphAction.instance">
+                <attr name="instanceClass" stringvalue="org.netbeans.modules.javascript.editing.ReflowParagraphAction"/>
             </file>
         </folder>
     </folder>
+    -->
     
+    <folder name="Templates">
+        <folder name="Other">
+            <file name="javascript.js" url="jstemplate.js">
+                <attr name="position" intvalue="400"/>
+                <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.javascript.editing.Bundle"/>
+                <attr name="templateCategory" stringvalue="simple-files"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/javascript/editing/javascript.html"/>
+            </file>
+            <file name="json.json" url="jsontemplate.json">
+                <attr name="position" intvalue="450"/>
+                <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.javascript.editing.Bundle"/>
+                <attr name="templateCategory" stringvalue="simple-files"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/javascript/editing/json.html"/>
+            </file>
+        </folder>
+        <folder name="JSP_Servlet">
+            <file name="javascript.shadow">
+                <attr name="originalFile" stringvalue="Templates/Other/javascript.js"/>
+                <attr name="position" intvalue="700"/>
+                <attr name="templateCategory" stringvalue="web-types"/>
+            </file>
+            <file name="json.shadow">
+                <attr name="originalFile" stringvalue="Templates/Other/json.json"/>
+                <attr name="position" intvalue="750"/>
+                <attr name="templateCategory" stringvalue="web-types"/>
+            </file>
+        </folder>
+        <folder name="Ruby">
+            <file name="javascript.shadow">
+                <attr name="originalFile" stringvalue="Templates/Other/javascript.js"/>
+                <attr name="position" intvalue="703"/>
+                <attr name="templateCategory" stringvalue="ruby"/>
+            </file>
+            <file name="json.shadow">
+                <attr name="originalFile" stringvalue="Templates/Other/json.json"/>
+                <attr name="position" intvalue="750"/>
+                <attr name="templateCategory" stringvalue="ruby"/>
+            </file>
+        </folder>
+    </folder>
 </filesystem>

@@ -42,7 +42,6 @@ package org.netbeans.modules.gsf;
 
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import javax.swing.Action;
@@ -57,10 +56,9 @@ import javax.swing.text.Keymap;
 import javax.swing.text.TextAction;
 import org.netbeans.api.editor.fold.FoldHierarchy;
 import org.netbeans.api.editor.fold.FoldUtilities;
-import org.netbeans.api.gsf.BracketCompletion;
-import org.netbeans.api.gsf.EditorAction;
-import org.netbeans.api.gsf.GsfLanguage;
-import org.netbeans.api.gsf.OffsetRange;
+import org.netbeans.modules.gsf.api.KeystrokeHandler;
+import org.netbeans.modules.gsf.api.GsfLanguage;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.editor.BaseAction;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.BaseKit;
@@ -79,9 +77,9 @@ import org.netbeans.modules.editor.NbEditorKit;
 import org.netbeans.modules.editor.gsfret.InstantRenameAction;
 import org.netbeans.modules.gsfret.editor.fold.GsfFoldManager;
 import org.netbeans.modules.gsfret.editor.hyperlink.GoToSupport;
+import org.netbeans.modules.gsfret.editor.semantic.GoToMarkOccurrencesAction;
 import org.openide.awt.Mnemonics;
 import org.openide.util.Exceptions;
-import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 
 
@@ -98,8 +96,6 @@ import org.openide.util.NbBundle;
  * @author Jan Jancura
  */
 public class GsfEditorKitFactory {
-    public static final String selectNextElementAction = "select-element-next"; //NOI18N
-    public static final String selectPreviousElementAction = "select-element-previous"; //NOI18N
     public static final String expandAllCodeBlockFolds = "expand-all-code-block-folds"; //NOI18N
     public static final String collapseAllCodeBlockFolds = "collapse-all-code-block-folds"; //NOI18N
 
@@ -120,19 +116,7 @@ public class GsfEditorKitFactory {
      *
      */
     public GsfEditorKit kit() {
-        LanguageRegistry registry = LanguageRegistry.getInstance();
-
         return new GsfEditorKit();
-    }
-
-    private static Language getLanguage(BaseDocument doc) {
-        String mimeType = (String)doc.getProperty("mimeType");
-
-        if (mimeType != null) {
-            return LanguageRegistry.getInstance().getLanguageByMimeType(mimeType);
-        }
-
-        return null;
     }
 
     public static Action findAction(Action [] actions, String name) {
@@ -145,6 +129,18 @@ public class GsfEditorKitFactory {
         return null;
     }
 
+    static KeystrokeHandler getBracketCompletion(Document doc, int offset) {
+        BaseDocument baseDoc = (BaseDocument)doc;
+        List<Language> list = LanguageRegistry.getInstance().getEmbeddedLanguages(baseDoc, offset);
+        for (Language l : list) {
+            if (l.getBracketCompletion() != null) {
+                return l.getBracketCompletion();
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Returns true if bracket completion is enabled in options.
      */
@@ -152,7 +148,7 @@ public class GsfEditorKitFactory {
         //return ((Boolean)Settings.getValue(GsfEditorKit.class, JavaSettingsNames.PAIR_CHARACTERS_COMPLETION)).booleanValue();
         return true;
     }
-
+    
     public class GsfEditorKit extends NbEditorKit {
         String mimeType;
 
@@ -187,14 +183,14 @@ public class GsfEditorKitFactory {
         }
 
         @Override
-        public SyntaxSupport createSyntaxSupport(BaseDocument doc) {
+        public SyntaxSupport createSyntaxSupport(final BaseDocument doc) {
             return new ExtSyntaxSupport(doc) {
             
                 @Override
                 public int[] findMatchingBlock(int offset, boolean simpleSearch)
                         throws BadLocationException {
                     // Do parenthesis matching, if applicable
-                    BracketCompletion bracketCompletion = language.getBracketCompletion();
+                    KeystrokeHandler bracketCompletion = getBracketCompletion(doc, offset);
                     if (bracketCompletion != null) {
                         OffsetRange range = bracketCompletion.findMatching(getDocument(), offset/*, simpleSearch*/);
                         if (range == OffsetRange.NONE) {
@@ -245,24 +241,24 @@ public class GsfEditorKitFactory {
                 actions.add(new ToggleCommentAction(lineCommentPrefix));
             }
 
-            Collection<? extends EditorAction> extraActions = Lookup.getDefault().lookupAll(EditorAction.class);
-            for (EditorAction action : extraActions) {
-                actions.add(new EditorActionWrapper(action));
-            }
-            
             actions.add(new InstantRenameAction());
             actions.add(new GenericGoToDeclarationAction());
             actions.add(new GenericGenerateGoToPopupAction());
-            actions.add(new SelectCodeElementAction(selectNextElementAction, true));
-            actions.add(new SelectCodeElementAction(selectPreviousElementAction, false));
+            actions.add(new SelectCodeElementAction(SelectCodeElementAction.selectNextElementAction, true));
+            actions.add(new SelectCodeElementAction(SelectCodeElementAction.selectPreviousElementAction, false));
             //actions.add(new ExpandAllCodeBlockFolds());
             //actions.add(new CollapseAllCodeBlockFolds());
-            actions.add(new NextCamelCasePosition(findAction(superActions, nextWordAction), language));
-            actions.add(new PreviousCamelCasePosition(findAction(superActions, previousWordAction), language));
-            actions.add(new SelectNextCamelCasePosition(findAction(superActions, selectionNextWordAction), language));
-            actions.add(new SelectPreviousCamelCasePosition(findAction(superActions, selectionPreviousWordAction), language));
-            actions.add(new DeleteToNextCamelCasePosition(findAction(superActions, removeNextWordAction), language));
-            actions.add(new DeleteToPreviousCamelCasePosition(findAction(superActions, removePreviousWordAction), language));
+            actions.add(new NextCamelCasePosition(findAction(superActions, nextWordAction)));
+            actions.add(new PreviousCamelCasePosition(findAction(superActions, previousWordAction)));
+            actions.add(new SelectNextCamelCasePosition(findAction(superActions, selectionNextWordAction)));
+            actions.add(new SelectPreviousCamelCasePosition(findAction(superActions, selectionPreviousWordAction)));
+            actions.add(new DeleteToNextCamelCasePosition(findAction(superActions, removeNextWordAction)));
+            actions.add(new DeleteToPreviousCamelCasePosition(findAction(superActions, removePreviousWordAction)));
+            
+            if (language.hasOccurrencesFinder()) {
+                actions.add(new GoToMarkOccurrencesAction(false));
+                actions.add(new GoToMarkOccurrencesAction(true));
+            }
             
             return TextAction.augmentList(superActions,
                 actions.toArray(new Action[actions.size()]));
@@ -282,25 +278,21 @@ public class GsfEditorKitFactory {
             protected void insertString(BaseDocument doc, int dotPos, Caret caret, String str,
                 boolean overwrite) throws BadLocationException {
                 if (completionSettingEnabled()) {
-                    Language language = getLanguage(doc);
+                    KeystrokeHandler bracketCompletion = getBracketCompletion(doc, dotPos);
 
-                    if (language != null) {
-                        BracketCompletion bracketCompletion = language.getBracketCompletion();
+                    if (bracketCompletion != null) {
+                        // TODO - check if we're in a comment etc. and if so, do nothing
+                        boolean handled =
+                            bracketCompletion.beforeCharInserted(doc, dotPos, currentTarget,
+                                str.charAt(0));
 
-                        if (bracketCompletion != null) {
-                            // TODO - check if we're in a comment etc. and if so, do nothing
-                            boolean handled =
-                                bracketCompletion.beforeCharInserted(doc, dotPos, currentTarget,
+                        if (!handled) {
+                            super.insertString(doc, dotPos, caret, str, overwrite);
+                            handled = bracketCompletion.afterCharInserted(doc, dotPos, currentTarget,
                                     str.charAt(0));
-
-                            if (!handled) {
-                                super.insertString(doc, dotPos, caret, str, overwrite);
-                                handled = bracketCompletion.afterCharInserted(doc, dotPos, currentTarget,
-                                        str.charAt(0));
-                            }
-
-                            return;
                         }
+
+                        return;
                     }
                 }
 
@@ -317,40 +309,36 @@ public class GsfEditorKitFactory {
                     BaseDocument doc = (BaseDocument)document;
 
                     if (completionSettingEnabled()) {
-                        Language language = getLanguage(doc);
+                        KeystrokeHandler bracketCompletion = getBracketCompletion(doc, dotPos);
 
-                        if (language != null) {
-                            BracketCompletion bracketCompletion = language.getBracketCompletion();
+                        if (bracketCompletion != null) {
+                            try {
+                                int caretPosition = caret.getDot();
 
-                            if (bracketCompletion != null) {
-                                try {
-                                    int caretPosition = caret.getDot();
+                                boolean handled =
+                                    bracketCompletion.beforeCharInserted(doc, caretPosition,
+                                        target, insertedChar);
 
-                                    boolean handled =
-                                        bracketCompletion.beforeCharInserted(doc, caretPosition,
-                                            target, insertedChar);
+                                int p0 = Math.min(caret.getDot(), caret.getMark());
+                                int p1 = Math.max(caret.getDot(), caret.getMark());
 
-                                    int p0 = Math.min(caret.getDot(), caret.getMark());
-                                    int p1 = Math.max(caret.getDot(), caret.getMark());
-
-                                    if (p0 != p1) {
-                                        doc.remove(p0, p1 - p0);
-                                    }
-
-                                    if (!handled) {
-                                        if ((str != null) && (str.length() > 0)) {
-                                            doc.insertString(p0, str, null);
-                                        }
-
-                                        bracketCompletion.afterCharInserted(doc, caret.getDot() - 1,
-                                            target, insertedChar);
-                                    }
-                                } catch (BadLocationException e) {
-                                    e.printStackTrace();
+                                if (p0 != p1) {
+                                    doc.remove(p0, p1 - p0);
                                 }
 
-                                return;
+                                if (!handled) {
+                                    if ((str != null) && (str.length() > 0)) {
+                                        doc.insertString(p0, str, null);
+                                    }
+
+                                    bracketCompletion.afterCharInserted(doc, caret.getDot() - 1,
+                                        target, insertedChar);
+                                }
+                            } catch (BadLocationException e) {
+                                e.printStackTrace();
                             }
+
+                            return;
                         }
                     }
                 }
@@ -365,21 +353,17 @@ public class GsfEditorKitFactory {
             @Override
             protected Object beforeBreak(JTextComponent target, BaseDocument doc, Caret caret) {
                 if (completionSettingEnabled()) {
-                    Language language = getLanguage(doc);
+                    KeystrokeHandler bracketCompletion = getBracketCompletion(doc, caret.getDot());
 
-                    if (language != null) {
-                        BracketCompletion bracketCompletion = language.getBracketCompletion();
+                    if (bracketCompletion != null) {
+                        try {
+                            int newOffset = bracketCompletion.beforeBreak(doc, caret.getDot(), target);
 
-                        if (bracketCompletion != null) {
-                            try {
-                                int newOffset = bracketCompletion.beforeBreak(doc, caret.getDot(), target);
-
-                                if (newOffset >= 0) {
-                                    return new Integer(newOffset);
-                                }
-                            } catch (BadLocationException ble) {
-                                Exceptions.printStackTrace(ble);
+                            if (newOffset >= 0) {
+                                return new Integer(newOffset);
                             }
+                        } catch (BadLocationException ble) {
+                            Exceptions.printStackTrace(ble);
                         }
                     }
                 }
@@ -426,16 +410,14 @@ public class GsfEditorKitFactory {
             protected void charBackspaced(BaseDocument doc, int dotPos, Caret caret, char ch)
                 throws BadLocationException {
                 if (completionSettingEnabled()) {
-                    Language language = getLanguage(doc);
+                    KeystrokeHandler bracketCompletion = getBracketCompletion(doc, dotPos);
 
-                    if (language != null) {
-                        BracketCompletion bracketCompletion = language.getBracketCompletion();
-
-                        if (bracketCompletion != null) {
-                            boolean success = bracketCompletion.charBackspaced(doc, dotPos, currentTarget, ch);
-                        }
+                    if (bracketCompletion != null) {
+                        boolean success = bracketCompletion.charBackspaced(doc, dotPos, currentTarget, ch);
+                        return;
                     }
                 }
+                super.charBackspaced(doc, dotPos, caret, ch);
             }
         }
 
@@ -557,27 +539,6 @@ public class GsfEditorKitFactory {
                 //addAction(target, jm, ExtKit.gotoAction);
                 return jm;
             }
-        }
-    }
-
-    /** Wrap a Swing Action implementing the EditorAction interface into a proper BaseAction action */
-    private class EditorActionWrapper extends BaseAction {
-        EditorAction gotoAction;
-        
-        public EditorActionWrapper(EditorAction gotoAction) {
-            super(gotoAction.getActionName(),
-                  // Not sure about these flags?
-                  ABBREV_RESET | MAGIC_POSITION_RESET | UNDO_MERGE_RESET | SAVE_POSITION);
-            this.gotoAction = gotoAction;
-        }
-
-        public void actionPerformed(ActionEvent evt, final JTextComponent target) {
-            gotoAction.actionPerformed(evt, target);
-        }
-
-        @Override
-        protected Class getShortDescriptionBundleClass() {
-            return gotoAction.getShortDescriptionBundleClass();
         }
     }
 

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,32 +41,26 @@
 package org.netbeans.modules.ruby.rubyproject;
 
 import java.awt.event.ActionEvent;
-import javax.swing.AbstractAction;
 import javax.swing.text.JTextComponent;
-import org.netbeans.modules.ruby.NbUtilities;
-import org.openide.util.NbBundle;
-import org.netbeans.api.gsf.EditorAction;
+import org.netbeans.editor.BaseAction;
 
 /**
  * Debug the current focused test or spec (test under caret)
  *
  * @author Tor Norbye
  */
-public class DebugFocusedTest extends AbstractAction implements EditorAction {
+public class DebugFocusedTest extends BaseAction {
 
     public DebugFocusedTest() {
-        super(NbBundle.getMessage(DebugFocusedTest.class, "debug-focused-test")); // NOI18N
-        putValue("PopupMenuText", NbBundle.getBundle(DebugFocusedTest.class).getString("popup-debug-focused-test")); // NOI18N
+        super("debug-focused-test", 0); // NOI18N
     }
 
+    @Override
     public void actionPerformed(ActionEvent evt, JTextComponent target) {
         RunFocusedTest.runTest(target, true);
     }
 
-    public String getActionName() {
-        return "debug-focused-test";
-    }
-
+    @Override
     public Class getShortDescriptionBundleClass() {
         return DebugFocusedTest.class;
     }
@@ -74,13 +68,5 @@ public class DebugFocusedTest extends AbstractAction implements EditorAction {
     @Override
     public boolean isEnabled() {
         return true;
-    }
-
-    public void actionPerformed(ActionEvent ev) {
-        JTextComponent pane = NbUtilities.getOpenPane();
-
-        if (pane != null) {
-            RunFocusedTest.runTest(pane, true);
-        }
     }
 }
