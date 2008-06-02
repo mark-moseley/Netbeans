@@ -655,13 +655,17 @@ public abstract class FileObject extends Object implements Serializable {
     * @exception IllegalArgumentException if <code>this</code> is not a folder
     */
     public FileObject getFileObject(String relativePath) {
-        if (relativePath.startsWith("/")) {
+        if (relativePath.startsWith("/") && !relativePath.startsWith("//")) {
             relativePath = relativePath.substring(1);
         }
 
         FileObject myObj = this;
         StringTokenizer st = new StringTokenizer(relativePath, "/");
-
+        
+        if(relativePath.startsWith("//")) {
+            // if it is UNC absolute path, start with //ComputerName/sharedFolder
+            myObj = myObj.getFileObject("//"+st.nextToken()+"/"+st.nextToken(), null);
+        }
         while ((myObj != null) && st.hasMoreTokens()) {
             String nameExt = st.nextToken();
             myObj = myObj.getFileObject(nameExt, null);
@@ -911,14 +915,17 @@ public abstract class FileObject extends Object implements Serializable {
              * FileSystem and from Repository mustn`t be forked.
              */
             FileObject fo = fe.getFile();
-            boolean transmit = false;
+            boolean transmit = false;            
             if (fo != null) {
                 switch (op) {
                     case FILE_CHANGED:
                         transmit = fo.equals(fe.getSource());
                         break;
-                    default: 
+                    default:
                         transmit = !fo.equals(fe.getSource());
+                        if (!transmit && fe instanceof Enumeration && !((Enumeration) fe).hasMoreElements()) {
+                            transmit = true;
+                        } 
                 }
                 
             }                
