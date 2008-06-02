@@ -52,6 +52,7 @@ import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
 import org.netbeans.modules.websvc.wsitconf.ui.service.subpanels.KeystorePanel;
 import org.netbeans.modules.websvc.wsitconf.util.UndoCounter;
 import org.netbeans.modules.websvc.wsitconf.util.Util;
+import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.PolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProfilesModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProprietarySecurityPolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityPolicyModelHelper;
@@ -115,7 +116,6 @@ public class EndorsingCertificateProfile extends ProfileBase
     }
 
     public void setServiceDefaults(WSDLComponent component, Project p) {
-//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
 //        if (Util.isTomcat(p)) {
@@ -128,7 +128,6 @@ public class EndorsingCertificateProfile extends ProfileBase
     }
     
     public void setClientDefaults(WSDLComponent component, WSDLComponent c, Project p) {
-//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, true);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, true);
         ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);        
@@ -165,9 +164,6 @@ public class EndorsingCertificateProfile extends ProfileBase
     }
 
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
-        if (ProprietarySecurityPolicyModelHelper.getCBHConfiguration((Binding) component) != null) {
-            return false;
-        }
         String keyAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
         String trustAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, true);
         String trustLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, true);
@@ -197,7 +193,7 @@ public class EndorsingCertificateProfile extends ProfileBase
     }
 
     public void enableSecureConversation(WSDLComponent component, boolean enable) {
-        ProfilesModelHelper.enableSecureConversation(component, enable);
+        ProfilesModelHelper.getInstance(PolicyModelHelper.getConfigVersion(component)).setSecureConversation(component, enable);
     }
 
 }
