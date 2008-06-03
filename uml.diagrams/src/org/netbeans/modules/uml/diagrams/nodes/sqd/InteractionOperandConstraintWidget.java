@@ -44,7 +44,9 @@ import java.beans.PropertyChangeListener;
 import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.modules.uml.core.metamodel.dynamics.IInteractionConstraint;
 import org.netbeans.modules.uml.diagrams.nodes.FeatureWidget;
+import org.netbeans.modules.uml.diagrams.nodes.MovableLabelWidget;
 import org.netbeans.modules.uml.drawingarea.persistence.NodeWriter;
+import org.netbeans.modules.uml.drawingarea.persistence.PersistenceUtil;
 
 /**
  *
@@ -61,7 +63,6 @@ public class InteractionOperandConstraintWidget extends FeatureWidget implements
 
     @Override
     protected void updateUI() {
-        System.out.println("UPDATE UI IN OPCONST");
         if(expression==null)
         {
             removeChildren();
@@ -76,12 +77,22 @@ public class InteractionOperandConstraintWidget extends FeatureWidget implements
     
     
     
+    @Override
     public void save(NodeWriter nodeWriter) {
-//        throw new UnsupportedOperationException("Not supported yet.");
+        nodeWriter = PersistenceUtil.populateNodeWriter(nodeWriter, this);
+        nodeWriter.setTypeInfo("InteractionOperandConstraintWidget");
+        nodeWriter.setHasPositionSize(true);        
+        PersistenceUtil.populateProperties(nodeWriter, this);
+        nodeWriter.beginGraphNode();
+        nodeWriter.endGraphNode();
     }
 
     public void propertyChange(PropertyChangeEvent evt) {
         updateUI();
+    }
+
+    public MovableLabelWidget getLabel() {
+        return expression.getLable();
     }
 
     void hideLabel() {

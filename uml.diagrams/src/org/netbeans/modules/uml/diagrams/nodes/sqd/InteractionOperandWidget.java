@@ -50,6 +50,7 @@ import java.awt.Rectangle;
 import java.awt.Stroke;
 import java.awt.geom.AffineTransform;
 import java.util.Hashtable;
+import java.util.List;
 import org.netbeans.api.visual.layout.Layout;
 import org.netbeans.api.visual.layout.LayoutFactory;
 import org.netbeans.api.visual.model.ObjectScene;
@@ -61,6 +62,7 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
 import org.netbeans.modules.uml.core.metamodel.dynamics.IInteractionOperand;
 import org.netbeans.modules.uml.diagrams.nodes.LabeledWidget;
+import org.netbeans.modules.uml.diagrams.nodes.MovableLabelWidget;
 import org.netbeans.modules.uml.drawingarea.persistence.NodeWriter;
 import org.netbeans.modules.uml.drawingarea.persistence.PersistenceUtil;
 import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeReader;
@@ -191,6 +193,11 @@ public class InteractionOperandWidget extends Widget implements DiagramNodeWrite
         }
     }
     
+    public MovableLabelWidget getLabel()
+    {
+        return constraint.getLabel();
+    }
+    
     public void show(TYPE type) {
         //TBD swicth to usage of label manager
         switch(type)
@@ -249,10 +256,25 @@ public class InteractionOperandWidget extends Widget implements DiagramNodeWrite
         nodeWriter.beginGraphNodeWithModelBridge();
         nodeWriter.beginContained();
         //write contained
+        saveChildren(this, nodeWriter);
         nodeWriter.endContained();     
         nodeWriter.endGraphNode();
     }
 
+    public void saveChildren(Widget widget, NodeWriter nodeWriter) {
+        if (widget == null || nodeWriter == null)
+            return;
+        
+        List<Widget> widList = widget.getChildren();
+        for (Widget child : widList) {
+            if (child instanceof DiagramNodeWriter) {
+                ((DiagramNodeWriter) child).save(nodeWriter);
+            } else {
+                saveChildren(child, nodeWriter);
+            }
+        }
+    }
+    
     public void addContainedChild(Widget widget) {
         throw new UnsupportedOperationException("Not supported yet.");
     }
@@ -263,6 +285,7 @@ public class InteractionOperandWidget extends Widget implements DiagramNodeWrite
         //
         if(nodeReader.getPosition()!=null)setPreferredLocation(nodeReader.getPosition());
     }
+    
     protected void setNodeWriterValues(NodeWriter nodeWriter, Widget widget) {
         nodeWriter = PersistenceUtil.populateNodeWriter(nodeWriter, widget);
         nodeWriter.setHasPositionSize(true);
