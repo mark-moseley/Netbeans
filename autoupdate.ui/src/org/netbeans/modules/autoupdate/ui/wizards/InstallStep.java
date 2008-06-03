@@ -41,13 +41,18 @@
 
 package org.netbeans.modules.autoupdate.ui.wizards;
 
+import java.awt.Dialog;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -73,7 +78,10 @@ import org.netbeans.api.autoupdate.UpdateElement;
 import org.netbeans.modules.autoupdate.ui.NetworkProblemPanel;
 import org.netbeans.modules.autoupdate.ui.PluginManagerUI;
 import org.netbeans.modules.autoupdate.ui.Utilities;
+import org.netbeans.modules.autoupdate.ui.actions.AutoupdateCheckScheduler;
 import org.netbeans.modules.autoupdate.ui.actions.BalloonManager;
+import org.netbeans.modules.autoupdate.ui.wizards.LazyInstallUnitWizardIterator.LazyUnit;
+import org.netbeans.modules.autoupdate.ui.wizards.OperationWizardModel.OperationType;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -89,6 +97,7 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
     private OperationPanel panel;
     private PanelBodyContainer component;
     private InstallUnitWizardModel model = null;
+    private boolean clearLazyUnits = false;
     private WizardDescriptor wd = null;
     private Restarter restarter = null;
     private ProgressHandle systemHandle = null;
@@ -97,7 +106,7 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
     private boolean indeterminateProgress = false;
     private int processedUnits = 0;
     private int totalUnits = 0;
-    private static  final Logger log = Logger.getLogger ("org.netbeans.modules.autoupdate.ui.wizards.InstallPanel");
+    private static  final Logger log = Logger.getLogger (InstallStep.class.getName ());
     private final List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
     
     private static final String TEXT_PROPERTY = "text";
@@ -114,15 +123,23 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
     private static final String HEAD_INSTALL_DONE = "InstallStep_Header_InstallDone_Head";
     private static final String CONTENT_INSTALL_DONE = "InstallStep_Header_InstallDone_Content";
     
+    private static final String HEAD_INSTALL_UNSUCCESSFUL = "InstallStep_Header_InstallUnsuccessful_Head";
+    private static final String CONTENT_INSTALL_UNSUCCESSFUL = "InstallStep_Header_InstallUnsuccessful_Content";
+    
     private static final String HEAD_RESTART = "InstallStep_Header_Restart_Head";
     private static final String CONTENT_RESTART = "InstallStep_Header_Restart_Content";
     
     private boolean wasStored = false;
     private boolean runInBg = false;
+    private OperationException installException;
     
     /** Creates a new instance of OperationDescriptionStep */
     public InstallStep (InstallUnitWizardModel model) {
+        this (model, false);
+    }
+    public InstallStep (InstallUnitWizardModel model, boolean clearLazyUnits) {
         this.model = model;
+        this.clearLazyUnits = clearLazyUnits;
     }
     
     public boolean isFinishPanel() {
@@ -203,8 +220,10 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
         }
         runInBg = inBackground;
         if (inBackground) {
-            if (getComponent ().getRootPane () != null) {
-                getComponent ().getRootPane ().setVisible (false);
+            assert SwingUtilities.isEventDispatchThread () : "In AWT queue only.";
+            Window w = SwingUtilities.getWindowAncestor (getComponent ());
+            if (w != null) {
+                w.setVisible (false);
             }
             if (model.getPluginManager () != null) {
                 model.getPluginManager ().close ();
@@ -285,11 +304,6 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
 
             validator = support.doDownload (handle, Utilities.isGlobalInstallation());
             if (validator == null) return true;
-            if (model.getAdditionallyInstallSupport () != null) {
-                handle = ProgressHandleFactory.createHandle (getBundle ("InstallStep_Download_DownloadingPlugins"));
-                ProgressHandleFactory.createProgressComponent (handle); // no need to show again
-                validator = model.getAdditionallyInstallSupport ().doDownload (handle, Utilities.isGlobalInstallation());
-            }
             if (validator == null) return true;
             panel.waitAndSetProgressComponents (mainLabel, progressComponent, new JLabel (getBundle ("InstallStep_Done")));
             if (spareHandle != null && spareHandleStarted) {
@@ -381,11 +395,6 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
         try {
             tmpInst = support.doValidate (v, handle);
             if (tmpInst == null) return null;
-            if (model.getAdditionallyInstallSupport () != null) {
-                handle = ProgressHandleFactory.createHandle (getBundle ("InstallStep_Validate_ValidatingPlugins"));
-                ProgressHandleFactory.createProgressComponent (handle); // no need to show again
-                tmpInst = model.getAdditionallyInstallSupport ().doValidate (v, handle);
-            }
             if (tmpInst == null) return null;
         } catch (OperationException ex) {
             log.log (Level.INFO, ex.getMessage (), ex);
@@ -399,10 +408,9 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
         List<UpdateElement> untrusted = new ArrayList<UpdateElement> ();
         String certs = "";
         for (UpdateElement el : model.getAllUpdateElements ()) {
-            InstallSupport addSupport = model.getAdditionallyInstallSupport ();
-            if (! (support.isSigned (inst, el) || (addSupport != null && addSupport.isSigned (inst, el)))) {
+            if (! support.isSigned (inst, el)) {
                 unsigned.add (el);
-            } else if (! (support.isTrusted (inst, el) || (addSupport != null && addSupport.isTrusted (inst, el)))) {
+            } else if (! support.isTrusted (inst, el)) {
                 untrusted.add (el);
                 String cert = support.getCertificate (inst, el);
                 if (cert != null && cert.length () > 0) {
@@ -434,7 +442,20 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
             if (! untrusted.isEmpty () && certs.length () > 0) {
                 dd.setAdditionalOptions (new JButton [] {showCertificate});
             }
-            DialogDisplayer.getDefault ().createDialog (dd).setVisible (true);
+            final Dialog dlg = DialogDisplayer.getDefault ().createDialog (dd);
+            try {
+                SwingUtilities.invokeAndWait (new Runnable () {
+                    public void run () {
+                        dlg.setVisible (true);
+                    }
+                });
+            } catch (InterruptedException ex) {
+                log.log (Level.INFO, ex.getLocalizedMessage (), ex);
+                return null;
+            } catch (InvocationTargetException ex) {
+                log.log (Level.INFO, ex.getLocalizedMessage (), ex);
+                return null;
+            }
             if (! canContinue.equals (dd.getValue ())) {
                 if (! cancel.equals (dd.getValue ())) cancel.doClick ();
                 return null;
@@ -446,6 +467,7 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
     }
     
     private Restarter handleInstall (Installer i) {
+        installException = null;
         component.setHeadAndContent (getBundle (HEAD_INSTALL), getBundle (CONTENT_INSTALL));
         InstallSupport support = model.getInstallSupport();
         assert support != null : "OperationSupport cannot be null because OperationContainer " +
@@ -489,19 +511,19 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
         panel.waitAndSetProgressComponents (mainLabel, progressComponent, detailLabel);
         Restarter r = null;
         
+        boolean success = false;
         try {
             r = support.doInstall (i, handle);
-            if (model.getAdditionallyInstallSupport () != null) {
-                handle = ProgressHandleFactory.createHandle (getBundle ("InstallStep_Install_InstallingPlugins"));
-                if (r == null) {
-                    ProgressHandleFactory.createProgressComponent (handle); // no need to show again
-                    r = model.getAdditionallyInstallSupport ().doInstall (i, handle);
-                }
-            }
+            success = true;
         } catch (OperationException ex) {
             log.log (Level.INFO, ex.getMessage (), ex);
+            panel.waitAndSetProgressComponents (mainLabel, progressComponent, new JLabel (
+                    getBundle ("InstallStep_Unsuccessful", ex.getLocalizedMessage ())));
+            installException = ex;
         }
-        panel.waitAndSetProgressComponents (mainLabel, progressComponent, new JLabel (getBundle ("InstallStep_Done")));
+        if (success) {
+            panel.waitAndSetProgressComponents (mainLabel, progressComponent, new JLabel (getBundle ("InstallStep_Done")));
+        }
         if (spareHandle != null && spareHandleStarted) {
             spareHandle.finish ();
         }
@@ -509,9 +531,16 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
     }
     
     private void presentInstallDone () {
-        component.setHeadAndContent (getBundle (HEAD_INSTALL_DONE), getBundle (CONTENT_INSTALL_DONE));
         model.modifyOptionsForDoClose (wd);
-        panel.setBody (getBundle ("InstallStep_InstallDone_Text"), InstallUnitWizardModel.getVisibleUpdateElements (model.getAllUpdateElements (), false, model.getOperation ()));
+        if (installException == null) {
+            component.setHeadAndContent (getBundle (HEAD_INSTALL_DONE), getBundle (CONTENT_INSTALL_DONE));
+            panel.setBody (getBundle ("InstallStep_InstallDone_Text"),
+                    InstallUnitWizardModel.getVisibleUpdateElements (model.getAllUpdateElements (), false, model.getOperation ()));
+        } else {
+            component.setHeadAndContent (getBundle (HEAD_INSTALL_UNSUCCESSFUL), getBundle (CONTENT_INSTALL_UNSUCCESSFUL));
+            panel.setBody (getBundle ("InstallStep_InstallUnsuccessful_Text", installException.getLocalizedMessage ()),
+                    InstallUnitWizardModel.getVisibleUpdateElements (model.getAllUpdateElements (), false, model.getOperation ()));
+        }
         panel.hideRunInBackground ();
     }
     
@@ -525,13 +554,14 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
         if (runInBackground ()) {
             InstallSupport support = model.getInstallSupport ();
             support.doRestartLater (restarter);
-            if (model.getAdditionallyInstallSupport () != null) {
-                model.getAdditionallyInstallSupport ().doRestartLater (restarter);
-            }
             try {
                 model.doCleanup (false);
             } catch (OperationException x) {
                 log.log (Level.INFO, x.getMessage (), x);
+            }
+            if (clearLazyUnits) {
+                LazyUnit.storeLazyUnits (model.getOperation (), null);
+                AutoupdateCheckScheduler.notifyAvailable (null, OperationType.UPDATE);
             }
             notifyInstallRestartNeeded (support, r, true); // NOI18N
         }
@@ -576,7 +606,7 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
                     public void actionPerformed (ActionEvent e) {
                         confirmOnClick.run ();
                     }
-                }, 30000);
+                }, Utilities.getShowingBalloonTimeout ());
             }
         };
         if (showToolTip) {
@@ -652,6 +682,7 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
             assert support != null : "OperationSupport cannot be null because OperationContainer " +
                     "contains elements: " + model.getBaseContainer ().listAll () + " and invalid elements " + model.getBaseContainer ().listInvalid ();
             if (panel.restartNow ()) {
+                handleLazyUnits (clearLazyUnits, false);
                 try {
                     support.doRestart (restarter, null);
                 } catch (OperationException x) {
@@ -660,9 +691,7 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
                 
             } else {
                 support.doRestartLater (restarter);
-                if (model.getAdditionallyInstallSupport () != null) {
-                    model.getAdditionallyInstallSupport ().doRestartLater (restarter);
-                }
+                handleLazyUnits (clearLazyUnits, true);
                 try {
                     model.doCleanup (false);
                 } catch (OperationException x) {
@@ -690,6 +719,32 @@ public class InstallStep implements WizardDescriptor.FinishablePanel<WizardDescr
 
     public synchronized void removeChangeListener(ChangeListener l) {
         listeners.remove(l);
+    }
+    
+    private void handleLazyUnits (boolean clearLazyUnits, boolean notifyUsers) {
+        if (clearLazyUnits) {
+            LazyUnit.storeLazyUnits (model.getOperation (), null);
+            if (notifyUsers) {
+                AutoupdateCheckScheduler.notifyAvailable (null, OperationType.UPDATE);
+            }
+        } else {
+            // get LazyUnit being installed
+            Collection<String> tmp = new HashSet<String> ();
+            for (UpdateElement el : model.getAllUpdateElements ()) {
+                tmp.add (LazyUnit.toString (el));
+            }
+            // remove them from LazyUnits stored for next IDE run
+            Collection<LazyUnit> res = new HashSet<LazyUnit> ();
+            for (LazyUnit lu : LazyUnit.loadLazyUnits (model.getOperation ())) {
+                if (! tmp.contains (lu.toString ())) {
+                    res.add (lu);
+                }
+            }
+            LazyUnit.storeLazyUnits (model.getOperation (), res);
+            if (notifyUsers) {
+                AutoupdateCheckScheduler.notifyAvailable (res, OperationType.UPDATE);
+            }
+        }
     }
 
     private void fireChange() {
