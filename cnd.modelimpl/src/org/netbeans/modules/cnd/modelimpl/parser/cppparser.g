@@ -406,6 +406,7 @@ tokens {
 	protected static final  int ANSI_C	= 0x4;
 	protected static final  int KandR_C	= 0x8;
 
+        protected static final int ERROR_LIMIT = 100;
 	private int errorCount = 0;
 
 	public int getErrorCount() {
@@ -413,11 +414,21 @@ tokens {
 	    return cnt;
 	}
 
+        public boolean shouldProceed() {
+            boolean res = errorCount < ERROR_LIMIT;
+            if (!res) {
+                reportError("Too many errors. Parsing is being stopped."); // NOI18N
+            }
+            return res;
+        }
+
 	public void reportError(RecognitionException e) {
             // Do not report errors that we had reported already
             if (lastRecoveryPosition == inputState.input.index()) {
                 return;
             }
+
+            onError(e);
             
             if (Diagnostic.needStatistics()) Diagnostic.onParserError(e);
 
@@ -637,6 +648,9 @@ tokens {
 	protected void printf (String pattern, int i1, int i2, int i3, String s) { /*TODO: implement*/ throw new NotImplementedException(); }
 
 	protected void balanceBraces(int left, int right) throws RecognitionException, TokenStreamException { throw new NotImplementedException(); };
+
+        /** Is called when an error occurred */
+        protected void onError(RecognitionException e) {}
 }
 
 public translation_unit:
@@ -644,8 +658,10 @@ public translation_unit:
                 /* Do not generate ambiguity warnings: we intentionally want to match everything that
                    can not be matched in external_declaration in the second alternative */
 		(options{generateAmbigWarnings = false;}:
+                    {shouldProceed()}?
                     external_declaration 
                     | 
+                    {shouldProceed()}?
                     /* Here we match everything that can not be matched by external_declaration rule,
                        report it as an error and not include in AST */
                     .! { reportError(new NoViableAltException(LT(0), getFilename())); }
@@ -920,12 +936,12 @@ external_declaration {String s; K_and_R = false; boolean definition;}
 		    else	   #external_declaration = #(#[CSM_USER_TYPE_CAST, "CSM_USER_TYPE_CAST"], #external_declaration); }
 	|   
 		// Function declaration
-		((LITERAL___extension__)? (function_attribute_specification)? declaration_specifiers function_declarator[false] (EOF|SEMICOLON))=> 
+		((LITERAL___extension__)? (options {greedy=true;} :function_attribute_specification)? declaration_specifiers function_declarator[false] (EOF|SEMICOLON))=> 
 		{if (statementTrace>=1) 
 			printf("external_declaration_7[%d]: Function prototype\n",
 				LT(1).getLine());
 		}
-		(LITERAL___extension__!)? (function_attribute_specification!)? declaration
+		(LITERAL___extension__!)? (options {greedy=true;} :function_attribute_specification!)? declaration
 		{ #external_declaration = #(#[CSM_FUNCTION_DECLARATION, "CSM_FUNCTION_DECLARATION"], #external_declaration); }
 	|
 		// Function definition with return value
@@ -1020,7 +1036,7 @@ decl_namespace
 			//	    antlrTrace(true);
 			//	 }	// Used for diagnostic trigger
 			//}
-			(namespace_attribute_specification)?
+			(options {greedy=true;} : namespace_attribute_specification)?
 			LCURLY!
 			//{enterNewLocalScope();}
 			((external_declaration)*)
@@ -1146,7 +1162,8 @@ member_declaration
 		// This is separated out otherwise the next alternative
 		// would look for "class A { ... } f() {...}" which is
 		// an unacceptable level of backtracking.
-		( (LITERAL_typedef)? class_head) => 
+                // we need "static" here for the case "static struct XX {...} myVar; - see issue #135149
+		( (LITERAL_typedef | LITERAL_static)? class_head) => 
 		{if (statementTrace>=1) 
 			printf("member_declaration_1[%d]: Class definition\n",
 				LT(1).getLine());
@@ -1391,28 +1408,29 @@ function_K_R_parameter
 
 function_definition
 	:	// don't want next action as an init-action due to (...)=> caller
-	//{ beginFunctionDefinition(); }
-	(	// Next line is equivalent to guarded predicate in PCCTS
-		// (SCOPE | ID)? => <<qualifiedItemIsOneOf(qiType|qiCtor)>>?
-		{( !(LA(1)==SCOPE || LA(1)==ID) || qualifiedItemIsOneOf(qiType | qiCtor) )}?
-		declaration_specifiers function_declarator[true]
+// IZ 132404 : Parser failed on code taken from boost
+//	//{ beginFunctionDefinition(); }
+//	(	// Next line is equivalent to guarded predicate in PCCTS
+//		// (SCOPE | ID)? => <<qualifiedItemIsOneOf(qiType|qiCtor)>>?
+//              {( !(LA(1)==SCOPE || LA(1)==ID) || qualifiedItemIsOneOf(qiType | qiCtor) )}?
+                declaration_specifiers function_declarator[true]
 		(	options{warnWhenFollowAmbig = false;}:
 			//(declaration)*	// Possible for K & R definition
                         (function_K_R_parameter_list)?
 			{in_parameter_list = false;}
 		)?
 		compound_statement
-	|	// Next line is equivalent to guarded predicate in PCCTS
-		// (SCOPE | ID)? => <<qualifiedItemIsOneOf(qiPtrMember)>>?
-		//{( !(LA(1)==SCOPE||LA(1)==ID) || (qualifiedItemIsOneOf(qiPtrMember)) )}?
-		function_declarator[true]
-		(	options{warnWhenFollowAmbig = false;}:
-			(declaration)*	// Possible for K & R definition
-			{in_parameter_list = false;}
-		)?		    
-                compound_statement             
-	)
-	//{endFunctionDefinition();}
+//	|	// Next line is equivalent to guarded predicate in PCCTS
+//		// (SCOPE | ID)? => <<qualifiedItemIsOneOf(qiPtrMember)>>?
+//		//{( !(LA(1)==SCOPE||LA(1)==ID) || (qualifiedItemIsOneOf(qiPtrMember)) )}?
+//		function_declarator[true]
+//		(	options{warnWhenFollowAmbig = false;}:
+//			(declaration)*	// Possible for K & R definition
+//			{in_parameter_list = false;}
+//		)?		    
+//                compound_statement             
+//	)
+//	//{endFunctionDefinition();}
 	;
 
 // rule for predicting "declaration"
@@ -1481,10 +1499,11 @@ declaration_specifiers
 		|	LITERAL_typename
 		|	LITERAL_friend	{fd=true;}
 		|	literal_stdcall
-                |       declspec
                 |      { LT(1).getText().equals(LITERAL___global_ext) == true}? ID 
 		)*
-		(	ts = type_specifier[ds] 
+		(	
+                        (options {greedy=true;} :type_attribute_specification)?
+                        ts = type_specifier[ds] 
                         // support for "A const*";
                         // need to catch postfix_cv_qualifier
                         (postfix_cv_qualifier)? 
@@ -1553,8 +1572,12 @@ simple_type_specifier returns [/*TypeSpecifier*/int ts = tsInvalid]
 			{ #simple_type_specifier = #([CSM_TYPE_BUILTIN, "CSM_TYPE_BUILTIN"], #simple_type_specifier); }
 		|
 			// Fix towards allowing us to parse *.cpp files directly
-			(qualified_type qualified_id)=> qualified_type { ts=tsTYPEID; }
-			{ #simple_type_specifier = #([CSM_TYPE_COMPOUND, "CSM_TYPE_COMPOUND"], #simple_type_specifier); }
+			
+                        // IZ 132404 : Parser failed on code taken from boost
+                        //(qualified_type qualified_id)=> qualified_type { ts=tsTYPEID; }
+                        (qualified_type) => qualified_type { ts=tsTYPEID; }
+			
+                        { #simple_type_specifier = #([CSM_TYPE_COMPOUND, "CSM_TYPE_COMPOUND"], #simple_type_specifier); }
 		)
 	;
 
@@ -1567,7 +1590,7 @@ qualified_type
 		// predicate on
 		// {qualifiedItemIsOneOf(qiType|qiCtor)}?
 
-		s = scope_override 
+		s = scope_override
 		id:ID 
 		(options {warnWhenFollowAmbig = false;}:
 		 LESSTHAN template_argument_list GREATERTHAN
@@ -1580,7 +1603,7 @@ class_specifier[DeclSpecifier ds] returns [/*TypeSpecifier*/int ts = tsInvalid]
 		|LITERAL_struct	{ts = tsSTRUCT;}
 		|LITERAL_union	{ts = tsUNION;}
 		)
-                (options {greedy=true;} : type_attribute_specification | declspec)?
+                (options {greedy=true;} : type_attribute_specification)?
 		(	id = qualified_id
 			(options{generateAmbigWarnings = false;}:
 				{
@@ -1699,7 +1722,7 @@ class_head
 	|	LITERAL_union 
 	|	LITERAL_class 
 	)
-        (options {greedy=true;} : type_attribute_specification | declspec)?
+        (options {greedy=true;} : type_attribute_specification)?
 	(
      
             s = scope_override  
@@ -1787,9 +1810,9 @@ direct_declarator
 	 TypeQualifier tq;}  
 	:
 		// Must be function declaration               
-		((function_attribute_specification)? idInBalanceParensHard LPAREN (RPAREN|parameter_list))=>
+		((options {greedy=true;} :function_attribute_specification)? idInBalanceParensHard LPAREN (RPAREN|parameter_list))=>
 		// TODO: refactor the grammar and use function_declarator here
-		(function_attribute_specification)?
+		(options {greedy=true;} :function_attribute_specification)?
 		id = idInBalanceParensHard                                                     
 		{declaratorID(id, qiFun);}                
 		LPAREN! //{declaratorParameterList(false);}
@@ -1809,7 +1832,7 @@ direct_declarator
 		RPAREN
 		{#direct_declarator = #(#[CSM_VARIABLE_DECLARATION, "CSM_VARIABLE_DECLARATION"], #direct_declarator);}
 	|
-                (variable_attribute_specification)?
+                (options {greedy=true;} :variable_attribute_specification)?
                 (
                     (qualified_id LSQUARE)=>	// Must be array declaration
                     id = qualified_id 
@@ -1901,7 +1924,7 @@ function_declarator [boolean definition]
 function_direct_declarator [boolean definition] 
 	{String q; CPPParser.TypeQualifier tq;}
 	:
-                (function_attribute_specification)?
+                (options {greedy=true;} : function_attribute_specification)?
 		(
 		function_direct_declarator_2[definition]		
 		)
@@ -1911,7 +1934,7 @@ function_direct_declarator [boolean definition]
 		(ASSIGNEQUAL OCTALINT)?	// The value of the octal must be 0
 		//{functionEndParameterList(definition);}
 		(exception_specification)?
-                (function_attribute_specification)?
+                (options {greedy=true;} :function_attribute_specification)?
                 (asm_block!)?
 	;
         
@@ -2243,7 +2266,7 @@ declspec!
 protected
 type_attribute_specification!
         :
-            attribute_specification_list
+            attribute_specification_list | declspec
         ;
 
 protected
