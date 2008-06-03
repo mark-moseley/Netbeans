@@ -41,7 +41,9 @@
 
 package org.netbeans.modules.j2ee.earproject;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -58,6 +60,7 @@ import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.deployment.plugins.api.ServerDebugInfo;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.EarProjectProperties;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.modules.web.spi.webmodule.WebModuleProvider;
 import org.netbeans.spi.project.ActionProvider;
@@ -183,6 +186,27 @@ public class EarActionProvider implements ActionProvider {
         
         //EXECUTION PART
         if (command.equals (COMMAND_RUN) || command.equals (EjbProjectConstants.COMMAND_REDEPLOY)) { //  || command.equals (COMMAND_DEBUG)) {
+            
+            StringBuilder sroots = new StringBuilder();
+            boolean first = true;
+            
+            for (J2eeModuleProvider provider : project.getAppModule().getChildModuleProviders()) {
+                for (FileObject file : provider.getSourceRoots()) {
+                    File f = FileUtil.toFile(file);
+
+                    if (f != null) {
+                        if (!first) {
+                            sroots.append(":");
+                        }
+
+                        sroots.append(f.getAbsolutePath());
+                        first = false;
+                    }
+                }
+            }
+
+            p.setProperty("ensure.built.source.roots", sroots.toString());
+            
             if (!isSelectedServer ()) {
                 // no selected server => warning
                 String msg = NbBundle.getMessage(
