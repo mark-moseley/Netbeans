@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,8 +44,8 @@ import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import javax.swing.AbstractAction;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.JTextComponent;
 import org.netbeans.api.project.FileOwnerQuery;
@@ -54,41 +54,38 @@ import org.netbeans.editor.Utilities;
 import org.netbeans.modules.ruby.NbUtilities;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
-import org.openide.util.NbBundle;
-import org.netbeans.api.gsf.EditorAction;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.editor.BaseAction;
 import org.netbeans.modules.ruby.AstUtilities;
 import org.netbeans.modules.ruby.platform.RubyExecution;
 import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
 import org.netbeans.modules.ruby.platform.execution.FileLocator;
 import org.netbeans.modules.ruby.platform.execution.OutputRecognizer;
+import org.netbeans.modules.ruby.rubyproject.spi.TestRunner;
 import org.netbeans.modules.ruby.spi.project.support.rake.PropertyEvaluator;
 import org.netbeans.spi.project.ActionProvider;
 import org.openide.LifecycleManager;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.Lookup;
 
 /**
  * Run the current focused test or spec (test under caret)
  *
  * @author Tor Norbye
  */
-public class RunFocusedTest extends AbstractAction implements EditorAction {
+public class RunFocusedTest extends BaseAction {
 
     public RunFocusedTest() {
-        super(NbBundle.getMessage(RunFocusedTest.class, "run-focused-spec")); 
-        putValue("PopupMenuText", NbBundle.getBundle(RunFocusedTest.class).getString("popup-run-focused-spec")); // NOI18N
+        super("run-focused-spec", 0); // NOI18N
     }
 
+    @Override
     public void actionPerformed(ActionEvent evt, JTextComponent target) {
         runTest(target, false);
     }
 
-    public String getActionName() {
-        return "run-focused-spec";
-    }
-
+    @Override
     public Class getShortDescriptionBundleClass() {
         return RunFocusedTest.class;
     }
@@ -96,14 +93,6 @@ public class RunFocusedTest extends AbstractAction implements EditorAction {
     @Override
     public boolean isEnabled() {
         return true;
-    }
-
-    public void actionPerformed(ActionEvent ev) {
-        JTextComponent pane = NbUtilities.getOpenPane();
-
-        if (pane != null) {
-            runTest(pane, false);
-        }
     }
 
     static void runTest(JTextComponent target, boolean debug) {
@@ -123,7 +112,7 @@ public class RunFocusedTest extends AbstractAction implements EditorAction {
 
                 try {
                     RSpecSupport rspec = new RSpecSupport(project);
-                    if (rspec.isRSpecInstalled() && rspec.isSpecFile(file)) {
+                    if (rspec.isRSpecInstalled() && RSpecSupport.isSpecFile(file)) {
                         int line = Utilities.getLineOffset(doc, offset);
                         if (line >= 0) {
                             // TODO - compute line number of surrounding "spec" ? Or can spec find it on its own?
@@ -148,9 +137,13 @@ public class RunFocusedTest extends AbstractAction implements EditorAction {
                             
                             // Save all files first - this spec file could be accessing other files being tested
                             LifecycleManager.getDefault().saveAll();
-
-                            runTest(project, null, file, testName, file.getName(), locator, true, debug);
-                                return;
+                            if (!debug) {
+                                TestRunner runner = getTestRunner(TestRunner.TestType.TEST_UNIT);
+                                runner.runSingleTest(file, testName);
+                            } else {
+                                runTest(project, null, file, testName, file.getName(), locator, true, debug);
+                            }
+                            return;
                         } else {
                             Toolkit.getDefaultToolkit().beep();
                         }
@@ -189,7 +182,7 @@ public class RunFocusedTest extends AbstractAction implements EditorAction {
 
         List<String> additionalArgs = new ArrayList<String>();
 
-        additionalArgs.add("-n");
+        additionalArgs.add("-n"); // NOI18N
         additionalArgs.add(testName);
 
         if ((parameters != null) && (parameters.length > 0)) {
@@ -230,4 +223,15 @@ public class RunFocusedTest extends AbstractAction implements EditorAction {
         }
         new RubyExecution(desc, charsetName).run();
     }
+    
+    private static TestRunner getTestRunner(TestRunner.TestType testType) {
+        Collection<? extends TestRunner> testRunners = Lookup.getDefault().lookupAll(TestRunner.class);
+        for (TestRunner each : testRunners) {
+            if (each.supports(testType)) {
+                return each;
+            }
+        }
+        return null;
+    }
+
 }
