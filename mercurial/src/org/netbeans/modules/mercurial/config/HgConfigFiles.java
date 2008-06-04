@@ -47,16 +47,14 @@ import java.io.FileReader;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
 import java.util.Properties;
-import java.util.StringTokenizer;
-import java.util.prefs.Preferences;
 import java.util.logging.Level;
 import org.ini4j.Ini;
+import org.netbeans.modules.mercurial.HgModuleConfig;
 import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.mercurial.util.HgUtils;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Utilities;
 
@@ -69,6 +67,14 @@ import org.openide.util.Utilities;
 public class HgConfigFiles {    
     public static final String HG_EXTENSIONS = "extensions";  // NOI18N
     public static final String HG_EXTENSIONS_HGK = "hgext.hgk";  // NOI18N
+    public static final String HG_EXTENSIONS_FETCH = "fetch";  // NOI18N
+    public static final String HG_UI_SECTION = "ui";  // NOI18N
+    public static final String HG_USERNAME = "username";  // NOI18N
+    public static final String HG_PATHS_SECTION = "paths";  // NOI18N
+    public static final String HG_DEFAULT_PUSH = "default-push";  // NOI18N
+    public static final String HG_DEFAULT_PUSH_VALUE = "default-push";  // NOI18N
+    public static final String HG_DEFAULT_PULL = "default-pull";  // NOI18N
+    public static final String HG_DEFAULT_PULL_VALUE = "default";  // NOI18N
 
     /** The HgConfigFiles instance for user and system defaults */
     private static HgConfigFiles instance;
@@ -79,17 +85,23 @@ public class HgConfigFiles {
     
     /** The repository directory if this instance is for a repository */
     private File dir;
-    private static final String UNIX_CONFIG_DIR = ".hg/";                                                                       // NOI18N
-    private static final String WINDOWS_USER_APPDATA = getAPPDATA();
-    private static final String WINDOWS_CONFIG_DIR = WINDOWS_USER_APPDATA + "\\Mercurial";                                      // NOI18N
-    private static final String WINDOWS_GLOBAL_CONFIG_DIR = getGlobalAPPDATA() + "\\Mercurial";                                 // NOI18N
-    
+    public static final String HG_RC_FILE = "hgrc";                                                                       // NOI18N
+    public static final String HG_REPO_DIR = ".hg";                                                                       // NOI18N
+
+    private static final String WINDOWS_HG_RC_FILE = "Mercurial.ini";                                 // NOI18N
+    private static final String WINDOWS_DEFAULT_MECURIAL_INI_PATH = "C:\\Mercurial\\Mercurial.ini";                                 // NOI18N
+    private boolean bIsProjectConfig;
     /**
      * Creates a new instance
      */
-    private HgConfigFiles() {      
+    private HgConfigFiles() {
+        bIsProjectConfig = false;
         // get the system hgrc file 
-        hgrc = loadFile("hgrc");                                           // NOI18N  
+        if(Utilities.isWindows()) {
+            hgrc = loadSystemAndGlobalFile(WINDOWS_HG_RC_FILE);
+        }else{    
+            hgrc = loadSystemAndGlobalFile(HG_RC_FILE);                                          
+        }
     }
     
     /**
@@ -97,7 +109,7 @@ public class HgConfigFiles {
      *
      * @return the HgConfiles instance
      */
-    public static HgConfigFiles getInstance() {
+    public static HgConfigFiles getSysInstance() {
         if (instance==null) {
             instance = new HgConfigFiles();
         }
@@ -105,23 +117,31 @@ public class HgConfigFiles {
     }
 
     public HgConfigFiles(File file) {
-        dir = file;
-        hgrc = loadFile(file, "hgrc");                                              // NOI18N
+        bIsProjectConfig = true;
+        dir = file;        
+        // <repository>/.hg/hgrc on all platforms
+        hgrc = loadRepoHgrcFile(file);                                             
     }
-    
+ 
     public void setProperty(String name, String value) {
-        if (name.equals("username")) { // NOI18N
-            setProperty("ui", "username", value); // NOI18N
-        } else if (name.equals("default-push")) { // NOI18N
-            setProperty("paths", "default-push", value); // NOI18N
-        } else if (name.equals("default-pull")) { // NOI18N
-            setProperty("paths", "default", value); // NOI18N
-        } else if (name.equals("hgext.hgk")) { // NOI18N
+        if (name.equals(HG_USERNAME)) { 
+            setProperty(HG_UI_SECTION, HG_USERNAME, value); 
+        } else if (name.equals(HG_DEFAULT_PUSH)) { 
+            setProperty(HG_PATHS_SECTION, HG_DEFAULT_PUSH_VALUE, value); 
+        } else if (name.equals(HG_DEFAULT_PULL)) { 
+            setProperty(HG_PATHS_SECTION, HG_DEFAULT_PULL_VALUE, value); 
+        } else if (name.equals(HG_EXTENSIONS_HGK)) { 
             // Allow hgext.hgk to be set to some other user defined value if required
-            if(getProperty("extensions", "hgext.hgk").equals("")){ // NOI18N
-                setProperty("extensions", "hgext.hgk", value, true); // NOI18N
+            if(getProperty(HG_EXTENSIONS, HG_EXTENSIONS_HGK).equals("")){
+                setProperty(HG_EXTENSIONS, HG_EXTENSIONS_HGK, value, true); 
+            }
+        } else if (name.equals(HG_EXTENSIONS_FETCH)) { 
+            // Allow fetch to be set to some other user defined value if required
+            if(getProperty(HG_EXTENSIONS, HG_EXTENSIONS_FETCH).equals("")){ 
+                setProperty(HG_EXTENSIONS, HG_EXTENSIONS_FETCH, value, true);
             }
         }
+
     }
  
     public void setProperty(String section, String name, String value, boolean allowEmpty) {
@@ -136,7 +156,11 @@ public class HgConfigFiles {
             Ini.Section inisection = getSection(hgrc, section, true);
             inisection.put(name, value);
         }
-        storeIni(hgrc, "hgrc"); // NOI18N
+        if (!bIsProjectConfig && Utilities.isWindows()) {
+            storeIni(hgrc, WINDOWS_HG_RC_FILE);
+        } else {
+            storeIni(hgrc, HG_RC_FILE);
+        }
     }
 
     public void setProperty(String section, String name, String value) {
@@ -144,11 +168,19 @@ public class HgConfigFiles {
     }
 
     public void setUserName(String value) {
-        setProperty("ui", "username", value); // NOI18N
+        setProperty(HG_UI_SECTION, HG_USERNAME, value); 
     }
 
-    public String getUserName() {
+    public String getSysUserName() {
         return getUserName(true);
+    }
+
+    public String getSysPushPath() {
+        return getDefaultPush(true);
+    }
+
+    public String getSysPullPath() {
+        return getDefaultPull(true);
     }
 
     public Properties getProperties(String section) {
@@ -167,7 +199,11 @@ public class HgConfigFiles {
         Ini.Section inisection = getSection(hgrc, section, false);
         if (inisection != null) {
              inisection.clear();
-             storeIni(hgrc, "hgrc"); // NOI18N 
+            if (!bIsProjectConfig && Utilities.isWindows()) {
+                storeIni(hgrc, WINDOWS_HG_RC_FILE);
+            } else {
+                storeIni(hgrc, HG_RC_FILE);
+            }
          }
     }
 
@@ -175,7 +211,11 @@ public class HgConfigFiles {
         Ini.Section inisection = getSection(hgrc, section, false);
         if (inisection != null) {
              inisection.remove(name);
-             storeIni(hgrc, "hgrc"); // NOI18N 
+            if (!bIsProjectConfig && Utilities.isWindows()) {
+                storeIni(hgrc, WINDOWS_HG_RC_FILE);
+            } else {
+                storeIni(hgrc, HG_RC_FILE);
+            }
          }
     }
 
@@ -183,16 +223,16 @@ public class HgConfigFiles {
         if (reload) {
             doReload();
         }
-        return getProperty("paths", "default"); // NOI18N
+        return getProperty(HG_PATHS_SECTION, HG_DEFAULT_PULL_VALUE); 
     }
 
     public String getDefaultPush(Boolean reload) {
         if (reload) {
             doReload();
         }
-        String value = getProperty("paths", "default-push"); // NOI18N
+        String value = getProperty(HG_PATHS_SECTION, HG_DEFAULT_PUSH); 
         if (value.length() == 0) {
-            value = getProperty("paths", "default"); // NOI18N
+            value = getProperty(HG_PATHS_SECTION, HG_DEFAULT_PULL_VALUE); 
         }
         return value;
     }
@@ -201,7 +241,7 @@ public class HgConfigFiles {
         if (reload) {
             doReload();
         }
-        return getProperty("ui", "username");                                              // NOI18N
+        return getProperty(HG_UI_SECTION, HG_USERNAME);                                              
     }
 
     public String getProperty(String section, String name) {
@@ -217,9 +257,13 @@ public class HgConfigFiles {
 
     private void doReload () {
         if (dir == null) {
-            hgrc = loadFile("hgrc");                                            // NOI18N  
+            if(!bIsProjectConfig && Utilities.isWindows()) {
+                hgrc = loadSystemAndGlobalFile(WINDOWS_HG_RC_FILE);
+            }else{    
+                hgrc = loadSystemAndGlobalFile(HG_RC_FILE);                                          
+            }
         } else {
-            hgrc = loadFile(dir, "hgrc");                                       // NOI18N  
+            hgrc = loadRepoHgrcFile(dir);                                      
         }
     }
 
@@ -235,7 +279,7 @@ public class HgConfigFiles {
         try {
             String filePath;
             if (dir != null) {
-                filePath = dir.getAbsolutePath() + File.separator + ".hg" + File.separator + iniFile; // NOI18N 
+                filePath = dir.getAbsolutePath() + File.separator + HG_REPO_DIR + File.separator + iniFile; // NOI18N 
             } else {
                 filePath =  getUserConfigPath() + iniFile;
             }
@@ -248,27 +292,20 @@ public class HgConfigFiles {
     }    
 
     /**
-     * Returns the path for the Mercurial configuration directory
-     *
-     * @return the path
-     *
-     */ 
-    public static String getUserConfigPath() {        
-        if(Utilities.isUnix()) {
-            String path = System.getProperty("user.home") ;                     // NOI18N
-            return path + "/.";                                // NOI18N
-        } else if (Utilities.isWindows()){
-            return WINDOWS_CONFIG_DIR + "/"; // NOI18N 
-        } 
-        return "";                                                              // NOI18N
-    }
-
-    private Ini loadFile(File dir, String fileName) {
-        String filePath = dir.getAbsolutePath() + File.separator + ".hg" + File.separator + fileName; // NOI18N 
+     * Loads Repository configuration file  <repo>/.hg/hgrc on all platforms
+     * */
+    private Ini loadRepoHgrcFile(File dir) {
+        String filePath = dir.getAbsolutePath() + File.separator + HG_REPO_DIR + File.separator + HG_RC_FILE; // NOI18N 
         File file = FileUtil.normalizeFile(new File(filePath));
+        File tmpFile = HgUtils.fixPathsInIniFileOnWindows(file);
         Ini system = null;
         try {            
-            system = new Ini(new FileReader(file));
+            if (Utilities.isWindows() && tmpFile != null && tmpFile.isFile() && tmpFile.canWrite() && file != null) {
+                tmpFile.deleteOnExit();
+                system = new Ini(new FileReader(tmpFile));
+            } else {
+                system = new Ini(new FileReader(file));
+            }
         } catch (FileNotFoundException ex) {
             // ignore
         } catch (IOException ex) {
@@ -277,28 +314,35 @@ public class HgConfigFiles {
 
         if(system == null) {
             system = new Ini();
-            Mercurial.LOG.log(Level.WARNING, "Could not load the file " + filePath + ". Falling back on hg defaults."); // NOI18N
+            Mercurial.LOG.log(Level.FINE, "Could not load the file " + filePath + ". Falling back on hg defaults."); // NOI18N
         }
         return system;
     }
     /**
-     * Loads the configuration file  
+     * Loads user and system configuration files 
      * The settings are loaded and merged together in the folowing order:
      * <ol>
-     *  <li> The per-user configuration file, i.e ~/.hgrc
-     *  <li> The system-wide file, i.e. /etc/mercurial/hgrc
+     *  <li> The per-user configuration file, Unix: ~/.hgrc, Windows: %USERPROFILE%\Mercurial.ini
+     *  <li> The system-wide file, Unix: /etc/mercurial/hgrc, Windows: Mercurial_Install\Mercurial.ini
      * </ol> 
      *
      * @param fileName the file name
      * @return an Ini instance holding the configuration file. 
      */       
-    private Ini loadFile(String fileName) {
+    private Ini loadSystemAndGlobalFile(String fileName) {
         // config files from userdir
         String filePath = getUserConfigPath() + fileName;
         File file = FileUtil.normalizeFile(new File(filePath));
+        File tmpFile = HgUtils.fixPathsInIniFileOnWindows(file);
         Ini system = null;
         try {            
-            system = new Ini(new FileReader(file));
+            if (Utilities.isWindows() && tmpFile != null && tmpFile.isFile() && tmpFile.canWrite() && file != null) {
+                tmpFile.deleteOnExit();
+                system = new Ini(new FileReader(tmpFile));
+            } else {
+                system = new Ini(new FileReader(file));
+            }
+
         } catch (FileNotFoundException ex) {
             // ignore
         } catch (IOException ex) {
@@ -312,7 +356,14 @@ public class HgConfigFiles {
         
         Ini global = null;      
         try {
-            global = new Ini(new FileReader(getGlobalConfigPath() + File.separator + fileName));   // NOI18N
+            File gFile = FileUtil.normalizeFile(new File(getGlobalConfigPath() + File.separator + fileName));
+            File tmp2File = HgUtils.fixPathsInIniFileOnWindows(gFile);
+            if (Utilities.isWindows() && tmp2File != null) {
+                tmp2File.deleteOnExit();
+                global = new Ini(new FileReader(tmp2File));   // NOI18N
+            } else {
+                global = new Ini(new FileReader(gFile));   // NOI18N            
+            }
         } catch (FileNotFoundException ex) {
             // just doesn't exist - ignore
         } catch (IOException ex) {
@@ -324,7 +375,6 @@ public class HgConfigFiles {
         }                
         return system;
     }
-
     /**
      * Merges only sections/keys/values into target which are not already present in source
      * 
@@ -351,6 +401,22 @@ public class HgConfigFiles {
         }
     }
    
+    
+    /**
+     * Return the path for the user command lines configuration directory 
+     */
+    private static String getUserConfigPath() {        
+        if(Utilities.isUnix()) {
+            String path = System.getProperty("user.home") ;                     // NOI18N
+            return path + "/.";                                // NOI18N
+        } else if (Utilities.isWindows()){
+            String userConfigPath = getUSERPROFILE();
+            return userConfigPath.equals("")? "":  userConfigPath + File.separator; // NOI18N 
+        } 
+        return "";                                                              // NOI18N
+    }
+
+
     /**
      * Return the path for the systemwide command lines configuration directory 
      */
@@ -358,52 +424,30 @@ public class HgConfigFiles {
         if(Utilities.isUnix()) {
             return "/etc/mercurial";               // NOI18N
         } else if (Utilities.isWindows()){
-            return WINDOWS_GLOBAL_CONFIG_DIR;
+            // <Mercurial Install>\Mercurial.ini
+            String mercurialPath = HgModuleConfig.getDefault().getExecutableBinaryPath ();
+            if(mercurialPath != null && !mercurialPath.equals("")){
+                File ini = new File(mercurialPath, WINDOWS_HG_RC_FILE);
+                if(ini != null && ini.exists() && ini.canRead()){
+                    return ini.getParentFile().getAbsolutePath();
+                }
+            }
+            // C:\Mercurial\Mercurial.ini
+            File ini = new File(WINDOWS_DEFAULT_MECURIAL_INI_PATH);// NOI18N
+            if(ini != null && ini.exists() && ini.canRead()){
+                    return ini.getParentFile().getAbsolutePath();                
+            }        
         } 
         return "";                                  // NOI18N
     }
 
-    /**
-     * Returns the value for the %APPDATA% env variable on windows
-     *
-     */
-    private static String getAPPDATA() {
-        String appdata = ""; // NOI18N
-        if(Utilities.isWindows()) {
-            appdata = System.getenv("APPDATA");// NOI18N
-        }
-        return appdata!= null? appdata: ""; // NOI18N
+    private static String getUSERPROFILE() {
+        if(!Utilities.isWindows()) return null;
+
+        String userprofile = ""; // NOI18N
+        userprofile = System.getenv("USERPROFILE");// NOI18N
+
+        return userprofile!= null? userprofile: ""; // NOI18N
     }
 
-    /**
-     * Returns the value for the %ALLUSERSPROFILE% + the last foder segment from %APPDATA% env variables on windows
-     *
-     */
-    private static String getGlobalAPPDATA() {
-        if(Utilities.isWindows()) {
-            String globalProfile = System.getenv("ALLUSERSPROFILE");                                // NOI18N
-            if(globalProfile == null || globalProfile.trim().equals("")) {                          // NOI18N
-                globalProfile = "";                                                                 // NOI18N
-            }
-            String appdataPath = WINDOWS_USER_APPDATA;
-            if(appdataPath == null || appdataPath.equals("")) {                                     // NOI18N
-                return "";                                                                          // NOI18N
-            }
-            String appdata = "";                                                                    // NOI18N
-            int idx = appdataPath.lastIndexOf("\\");                                                // NOI18N
-            if(idx > -1) {
-                appdata = appdataPath.substring(idx + 1);
-                if(appdata.trim().equals("")) {                                                     // NOI18N
-                    int previdx = appdataPath.lastIndexOf("\\", idx);                               // NOI18N
-                    if(idx > -1) {
-                        appdata = appdataPath.substring(previdx + 1, idx);
-                    }
-                }
-            } else {
-                return "";                                                                          // NOI18N
-            }
-            return globalProfile + "/" + appdata;                                                   // NOI18N
-        }
-        return "";                                                                                  // NOI18N
-    }
 }
