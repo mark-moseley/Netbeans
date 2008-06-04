@@ -48,7 +48,6 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.Document;
 import org.netbeans.api.lexer.InputAttributes;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.lib.editor.util.swing.DocumentListenerPriority;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.lib.lexer.LanguageManager;
@@ -137,22 +136,12 @@ extends MutableTextInput<D> implements DocumentListener {
     }
 
     public void insertUpdate(DocumentEvent e) {
-        modified(true, e);
+        tokenHierarchyControl().textModified(e.getOffset(), 0, null, e.getLength());
     }
 
     public void removeUpdate(DocumentEvent e) {
-        modified(false, e);
-    }
-
-    private void modified(boolean insert, DocumentEvent e) {
-        int offset = e.getOffset();
-        int length = e.getLength();
-        if (insert) {
-            tokenHierarchyControl().textModified(offset, 0, null, length);
-        } else {
-            tokenHierarchyControl().textModified(offset, length,
-                    DocumentUtilities.getModificationText(e), 0);
-        }
+        tokenHierarchyControl().textModified(e.getOffset(), e.getLength(),
+                DocumentUtilities.getModificationText(e), 0);
     }
 
 }
