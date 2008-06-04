@@ -50,6 +50,7 @@ import java.net.URLConnection;
 import javax.swing.JComboBox;
 import javax.swing.SwingUtilities;
 import javax.swing.tree.TreePath;
+import junit.framework.Test;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.EditorWindowOperator;
@@ -72,6 +73,8 @@ import org.netbeans.jellytools.actions.ActionNoBlock;
 import org.netbeans.jellytools.actions.Action;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.NewWebProjectNameLocationStepOperator;
+import org.netbeans.jellytools.NewWebProjectServerSettingsStepOperator;
+import org.netbeans.jellytools.NewWebProjectSourcesStepOperator;
 import org.netbeans.jellytools.OptionsOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
@@ -81,7 +84,6 @@ import org.netbeans.jellytools.modules.j2ee.nodes.J2eeServerNode;
 import org.netbeans.jellytools.modules.web.NavigatorOperator;
 import org.netbeans.jellytools.modules.web.nodes.WebPagesNode;
 import org.netbeans.jemmy.QueueTool;
-import org.netbeans.jemmy.Timeouts;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JComboBoxOperator;
@@ -91,8 +93,7 @@ import org.netbeans.jemmy.operators.JRadioButtonOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.jemmy.operators.Operator;
-import org.netbeans.jemmy.util.PNGEncoder;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.ide.ProjectSupport;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceCreationException;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
@@ -126,39 +127,22 @@ public class WebProjectValidation extends JellyTestCase {
         super(name);
     }
     
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new WebProjectValidation("testPreconditions"));
-        suite.addTest(new WebProjectValidation("testNewWebProject"));
-        //suite.addTest(new WebProjectValidation("testRegisterTomcat"));
-        suite.addTest(new WebProjectValidation("testNewJSP"));
-        suite.addTest(new WebProjectValidation("testNewJSP2"));
-        suite.addTest(new WebProjectValidation("testJSPNavigator"));
-        suite.addTest(new WebProjectValidation("testNewServlet"));
-        suite.addTest(new WebProjectValidation("testNewServlet2"));
-        suite.addTest(new WebProjectValidation("testBuildProject"));
-        suite.addTest(new WebProjectValidation("testCompileAllJSP"));
-        suite.addTest(new WebProjectValidation("testCompileJSP"));
-        suite.addTest(new WebProjectValidation("testCleanProject"));
-        suite.addTest(new WebProjectValidation("testRunProject"));
-        suite.addTest(new WebProjectValidation("testRunJSP"));
-        suite.addTest(new WebProjectValidation("testViewServlet"));
-        suite.addTest(new WebProjectValidation("testRunServlet"));
-        suite.addTest(new WebProjectValidation("testCreateTLD"));
-        suite.addTest(new WebProjectValidation("testCreateTagHandler"));
-        suite.addTest(new WebProjectValidation("testRunTag"));
-        suite.addTest(new WebProjectValidation("testNewHTML"));
-        suite.addTest(new WebProjectValidation("testHTMLNavigator"));
-        suite.addTest(new WebProjectValidation("testRunHTML"));
-        suite.addTest(new WebProjectValidation("testNewSegment"));
-        suite.addTest(new WebProjectValidation("testNewDocument"));
-        suite.addTest(new WebProjectValidation("testStopServer"));
-        suite.addTest(new WebProjectValidation("testStartServer"));
-        suite.addTest(new WebProjectValidation("testBrowserSettings"));
-        suite.addTest(new WebProjectValidation("testFinish"));
-        return suite;
+    public static Test suite() {
+        return NbModuleSuite.create(
+            NbModuleSuite.createConfiguration(WebProjectValidation.class).addTest(
+              "testPreconditions", "testNewWebProject", "testRegisterTomcat",
+              "testNewJSP", "testNewJSP2", "testNewServlet", "testNewServlet2",
+              "testBuildProject", "testCompileAllJSP", "testCompileJSP",
+              "testCleanProject", "testRunProject", "testRunJSP", "testViewServlet",
+              "testRunServlet", "testCreateTLD", "testCreateTagHandler", "testRunTag",
+              "testNewHTML", "testRunHTML", "testNewSegment", "testNewDocument",
+              "testStopServer", "testStartServer", "testBrowserSettings", "testFinish"
+               /*"testJSPNavigator", "testHTMLNavigator" */)
+            .enableModules(".*")
+            .clusters(".*")
+        );
     }
-    
+
     /** Use for execution inside IDE */
     public static void main(java.lang.String[] args) {
         // run whole suite
@@ -245,11 +229,13 @@ public class WebProjectValidation extends JellyTestCase {
         nameStep.txtProjectName().typeText(PROJECT_NAME);
         nameStep.txtProjectLocation().setText("");
         nameStep.txtProjectLocation().typeText(PROJECT_LOCATION);
-        nameStep.finish();
-        Timeouts timeouts = nameStep.getTimeouts().cloneThis();
-        nameStep.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 60000);
-        nameStep.waitClosed();
-        nameStep.setTimeouts(timeouts);
+        nameStep.next();
+        NewWebProjectServerSettingsStepOperator serverStep = new NewWebProjectServerSettingsStepOperator();
+        serverStep.selectServer("Tomcat");
+        serverStep.selectJavaEEVersion(org.netbeans.jellytools.Bundle.getString("org.netbeans.modules.j2ee.common.project.ui.Bundle", "J2EESpecLevel_14"));
+        serverStep.next();
+        NewWebProjectSourcesStepOperator frameworkStep =  new NewWebProjectSourcesStepOperator();
+        frameworkStep.finish();
         // wait for project creation
         sleep(5000);
         ProjectSupport.waitScanFinished();
@@ -510,7 +496,6 @@ public class WebProjectValidation extends JellyTestCase {
         editor.insert(runningViewServlet+"\n", 14, 1);
         editor.insert("<% " + jspCode + " %>\n" , 19, 9);
         sleep(5000);
-        PNGEncoder.captureScreen(getWorkDir().getAbsolutePath()+File.separator+"screen1.png");        
         editor.saveDocument();
         new Action("Run|Run File|Run \"page2.jsp\"",null).perform();
         waitBuildSuccessful();
@@ -527,7 +512,6 @@ public class WebProjectValidation extends JellyTestCase {
         editor.deleteLine(19);
         sleep(5000);        
         editor.save();
-        PNGEncoder.captureScreen(getWorkDir().getAbsolutePath()+File.separator+"screen2.png");
         editor.close();
         servlet.close();
     }
@@ -846,7 +830,7 @@ public class WebProjectValidation extends JellyTestCase {
         }
     }
     
-    private void logAndCloseOutputs() {
+    public void logAndCloseOutputs() {
         OutputTabOperator outputTab;
         long timeout = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
         JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 3000);
@@ -867,20 +851,20 @@ public class WebProjectValidation extends JellyTestCase {
         }
     }
     
-    private void waitBuildSuccessful() {
+    public void waitBuildSuccessful() {
         OutputTabOperator console = new OutputTabOperator(PROJECT_NAME);
         console.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 180000);
         console.waitText(BUILD_SUCCESSFUL);
     }
     
-    private void initDisplayer() {
+    public void initDisplayer() {
         if (urlDisplayer == null) {
             urlDisplayer = TestURLDisplayer.getInstance();
         }
         urlDisplayer.invalidateURL();
     }
     
-    private void assertDisplayerContent(String substr) {
+    public void assertDisplayerContent(String substr) {
         try {
             urlDisplayer.waitURL();
         } catch (InterruptedException ex) {
@@ -895,7 +879,7 @@ public class WebProjectValidation extends JellyTestCase {
         assertTrue("The '"+urlDisplayer.getURL()+"' page does not contain '"+substr+"'", contains);
     }
     
-    private void assertContains(String text, String value) {
+    public void assertContains(String text, String value) {
         assertTrue("Assertation failed, cannot find:\n"+value+"\nin the following text:\n"+text, text.contains(value));
     }
     
