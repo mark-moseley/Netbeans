@@ -39,37 +39,41 @@
 
 package org.netbeans.modules.extexecution.api;
 
+import java.io.Writer;
 import org.netbeans.modules.extexecution.api.input.InputProcessor;
-import org.openide.filesystems.FileObject;
 import org.openide.windows.InputOutput;
+import org.openide.windows.OutputWriter;
 
 /**
  *
  * @author Petr Hejl
  */
-public interface Descriptor {
+public interface ExecutionDescriptor {
 
-        InputOutput getInputOutput();
+    InputOutput getInputOutput();
 
-        FileObject getFileObject();
+    boolean isControlable();
 
-        InputProcessor getOutputSnooper();
+    /* Select the tab on run */
+    boolean isFrontWindow();
 
-        boolean isControlable();
+    /* Allows user input */
+    boolean isInputVisible();
 
-        /* Select the tab on run */
-        boolean isFrontWindow();
+    /* Suspend the progress bar on run */
+    boolean showSuspended();
 
-        /* Allows user input */
-        boolean isInputVisible();
+    /* Show progress bar */
+    boolean showProgress();
 
-        /* Suspend the progress bar on run */
-        boolean showSuspended();
+    InputProcessor getOutProcessor(OutputWriter writer);
 
-        /* Show progress bar */
-        boolean showProgress();
+    InputProcessor getErrProcessor(OutputWriter writer);
 
-        /* Action to run when action is finished */
-        Runnable getPostExecution();
+    InputProcessor getInProcessor(Writer writer);
+
+    Runnable getPreExecution();
+
+    Runnable getPostExecution();
 
 }
