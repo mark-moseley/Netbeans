@@ -88,6 +88,16 @@ public abstract class JPDADebugger {
     /** Property name constant. */
     public static final String          PROP_SUSPEND = "suspend"; // NOI18N
 
+    /** Property name constant.
+     * @since 2.16     */
+    public static final String          PROP_THREAD_STARTED = "threadStarted";   // NOI18N
+    /** Property name constant.
+     * @since 2.16     */
+    public static final String          PROP_THREAD_DIED = "threadDied";         // NOI18N
+    /** Property name constant.
+     * @since 2.16     */
+    public static final String          PROP_THREAD_GROUP_ADDED = "threadGroupAdded";  // NOI18N
+    
     /** Suspend property value constant. */
     public static final int             SUSPEND_ALL = EventRequest.SUSPEND_ALL;
     /** Suspend property value constant. */
@@ -176,8 +186,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             if (d == null) continue;
             d.waitRunning ();
             return d;
@@ -247,8 +256,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             if (d == null) continue;
             d.waitRunning ();
             return d;
@@ -282,8 +290,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             d.waitRunning ();
             if (d == null) continue;
             return d;
@@ -316,6 +323,17 @@ public abstract class JPDADebugger {
      * @param s a new value of suspend property
      */
     public abstract void setSuspend (int s);
+    
+    /*
+     * Returns all threads that exist in the debuggee.
+     *
+     * @return all threads
+     * @since 2.16
+     * Use ThreadsCollector instead.
+    public List<JPDAThread> getAllThreads() {
+        return Collections.emptyList();
+    }
+     */
     
     /**
      * Returns current thread or null.
@@ -494,5 +512,25 @@ public abstract class JPDADebugger {
     public long[] getInstanceCounts(List<JPDAClassType> classTypes) throws UnsupportedOperationException {
         throw new UnsupportedOperationException("Not supported.");
     }
+    
+    /**
+     * Get the collector of threads.
+     * 
+     * @return The threads collector
+     * @since 2.16
+     */
+    public ThreadsCollector getThreadsCollector() {
+        return null;
+    }
+    
+    /**
+     * Creates a deadlock detector.
+     * @return deadlock detector with automatic detection of deadlock among suspended threads
+     * @since 2.16
+     *
+    public DeadlockDetector getDeadlockDetector() {
+        return new DeadlockDetector() {};
+    }
+     */
 
 }

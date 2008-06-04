@@ -77,7 +77,6 @@ import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.api.debugger.jpda.event.JPDABreakpointEvent;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.Session;
-import org.netbeans.api.debugger.DebuggerManager;
 
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
 import org.netbeans.modules.debugger.jpda.expr.Expression;
@@ -105,7 +104,6 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
     private JPDADebuggerImpl    debugger;
     private JPDABreakpoint      breakpoint;
     private BreakpointsReader   reader;
-    private final Session       session;
     private Expression          compiledCondition;
     private List<EventRequest>  requests = new ArrayList<EventRequest>();
     private int                 hitCountFilter = 0;
@@ -114,7 +112,6 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
         this.debugger = debugger;
         this.reader = reader;
         breakpoint = p;
-        this.session = session;
     }
 
     /**
@@ -352,10 +349,9 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
         getDebugger().setAltCSF(null);
         if (!resume) {
             resume = checkWhetherResumeToFinishStep(thread);
-            if (!resume) {
-                DebuggerManager.getDebuggerManager().setCurrentSession(session);
-                getDebugger ().setStoppedState (thread);
-            }
+        }
+        if (!resume) {
+            ((JPDAThreadImpl) getDebugger().getThread(thread)).setCurrentBreakpoint(breakpoint);
         }
         //S ystem.out.println("BreakpointImpl.perform end");
         return resume; 
@@ -379,6 +375,7 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
                     }
                     if (step.thread().status() == ThreadReference.THREAD_STATUS_ZOMBIE) {
                         thread.virtualMachine().eventRequestManager().deleteEventRequest(step);
+                        debugger.getOperator().unregister(step);
                         activeStepRequests.remove(i);
                         continue;
                     }
@@ -435,7 +432,8 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
                     debugger.addPropertyChangeListener(new PropertyChangeListener() {
                         public void propertyChange(PropertyChangeEvent pe) {
                             if (pe.getPropertyName().equals(debugger.PROP_STATE)) {
-                                if (pe.getNewValue().equals(debugger.STATE_RUNNING)) {
+                                if (pe.getNewValue().equals(debugger.STATE_RUNNING) ||
+                                    pe.getNewValue().equals(debugger.STATE_DISCONNECTED)) {
                                     debugger.removePropertyChangeListener(this);
                                     tiPanelRef[0].dismiss();
                                 }
@@ -473,6 +471,7 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
                         // the step requests to prevent confusion
                         for (StepRequest step : activeStepRequests) {
                             thread.virtualMachine().eventRequestManager().deleteEventRequest(step);
+                            debugger.getOperator().unregister(step);
                         }
                     }
                     return yes;
