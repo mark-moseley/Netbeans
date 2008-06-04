@@ -60,7 +60,9 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.modules.db.api.sql.execute.SQLExecution;
+import org.netbeans.modules.db.sql.execute.SQLHistory;
 import org.netbeans.modules.db.sql.execute.ui.SQLResultPanel;
+import org.netbeans.modules.db.sql.history.SQLHistoryManager;
 import org.openide.text.CloneableEditor;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
@@ -78,7 +80,6 @@ import org.openide.windows.TopComponent;
  */
 public class SQLCloneableEditor extends CloneableEditor {
 
-    private transient JPanel container;
     private transient JSplitPane splitter;
     private transient SQLResultPanel resultComponent;
 
@@ -93,10 +94,12 @@ public class SQLCloneableEditor extends CloneableEditor {
 
     public SQLCloneableEditor() {
         super(null);
+        putClientProperty("oldInitialize", Boolean.TRUE); // NOI18N
     }
 
     public SQLCloneableEditor(SQLEditorSupport support) {
         super(support);
+        putClientProperty("oldInitialize", Boolean.TRUE); // NOI18N
         initialize();
     }
 
@@ -386,6 +389,12 @@ public class SQLCloneableEditor extends CloneableEditor {
                 Logger.getLogger("global").log(Level.INFO, null, e);
                 return ""; // NOI18N
             }
+        }
+
+        public void showHistory() {
+            // XXX under construction
+            SQLHistoryManager.getInstance();
+            SQLHistoryManager.getInstance().saveSQL(new SQLHistory("jdbc", "sql"));
         }
     }
 }
