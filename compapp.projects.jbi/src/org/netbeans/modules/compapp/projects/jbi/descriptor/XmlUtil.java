@@ -44,6 +44,8 @@ package org.netbeans.modules.compapp.projects.jbi.descriptor;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import org.openide.filesystems.FileStateInvalidException;
+import org.openide.util.Exceptions;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 
@@ -62,6 +64,8 @@ import java.util.Map;
 import javax.xml.namespace.QName;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.FileUtil;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
@@ -84,19 +88,33 @@ public class XmlUtil {
      */
     public static void writeToFile(String fileLocation, Document document)
         throws TransformerConfigurationException, TransformerException, 
-            FileNotFoundException, UnsupportedEncodingException {
+            FileNotFoundException, UnsupportedEncodingException, IOException {
 
         File outputFile = new File(fileLocation);
+        FileObject outputFO = FileUtil.toFileObject(outputFile);
+        
+//        if (outputFO != null) {
+//            // #129625: Use NB FS API. Alternatively, we could use File API,  
+//            // then refresh NB FileSystem.
+//            writeToFileObject(outputFO, document);
+//            return;
+//        } 
+        
         PrintWriter pw = new PrintWriter(outputFile, "UTF-8"); // NOI18N
         StreamResult result = new StreamResult(pw);
-        
+
         try {
             writeTo(result, document);
         } finally {
             if (pw != null) {
                 pw.close();
             }
-        }        
+        } 
+            
+        // #136190: avoid file locking caused by the old fix to #129625
+        if (outputFO != null) {
+            outputFO.getFileSystem().refresh(true);
+        }
     }
     
     public static void writeToOutputStream(OutputStream os, Document document)
