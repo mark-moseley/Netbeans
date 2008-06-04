@@ -81,11 +81,11 @@ public final class WebModule {
             Lookup.getDefault().lookupResult(WebModuleProvider.class);
     
     static  {
-        WebModuleAccessor.DEFAULT = new WebModuleAccessor() {
+        WebModuleAccessor.setDefault(new WebModuleAccessor() {
             public WebModule createWebModule(WebModuleImplementation spiWebmodule) {
                 return new WebModule(spiWebmodule);
             }
-        };
+        });
     }
     
     private WebModule (WebModuleImplementation impl) {
@@ -201,23 +201,5 @@ public final class WebModule {
      */
     public MetadataModel<WebAppMetadata> getMetadataModel() {
         return impl.getMetadataModel();
-    }
-    
-    @Override
-    public boolean equals (Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (!WebModule.class.isAssignableFrom(obj.getClass()))
-            return false;
-        WebModule wm = (WebModule) obj;
-        return getDocumentBase().equals(wm.getDocumentBase())
-            && getJ2eePlatformVersion().equals (wm.getJ2eePlatformVersion())
-            && getContextPath().equals(wm.getContextPath());
-    }
-    
-    @Override
-    public int hashCode () {
-        return getDocumentBase ().getPath ().length () + getContextPath ().length ();
     }
 }
