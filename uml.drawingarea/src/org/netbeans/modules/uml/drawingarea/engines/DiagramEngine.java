@@ -70,6 +70,8 @@ import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagram;
+import org.netbeans.modules.uml.drawingarea.ConnectionWidgetFactory;
+import org.netbeans.modules.uml.drawingarea.NodeWidgetFactory;
 import org.netbeans.modules.uml.drawingarea.RelationshipDiscovery;
 import org.netbeans.modules.uml.drawingarea.UMLDiagramTopComponent;
 import org.netbeans.modules.uml.drawingarea.ZoomManager;
@@ -151,7 +153,7 @@ abstract public class DiagramEngine {
         selectTool.addAction(scene.createRectangularSelectAction());
         selectTool.addAction(ActionFactory.createZoomAction());
         selectTool.addAction(scene.createWidgetHoverAction());
-        selectTool.addAction(new DiagramSceneAcceptAction(new SceneAcceptProvider(scene.getDiagram().getNamespace())));
+        selectTool.addAction(new DiagramSceneAcceptAction(new SceneAcceptProvider(scene.getDiagram().getNamespaceForCreatedElements())));
         selectTool.addAction(ActionFactory.createCycleObjectSceneFocusAction());
         selectTool.addAction(ActionFactory.createPopupMenuAction(menuProvider));
 
@@ -479,21 +481,42 @@ abstract public class DiagramEngine {
                     {
                         try
                         {
-                            Class cl = ic.instanceClass();
-                            if(cl != null)
+                            Object obj = ic.instanceCreate();
+                            if (obj instanceof NodeWidgetFactory)
                             {
-                                Constructor constructor = cl.getConstructor(Scene.class);
-                                if(constructor != null)
-                                {
-                                    retVal = constructor.newInstance(scene);
-                                }
+                                NodeWidgetFactory factory = (NodeWidgetFactory) obj;
+                                retVal = factory.createNode(scene);
+                                break;
+                            }
+                            else if (obj instanceof ConnectionWidgetFactory)
+                            {
+                                ConnectionWidgetFactory factory = (ConnectionWidgetFactory) obj;
+                                retVal = factory.createConnection(scene);
+                                break;
                             }
                         }
-                        catch (Exception e)
+                        catch(Exception ex)
                         {
-                            Exceptions.printStackTrace(e);
-                            continue;
+                            Exceptions.printStackTrace(ex);
                         }
+                        
+//                        try
+//                        {
+//                            Class cl = ic.instanceClass();
+//                            if(cl != null)
+//                            {
+//                                Constructor constructor = cl.getConstructor(Scene.class);
+//                                if(constructor != null)
+//                                {
+//                                    retVal = constructor.newInstance(scene);
+//                                }
+//                            }
+//                        }
+//                        catch (Exception e)
+//                        {
+//                            Exceptions.printStackTrace(e);
+//                            continue;
+//                        }
                     }
                     else
                     {
