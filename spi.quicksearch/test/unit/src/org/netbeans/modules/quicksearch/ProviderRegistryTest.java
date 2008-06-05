@@ -45,7 +45,11 @@ import org.netbeans.junit.NbTestCase;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.spi.quicksearch.CategoryDescription;
 import org.netbeans.spi.quicksearch.SearchProvider;
-import org.netbeans.spi.quicksearch.SearchResult;
+import org.netbeans.modules.quicksearch.ResultsModel.ItemResult;
+import org.netbeans.spi.quicksearch.SearchRequest;
+import org.netbeans.spi.quicksearch.SearchResponse;
+import org.openide.util.Lookup;
+import org.openide.util.lookup.Lookups;
 
 
 /**
@@ -126,17 +130,12 @@ public class ProviderRegistryTest extends NbTestCase {
     /** Test provider without category description */
     public static class Test1Provider implements SearchProvider {
         
-        public List<SearchResult> evaluate(String pattern) {
-            return null;
-        }
-
-        public CategoryDescription getCategory() {
-            return null;
-        }
-
-        public boolean cancel() {
+        public void evaluate(SearchRequest request, SearchResponse response) {
             // no operation
-            return true;
+        }
+
+        public Lookup getLookup() {
+            return null;
         }
         
     }
@@ -144,14 +143,10 @@ public class ProviderRegistryTest extends NbTestCase {
     /** Test provider with full category description */
     public static class Test2Provider implements SearchProvider, CategoryDescription {
 
-        public List<SearchResult> evaluate(String pattern) {
-            return null;
+        public void evaluate(SearchRequest request, SearchResponse response) {
+            // no operation
         }
-
-        public CategoryDescription getCategory() {
-            return this;
-        }
-
+        
         public String getDisplayName() {
             return DISPLAY_NAME;
         }
@@ -164,11 +159,10 @@ public class ProviderRegistryTest extends NbTestCase {
             return null;
         }
 
-        public boolean cancel() {
-            // no operation
-            return true;
+        public Lookup getLookup() {
+            return Lookups.fixed(this);
         }
-        
+
     }
     
 }
