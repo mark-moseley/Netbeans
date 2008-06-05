@@ -27,9 +27,10 @@
  */
 package org.netbeans.test.java.hints;
 
+import junit.framework.Test;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jemmy.EventTool;
+import org.netbeans.junit.NbModuleSuite;
 
 /**
  *
@@ -191,6 +192,7 @@ public class HintsTest extends HintsTestCase {
     
     public void testAddLocal() {
         String file = "addHint";
+        setInPlaceCreation(true);
         openSourceFile("org.netbeans.test.java.hints.HintsTest", file);
         editor = new EditorOperator(file);
         editor.setCaretPosition(13,1);
@@ -314,6 +316,9 @@ public class HintsTest extends HintsTestCase {
         new TestRunner().run(HintsTest.class);
     }
     
-    
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(HintsTest.class).enableModules(".*").clusters(".*"));
+    }
     
 }
