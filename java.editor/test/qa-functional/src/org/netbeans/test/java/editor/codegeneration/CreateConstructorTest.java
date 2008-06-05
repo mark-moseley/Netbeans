@@ -40,11 +40,14 @@
  */
 package org.netbeans.test.java.editor.codegeneration;
 
+
+import junit.framework.Test;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.MainWindowOperator;
 import org.netbeans.jellytools.actions.Action;
 import org.netbeans.jemmy.operators.JTreeOperator;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.java.editor.jelly.GenerateCodeOperator;
 import org.netbeans.test.java.editor.jelly.GenerateConstructorOperator;
 
@@ -52,10 +55,10 @@ import org.netbeans.test.java.editor.jelly.GenerateConstructorOperator;
  *
  * @author Jiri Prox Jiri.Prox@Sun.COM
  */
-public class CreateConstructor extends GenerateCode {
+public class CreateConstructorTest extends GenerateCodeTestCase {
 
     /** Creates a new instance of CreateConstructor */
-    public CreateConstructor(String name) {
+    public CreateConstructorTest(String name) {
         super(name);
     }
 
@@ -262,8 +265,31 @@ public class CreateConstructor extends GenerateCode {
             editor.close(false);
         }
     }
+    
+    public void testIssue100341() {
+        openSourceFile("org.netbeans.test.java.editor.codegeneration", "test100341b");
+        editor = new EditorOperator("test100341b");
+        txtOper = editor.txtEditorPane();
+        try {
+            editor.requestFocus();
+            editor.setCaretPosition(13, 1);
+            GenerateCodeOperator.openDialog(GenerateCodeOperator.GENERATE_CONSTRUCTOR, editor);
+            String expected = "" +
+                    "    public test100341b(String data) {\n" +
+                    "        super(data);\n" +
+                    "    }\n";
+            waitAndCompare(expected);
+        } finally {
+            editor.close(false);
+        }
+    }
 
     public static void main(String[] args) {
-        TestRunner.run(CreateConstructor.class);        
+        TestRunner.run(CreateConstructorTest.class);
     }
+    
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(CreateConstructorTest.class).enableModules(".*").clusters(".*"));
+     }
 }
