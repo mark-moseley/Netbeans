@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -37,41 +37,57 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.quicksearch.recent;
+package org.netbeans.modules.quicksearch;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import org.netbeans.modules.quicksearch.ResultsModel.ItemResult;
 
-
 /**
  *
- * @author Jan Becicka
+ * @author  Jan Becicka, Dafe Simonek
  */
-public class RecentSearches {
-    private LinkedList<ItemResult> recent;
-    private static final int MAX_ITEMS = 5;
-    private static RecentSearches instance;
+public final class CategoryResult {
+    
+    private ProviderModel.Category category;
+    
+    private List<ItemResult> items;
 
-    private RecentSearches() {
-        recent = new LinkedList<ItemResult>();
+    CategoryResult (ProviderModel.Category category) {
+        this.category = category;
+        items = new ArrayList<ItemResult>();
     }
     
-    public static RecentSearches getDefault() {
-        if (instance==null) {
-            instance = new RecentSearches();
-        }
-        return instance;
-    } 
-    
-    public void add(ItemResult result) {
-        if (recent.size()>=MAX_ITEMS) {
-            recent.removeLast();
-        }
-        recent.addFirst(result);
+    public boolean addItem (ItemResult item) {
+        items.add(item);
+        // TBD, return false if category is already full or whole this search
+        // was cancelled
+        return true;
     }
     
-    public List<ItemResult> getSearches() {
-        return recent;
+    public boolean addAll (List<ItemResult> newItems) {
+        items.addAll(newItems);
+        // TBD, return false if category is already full or whole this search
+        // was cancelled
+        return true;
     }
+
+    /**
+     * Get the value of item
+     *
+     * @return the value of item
+     */
+    public List<ItemResult> getItems() {
+        return items;
+    }
+
+    /**
+     * Get the value of Category
+     *
+     * @return the value of Category
+     */
+    public ProviderModel.Category getCategory() {
+        return category;
+    }
+
 }
