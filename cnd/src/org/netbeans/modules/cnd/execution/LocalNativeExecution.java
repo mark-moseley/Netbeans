@@ -50,7 +50,6 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.ResourceBundle;
-import org.netbeans.modules.cnd.execution41.org.openide.loaders.ExecutionSupport;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
@@ -62,27 +61,22 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.netbeans.modules.cnd.api.execution.NativeExecution;
 
 /**
  *  A support class for helping execution of an executable, a makefile, or a script.
  */
-public class NativeExecution extends ExecutionSupport {
+public class LocalNativeExecution extends NativeExecution {
     /** Script file that merges stdout and stderr on Unix */
     private static File stdOutErrFile = null;
     private static boolean hasWarned = false;
     
     private File runDirFile;
-    private static ResourceBundle bundle = NbBundle.getBundle(NativeExecution.class);
+    private static ResourceBundle bundle = NbBundle.getBundle(LocalNativeExecution.class);
     private OutputReaderThread outputReaderThread = null; // Thread for running process
     private InputReaderThread inputReaderThread = null; // Thread for running process
     private Process executionProcess = null;
     private PrintWriter out;
-    private Reader tmp_in;
-    
-    /** Constructor */
-    public NativeExecution() {
-        super(null);
-    }
     
     /**
      * Execute an executable, a makefile, or a script
@@ -161,19 +155,16 @@ public class NativeExecution extends ExecutionSupport {
         return rc;
     }
     
-    public void start() {
-        super.start();
-    }
-    
-    public void destroy() {
+    public void stop() {
         /*
         if (executionThread != null) {
             executionThread.interrupt();
         }
          */
-        if (executionProcess != null) {
-            executionProcess.destroy();
-        }
+        outputReaderThread.cancel();
+//        if (executionProcess != null) {
+//            executionProcess.destroy();
+//        }
     }
     
     
@@ -183,7 +174,7 @@ public class NativeExecution extends ExecutionSupport {
         /** This is all output, not just stderr */
         private Reader err;
         private Writer output;
-        private Reader tmp_in;
+        private boolean cancel = false;
         
         public OutputReaderThread(InputStream err, Writer output) {
             this.err = new InputStreamReader(err);
@@ -198,21 +189,29 @@ public class NativeExecution extends ExecutionSupport {
          *  Java don't have a good way of interleaving stdout and stderr while keeping the
          *  exact order of the output.
          */
+        @Override
         public void run() {
             try {
                 int read;
                 
                 while ((read = err.read()) != (-1)) {
+                    if (cancel) { // 131739 
+                        return;
+                    }
                     if (read == 10)
                         output.write("\n"); // NOI18N
                     else
                         output.write((char) read);
-                    output.flush();
+                    //output.flush(); // 135380 
                 }
                 output.flush();
             } catch (IOException e) {
                 ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
             }
+        }
+        
+        public void cancel() {
+            cancel = true;
         }
     }
     
@@ -233,6 +232,7 @@ public class NativeExecution extends ExecutionSupport {
          *  Reader proc to read input from Output2's input textfield and send it
          *  to the running process.
          */
+        @Override
         public void run() {
             int ch;
             
