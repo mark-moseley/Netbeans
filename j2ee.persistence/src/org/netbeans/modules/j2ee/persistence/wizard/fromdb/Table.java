@@ -43,7 +43,6 @@ package org.netbeans.modules.j2ee.persistence.wizard.fromdb;
 
 import java.util.Set;
 import org.netbeans.modules.j2ee.core.api.support.java.JavaIdentifiers;
-import org.netbeans.modules.j2ee.persistence.wizard.Util;
 import org.openide.util.NbBundle;
 
 /**
@@ -53,16 +52,36 @@ import org.openide.util.NbBundle;
  */
 public abstract class Table implements Comparable<Table> {
 
+    private final String schema;
+    private final String catalog;
     private final String name;
     private final boolean join;
     private final DisabledReason disabledReason;
+    private final boolean tableOrView; // true for table and false for view
 
-    public Table(String name, boolean join, DisabledReason disabledReason) {
+    public Table(String schema, String catalog, String name, boolean join, DisabledReason disabledReason) {
+        this.schema = schema;
+        this.catalog = catalog;
         this.name = name;
         this.join = join;
         this.disabledReason = disabledReason;
+        tableOrView = true; // default to table
+    }
+    
+    public Table(String schema, String catalog, String name, boolean join, DisabledReason disabledReason, boolean isTable) {
+        this.schema = schema;
+        this.catalog = catalog;
+        this.name = name;
+        this.join = join;
+        this.disabledReason = disabledReason;
+        tableOrView = isTable;
+    }
+    
+    public boolean isTable() {
+        return tableOrView;
     }
 
+    @Override
     public boolean equals(Object that) {
         if (that instanceof Table) {
             return compareTo((Table)that) == 0;
@@ -76,6 +95,14 @@ public abstract class Table implements Comparable<Table> {
             return 1;
         }
         return this.getName().compareTo(that.getName());
+    }
+    
+    public String getSchema() {
+        return this.schema;
+    }
+    
+    public String getCatalog() {
+        return this.catalog;
     }
 
     /**
