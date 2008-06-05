@@ -44,10 +44,13 @@ import com.sun.esb.management.api.administration.AdministrationService;
 import com.sun.esb.management.api.configuration.ConfigurationService;
 import com.sun.esb.management.api.deployment.DeploymentService;
 import com.sun.esb.management.api.installation.InstallationService;
+import com.sun.esb.management.api.notification.NotificationService;
 import com.sun.esb.management.client.ManagementClient;
+import com.sun.esb.management.client.ManagementClientFactory;
 import com.sun.esb.management.common.ManagementRemoteException;
 import java.io.File;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.List;
 import java.util.logging.Logger;
 import javax.management.MBeanServerConnection;
@@ -81,6 +84,12 @@ public class AppserverJBIMgmtController {
     private ConfigurationService configurationService;
     private PerformanceMeasurementServiceWrapper performanceMeasurementServiceWrapper;
     private RuntimeManagementServiceWrapper runtimeManagementServiceWrapper;
+    private NotificationService notificationService;
+    
+    private String hostName;
+    private String port;
+    private String userName;
+    private String password;
     
     public static final String SERVER_TARGET = "server";
     private static final String HOST_MBEAN_NAME =
@@ -97,7 +106,7 @@ public class AppserverJBIMgmtController {
     public AppserverJBIMgmtController(MBeanServerConnection mBeanServerConnection) {
         this.mBeanServerConnection = mBeanServerConnection;
         init();
-        managementClient = new ManagementClient(myMBeanServerConnection);
+        managementClient = new ManagementClient(myMBeanServerConnection, true);
     }
 
     public boolean isJBIFrameworkEnabled() {
@@ -136,6 +145,20 @@ public class AppserverJBIMgmtController {
             configurationService = managementClient.getConfigurationService();
         }
         return configurationService;
+    }
+    
+    public NotificationService getNotificationService()
+            throws ManagementRemoteException {
+
+        if (notificationService == null) {
+            String rmiPortString = managementClient.getAdministrationService().getJmxRmiPort();        
+            notificationService = 
+                    //managementClient.getNotificationService(); // DOES NOT WORK
+                    //ManagementClientFactory.getInstance(mBeanServerConnection, true).getNotificationService(); // DOES NOT WORK
+                    //ManagementClientFactory.getInstance("localhost", 8686, "admin", "adminadmin").getNotificationService(); // WORKS
+                    ManagementClientFactory.getInstance(hostName, Integer.parseInt(rmiPortString), userName, password).getNotificationService();
+        }
+        return notificationService;
     }
 
     public PerformanceMeasurementServiceWrapper 
@@ -226,10 +249,10 @@ public class AppserverJBIMgmtController {
                     if (serverInstance != null) {
                         JBIClassLoader jbiClassLoader = new JBIClassLoader(serverInstance);
 
-                        String hostName = serverInstance.getHostName();
-                        String port = serverInstance.getAdminPort();
-                        String userName = serverInstance.getUserName();
-                        String password = serverInstance.getPassword();
+                        hostName = serverInstance.getHostName();
+                        port = serverInstance.getAdminPort();
+                        userName = serverInstance.getUserName();
+                        password = serverInstance.getPassword();
 
                         HTTPServerConnector httpConnector = new HTTPServerConnector(
                                 hostName, port, userName, password, jbiClassLoader);
@@ -245,7 +268,8 @@ public class AppserverJBIMgmtController {
         if (myMBeanServerConnection == null) {
             // Fall back on the mBeanServerConnection provided by NetBeans
             try {
-                logger.warning("Could not find the server instance. Falling back on the mBeanServerConnection provided by NetBeans."); // NOI18N
+                logger.warning("Could not find the server instance. Falling back " + // NOI18N
+                        "on the mBeanServerConnection provided by NetBeans."); // NOI18N
                 myMBeanServerConnection = mBeanServerConnection;
             } catch (Exception e) {
                 logger.warning(e.getMessage());
@@ -260,6 +284,13 @@ public class AppserverJBIMgmtController {
         if (instanceHost.equals("localhost")) { // NOI18N
             instanceHost = getHostName();
             isLocalHost = true;
+        }
+        
+        try {
+            InetAddress.getByName(instanceHost);
+        } catch (UnknownHostException e) {
+            // invalid host name parsing, tomcat for example
+            return false;
         }
 
         try {
@@ -294,15 +325,20 @@ public class AppserverJBIMgmtController {
 
                 // For local domains, use instance LOCATION instead of url location  (#90749)
                 String localInstanceLocation = instance.getLocation();
-                assert localInstanceLocation != null;
-                localInstanceLocation = localInstanceLocation.replace('\\', '/'); // NOI18N
+                // assert localInstanceLocation != null;
+                if (localInstanceLocation != null) {
+                    localInstanceLocation = localInstanceLocation.replace('\\', '/'); // NOI18N
+                }
 
                 if (isLocalHost) {
                     logger.fine("    localInstanceLocation=" + localInstanceLocation);
                     logger.fine("                  appBase=" + appBase);
                 }
 
-                if (!isLocalHost || appBase.toLowerCase().startsWith(localInstanceLocation.toLowerCase())) {
+                if (!isLocalHost || 
+                        localInstanceLocation != null &&
+                        appBase.toLowerCase().startsWith(localInstanceLocation.toLowerCase()) &&
+                        new File(localInstanceLocation).exists()) {
                     objectName = new ObjectName(HTTP_PORT_MBEAN_NAME);
                     String port = (String) mBeanServerConnection.getAttribute(objectName, "port");  // NOI18N
                     String instanceHttpPort = instance.getHttpPortNumber();
