@@ -37,32 +37,16 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.iep.editor.wizard.database;
+package org.netbeans.modules.iep.editor.xsd.nodes;
 
-import org.netbeans.modules.iep.editor.xsd.nodes.SelectableTreeNode;
+import javax.swing.Icon;
 
 /**
  *
  * @author radval
  */
-public class ColumnNode extends AbstractDBArtifactNode implements SelectableTreeNode {
+public interface INode {
 
-	private boolean mSelected;
-	
-    public ColumnNode(ColumnInfo column) {
-        super(column, false);
-    }
+    public Icon getIcon();
     
-    @Override
-    public boolean isLeaf() {
-    	return true;
-    }
- 
-    public boolean isSelected() {
-        return mSelected;
-    }
-
-    public void setSelected(boolean selected) {
-        this.mSelected = selected;
-    }
 }

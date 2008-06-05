@@ -37,32 +37,34 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.iep.editor.wizard.database;
+package org.netbeans.modules.iep.editor.xsd.nodes;
 
-import org.netbeans.modules.iep.editor.xsd.nodes.SelectableTreeNode;
+import java.io.File;
+import java.io.FileFilter;
 
 /**
  *
  * @author radval
  */
-public class ColumnNode extends AbstractDBArtifactNode implements SelectableTreeNode {
-
-	private boolean mSelected;
-	
-    public ColumnNode(ColumnInfo column) {
-        super(column, false);
-    }
+public  class SchemaFileFilter implements FileFilter {
     
-    @Override
-    public boolean isLeaf() {
-    	return true;
-    }
- 
-    public boolean isSelected() {
-        return mSelected;
-    }
+    public static final String SCHEMA_FILE_EXTENSION = "xsd";
+    
+    public boolean accept(File pathname) {
+        boolean result = false;
+        String fileName = pathname.getName();
+        String fileExtension = null;
+        int dotIndex = fileName.lastIndexOf('.');
+        if(dotIndex != -1) {
+            fileExtension = fileName.substring(dotIndex +1);
+        }
 
-    public void setSelected(boolean selected) {
-        this.mSelected = selected;
+        if(fileExtension != null 
+                && (fileExtension.equalsIgnoreCase(SCHEMA_FILE_EXTENSION))) {
+            result = true;
+        }
+
+        return result;
     }
 }
+    

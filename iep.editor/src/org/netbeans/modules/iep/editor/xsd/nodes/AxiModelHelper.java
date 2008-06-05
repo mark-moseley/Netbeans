@@ -37,32 +37,29 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.iep.editor.wizard.database;
+package org.netbeans.modules.iep.editor.xsd.nodes;
 
-import org.netbeans.modules.iep.editor.xsd.nodes.SelectableTreeNode;
+import java.io.File;
+import java.io.IOException;
+import org.netbeans.modules.xml.axi.AXIModel;
+import org.netbeans.modules.xml.axi.AXIModelFactory;
+import org.netbeans.modules.xml.schema.model.SchemaModel;
+import org.netbeans.modules.xml.schema.model.SchemaModelFactory;
+import org.netbeans.modules.xml.xam.ModelSource;
+import org.netbeans.modules.xml.xam.locator.CatalogModelException;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
  * @author radval
  */
-public class ColumnNode extends AbstractDBArtifactNode implements SelectableTreeNode {
-
-	private boolean mSelected;
-	
-    public ColumnNode(ColumnInfo column) {
-        super(column, false);
+public class AxiModelHelper {
+ 
+    public static AXIModel getAXIModel(FileObject thisFileObj) throws CatalogModelException, IOException {
+        ModelSource modelSource = org.netbeans.modules.xml.retriever.catalog.Utilities.getModelSource(thisFileObj, false); 
+        SchemaModel model = SchemaModelFactory.getDefault().getModel(modelSource);
+        return AXIModelFactory.getDefault().getModel(model);
     }
     
-    @Override
-    public boolean isLeaf() {
-    	return true;
-    }
- 
-    public boolean isSelected() {
-        return mSelected;
-    }
-
-    public void setSelected(boolean selected) {
-        this.mSelected = selected;
-    }
 }
