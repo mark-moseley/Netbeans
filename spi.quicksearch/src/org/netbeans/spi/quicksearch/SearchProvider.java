@@ -40,24 +40,60 @@
 
 package org.netbeans.spi.quicksearch;
 
-import org.openide.util.Cancellable;
-import java.util.List;
-
-
 /**
- * Search Provider.
- * Implement to provide new group of results for quick search
- * @author  Jan Becicka
+ * Search Provider, implement to provide new group of results for quick search.
+ * 
+ * Implementations of SearchProvider must be registered through xml layer in
+ * following way:
+ * 
+ * <pre>
+ *  <folder name="QuickSearch">
+ *      <folder name="MyCategoryID">
+ *          <file name="org-netbeans-mymodule-mypackage-MySearchProviderImpl.instance"/>
+ *          <attr name="position" intvalue="500"/>
+ *      </folder>
+ *  </folder>
+ * </pre>
+ * 
+ * @author  Jan Becicka, Dafe Simonek
  */
-public interface SearchProvider extends Cancellable {
+public interface SearchProvider {
     
     /**
-     * find result matching given pattern
-     * @param pattern
+     * Evaluates given request and fills response object with apropriate results.
+     * 
+     * Typical implementation would look like follows:
+     * 
+     * <pre>
+     *  for (SearchedItem item : getAllItemsToSearchIn()) {
+     *      if (isConditionSatisfied(item, request)) {
+     *          if (!response.addResult(item.getRunnable(), item.getDisplayName(),
+     *              item.getShortcut(), item.getDisplayHint())) {
+     *               break;
+     *          }
+     *      }
+     *  }
+     * </pre>
+     * 
+     * This method can be called outside EQ thread.
+     * 
+     * @param request Search request object that contains information what to
+     * search for.
+     * @param response Search response object that stores search results. Note
+     * that it's important to react to return value of SearchResponse.addResult(...)
+     * method and stop computation if false value is returned.
+     * 
+     */
+    public void evaluate (SearchRequest request, SearchResponse response);
+    
+    
+    /**
+     * Description of visual category in which results will be displayed.
+     * 
+     * Category ID and its position is defined in 
+     * 
      * @return
      */
-    List<SearchResult> evaluate (String pattern);
-    
-    CategoryDescription getCategory ();
+    public CategoryDescription getCategory ();
     
 }
