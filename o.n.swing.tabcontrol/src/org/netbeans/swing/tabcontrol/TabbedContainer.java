@@ -40,6 +40,7 @@
  */
 
 package org.netbeans.swing.tabcontrol;
+
 import javax.accessibility.Accessible;
 import org.netbeans.swing.tabcontrol.event.TabActionEvent;
 import org.netbeans.swing.tabcontrol.plaf.DefaultTabbedContainerUI;
@@ -291,6 +292,9 @@ public class TabbedContainer extends JComponent implements Accessible {
     
     /** Winsys info needed for tab control or null if not available */
     private WinsysInfoForTabbed winsysInfo = null;
+    
+    /** Winsys info needed for tab control or null if not available */
+    private WinsysInfoForTabbedContainer containerWinsysInfo = null;
 
     @Deprecated
     private LocationInformer locationInformer = null;
@@ -332,10 +336,18 @@ public class TabbedContainer extends JComponent implements Accessible {
     }
         
     /**
+     * Deprecated, please use constructor with WinsysInfoForTabbed instead.
+     */
+    @Deprecated
+    public TabbedContainer(TabDataModel model, int type, WinsysInfoForTabbed winsysInfo) {
+        this( model, type, WinsysInfoForTabbedContainer.getDefault( winsysInfo ) );
+    }
+        
+    /**
      * Create a new pane with the specified model, displayer type and extra
      * information from winsys
      */
-    public TabbedContainer(TabDataModel model, int type, WinsysInfoForTabbed winsysInfo) {
+    public TabbedContainer(TabDataModel model, int type, WinsysInfoForTabbedContainer winsysInfo) {
         switch (type) {
             case TYPE_VIEW:
             case TYPE_EDITOR:
@@ -351,6 +363,7 @@ public class TabbedContainer extends JComponent implements Accessible {
         this.model = model;
         this.type = Boolean.getBoolean("nb.tabcontrol.alltoolbar") ? TYPE_TOOLBAR : type;
         this.winsysInfo = winsysInfo;
+        this.containerWinsysInfo = winsysInfo;
         initialized = true;
         updateUI();
         //A few borders and such will check this
@@ -358,8 +371,6 @@ public class TabbedContainer extends JComponent implements Accessible {
         putClientProperty ("viewType", new Integer(type)); //NOI18N
     }
     
-    
-
     /**
      * Overridden as follows:  When called by the superclass constructor (before
      * the <code>type</code> field is set), it will simply return; the  
@@ -792,10 +803,15 @@ public class TabbedContainer extends JComponent implements Accessible {
         return locationInformer;
     }
     
+    @Deprecated
     public WinsysInfoForTabbed getWinsysInfo() {
         return winsysInfo;
     }
 
+    public WinsysInfoForTabbedContainer getContainerWinsysInfo() {
+        return containerWinsysInfo;
+    }
+    
     static {
         //Support for experimenting with different content policies in NetBeans
         String s = System.getProperty("nb.tabcontrol.contentpolicy"); //NOI18N
@@ -856,14 +872,13 @@ public class TabbedContainer extends JComponent implements Accessible {
      * @param transparent True to make the container transparent
      */
     public void setTransparent( boolean transparent ) {
-        if( !isSliding() ) {
-            //support only slided-in windows
-            throw new IllegalStateException( "Transparency is supported for sliding windows only." );
-        }
-        float oldAlpha = currentAlpha;
-        currentAlpha = transparent ? ALPHA_TRESHOLD : 1.0f;
-        if( oldAlpha != currentAlpha ) {
-            repaint();
+        if( isSliding() ) {
+            //#129444 - AWT events may be retargeted icorrectly sometimes
+            float oldAlpha = currentAlpha;
+            currentAlpha = transparent ? ALPHA_TRESHOLD : 1.0f;
+            if( oldAlpha != currentAlpha ) {
+                repaint();
+            }
         }
     }
     
@@ -893,6 +908,12 @@ public class TabbedContainer extends JComponent implements Accessible {
                                 || ke.getKeyCode() == KeyEvent.VK_CONTROL) ) {
                             setTransparent( false );
                         }
+                    } else if( event.getID() == MouseEvent.MOUSE_PRESSED ) {
+                        setTransparent( false );
+                    } else if( event.getID() == KeyEvent.KEY_PRESSED ) {
+                        KeyEvent ke = (KeyEvent)event;
+                        if( !(ke.getKeyCode() == KeyEvent.VK_ALT || ke.getKeyCode() == KeyEvent.VK_SHIFT) )
+                            setTransparent( false );
                     }
                 }
             };

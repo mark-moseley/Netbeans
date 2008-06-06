@@ -48,6 +48,7 @@ import org.openide.util.NbBundle;
 import javax.swing.*;
 import org.netbeans.core.windows.Constants;
 import org.netbeans.core.windows.ModeImpl;
+import org.netbeans.core.windows.Switches;
 import org.netbeans.core.windows.WindowManagerImpl;
 import org.openide.windows.TopComponent;
 
@@ -56,30 +57,36 @@ import org.openide.windows.TopComponent;
  * @author   Peter Zavadsky
  */
 public class CloseAllDocumentsAction extends AbstractAction {
+    
+    /** true when action is context aware (like in popup menu),
+     * false means global action
+     */
+    private boolean isContext;
 
     /**
      * default constructor with label containing mnemonics.
      */
     public CloseAllDocumentsAction() {
-        this(true);
+        this(false);
     }
 
     /**
      * can decide whether to have label with mnemonics or without it.
      */
-    public CloseAllDocumentsAction(boolean withMnemonic) {
+    public CloseAllDocumentsAction(boolean isContext) {
+        this.isContext = isContext;
         String key;
-        if (withMnemonic) {
-            key = "CTL_CloseAllDocumentsAction"; //NOI18N
-        } else {
+        if (isContext) {
             key = "LBL_CloseAllDocumentsAction"; //NOI18N
+        } else {
+            key = "CTL_CloseAllDocumentsAction"; //NOI18N
         }
         putValue(NAME, NbBundle.getMessage(CloseAllDocumentsAction.class, key));
     }
     
     /** Perform the action. Sets/unsets maximzed mode. */
     public void actionPerformed(java.awt.event.ActionEvent ev) {
-        ActionUtils.closeAllDocuments();
+        ActionUtils.closeAllDocuments(isContext);
     }
 
     /** Overriden to share accelerator with 
@@ -106,11 +113,18 @@ public class CloseAllDocumentsAction extends AbstractAction {
 
     @Override
     public boolean isEnabled() {
-        TopComponent activeTC = TopComponent.getRegistry().getActivated();
-        ModeImpl mode = (ModeImpl)WindowManagerImpl.getInstance().findMode(activeTC);
-        
-        return mode != null && mode.getKind() == Constants.MODE_KIND_EDITOR
-                && !mode.getOpenedTopComponents().isEmpty();
+        if( !Switches.isEditorTopComponentClosingEnabled() )
+            return false;
+        WindowManagerImpl wmi = WindowManagerImpl.getInstance();
+        if (isContext) {
+            TopComponent activeTC = TopComponent.getRegistry().getActivated();
+            ModeImpl mode = (ModeImpl)wmi.findMode(activeTC);
+
+            return mode != null && mode.getKind() == Constants.MODE_KIND_EDITOR
+                    && !mode.getOpenedTopComponents().isEmpty();
+        } else {
+            return wmi.getEditorTopComponents().length > 0;
+        }
     }
     
 }
