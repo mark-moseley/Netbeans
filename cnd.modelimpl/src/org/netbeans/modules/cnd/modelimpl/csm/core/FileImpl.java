@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
+import antlr.RecognitionException;
 import antlr.Token;
 import antlr.TokenStream;
 import antlr.TokenStreamException;
@@ -55,7 +56,10 @@ import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
 import org.netbeans.modules.cnd.modelimpl.parser.CPPParserEx;
 
 import java.io.*;
+import java.lang.ref.Reference;
+import java.lang.ref.SoftReference;
 import java.util.*;
+import java.util.ArrayList;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.logging.Level;
 import org.netbeans.modules.cnd.apt.support.APTLanguageFilter;
@@ -65,25 +69,31 @@ import org.netbeans.modules.cnd.modelimpl.cache.FileCache;
 import org.netbeans.modules.cnd.modelimpl.cache.impl.FileCacheImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.*;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.support.APTDriver;
 import org.netbeans.modules.cnd.apt.support.APTPreprocHandler;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.support.StartEntry;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.parser.apt.APTParseFileWalker;
 import org.netbeans.modules.cnd.modelimpl.parser.apt.GuardBlockWalker;
+import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 import org.netbeans.modules.cnd.modelimpl.platform.ModelSupport;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
+import org.netbeans.modules.cnd.modelimpl.uid.LazyCsmCollection;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDUtilities;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.support.SelfPersistent;
 import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
+import org.netbeans.editor.BaseDocument;
 
 /**
  * CsmFile implementations
@@ -148,6 +158,13 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
     
     /** Cache the hash code */
     private int hash; // Default to 0
+    
+    /** 
+     * Stores the UIDs of the static functions declarations (not definitions) 
+     * This is necessary for finding definitions/declarations 
+     * since file-level static functions (i.e. c-style static functions) aren't registered in project
+     */
+    private Collection<CsmUID<CsmFunction>> staticFunctionDeclarationUIDs = new ArrayList<CsmUID<CsmFunction>>();
     
     /** For test purposes only */
     public interface Hook {
@@ -288,6 +305,9 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
 		state = State.MODIFIED;
 	    }
             if (invalidateCache) {
+                synchronized (tokStreamLock) {
+                   ref = null;
+                }                
                 if (TraceFlags.USE_AST_CACHE) {
                     CacheManager.getInstance().invalidate(this);
                 } else {
@@ -486,30 +506,146 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
         return null;
     }
 
-    public TokenStream getTokenStream() {
+    private TokenStream createFullTokenStream() {
         APTPreprocHandler preprocHandler = getPreprocHandler();
         APTFile apt = null;
-	if (TraceFlags.USE_AST_CACHE) {
-	    apt = CacheManager.getInstance().findAPT(this);
-	}
-	else {
-	    try {
-		apt = APTDriver.getInstance().findAPT(fileBuffer);
-	    } catch (IOException ex) {
-		DiagnosticExceptoins.register(ex);
-	    }
-	}
+        if (TraceFlags.USE_AST_CACHE) {
+            apt = CacheManager.getInstance().findAPT(this);
+        } else {
+            try {
+                apt = APTDriver.getInstance().findAPT(fileBuffer);
+            } catch (IOException ex) {
+                DiagnosticExceptoins.register(ex);
+            }
+        }
         if (apt == null) {
             return null;
         }
         ProjectBase startProject = ProjectBase.getStartProject(preprocHandler.getState());
         if (startProject == null) {
             System.err.println(" null project for " + APTHandlersSupport.extractStartEntry(preprocHandler.getState()) + // NOI18N
-                "\n while getting TS of file " + getAbsolutePath() + "\n of project " + getProject()); // NOI18N
+                    "\n while getting TS of file " + getAbsolutePath() + "\n of project " + getProject()); // NOI18N
             return null;
-        }        
+        }
         APTParseFileWalker walker = new APTParseFileWalker(startProject, apt, this, preprocHandler);
-        return walker.getFilteredTokenStream(getLanguageFilter());
+        return walker.getFilteredTokenStream(getLanguageFilter());        
+    }
+    
+    private final String tokStreamLock = new String("TokenStream lock"); // NOI18N
+    private Reference<OffsetTokenStream> ref = new SoftReference(null);
+    
+    public TokenStream getTokenStream(int startOffset, int endOffset) {
+        try {
+            OffsetTokenStream stream;
+            synchronized (tokStreamLock) {
+                stream = ref != null ? ref.get() : null;
+                ref = new SoftReference(null);
+            }
+            if (stream == null || stream.getStartOffset() > startOffset) {
+                if (stream == null) {
+//                    System.err.println("new stream created for " + startOffset);
+                } else {
+//                    System.err.println("new stream created, because prev stream was finished on " + stream.getStartOffset() + " now asked for " + startOffset);
+                }
+                stream = new OffsetTokenStream(createFullTokenStream());
+            } else {
+//                System.err.println("use cached stream finished previously on " + stream.getStartOffset() + " now asked for " + startOffset);
+            }
+            stream.moveTo(startOffset, endOffset);
+            return stream;
+        } catch (TokenStreamException ex) {
+            Utils.LOG.severe("Can't create compound statement: " + ex.getMessage());
+            DiagnosticExceptoins.register(ex);
+            return null;
+        }
+    }
+    
+    public void releaseTokenStream(TokenStream ts) {
+        if (ts instanceof OffsetTokenStream) {
+            OffsetTokenStream offsTS = (OffsetTokenStream)ts;
+            synchronized (tokStreamLock) {
+                if (ref != null && ref.get() == null) {
+                    ref = new SoftReference<OffsetTokenStream>(offsTS);
+//                    System.err.println("caching stream finished on " + offsTS.getStartOffset());                    
+                }
+            }
+        }
+    }
+    
+    private static class OffsetTokenStream implements TokenStream {
+
+        private final TokenStream stream;
+        private Token next;
+        private int endOffset;
+
+        public OffsetTokenStream(TokenStream stream) {
+            this.stream = stream;
+        }
+
+        public Token nextToken() throws TokenStreamException {
+            Token out = next;
+            
+            if (out == null || out.getType() == CPPTokenTypes.EOF ||
+                  (((APTToken)out).getOffset() > endOffset)  ) {
+                out = APTUtils.EOF_TOKEN;
+            } else {
+                next = stream.nextToken();
+            }
+            return out;
+        }
+        
+        public int getStartOffset() {
+            return next == null || (next.getType() == CPPTokenTypes.EOF) ? Integer.MAX_VALUE : ((APTToken)next).getOffset();
+        }
+        
+        public void moveTo(int startOffset, int endOffset) throws TokenStreamException {
+            this.endOffset = endOffset;
+            assert this.endOffset >= startOffset;
+            for (next = stream.nextToken(); next != null && next.getType() != CPPTokenTypes.EOF; next = stream.nextToken()) {
+                assert (next instanceof APTToken) : "we have only APTTokens in token stream";
+                int currOffset = ((APTToken) next).getOffset();
+                if (currOffset == startOffset) {
+                    break;
+                }
+            }            
+        }
+    };
+    
+    public Collection<RecognitionException> getErrors() {
+        final Collection<RecognitionException> result = new ArrayList<RecognitionException>();
+        CPPParserEx.ErrorDelegate delegate = new CPPParserEx.ErrorDelegate() {
+            public void onError(RecognitionException e) {
+                result.add(e);
+            }
+        };
+        // FIXUP (up to the end of the function)
+        // should be changed with setting appropriate flag and using common parsing mechanism
+        // (Now doParse performs too many actions that should NOT be performed if parsing just for getting errors;
+        // making this actions conditional will make doParse code spaghetty-like. That's why I use this fixup)
+        // Another issue to be solved is threading and cancellation
+        if( TraceFlags.TRACE_ERROR_PROVIDER ) System.err.printf("\n\n>>> Start parsing (getting errors) %s \n", getName());
+        long time = TraceFlags.TRACE_ERROR_PROVIDER ? System.currentTimeMillis() : 0;
+        APTPreprocHandler preprocHandler = getPreprocHandler();
+        ProjectBase startProject = ProjectBase.getStartProject(preprocHandler.getState());
+        int flags = CPPParserEx.CPP_CPLUSPLUS;
+        if( ! TraceFlags.TRACE_ERROR_PROVIDER ) {
+            flags |= CPPParserEx.CPP_SUPPRESS_ERRORS;
+        }
+        try {
+            APTFile aptFull = APTDriver.getInstance().findAPT(this.getBuffer());
+            APTParseFileWalker walker = new APTParseFileWalker(startProject, aptFull, this, preprocHandler);
+            CPPParserEx parser = CPPParserEx.getInstance(fileBuffer.getFile().getName(), walker.getFilteredTokenStream(getLanguageFilter()), flags);
+            parser.setErrorDelegate(delegate);
+            parser.setLazyCompound(false);
+            parser.translation_unit();
+        } catch (IOException ex) {
+            DiagnosticExceptoins.register(ex);
+        } catch (Error ex){
+            System.err.println(ex.getClass().getName()+" at parsing file "+fileBuffer.getFile().getAbsolutePath()); // NOI18N
+            throw ex;
+        }
+        if( TraceFlags.TRACE_ERROR_PROVIDER ) System.err.printf("<<< Done parsing (getting errors) %s %d ms\n\n\n", getName(), System.currentTimeMillis() - time);
+        return result;
     }
     
     private AST doParse(APTPreprocHandler preprocHandler) {
@@ -571,8 +707,8 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
             if (TraceFlags.TRACE_CACHE) {
                 System.err.println("CACHE: parsing using full APT for " + getAbsolutePath());
             }      
-            // init guard info
-            initGuardIfNeeded(preprocHandler, aptFull);
+            // set guard info
+            updateGuardAfterParse(preprocHandler, aptFull);
             // make real parse
             ProjectBase startProject = ProjectBase.getStartProject(preprocHandler.getState());
             if (startProject == null) {
@@ -585,6 +721,7 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
             if (TraceFlags.DEBUG) {
                 System.err.println("doParse " + getAbsolutePath() + " with " + ParserQueue.tracePreprocState(oldState));
             }
+            clearFakeRegistrations();
             CPPParserEx parser = CPPParserEx.getInstance(fileBuffer.getFile().getName(), walker.getFilteredTokenStream(getLanguageFilter()), flags);
             long time = (emptyAstStatictics) ? System.currentTimeMillis() : 0;
             try {
@@ -640,6 +777,14 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
     /*package*/void initGuardIfNeeded(APTPreprocHandler preprocHandler, APTFile apt) {
         if (!getGuardState().isInited()) {
             setGuardState(preprocHandler, apt);
+        }
+    }
+
+    private void updateGuardAfterParse(APTPreprocHandler preprocHandler, APTFile apt) {
+        if (!getGuardState().isInited()) {
+            setGuardState(preprocHandler, apt);
+        } else {
+            getGuardState().setGuardBlockState(preprocHandler, getGuardState().getGuard());
         }
     }
     
@@ -796,6 +941,17 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
         }
         return out;
     }
+
+    public Iterator<CsmMacro> getMacros(CsmFilter filter) {
+        Iterator<CsmMacro> out;
+        try {
+            macrosLock.readLock().lock();
+            out = UIDCsmConverter.UIDsToMacros(macros, filter);
+         } finally {
+            macrosLock.readLock().unlock();
+         }
+         return out;
+    }
     
     public void addDeclaration(CsmOffsetableDeclaration decl) {
         CsmUID<CsmOffsetableDeclaration> uidDecl = RepositoryUtils.put(decl);
@@ -812,6 +968,25 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
 		v.setScope(this);
 	    }
 	}
+        if( CsmKindUtilities.isFunctionDeclaration(decl) ) {
+            FunctionImpl fi = (FunctionImpl) decl;
+            if( fi.isStatic() ) {
+                addStaticFunctionDeclaration(fi);
+            }
+        }
+    }
+    
+    private void addStaticFunctionDeclaration(FunctionImpl func) {
+        staticFunctionDeclarationUIDs.add(func.getUID());
+    }
+
+    /** 
+     * Gets the list of the static functions declarations (not definitions) 
+     * This is necessary for finding definitions/declarations 
+     * since file-level static functions (i.e. c-style static functions) aren't registered in project
+     */
+    public Collection<CsmFunction> getStaticFunctionDeclarations() {
+        return new LazyCsmCollection<CsmFunction, CsmFunction>(new ArrayList<CsmUID<CsmFunction>>(staticFunctionDeclarationUIDs), true);
     }
     
     public static boolean isOfFileScope(VariableImpl v) {
@@ -908,7 +1083,7 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
                     fixFakes = wait;
                 } else {
                     while( ! isParsed() ) {
-                        ParserQueue.instance().addFirst(this, ppState, false);
+                        ParserQueue.instance().add(this, ppState, ParserQueue.Position.HEAD);
                         //if( TraceFlags.TRACE_PARSER_QUEUE ) System.err.println("  !prs " + getName() + " @" + hashCode() + " waiting for parse; thread: " + Thread.currentThread().getName());
                         if( wait ) {
                             stateLock.wait();
@@ -921,7 +1096,7 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
                 }
             } else {
                 while( ! isParsed() ) {
-                    ParserQueue.instance().addFirst(this, ppState, false);
+                    ParserQueue.instance().add(this, ppState, ParserQueue.Position.HEAD);
                     //if( TraceFlags.TRACE_PARSER_QUEUE ) System.err.println("  !prs " + getName() + " @" + hashCode() + " waiting for parse; thread: " + Thread.currentThread().getName());
                     if( wait ) {
                         stateLock.wait();
@@ -944,22 +1119,28 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
         fakeRegistrationUIDs.add(uidDecl);
     }
     
+    private void clearFakeRegistrations() {
+        fakeRegistrationUIDs.clear();
+    }
+    
     public void fixFakeRegistrations() {
         if (!isValid()) {
             return;
         }
-        Collection<FunctionImplEx> fakes = Collections.<FunctionImplEx>emptySet();
-        
         if (fakeRegistrationUIDs.size() > 0) {
-            fakes = UIDCsmConverter.UIDsToDeclarationsUnsafe(fakeRegistrationUIDs);
+            List<CsmUID<FunctionImplEx>> fakes = new ArrayList<CsmUID<FunctionImplEx>>(fakeRegistrationUIDs);
             fakeRegistrationUIDs.clear();
-        }
-	for (FunctionImplEx curElem: fakes) {
-            // Due to lazy list the client should check value on null.
-            if (curElem != null) {
-                curElem.fixFakeRegistration();
+            for( CsmUID<? extends CsmDeclaration> fakeUid : fakes ) {
+                CsmDeclaration curElem = fakeUid.getObject();
+                if (curElem != null) {
+                    if( curElem instanceof FunctionImplEx ) {
+                        ((FunctionImplEx) curElem).fixFakeRegistration();
+                    } else {
+                        DiagnosticExceptoins.register(new Exception("Incorrect fake registration class: " + curElem.getClass())); // NOI18N
+                    }
+                }
             }
-	}
+        }
     }
     
     public @Override String toString() {
@@ -1008,6 +1189,7 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
         guardState.write(output);
 	output.writeLong(lastParsed);
 	output.writeUTF(state.toString());
+        UIDObjectFactory.getDefaultFactory().writeUIDCollection(staticFunctionDeclarationUIDs, output, false);
     }
     
     public FileImpl(DataInput input) throws IOException {
@@ -1031,6 +1213,7 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
         guardState = new GuardBlockState(input);
 	lastParsed = input.readLong();
         state = State.valueOf(input.readUTF());
+        UIDObjectFactory.getDefaultFactory().readUIDCollection(staticFunctionDeclarationUIDs, input);
     }
 
     public @Override int hashCode() {
@@ -1182,5 +1365,5 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
             name = NameCache.getManager().getString(input.readUTF());
         }
     }
-    
+
 }
