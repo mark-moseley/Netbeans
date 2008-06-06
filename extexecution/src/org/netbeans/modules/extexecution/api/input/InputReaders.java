@@ -40,18 +40,16 @@
 package org.netbeans.modules.extexecution.api.input;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
 import java.nio.charset.Charset;
-import java.util.concurrent.Callable;
 import org.netbeans.modules.extexecution.input.FileInputReader;
-import org.netbeans.modules.extexecution.input.StreamInputReader;
+import org.netbeans.modules.extexecution.input.DefaultInputReader;
 import org.openide.util.Parameters;
 
 /**
+ * Factory methods for {@link InputReader} classes.
  *
  * @author Petr Hejl
  */
@@ -61,100 +59,58 @@ public final class InputReaders {
         super();
     }
 
-    public static InputReader forReader(Reader reader, Charset charset) {
-        return forStream(new ReaderAdapter(reader, charset));
+    public static InputReader forReader(Reader reader) {
+        return new DefaultInputReader(reader, true);
     }
 
-    public static InputReader forStream(InputStream stream) {
+    public static InputReader forStream(InputStream stream, Charset charset) {
         Parameters.notNull("stream", stream);
 
-        return new StreamInputReader(stream, true);
+        return forReader(new InputStreamReader(stream, charset));
     }
 
-    public static InputReader forFile(final File file) {
+    public static InputReader forFile(File file, Charset charset) {
         Parameters.notNull("file", file);
+        Parameters.notNull("charset", charset);
 
-        return forFileGenerator(new Callable<File>() {
+        final FileInput fileInput = new FileInput(file, charset);
+        return forFileInputProvider(new FileInput.Provider() {
 
-            public File call() throws Exception {
-                return file;
+            public FileInput getFileInput() {
+                return fileInput;
             }
         });
     }
 
-    public static InputReader forFileGenerator(Callable<File> fileGenerator) {
-        Parameters.notNull("fileGenerator", fileGenerator);
+    public static InputReader forFileInputProvider(FileInput.Provider fileProvider) {
+        Parameters.notNull("fileProvider", fileProvider);
 
-        return new FileInputReader(fileGenerator);
+        return new FileInputReader(fileProvider);
     }
 
-    private static class ReaderAdapter extends InputStream {
+    public static final class FileInput {
 
-        private static final int BUFFER_SIZE = 1024;
-
-        private final Reader reader;
+        private final File file;
 
         private final Charset charset;
 
-        private final CharBuffer charBuffer = CharBuffer.allocate(BUFFER_SIZE);
-
-        private ByteBuffer byteBuffer;
-
-        public ReaderAdapter(Reader reader, Charset charset) {
-            this.reader = reader;
+        public FileInput(File file, Charset charset) {
+            this.file = file;
             this.charset = charset;
         }
 
-        @Override
-        public int read(byte[] b, int off, int len) throws IOException {
-            int read = loadBuffer();
-            if (read < 0) {
-                return read;
-            }
-            int ret = Math.min(len, byteBuffer.remaining());
-            byteBuffer.get(b, off, ret);
-            return ret;
+        public Charset getCharset() {
+            return charset;
         }
 
-        @Override
-        public int read() throws IOException {
-            int read = loadBuffer();
-            if (read < 0) {
-                return read;
-            }
-            return byteBuffer.get();
+        public File getFile() {
+            return file;
         }
 
-        @Override
-        public int available() throws IOException {
-            if (byteBuffer == null || !byteBuffer.hasRemaining()) {
-                return reader.ready() ? 1 : 0;
-            }
-            return byteBuffer.remaining();
-        }
+        public interface Provider {
 
-        @Override
-        public void close() throws IOException {
-            reader.close();
-        }
+            FileInput getFileInput();
 
-        private int loadBuffer() throws IOException {
-            int count = 0;
-            if (byteBuffer == null || !byteBuffer.hasRemaining()) {
-                charBuffer.clear();
-                do {
-                     int read = reader.read();
-                     if (read < 0) {
-                         return read;
-                     }
-                     charBuffer.put((char) read);
-                     count++;
-                } while (reader.ready() && count < charBuffer.capacity());
-
-                charBuffer.position(0).limit(count);
-                byteBuffer = charset.encode(charBuffer);
-            }
-            return count;
         }
     }
 }
