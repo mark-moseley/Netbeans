@@ -54,6 +54,7 @@ import org.netbeans.modules.xml.sync.*;
 import org.netbeans.modules.xml.cookies.*;
 
 import org.netbeans.spi.xml.cookies.*;
+import org.openide.util.Lookup;
 import org.xml.sax.InputSource;
 
 /** 
@@ -76,10 +77,6 @@ public final class EntityDataObject extends MultiDataObject implements XMLDataOb
     private transient final DataObjectCookieManager cookieManager;
 
     
-    //
-    // init
-    //
-
     public EntityDataObject (final FileObject obj, final UniFileLoader loader) throws DataObjectExistsException {
         super (obj, loader);
 
@@ -100,9 +97,14 @@ public final class EntityDataObject extends MultiDataObject implements XMLDataOb
 //         new CookieManager (this, set, EntityCookieFactoryCreator.class);
     }
 
+    @Override
+    public final Lookup getLookup() {
+        return getCookieSet().getLookup();
+    }
 
     /**
      */
+    @Override
     protected Node createNodeDelegate () {
         return new EntityDataNode (this);
     }
@@ -124,15 +126,12 @@ public final class EntityDataObject extends MultiDataObject implements XMLDataOb
     
     /**
      */
+    @Override
     public HelpCtx getHelpCtx() {
         //return new HelpCtx (EntityDataObject.class);
         return HelpCtx.DEFAULT_HELP;
     }
         
-
-    //
-    // class EntityDataNode
-    //
 
     /**
      *
@@ -150,23 +149,12 @@ public final class EntityDataObject extends MultiDataObject implements XMLDataOb
 
         /**
          */
+        @Override
         public HelpCtx getHelpCtx() {
             //return new HelpCtx (EntityDataObject.class);
             return HelpCtx.DEFAULT_HELP;
         }
         
     } // end of class EntityDataNode
-
-
-//     //
-//     // interface EntityCookieFactoryCreator
-//     //
-
-//     /**
-//      *
-//      */
-//     public static interface EntityCookieFactoryCreator extends CookieFactoryCreator {
-        
-//     } // end: interface EntityCookieFactoryCreator
 
 }
