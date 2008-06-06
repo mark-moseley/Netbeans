@@ -84,9 +84,9 @@ public class QuickSearchComboBar extends javax.swing.JPanel {
 
     private void processCommand(String text) {
         if (popup == null && !"".equals(command.getText())) {
-            Point where = new Point(0, jPanel1.getSize().height - 1);
+            Point where = new Point(-SearchResultRender.shift-6, jPanel1.getSize().height - 1);
             Window parent = SwingUtilities.windowForComponent(this);
-            SwingUtilities.convertPointToScreen(where, jPanel1);
+            SwingUtilities.convertPointToScreen(where, command);
             popup = new JWindow(parent);
             popup.setFocusableWindowState(false);
             popup.getContentPane().add(displayer);
@@ -143,6 +143,7 @@ public class QuickSearchComboBar extends javax.swing.JPanel {
         jScrollPane1.setBorder(null);
         jScrollPane1.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         jScrollPane1.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
+        jScrollPane1.setViewportBorder(null);
         jScrollPane1.setMinimumSize(new java.awt.Dimension(2, 18));
         jScrollPane1.setName("jScrollPane1"); // NOI18N
 
