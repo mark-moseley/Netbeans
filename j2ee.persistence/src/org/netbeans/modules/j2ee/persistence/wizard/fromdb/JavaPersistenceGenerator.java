@@ -75,6 +75,7 @@ import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Persistenc
 import org.netbeans.modules.j2ee.persistence.entitygenerator.CMPMappingModel;
 import org.netbeans.modules.j2ee.persistence.entitygenerator.EntityClass;
 import org.netbeans.modules.j2ee.persistence.entitygenerator.EntityMember;
+import org.netbeans.modules.j2ee.persistence.entitygenerator.EntityRelation.FetchType;
 import org.netbeans.modules.j2ee.persistence.entitygenerator.RelationshipRole;
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
@@ -322,7 +323,9 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
                 FileObject entity = GenerationUtils.createClass(packageFileObject, entityClassName, NbBundle.getMessage(JavaPersistenceGenerator.class, "MSG_Javadoc_Class"));
                 generatedEntityFOs.add(entity);
                 generatedFOs.add(entity);
-                if (!entityClass.isUsePkField()) {
+                
+                // NO PK classes for views
+                if (entityClass.isForTable() && !entityClass.isUsePkField()) {
                     String pkClassName = createPKClassName(entityClassName);
                     if (packageFileObject.getFileObject(pkClassName, "java") == null) { // NOI18N
                         FileObject pkClass = GenerationUtils.createClass(packageFileObject, pkClassName, NbBundle.getMessage(JavaPersistenceGenerator.class, "MSG_Javadoc_PKClass", pkClassName, entityClassName));
@@ -442,7 +445,9 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
 
                 this.entityClass = entityClass;
                 dbMappings = entityClass.getCMPMapping();
-                needsPKClass = !entityClass.isUsePkField();
+                // NO PK for views
+                needsPKClass = entityClass.isForTable() && !entityClass.isUsePkField();
+                    
                 pkClassName = needsPKClass ? createPKClassName(entityClass.getClassName()) : null;
                 pkFQClassName = entityClass.getPackage() + "." + pkClassName; // NOI18N
 
@@ -483,6 +488,13 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
                 //add @Id() only if not in an embeddable PK class
                 if (isPKMember && !needsPKClass) {
                     annotations.add(genUtils.createAnnotation("javax.persistence.Id")); // NOI18N
+                } 
+                
+                // Add @Basic(optional=false) for not nullable columns
+                if (!isPKMember && !m.isNullable()) {
+                    List<ExpressionTree> basicAnnArguments = new ArrayList();
+                    basicAnnArguments.add(genUtils.createAnnotationArgument("optional", false)); //NOI18N
+                    annotations.add(genUtils.createAnnotation("javax.persistence.Basic", basicAnnArguments)); //NOI18N
                 }
 
                 boolean isLobType = m.isLobType();
@@ -492,12 +504,29 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
 
                 List<ExpressionTree> columnAnnArguments = new ArrayList();
                 String memberName = m.getMemberName();
+                String memberType = getMemberType(m);
 
                 String columnName = (String) dbMappings.getCMPFieldMapping().get(memberName);
                 columnAnnArguments.add(genUtils.createAnnotationArgument("name", columnName)); //NOI18N
-                if (!m.isNullable()) {
+              
+                if (entityClass.isRegenSchemaAttrs() && !m.isNullable()) {
                     columnAnnArguments.add(genUtils.createAnnotationArgument("nullable", false)); //NOI18N
                 }
+                Integer length = m.getLength();
+                Integer precision = m.getPrecision();
+                Integer scale = m.getScale();
+                if (entityClass.isRegenSchemaAttrs() ) {
+                    if(length != null) {
+                        columnAnnArguments.add(genUtils.createAnnotationArgument("length", length)); // NOI18N
+                    }
+                    if(precision != null) {
+                        columnAnnArguments.add(genUtils.createAnnotationArgument("precision", precision)); // NOI18N
+                    }
+                    if(scale != null) {
+                        columnAnnArguments.add(genUtils.createAnnotationArgument("scale", scale)); // NOI18N
+                    }
+                }
+                
                 annotations.add(genUtils.createAnnotation("javax.persistence.Column", columnAnnArguments)); //NOI18N
 
                 String temporalType = getMemberTemporalType(m);
@@ -506,7 +535,7 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
                     annotations.add(genUtils.createAnnotation("javax.persistence.Temporal", Collections.singletonList(temporalAnnValueArgument)));
                 }
 
-                return new Property(Modifier.PRIVATE, annotations, getMemberType(m), memberName);
+                return new Property(Modifier.PRIVATE, annotations, memberType, memberName);
             }
 
             /**
@@ -528,6 +557,15 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
                     memberType = "java.util.Date";
                 }
                 return memberType;
+            }
+            
+            private boolean isCharacterType(String type) {
+                if ("java.lang.String".equals(type)) { // NOI18N
+                    // XXX also need to check for char[] and Character[]
+                    // (better to use TypeMirror)
+                    return true;
+                } 
+                return false;
             }
 
             private String getMemberTemporalType(EntityMember m) {
@@ -693,8 +731,20 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
                     newClassTree = genUtils.addImplementsClause(newClassTree, "java.io.Serializable"); // NOI18N
                 }
                 newClassTree = genUtils.addAnnotation(newClassTree, genUtils.createAnnotation("javax.persistence.Entity")); // NOI18N
-                ExpressionTree tableNameArgument = genUtils.createAnnotationArgument("name", dbMappings.getTableName()); // NOI18N
-                newClassTree = genUtils.addAnnotation(newClassTree, genUtils.createAnnotation("javax.persistence.Table", Collections.singletonList(tableNameArgument)));
+                //ExpressionTree tableNameArgument = genUtils.createAnnotationArgument("name", dbMappings.getTableName()); // NOI18N
+                List<ExpressionTree> tableAnnArgs = new ArrayList<ExpressionTree>();
+                tableAnnArgs.add(genUtils.createAnnotationArgument("name", dbMappings.getTableName())); // NOI18N
+                if(entityClass.isFullyQualifiedTblNames()) {
+                    String schemaName = entityClass.getSchemaName();
+                    String catalogName = entityClass.getCatalogName();
+                    if(schemaName != null ) {
+                        tableAnnArgs.add(genUtils.createAnnotationArgument("schema", schemaName)); // NI18N
+                    }
+                    if(catalogName != null) {
+                        tableAnnArgs.add(genUtils.createAnnotationArgument("catalog", catalogName)); // NI18N
+                    }
+                }
+                newClassTree = genUtils.addAnnotation(newClassTree, genUtils.createAnnotation("javax.persistence.Table", tableAnnArgs));
 
                 if (needsPKClass) {
                     String pkFieldName = createFieldName(pkClassName);
@@ -753,8 +803,23 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
                     namedQueryAnnotations.add(genUtils.createAnnotation("javax.persistence.NamedQuery", namedQueryAnnArguments)); //NOI18N
                 }
             }
+           
+            protected void addFindAllNamedQueryAnnotation() {
+                // Add NamedQuery findAll here
+                List<ExpressionTree> namedQueryAnnArguments = new ArrayList<ExpressionTree>();
+                namedQueryAnnArguments.add(genUtils.createAnnotationArgument("name", entityClassName + ".findAll")); // NOI18N
+
+                char firstLetter = entityClassName.toLowerCase().charAt(0);
+                String queryString = "SELECT " + firstLetter + " FROM " + entityClassName + " " + firstLetter; // NOI18N
+                namedQueryAnnArguments.add(genUtils.createAnnotationArgument("query", queryString)); // NOI18N
+                
+                // Have the findAll as the first NameQuery
+                namedQueryAnnotations.add(0, genUtils.createAnnotation("javax.persistence.NamedQuery", namedQueryAnnArguments)); //NOI18N
+            }
 
             protected void afterMembersGenerated() {
+                addFindAllNamedQueryAnnotation();
+                
                 newClassTree = genUtils.addAnnotation(newClassTree, genUtils.createAnnotation("javax.persistence.NamedQueries", // NOI18N
                         Collections.singletonList(genUtils.createAnnotationArgument(null, namedQueryAnnotations))));
             }
@@ -844,6 +909,23 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
                 } else {
                     relationAnn = "OneToOne";  //NOI18N
                 }
+                
+                if (!role.isToMany()) { // meaning ManyToOne or OneToOne
+                    // Add optional=false if the relationship is not optional/non-nullable 
+                    if(!role.isOptional() && (role.isMany() || role.equals(role.getParent().getRoleA())) ) {
+                        annArguments.add(genUtils.createAnnotationArgument("optional", false)); // NOI18N
+                    }
+                } 
+                
+                //FetchType
+                FetchType fetchType = entityClass.getFetchType();
+                if(fetchType.equals(FetchType.LAZY)) {
+                    annArguments.add(genUtils.createAnnotationArgument("fetch", "javax.persistence.FetchType", "LAZY")); // NOI18N
+                } else if(fetchType.equals(FetchType.EAGER)) {
+                    annArguments.add(genUtils.createAnnotationArgument("fetch", "javax.persistence.FetchType", "EAGER")); // NOI18N
+                }
+                
+                // Create the relationship annotation 
                 annotations.add(genUtils.createAnnotation("javax.persistence." + relationAnn, annArguments)); // NOI18N
 
                 properties.add(new Property(Modifier.PRIVATE, annotations, fieldType, memberName));
@@ -869,46 +951,50 @@ public class JavaPersistenceGenerator implements PersistenceGenerator {
             }
             
             protected void finish() {
-                // create a constructor which takes the primary key field as argument
-                VariableTree pkFieldParam = genUtils.removeModifiers(pkProperty.getField());
-                List<VariableTree> pkFieldParams = Collections.singletonList(pkFieldParam);
-                constructors.add(genUtils.createAssignmentConstructor(genUtils.createModifiers(Modifier.PUBLIC), entityClassName, pkFieldParams));
+                
+                if(pkProperty != null) {
+                    // create a constructor which takes the primary key field as argument    
+                    VariableTree pkFieldParam = genUtils.removeModifiers(pkProperty.getField());
+                    List<VariableTree> pkFieldParams = Collections.singletonList(pkFieldParam);
+                    constructors.add(genUtils.createAssignmentConstructor(genUtils.createModifiers(Modifier.PUBLIC), entityClassName, pkFieldParams));
 
-                // if different than pk fields constructor, add constructor
-                // which takes all non-nullable non-relationship fields as args
-                if (nonNullableProps.size() > 0) {
-                    List<VariableTree> nonNullableParams = new ArrayList<VariableTree>(nonNullableProps.size() + 1);
-                    nonNullableParams.add(pkFieldParam);
-                    for (Property property : nonNullableProps) {
-                        nonNullableParams.add(genUtils.removeModifiers(property.getField()));
+                    // if different than pk fields constructor, add constructor
+                    // which takes all non-nullable non-relationship fields as args
+                    if (nonNullableProps.size() > 0) {
+                        List<VariableTree> nonNullableParams = new ArrayList<VariableTree>(nonNullableProps.size() + 1);
+                        nonNullableParams.add(pkFieldParam);
+                        for (Property property : nonNullableProps) {
+                            nonNullableParams.add(genUtils.removeModifiers(property.getField()));
+                        }
+                        constructors.add(genUtils.createAssignmentConstructor(genUtils.createModifiers(Modifier.PUBLIC), entityClassName, nonNullableParams));
                     }
-                    constructors.add(genUtils.createAssignmentConstructor(genUtils.createModifiers(Modifier.PUBLIC), entityClassName, nonNullableParams));
-                }
 
-                // create a constructor which takes the fields of the primary key class as arguments
-                if (pkClassVariables.size() > 0) {
-                    StringBuilder body = new StringBuilder(30 + 30 * pkClassVariables.size());
-                    body.append("{"); // NOI18N
-                    body.append("this." + pkProperty.getField().getName() + " = new " + pkClassName + "("); // NOI18N
-                    for (Iterator<VariableTree> i = pkClassVariables.iterator(); i.hasNext();) {
-                        body.append(i.next().getName());
-                        body.append(i.hasNext() ? ", " : ");"); // NOI18N
+                    // create a constructor which takes the fields of the primary key class as arguments
+                    if (pkClassVariables.size() > 0) {
+                        StringBuilder body = new StringBuilder(30 + 30 * pkClassVariables.size());
+                        body.append("{"); // NOI18N
+                        body.append("this." + pkProperty.getField().getName() + " = new " + pkClassName + "("); // NOI18N
+                        for (Iterator<VariableTree> i = pkClassVariables.iterator(); i.hasNext();) {
+                            body.append(i.next().getName());
+                            body.append(i.hasNext() ? ", " : ");"); // NOI18N
+                        }
+                        body.append("}"); // NOI18N
+                        TreeMaker make = copy.getTreeMaker();
+                        constructors.add(make.Constructor(
+                                make.Modifiers(EnumSet.of(Modifier.PUBLIC), Collections.<AnnotationTree>emptyList()),
+                                Collections.<TypeParameterTree>emptyList(),
+                                pkClassVariables,
+                                Collections.<ExpressionTree>emptyList(),
+                                body.toString()));
                     }
-                    body.append("}"); // NOI18N
-                    TreeMaker make = copy.getTreeMaker();
-                    constructors.add(make.Constructor(
-                            make.Modifiers(EnumSet.of(Modifier.PUBLIC), Collections.<AnnotationTree>emptyList()),
-                            Collections.<TypeParameterTree>emptyList(),
-                            pkClassVariables,
-                            Collections.<ExpressionTree>emptyList(),
-                            body.toString()));
-                }
+                
 
-                // add equals and hashCode methods
-                EntityMethodGenerator methodGenerator = new EntityMethodGenerator(copy, genUtils, typeElement);
-                methods.add(methodGenerator.createHashCodeMethod(pkFieldParams));
-                methods.add(methodGenerator.createEqualsMethod(entityClassName, pkFieldParams));
-                methods.add(methodGenerator.createToStringMethod(entityFQClassName, pkFieldParams));
+                    // add equals and hashCode methods
+                    EntityMethodGenerator methodGenerator = new EntityMethodGenerator(copy, genUtils, typeElement);
+                    methods.add(methodGenerator.createHashCodeMethod(pkFieldParams));
+                    methods.add(methodGenerator.createEqualsMethod(entityClassName, pkFieldParams));
+                    methods.add(methodGenerator.createToStringMethod(entityFQClassName, pkFieldParams));
+                }
                 
                 // add the serialVersionUID field
                 fields.add(createSerialVersionUID());
