@@ -46,17 +46,19 @@ import java.awt.datatransfer.Transferable;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.netbeans.api.visual.action.AcceptProvider;
+import java.util.TreeSet;
 import org.netbeans.api.visual.action.ActionFactory;
-import org.netbeans.api.visual.action.ConnectorState;
 import org.netbeans.api.visual.action.WidgetAction;
 import org.netbeans.api.visual.graph.GraphScene;
 import org.netbeans.api.visual.layout.LayoutFactory;
 import org.netbeans.api.visual.model.ObjectScene;
 import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
+import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityGroup;
 import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityNode;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
@@ -65,6 +67,9 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElem
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagram;
 import org.netbeans.modules.uml.core.metamodel.dynamics.ICombinedFragment;
 import org.netbeans.modules.uml.core.metamodel.dynamics.ILifeline;
+import org.netbeans.modules.uml.core.support.umlutils.ETList;
+import org.netbeans.modules.uml.drawingarea.actions.ActionProvider;
+import org.netbeans.modules.uml.drawingarea.actions.AfterValidationExecutor;
 import org.netbeans.modules.uml.drawingarea.actions.SceneAcceptProvider;
 import org.netbeans.modules.uml.drawingarea.actions.WidgetAcceptAction;
 import org.netbeans.modules.uml.drawingarea.util.Util;
@@ -228,6 +233,7 @@ public class ContainerWidget extends Widget
         // Second see if any nodes need to be added to the container.
         for (Object nodeData : scene.getNodes())
         {
+            if(!(((IPresentationElement)nodeData).getFirstSubject() instanceof INamedElement ))continue;
             Widget node = scene.findWidget(nodeData);
             if (node != null)
             {
@@ -312,6 +318,7 @@ public class ContainerWidget extends Widget
                 child.setPreferredLocation(newParent.convertSceneToLocal(sceneBounds.getLocation()));
 
                 Object nodeData = scene.findObject(child);
+                if(!(((IPresentationElement)nodeData).getFirstSubject() instanceof INamedElement ))continue;
                 INamedElement element = (INamedElement) ((IPresentationElement)nodeData).getFirstSubject();
 
                 if(namespace!=null)
@@ -347,29 +354,38 @@ public class ContainerWidget extends Widget
         return changed;
     }
     
+    protected boolean allowed(IElement... elements)
+    {
+        return true;
+    }
+    
+    /**
+     * Test if a widget is fully with in the bounds of the container widget.
+     * 
+     * @param widget The widget to test
+     * @return True if the widget is in the containers bounds.
+     */
+    protected boolean isFullyContained(Widget widget)
+    {
+        Rectangle area = widget.getClientArea();
+        Rectangle sceneArea = widget.convertLocalToScene(area);
+        
+        Rectangle localArea = convertSceneToLocal(sceneArea);
+        return getClientArea().contains(localArea);
+    }
+    
     public class ContainerAcceptProvider extends SceneAcceptProvider
     {
         public ContainerAcceptProvider()
         {
             super(null);
         }
-
+        
         @Override
-        public ConnectorState isAcceptable(Widget widget, Point point, Transferable transferable)
+        protected boolean elementsAllowed(IElement... elements)
         {
-            ConnectorState retVal = super.isAcceptable(widget, point, transferable);
-            
-            if(retVal != ConnectorState.ACCEPT)
-            {
-                if(isWidgetMove(transferable) == true)
-                {
-                    retVal = ConnectorState.ACCEPT;
-                }
-            }
-            
-            return retVal;
+            return allowed(elements);
         }
-
         
         @Override
         public void accept(Widget widget, Point point, Transferable transferable)
@@ -379,7 +395,8 @@ public class ContainerWidget extends Widget
             Widget[] target = null;
             ObjectScene scene = (ObjectScene) widget.getScene();
             boolean convertLocation = false;
-            
+            boolean isMovingWidget = false;
+            Set <Object> selected = null;
             if(isWidgetMove(transferable) == true)
             {
                 try
@@ -393,13 +410,15 @@ public class ContainerWidget extends Widget
                 {
                     target = new Widget[0];
                 }
+                
+                isMovingWidget = true;
             }
             else
             {
                 // Now the new Nodes should be selected.  So get the widgets and 
                 // add them to the container.
                 target = new Widget[scene.getSelectedObjects().size()];
-                Set <Object> selected = (Set<Object>) scene.getSelectedObjects();
+                selected = (Set<Object>) scene.getSelectedObjects();
                 Object[] selectedArray = new Object[selected.size()];
                 selected.toArray(selectedArray);
 
@@ -410,45 +429,89 @@ public class ContainerWidget extends Widget
                     target[i] = curWidget;
                 }
             }
-            
+            final Set finalselected=selected!=null ? new HashSet(selected):null;
+            boolean reselect=false;
             for(Widget curWidget : target)
             {
+                // Only add the node to the container if it is fully contained
+                // by the container.
+                if((isMovingWidget == true) && (isFullyContained(curWidget) == false))
+                {
+                    break;
+                }
+                
                 if(curWidget.getParentWidget() != null)
                 {
                     curWidget.getParentWidget().removeChild(curWidget);
                 }
                 
-                Point curPt = curWidget.getLocation();
+                Point curPt = curWidget.getPreferredLocation();
+                if(curPt==null)curPt = curWidget.getLocation();
                 addChild(curWidget);
+                Object data = scene.findObject(curWidget);
+                INamedElement element = (INamedElement) ((IPresentationElement)data).getFirstSubject();
                 
                 if(convertLocation == true)
                 {
                     curWidget.setPreferredLocation(convertSceneToLocal(curPt));
                 }
+                else if(element instanceof ILifeline)//lifeline need correction because need to be on certain level, not on dropped position
+                {
+                    curPt.y=convertSceneToLocal(curPt).y;
+                    curWidget.setPreferredLocation(curPt);
+                }
                 
-                Object data = scene.findObject(curWidget);
-                INamedElement element = (INamedElement) ((IPresentationElement)data).getFirstSubject();
                 INamespace ns = getContainerNamespace();
                 IElement containerElem = getContainerElement();
                 
                 if(ns != null) 
                 {
-                    ns.addOwnedElement(element);
+//                    ns.addOwnedElement(element);
                    
-                    // An activiy node that is contained in an activity group still
-                    // has  Activity as its name space; hence adding 
-                    // the node to its activity namespace
-                    if (element instanceof  IActivityNode) 
+                     if (element instanceof  IActivityNode && ns instanceof IActivityGroup) 
                     {   
+                        IActivityGroup group = (IActivityGroup) ns;
+                        IActivityNode activityElem = (IActivityNode)element;
+                        
+                        // Remove an activity node from its previous containers, i.e., activity groups.
+                        // This is the case when the activity node is moved from one container to the other.
+                        ETList<IActivityGroup> previousGroups = activityElem.getGroups();
+                        for (IActivityGroup aGroup : previousGroups)
+                        {
+                            aGroup.removeNodeContent(activityElem);
+                            activityElem.removeGroup(aGroup);
+                        }
+                        // add the activity node to the new container
+                        group.addOwnedElement(element);
+                        activityElem.addGroup(group);
+                       
+                        // An activity node that is contained in an activity group is still under 
+                        // an Activity namespace; hence adding the activity node
+                        // to its Activity namespace.
                         INamespace activityNamespace = ((DesignerScene) scene).getDiagram().getNamespace();
                         activityNamespace.addOwnedElement(element);
                     }
                 }
                 //some elements(like combined fragment) are not namespace but can contain other element graphically
-                else if(containerElem instanceof ICombinedFragment && element instanceof ILifeline)
+                else if(containerElem instanceof ICombinedFragment)
                 {
-                    ((ICombinedFragment) containerElem).addCoveredLifeline((ILifeline) element);
-                }
+                    ICombinedFragment cf=(ICombinedFragment) containerElem;
+                    INamespace cfNs=cf.getNamespace();
+                    if(element instanceof ILifeline)
+                    {
+                        ILifeline ll=(ILifeline) element;
+                        cf.addCoveredLifeline(ll);
+                    }
+                    if(element.getNamespace()!=cfNs)
+                    {
+                        if(element.getNamespace()!=null)
+                        {
+                            element.getNamespace().removeOwnedElement(element);
+                        }
+                        cfNs.addOwnedElement(element);
+                    }
+                    reselect=true;
+               }
             }
             
             if(target.length > 0)
@@ -456,6 +519,7 @@ public class ContainerWidget extends Widget
                 firePropertyChange(CHILDREN_CHANGED, null, null);
             }
             revalidate();
+            scene.validate();
         }
         
         @Override
@@ -463,7 +527,7 @@ public class ContainerWidget extends Widget
         {
             return getContainerNamespace();
         }
-        
+
         protected boolean isWidgetMove(Transferable transferable)
         {
             return transferable.isDataFlavorSupported(MoveWidgetTransferable.FLAVOR);
