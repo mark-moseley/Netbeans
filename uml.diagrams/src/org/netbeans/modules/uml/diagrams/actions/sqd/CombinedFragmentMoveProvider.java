@@ -112,11 +112,17 @@ public class CombinedFragmentMoveProvider  implements MoveProvider {
                     return provider.getOriginalLocation(widget);
                 }
 
-                public void setNewLocation(Widget widget, Point location) {
+                public void setNewLocation(final Widget widget, Point location) {
                     provider.setNewLocation(widget, location);
-                    verifyCFContentLifelines(widget);
-                    verifyCFContentPins(widget);
-                    verifyCreatedLifelines(widget);
+                    new AfterValidationExecutor(new ActionProvider() {
+                    public void perfomeAction() {
+                            verifyCFContentLifelines(widget);
+                            verifyCFContentPins(widget);
+                            verifyCreatedLifelines(widget);
+                    }
+                    }, widget.getScene());
+                    
+                    widget.getScene().validate();
                  }
                 
                 private void verifyCFContentLifelines(Widget widget)
@@ -159,7 +165,7 @@ public class CombinedFragmentMoveProvider  implements MoveProvider {
                             }
                             if(changed)l.setPreferredLocation(loc);
                             IPresentationElement el=(IPresentationElement) scene.findObject(l);
-                            tb.moveObject(el);
+                            if(tb!=null)tb.moveObject(el);
                         }
                         else if(child instanceof CombinedFragmentWidget)
                         {
@@ -238,7 +244,7 @@ public class CombinedFragmentMoveProvider  implements MoveProvider {
                             }
                             if(changed)l.setPreferredLocation(loc);
                             IPresentationElement el=(IPresentationElement) scene.findObject(l);
-                            tb.moveObject(el);
+                            if(tb!=null)tb.moveObject(el);
                         }
                         else if(child instanceof CombinedFragmentWidget)
                         {
