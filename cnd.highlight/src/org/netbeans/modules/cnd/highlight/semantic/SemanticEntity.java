@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,65 +31,27 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+
 package org.netbeans.modules.cnd.highlight.semantic;
 
-import java.lang.ref.WeakReference;
-import javax.swing.text.Document;
-import org.netbeans.api.editor.mimelookup.MimeLookup;
-import org.netbeans.api.editor.mimelookup.MimePath;
+import java.util.List;
+import javax.swing.text.AttributeSet;
 import org.netbeans.api.editor.settings.FontColorSettings;
-import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.cnd.model.tasks.CsmFileTaskFactory.PhaseRunner;
-import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
-import org.openide.util.Lookup;
-import org.openide.util.LookupEvent;
-import org.openide.util.LookupListener;
-import org.openide.util.WeakListeners;
+import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 
 /**
  *
  * @author Sergey Grinev
  */
-public abstract class HighlighterBase implements PhaseRunner, LookupListener {
-
-    /*package*/ static final boolean MINIMAL = Boolean.getBoolean("cnd.highlighting.minimal");
-    
-    //private final String mime;
-    private final OffsetsBag bag;
-    private final WeakReference<BaseDocument> weakDoc;
-
-    //private final FontColorSettings savedFCS;
-    
-    public HighlighterBase(Document doc) {
-        bag = new OffsetsBag(doc);
-
-        if (doc instanceof BaseDocument) {
-            weakDoc = new WeakReference<BaseDocument>((BaseDocument) doc);
-        } else {
-            weakDoc = null;
-        }
-
-        updateFontColors();
-    }
-    
-    protected BaseDocument getDocument() {
-        return weakDoc != null ? weakDoc.get() : null;
-    }
-
-    public OffsetsBag getHighlightsBag() {
-        return bag;
-    }
-
-    // LookupListener
-    public void resultChanged(LookupEvent ev) {
-        updateFontColors();
-        run(PhaseRunner.Phase.INIT);
-    }
-    
-    protected abstract void updateFontColors();
-
-    protected boolean isCancelled() {
-        return Thread.interrupted();
-    }
+public interface SemanticEntity {
+    String getName();
+    List<? extends CsmOffsetable> getBlocks(CsmFile csmFile);
+    void updateFontColors();
+    public AttributeSet getColor(CsmOffsetable obj);
 }
