@@ -64,6 +64,7 @@ import org.netbeans.modules.project.ant.ProjectLibraryProvider;
 import org.netbeans.modules.project.ant.UserQuestionHandler;
 import org.netbeans.modules.project.ant.Util;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
+import org.netbeans.spi.project.AuxiliaryProperties;
 import org.netbeans.spi.project.CacheDirectoryProvider;
 import org.netbeans.spi.project.ProjectState;
 import org.netbeans.spi.queries.FileBuiltQueryImplementation;
@@ -430,7 +431,7 @@ public final class AntProjectHelper {
                 return null;
             }
         };
-        if (ProjectManager.mutex().isWriteAccess()) {
+        if (ProjectManager.mutex().isWriteAccess() || ProjectLibraryProvider.FIRE_CHANGES_SYNCH) {
             // Run it right now. postReadRequest would be too late.
             ProjectManager.mutex().readAccess(action);
         } else if (ProjectManager.mutex().isReadAccess()) {
@@ -543,6 +544,10 @@ public final class AntProjectHelper {
      */
     private void save() throws IOException {
         assert ProjectManager.mutex().isWriteAccess();
+        if (!getProjectDirectory().isValid()) {
+            //ProjectManager.saveProject() is called when project is deleted externally..
+            return;
+        }
         Set<FileLock> locks = new HashSet<FileLock>();
         try {
             synchronized (modifiedMetadataPaths) {
@@ -923,6 +928,21 @@ public final class AntProjectHelper {
      */
     public CacheDirectoryProvider createCacheDirectoryProvider() {
         return new ExtensibleMetadataProviderImpl(this);
+    }
+    
+    /**
+     * Create an object permitting this project to expose {@link AuxiliaryProperties}.
+     * Would be placed into the project's lookup.
+     * 
+     * This implementation places the properties into {@link #PROJECT_PROPERTIES_PATH}
+     * or {@link #PRIVATE_PROPERTIES_PATH} (depending on shared value). The properties are
+     * prefixed with "<code>auxiliary.</code>".
+     * 
+     * @return an instance of {@link AuxiliaryProperties} suitable for the project lookup
+     * @since 1.21
+     */
+    public AuxiliaryProperties createAuxiliaryProperties() {
+        return new AuxiliaryPropertiesImpl(this);
     }
     
     /**
