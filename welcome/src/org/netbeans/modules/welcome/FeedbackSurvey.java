@@ -37,9 +37,11 @@ import java.net.URLConnection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
+import javax.swing.JButton;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.awt.HtmlBrowser;
+import org.openide.awt.Mnemonics;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
@@ -73,7 +75,8 @@ final class FeedbackSurvey {
         } catch (InvocationTargetException ex) {
             Exceptions.printStackTrace(ex);
         } catch (NoSuchMethodException ex) {
-            Exceptions.printStackTrace(ex);
+            // Can be thrown on non-Sun JDKs:
+            Logger.getLogger(FeedbackSurvey.class.getName()).log(Level.INFO, null, ex);
         } catch (SecurityException ex) {
             Exceptions.printStackTrace(ex);
         } catch (NoSuchMethodError ex) {
@@ -103,6 +106,11 @@ final class FeedbackSurvey {
                 return;
             }
 
+            int counts = prefs.getInt("feedback.survey.show.count", 0); // NOI18N
+            if (counts >= bundledInt("MSG_FeedbackSurvey_AskTimes")) { // NOI18N
+                return;
+            }
+            
             URL u = new URL(url);
             URLConnection conn = u.openConnection();
             String type = conn.getContentType();
@@ -111,10 +119,6 @@ final class FeedbackSurvey {
                 return;
             }
             
-            int counts = prefs.getInt("feedback.survey.show.count", 0); // NOI18N
-            if (counts >= bundledInt("MSG_FeedbackSurvey_AskTimes")) { // NOI18N
-                return;
-            }
             prefs.putInt("feedback.survey.show.count", counts + 1); // NOI18N
             
             if (showDialog(u)) {
@@ -138,17 +142,35 @@ final class FeedbackSurvey {
         String tit = NbBundle.getMessage(FeedbackSurvey.class, "MSG_FeedbackSurvey_Title");
         String yes = NbBundle.getMessage(FeedbackSurvey.class, "MSG_FeedbackSurvey_Yes");
         String later = NbBundle.getMessage(FeedbackSurvey.class, "MSG_FeedbackSurvey_Later");
+        String never = NbBundle.getMessage(FeedbackSurvey.class, "MSG_FeedbackSurvey_Never");
         
         NotifyDescriptor nd = new NotifyDescriptor.Message(msg, NotifyDescriptor.QUESTION_MESSAGE);
         nd.setTitle(tit);
-        Object[] buttons = { yes, later };
+        //Object[] buttons = { yes, later, never };
+        JButton yesButton = new JButton();
+        yesButton.getAccessibleContext().setAccessibleDescription( 
+                NbBundle.getMessage(FeedbackSurvey.class, "ACSD_FeedbackSurvey_Yes"));
+        Mnemonics.setLocalizedText(yesButton, yes);
+        JButton laterButton = new JButton();
+        laterButton.getAccessibleContext().setAccessibleDescription( 
+                NbBundle.getMessage(FeedbackSurvey.class, "ACSD_FeedbackSurvey_Later"));
+        Mnemonics.setLocalizedText(laterButton, later);
+        JButton neverButton = new JButton();
+        neverButton.getAccessibleContext().setAccessibleDescription( 
+                NbBundle.getMessage(FeedbackSurvey.class, "ACSD_FeedbackSurvey_Never"));
+        Mnemonics.setLocalizedText(neverButton, never);
+        Object[] buttons = { yesButton, laterButton, neverButton };
         nd.setOptions(buttons);
         Object res = DialogDisplayer.getDefault().notify(nd);
         
-        if (res == yes) {
+        if (res == yesButton) {
             HtmlBrowser.URLDisplayer.getDefault().showURL(whereTo);
             return true;
         } else {
+            if( res == neverButton ) {
+                Preferences prefs = NbPreferences.forModule(FeedbackSurvey.class);
+                prefs.putInt("feedback.survey.show.count", (int)bundledInt("MSG_FeedbackSurvey_AskTimes")); // NOI18N
+            }
             return false;
         }
     }
