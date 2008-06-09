@@ -41,9 +41,11 @@
  * Contributor(s): Sun Microsystems, Inc.
  */
 
-package gui.debuggercore;
+package org.netbeans.debuggercore;
 
 import java.io.File;
+import java.io.IOException;
+import junit.framework.Test;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.*;
 import org.netbeans.jellytools.actions.Action;
@@ -55,15 +57,18 @@ import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.operators.JTableOperator;
 import org.netbeans.jemmy.util.PNGEncoder;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestSuite;
 
 /**
  *
- * @author ehucka
+ * @author ehucka, Jiri Vagner
  */
-public class LocalVariables extends JellyTestCase {
+public class LocalVariablesTest extends JellyTestCase {
     
     static int consoleLineNumber = 0;
+    
+    public final String version;
     
     String projectPropertiesTitle;
     
@@ -71,9 +76,26 @@ public class LocalVariables extends JellyTestCase {
      *
      * @param name
      */
-    public LocalVariables(String name) {
-        super(name);
+    public LocalVariablesTest(String name) {
+       super(name);
+        version  = getJDKVersionCode();
     }
+    
+    private String getJDKVersionCode() {
+        String specVersion = System.getProperty("java.version");
+        
+        if (specVersion.startsWith("1.4"))
+            return "jdk14";
+        
+        if (specVersion.startsWith("1.5"))
+            return "jdk15";
+        
+        if (specVersion.startsWith("1.6"))
+            return "jdk16";
+        
+        throw new IllegalStateException("Specification version: " + specVersion + " not recognized.");
+    }
+        
     
     /**
      *
@@ -87,22 +109,27 @@ public class LocalVariables extends JellyTestCase {
      *
      * @return
      */
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new LocalVariables("testLocalVariablesThisNode"));
-        suite.addTest(new LocalVariables("testLocalVariablesStaticNode"));
-        suite.addTest(new LocalVariables("testLocalVariablesStaticInherited"));
-        suite.addTest(new LocalVariables("testLocalVariablesInheritedNode"));
-        suite.addTest(new LocalVariables("testLocalVariablesExtended"));
-        suite.addTest(new LocalVariables("testLocalVariablesValues"));
-        suite.addTest(new LocalVariables("testLocalVariablesSubExpressions"));
-        return suite;
+    public static Test suite() {
+        return NbModuleSuite.create(
+            NbModuleSuite.createConfiguration(LocalVariablesTest.class).addTest(
+                "testLocalVariablesThisNode",
+                "testLocalVariablesStaticNode",
+                "testLocalVariablesStaticInherited",
+                "testLocalVariablesInheritedNode",
+                "testLocalVariablesExtended",
+                "testLocalVariablesValues",
+                "testLocalVariablesSubExpressions"
+                )
+                .enableModules(".*")
+                .clusters(".*"));
     }
     
     /**
      *
      */
-    public void setUp() {
+    public void setUp() throws IOException {
+        openDataProjects(Utilities.testProjectName);
+        new Action(null, Utilities.setMainProjectAction).perform(new ProjectsTabOperator().getProjectRootNode(Utilities.testProjectName));
         System.out.println("########  " + getName() + "  #######");
         if (getName().equals("testLocalVariablesThisNode")) {
             //open source
@@ -323,36 +350,43 @@ public class LocalVariables extends JellyTestCase {
      */
     public void testLocalVariablesSubExpressions() throws Throwable {
         try {
-            /*Node beanNode = new Node(new SourcePackagesNode(Utilities.testProjectName), "examples.advanced|MemoryView.java"); //NOI18N
+
+            Node beanNode = new Node(new SourcePackagesNode(Utilities.testProjectName), "examples.advanced|MemoryView.java"); //NOI18N
             new OpenAction().performAPI(beanNode);
             EditorOperator eo = new EditorOperator("MemoryView.java");
             Utilities.setCaret(eo, 104);
             new EventTool().waitNoEvent(500);
             new RunToCursorAction().performMenu();
-            new EventTool().waitNoEvent(500);
+            new EventTool().waitNoEvent(1500);
             consoleLineNumber = Utilities.waitDebuggerConsole("Thread main stopped at MemoryView.java:104.", consoleLineNumber+1);
-            */
-            new Action(Utilities.runMenu+"|"+Utilities.stepOverExpresItem, null).perform();
+            new EventTool().waitNoEvent(1500);
             new Action(Utilities.runMenu+"|"+Utilities.stepOverExpresItem, null).perform();
             new Action(Utilities.runMenu+"|"+Utilities.stepOverExpresItem, null).perform();
             new Action(Utilities.runMenu+"|"+Utilities.stepOverExpresItem, null).perform();
             new Action(Utilities.runMenu+"|"+Utilities.stepOverExpresItem, null).perform();
             new Action(Utilities.runMenu+"|"+Utilities.stepOverExpresItem, null).perform();
             
+            // TODO: Enable after fix of issue 132886 
+            //new Action(Utilities.runMenu+"|"+Utilities.stepOverExpresItem, null).perform();
+            
             Utilities.showDebuggerView(Utilities.localVarsViewTitle);
             JTableOperator jTableOperator = new JTableOperator(new TopComponentOperator(Utilities.localVarsViewTitle));
-                TreeTableOperator treeTableOperator = new TreeTableOperator((javax.swing.JTable) jTableOperator.getSource());
-                String name = Bundle.getString("org.netbeans.modules.debugger.jpda.ui.models.Bundle", "lastOperationsNode");
-                org.netbeans.jellytools.nodes.Node nd = new org.netbeans.jellytools.nodes.Node(treeTableOperator.tree(), name);
-                nd.expand();
-                String[] children = nd.getChildren();
-                assertEquals(5, children.length);
-                assertEquals("Wrong sub-expression node", "return <init>()", children[0]);
-                assertEquals("Wrong sub-expression node", "return <init>()", children[1]);
-                assertEquals("Wrong sub-expression node", "return <init>()", children[2]);
-                assertEquals("Wrong sub-expression node", "return format()", children[3]);
-                assertEquals("Wrong sub-expression node", "return println()", children[4]);
+            int count = 0;
+            checkTreeTableLine(jTableOperator, count++, "Before call to 'println()'", null, null);
+            checkTreeTableLine(jTableOperator, count++, "Arguments", null, null);
 
+            if (version.equals("jdk16")) {
+                checkTreeTableLine(jTableOperator, count++, "Return values history", null, null);            
+                checkTreeTableLine(jTableOperator, count++, "return <init>()", null, null);
+                checkTreeTableLine(jTableOperator, count++, "return <init>()", null, null);
+                checkTreeTableLine(jTableOperator, count++, "return <init>()", null, null);
+                checkTreeTableLine(jTableOperator, count++, "return format()", "String", null);
+
+                // TODO: Enable after fix of issue 132886 
+                //checkTreeTableLine(jTableOperator, count++, "return println()", "String", null);
+            }
+            
+            
         } catch (Throwable th) {
             Utilities.captureScreen(this);
             throw th;
