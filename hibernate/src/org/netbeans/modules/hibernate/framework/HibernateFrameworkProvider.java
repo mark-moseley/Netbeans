@@ -36,59 +36,60 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.hibernate.framework;
 
-package org.netbeans.modules.hibernate.service.listener;
-
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.hibernate.cfg.model.HibernateConfiguration;
-import org.netbeans.modules.hibernate.service.HibernateEnvironment;
 import org.netbeans.modules.hibernate.util.HibernateUtil;
-import org.netbeans.spi.project.ui.ProjectOpenedHook;
+import org.netbeans.modules.web.api.webmodule.ExtenderController;
+import org.netbeans.modules.web.api.webmodule.WebModule;
+import org.netbeans.modules.web.spi.webmodule.WebFrameworkProvider;
+import org.netbeans.modules.web.spi.webmodule.WebModuleExtender;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.NbBundle;
 
 /**
- * Class that listens for (global) project open/close operations and 
- * registeres or un-registeres Hibernate specific artifacts.
- * 
+ *
  * @author Vadiraj Deshpande (Vadiraj.Deshpande@Sun.COM)
  */
-public class ProjectOpenedHookImpl extends ProjectOpenedHook{
+public class HibernateFrameworkProvider extends WebFrameworkProvider {
 
-    private Project project;
-    private HibernateEnvironment hibernateEnvironment;
-    
-    private Logger logger = Logger.getLogger(ProjectOpenedHookImpl.class.getName());
-    
-    public ProjectOpenedHookImpl(Project project, HibernateEnvironment hibernateEnvironment) {
-        this.project = project;
-        this.hibernateEnvironment = hibernateEnvironment;
+    public HibernateFrameworkProvider() {
+        super(NbBundle.getMessage(HibernateFrameworkProvider.class, "HibernateFramework_Name"), 
+                NbBundle.getMessage(HibernateFrameworkProvider.class, "HibernateFramework_Description")); 
     }
 
-    
     @Override
-    protected void projectOpened() {
-        // Check for Hibernate files in this project.
-        List<HibernateConfiguration> hibernateConfigurations = HibernateUtil.getAllHibernateConfigurations(project);
-        if(hibernateConfigurations.size() != 0) {
-            hibernateEnvironment = new HibernateEnvironment(project);
+    public boolean isInWebModule(WebModule wm) {
+        if (getConfigurationFiles(wm).length == 0) {
+            // There are no Hibernate configuration files found in this project.
+            return false;
+        } else {
+            return true;
         }
-        logger.info("project opened .. " + project);
-        logger.info("config : " + project.getLookup().lookup(HibernateEnvironment.class).getAllHibernateConfigurationsFromProject());
-        
-
-//        // Three cases exists..
-//        //1. This web project do not have hibernate files. fine.. NOP
-//        //2. This web project already has hibernate files.. search and find them.
-//        //3. The web project already has hibernate files and its lookup has the ojb..
-//        // Does this third case occur? I think no.
-        // this one I need to take care of it..
     }
 
     @Override
-    protected void projectClosed() {
-        //TODO clean up here.
+    public WebModuleExtender createWebModuleExtender(WebModule wm, ExtenderController controller) {
+        // Find out wether WFE needs to be shown in Proj. Customizer or in New Project Wizard.
+        // (The following is copied from JSFFrameworkProvider
+        boolean forNewProjectWizard = (wm == null || !isInWebModule(wm));
+        HibernateWebModuleExtender webModuleExtender = 
+                new HibernateWebModuleExtender(forNewProjectWizard, wm, controller);
+        return webModuleExtender;
     }
 
+    @Override
+    public File[] getConfigurationFiles(WebModule wm) {
+        List<File> configFiles = new ArrayList<File>();
+        Project enclosingProject = Util.getEnclosingProjectFromWebModule(wm);
+        List<FileObject> configFileObjects = HibernateUtil.getAllHibernateConfigFileObjects(enclosingProject);
+        for(FileObject fo : configFileObjects) {
+            configFiles.add(FileUtil.toFile(fo));
+        }
+        return configFiles.toArray(new File[]{});
+    }
 }
