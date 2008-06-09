@@ -105,9 +105,6 @@ public final class SystemUtils {
     
     private static Platform currentPlatform;
     
-    private static File localDirectory;
-    private static FinishHandler finishHandler;
-    
     // string resolution ////////////////////////////////////////////////////////////
     public static String resolveString(String string) {
         return resolveString(string, SystemUtils.class.getClassLoader());
@@ -120,16 +117,23 @@ public final class SystemUtils {
             return null;
         }
         // N for Name
-        try {
-            parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{install\\}", StringUtils.escapeRegExp(getDefaultApplicationsLocation().getAbsolutePath()));
-        } catch (NativeException e) {
-            ErrorManager.notifyError(ResourceUtils.getString(SystemUtils.class,
-                    ERROR_CANNOT_GET_DEFAULT_APPS_LOCATION_KEY), e);
+        if (parsed.contains("$N{install}")) {
+            try {
+                parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{install\\}", StringUtils.escapeRegExp(getDefaultApplicationsLocation().getAbsolutePath()));
+            } catch (NativeException e) {
+                ErrorManager.notifyError(ResourceUtils.getString(SystemUtils.class,
+                        ERROR_CANNOT_GET_DEFAULT_APPS_LOCATION_KEY), e);
+            }
         }
-        
-        parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{home\\}", StringUtils.escapeRegExp(getUserHomeDirectory().getAbsolutePath()));
-        parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{temp\\}", StringUtils.escapeRegExp(getTempDirectory().getAbsolutePath()));
-        parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{current\\}", StringUtils.escapeRegExp(getCurrentDirectory().getAbsolutePath()));
+        if (parsed.contains("$N{home}")) {
+            parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{home\\}", StringUtils.escapeRegExp(getUserHomeDirectory().getAbsolutePath()));
+        }
+        if (parsed.contains("$N{temp}")) {
+            parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{temp\\}", StringUtils.escapeRegExp(getTempDirectory().getAbsolutePath()));
+        }
+        if (parsed.contains("$N{current}")) {
+            parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{current\\}", StringUtils.escapeRegExp(getCurrentDirectory().getAbsolutePath()));
+        }
         
         Matcher matcher;
         
@@ -224,14 +228,20 @@ public final class SystemUtils {
         }
         
         // R for Resource
-        matcher = Pattern.compile("(?<!\\\\)\\$R\\{(.*?)\\}").matcher(parsed);
+        matcher = Pattern.compile("(?<!\\\\)\\$R\\{(.*?)(;(.*)?)?}").matcher(parsed);
         while (matcher.find()) {
             String path = matcher.group(1);
-            
+            String charset = matcher.group(3);
+            if(charset!=null) {
+                charset = charset.trim();
+                if(charset.equals(StringUtils.EMPTY_STRING)) {
+                    charset = null;
+                }
+            } 
             InputStream inputStream = null;
             try {
                 inputStream  = ResourceUtils.getResource(path, loader);
-                parsed = parsed.replace(matcher.group(), StringUtils.readStream(inputStream));
+                parsed = parsed.replace(matcher.group(), StringUtils.readStream(inputStream, charset));
             } catch (IOException e) {
                 ErrorManager.notifyDebug(ResourceUtils.getString(SystemUtils.class,
                         ERROR_CANNOT_PARSE_PATTERN_KEY, matcher.group()), e);
@@ -331,8 +341,11 @@ public final class SystemUtils {
     }
     
     public static boolean isCurrentJava64Bit() {
-        return System.getProperty("os.arch").equals("amd64") ||
-                System.getProperty("os.arch").equals("sparcv9");
+        final String osArch = System.getProperty("os.arch");
+        return osArch.equals("amd64") ||
+                osArch.equals("sparcv9") ||
+                osArch.equals("x86_64") ||
+                osArch.equals("ppc64");
     }
     
     public static File getPacker() {
@@ -726,31 +739,44 @@ public final class SystemUtils {
     
     public static Platform getCurrentPlatform() {
         if (currentPlatform == null) {
-            boolean is64bit = System.getProperty("os.arch").equals("amd64") ||
-                    System.getProperty("os.arch").equals("sparcv9");
+            final String osArch = System.getProperty("os.arch");
+            final String osName = System.getProperty("os.name");
+            boolean is64bit = isCurrentJava64Bit();                    
             
-            if (System.getProperty("os.name").contains("Windows")) {
+            if (osName.contains("Windows")) {
                 currentPlatform =
                         is64bit ? Platform.WINDOWS_X64 : Platform.WINDOWS_X86;
             }
-            if (System.getProperty("os.name").contains("Linux")) {
-                currentPlatform =
-                        is64bit ? Platform.LINUX_X64 : Platform.LINUX_X86;
+            
+            if (osName.contains("Linux")) {
+                if (osArch.contains("ppc")) {
+                    currentPlatform =
+                            is64bit ? Platform.LINUX_PPC64 : Platform.LINUX_PPC;
+                } else if(osArch.contains("sparc")) {
+                    currentPlatform = Platform.LINUX_SPARC;
+                } else {
+                    currentPlatform =
+                            is64bit ? Platform.LINUX_X64 : Platform.LINUX_X86;
+                }
             }
-            if (System.getProperty("os.name").contains("Mac OS X") &&
-                    System.getProperty("os.arch").contains("ppc")) {
-                currentPlatform = Platform.MACOSX_PPC;
+            
+            if (osName.contains("Mac OS X")) {
+                if(osArch.contains("ppc")) {
+                    currentPlatform = Platform.MACOSX_PPC;
+                } else {
+                    currentPlatform = Platform.MACOSX_X86;
+                }
             }
-            if (System.getProperty("os.name").contains("Mac OS X") &&
-                    System.getProperty("os.arch").contains("i386")) {
-                currentPlatform = Platform.MACOSX_X86;
-            }
-            if (System.getProperty("os.name").contains("SunOS")) {
-                if(System.getProperty("os.arch").contains("sparc")) {
+            
+            if (osName.contains("SunOS")) {
+                if(osArch.contains("sparc")) {
                     currentPlatform = Platform.SOLARIS_SPARC;
                 } else {
                     currentPlatform = Platform.SOLARIS_X86;
                 }
+            }
+            if(currentPlatform==null) {
+                currentPlatform = Platform.UNIX;
             }
         }
         
@@ -1004,7 +1030,9 @@ public final class SystemUtils {
     public static boolean isSolaris() {
         return getCurrentPlatform().isCompatibleWith(Platform.SOLARIS);
     }
-    
+    public static boolean isUnix() {
+        return getCurrentPlatform().isCompatibleWith(Platform.UNIX);
+    }
     // miscellanea //////////////////////////////////////////////////////////////////
     public static boolean intersects(
             final List<? extends Object> list1,
@@ -1084,6 +1112,8 @@ public final class SystemUtils {
             System.getProperty("java.home");//NOI18N
     public static final String USER_HOME = 
             System.getProperty("user.home");//NOI18N
+    public static final String NO_SPACE_CHECK_PROPERTY = 
+            "no.space.check";//NOI18N
     public static final String ERROR_CANNOT_PARSE_PATTERN_KEY =
             "SU.error.cannot.parse.pattern";//NOI18N
     public static final String ERROR_CANNOT_GET_DEFAULT_APPS_LOCATION_KEY =
