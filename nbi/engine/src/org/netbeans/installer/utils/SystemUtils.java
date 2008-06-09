@@ -74,13 +74,13 @@ import org.netbeans.installer.utils.helper.EnvironmentScope;
 import org.netbeans.installer.utils.helper.ErrorLevel;
 import org.netbeans.installer.utils.helper.ExecutionResults;
 import org.netbeans.installer.utils.helper.FilesList;
-import org.netbeans.installer.utils.helper.FinishHandler;
 import org.netbeans.installer.utils.helper.Platform;
 import org.netbeans.installer.utils.system.shortcut.FileShortcut;
 import org.netbeans.installer.utils.system.shortcut.Shortcut;
 import org.netbeans.installer.utils.helper.ShortcutLocationType;
 import org.netbeans.installer.utils.progress.Progress;
 import org.netbeans.installer.utils.system.NativeUtils;
+import org.netbeans.installer.utils.system.NativeUtilsFactory;
 import org.netbeans.installer.utils.system.launchers.Launcher;
 import org.netbeans.installer.utils.system.launchers.LauncherFactory;
 import org.netbeans.installer.utils.system.launchers.LauncherProperties;
@@ -103,11 +103,6 @@ public final class SystemUtils {
     private static KeyStore sessionTrustedStore;
     private static KeyStore deniedStore;
     
-    private static Platform currentPlatform;
-    
-    private static File localDirectory;
-    private static FinishHandler finishHandler;
-    
     // string resolution ////////////////////////////////////////////////////////////
     public static String resolveString(String string) {
         return resolveString(string, SystemUtils.class.getClassLoader());
@@ -120,16 +115,23 @@ public final class SystemUtils {
             return null;
         }
         // N for Name
-        try {
-            parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{install\\}", StringUtils.escapeRegExp(getDefaultApplicationsLocation().getAbsolutePath()));
-        } catch (NativeException e) {
-            ErrorManager.notifyError(ResourceUtils.getString(SystemUtils.class,
-                    ERROR_CANNOT_GET_DEFAULT_APPS_LOCATION_KEY), e);
+        if (parsed.contains("$N{install}")) {
+            try {
+                parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{install\\}", StringUtils.escapeRegExp(getDefaultApplicationsLocation().getAbsolutePath()));
+            } catch (NativeException e) {
+                ErrorManager.notifyError(ResourceUtils.getString(SystemUtils.class,
+                        ERROR_CANNOT_GET_DEFAULT_APPS_LOCATION_KEY), e);
+            }
         }
-        
-        parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{home\\}", StringUtils.escapeRegExp(getUserHomeDirectory().getAbsolutePath()));
-        parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{temp\\}", StringUtils.escapeRegExp(getTempDirectory().getAbsolutePath()));
-        parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{current\\}", StringUtils.escapeRegExp(getCurrentDirectory().getAbsolutePath()));
+        if (parsed.contains("$N{home}")) {
+            parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{home\\}", StringUtils.escapeRegExp(getUserHomeDirectory().getAbsolutePath()));
+        }
+        if (parsed.contains("$N{temp}")) {
+            parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{temp\\}", StringUtils.escapeRegExp(getTempDirectory().getAbsolutePath()));
+        }
+        if (parsed.contains("$N{current}")) {
+            parsed = parsed.replaceAll("(?<!\\\\)\\$N\\{current\\}", StringUtils.escapeRegExp(getCurrentDirectory().getAbsolutePath()));
+        }
         
         Matcher matcher;
         
@@ -224,14 +226,20 @@ public final class SystemUtils {
         }
         
         // R for Resource
-        matcher = Pattern.compile("(?<!\\\\)\\$R\\{(.*?)\\}").matcher(parsed);
+        matcher = Pattern.compile("(?<!\\\\)\\$R\\{(.*?)(;(.*)?)?}").matcher(parsed);
         while (matcher.find()) {
             String path = matcher.group(1);
-            
+            String charset = matcher.group(3);
+            if(charset!=null) {
+                charset = charset.trim();
+                if(charset.equals(StringUtils.EMPTY_STRING)) {
+                    charset = null;
+                }
+            } 
             InputStream inputStream = null;
             try {
                 inputStream  = ResourceUtils.getResource(path, loader);
-                parsed = parsed.replace(matcher.group(), StringUtils.readStream(inputStream));
+                parsed = parsed.replace(matcher.group(), StringUtils.readStream(inputStream, charset));
             } catch (IOException e) {
                 ErrorManager.notifyDebug(ResourceUtils.getString(SystemUtils.class,
                         ERROR_CANNOT_PARSE_PATTERN_KEY, matcher.group()), e);
@@ -331,8 +339,11 @@ public final class SystemUtils {
     }
     
     public static boolean isCurrentJava64Bit() {
-        return System.getProperty("os.arch").equals("amd64") ||
-                System.getProperty("os.arch").equals("sparcv9");
+        final String osArch = System.getProperty("os.arch");
+        return osArch.equals("amd64") ||
+                osArch.equals("sparcv9") ||
+                osArch.equals("x86_64") ||
+                osArch.equals("ppc64");
     }
     
     public static File getPacker() {
@@ -694,7 +705,7 @@ public final class SystemUtils {
             launcher = LauncherFactory.newLauncher(props, platform);
             long start = System.currentTimeMillis();
             launcher.initialize();
-            launcher.create(progress);
+            launcher.create(prg);
             long seconds = System.currentTimeMillis() - start ;
             LogManager.unindent();
             LogManager.log("[launcher] Time : " + (seconds/1000) + "."+ (seconds%1000)+ " seconds");
@@ -725,36 +736,7 @@ public final class SystemUtils {
     }
     
     public static Platform getCurrentPlatform() {
-        if (currentPlatform == null) {
-            boolean is64bit = System.getProperty("os.arch").equals("amd64") ||
-                    System.getProperty("os.arch").equals("sparcv9");
-            
-            if (System.getProperty("os.name").contains("Windows")) {
-                currentPlatform =
-                        is64bit ? Platform.WINDOWS_X64 : Platform.WINDOWS_X86;
-            }
-            if (System.getProperty("os.name").contains("Linux")) {
-                currentPlatform =
-                        is64bit ? Platform.LINUX_X64 : Platform.LINUX_X86;
-            }
-            if (System.getProperty("os.name").contains("Mac OS X") &&
-                    System.getProperty("os.arch").contains("ppc")) {
-                currentPlatform = Platform.MACOSX_PPC;
-            }
-            if (System.getProperty("os.name").contains("Mac OS X") &&
-                    System.getProperty("os.arch").contains("i386")) {
-                currentPlatform = Platform.MACOSX_X86;
-            }
-            if (System.getProperty("os.name").contains("SunOS")) {
-                if(System.getProperty("os.arch").contains("sparc")) {
-                    currentPlatform = Platform.SOLARIS_SPARC;
-                } else {
-                    currentPlatform = Platform.SOLARIS_X86;
-                }
-            }
-        }
-        
-        return currentPlatform;
+        return getNativeUtils().getCurrentPlatform();        
     }
     
     public static String getHostName() {
@@ -1004,7 +986,9 @@ public final class SystemUtils {
     public static boolean isSolaris() {
         return getCurrentPlatform().isCompatibleWith(Platform.SOLARIS);
     }
-    
+    public static boolean isUnix() {
+        return getCurrentPlatform().isCompatibleWith(Platform.UNIX);
+    }
     // miscellanea //////////////////////////////////////////////////////////////////
     public static boolean intersects(
             final List<? extends Object> list1,
@@ -1060,7 +1044,7 @@ public final class SystemUtils {
     // native accessor //////////////////////////////////////////////////////////////
     public static synchronized NativeUtils getNativeUtils() {
         if (nativeUtils == null) {
-            nativeUtils = NativeUtils.getInstance();
+            nativeUtils = NativeUtilsFactory.newNativeUtils();
         }
         return nativeUtils;
     }
@@ -1084,6 +1068,8 @@ public final class SystemUtils {
             System.getProperty("java.home");//NOI18N
     public static final String USER_HOME = 
             System.getProperty("user.home");//NOI18N
+    public static final String NO_SPACE_CHECK_PROPERTY = 
+            "no.space.check";//NOI18N
     public static final String ERROR_CANNOT_PARSE_PATTERN_KEY =
             "SU.error.cannot.parse.pattern";//NOI18N
     public static final String ERROR_CANNOT_GET_DEFAULT_APPS_LOCATION_KEY =
