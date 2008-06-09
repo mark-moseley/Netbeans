@@ -37,57 +37,27 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.hibernate.service.listener;
+package org.netbeans.modules.hibernate.service;
 
-import java.util.List;
-import java.util.logging.Logger;
+import org.netbeans.modules.hibernate.service.spi.HibernateEnvironmentImpl;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.hibernate.cfg.model.HibernateConfiguration;
 import org.netbeans.modules.hibernate.service.api.HibernateEnvironment;
-import org.netbeans.modules.hibernate.util.HibernateUtil;
-import org.netbeans.spi.project.ui.ProjectOpenedHook;
+import org.netbeans.spi.project.LookupProvider;
+import org.openide.util.Lookup;
+import org.openide.util.lookup.Lookups;
+
 
 /**
- * Class that listens for (global) project open/close operations and 
- * registeres or un-registeres Hibernate specific artifacts.
+ * The class extends project lookup to include additional instances of 
+ * Hibernate artifacts. This class is registered in the project's lookup.
  * 
  * @author Vadiraj Deshpande (Vadiraj.Deshpande@Sun.COM)
  */
-public class ProjectOpenedHookImpl extends ProjectOpenedHook{
+public class HibernateProjectLookupExtender implements LookupProvider {
 
-    private Project project;
-    private HibernateEnvironment hibernateEnvironment;
-    
-    private Logger logger = Logger.getLogger(ProjectOpenedHookImpl.class.getName());
-    
-    public ProjectOpenedHookImpl(Project project, HibernateEnvironment hibernateEnvironment) {
-        this.project = project;
-        this.hibernateEnvironment = hibernateEnvironment;
-    }
-
-    
-    @Override
-    protected void projectOpened() {
-        // Check for Hibernate files in this project.
-        List<HibernateConfiguration> hibernateConfigurations = HibernateUtil.getAllHibernateConfigurations(project);
-        if(hibernateConfigurations.size() != 0) {
-            hibernateEnvironment = project.getLookup().lookup(HibernateEnvironment.class);
-        }
-        logger.info("project opened .. " + project);
-        logger.info("config : " + project.getLookup().lookup(HibernateEnvironment.class).getAllHibernateConfigurationsFromProject());
-        
-
-//        // Three cases exists..
-//        //1. This web project do not have hibernate files. fine.. NOP
-//        //2. This web project already has hibernate files.. search and find them.
-//        //3. The web project already has hibernate files and its lookup has the ojb..
-//        // Does this third case occur? I think no.
-        // this one I need to take care of it..
-    }
-
-    @Override
-    protected void projectClosed() {
-        //TODO clean up here.
+    public Lookup createAdditionalLookup(Lookup baseContext) {
+        HibernateEnvironment hibernateEnvironment = new HibernateEnvironmentImpl(baseContext.lookup(Project.class));
+        return Lookups.fixed(new Object[]{hibernateEnvironment});
     }
 
 }
