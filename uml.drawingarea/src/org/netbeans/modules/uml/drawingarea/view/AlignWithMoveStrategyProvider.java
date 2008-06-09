@@ -61,13 +61,10 @@ import java.util.ArrayList;
 import org.netbeans.api.visual.graph.GraphScene;
 import org.netbeans.api.visual.model.ObjectScene;
 import org.netbeans.api.visual.widget.Scene;
-import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityGroup;
-import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityNode;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagram;
-import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.drawingarea.UMLDiagramTopComponent;
 import org.netbeans.modules.uml.drawingarea.palette.context.ContextPaletteManager;
 import org.netbeans.modules.uml.drawingarea.widgets.ContainerWidget;
@@ -85,6 +82,7 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
     private LayerWidget mainLayer = null;
     private ArrayList < MovingWidgetDetails > movingWidgets = null;
     private Point original;
+    private boolean moveWidgetInitialized;
     
     public AlignWithMoveStrategyProvider (AlignWithWidgetCollector collector, 
                                           LayerWidget interractionLayer, 
@@ -95,6 +93,7 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
         this.outerBounds = outerBounds;
         this.interactionLayer = interractionLayer;
         this.mainLayer = widgetLayer;
+        moveWidgetInitialized=false;
     }
 
     public Point locationSuggested (Widget widget, Point originalLocation, Point suggestedLocation) {
@@ -121,9 +120,11 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
             suggestedLocation.x += insets.left;
             suggestedLocation.y += insets.top;
         }
+        
         Widget parent = widget.getParentWidget();
         
-        Point point = super.locationSuggested (widget, bounds, suggestedLocation, true, true, true, true);
+        Point scenePoint = parent.convertLocalToScene(suggestedLocation);
+        Point point = super.locationSuggested (widget, bounds, scenePoint, true, true, true, true);
         if (! outerBounds) {
             point.x -= insets.left;
             point.y -= insets.top;
@@ -140,7 +141,7 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
         {
             manager.cancelPalette();
         }
-        
+        moveWidgetInitialized=false;
 //        initializeMovingWidgets(scene, widget);
     }
 
@@ -203,10 +204,6 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
     public Point getOriginalLocation (Widget widget) {
         
         original = widget.getPreferredLocation();
-        if(widget.getParentWidget() instanceof ContainerWidget)
-        {
-            original = widget.getParentWidget().convertLocalToScene(original);
-        }
         return original;
     }
 
@@ -300,8 +297,12 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
     private void finishedOverScene(MovingWidgetDetails details, Scene scene)
     {
         Widget widget = details.getWidget();
-        interactionLayer.removeChild(widget);
-        mainLayer.addChild(widget);
+        List <Widget>  children = interactionLayer.getChildren();
+        if (children != null && children.contains(widget))
+        {
+            interactionLayer.removeChild(widget);
+            mainLayer.addChild(widget);
+        }
 
         Lookup lookup = scene.getLookup();
         if (lookup != null)
@@ -332,26 +333,12 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
                     if (diagram != null)
                     {
                         INamespace space = diagram.getNamespace();
+                        INamespace curSpace = element.getOwningPackage();
 
-                        if (element instanceof IActivityNode)
-                        {   // Remove an activity node from an activity group
-                            IActivityNode activyElem = (IActivityNode) element;
-                            ETList<IActivityGroup> groups = activyElem.getGroups();
-                            for (IActivityGroup aGroup : groups)
-                            {
-                                activyElem.removeGroup(aGroup);
-                            }
-                            space.addOwnedElement(element);
-                        }
-                        else
+                        if (space.equals(curSpace) == false)
                         {
-                            INamespace curSpace = element.getOwningPackage();
-
-                            if (space.equals(curSpace) == false)
-                            {
-                                curSpace.removeOwnedElement(element);
-                                space.addOwnedElement(element);
-                            }
+                            curSpace.removeOwnedElement(element);
+                            space.addOwnedElement(element);
                         }
                     }
                 }
@@ -416,6 +403,12 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
                 movingWidgets.add(details);
             }
         }
+        moveWidgetInitialized=true;
+    }
+    
+    public boolean isMovementInitialized()
+    {
+        return moveWidgetInitialized;
     }
     
     private boolean processLocationOperator(Widget widget,
@@ -508,44 +501,6 @@ public class AlignWithMoveStrategyProvider extends AlignWithSupport implements M
         }
         
         return retVal;
-    }
-    
-    private class MoveDropTargetDropEvent extends DropTargetDropEvent
-    {
-        private MoveWidgetTransferable widgetTransferable = null;
-        
-        public MoveDropTargetDropEvent(Widget dropWidget, Point pt)
-        {
-            super((new DropTarget()).getDropTargetContext(), pt, 0, 0);
-            widgetTransferable = new MoveWidgetTransferable(dropWidget);
-        }
-
-        @Override
-        public Transferable getTransferable()
-        {
-            return new Transferable() {
-
-                public DataFlavor[] getTransferDataFlavors()
-                {
-                    return new DataFlavor[] { MoveWidgetTransferable.FLAVOR };
-                }
-
-                public boolean isDataFlavorSupported(DataFlavor flavor)
-                {
-                    return MoveWidgetTransferable.FLAVOR.equals(flavor);
-                }
-
-                public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException, IOException
-                {
-                    if(isDataFlavorSupported(flavor) == true)
-                    {
-                        return widgetTransferable;
-                    }
-                    
-                    throw new UnsupportedFlavorException(flavor);
-                }
-            };
-        }
     }
     
     protected class MovingWidgetDetails
