@@ -139,6 +139,8 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
                 }
             } else {
                 int c = read(true);
+                // if read of the first char caused skipping escaped line
+                // do we need to backup and create escaped lines first?
                 switch (c) {
                     case '"': {
                         Token<CppTokenId> out = finishDblQuote();
@@ -247,7 +249,12 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
 
                     case '*':
                         switch (read(true)) {
-                            case '/': // invalid comment end - */
+                            case '/': // invalid comment end - */ or int*/* */
+                                if (read(true) == '*') {
+                                    backup(2);
+                                    return token(CppTokenId.STAR);
+                                }
+                                backup(1);
                                 return token(CppTokenId.INVALID_COMMENT_END);
                             case '=':
                                 return token(CppTokenId.STAREQ);
@@ -516,7 +523,7 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
             // so do not call translateSurrogates()
             if (c == EOF || !Character.isWhitespace(c) || c == '\n' || c == '\r') {
                 backup(1);
-                return token(CppTokenId.WHITESPACE);
+                return isTokenSplittedByEscapedLine() ? token(CppTokenId.ESCAPED_WHITESPACE) : token(CppTokenId.WHITESPACE);
             }
         }
     }
@@ -559,7 +566,13 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
                     return token(CppTokenId.FLOAT_LITERAL);
                 case 'u':
                 case 'U':
-                    return token(CppTokenId.UNSIGNED_LITERAL);
+                    c = read(true);
+                    if (c == 'l' || c == 'L') {
+                        return token(CppTokenId.UNSIGNED_LONG_LITERAL);
+                    } else {
+                        backup(1);
+                        return token(CppTokenId.UNSIGNED_LITERAL);
+                    }                   
                 case '0':
                 case '1':
                 case '2':
