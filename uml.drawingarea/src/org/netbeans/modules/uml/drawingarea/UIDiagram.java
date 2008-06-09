@@ -43,11 +43,12 @@ package org.netbeans.modules.uml.drawingarea;
 
 import java.awt.Rectangle;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.TreeSet;
+import org.dom4j.Node;
 import org.netbeans.api.visual.widget.Widget;
+import org.netbeans.modules.uml.core.eventframework.IEventPayload;
+import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.IStateMachine;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
@@ -60,11 +61,15 @@ import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagramKind;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IGraphicExportDetails;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IProxyDiagram;
 import org.netbeans.modules.uml.core.metamodel.structure.IProject;
+import org.netbeans.modules.uml.core.support.umlsupport.XMLManip;
 import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.drawingarea.dataobject.UMLDiagramDataObject;
-import org.netbeans.modules.uml.drawingarea.engines.DiagramEngine;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
+import org.netbeans.modules.uml.ui.support.DispatchHelper;
 import org.netbeans.modules.uml.ui.support.ProductHelper;
+import org.netbeans.modules.uml.ui.support.diagramsupport.DiagramAreaEnumerations;
+import org.netbeans.modules.uml.ui.support.diagramsupport.IDrawingAreaEventDispatcher;
+import org.netbeans.modules.uml.ui.support.diagramsupport.ProxyDiagramManager;
 import org.openide.cookies.SaveCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
@@ -79,13 +84,15 @@ import org.openide.util.Exceptions;
 public class UIDiagram extends Diagram { 
     
 //    private WeakReference < UITopComponent > rawTopComponent = null;
+    private DispatchHelper dispatchHelper = new DispatchHelper();
+    private IDrawingAreaEventDispatcher diagramAreaDispatcher;
     private UMLDiagramDataObject data = null;
     private DesignerScene scene;
     private FileLock lock = null;
     private INamespace space = null;
     private String name = "";
     private String alias = "";
-    private String xmiIDStr = "";
+    //private String xmiIDStr = "";
     private String doc;
     
     // TODO: Convert to enumeration.
@@ -215,9 +222,19 @@ public class UIDiagram extends Diagram {
         return retVal;
     }
     
-    public void setName(String value) {
-        
-        name = value;
+    public void setName(String value) 
+    {
+        if ( !getName().equals(value))
+        {
+            name = value;
+            fireDrawingAreaPropertyChange("FireDrawingAreaPostPropertyChange", 
+                    DiagramAreaEnumerations.DAPK_NAME);
+            Node node = null;
+            if ((node = getNode()) != null )
+            {
+                XMLManip.setAttributeValue(node, "name",  name);
+            }
+        }
     }
     
     public String getAlias() 
@@ -228,7 +245,12 @@ public class UIDiagram extends Diagram {
     
     public void setAlias(String value) 
     {
-        alias = value;
+        if ( !getAlias().equals(value))
+        {
+            alias = value;
+            fireDrawingAreaPropertyChange("FireDrawingAreaPostPropertyChange", 
+                    DiagramAreaEnumerations.DAPK_ALIAS);
+        }
     }
     
         /* (non-Javadoc)
@@ -331,9 +353,18 @@ public class UIDiagram extends Diagram {
     }
     
     public INamespace getNamespaceForCreatedElements() {
-        INamespace retVal = space;
-        
-        return retVal;
+//        INamespace retVal = space;
+//        
+//        return retVal;
+        if (this.getDiagramKind() == IDiagram.DK_STATE_DIAGRAM)
+        {
+            IElement owner = getOwner();
+            if (owner instanceof IStateMachine)
+            {
+                return ((IStateMachine)owner).getFirstRegion();
+            }
+        }
+        return space;
     }
     
     /**
@@ -458,10 +489,7 @@ public class UIDiagram extends Diagram {
         return retVal;
     }
     
-        /* (non-Javadoc)
-         * @see org.netbeans.modules.uml.core.metamodel.diagrams.IDiagram#setIsDirty(boolean)
-         */
-    public void setIsDirty(boolean value) {
+    public void setDirty(boolean value) {
         
         if(data != null)
         {
@@ -671,4 +699,34 @@ public class UIDiagram extends Diagram {
         return this;
     }
 
+    public IProxyDiagram getProxyDiagram()
+    {
+        ProxyDiagramManager proxyDiagramManager = ProxyDiagramManager.instance();
+        return proxyDiagramManager.getDiagram(this);
+
+    }
+    
+    /**
+     * Fires the property change event
+     */
+    private void fireDrawingAreaPropertyChange(String payload, int propKind)
+    {
+        if (diagramAreaDispatcher == null)
+        {
+            DispatchHelper helper = new DispatchHelper();
+            diagramAreaDispatcher = helper.getDrawingAreaDispatcher();
+        }
+
+        if (payload != null && payload.trim().length() > 0)
+        {
+            IProxyDiagram proxyDiagram = getProxyDiagram();
+            IEventPayload ePayload = diagramAreaDispatcher.createPayload(payload);
+
+            if (proxyDiagram != null)
+            {
+                diagramAreaDispatcher.fireDrawingAreaPostPropertyChange(
+                        proxyDiagram, propKind, ePayload);
+            }
+        }
+    }
 }
