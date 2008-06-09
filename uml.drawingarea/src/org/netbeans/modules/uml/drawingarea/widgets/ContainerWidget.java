@@ -48,15 +48,14 @@ import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import org.netbeans.api.visual.action.AcceptProvider;
 import org.netbeans.api.visual.action.ActionFactory;
-import org.netbeans.api.visual.action.ConnectorState;
 import org.netbeans.api.visual.action.WidgetAction;
 import org.netbeans.api.visual.graph.GraphScene;
 import org.netbeans.api.visual.layout.LayoutFactory;
 import org.netbeans.api.visual.model.ObjectScene;
 import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
+import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityGroup;
 import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityNode;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
@@ -65,6 +64,7 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElem
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagram;
 import org.netbeans.modules.uml.core.metamodel.dynamics.ICombinedFragment;
 import org.netbeans.modules.uml.core.metamodel.dynamics.ILifeline;
+import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.drawingarea.actions.SceneAcceptProvider;
 import org.netbeans.modules.uml.drawingarea.actions.WidgetAcceptAction;
 import org.netbeans.modules.uml.drawingarea.util.Util;
@@ -169,6 +169,7 @@ public class ContainerWidget extends Widget
         
         createActions(DesignerTools.SELECT).addAction(acceptAction);
         createActions(DesignerTools.PALETTE).addAction(new WidgetAcceptAction(provider));
+        createActions(DesignerTools.CONTEXT_PALETTE).addAction(acceptAction);
     }
     
     private boolean addChildNode(INamespace namespace, Object nodeData, Widget node)
@@ -228,6 +229,7 @@ public class ContainerWidget extends Widget
         // Second see if any nodes need to be added to the container.
         for (Object nodeData : scene.getNodes())
         {
+            if(!(((IPresentationElement)nodeData).getFirstSubject() instanceof INamedElement ))continue;
             Widget node = scene.findWidget(nodeData);
             if (node != null)
             {
@@ -312,6 +314,7 @@ public class ContainerWidget extends Widget
                 child.setPreferredLocation(newParent.convertSceneToLocal(sceneBounds.getLocation()));
 
                 Object nodeData = scene.findObject(child);
+                if(!(((IPresentationElement)nodeData).getFirstSubject() instanceof INamedElement ))continue;
                 INamedElement element = (INamedElement) ((IPresentationElement)nodeData).getFirstSubject();
 
                 if(namespace!=null)
@@ -347,29 +350,45 @@ public class ContainerWidget extends Widget
         return changed;
     }
     
+    protected boolean allowed(IElement... elements)
+    {
+        return true;
+    }
+    
+    /**
+     * Test if a widget is fully with in the bounds of the container widget.
+     * 
+     * @param widget The widget to test
+     * @return True if the widget is in the containers bounds.
+     */
+    protected boolean isFullyContained(Widget widget)
+    {
+        Rectangle area = widget.getClientArea();
+        
+        boolean retVal = false;
+        if(area != null)
+        {
+            Rectangle sceneArea = widget.convertLocalToScene(area);
+
+            Rectangle localArea = convertSceneToLocal(sceneArea);
+            retVal = getClientArea().contains(localArea);
+        }
+        
+        return retVal;
+    }
+    
     public class ContainerAcceptProvider extends SceneAcceptProvider
     {
         public ContainerAcceptProvider()
         {
             super(null);
         }
-
+        
         @Override
-        public ConnectorState isAcceptable(Widget widget, Point point, Transferable transferable)
+        protected boolean elementsAllowed(IElement... elements)
         {
-            ConnectorState retVal = super.isAcceptable(widget, point, transferable);
-            
-            if(retVal != ConnectorState.ACCEPT)
-            {
-                if(isWidgetMove(transferable) == true)
-                {
-                    retVal = ConnectorState.ACCEPT;
-                }
-            }
-            
-            return retVal;
+            return allowed(elements);
         }
-
         
         @Override
         public void accept(Widget widget, Point point, Transferable transferable)
@@ -379,6 +398,7 @@ public class ContainerWidget extends Widget
             Widget[] target = null;
             ObjectScene scene = (ObjectScene) widget.getScene();
             boolean convertLocation = false;
+            boolean isMovingWidget = false;
             
             if(isWidgetMove(transferable) == true)
             {
@@ -393,6 +413,8 @@ public class ContainerWidget extends Widget
                 {
                     target = new Widget[0];
                 }
+                
+                isMovingWidget = true;
             }
             else
             {
@@ -413,6 +435,13 @@ public class ContainerWidget extends Widget
             
             for(Widget curWidget : target)
             {
+                // Only add the node to the container if it is fully contained
+                // by the container.
+                if((isMovingWidget == true) && (isFullyContained(curWidget) == false))
+                {
+                    break;
+                }
+                
                 if(curWidget.getParentWidget() != null)
                 {
                     curWidget.getParentWidget().removeChild(curWidget);
@@ -433,13 +462,28 @@ public class ContainerWidget extends Widget
                 
                 if(ns != null) 
                 {
-                    ns.addOwnedElement(element);
+//                    ns.addOwnedElement(element);
                    
-                    // An activiy node that is contained in an activity group still
-                    // has  Activity as its name space; hence adding 
-                    // the node to its activity namespace
-                    if (element instanceof  IActivityNode) 
+                     if (element instanceof  IActivityNode && ns instanceof IActivityGroup) 
                     {   
+                        IActivityGroup group = (IActivityGroup) ns;
+                        IActivityNode activityElem = (IActivityNode)element;
+                        
+                        // Remove an activity node from its previous containers, i.e., activity groups.
+                        // This is the case when the activity node is moved from one container to the other.
+                        ETList<IActivityGroup> previousGroups = activityElem.getGroups();
+                        for (IActivityGroup aGroup : previousGroups)
+                        {
+                            aGroup.removeNodeContent(activityElem);
+                            activityElem.removeGroup(aGroup);
+                        }
+                        // add the activity node to the new container
+                        group.addOwnedElement(element);
+                        activityElem.addGroup(group);
+                       
+                        // An activity node that is contained in an activity group is still under 
+                        // an Activity namespace; hence adding the activity node
+                        // to its Activity namespace.
                         INamespace activityNamespace = ((DesignerScene) scene).getDiagram().getNamespace();
                         activityNamespace.addOwnedElement(element);
                     }
