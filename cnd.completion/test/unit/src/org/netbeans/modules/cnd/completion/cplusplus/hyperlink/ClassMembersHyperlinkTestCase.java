@@ -172,6 +172,10 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("ClassA.cc", 69, 30, "ClassA.h", 33, 5); // /*static*/ void ClassA::privateFooSt()
     }
     
+    public void testInitList() throws Exception {
+        performTest("ClassA.cc", 8, 25, "ClassA.h", 46, 5); // privateMemberInt in "ClassA::ClassA() : privateMemberInt(1)"
+    }
+    
     public void testConstructors() throws Exception {
         // declaration do definition
         performTest("ClassA.h", 7, 10, "ClassA.cc", 8, 1); // public ClassA();
@@ -296,6 +300,25 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("ClassA.cc", 102, 15, "ClassA.h", 69, 5); // ostream& operator <<(ostream& output, const ClassA& item) {
     }
 
+    public void testIZ136102() throws Exception {
+        // from usage to definition
+        performTest("IZ136102.cc", 15, 8, "IZ136102.cc", 6, 12);
+    }
+
+    public void testIZ136140() throws Exception {
+        // from usage to definition
+        performTest("IZ136140.cc", 16, 11, "IZ136140.cc", 11, 5);
+        performTest("IZ136140.cc", 17, 12, "IZ136140.cc", 11, 5);
+    }
+    
+    public void testIZ136894() throws Exception {
+        performTest("main.cc", 67, 35, "main.cc", 59, 5); // itd_state in state->ehci_itd_pool_addr->itd_state;
+        performTest("main.cc", 68, 35, "main.cc", 59, 5); // itd_state in state->ehci_itd_pool_addr[i].itd_state;
+        performTest("main.cc", 70, 19, "main.cc", 59, 5); // itd_state in pool_addr[i].itd_state;
+        performTest("main.cc", 71, 35, "main.cc", 59, 5); // itd_state in state->ehci_itd_pool_addr[0].itd_state;
+        performTest("main.cc", 72, 19, "main.cc", 59, 5); // itd_state in pool_addr[0].itd_state;
+    }
+    
     public static class Failed extends HyperlinkBaseTestCase {
         
         protected Class getTestCaseDataClass() {
