@@ -42,9 +42,11 @@
 package org.netbeans.modules.uml.drawingarea;
 
 import java.awt.Color;
+import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.HashMap;
+import java.util.HashSet;
 import javax.swing.UIManager;
 import org.netbeans.api.visual.action.ActionFactory;
 import org.netbeans.api.visual.action.WidgetAction;
@@ -61,7 +63,9 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElem
 import org.netbeans.modules.uml.core.preferenceframework.PreferenceAccessor;
 import org.netbeans.modules.uml.drawingarea.persistence.EdgeWriter;
 import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramEdgeWriter;
+import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.netbeans.modules.uml.drawingarea.view.DesignerTools;
+import org.netbeans.modules.uml.drawingarea.view.UMLWidget;
 
 /**
  * The AbstractLabelManger provides a basic implementation of the label manager.
@@ -74,10 +78,30 @@ import org.netbeans.modules.uml.drawingarea.view.DesignerTools;
 public abstract class AbstractLabelManager implements LabelManager
 {
     private final static Border NON_SELECTED_BORDER = BorderFactory.createOpaqueBorder(1, 1, 1, 1);
-    private final static Border SELECTED_BORDER = BorderFactory.createLineBorder(1, new Color(0xFFA400));
+    private final static Border SELECTED_BORDER = BorderFactory.createLineBorder(1, UMLWidget.BORDER_HILIGHTED_COLOR);
         
     private ConnectionWidget connector = null;
     private HashMap < String, Widget > labelMap = new HashMap < String, Widget >();
+    
+    /**
+     * The name of stereotype labels.
+     */
+    public static final String STEREOTYPE = "Stereotype"; //NOI18N
+    
+    /**
+     * The name of Name labels.
+     */
+    public static final String NAME = "Name"; //NOI18N
+    
+    public static final String OPERATION = "Operation"; //NOI18N
+    
+    public static final String BINDING = "Binding"; //NOI18N
+    
+    public static final String GUARD_CONDITION = "GuardCondition"; //NOI18N
+    
+    public static final String MULTIPLICITY = "Multiplicity"; //NOI18N
+    
+    public static final String END_NAME = "End Name"; //NOI18N
     
     /**
      * Creates an AbstractLabelManager and associates it to a connection 
@@ -97,7 +121,7 @@ public abstract class AbstractLabelManager implements LabelManager
         showLabel(name, LabelType.EDGE);
     }
     
-    public void showLabel(String name, LabelType type)
+    public void showLabel(final String name, final LabelType type)
     {
         String completeName = name + "_" + type.toString();
         Widget label = labelMap.get(completeName);
@@ -108,6 +132,7 @@ public abstract class AbstractLabelManager implements LabelManager
             
             
             label = createLabel(name, type);
+            if(label==null)throw new IllegalArgumentException("Unsupported label name-type combination, can't create label. name=\""+name+"\"; type=\""+type+"\".");
             ConnectionLabelWidget child = new ConnectionLabelWidget(scene, label);
             Object data = createAttachedData(name, type);
             if(data == null)
@@ -119,6 +144,23 @@ public abstract class AbstractLabelManager implements LabelManager
             WidgetAction.Chain chain = child.createActions(DesignerTools.SELECT);
             chain.addAction(scene.createSelectAction());
             chain.addAction(ActionFactory.createMoveAction());
+            chain.addAction(new WidgetAction.Adapter()
+            {
+                public WidgetAction.State keyPressed(Widget widget,
+                                                     WidgetAction.WidgetKeyEvent event)
+                {
+                    WidgetAction.State retVal = WidgetAction.State.REJECTED;
+                    
+                    if((event.getKeyCode() == KeyEvent.VK_DELETE) ||
+                       (event.getKeyCode() == KeyEvent.VK_BACK_SPACE))
+                    {
+                        hideLabel(name, type);
+                        retVal = WidgetAction.State.CONSUMED;
+                    }
+                    
+                    return retVal;
+                }
+            });
             
             if(label != null)
             {
@@ -152,6 +194,33 @@ public abstract class AbstractLabelManager implements LabelManager
         else
         {
             label.setVisible(true);
+        }
+    }
+    
+    public void selectLabel(String name)
+    {
+        selectLabel(name, LabelType.EDGE);
+    }
+    /**
+     * select and focus on labvel if it's shown
+     * @param name
+     * @param type
+     */
+    public void selectLabel(final String name, final LabelType type)
+    {
+        String completeName = name + "_" + type.toString();
+        Widget lW=labelMap.get(completeName);
+        if(lW!=null && lW.isVisible())
+        {
+            DesignerScene scene=(DesignerScene) lW.getScene();
+            Object lPres=scene.findObject(lW);
+            if(lPres!=null)
+            {
+                HashSet sel=new HashSet();
+                sel.add(lPres);
+                scene.setFocusedObject(lPres);
+                scene.setSelectedObjects(sel);
+            }
         }
     }
     
