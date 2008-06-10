@@ -39,14 +39,19 @@
 package org.netbeans.modules.uml.diagrams.nodes.activity;
 
 import java.awt.Color;
+import java.beans.PropertyChangeEvent;
 import java.util.ResourceBundle;
 import org.netbeans.api.visual.action.ResizeProvider;
 import org.netbeans.api.visual.border.BorderFactory;
 import org.netbeans.api.visual.model.ObjectState;
 import org.netbeans.api.visual.widget.Scene;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.diagrams.nodes.UMLLabelNodeWidget;
 import org.netbeans.modules.uml.drawingarea.border.ResizeBorder;
 import org.netbeans.modules.uml.drawingarea.palette.context.DefaultContextPaletteModel;
+import org.netbeans.modules.uml.drawingarea.view.UMLLabelWidget;
+import org.netbeans.modules.uml.drawingarea.view.UMLWidget;
 import org.openide.util.NbBundle;
 
 /**
@@ -75,6 +80,16 @@ public abstract class ControlNodeWidget extends UMLLabelNodeWidget
         }
     }
 
+    public ControlNodeWidget(Scene scene, String contextPaletteRes)
+    {
+        super(scene);
+        if (contextPaletteRes != null && contextPaletteRes.trim().length() > 0)
+        {
+            this.contextPaletteRes = contextPaletteRes;
+            addToLookup(initializeContextPalette());
+        }
+    }
+    
     protected DefaultContextPaletteModel initializeContextPalette()
     {
         DefaultContextPaletteModel paletteModel = new DefaultContextPaletteModel(this);
@@ -82,11 +97,6 @@ public abstract class ControlNodeWidget extends UMLLabelNodeWidget
         return paletteModel;
     }
     
-    private static int RESIZE_SIZE = 5;
-    private static ResizeBorder NON_RESIZABLE_BORDER =
-            new ResizeBorder(RESIZE_SIZE, Color.BLACK,
-                             new ResizeProvider.ControlPoint[]{});
-
     protected void processStateChange(ObjectState previousState,
                                        ObjectState state)
     {
@@ -95,7 +105,7 @@ public abstract class ControlNodeWidget extends UMLLabelNodeWidget
 
         if (select && !wasSelected)
         {
-            setBorder(NON_RESIZABLE_BORDER);
+            setBorder(UMLWidget.NON_RESIZABLE_BORDER);
         }
         else
         {
@@ -104,6 +114,23 @@ public abstract class ControlNodeWidget extends UMLLabelNodeWidget
                 setBorder(BorderFactory.createEmptyBorder());
             }
         }
+    }
+    
+    @Override
+    public void propertyChange(PropertyChangeEvent event)
+    {
+        IElement element = getObject().getFirstSubject();
+        UMLLabelWidget labelWidget = getLabelWidget();
+        if (element instanceof INamedElement && labelWidget != null)
+        {
+            String label = ((INamedElement) element).getNameWithAlias();
+            labelWidget.setLabel(label);
+            if ( label != null && label.trim().length() > 0 && !labelWidget.isVisible())
+            {
+                labelWidget.setVisible(true);
+            }
+        }
+        super.propertyChange(event);
     }
 }
 
