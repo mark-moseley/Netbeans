@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -43,6 +43,9 @@ package org.netbeans.modules.print.spi;
 import java.util.Date;
 
 /**
+ * Print provider is the collection of the pages to be printed,
+ * where collection is the 2D matrix
+ *
  * @author Vladimir Yaroslavskiy
  * @version 2006.04.24
  */
@@ -50,9 +53,9 @@ public interface PrintProvider {
 
   /**
    * Returns pages for given option.
-   * @param width of page.
-   * @param height of page.
-   * @param zoom of page.
+   * @param width specifies the width of pages.
+   * @param height specifies the height of pages.
+   * @param zoom specifies the zoom of pages.
    * @return pages for given option
    */
   PrintPage [][] getPages(int width, int height, double zoom);
