@@ -50,7 +50,6 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
@@ -74,8 +73,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.text.DefaultEditorKit;
 import org.netbeans.api.visual.action.ConnectorState;
 import org.netbeans.api.visual.action.WidgetAction;
-import org.netbeans.api.visual.action.WidgetAction.State;
-import org.netbeans.api.visual.action.WidgetAction.WidgetKeyEvent;
 import org.netbeans.api.visual.model.ObjectSceneEvent;
 import org.netbeans.api.visual.model.ObjectSceneEventType;
 import org.netbeans.api.visual.widget.ConnectionWidget;
@@ -85,7 +82,6 @@ import org.netbeans.modules.uml.common.ui.SaveNotifierYesNo;
 import org.netbeans.modules.uml.core.eventframework.IEventPayload;
 import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivity;
 import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.IStateMachine;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.Expression;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.FactoryRetriever;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IConstraint;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
@@ -214,6 +210,7 @@ public class UMLDiagramTopComponent extends TopComponent
     private static final int RESULT_CANCEL = 0;
     private static final int RESULT_NO = 1;
     private static final int RESULT_YES = 2;
+    private boolean activated;
     
     private UMLDiagramTopComponent()
     {
@@ -328,7 +325,6 @@ public class UMLDiagramTopComponent extends TopComponent
         
         initializeToolBar();
         initRootNode();
-        getDiagramDO().setDirty(true, scene);
     }
 
     protected boolean isEdgesGrouped()
@@ -339,6 +335,7 @@ public class UMLDiagramTopComponent extends TopComponent
     private void initRootNode()
     {
         DiagramModelElementNode node = new DiagramModelElementNode(getDiagramDO());
+        node.setName(getName());
         node.setElement(getDiagram().getDiagram());
         node.setScene(scene);
         getExplorerManager().setRootContext(node);
@@ -402,12 +399,7 @@ public class UMLDiagramTopComponent extends TopComponent
             break;
             
         case RESULT_NO:
-            UMLDiagramDataObject obj = getDiagramDO();
-            if (obj != null)
-            {
-                obj.setDirty(false, scene);
-            }
-//            removeSaveCookie();
+            this.setDiagramDirty(false);
             break;
             
         case RESULT_CANCEL:
@@ -492,6 +484,7 @@ public class UMLDiagramTopComponent extends TopComponent
     @Override
     protected void componentActivated() {
         super.componentActivated();
+        this.activated=true;
         if (getDiagram() != null && getDiagram().getView() != null)
         {
             getDiagram().getView().requestFocusInWindow();
@@ -507,7 +500,16 @@ public class UMLDiagramTopComponent extends TopComponent
         }
     }
 
-    
+    @Override
+    protected void componentDeactivated() {
+        super.componentDeactivated();
+        this.activated=false;
+    }
+
+    public boolean isActivated()
+    {
+        return activated;
+    }
     
     @Override
     public int getPersistenceType()
@@ -734,13 +736,16 @@ public class UMLDiagramTopComponent extends TopComponent
                 UIDiagram diagram = (UIDiagram)FactoryRetriever.instance().createType("Diagram", null);
                 diagram.setDataObject(data);
 
-
+                // At this point the diagram has not yet been saved, so 
+                // setting the notify flag to false to prevent the diagram from firing
+                // name-change events
+                diagram.setNotify(false);
                 diagram.setName(name);
 //            diagram.setNamespace(owner);
                 diagram.setDiagramKind(kind);
+                diagram.setNotify(true);
                 setDiagramNameSpace(owner, diagram);
-                lookupContent.add(diagram);
-                lookupContent.add(data);
+                lookupContent.add(diagram);   
 
                 retVal = diagram;
                 scene = new DesignerScene(diagram,this);
@@ -846,7 +851,6 @@ public class UMLDiagramTopComponent extends TopComponent
                                          ObjectSceneEventType.OBJECT_REMOVED);
             scene.addObjectSceneListener(new SceneSelectionListener(), 
                                          ObjectSceneEventType.OBJECT_SELECTION_CHANGED);
-            scene.getActions().addAction(new DiagramSaveListener());
         }
 
 //        SwingPaletteManager contextPalette = new SwingPaletteManager(scene, diagramView);
@@ -1182,7 +1186,6 @@ public class UMLDiagramTopComponent extends TopComponent
     
     static final class ResolvableHelper implements Serializable
     {
-
         private static final long serialVersionUID = 1L;
 
         public Object readResolve()
@@ -1209,29 +1212,34 @@ public class UMLDiagramTopComponent extends TopComponent
         {
             UMLDiagramDataObject dobj = getDiagramDO();
             if (!dobj.isValid())
-            {
+            {   
                 return;
             }
             
-            IDiagram uiDiagram = getAssociatedDiagram();
-            int diagramKind = uiDiagram.getDiagramKind();
-            String diagramName = uiDiagram.getNameWithAlias();
-            
-            UMLDiagramDataNode diagDataNode = 
-                        (UMLDiagramDataNode)dobj.getNodeDelegate();
             if (evt.getPropertyName().equals(DataObject.PROP_MODIFIED))
             {
-                Object newVal = evt.getNewValue();
-                if (newVal == Boolean.FALSE)
+                IDiagram uiDiagram = getAssociatedDiagram();
+                int diagramKind = uiDiagram.getDiagramKind();
+                String diagramName = uiDiagram.getNameWithAlias();
+                String displName = "";
+
+                UMLDiagramDataNode diagDataNode = 
+                        (UMLDiagramDataNode)dobj.getNodeDelegate();
+                Object newVal = evt.getNewValue(); 
+                if (newVal == Boolean.TRUE)
                 {
-                    setDiagramDisplayName(diagramName);
-                    setDiagramDirty(false);
-                }
-                else 
+                    displName = diagramName + SPACE_STAR;
+                    dobj.addSaveCookie(scene);
+                    updateSaveCookie(ADD);
+
+                } else 
                 {
-                    setDiagramDisplayName(diagramName + SPACE_STAR);
-                    setDiagramDirty(true);
+                    displName = diagramName;
+                    updateSaveCookie(REMOVE);
+                    dobj.removeSaveCookie();
                 }
+               
+                setDiagramDisplayName(displName);
                 diagDataNode.setIconBaseWithExtension(ImageUtil.instance()
                         .getDiagramTypeImageName(diagramKind));
                     
@@ -1242,35 +1250,47 @@ public class UMLDiagramTopComponent extends TopComponent
     }
     
     // the presence of save cookie in activated nodes enables/disables "Save" button
-//    private void addSaveCookie()
-//    {
-//        Node[] nodes = getActivatedNodes();
-//        if (nodes != null &&
-//                nodes.length > 0 &&
-//                nodes[0] instanceof DiagramModelElementNode)
-//        {
-//            ((DiagramModelElementNode)nodes[0]).addSaveCookie();
-//        }
-////        if (node != null)
-////            node.addSaveCookie();
-//       
-//    }
-    
-//    private void removeSaveCookie()
-//    {
-//        Node[] nodes = getActivatedNodes();
-//        if (nodes != null) {
-//            for (int i = 0; i < nodes.length; i++) {
-//                if (nodes[i] instanceof DiagramModelElementNode) {
-//                    ((DiagramModelElementNode) nodes[i]).removeSaveCookie();
-//                }
-//            }
-//        }
-////        if (node != null)
-////            node.removeSaveCookie();
-//        
-//    }
+    private static int ADD = 0;
+    private static int REMOVE = 1;
+    private void updateSaveCookie(int action)
+    {
+        // get diagram root node
+        final Node rootNode = explorerManager.getRootContext() ;
+        // get selected nodes
+        Node[] nodes = getActivatedNodes();
+        
+        List<Node> allNodes = new ArrayList<Node>();
+        allNodes.add(rootNode);
+        
+        if ( nodes != null && nodes.length > 0)
+        {
+            for (int i=0; i < nodes.length; i++) 
+            {
+                // check to prevent duplicate root node
+                if (!nodes[i].equals(rootNode))
+                {
+                    allNodes.add(nodes[i]);
+                }
+            }
+        }
 
+        for (Node aNode : allNodes)
+        {
+            if (aNode != null && aNode instanceof DiagramModelElementNode)
+            {
+                System.out.println("updateSaveCookie: node="+ aNode.getDisplayName() );
+                if (action == ADD)
+                {
+                    ((DiagramModelElementNode)aNode).addSaveCookie();
+                }
+                else if (action == REMOVE)
+                {
+                    ((DiagramModelElementNode)aNode).removeSaveCookie();
+                } 
+            }
+        }
+    }
+    
     public class ChangeHandler implements DrawingAreaChangeListener
     {
         public void elementChanged(IElement changedElement, IElement secondaryElement, ModelElementChangedKind changeType)
@@ -1373,7 +1393,7 @@ public class UMLDiagramTopComponent extends TopComponent
                             {
                                 PropertyChangeListener listener = (PropertyChangeListener) changedWidget;
                                 listener.propertyChange(event);
-                                getDiagramDO().setDirty(true, getScene());
+                                setDiagramDirty(true);
                             }
                         }
                     }
@@ -1396,7 +1416,7 @@ public class UMLDiagramTopComponent extends TopComponent
                         {
                             PropertyChangeListener listener = (PropertyChangeListener) changedWidget;
                             listener.propertyChange(event);
-                            getDiagramDO().setDirty(true, getScene());
+                            setDiagramDirty(true);
                         }
                     }
                 }
@@ -1490,7 +1510,7 @@ public class UMLDiagramTopComponent extends TopComponent
                         node = new DiagramModelElementNode(getDiagramDO());
 
                         IElement element = presenation.getFirstSubject();
-                        node.setElement(element);
+                        node.setElement(element); 
                         node.setScene(scene);
                         node.setPresentationElement(presenation);
 
@@ -1500,7 +1520,7 @@ public class UMLDiagramTopComponent extends TopComponent
 
                         if (element instanceof INamedElement)
                         {
-                            String name = ((INamedElement) element).getName();
+                            String name = ((INamedElement) element).getName(); 
 
                             if (name != null && !name.trim().equals(""))
                             {
@@ -1518,6 +1538,9 @@ public class UMLDiagramTopComponent extends TopComponent
                                     {
                                         node.setName(expandedName.replace('_', ' '));
                                     }
+                                }
+                                else {  // displayed the element type name, e.g. Class, Interface, InvocationNode...
+                                        node.setName(((INamedElement) element).getElementType());
                                 }
                             }
                         }
@@ -1567,7 +1590,7 @@ public class UMLDiagramTopComponent extends TopComponent
 
                     public void run()
                     {
-                        setActivatedNodes(nodes);
+                        setActivatedNodes(nodes); 
                     }
                 });
                 
@@ -1796,39 +1819,10 @@ public class UMLDiagramTopComponent extends TopComponent
                     {
                         setName(newName);
                         setDiagramDisplayName(newName);
-                        UMLDiagramDataObject dataObj = getDiagramDO();
-                        if ( dataObj != null) {
-                            dataObj.setDirty(true, getScene());
-                        }
+                        setDiagramDirty(true);
                     }
                 }
             }
         }
-    }
-    
-    private class DiagramSaveListener extends WidgetAction.Adapter
-    {
-        @Override
-        public State keyPressed(Widget widget, WidgetKeyEvent event)
-        {
-            if ((event.getKeyCode() == KeyEvent.VK_S) && (event.isControlDown() || event.isMetaDown()))
-            {
-                SaveCookie cookie = (SaveCookie) getDiagramDO().getCookie(SaveCookie.class);
-                try
-                {
-                    if (cookie != null)
-                    {
-                        cookie.save();
-                    }
-                } catch (IOException e)
-                {
-                    e.printStackTrace();
-                }
-//                getDiagramDO().setDirty(false, scene);
-                return State.CONSUMED;
-            }
-            return super.keyTyped(widget, event);
-        }
-        
     }
 }
