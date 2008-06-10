@@ -41,10 +41,7 @@ package org.netbeans.modules.uml.diagrams.actions;
 import javax.swing.Action;
 import org.netbeans.api.visual.model.ObjectScene;
 import org.netbeans.api.visual.widget.Widget;
-import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IControlNode;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
-import org.netbeans.modules.uml.diagrams.nodes.activity.ActivityNodeWidget;
 import org.netbeans.modules.uml.drawingarea.view.LabelNode;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.openide.nodes.Node;
@@ -67,7 +64,7 @@ public final class ToggleShowLabelAction extends CookieAction
     {
         scene = actionContext.lookup(DesignerScene.class);
         pe = actionContext.lookup(IPresentationElement.class);
-        return this;
+        return super.createContextAwareInstance(actionContext);
     }
    
     protected void performAction(Node[] activatedNodes)
@@ -76,15 +73,7 @@ public final class ToggleShowLabelAction extends CookieAction
         pe = activatedNodes[0].getLookup().lookup(IPresentationElement.class);
         Widget widget = getTargetWidget(scene, pe);
         
-        if (widget != null && widget instanceof ActivityNodeWidget)
-        {
-            ActivityNodeWidget simpleWidget = (ActivityNodeWidget) widget;
-            if (simpleWidget.getNameWidget() != null)
-            {
-                simpleWidget.setNameVisisble(!simpleWidget.isNameVisible());
-            }
-        }
-        else if (widget != null && widget instanceof LabelNode)
+        if (widget != null && widget instanceof LabelNode)
         {
             ((LabelNode)widget).showLabel(!((LabelNode)widget).getLabelWidget().isVisible());
         }
@@ -92,14 +81,9 @@ public final class ToggleShowLabelAction extends CookieAction
     
      private Widget getTargetWidget(ObjectScene scene, IPresentationElement pe)
     {
-         Widget widget = scene.findWidget(pe);
-         if ( pe != null) 
-         {
-             IElement element = pe.getFirstSubject();
-             if (element instanceof IControlNode)
-             {
-                widget = scene.findWidget(pe);
-             }
+         Widget widget = null;
+         if ( scene != null) {
+             widget = scene.findWidget(pe);
          }
         return widget;
     }
@@ -114,12 +98,7 @@ public final class ToggleShowLabelAction extends CookieAction
         String msgKey = "CTL_ShowLabel";  
         Widget widget = getTargetWidget(scene, pe);
         
-        if (widget != null && widget instanceof ActivityNodeWidget)
-        {   
-            ActivityNodeWidget simpleWidget = (ActivityNodeWidget) widget;
-            msgKey = (simpleWidget.isNameVisible() ? "CTL_HideLabel" : msgKey);
-        }
-        else if (widget != null && widget instanceof LabelNode)
+        if (widget != null && widget instanceof LabelNode)
         {
             msgKey = ((LabelNode)widget).getLabelWidget().isVisible() ? "CTL_HideLabel" : "CTL_ShowLabel";
         }
