@@ -69,6 +69,7 @@ import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.JarFileSystem;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -78,7 +79,7 @@ import org.openide.text.NbDocument;
  *
  * @author Tomas Zezula
  */
-public class SourceFileObject implements JavaFileObject, DocumentProvider {    
+public class SourceFileObject implements DocumentProvider, FileObjects.InferableJavaFileObject {    
     
     final FileObject file;
     final FileObject root;
@@ -97,19 +98,60 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
         }        
     }
     
+    public SourceFileObject (final FileObject file, final FileObject root, final JavaFileFilterImplementation filter, final CharSequence content) throws IOException {
+        this (file, root, filter);
+        if (content != null) {
+            this.text = toString (content);
+        }
+        else {
+            update();
+        }
+    }
+    
+    //where
+    private String toString (final CharSequence c) {
+        if (c instanceof String) {
+            return (String) c;
+        }
+        else {
+            return c.toString();
+        }
+    }
+    
     /** Creates a new instance of SourceFileObject */
     public SourceFileObject (final FileObject file, final FileObject root, final JavaFileFilterImplementation filter, final boolean renderNow) throws IOException {
+        this (file, root, filter);
+        if (renderNow && this.kind != Kind.CLASS) {
+            getCharContentImpl(true);
+        }
+    }
+    
+    private SourceFileObject (final FileObject file, final FileObject root, final JavaFileFilterImplementation filter) {
         assert file != null;
         this.file = file;
         this.root = root;
         this.filter = filter;
         String ext = this.file.getExt();        
-        this.kind = FileObjects.getKind(ext);        
-        if (renderNow && this.kind != Kind.CLASS) {
+        this.kind = FileObjects.getKind(ext);
+    }
+
+    
+    public void update () throws IOException {
+        if (this.kind != Kind.CLASS) {
             getCharContentImpl(true);
         }
     }
-
+    
+    public void update (final CharSequence content) throws IOException {
+        if (content == null) {
+            update();
+        }
+        else {            
+            final CharBuffer charBuffer = CharBuffer.wrap (content);
+            this.text = toString(content);
+            tokens = TokenHierarchy.create(charBuffer, false, JavaTokenId.language(), null, null);
+        }
+    }
     
 
     public boolean isNameCompatible (String simplename, JavaFileObject.Kind kind) {
@@ -287,6 +329,17 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
 
     public Modifier getAccessLevel() {
         return null;
+    }
+    
+    public String inferBinaryName () {
+        if (root == null) {
+            return null;
+        }
+        final String relativePath = FileUtil.getRelativePath(root,file);
+        final int index = relativePath.lastIndexOf('.');
+        assert index > 0;
+        final String result = relativePath.substring(0,index).replace('/','.');
+        return result;
     }
     
     public @Override String toString () {
