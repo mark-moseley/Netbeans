@@ -1,0 +1,3 @@
+org.netbeans.modules.websvc.saas.codegen.ui.SoapClientFlavorProvider
+org.netbeans.modules.websvc.saas.codegen.ui.RestClientFlavorProvider
+org.netbeans.modules.websvc.saas.codegen.ui.CustomClientFlavorProvider
