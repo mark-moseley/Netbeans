@@ -409,7 +409,7 @@ public final class PersistenceManager implements PropertyChangeListener {
     }
     
     // XXX helper method
-    public boolean isTopComponentPersistentWhenClosed(TopComponent tc) {
+    public static boolean isTopComponentPersistentWhenClosed(TopComponent tc) {
         int persistenceType = persistenceType(tc);
         if (persistenceType == TopComponent.PERSISTENCE_ALWAYS) {
             return true;
@@ -534,6 +534,8 @@ public final class PersistenceManager implements PropertyChangeListener {
                         id2TopComponentMap.put(stringId, new TopComponentReference(tc,stringId));
                         if (persistenceType(tc) == TopComponent.PERSISTENCE_ONLY_OPENED) {
                             topComponentPersistentOnlyOpenedID.add(stringId);
+                        } else if (persistenceType(tc) == TopComponent.PERSISTENCE_NEVER) {
+                            topComponentNonPersistentID.add(stringId);
                         }
                         dataobjectToTopComponentMap.put(dob, stringId);
                     }
@@ -1080,18 +1082,11 @@ public final class PersistenceManager implements PropertyChangeListener {
                 boolean contains;
                 synchronized(LOCK_IDS) {
                     contains = usedTcIds.contains(tc_id);
-                }
-                if (!contains) {
-                    deleteOneFO(file);
-                }
-            }
-        }
-        //Fill global set of used TopComponent IDs
-        for (FileObject file : getComponentsLocalFolder().getChildren()) {
-            if (!file.isFolder() && "settings".equals(file.getExt())) { // NOI18N
-                String tc_id = file.getName();
-                synchronized(LOCK_IDS) {
-                    globalIDSet.add(tc_id.toUpperCase(Locale.ENGLISH));
+                    if (!contains) {
+                        deleteOneFO(file);
+                    } else {
+                        globalIDSet.add(tc_id.toUpperCase(Locale.ENGLISH));
+                    }
                 }
             }
         }
