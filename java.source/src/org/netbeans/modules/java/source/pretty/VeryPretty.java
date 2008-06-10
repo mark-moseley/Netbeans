@@ -64,16 +64,15 @@ import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.*;
 import com.sun.tools.javac.tree.TreeInfo;
 
-import java.io.*;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.source.Comment.Style;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
 
-import sun.security.x509.KeyIdentifier;
 import static org.netbeans.modules.java.source.save.PositionEstimator.*;
 
 /** Prints out a tree as an indented Java source program.
@@ -108,19 +107,12 @@ public final class VeryPretty extends JCTree.Visitor {
     private boolean containsError = false;
     
     public VeryPretty(CompilationInfo cInfo) {
-        this(cInfo, CodeStyle.getDefault(null));
-    }
-
-    public VeryPretty(CompilationInfo cInfo, CodeStyle cs) {
-        this(JavaSourceAccessor.INSTANCE.getJavacTask(cInfo).getContext(), cs);
+        this(JavaSourceAccessor.getINSTANCE().getJavacTask(cInfo).getContext(),
+                CodeStyle.getDefault(FileOwnerQuery.getOwner(cInfo.getFileObject())));
         this.cInfo = cInfo;
         this.origUnit = (JCCompilationUnit) cInfo.getCompilationUnit();
     }
-    
-    public VeryPretty(Context context) {
-        this(context, CodeStyle.getDefault(null));
-    }
-    
+
     public VeryPretty(Context context, CodeStyle cs) {
 	names = Name.Table.instance(context);
 	enclClassName = names.empty;
