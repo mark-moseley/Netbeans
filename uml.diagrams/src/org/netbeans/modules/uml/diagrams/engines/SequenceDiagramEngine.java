@@ -92,6 +92,7 @@ import org.netbeans.modules.uml.core.metamodel.dynamics.IMessage;
 import org.netbeans.modules.uml.core.metamodel.dynamics.Lifeline;
 import org.netbeans.modules.uml.core.metamodel.dynamics.Message;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IClassifier;
+import org.netbeans.modules.uml.core.metamodel.structure.IComment;
 import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.core.support.umlutils.ElementLocator;
 import org.netbeans.modules.uml.core.support.umlutils.IElementLocator;
@@ -157,44 +158,93 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
     private IInteraction interaction;
     private RelationshipDiscovery relDiscovery = null;
     
+    public SequenceDiagramEngine()
+    {
+        super();
+    }
+    
     public SequenceDiagramEngine(DesignerScene scene) {
         super(scene);
-         //need to check if there interaction, it's specific to diagram so is handed in engine
-         IDiagram dgr=getScene().getDiagram();
-         INamespace ns=dgr.getNamespace();
-         String type=ns.getExpandedElementType();
-         if(! type.equalsIgnoreCase("interaction"))
-         {
-             //create interaction
-             Object value = FactoryRetriever.instance().createType("Interaction",
-             ns);
+        
+//        //need to check if there interaction, it's specific to diagram so is handed in engine
+//        IDiagram dgr = getScene().getDiagram();
+//        INamespace ns = dgr.getNamespace();
+//        String type = ns.getExpandedElementType();
+//        if (!type.equalsIgnoreCase("interaction"))
+//        {
+//            //create interaction
+//            Object value = FactoryRetriever.instance().createType("Interaction",
+//                                                                  ns);
+//
+//            INamedElement inter = null;
+//            if (value instanceof INamedElement)
+//            {
+//                inter = (INamedElement) value;
+//            }
+//            //
+//            interaction = (IInteraction) inter;
+//            //
+//            inter.setName(dgr.getName());//by default the same as diagram
+//            //inter.setNamespace(ns);
+//            ns.addOwnedElement(inter);
+//            dgr.setNamespace((Namespace) inter);
+//        }
+//        else
+//        {
+//            interaction = (IInteraction) ns;
+//        }
+//        
+//        //fill settings, where to get default? some should be from preferences
+//        setSettingValue(SHOW_MESSAGE_NUMBERS, Boolean.FALSE);
+//        setSettingValue(SHOW_RETURN_MESSAGES, Boolean.TRUE);
+//        setSettingValue(SHOW_INTERACTION_BOUNDARY, Boolean.FALSE);
+//        
+//        scene.addObjectSceneListener(new SQDChangeListener(), ObjectSceneEventType.values());
+//
+//        relDiscovery = new UMLRelationshipDiscovery(scene);
+    }
 
-             INamedElement inter = null;
-             if(value instanceof INamedElement)
-             {
-                 inter = (INamedElement)value;
-             }
-             //
-             interaction=(IInteraction) inter;
-             //
-             inter.setName(dgr.getName());//by default the same as diagram
-             //inter.setNamespace(ns);
-             ns.addOwnedElement(inter);
-             dgr.setNamespace((Namespace) inter);
-         }
-         else
-         {
-             interaction=(IInteraction) ns;
-         }
+    @Override
+    public void initialize(DesignerScene scene)
+    {
+        super.initialize(scene);
+        
+        IDiagram dgr = getScene().getDiagram();
+        INamespace ns = dgr.getNamespace();
+        String type = ns.getExpandedElementType();
+        if (!type.equalsIgnoreCase("interaction"))
+        {
+            //create interaction
+            Object value = FactoryRetriever.instance().createType("Interaction",
+                                                                  ns);
+
+            INamedElement inter = null;
+            if (value instanceof INamedElement)
+            {
+                inter = (INamedElement) value;
+            }
+            //
+            interaction = (IInteraction) inter;
+            //
+            inter.setName(dgr.getName());//by default the same as diagram
+            //inter.setNamespace(ns);
+            ns.addOwnedElement(inter);
+            dgr.setNamespace((Namespace) inter);
+        }
+        else
+        {
+            interaction = (IInteraction) ns;
+        }
+        
         //fill settings, where to get default? some should be from preferences
         setSettingValue(SHOW_MESSAGE_NUMBERS, Boolean.FALSE);
         setSettingValue(SHOW_RETURN_MESSAGES, Boolean.TRUE);
         setSettingValue(SHOW_INTERACTION_BOUNDARY, Boolean.FALSE);
-        //
-        scene.addObjectSceneListener(new SQDChangeListener(), ObjectSceneEventType.values());
         
-        relDiscovery = new UMLRelationshipDiscovery(scene);
+        getScene().addObjectSceneListener(new SQDChangeListener(), ObjectSceneEventType.values());
     }
+    
+    
 
     /**
      * used to attach actions to scene
@@ -316,9 +366,19 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
 
     public boolean isDropPossible(INamedElement node) {
         String type0=node.getExpandedElementType();
-        if(type0.equals("Lifeline") || type0.equals("Comment"))
+        if(node instanceof ILifeline || node instanceof IComment)
         {
             //accept as is (TBD may be need to check if exists in "current" interaction
+            return true;
+        }
+        else if(node instanceof ICombinedFragment)
+        {
+            if(node.getPresentationElements().size()==0)return true;//only once drop should be possible
+            //but it may be dropped to another diagram
+            for(IPresentationElement pe:node.getPresentationElements())
+            {
+                if(getScene().findWidget(pe)!=null)return false;
+            }
             return true;
         }
         else
@@ -334,6 +394,8 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         String type0=elementToDrop.getExpandedElementType();
         if(type0==null)type0=elementToDrop.getElementType();
         INamedElement ret=elementToDrop;
+        INamespace ns=getScene().getDiagram().getNamespace();
+        if(ret.getNamespace()==null && ret.getOwner()==null)ns.addOwnedElement(ret);//need to add here as a fix for combined fragment initialization problem below caused by not set of namespace in accept on containers before call to processing, set default ns to diagram ns
         if(type0.equals("Lifeline") || type0.equals("Comment"))
         {
             //accept as is (TBD may be need to check if exists in "current" interaction
@@ -346,7 +408,6 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         }
         else if(type0.equals("Interaction"))
         {
-            INamespace ns=getScene().getDiagram().getNamespace();
             if(ns instanceof IInteraction)
             {
                 IInteraction inter=(IInteraction) ns;
@@ -1064,7 +1125,6 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
     
     private void setInteractionBounds()
     {
-        System.out.println("SET BOUNDARY");
         Widget widget=getScene().getMainLayer();
         Collection<Widget> children = widget.getChildren ();
         Rectangle bounds=null;
@@ -1469,6 +1529,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         int minY=Integer.MAX_VALUE;
         for(LifelineWidget llW:lifelines)
         {
+            if(llW.getParentWidget()==null)continue;
             Rectangle llBnd=llW.getBounds();
             Insets llIns=llW.getBorder().getInsets();
             llBnd.x+=llIns.left;
