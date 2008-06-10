@@ -41,19 +41,20 @@ package org.netbeans.modules.quicksearch.recent;
 
 import java.util.LinkedList;
 import java.util.List;
-import org.netbeans.spi.quicksearch.SearchResult;
+import org.netbeans.modules.quicksearch.ResultsModel.ItemResult;
+
 
 /**
  *
  * @author Jan Becicka
  */
 public class RecentSearches {
-    private LinkedList<SearchResult> recent;
+    private LinkedList<ItemResult> recent;
     private static final int MAX_ITEMS = 5;
     private static RecentSearches instance;
 
     private RecentSearches() {
-        recent = new LinkedList<SearchResult>();
+        recent = new LinkedList<ItemResult>();
     }
     
     public static RecentSearches getDefault() {
@@ -63,14 +64,21 @@ public class RecentSearches {
         return instance;
     } 
     
-    public void add(SearchResult result) {
+    public void add(ItemResult result) {
+        // don't create duplicates, however poor-man's test only
+        for (ItemResult ir : recent) {
+            if (ir.getDisplayName().equals(result.getDisplayName())) {
+                return;
+            }
+        }
+        
         if (recent.size()>=MAX_ITEMS) {
             recent.removeLast();
         }
         recent.addFirst(result);
     }
     
-    public List<SearchResult> getSearches() {
+    public List<ItemResult> getSearches() {
         return recent;
     }
 }
