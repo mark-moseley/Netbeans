@@ -40,21 +40,28 @@
 
 package org.netbeans.spi.quicksearch;
 
-import org.openide.util.Lookup;
-
 /**
- * Search Provider, implement to provide new group of results for quick search.
+ * Main interface of Quick Search API. Implement this interface
+ * to provide new group of results for quick search.
  * 
- * In order to plug into quick search UI, implementations of SearchProvider
- * must be registered through xml layer in following way:
+ * In order to plug into Quick Search UI and show quick search results for your
+ * providers, implementations of SearchProvider must be registered through xml
+ * layer in following way:
  * 
  * <pre>
- *  <folder name="QuickSearch">
- *      <folder name="MyCategoryID">
- *          <file name="org-netbeans-mymodule-mypackage-MySearchProviderImpl.instance"/>
- *          <attr name="position" intvalue="500"/>
- *      </folder>
- *  </folder>
+ *  &lt;folder name="QuickSearch"&gt;
+ *      &lt;folder name="MyCategoryID"&gt;
+ *          &lt;!--Attribute for localization - provide localized display name of category!--&gt;
+ *          &lt;attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.yourmodule.YourBundle"/>
+ *          &lt;!--Attribute for command prefix - used to narrow search to this category only!--&gt;
+ *          &lt;attr name="command" stringvalue="p"/>
+ *          &lt;!--Attribute for category ordering!--&gt;
+ *          &lt;attr name="position" intvalue="200"/&gt;
+ *          &lt;!--Note that multiple providers can contribute to one category!--&gt;
+ *          &lt;file name="org-netbeans-module2-package2-MySearchProviderImpll.instance"/&gt;
+ *          &lt;file name="org-netbeans-module2-package3-MySearchProviderImpl2.instance"/&gt;
+ *      &lt;/folder&gt;
+ *  &lt;/folder&gt;
  * </pre>
  * 
  * @author  Jan Becicka, Dafe Simonek
@@ -62,7 +69,8 @@ import org.openide.util.Lookup;
 public interface SearchProvider {
     
     /**
-     * Evaluates given request and fills response object with apropriate results.
+     * Method is called by infrastructure when search operation was requested.
+     * Implementors should evaluate given request and fill response object with apropriate results.
      * 
      * Typical implementation would look like follows:
      * 
@@ -77,7 +85,7 @@ public interface SearchProvider {
      *  }
      * </pre>
      * 
-     * This method can be called outside EQ thread.
+     * Threading: This method can be called outside EQ thread by infrastructure.
      * 
      * @param request Search request object that contains information what to
      * search for.
@@ -88,29 +96,5 @@ public interface SearchProvider {
      */
     public void evaluate (SearchRequest request, SearchResponse response);
     
-    /**
-     * Returns lookup content of this provider.
-     * 
-     * Implementors should return Lookup instance that contains instances of:
-     * 
-     * <ul>
-     * <li><b>CategoryDescription:</b> Description of visual category of 
-     * quick search results. While category ID and its position is defined in xml layer
-     * registration, CategoryDescription serves for UI of result category.
-     * If several providers share one category, then only one provider needs to
-     * specify CategoryDescription. Note however that if your provider shares
-     * category with provider from different module and you won't provide
-     * CategoryDescription, you must have dependency on module which actually defines
-     * CategoryDescription.
-     * </li>
-     * 
-     * </ul>
-     * 
-     * 
-     * @return Lookup that quick search infrastructure lookups for instances of
-     * classes/interfaces mentioned above and uses found capabilities for its UI
-     * and other functionality. May return null under special circumstances (see above).
-     */
-    public Lookup getLookup ();
     
 }
