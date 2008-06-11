@@ -41,6 +41,7 @@
 package org.netbeans.modules.uml.drawingarea.view;
 
 import java.awt.Point;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -149,6 +150,16 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
         //scene.setEdgeSource(pE, srcTargetPEs.get("Source"));
         if (scene != null)
         {
+            Collection<IPresentationElement> nodesList = scene.getNodes();
+            if ( nodesList != null )
+            {
+                if (!(nodesList.contains(edgeReader.getSourcePE())) 
+                        || !(nodesList.contains(edgeReader.getTargetPE())))
+                {
+                    System.out.println(" invalid edge...");
+                    return;
+                }
+            }
             scene.setEdgeSource(PersistenceUtil.getPresentationElement(this), edgeReader.getSourcePE());
             scene.setEdgeTarget(PersistenceUtil.getPresentationElement(this), edgeReader.getTargetPE());
         }
@@ -156,24 +167,12 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
         if (manager != null)
         {
             List<EdgeInfo.EdgeLabel> edgeLabels = edgeReader.getLabels();
+            
             for (Iterator<EdgeInfo.EdgeLabel> it = edgeLabels.iterator(); it.hasNext();)
             {
                 EdgeInfo.EdgeLabel edgeLabel = it.next();
-                if (edgeLabel.getLabel().equalsIgnoreCase(NAME))
-                {
-                    manager.showLabel(NAME);
-                }
-                else if (edgeLabel.getLabel().equalsIgnoreCase(STEREOTYPE))
-                {
-                    manager.showLabel(STEREOTYPE);
-                }
-                else if (edgeLabel.getLabel().equalsIgnoreCase(TAGGEDVALUE))
-                {
-                    manager.showLabel(TAGGEDVALUE);
-                }
-
+                manager.showLabel(edgeLabel.getLabel());
             }
-
         }
     }
 
