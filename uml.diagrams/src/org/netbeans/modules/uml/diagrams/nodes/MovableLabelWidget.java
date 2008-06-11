@@ -60,8 +60,10 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.ICreationFactory;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.IValueSpecification;
 import org.netbeans.modules.uml.drawingarea.engines.DiagramEngine;
+import org.netbeans.modules.uml.drawingarea.persistence.NodeWriter;
+import org.netbeans.modules.uml.drawingarea.persistence.PersistenceUtil;
+import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeWriter;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.netbeans.modules.uml.drawingarea.view.DesignerTools;
 
@@ -69,7 +71,7 @@ import org.netbeans.modules.uml.drawingarea.view.DesignerTools;
  *
  * @author Sheryl Su
  */
-public class MovableLabelWidget extends EditableCompartmentWidget implements Widget.Dependency
+public class MovableLabelWidget extends EditableCompartmentWidget implements Widget.Dependency, DiagramNodeWriter
 {
 
     private Widget nodeWidget;
@@ -122,6 +124,11 @@ public class MovableLabelWidget extends EditableCompartmentWidget implements Wid
         updateLocation = true;
     }
 
+    public void refresh()
+    {
+        updateLocation = true;
+    }
+    
     protected void paintWidget()
     {
         super.paintWidget();
@@ -153,6 +160,11 @@ public class MovableLabelWidget extends EditableCompartmentWidget implements Wid
         Insets insets = nodeWidget.getBorder().getInsets();
         Rectangle labelBnd=getBounds();
         if(labelBnd==null)labelBnd=getPreferredBounds();
+        Rectangle nodeBnd=nodeWidget.getBounds();
+        //if(nodeBnd==null && )nodeBnd=nodeWidget.getPreferredBounds();
+        if(nodeBnd==null)return;
+        nodeBnd=nodeWidget.convertLocalToScene(nodeBnd);
+        nodeBnd=getParentWidget().convertSceneToLocal(nodeBnd);//in parent of label coordinates
         if (getPreferredLocation() == null)
         {
             if(x0!=null)
@@ -162,24 +174,24 @@ public class MovableLabelWidget extends EditableCompartmentWidget implements Wid
             else dx = 0;
             if(y0==null)
             {
-                dy = -labelBnd.height / 2 - nodeWidget.getPreferredBounds().height / 2;
+                dy = -labelBnd.height / 2 - nodeBnd.height / 2;
             }
             else dy=y0;
 
         }
-        
-        Rectangle nodeBnd=nodeWidget.getBounds();
-        if(nodeBnd==null)nodeBnd=nodeWidget.getPreferredBounds();
-        nodeBnd=nodeWidget.convertLocalToScene(nodeBnd);
-        nodeBnd=getParentWidget().convertSceneToLocal(nodeBnd);//in parent of label coordinates
+        if (getPreferredLocation() != null)
+        {
+            point = getPreferredLocation();
+        }
+       else
+        {
+            double nodeCenterX = nodeBnd.x + insets.left + (nodeBnd.width - insets.left - insets.right) / 2;
 
-        double nodeCenterX = nodeBnd.x+ insets.left + (nodeBnd.width - insets.left - insets.right) / 2;
+            double nodeCenterY = nodeBnd.y + insets.bottom + (nodeBnd.height - insets.top - insets.bottom) / 2;
 
-        double nodeCenterY = nodeBnd.y+ insets.bottom + (nodeBnd.height - insets.top - insets.bottom) / 2;
-
-        point = new Point((int) (nodeCenterX + dx - labelBnd.width / 2),
-                (int) (nodeCenterY + dy - labelBnd.height / 2));
-
+            point = new Point((int) (nodeCenterX + dx - labelBnd.width / 2),
+                    (int) (nodeCenterY + dy - labelBnd.height / 2));
+        }
         setPreferredLocation(point);
         getScene().revalidate();
     }
@@ -214,7 +226,7 @@ public class MovableLabelWidget extends EditableCompartmentWidget implements Wid
             initialBeforeSelectionFG=getForeground();
             setForeground(UIManager.getColor("List.selectionForeground"));
              
-            setBorder(BorderFactory.createLineBorder(1, new Color(0xFFA400)));
+            setBorder(BorderFactory.createLineBorder(1, BORDER_HILIGHTED_COLOR));
         }
         else if((previousState.isSelected() == true) && (state.isSelected() == false))
         {
@@ -254,6 +266,23 @@ public class MovableLabelWidget extends EditableCompartmentWidget implements Wid
         }
         
         return retVal;
+    }
+
+    public void save(NodeWriter nodeWriter)
+    {
+        if (!(this.isVisible()))
+            return;
+        
+        nodeWriter = PersistenceUtil.populateNodeWriter(nodeWriter, this);
+        nodeWriter.setTypeInfo("MovableLabel");
+        nodeWriter.setHasPositionSize(true);        
+        PersistenceUtil.populateProperties(nodeWriter, this);
+        nodeWriter.beginGraphNode();
+        nodeWriter.endGraphNode();
+    }
+    
+    public void saveChildren(Widget widget, NodeWriter nodeWriter) {
+        //not applicable
     }
 
     private class LabelMoveSupport implements MoveStrategy, MoveProvider
