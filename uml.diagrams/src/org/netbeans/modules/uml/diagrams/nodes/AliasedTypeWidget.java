@@ -62,18 +62,18 @@ import org.netbeans.modules.uml.drawingarea.view.UMLNodeWidget;
  *
  * @author treyspiva
  */
-public class DataTypeWidget extends UMLNodeWidget implements PropertyChangeListener
+public class AliasedTypeWidget extends UMLNodeWidget implements PropertyChangeListener
 {
     private UMLNameWidget nameWidget = null;
     private IPresentationElement pe = null;
    
-    public DataTypeWidget(Scene scene)
+    public AliasedTypeWidget(Scene scene)
     {
         super(scene, true);
         addToLookup(initializeContextPalette());
     }
     
-    public DataTypeWidget(Scene scene, IPresentationElement pe)
+    public AliasedTypeWidget(Scene scene, IPresentationElement pe)
     {
         this(scene);
         this.pe = pe;
@@ -84,7 +84,7 @@ public class DataTypeWidget extends UMLNodeWidget implements PropertyChangeListe
     protected DefaultContextPaletteModel initializeContextPalette()
     {
         DefaultContextPaletteModel paletteModel = new DefaultContextPaletteModel(this);
-        paletteModel.initialize("UML/context-palette/DataType");
+        paletteModel.initialize("UML/context-palette/AliasedType");
         return paletteModel;
     }
     
@@ -108,7 +108,7 @@ public class DataTypeWidget extends UMLNodeWidget implements PropertyChangeListe
         LabelWidget keywordWidget = new UMLLabelWidget(getScene());
         keywordWidget.setBackground((Paint)null); 
         keywordWidget.setForeground((Color)null);
-        keywordWidget.setLabel("<<datatype>>"); //NOI18N
+        keywordWidget.setLabel("<<aliasedtype>>"); //NOI18N
         keywordWidget.setAlignment(LabelWidget.Alignment.CENTER);
         retVal.addChild(keywordWidget);
         
@@ -160,7 +160,7 @@ public class DataTypeWidget extends UMLNodeWidget implements PropertyChangeListe
     }
     
     public String getWidgetID() {
-        return UMLWidgetIDString.DATATYPEWIDGET.toString();
+        return UMLWidgetIDString.ALIASED_TYPEWIDGET.toString();
     }
     
     @Override

@@ -53,6 +53,7 @@ import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.uml.core.metamodel.core.constructs.IDataType;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
+import org.netbeans.modules.uml.core.metamodel.structure.IArtifact;
 import org.netbeans.modules.uml.drawingarea.palette.context.DefaultContextPaletteModel;
 import org.netbeans.modules.uml.drawingarea.view.ResourceValue;
 import org.netbeans.modules.uml.drawingarea.view.UMLLabelWidget;
@@ -62,18 +63,18 @@ import org.netbeans.modules.uml.drawingarea.view.UMLNodeWidget;
  *
  * @author treyspiva
  */
-public class DataTypeWidget extends UMLNodeWidget implements PropertyChangeListener
+public class ArtifactWidget extends UMLNodeWidget implements PropertyChangeListener
 {
     private UMLNameWidget nameWidget = null;
     private IPresentationElement pe = null;
    
-    public DataTypeWidget(Scene scene)
+    public ArtifactWidget(Scene scene)
     {
         super(scene, true);
         addToLookup(initializeContextPalette());
     }
     
-    public DataTypeWidget(Scene scene, IPresentationElement pe)
+    public ArtifactWidget(Scene scene, IPresentationElement pe)
     {
         this(scene);
         this.pe = pe;
@@ -84,20 +85,20 @@ public class DataTypeWidget extends UMLNodeWidget implements PropertyChangeListe
     protected DefaultContextPaletteModel initializeContextPalette()
     {
         DefaultContextPaletteModel paletteModel = new DefaultContextPaletteModel(this);
-        paletteModel.initialize("UML/context-palette/DataType");
+        paletteModel.initialize("UML/context-palette/Artifact");
         return paletteModel;
     }
     
     @Override
     public void initializeNode(IPresentationElement presentation)
     {
-        IDataType type = (IDataType) presentation.getFirstSubject();
-        setCurrentView(createDataTypeView(type));
+        IArtifact type = (IArtifact) presentation.getFirstSubject();
+        setCurrentView(createArtifactView(type));
         setOpaque(true);
         ResourceValue.initResources(getResourcePath(), this);
     }
 
-    public Widget createDataTypeView(IDataType type)
+    public Widget createArtifactView(IArtifact type)
     {
         Widget retVal = new Widget(getScene());
         retVal.setForeground((Color)null);
@@ -108,7 +109,7 @@ public class DataTypeWidget extends UMLNodeWidget implements PropertyChangeListe
         LabelWidget keywordWidget = new UMLLabelWidget(getScene());
         keywordWidget.setBackground((Paint)null); 
         keywordWidget.setForeground((Color)null);
-        keywordWidget.setLabel("<<datatype>>"); //NOI18N
+        keywordWidget.setLabel("<<artifact>>"); //NOI18N
         keywordWidget.setAlignment(LabelWidget.Alignment.CENTER);
         retVal.addChild(keywordWidget);
         
@@ -160,7 +161,7 @@ public class DataTypeWidget extends UMLNodeWidget implements PropertyChangeListe
     }
     
     public String getWidgetID() {
-        return UMLWidgetIDString.DATATYPEWIDGET.toString();
+        return UMLWidgetIDString.ARTIFACTWIDGET.toString();
     }
     
     @Override
