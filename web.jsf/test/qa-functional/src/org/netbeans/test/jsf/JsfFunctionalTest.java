@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,7 +43,7 @@ package org.netbeans.test.jsf;
 import java.awt.Container;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
-import org.netbeans.jellytools.JellyTestCase;
+import junit.framework.Test;
 import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.NewFileWizardOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
@@ -57,8 +57,8 @@ import org.netbeans.jellytools.actions.Action;
 import org.netbeans.jellytools.actions.EditAction;
 import org.netbeans.jellytools.actions.OpenAction;
 import org.netbeans.jellytools.modules.form.ComponentPaletteOperator;
+import org.netbeans.jellytools.modules.j2ee.J2eeTestCase;
 import org.netbeans.jellytools.modules.web.nodes.WebPagesNode;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
 import org.netbeans.jemmy.operators.JTableOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
@@ -69,7 +69,7 @@ import org.netbeans.jemmy.operators.JListOperator;
 import org.netbeans.jemmy.operators.JToggleButtonOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.ide.ProjectSupport;
 
 /** Test JSF support.
@@ -77,7 +77,7 @@ import org.netbeans.junit.ide.ProjectSupport;
  * @author Lukasz Grela
  * @author Jiri Skrivanek
  */
-public class JsfFunctionalTest extends JellyTestCase{
+public class JsfFunctionalTest extends J2eeTestCase{
     
     public static final String PROJECT_NAME = "myjsfproject";
     public static final String WELCOME_JSP = "welcomeJSF.jsp";
@@ -95,30 +95,23 @@ public class JsfFunctionalTest extends JellyTestCase{
         super(name);
     }
     
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new JsfFunctionalTest("testCreateWebProjectWithJSF"));
-        suite.addTest(new JsfFunctionalTest("testManagedBeanWizard"));
-        suite.addTest(new JsfFunctionalTest("testManagedBeanDelete"));
-        suite.addTest(new JsfFunctionalTest("testAddManagedBean"));
-        suite.addTest(new JsfFunctionalTest("testAddNavigationRule"));
-        suite.addTest(new JsfFunctionalTest("testAddNavigationCase"));
-        suite.addTest(new JsfFunctionalTest("testAddNavigationCaseWithNewRule"));
-        suite.addTest(new JsfFunctionalTest("testAddJSFToProject"));
-        suite.addTest(new JsfFunctionalTest("testJSFPalette"));
-        return suite;
+    public static Test suite() {
+        return NbModuleSuite.create(addServerTests(NbModuleSuite.createConfiguration(JsfFunctionalTest.class),
+                "testCreateWebProjectWithJSF",
+                "testManagedBeanWizard",
+                "testManagedBeanDelete",
+                "testAddManagedBean",
+                "testAddNavigationRule",
+                "testAddNavigationCase",
+                "testAddNavigationCaseWithNewRule",
+                "testAddJSFToProject",
+                "testJSFPalette"
+                ));
     }
     
     @Override
     public void setUp() {
         System.out.println("### "+getName()+" ###");
-    }
-    
-    /** Use for internal test execution inside IDE
-     * @param args command line arguments
-     */
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(suite());
     }
     
     public void testCreateWebProjectWithJSF() throws IOException {
@@ -138,15 +131,19 @@ public class JsfFunctionalTest extends JellyTestCase{
         lop.setProjectName(PROJECT_NAME);
         lop.setProjectLocation(getDataDir().getCanonicalPath());
         lop.next();
+        lop.next();
         NewProjectWizardOperator frameworkStep = new NewProjectWizardOperator();
-        // select JavaServer Faces within Visual Web JavaServer Faces, JavaServer Faces, Struts 1.2.9
+        // select JavaServer Faces
         JTableOperator tableOper = new JTableOperator(frameworkStep);
-        if(tableOper.getRowCount() > 2) {
-            // when Visual Web JSF available
-            tableOper.selectCell(1, 0);
-        } else {
-            tableOper.selectCell(0, 0);
+        boolean found = false;
+        for(int i=0; i<tableOper.getRowCount(); i++) {
+            if(tableOper.getValueAt(i, 1).toString().startsWith("org.netbeans.modules.web.jsf.JSFFrameworkProvider")) { // NOI18N
+                tableOper.selectCell(i, 0);
+                found = true;
+                break;
+            }
         }
+        assertTrue("JavaServer Faces framework not found.", found);
         frameworkStep.finish();
         ProjectSupport.waitScanFinished();
         // Check project contains all needed files.
@@ -326,6 +323,7 @@ public class JsfFunctionalTest extends JellyTestCase{
         NewWebProjectNameLocationStepOperator lop = new NewWebProjectNameLocationStepOperator();
         lop.setProjectName(PROJECT_NAME+"2");
         lop.setProjectLocation(getDataDir().getCanonicalPath());
+        lop.next();
         lop.finish();
         
         // add JSF framework using project properties
