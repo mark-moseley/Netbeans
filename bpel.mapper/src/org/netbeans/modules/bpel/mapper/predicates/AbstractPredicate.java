@@ -22,19 +22,19 @@ package org.netbeans.modules.bpel.mapper.predicates;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.xam.Named;
 import org.netbeans.modules.xml.xpath.ext.XPathPredicateExpression;
-import org.netbeans.modules.xml.xpath.ext.XPathSchemaContext;
+import org.netbeans.modules.xml.xpath.ext.schema.resolver.XPathSchemaContext;
+import org.netbeans.modules.xml.xpath.ext.XPathSchemaContextHolder;
+import org.netbeans.modules.xml.xpath.ext.XPathUtils;
 
 /**
  * The base class for different kind of Predicated Schema components.
  * @author nk160297
  */
-public abstract class AbstractPredicate {
+public abstract class AbstractPredicate implements XPathSchemaContextHolder {
 
-    public abstract XPathSchemaContext getContext();
+    public abstract SchemaComponent getSComponent();
     
     public abstract XPathPredicateExpression[] getPredicates();
-    
-    public abstract SchemaComponent getSComponent();
     
     public abstract void setPredicates(XPathPredicateExpression[] newPArr);
     
@@ -51,30 +51,8 @@ public abstract class AbstractPredicate {
         }
     }
     
-    public boolean hasSamePredicates(XPathPredicateExpression[] predArr) {
-        XPathPredicateExpression[] myPredArr = getPredicates();
-        //
-        // Compare predicates count
-        int counter = myPredArr == null ? 0 : myPredArr.length;
-        int otherCount = predArr == null ? 0 : predArr.length;
-        if (counter != otherCount) {
-            return false;
-        }
-        // Compare predicates one by one
-        for (int index = 0; index < counter; index++) {
-            XPathPredicateExpression myPredicate = myPredArr[index];
-            XPathPredicateExpression otherPredicate = predArr[index];
-            String myPredText = myPredicate.getExpressionString();
-            String otherPredText = otherPredicate.getExpressionString();
-            if (!(myPredText.equals(otherPredText))) {
-                return false;
-            }
-        }
-        return true;
-    }
-    
     public boolean hasSameContext(XPathSchemaContext context) {
-        XPathSchemaContext myContext = getContext();
+        XPathSchemaContext myContext = getSchemaContext();
         if (myContext == null) {
             return false;
         }
@@ -90,8 +68,8 @@ public abstract class AbstractPredicate {
         //
         AbstractPredicate comp2 = (AbstractPredicate)obj;
         //
-        XPathSchemaContext mySContext = getContext();
-        if (mySContext == null || comp2.getContext() == null) {
+        XPathSchemaContext mySContext = getSchemaContext();
+        if (mySContext == null || comp2.getSchemaContext() == null) {
             // 
             // Compare Schema component
             SchemaComponent mySchemaComp = getSComponent();
@@ -100,14 +78,14 @@ public abstract class AbstractPredicate {
             }
         } else {
             // Compare context
-            if (!(comp2.getContext().equalsChain(mySContext))) {
+            if (!(comp2.getSchemaContext().equalsChain(mySContext))) {
                 return false;
             }
         }
         //
         // Compare predicates 
         XPathPredicateExpression[] otherPredicateArr = comp2.getPredicates();
-        return hasSamePredicates(otherPredicateArr);        
+        return XPathUtils.samePredicatesArr(getPredicates(), otherPredicateArr);        
     }
 
     public String getDisplayName() {
@@ -118,7 +96,7 @@ public abstract class AbstractPredicate {
     @Override
     public String toString() {
         String contextText = null;
-        XPathSchemaContext mySContext = getContext();
+        XPathSchemaContext mySContext = getSchemaContext();
         if (mySContext != null) {
             contextText = mySContext.toString();
         }
@@ -130,4 +108,7 @@ public abstract class AbstractPredicate {
         }
     }
     
+    public void setSchemaContext(XPathSchemaContext newContext) {
+        throw new UnsupportedOperationException("Not supported"); // NOI18N
+    }
 } 

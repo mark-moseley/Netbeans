@@ -18,15 +18,16 @@
  */
 package org.netbeans.modules.bpel.nodes;
 
+import org.netbeans.modules.bpel.nodes.BpelNode;
 import java.awt.Image;
 import org.netbeans.modules.bpel.editors.api.nodes.NodeType;
 import org.netbeans.modules.bpel.properties.Constants;
 import org.netbeans.modules.bpel.editors.api.Constants.VariableStereotype;
+import org.netbeans.modules.bpel.editors.api.EditorUtil;
 import org.netbeans.modules.bpel.properties.props.PropertyUtils;
 import org.openide.nodes.Sheet;
 import org.openide.util.Lookup;
 import static org.netbeans.modules.bpel.properties.PropertyType.*;
-import org.netbeans.modules.bpel.properties.Util;
 import org.netbeans.modules.soa.ui.nodes.NodesTreeParams;
 import org.netbeans.modules.xml.wsdl.model.Message;
 import org.openide.nodes.Children;
@@ -68,7 +69,7 @@ public class MessageTypeNode extends BpelNode<Message> {
                 boolean isTargetNodeClass =
                         treeParams.isTargetNodeClass(this.getClass());
                 if (isTargetNodeClass) {
-                    result = Util.getAccentedString(result);
+                    result = EditorUtil.getAccentedString(result);
                 }
             }
         }

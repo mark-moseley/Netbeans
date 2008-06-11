@@ -24,9 +24,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import org.netbeans.modules.bpel.mapper.cast.AbstractPseudoComp;
 import org.netbeans.modules.bpel.mapper.predicates.PredicateManager;
 import org.netbeans.modules.bpel.mapper.multiview.BpelDesignContext;
 import org.netbeans.modules.bpel.mapper.predicates.AbstractPredicate;
+import org.netbeans.modules.bpel.mapper.predicates.SpecialStepManager;
+import org.netbeans.modules.bpel.mapper.cast.AbstractTypeCast;
+import org.netbeans.modules.bpel.mapper.cast.CastManager;
+import org.netbeans.modules.bpel.mapper.cast.PseudoCompManager;
 import org.netbeans.modules.bpel.mapper.tree.spi.MapperTreeExtensionModel;
 import org.netbeans.modules.bpel.mapper.tree.spi.TreeItemInfoProvider;
 import org.netbeans.modules.bpel.model.api.AbstractVariableDeclaration;
@@ -36,7 +41,6 @@ import org.netbeans.modules.bpel.model.api.references.SchemaReference;
 import org.netbeans.modules.bpel.model.api.references.WSDLReference;
 import org.netbeans.modules.bpel.model.api.support.VisibilityScope;
 import org.netbeans.modules.bpel.mapper.tree.spi.MapperTreeModel;
-import org.netbeans.modules.bpel.mapper.tree.spi.RestartableIterator;
 import org.netbeans.modules.bpel.model.api.Process;
 import org.netbeans.modules.xml.xpath.ext.schema.FindAllChildrenSchemaVisitor;
 import org.netbeans.modules.xml.schema.model.Attribute;
@@ -47,6 +51,10 @@ import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.wsdl.model.Message;
 import org.netbeans.modules.xml.wsdl.model.Part;
 import org.netbeans.modules.xml.xam.dom.NamedComponentReference;
+import org.netbeans.modules.xml.xpath.ext.LocationStep;
+import org.netbeans.modules.xml.xpath.ext.schema.resolver.SchemaCompHolder;
+import org.netbeans.modules.xml.xpath.ext.schema.resolver.XPathSchemaContext;
+import org.netbeans.modules.xml.xpath.ext.schema.resolver.XPathSchemaContext.SchemaCompPair;
 
 /**
  * The implementation of the MapperTreeModel for the variables' tree.
@@ -56,35 +64,47 @@ import org.netbeans.modules.xml.xam.dom.NamedComponentReference;
 public class VariableTreeModel implements MapperTreeExtensionModel<Object> {
 
     private FindAllChildrenSchemaVisitor sSchemaSearcher = 
-            new FindAllChildrenSchemaVisitor(true, true);
+            new FindAllChildrenSchemaVisitor(true, true, true);
     
-    private VisibilityScope mVisScope;
     private Set<VariableDeclaration> mOverriddenVariables;
     private BpelDesignContext mDesignContext;
     private PredicateManager mPredManager;
+    private SpecialStepManager mSStepManager;
+    private CastManager mCastManager;
+    private PseudoCompManager mPseudoCompManager;
     private TreeItemInfoProvider mTreeInfoProvider;
     
-    public VariableTreeModel(BpelDesignContext context) {
-        this(context, new PredicateManager());
-    }
-    
-    public VariableTreeModel(BpelDesignContext context, PredicateManager predManager) {
-        this(context, predManager, VariableTreeInfoProvider.getInstance());
+    public VariableTreeModel(BpelDesignContext context, boolean leftTree, 
+            Object synchSource) {
+        this(context, new PredicateManager(), new SpecialStepManager(), 
+                new CastManager(leftTree, synchSource), 
+                new PseudoCompManager(leftTree, synchSource));
     }
     
     public VariableTreeModel(BpelDesignContext context, 
-            PredicateManager predManager, TreeItemInfoProvider treeInfoProvider) {
-        mDesignContext = context;
-        mPredManager = predManager;
-        mTreeInfoProvider = treeInfoProvider;
-        //
-        mVisScope = new VisibilityScope(context.getSelectedEntity());
-        mOverriddenVariables = VisibilityScope.Utils.
-                getAllOverridenVariables(mVisScope);
+            PredicateManager predManager, SpecialStepManager stepManager, 
+            CastManager castManager, PseudoCompManager pseudoCompManager) {
+        this(context, predManager, stepManager, castManager, pseudoCompManager, 
+                VariableTreeInfoProvider.getInstance());
     }
     
-    public List getChildren(RestartableIterator<Object> dataObjectPathItr) {
-        Object parent = dataObjectPathItr.next();
+    public VariableTreeModel(BpelDesignContext context, 
+            PredicateManager predManager, SpecialStepManager stepManager, 
+            CastManager castManager, PseudoCompManager pseudoCompManager, 
+            TreeItemInfoProvider treeInfoProvider) {
+        mDesignContext = context;
+        mPredManager = predManager;
+        mSStepManager = stepManager;
+        mCastManager = castManager;
+        mPseudoCompManager = pseudoCompManager;
+        mTreeInfoProvider = treeInfoProvider;
+        //
+        mOverriddenVariables = mDesignContext.getVisibilityScope().
+                getVisibleVariables().getAllOverridenVariables();
+    }
+    
+    public List getChildren(Iterable<Object> dataObjectPathItrb) {
+        Object parent = dataObjectPathItrb.iterator().next();
         if (parent == MapperTreeModel.TREE_ROOT) {
             Process process = mDesignContext.getBpelModel().getProcess();
             return Collections.singletonList(process);
@@ -93,7 +113,7 @@ public class VariableTreeModel implements MapperTreeExtensionModel<Object> {
             //
             // Look for the parent in the scope chain.
             List<VariableDeclarationScope> scopeChain = 
-                    mVisScope.getVarScopeChain();
+                    mDesignContext.getVisibilityScope().getVarScopeChain();
             int parentIndex = -1;
             for (int index = 0; index < scopeChain.size(); index++) {
                 VariableDeclarationScope scopeFromChain = scopeChain.get(index);
@@ -122,12 +142,25 @@ public class VariableTreeModel implements MapperTreeExtensionModel<Object> {
             //
             List<Object> childrenList = new ArrayList<Object>();
             for (VariableDeclaration childVar : varList) {
+                AbstractVariableDeclaration var = null;
                 if (childVar == parent) {
                     VariableDeclarationWrapper wrapper = 
                             new VariableDeclarationWrapper(childVar);
-                    childrenList.add(wrapper);
+                    var = wrapper;
                 } else {
-                    childrenList.add(childVar);
+                    var = childVar;
+                }
+                //
+                if (var != null) {
+                    childrenList.add(var);
+                    //
+                    // Add casted variables
+                    if (mCastManager != null) {
+                        // Look for the corresponding cast nodes.
+                        List<AbstractTypeCast> typeCast = 
+                                mCastManager.getCastedVariables(var, null);
+                        childrenList.addAll(typeCast);
+                    }
                 }
             }
             //
@@ -141,22 +174,42 @@ public class VariableTreeModel implements MapperTreeExtensionModel<Object> {
             WSDLReference<Message> msgRef = varDecl.getMessageType();
             if (msgRef != null) {
                 Message msg = msgRef.get();
-                Collection<Part> parts = msg.getParts();
-                ArrayList<Part> partList = new ArrayList<Part>(parts);
-                return partList;
+                if (msg != null) {
+                    Collection<Part> parts = msg.getParts();
+                    if (parts != null && !parts.isEmpty()) {
+                        if (mCastManager == null) {
+                            ArrayList<Part> partList = parts != null ? 
+                                new ArrayList<Part>(parts) : new ArrayList<Part>();
+                            return partList;
+                        } else {
+                            List<Object> childrenList = new ArrayList<Object>();
+                            childrenList.addAll(parts);
+                            //
+                            // Add casted parts
+                            // Look for the corresponding cast nodes.
+                            for (Part part : parts) {
+                                List<AbstractTypeCast> typeCast = 
+                                        mCastManager.getCastedVariables(varDecl, part);
+                                childrenList.addAll(typeCast);
+                            }
+                            //
+                            return childrenList;
+                        }
+                    }
+                }
             } else {
                 SchemaReference<GlobalType> gTypeRef = varDecl.getType();
                 if (gTypeRef != null) {
                     GlobalType gType = gTypeRef.get();
                     if (gType != null) {
-                        return loadSchemaComponents(dataObjectPathItr, gType);
+                        return loadSchemaComponents(dataObjectPathItrb, gType);
                     }
                 } else {
                     SchemaReference<GlobalElement> gElemRef = varDecl.getElement();
                     if (gElemRef != null) {
                         GlobalElement gElem = gElemRef.get();
                         if (gElem != null) {
-                            return loadSchemaComponents(dataObjectPathItr, gElem);
+                            return loadSchemaComponents(dataObjectPathItrb, gElem);
                         }
                     }
                 }
@@ -167,23 +220,46 @@ public class VariableTreeModel implements MapperTreeExtensionModel<Object> {
             if (gTypeRef != null) {
                 GlobalType gType = gTypeRef.get();
                 if (gType != null) {
-                    return loadSchemaComponents(dataObjectPathItr, gType);
+                    return loadSchemaComponents(dataObjectPathItrb, gType);
                 }
             } else {
                 NamedComponentReference<GlobalElement> gElemRef = part.getElement();
                 if (gElemRef != null) {
                     GlobalElement gElem = gElemRef.get();
                     if (gElem != null) {
-                        return loadSchemaComponents(dataObjectPathItr, gElem);
+                        return loadSchemaComponents(dataObjectPathItrb, gElem);
                     }
                 }
             }
         } else if (parent instanceof SchemaComponent) {
-            return loadSchemaComponents(dataObjectPathItr, (SchemaComponent)parent);
+            return loadSchemaComponents(dataObjectPathItrb, (SchemaComponent)parent);
         } else if (parent instanceof AbstractPredicate) {
             SchemaComponent sComp = ((AbstractPredicate)parent).getSComponent();
             if (sComp != null) {
-                return loadSchemaComponents(dataObjectPathItr, sComp);
+                return loadSchemaComponents(dataObjectPathItrb, sComp);
+            }
+        } else if (parent instanceof LocationStep) {
+            LocationStep step = (LocationStep)parent;
+            XPathSchemaContext context = step.getSchemaContext();
+            if (context != null) {
+                Set<SchemaCompPair> sCompPairs = context.getSchemaCompPairs();
+                ArrayList result = new ArrayList();
+                for (SchemaCompPair sCompPair : sCompPairs) {
+                    SchemaCompHolder sCompHolder = sCompPair.getCompHolder();
+                    SchemaComponent sComp = sCompHolder.getSchemaComponent();
+                    result.addAll(loadSchemaComponents(dataObjectPathItrb, sComp));
+                }
+                return result;
+            }
+        } else if (parent instanceof AbstractTypeCast) {
+            GlobalType type = ((AbstractTypeCast)parent).getType();
+            if (type != null) {
+                return loadSchemaComponents(dataObjectPathItrb, type);
+            }
+        } else if (parent instanceof AbstractPseudoComp) {
+            GlobalType type = ((AbstractPseudoComp)parent).getType();
+            if (type != null) {
+                return loadSchemaComponents(dataObjectPathItrb, type);
             }
         }
         //
@@ -194,25 +270,66 @@ public class VariableTreeModel implements MapperTreeExtensionModel<Object> {
         return mPredManager;
     }
     
+    public SpecialStepManager getSStepManager() {
+        return mSStepManager;
+    }
+    
+    public CastManager getCastManager() {
+        return mCastManager;
+    }
+
+    public PseudoCompManager getPseudoCompManager() {
+        return mPseudoCompManager;
+    }
+
     private List loadSchemaComponents(
-            RestartableIterator<Object> dataObjectPathItr, 
-            SchemaComponent parent) {
+            Iterable<Object> dataObjectPathItrb, SchemaComponent parent) {
         //
         sSchemaSearcher.lookForSubcomponents(parent);
         List<SchemaComponent> childrenComp = sSchemaSearcher.getFound();
         //
-        if (mPredManager == null) {
+        if (mPredManager == null && mSStepManager == null && mCastManager == null) {
             return childrenComp;
         }
         //
-        List<Object> allChildren = new ArrayList<Object>(childrenComp.size() + 2);
+        List<Object> allChildren = new ArrayList<Object>(childrenComp.size() + 5);
+        if (mSStepManager != null) {
+            //
+            // Look for the corresponding special nodes (text(), node(), comment()).
+            List<LocationStep> step = 
+                    mSStepManager.getSteps(dataObjectPathItrb);
+            if (step != null && !step.isEmpty()) {
+                allChildren.addAll(step);
+            }
+        }
+        //
         for (SchemaComponent sComp : childrenComp) {
             allChildren.add(sComp);
             //
-            // Look for the corresponding predicated nodes.
-            List<AbstractPredicate> predicates = 
-                    mPredManager.getPredicates(dataObjectPathItr, sComp);
-            allChildren.addAll(predicates);
+            if (mPredManager != null) {
+                // Look for the corresponding predicated nodes.
+                List<AbstractPredicate> predicates = 
+                        mPredManager.getPredicates(dataObjectPathItrb, sComp);
+                allChildren.addAll(predicates);
+            }
+            //
+            if (mCastManager != null) {
+                // Look for the corresponding cast nodes.
+                List<AbstractTypeCast> typeCast = 
+                        mCastManager.getTypeCast(dataObjectPathItrb, sComp);
+                allChildren.addAll(typeCast);
+            }
+        }
+        //
+        // Add pseudo components to the end of list.
+        // It's not clear how to correlate a pseudo element with 
+        // the corresponding xsd:any. So the pseudo components are at the end of 
+        // children list.
+        if (mPseudoCompManager != null) {
+            // Look for the corresponding cast nodes.
+            List<AbstractPseudoComp> pseudoComp = 
+                    mPseudoCompManager.getPseudoComp(dataObjectPathItrb);
+            allChildren.addAll(pseudoComp);
         }
         //
         return allChildren;
@@ -226,7 +343,10 @@ public class VariableTreeModel implements MapperTreeExtensionModel<Object> {
         if (node instanceof Element || 
                 node instanceof Attribute ||
                 node instanceof Part || 
-                node instanceof AbstractPredicate) {
+                node instanceof AbstractPredicate ||
+                node instanceof LocationStep || 
+                node instanceof AbstractTypeCast || 
+                node instanceof AbstractPseudoComp) {
             return Boolean.TRUE;
         }
         //

@@ -25,9 +25,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import org.netbeans.modules.bpel.mapper.predicates.editor.PathConverter;
-import org.netbeans.modules.bpel.mapper.tree.spi.RestartableIterator;
+import org.netbeans.modules.bpel.mapper.tree.models.VariableTreeModel;
+import org.netbeans.modules.bpel.mapper.tree.spi.MapperTreeModel;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.xpath.ext.XPathPredicateExpression;
+import org.netbeans.modules.xml.xpath.ext.XPathUtils;
 
 /**
  * The class collects all predicate expressions which are in the edited 
@@ -36,19 +38,23 @@ import org.netbeans.modules.xml.xpath.ext.XPathPredicateExpression;
  * The predicate manager keeps the location of predicate in term of
  * schema components' path.
  *
- * The set of predicates is populated from XPath model(s). The manager can
- * be populated entirely or can track small model's changes only.
- * It produces notification messages about adding, editing or deleting of
- * the predicates set.
- *
  * The main intention of the predicate manager is to provide showing of
  * predicates in the mapper source and destination trees.
  * 
- * TODO: remove unused code later. It is commented now.
- *
  * @author nk160297
  */
 public class PredicateManager {
+
+    public static PredicateManager getPredicateManager(MapperTreeModel treeModel) {
+        VariableTreeModel varTreeModel = MapperTreeModel.Utils.
+                findExtensionModel(treeModel, VariableTreeModel.class);
+        if (varTreeModel != null) {
+            PredicateManager predManager = varTreeModel.getPredicateManager();
+            return predManager;
+        }
+        //
+        return null;
+    }
     
     // The cache of predicates.
     private LinkedList<CachedPredicate> mPredicates;
@@ -58,12 +64,12 @@ public class PredicateManager {
     }
     
     public List<AbstractPredicate> getPredicates(
-            RestartableIterator<Object> parentPath, SchemaComponent sComp) {
+            Iterable<Object> parentPathItrb, SchemaComponent sComp) {
         //    
         ArrayList<AbstractPredicate> result = new ArrayList<AbstractPredicate>();
         
         for (CachedPredicate cPred : mPredicates) {
-            if (cPred.hasSameBase(sComp) && cPred.hasSameLocation(parentPath)) {
+            if (cPred.hasSameBase(sComp) && cPred.hasSameLocation(parentPathItrb)) {
                 result.add(cPred.getPredicate());
             }
         }
@@ -71,28 +77,27 @@ public class PredicateManager {
         return result;
     }
     
-    public void addPredicate(List<Object> parentPath, AbstractPredicate pred) {
+    public boolean addPredicate(List<Object> parentPath, AbstractPredicate pred) {
         for (CachedPredicate cPred : mPredicates) {
             if (cPred.hasSameLocation(parentPath) && cPred.hasSamePredicate(pred)) {
                 // the same predicate already in cache
-                return;
+                return false;
             }
         }
         //
         CachedPredicate cPredicate = new CachedPredicate(parentPath, pred);
         mPredicates.add(cPredicate);
+        return true;
     }
 
-    public boolean addPredicate(RestartableIterator<Object> parentItr, 
+    public boolean addPredicate(Iterable<Object> parentItrb, 
             AbstractPredicate pred) {
         //
         List<Object> parentPath = 
-                PathConverter.constructPredicateLocationtList(parentItr);
+                PathConverter.constructObjectLocationtList(parentItrb, true, false);
         //
         if (parentPath != null) {
-            CachedPredicate cPredicate = new CachedPredicate(parentPath, pred);
-            mPredicates.add(cPredicate);
-            return true;
+            return addPredicate(parentPath, pred);
         }
         //
         return false;
@@ -191,7 +196,7 @@ public class PredicateManager {
                 XPathPredicateExpression[] predArr) {
             AbstractPredicate pComp = getPredicate();
             return pComp.getSComponent().equals(schemaComp) &&
-                    pComp.hasSamePredicates(predArr);
+                    XPathUtils.samePredicatesArr(pComp.getPredicates(), predArr);
         }
         
         public boolean hasSamePredicate(AbstractPredicate pred) {
@@ -199,14 +204,8 @@ public class PredicateManager {
             return pComp.equals(pred);
         }
         
-        public boolean hasSameLocation(RestartableIterator parentPathItr) {
-            parentPathItr.restart();
-            return hasSameLocationImpl(parentPathItr);
-        }
-        
-        public boolean hasSameLocation(List<Object> parentPath) {
-            Iterator externalItr = parentPath.iterator();
-            return hasSameLocationImpl(externalItr);
+        public boolean hasSameLocation(Iterable parentPathItrb) {
+            return hasSameLocationImpl(parentPathItrb.iterator());
         }
         
         private boolean hasSameLocationImpl(Iterator externalItr) {

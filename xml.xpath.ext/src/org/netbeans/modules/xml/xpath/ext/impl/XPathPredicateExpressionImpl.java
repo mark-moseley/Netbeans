@@ -22,7 +22,7 @@ package org.netbeans.modules.xml.xpath.ext.impl;
 import org.netbeans.modules.xml.xpath.ext.XPathExpression;
 import org.netbeans.modules.xml.xpath.ext.XPathModel;
 import org.netbeans.modules.xml.xpath.ext.XPathPredicateExpression;
-import org.netbeans.modules.xml.xpath.ext.XPathSchemaContext;
+import org.netbeans.modules.xml.xpath.ext.schema.resolver.XPathSchemaContext;
 import org.netbeans.modules.xml.xpath.ext.visitor.XPathVisitor;
 
 /**
@@ -57,9 +57,12 @@ public class XPathPredicateExpressionImpl extends XPathExpressionImpl
     }
     
     public XPathSchemaContext getSchemaContext() {
-        if (!((XPathModelImpl)myModel).isInResolveMode() && 
-                mSchemaContext == null) {
-            myModel.resolveExtReferences(false);
+        if (mSchemaContext == null) {
+            if (myModel.getRootExpression() != null) {
+                myModel.resolveExtReferences(false);
+            } else {
+                myModel.resolveExpressionExtReferences(this);
+            }
         }
         return mSchemaContext;
     }

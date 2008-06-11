@@ -19,8 +19,13 @@
 package org.netbeans.modules.soa.ui.form.valid;
 
 import java.awt.Container;
+import java.util.List;
+import java.util.concurrent.Callable;
 import org.netbeans.modules.soa.ui.UserNotification;
 import org.netbeans.modules.soa.ui.form.FormLifeCycle;
+import org.netbeans.modules.soa.ui.form.valid.Validator.Reason;
+import org.netbeans.modules.soa.ui.form.valid.Validator.Severity;
+import org.openide.ErrorManager;
 
 /**
  * The dialog descriptor which supports form life cycle and validation.
@@ -28,6 +33,8 @@ import org.netbeans.modules.soa.ui.form.FormLifeCycle;
  * @author nk160297
  */
 public class DefaultDialogDescriptor extends AbstractDialogDescriptor {
+    
+    private Callable<Boolean> mOkButtonProcessor;
     
     public DefaultDialogDescriptor(Object innerPane, String title) {
         super(innerPane, title);
@@ -46,11 +53,43 @@ public class DefaultDialogDescriptor extends AbstractDialogDescriptor {
         }
         //
         if (vsManager.isValid()) {
-            setOptionClosable(btnOk, true);
+            // if (vsManager.hasWarnings()) {
+            //    String reason = vsManager.getReason();
+            //    if (reason != null && reason.length() != 0) {
+            //        UserNotification.askConfirmation(reason);
+            //    }
+            // }
+            //
+            if (mOkButtonProcessor != null) {
+                if (callProcessor()) {
+                    setOptionClosable(btnOk, true);
+                }
+            } else {
+                setOptionClosable(btnOk, true);
+            }
         } else {
-            String reason = vsManager.getReason();
-            if (reason != null && reason.length() != 0) {
-                UserNotification.showMessage(reason);
+            Reason errorReason = vsManager.getFistReason(Severity.ERROR);
+            if (errorReason != null) {
+                String text = errorReason.getText();
+                if (text != null && text.length() != 0) {
+                    UserNotification.showMessage(text);
+                }
+            } else {
+                List<Reason> warnReasonList = vsManager.getReasons(Severity.WARNING);
+                if (warnReasonList != null && !warnReasonList.isEmpty()) {
+                    for (Reason warnReason : warnReasonList) {
+                        String text = warnReason.getText();
+                        if (text != null && text.length() != 0) {
+                            boolean confirmed = 
+                                    UserNotification.showWarningMessage(text);
+                            if (!confirmed) {
+                                return;
+                            }
+                        }
+                    }
+                    //
+                    setOptionClosable(btnOk, true);
+                }                
             }
         }
     }
@@ -65,6 +104,30 @@ public class DefaultDialogDescriptor extends AbstractDialogDescriptor {
         }
     }
     
+    /**
+     * Calls the Ok Button processor.
+     * @return returns success status
+     */
+    private boolean callProcessor() {
+        boolean success = true;
+        try {
+            success = mOkButtonProcessor.call();
+        } catch (java.lang.Exception ex) {
+            success = false;
+            ErrorManager.getDefault().notify(ex);
+        }
+        return success;
+    }
+    
+    public Callable<Boolean> getOkButtonProcessor() {
+        return mOkButtonProcessor;
+    }
+    
+    public void setOkButtonProcessor(Callable<Boolean> processor) {
+        this.mOkButtonProcessor = processor;
+    }
+    
+    @Override
     public void setMessage(Object innerPane) {
         super.setMessage(innerPane);
     }

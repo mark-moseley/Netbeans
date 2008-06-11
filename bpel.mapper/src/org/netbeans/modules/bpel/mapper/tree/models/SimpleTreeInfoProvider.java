@@ -16,7 +16,6 @@
  * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  */
-
 package org.netbeans.modules.bpel.mapper.tree.models;
 
 import java.util.List;
@@ -25,11 +24,10 @@ import javax.swing.Icon;
 import javax.swing.tree.TreePath;
 import org.netbeans.modules.bpel.editors.api.nodes.NodeType;
 import org.netbeans.modules.bpel.mapper.tree.spi.TreeItemInfoProvider;
-import org.netbeans.modules.bpel.editors.api.utils.Util;
+import org.netbeans.modules.bpel.editors.api.EditorUtil;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.mapper.tree.images.NodeIcons;
 import org.netbeans.modules.bpel.mapper.tree.spi.MapperTcContext;
-import org.netbeans.modules.bpel.mapper.tree.spi.RestartableIterator;
 
 /**
  * The implementation of the TreeItemInfoProvider for target tree 
@@ -49,7 +47,7 @@ public class SimpleTreeInfoProvider implements TreeItemInfoProvider {
         if (treeItem instanceof BpelEntity) {
             Class<? extends BpelEntity> bpelInterface = 
                     ((BpelEntity)treeItem).getElementType();
-            NodeType nodeType = Util.getBasicNodeType(bpelInterface);
+            NodeType nodeType = EditorUtil.getBasicNodeType(bpelInterface);
             if (nodeType != null && nodeType != NodeType.UNKNOWN_TYPE) {
                 return nodeType.getDisplayName();
             }
@@ -61,7 +59,7 @@ public class SimpleTreeInfoProvider implements TreeItemInfoProvider {
         if (treeItem instanceof BpelEntity) {
             Class<? extends BpelEntity> bpelInterface = 
                     ((BpelEntity)treeItem).getElementType();
-            NodeType nodeType = Util.getBasicNodeType(bpelInterface);
+            NodeType nodeType = EditorUtil.getBasicNodeType(bpelInterface);
             if (nodeType != null && nodeType != NodeType.UNKNOWN_TYPE) {
                 Icon icon = nodeType.getIcon();
                 if (icon != null) {
@@ -79,12 +77,11 @@ public class SimpleTreeInfoProvider implements TreeItemInfoProvider {
 
     public List<Action> getMenuActions(MapperTcContext mapperTcContext, 
             boolean inLeftTree, TreePath treePath, 
-            RestartableIterator<Object> dataObjectPathItr) {
+            Iterable<Object> dataObjectPathItrb) {
         return null;
     }
 
-    public String getTooltipText(Object treeItem) {
+    public String getToolTipText(Iterable<Object> dataObjectPathItrb) {
         return null;
     }
-
 }

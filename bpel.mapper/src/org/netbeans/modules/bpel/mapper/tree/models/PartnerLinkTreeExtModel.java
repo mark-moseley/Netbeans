@@ -19,6 +19,7 @@
 
 package org.netbeans.modules.bpel.mapper.tree.models;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -29,7 +30,6 @@ import org.netbeans.modules.bpel.editors.api.nodes.NodeType;
 import org.netbeans.modules.bpel.mapper.tree.spi.MapperTcContext;
 import org.netbeans.modules.bpel.mapper.tree.spi.MapperTreeExtensionModel;
 import org.netbeans.modules.bpel.mapper.tree.spi.MapperTreeModel;
-import org.netbeans.modules.bpel.mapper.tree.spi.RestartableIterator;
 import org.netbeans.modules.bpel.mapper.tree.spi.TreeItemInfoProvider;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.PartnerLink;
@@ -59,8 +59,8 @@ public class PartnerLinkTreeExtModel
         mShowEndpointRef = showEndpointRef;
     }
     
-    public List getChildren(RestartableIterator<Object> dataObjectPathItr) {
-        Object parent = dataObjectPathItr.next();
+    public List getChildren(Iterable<Object> dataObjectPathItrb) {
+        Object parent = dataObjectPathItrb.iterator().next();
         if (parent == MapperTreeModel.TREE_ROOT) {
             Process process = mContextEntity.getBpelModel().getProcess();
             PartnerLinkContainer plContainer = process.getPartnerLinkContainer();
@@ -72,15 +72,53 @@ public class PartnerLinkTreeExtModel
         } else if (parent instanceof PartnerLinkContainer) {
             PartnerLinkContainer plContainer = (PartnerLinkContainer)parent;
             if (plContainer != null) {
-                return Arrays.asList(plContainer.getPartnerLinks());
+                return filterPartnerLink(
+                        !mShowEndpointRef ? Roles.PARTNER_ROLE : null, plContainer);
             }
         } else if (mShowEndpointRef && parent instanceof PartnerLink) {
-            return Arrays.asList(Roles.MY_ROLE, Roles.PARTNER_ROLE);
+            PartnerLink pl = (PartnerLink)parent;
+            List<Roles> rolesList = new ArrayList<Roles>();
+            if (pl.getMyRole() != null) {
+                rolesList.add(Roles.MY_ROLE);
+            }
+            if (pl.getPartnerRole() != null) {
+                rolesList.add(Roles.PARTNER_ROLE);
+            }
+            return rolesList;
         }
         //
         return null;
     }
 
+    private List<PartnerLink> filterPartnerLink(Roles filter, PartnerLinkContainer plc) {
+        if (plc == null) {
+            return Collections.emptyList();
+        }
+        PartnerLink[] pls = plc.getPartnerLinks();
+        if (filter == null) {
+            return Arrays.asList(pls);
+        }
+        List<PartnerLink> plsFiltred = new  ArrayList<PartnerLink>();
+        int l = pls.length;
+        if (Roles.MY_ROLE.equals(filter)) {
+            for (int i = 0; i < l; i++) {
+                PartnerLink pl = pls[i];
+                if (pl != null && pl.getMyRole() != null) {
+                    plsFiltred.add(pl);
+                }
+            }
+        } else if (Roles.PARTNER_ROLE.equals(filter)) {
+            for (int i = 0; i < l; i++) {
+                PartnerLink pl = pls[i];
+                if (pl != null && pl.getPartnerRole() != null) {
+                    plsFiltred.add(pl);
+                }
+            }
+        }
+        
+        return plsFiltred;
+    }
+    
     public Boolean isLeaf(Object node) {
         return null;
     }
@@ -114,11 +152,12 @@ public class PartnerLinkTreeExtModel
 
     public List<Action> getMenuActions(MapperTcContext mapperTcContext, 
             boolean inLeftTree, TreePath treePath, 
-            RestartableIterator<Object> dataObjectPathItr) {
+            Iterable<Object> dataObjectPathItr) {
         return null;
     }
 
-    public String getTooltipText(Object treeItem) {
+    public String getToolTipText(Iterable<Object> dataObjectPathItrb) {
+        Object treeItem = dataObjectPathItrb.iterator().next();
         if (treeItem instanceof Roles) {
             return ((Roles)treeItem).toString();
         }

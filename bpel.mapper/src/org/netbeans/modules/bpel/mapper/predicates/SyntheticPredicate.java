@@ -21,7 +21,7 @@ package org.netbeans.modules.bpel.mapper.predicates;
 
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.xpath.ext.XPathPredicateExpression;
-import org.netbeans.modules.xml.xpath.ext.XPathSchemaContext;
+import org.netbeans.modules.xml.xpath.ext.schema.resolver.XPathSchemaContext;
 
 /**
  * This predicate isn't related with any XPath model
@@ -42,7 +42,7 @@ public class SyntheticPredicate extends AbstractPredicate {
         mPredicateArr = predicateArr;
     }
     
-    public XPathSchemaContext getContext() {
+    public XPathSchemaContext getSchemaContext() {
         return mSContext;
     }
     
