@@ -55,8 +55,6 @@ import org.netbeans.modules.uml.drawingarea.view.UMLLabelWidget;
  */
 public class DerivationLabelManager extends BasicUMLLabelManager
 {
-    private static final String BINDING = "Binding"; //NOI18N
-    
     public DerivationLabelManager(ConnectionWidget widget)
     {
         super(widget);
@@ -98,9 +96,11 @@ public class DerivationLabelManager extends BasicUMLLabelManager
     {
         IDerivation element = (IDerivation) getModelElement();
         String retVal = "<<binding>> <"; // NOI18N
+        int len0=retVal.length();
             
         for(IUMLBinding binding : element.getBindings())
         {
+            if(retVal.length()>len0)retVal+=", ";
             retVal += binding.getFormal().getNameWithAlias();
             retVal += "->"; // NO18N
             retVal += binding.getActual().getNameWithAlias();
