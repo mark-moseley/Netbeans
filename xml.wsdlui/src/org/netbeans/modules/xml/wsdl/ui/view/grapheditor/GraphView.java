@@ -71,6 +71,8 @@ import org.netbeans.modules.xml.wsdl.ui.view.grapheditor.widget.MessagesWidget;
 import org.netbeans.modules.xml.wsdl.ui.view.grapheditor.widget.PartnerScene;
 import org.netbeans.modules.xml.wsdl.ui.view.grapheditor.widget.WidgetConstants;
 import org.netbeans.modules.xml.xam.Component;
+//import org.netbeans.modules.print.api.PrintManager;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -228,6 +230,10 @@ public class GraphView extends JPanel {
         }
         toolbar.add(showHideMessageToggle);
 
+        // vlv: print
+// todo add after # 136903
+//        toolbar.addSeparator();
+//        toolbar.add(PrintManager.getDefault().getPrintPreviewAction());
     }
 
     /**
