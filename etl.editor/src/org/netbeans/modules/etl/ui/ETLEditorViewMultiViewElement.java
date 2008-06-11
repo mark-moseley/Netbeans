@@ -51,7 +51,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import javax.swing.Action;
-import javax.swing.JSeparator;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeListener;
 import javax.swing.text.Document;
@@ -64,12 +63,10 @@ import org.netbeans.core.spi.multiview.MultiViewElement;
 import org.netbeans.core.spi.multiview.MultiViewElementCallback;
 import org.netbeans.core.spi.multiview.MultiViewFactory;
 import org.netbeans.modules.etl.logger.Localizer;
-import org.netbeans.modules.etl.logger.LogUtil;
 import org.netbeans.modules.etl.model.ETLDefinition;
 import org.netbeans.modules.etl.ui.palette.PaletteSupport;
 import org.netbeans.modules.sql.framework.model.utils.SQLObjectUtil;
 import org.netbeans.modules.etl.ui.view.ETLCollaborationTopPanel;
-import org.netbeans.modules.sql.framework.ui.graph.impl.GraphView;
 import org.netbeans.spi.palette.PaletteController;
 import org.openide.ErrorManager;
 import org.openide.awt.StatusDisplayer;
@@ -77,6 +74,7 @@ import org.openide.awt.UndoRedo;
 import org.openide.cookies.SaveCookie;
 import org.openide.nodes.Node;
 import org.openide.util.Lookup;
+import org.openide.util.Utilities;
 import org.openide.util.lookup.AbstractLookup;
 import org.openide.util.lookup.InstanceContent;
 import org.openide.util.lookup.Lookups;
@@ -98,7 +96,7 @@ public class ETLEditorViewMultiViewElement extends CloneableTopComponent
     private ETLEditorSupport mEditorSupport = null;
     private transient InstanceContent nodesHack;
     private transient javax.swing.JLabel errorLabel = new javax.swing.JLabel();
-    private static transient final Logger mLogger = LogUtil.getLogger(ETLEditorViewMultiViewElement.class.getName());
+    private static transient final Logger mLogger = Logger.getLogger(ETLEditorViewMultiViewElement.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
     
     public ETLEditorViewMultiViewElement() {
@@ -111,9 +109,9 @@ public class ETLEditorViewMultiViewElement extends CloneableTopComponent
         try {
             initialize();
         } catch (Exception ex) {
-            String nbBundle1 = mLoc.t("PRSR001: Error in creating eTL Editor view");
+            String nbBundle1 = mLoc.t("BUND177: Error in creating eTL Editor view");
             ErrorManager.getDefault().log(ErrorManager.ERROR,
-                  Localizer.parse(nbBundle1) + ex.getMessage());
+                 nbBundle1.substring(15) + ex.getMessage());
         }
     }
 
@@ -155,9 +153,41 @@ public class ETLEditorViewMultiViewElement extends CloneableTopComponent
         //
         // see http://www.netbeans.org/issues/show_bug.cgi?id=67257
         //
-        PaletteController controller = createPalette();
+        final PaletteController controller = createPalette();
         nodesHack = new InstanceContent();
         nodesHack.add(controller);
+        /*controller.addPropertyChangeListener( new PropertyChangeListener() {
+            public void propertyChange(PropertyChangeEvent evt) {
+                if( PaletteController.PROP_SELECTED_ITEM.equals( evt.getPropertyName() ) ) {
+                    Lookup selItem = controller.getSelectedItem();
+                    if( null != selItem ) {
+                        ActiveEditorDrop selNode = (ActiveEditorDrop)selItem.lookup( ActiveEditorDrop.class );
+                        if(null != selNode){
+                            StatusDisplayer.getDefault().setStatusText("Selected "+selNode);
+                        }
+                    }
+                }
+            }
+            
+        });
+        setDropTarget(new DropTarget(this,new DropTargetListener() {
+            public void dragEnter(DropTargetDragEvent dtde) {            
+            }
+
+            public void dragOver(DropTargetDragEvent dtde) {                
+            }
+
+            public void dropActionChanged(DropTargetDragEvent dtde) {
+            }
+
+            public void dragExit(DropTargetEvent dte) {
+            }
+
+            public void drop(DropTargetDropEvent dtde) {
+              NotifyDescriptor d =new NotifyDescriptor.Message("Drop",NotifyDescriptor.INFORMATION_MESSAGE);
+              DialogDisplayer.getDefault().notify(d);
+            }
+        }));*/
         return new ProxyLookup(new Lookup[]{
             //
             // other than nodesHack what else do we need in the associated
@@ -232,10 +262,10 @@ public class ETLEditorViewMultiViewElement extends CloneableTopComponent
         }
         getETLDataObject().createNodeDelegate();
         DataObjectProvider.activeDataObject = dataObject;
-        GraphView graphView = (GraphView) this.topPanel.getGraphView();
+        /*GraphView graphView = (GraphView) this.topPanel.getGraphView();
         if (null != graphView) {
             graphView.setObserved(graphView);
-        }
+        }*/
     }
 
     @Override
@@ -281,8 +311,8 @@ public class ETLEditorViewMultiViewElement extends CloneableTopComponent
         //if it comes here, either the schema is not well-formed or invalid
         if (model == null) {
             if (errorMessage == null) {
-                String nbBundle2 = mLoc.t("PRSR001: The etl is not well-formed");
-                errorMessage = Localizer.parse(nbBundle2);
+                String nbBundle2 = mLoc.t("BUND178: The etl is not well-formed");
+                errorMessage = nbBundle2.substring(15);
             }
         }
 
@@ -393,22 +423,10 @@ public class ETLEditorViewMultiViewElement extends CloneableTopComponent
         for (Action action : super.getActions()) {            
             actionsList.add(action);
         }
-        actionsList.add(addFromLayers());
+        actionsList.addAll(Utilities.actionsForPath("Projects/Actions"));
         Action[] actions = new Action[actionsList.size()];
         actionsList.toArray(actions);
         return actions;
     }
 
-    private Action addFromLayers() {
-        Action action = null;
-        Lookup look = Lookups.forPath("Projects/Actions");
-        for (Object next : look.lookupAll(Object.class)) {
-            if (next instanceof Action) {
-                action = (Action) next;
-            } else if (next instanceof JSeparator) {
-                action = null;
-            }
-        }
-        return action;
-    }
 }

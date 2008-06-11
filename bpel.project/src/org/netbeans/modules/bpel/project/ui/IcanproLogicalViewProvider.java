@@ -24,14 +24,12 @@ import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.StringTokenizer;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.JSeparator;
 import org.netbeans.api.project.Sources;
 import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
 
@@ -50,12 +48,11 @@ import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.netbeans.spi.project.ui.support.ProjectSensitiveActions;
+import org.netbeans.modules.bpel.model.api.support.Utils;
 import org.netbeans.modules.bpel.project.IcanproConstants;
-import org.netbeans.modules.bpel.project.ProjectConstants;
 import org.netbeans.modules.compapp.projects.base.ui.customizer.IcanproProjectProperties;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
@@ -175,8 +172,7 @@ public class IcanproLogicalViewProvider implements LogicalViewProvider {
         // XXX remove after SimpleTargetChooserPanel rewrite (suggestion if default dir is project dir then it's source dir)
         Sources sources = ProjectUtils.getSources(project);
         List<SourceGroup> roots = new ArrayList<SourceGroup>();
-        SourceGroup[] javaRoots = 
-            sources.getSourceGroups(ProjectConstants.SOURCES_TYPE_BPELPRO);
+        SourceGroup[] javaRoots = sources.getSourceGroups(Utils.SOURCES_TYPE_BPELPRO);
         roots.addAll(Arrays.asList(javaRoots));
         if (roots.isEmpty()) {
             SourceGroup[] sourceGroups = sources.getSourceGroups(Sources.TYPE_GENERIC);
@@ -216,7 +212,7 @@ public class IcanproLogicalViewProvider implements LogicalViewProvider {
 
         public IcanLogicalViewRootNode() {
             super( new IcanproViews.LogicalViewChildren( helper, evaluator, project ), createLookup( project ) );
-            setIconBase("org/netbeans/modules/bpel/project/ui/resources/icanproProjectIcon"); // NOI18N
+            setIconBaseWithExtension("org/netbeans/modules/bpel/project/ui/resources/icanproProjectIcon.gif"); // NOI18N
             super.setName( ProjectUtils.getInformation( project ).getDisplayName() );
             if (hasBrokenLinks(helper, resolver)) {
                 broken = true;
@@ -260,7 +256,7 @@ public class IcanproLogicalViewProvider implements LogicalViewProvider {
                 actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_BUILD, bundle.getString( "LBL_BuildAction_Name" ), null )); // NOI18N
                 actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_REBUILD, bundle.getString( "LBL_RebuildAction_Name" ), null )); // NOI18N
                 actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_CLEAN, bundle.getString( "LBL_CleanAction_Name" ), null )); // NOI18N
-//                null,
+                actions.add(null);
 //                ProjectSensitiveActions.projectCommandAction( IcanproConstants.COMMAND_REDEPLOY, bundle.getString( "LBL_RedeployAction_Name" ), null ), // NOI18N
 //                ProjectSensitiveActions.projectCommandAction( IcanproConstants.COMMAND_DEPLOY, bundle.getString( "LBL_DeployAction_Name" ), null ), // NOI18N
                 actions.add(ProjectSensitiveActions.projectCommandAction( IcanproConstants.POPULATE_CATALOG, bundle.getString( "LBL_Populate_Catalog" ), null )); // NOI18N
@@ -276,7 +272,7 @@ public class IcanproLogicalViewProvider implements LogicalViewProvider {
                 actions.add(null);
                 actions.add(SystemAction.get( org.openide.actions.FindAction.class ));
                 // add versioning support
-                addFromLayers(actions, "Projects/Actions"); //NOI18N
+                actions.addAll(Utilities.actionsForPath("Projects/Actions")); //NOI18N
 //                null,
 //                SystemAction.get(org.openide.actions.OpenLocalExplorerAction.class),
                 actions.add(null);
@@ -286,17 +282,6 @@ public class IcanproLogicalViewProvider implements LogicalViewProvider {
             return actions.toArray(new Action[actions.size()]);
         }
         
-        private void addFromLayers(List<Action> actions, String path) {
-            Lookup look = Lookups.forPath(path);
-            for (Object next : look.lookupAll(Object.class)) {
-                if (next instanceof Action) {
-                    actions.add((Action) next);
-                } else if (next instanceof JSeparator) {
-                    actions.add(null);
-                }
-            }
-        }        
-
         /** This action is created only when project has broken references.
          * Once these are resolved the action is disabled.
          */
