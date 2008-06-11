@@ -46,7 +46,6 @@ import java.io.OutputStream;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.NewFileWizardOperator;
 import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
@@ -55,13 +54,13 @@ import org.netbeans.jellytools.OutputOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.actions.Action;
+import org.netbeans.jellytools.modules.j2ee.J2eeTestCase;
 import org.netbeans.jellytools.modules.j2ee.nodes.J2eeServerNode;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.ProjectRootNode;
 import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.TimeoutExpiredException;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JComboBoxOperator;
 import org.netbeans.jemmy.operators.JDialogOperator;
 import org.netbeans.jemmy.operators.JTabbedPaneOperator;
@@ -75,7 +74,7 @@ import org.openide.filesystems.FileUtil;
  * Base class for web services UI tests
  * @author lukas
  */
-public abstract class WebServicesTestBase extends JellyTestCase {
+public abstract class WebServicesTestBase extends J2eeTestCase {
 
     protected static final ServerType REGISTERED_SERVER;
     private Project project;
@@ -167,7 +166,6 @@ public abstract class WebServicesTestBase extends JellyTestCase {
                     return -1;
                 case WEB:
                 case EJB:
-                    return 1;
                 case APPCLIENT:
                     return 0;
             }
@@ -185,9 +183,8 @@ public abstract class WebServicesTestBase extends JellyTestCase {
                     return -1;
                 case WEB:
                 case APPCLIENT:
-                    return 2;
                 case EJB:
-                    return 0;
+                    return 1;
             }
             throw new AssertionError("Unknown type: " + this); //NOI18N
         }
@@ -206,10 +203,11 @@ public abstract class WebServicesTestBase extends JellyTestCase {
             switch (this) {
                 case J2EE14:
                     //J2EE 1.4
-                    return Bundle.getStringTrimmed("org.netbeans.modules.web.project.ui.wizards.Bundle", "J2EESpecLevel_14");
+                    return Bundle.getStringTrimmed("org.netbeans.modules.j2ee.common.project.ui.Bundle", "J2EESpecLevel_14");
                 case JAVAEE5:
                     //Java EE 5
-                    return Bundle.getStringTrimmed("org.netbeans.modules.web.project.ui.wizards.Bundle", "JavaEESpecLevel_50");
+                    return Bundle.getStringTrimmed("org.netbeans.modules.j2ee.common.project.ui.Bundle", "JavaEESpecLevel_50");
+                    
             }
             throw new AssertionError("Unknown type: " + this); //NOI18N
         }
@@ -366,6 +364,7 @@ public abstract class WebServicesTestBase extends JellyTestCase {
             File projectRoot = new File(getDataDir(), "projects/" + getProjectName()); //NOI18N
             if (projectRoot.exists()) {
                 project = (Project) ProjectSupport.openProject(new File(getDataDir(), "projects/" + getProjectName()));
+                checkMissingServer(getProjectName());
             } else {
                 if (System.getProperty("xtest.tmpdir") != null) { //NOI18N
                     //XTest execution
@@ -452,20 +451,22 @@ public abstract class WebServicesTestBase extends JellyTestCase {
                 projectLocation = new File(System.getProperty("java.io.tmpdir")); //NOI18N
             }
             op.txtProjectLocation().setText(projectLocation.getAbsolutePath());
-            if (!ProjectType.JAVASE_APPLICATION.equals(type)) {
-                //choose server type and Java EE version
-                JComboBoxOperator jcboServer = new JComboBoxOperator(op, type.getServerComboBoxIndex());
-                jcboServer.selectItem(REGISTERED_SERVER.toString());
-                JComboBoxOperator jcboVersion = new JComboBoxOperator(op, type.getServerVersionComboBoxIndex());
-                jcboVersion.selectItem(javaeeVersion.toString());
-            }
+        }
+        if (!(ProjectType.SAMPLE.equals(type) || ProjectType.JAVASE_APPLICATION.equals(type))) {
+            //second panel in New Web, Ejb and AppClient project wizards
+            op.next();
+            //choose server type and Java EE version
+            JComboBoxOperator jcboServer = new JComboBoxOperator(op, type.getServerComboBoxIndex());
+            jcboServer.selectItem(REGISTERED_SERVER.toString());
+            JComboBoxOperator jcboVersion = new JComboBoxOperator(op, type.getServerVersionComboBoxIndex());
+            jcboVersion.selectItem(javaeeVersion.toString());
         }
         op.finish();
         // Opening Projects
         String openingProjectsTitle = Bundle.getStringTrimmed("org.netbeans.modules.project.ui.Bundle", "LBL_Opening_Projects_Progress");
         waitDialogClosed(openingProjectsTitle);
         if (ProjectType.SAMPLE.equals(type)) {
-            checkMissingServer(projectName);
+            checkMissingServer(name);
         }
         // wait project appear in projects view
         ProjectRootNode node = ProjectsTabOperator.invoke().getProjectRootNode(name);
@@ -570,11 +571,11 @@ public abstract class WebServicesTestBase extends JellyTestCase {
         }
         appsNode.expand();
         appsNode.callPopup().pushMenu(refreshLabel);
-        if (appsNode.isChildPresent(projectName)) {
-            Node n = new Node(appsNode, projectName);
-            n.callPopup().pushMenu(undeployLabel);
-            new EventTool().waitNoEvent(2000);
-        }
+        // needed for slower machines
+        JemmyProperties.setCurrentTimeout("JTreeOperator.WaitNextNodeTimeout", 30000); //NOI18N
+        Node n = new Node(appsNode, projectName);
+        n.callPopup().pushMenu(undeployLabel);
+        new EventTool().waitNoEvent(2000);
         appsNode.callPopup().pushMenu(refreshLabel);
         new EventTool().waitNoEvent(2000);
         dumpOutput();
@@ -665,7 +666,7 @@ public abstract class WebServicesTestBase extends JellyTestCase {
         }
     }
 
-    private void checkMissingServer(String project) {
+    protected void checkMissingServer(String project) {
         // check missing target server dialog is shown
         // "Open Project"
         String openProjectTitle = Bundle.getString("org.netbeans.modules.j2ee.common.ui.Bundle", "MSG_Broken_Server_Title");
