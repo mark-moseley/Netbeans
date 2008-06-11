@@ -39,9 +39,10 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.javascript.editing;
 
-import org.jruby.ast.Node;
+import org.mozilla.javascript.Node;
+import org.mozilla.javascript.Token;
 import org.netbeans.modules.gsf.GsfTestCompilationInfo;
 import org.netbeans.modules.gsf.api.CompilationInfo;
 import org.netbeans.modules.gsf.api.OffsetRange;
@@ -50,23 +51,14 @@ import org.netbeans.modules.gsf.api.OffsetRange;
  *
  * @author Tor Norbye
  */
-public class RubyParserTest extends RubyTestBase {
+public class JsParserTest extends JsTestBase {
     
-    public RubyParserTest(String testName) {
+    public JsParserTest(String testName) {
         super(testName);
     }
 
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-    }
-
-    @Override
-    protected void tearDown() throws Exception {
-        super.tearDown();
-    }
-
-    private void checkParseTree(String file, String caretLine, String nodeName) throws Exception {
+    private void checkParseTree(String file, String caretLine, int nodeType) throws Exception {
+        JsParser.runtimeException = null;
         CompilationInfo info = getInfo(file);
         
         String text = info.getText();
@@ -87,8 +79,8 @@ public class RubyParserTest extends RubyTestBase {
         assertNotNull("Parsing broken input failed for " + file, root);
         
         // Ensure that we find the node we're looking for
-        if (nodeName != null) {
-            RubyParseResult rpr = AstUtilities.getParseResult(info);
+        if (nodeType != -1) {
+            JsParseResult rpr = AstUtilities.getParseResult(info);
             OffsetRange range = rpr.getSanitizedRange();
             if (range.containsInclusive(caretOffset)) {
                 caretOffset = range.getStart();
@@ -98,57 +90,64 @@ public class RubyParserTest extends RubyTestBase {
             assertNotNull(closest);
             String leafName = closest.getClass().getName();
             leafName = leafName.substring(leafName.lastIndexOf('.')+1);
-            assertEquals(nodeName, leafName);
+            assertEquals(Token.fullName(nodeType) + " != " + Token.fullName(closest.getType()), nodeType, closest.getType());
         }
+        assertNull(JsParser.runtimeException);
     }
+
+    private void checkNoParseAbort(String file) throws Exception {
+        JsParser.runtimeException = null;
+        CompilationInfo info = getInfo(file);
+        Node root = AstUtilities.getRoot(info);
+        assertNull(JsParser.runtimeException);
         
-    public void testPartial1() throws Exception {
-        checkParseTree("testfiles/broken1.rb", "x.^", "VCallNode");
     }
     
-    public void testPartial1b() throws Exception {
-        // Recover even when the caret is elsewhere
-        checkParseTree("testfiles/broken1.rb", null, null);
+    public void testPartial1() throws Exception {
+        checkParseTree("testfiles/broken1.js", "\"str\".^", Token.GETPROP);
     }
 
     public void testPartial2() throws Exception {
-        checkParseTree("testfiles/broken2.rb", "Foo.new.^", "CallNode");
+        checkParseTree("testfiles/broken2.js", "x.^", Token.GETPROP);
     }
-
+    
     public void testPartial3() throws Exception {
-        checkParseTree("testfiles/broken3.rb", "x = ^", "ClassNode");
+        checkParseTree("testfiles/broken3.js", "new String().^", Token.GETPROP);
     }
-
-    public void testPartial3b() throws Exception {
-        // Recover even when the caret is elsewhere
-        checkParseTree("testfiles/broken3.rb", null, null);
-    }
-
+    
     public void testPartial4() throws Exception {
-        checkParseTree("testfiles/broken4.rb", "Test::^", "ConstNode");
+        checkParseTree("testfiles/broken4.js", "call(50,^)", Token.NUMBER);
     }
     
-    public void testPartial4b() throws Exception {
-        // Recover even when the caret is elsewhere
-        checkParseTree("testfiles/broken4.rb", null, null);
-    }
-
     public void testPartial5() throws Exception {
-        checkParseTree("testfiles/broken5.rb", "if true^", "TrueNode");
+        checkParseTree("testfiles/broken5.js", "call(50, ^)", Token.CALL);
     }
 
-    public void testPartial5MissingEnd() throws Exception {
-        // An end is missing and we don't have a current line we can simply
-        // clip out; try to compensate
-        checkParseTree("testfiles/broken5.rb", null, null);
-    }
-    
     public void testPartial6() throws Exception {
-        checkParseTree("testfiles/broken6.rb", "def ^", "ClassNode");
+        checkParseTree("testfiles/broken6.js", "x = new ^", Token.SCRIPT);
+    }
+
+    public void testPartial7() throws Exception {
+        checkParseTree("testfiles/broken7.js", "k.^", Token.GETPROP);
+    }
+
+    public void testPartial8() throws Exception {
+        checkParseTree("testfiles/broken8.js", "partialLiteralName^", Token.OBJECTLIT);
+    }
+
+    public void testPartial9() throws Exception {
+        checkParseTree("testfiles/broken9.js", "x^", Token.OBJECTLIT);
+    }
+
+    public void testPartial10() throws Exception {
+        checkParseTree("testfiles/broken10.js", "xy^", Token.OBJECTLIT);
+    }
+
+    public void testPartial11() throws Exception {
+        checkNoParseAbort("testfiles/broken11.js");
     }
 
     public void testPartial12() throws Exception {
-        checkParseTree("testfiles/broken12.rb", " File.exists?(^)", "ArrayNode");
+        checkNoParseAbort("testfiles/broken12.js");
     }
-
 }
