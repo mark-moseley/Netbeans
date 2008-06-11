@@ -77,6 +77,8 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
     private static final int CONVERSION = CsmCompletionExpression.CONVERSION;
     private static final int TYPE = CsmCompletionExpression.TYPE;
     private static final int NEW = CsmCompletionExpression.NEW;
+    private static final int GOTO = CsmCompletionExpression.GOTO;
+    private static final int LABEL = CsmCompletionExpression.LABEL;
     private static final int INSTANCEOF = CsmCompletionExpression.INSTANCEOF;
     private static final int GENERIC_TYPE = CsmCompletionExpression.GENERIC_TYPE;
     private static final int GENERIC_TYPE_OPEN = CsmCompletionExpression.GENERIC_TYPE_OPEN;
@@ -111,7 +113,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
     private boolean stopped;
 
     /** Stack of the expressions. */
-    private ArrayList expStack = new ArrayList();
+    private ArrayList<CsmCompletionExpression> expStack = new ArrayList<CsmCompletionExpression>();
 
     /** TokenID of the last found token except Syntax.EOT and Syntax.EOL */
     private TokenID lastValidTokenID;
@@ -189,27 +191,27 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
     /** Pop exp from top of stack */
     private CsmCompletionExpression popExp() {
         int cnt = expStack.size();
-        return (cnt > 0) ? (CsmCompletionExpression)expStack.remove(cnt - 1) : null;
+        return (cnt > 0) ? expStack.remove(cnt - 1) : null;
     }
 
     /** Look at the exp at top of stack */
     private CsmCompletionExpression peekExp() {
         int cnt = expStack.size();
-        return (cnt > 0) ? (CsmCompletionExpression)expStack.get(cnt - 1) : null;
+        return (cnt > 0) ? expStack.get(cnt - 1) : null;
     }
 
     /** Look at the second exp on stack */
     private CsmCompletionExpression peekExp2() {
         int cnt = expStack.size();
-        return (cnt > 1) ? (CsmCompletionExpression)expStack.get(cnt - 2) : null;
+        return (cnt > 1) ? expStack.get(cnt - 2) : null;
     }
 
     /** Look at the third exp on stack */
     private CsmCompletionExpression peekExp(int ind) {
         int cnt = expStack.size();
-        return (cnt > ind && cnt > 0) ? (CsmCompletionExpression)expStack.get(cnt - ind) : null;
+        return (cnt >= ind && cnt > 0) ? expStack.get(cnt - ind) : null;
     }
-
+    
     private CsmCompletionExpression createTokenExp(int id) {
         CsmCompletionExpression exp = new CsmCompletionExpression(id);
         addTokenTo(exp);
@@ -336,11 +338,11 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                                     popExp(); // pop '~'
 
                                     // construct new VARIABLE expression
-                                    TokenID curTokenID = top.getTokenID(0);
-                                    int curTokenPosition = top2.getTokenOffset(0);
-                                    String curTokenText = top2.getTokenText(0) + top.getTokenText(0);
+                                    TokenID aCurTokenID = top.getTokenID(0);
+                                    int aCurTokenPosition = top2.getTokenOffset(0);
+                                    String aCurTokenText = top2.getTokenText(0) + top.getTokenText(0);
                                     CsmCompletionExpression exp = new CsmCompletionExpression(VARIABLE);
-                                    exp.addToken(curTokenID, curTokenPosition, curTokenText);                                
+                                    exp.addToken(aCurTokenID, aCurTokenPosition, aCurTokenText);                                
                                     pushExp(exp);
                                 }
                             }
@@ -482,7 +484,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                 if (rightOp != null) {
                     popExp(); // pop rightOp
                     cont = true;
-                    ArrayList opStack = new ArrayList(); // operator stack
+                    ArrayList<CsmCompletionExpression> opStack = new ArrayList<CsmCompletionExpression>(); // operator stack
                     CsmCompletionExpression leftOp = null;
                     do {
                         if (leftOp == null) {
@@ -522,8 +524,8 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                                 }
                                 if (opStack.size() > 0) { // at least one right stacked op
                                     lastVar = rightOp; // rightOp becomes item
-                                    rightOp = (CsmCompletionExpression)opStack.remove(opStack.size() - 1); // get stacked op
-                                    rightOpID = rightOp.getOperatorID(rightOp);
+                                    rightOp = opStack.remove(opStack.size() - 1); // get stacked op
+                                    rightOpID = CsmCompletionExpression.getOperatorID(rightOp);
                                 } else { // shift the leftOp to rightOp
                                     leftOp.addParameter(rightOp);
                                     lastVar = null;
@@ -552,7 +554,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
 
                     // pop the whole stack adding the current right op to the stack exp
                     for (int i = opStack.size() - 1; i >= 0; i--) {
-                        CsmCompletionExpression op = (CsmCompletionExpression)opStack.get(i);
+                        CsmCompletionExpression op = opStack.get(i);
                         op.addParameter(rightOp);
                         rightOp = op;
                     }
@@ -566,7 +568,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
 
         return ret;
     }
-
+    
     public boolean token(TokenID tokenID, TokenContextPath tokenContextPath,
     int tokenOffset, int tokenLen) {
         
@@ -653,7 +655,9 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                             errorState = true;
                         }
                         break;
-
+                    case CCTokenContext.GOTO_ID:
+                        pushExp(createTokenExp(GOTO));
+                        break;
                     case CCTokenContext.NEW_ID:
                         switch (topID) {
                         case VARIABLE:
@@ -731,7 +735,6 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
 //                    case CCTokenContext.FINAL_ID:
 //XXX                    case CCTokenContext.FINALLY_ID:
                     case CCTokenContext.FOR_ID:
-                    case CCTokenContext.GOTO_ID:
                     case CCTokenContext.IF_ID:
 //                    case CCTokenContext.IMPLEMENTS_ID:
 //                    case CCTokenContext.INTERFACE_ID:
@@ -765,6 +768,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                             case METHOD_OPEN:
                             case MEMBER_POINTER_OPEN:
                             case NEW:
+                            case GOTO:
 //                            case CPPINCLUDE:
                             case CONVERSION:
                             case UNARY_OPERATOR:
@@ -791,7 +795,9 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                                     //pushExp(createTokenExp(VARIABLE));
                                     // TODO: need to create parameter, we know, that METHOD_OPEN is declaration/definition of method
                                     break;
-                                }  
+                                }
+                                errorState = true;
+                                break;
                             case TYPE_REFERENCE:
                                 if (getValidExpID(peekExp2()) == METHOD_OPEN) {
                                     //top.setExpID(VARIABLE);
@@ -803,6 +809,8 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                                     // TODO: need to create parameter, we know, that METHOD_OPEN is declaration/definition of method
                                     break;
                                 }                                
+                                errorState = true;
+                                break;
                             default:
                                 errorState = true;
                                 break;
@@ -966,27 +974,33 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                             boolean genericType = false;
                             if (java15) { // special treatment of Java 1.5 features
                                 switch (topID) {
+                                    case CONSTANT: // check for "List<const" plus ">" case
                                     case VARIABLE: // check for "List<var" plus ">" case
+                                    case TYPE: // check for "List<int" plus ">" case
                                     case DOT: // check for "List<var1.var2" plus ">" case
                                     case ARROW: // check for "List<var1.var2" plus ">" case
                                     case SCOPE: // check for "List<NS::Class" plus ">" case
                                     case GENERIC_TYPE: // check for "List<HashMap<String, Integer>" plus ">" case
+                                    case GENERIC_TYPE_OPEN: // chack for "List<" plus ">" case
                                     case GENERIC_WILD_CHAR: // chack for "List<?" plus ">" case
                                     case ARRAY: // chack for "List<String[]" plus ">" case
-                                        CsmCompletionExpression top2 = peekExp2();
-                                        switch (getValidExpID(top2)) {
-                                            case GENERIC_TYPE_OPEN:
-                                                popExp();
-                                                top2.addParameter(top);
-                                                top2.setExpID(GENERIC_TYPE);
-                                                addTokenTo(top2);
-                                                genericType = true;
-                                                top = top2;
+                                    case PARENTHESIS: // chack for "T<(1+1)" plus ">" case
+                                        int cnt = expStack.size();
+                                        CsmCompletionExpression gen = null;
+                                        for (int i = 0; i < cnt; i++) {
+                                            CsmCompletionExpression expr = peekExp(i + 1);
+                                            if (expr.getExpID() == GENERIC_TYPE_OPEN) {
+                                                gen = expr;
                                                 break;
-
-                                            default:
-                                                errorState = topID == GENERIC_TYPE;
-                                                break;
+                                            }
+                                        }
+                                        if (gen != null) {
+                                            while (peekExp().getExpID() != GENERIC_TYPE_OPEN) {
+                                                gen.addParameter(popExp());
+                                            }
+                                            gen.setExpID(GENERIC_TYPE);
+                                            top = gen;
+                                            genericType = true;
                                         }
                                         break;
 
@@ -1028,40 +1042,42 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                             boolean genericType = false;
                             if (java15) { // special treatment of Java 1.5 features
                                 switch (topID) {
+                                    case CONSTANT: // check for "List<const" plus ">" case
                                     case VARIABLE: // check for "List<var" plus ">" case
+                                    case TYPE: // check for "List<int" plus ">" case
                                     case DOT: // check for "List<var.var2" plus ">" case
                                     case ARROW: // check for "List<var.var2" plus ">" case
                                     case SCOPE: // check for "List<NS::Class" plus ">" case
                                     case GENERIC_TYPE: // check for "List<HashMap<String, Integer>" plus ">" case
+                                    case GENERIC_TYPE_OPEN: // chack for "List<" plus ">" case
                                     case GENERIC_WILD_CHAR: // chack for "List<?" plus ">" case
                                     case ARRAY: // chack for "List<String[]" plus ">" case
-                                        CsmCompletionExpression top2 = peekExp2();
-                                        switch (getValidExpID(top2)) {
-                                            case GENERIC_TYPE_OPEN:
-                                                // Check whether outer is open as well
-                                                CsmCompletionExpression top3 = peekExp(3);
-                                                if (getValidExpID(top3) == GENERIC_TYPE_OPEN) {
-                                                    genericType = true;
-                                                    popExp();
-                                                    top2.addParameter(top);
-                                                    top2.setExpID(GENERIC_TYPE);
-                                                    addTokenTo(top2); // [TODO] revise possible spliting of the token
-
-                                                    popExp();
-                                                    top3.addParameter(top2);
-                                                    top3.setExpID(GENERIC_TYPE);
-                                                    addTokenTo(top3); // [TODO] revise possible spliting of the token
-
-                                                    top = top3;
-
-                                                } else { // inner is not generic type
-                                                    errorState = true;
+                                    case PARENTHESIS: // chack for "T<(1+1)" plus ">" case
+                                        int cnt = expStack.size();
+                                        CsmCompletionExpression genTop = null;
+                                        CsmCompletionExpression genBottom = null;
+                                        for (int i = 0; i < cnt; i++) {
+                                            CsmCompletionExpression expr = peekExp(i + 1);
+                                            if (expr.getExpID() == GENERIC_TYPE_OPEN) {
+                                                CsmCompletionExpression expr2 = peekExp(i + 2);
+                                                if (getValidExpID(expr2) == GENERIC_TYPE_OPEN) {
+                                                    genTop = expr;
+                                                    genBottom = expr2;
+                                                    break;
                                                 }
-                                                break;
+                                            }
+                                        }
+                                        if (genTop != null && genBottom != null) {
+                                            while (peekExp().getExpID() != GENERIC_TYPE_OPEN) {
+                                                genTop.addParameter(popExp());
+                                            }
+                                            genTop.setExpID(GENERIC_TYPE);
+                                            popExp();
+                                            genBottom.addParameter(genTop);
+                                            genBottom.setExpID(GENERIC_TYPE);
+                                            top = genBottom;
 
-                                            default:
-                                                errorState = true;
-                                                break;
+                                            genericType = true;
                                         }
                                         break;
 
@@ -1293,6 +1309,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                             case CONSTRUCTOR:
                             case PARENTHESIS:
                             case GENERIC_TYPE:
+                            case MEMBER_POINTER:
                             {
                                 popExp();
                                  // tokenID.getNumericID() is the parameter of the main switch
@@ -1368,27 +1385,24 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                                         top = top2;
                                         break;
 
-                                    case GENERIC_TYPE_OPEN:
-                                        switch (topID) {
-                                            case VARIABLE:
-                                            case DOT:
-                                            case ARROW:
-                                            case SCOPE:
-                                            case GENERIC_TYPE:
-                                            case GENERIC_WILD_CHAR:
-                                                popExp();
-                                                top2.addParameter(top);
-                                                addTokenTo(top2); // add "," to open generics type
-                                                top = top2;
-                                                break;
-
-                                            default:
-                                                errorState = true;
-                                                break;
-                                        }
-                                        break;
-
                                     default:
+                                        int cnt = expStack.size();
+                                        CsmCompletionExpression gen = null;
+                                        for (int i = 0; i < cnt; i++) {
+                                            CsmCompletionExpression expr = peekExp(i + 1);
+                                            if (expr.getExpID() == GENERIC_TYPE_OPEN) {
+                                                gen = expr;
+                                                break;
+                                            }
+                                        }
+                                        if (gen != null) {
+                                            while (peekExp().getExpID() != GENERIC_TYPE_OPEN) {
+                                                gen.addParameter(popExp());
+                                            }
+                                            top = gen;
+                                            break;
+                                        }
+
                                         errorState = true;
                                         break;
                                 }
@@ -1716,11 +1730,13 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                     case CCTokenContext.INT_LITERAL_ID:
                     case CCTokenContext.HEX_LITERAL_ID:
                     case CCTokenContext.OCTAL_LITERAL_ID:
+                    case CCTokenContext.UNSIGNED_ID:
                         constExp = createTokenExp(CONSTANT);
                         constExp.setType("int"); // NOI18N
                         break;
 
                     case CCTokenContext.LONG_LITERAL_ID:
+                    case CCTokenContext.UNSIGNED_LONG_LITERAL_ID:
                         constExp = createTokenExp(CONSTANT);
                         constExp.setType("long"); // NOI18N
                         break;
@@ -1768,8 +1784,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                 break;
 
             case GENERIC_TYPE_OPEN:
-                top.setExpID(OPERATOR);
-                top.addParameter(constExp);
+                pushExp(constExp);
                 errorState = false;
                 break;
 
@@ -1817,6 +1832,14 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                 errorState = false;
                 break;
             }     
+            case GENERIC_TYPE_OPEN:
+            {
+                CsmCompletionExpression kwdExp = createTokenExp(TYPE);
+                kwdExp.setType(kwdType);
+                pushExp(kwdExp);
+                errorState = false;
+                break;
+            }     
             default: // otherwise not recognized
                 errorState = true;
                 break;
@@ -1846,6 +1869,12 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                     pushExp(CsmCompletionExpression.createEmptyVariable(
                         bufferStartPos + bufferOffsetDelta + offset));
                     break;
+                default:
+                    if (getValidExpID(peekExp()) == GENERIC_TYPE) {
+                        pushExp(CsmCompletionExpression.createEmptyVariable(
+                            bufferStartPos + bufferOffsetDelta + offset));
+                    }
+                    break;
             }
         }        
         // Check for joins
@@ -1873,13 +1902,21 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
                         top2.setExpID(CONSTRUCTOR);
                         reScan = true;
                         break;                    
+                    case GOTO:
+                        popExp();
+                        top2.addParameter(top);
+                        top2.setExpID(LABEL);
+                        reScan = false;
+                        break;
                     case ANNOTATION:
                     case ANNOTATION_OPEN:
                     case CASE:
-                    case GENERIC_TYPE_OPEN: // e.g. "List<String"
                         popExp();
                         top2.addParameter(top);
                         reScan = false; // by default do not nest more - can be changed if necessary
+                        break;
+                    case GENERIC_TYPE_OPEN: // e.g. "List<String"
+                        reScan = false;
                         break;
                     }
                     break;
@@ -1924,9 +1961,11 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
 //                        break;
                     case ANNOTATION:
                     case ANNOTATION_OPEN:
-                    case GENERIC_TYPE_OPEN:
                         popExp();
                         top2.addParameter(top);
+                        reScan = false; // by default do not nest more - can be changed if necessary
+                        break;
+                    case GENERIC_TYPE_OPEN: // e.g. "List<String"
                         reScan = false; // by default do not nest more - can be changed if necessary
                         break;
                     case OPERATOR:
@@ -2020,6 +2059,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
         this.bufferStartPos = startPos - preScan;
     }
 
+    @Override
     public String toString() {
         int cnt = expStack.size();
         StringBuilder sb = new StringBuilder();
@@ -2030,7 +2070,7 @@ final class CsmCompletionTokenProcessor implements TokenProcessor {
         if (cnt > 0) {
             sb.append("Stack expressions:\n"); // NOI18N
             for (int i = 0; i < cnt; i++) {
-                CsmCompletionExpression e = (CsmCompletionExpression)expStack.get(i);
+                CsmCompletionExpression e = expStack.get(i);
                 sb.append("Stack["); // NOI18N
                 sb.append(i);
                 sb.append("]: "); // NOI18N
