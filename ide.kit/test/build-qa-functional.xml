@@ -47,6 +47,9 @@ made subject to such option by the copyright holder.
         jemmy and jellytools jars are on classpath for both. -->
     <import file="../../nbbuild/templates/xtest-qa-functional.xml"/>
 
+    <!-- Temporary logging.  -->
+    <property name="xtest.ide.commandline.suffix" value="-J-Dorg.netbeans.modules.refactoring.spi.impl.ParametersPanel.level=100"/>
+
     <!-- Creates an empty Java project in IDE -->
     <!-- <property name="xtest.ide.create.project" value="true"/> -->
     <!-- Opens project at specified location -->
@@ -83,7 +86,7 @@ made subject to such option by the copyright holder.
     <!-- This target executes tests inside IDE. It is defined in imported xtest-qa-functional.xml.
          If you need to customize it, you can uncomment the following and override it.
     <target name="runidetest" depends="init-cp">
-        <executeTests pluginName="ide">
+        <executeTests pluginName="ide">            
             <classpath>
                 <path refid="test.qa-functional.run.cp"/>
             </classpath>
