@@ -1,0 +1,7 @@
+Code completion result for source line:
+document.b|
+(QueryType=COMPLETION, NameKind=PREFIX)
+PROPERTY   baseURI : String                           Node
+PROPERTY   bgColor                                    Document
+PROPERTY   body                                       Document
+PROPERTY   body : HTMLElement                         HTMLDocument
