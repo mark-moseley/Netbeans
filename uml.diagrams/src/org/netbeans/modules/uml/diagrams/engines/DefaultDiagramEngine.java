@@ -51,6 +51,7 @@ import org.netbeans.api.visual.action.PopupMenuProvider;
 import org.netbeans.api.visual.action.ReconnectProvider;
 import org.netbeans.api.visual.action.SelectProvider;
 import org.netbeans.api.visual.action.WidgetAction;
+import org.netbeans.api.visual.anchor.Anchor;
 import org.netbeans.api.visual.router.Router;
 import org.netbeans.api.visual.router.RouterFactory;
 import org.netbeans.api.visual.widget.LayerWidget;
@@ -95,8 +96,19 @@ public class DefaultDiagramEngine extends  DiagramEngine {
     
     private RelationshipDiscovery relDiscovery = null;
     
+    public DefaultDiagramEngine()
+    {
+        super();
+    }
+    
     public DefaultDiagramEngine(DesignerScene scene) {
         super(scene);
+    }
+
+    @Override
+    public void initialize(DesignerScene scene)
+    {
+        super.initialize(scene);
         
         if(DEFAULT_MOVE_STRATEGY == null)
         {
@@ -122,6 +134,7 @@ public class DefaultDiagramEngine extends  DiagramEngine {
         relDiscovery = new UMLRelationshipDiscovery(scene);
     }
 
+    
     public void setSelectionManager(DesignerScene scene) {
         scene.setContextPaletteManager(new SwingPaletteManager(scene));
     }
@@ -253,7 +266,8 @@ public class DefaultDiagramEngine extends  DiagramEngine {
      */
     public Router getEdgeRouter(LayerWidget... layers)
     {
-        return RouterFactory.createOrthogonalSearchRouter(layers);
+//        return RouterFactory.createOrthogonalSearchRouter(layers);
+        return RouterFactory.createDirectRouter() ;
     }
     
     public ConnectionWidget createConnectionWidget(DesignerScene scene, 
@@ -302,6 +316,8 @@ public class DefaultDiagramEngine extends  DiagramEngine {
 
         private IPresentationElement originalSource = null;
         private IPresentationElement originalTarget = null;
+        private Anchor originalSourceAnchor = null;
+        private Anchor originalTargetAnchor = null;
         private RelationValidator validator = new RelationValidator();
 
         public void reconnectingStarted(ConnectionWidget connectionWidget, 
@@ -309,16 +325,16 @@ public class DefaultDiagramEngine extends  DiagramEngine {
         {
             Widget sourceWidget = connectionWidget.getSourceAnchor().getRelatedWidget();
             originalSource = (IPresentationElement) getScene().findObject(sourceWidget);
+            originalSourceAnchor= connectionWidget.getSourceAnchor();
             
             Widget targetWidget = connectionWidget.getTargetAnchor().getRelatedWidget();
             originalTarget = (IPresentationElement) getScene().findObject(targetWidget);
+            originalTargetAnchor = connectionWidget.getTargetAnchor();
         }
 
         public void reconnectingFinished(ConnectionWidget connectionWidget, 
                                          boolean reconnectingSource)
         {
-            originalSource = null;
-            originalTarget = null;
         }
 
         public boolean isSourceReconnectable(ConnectionWidget connectionWidget)
@@ -388,7 +404,7 @@ public class DefaultDiagramEngine extends  DiagramEngine {
                 }
             }
 
-            if ((sourceElement != null) && (targetElement != null) && (sameElement == false))
+            if (!sameElement && (sourceElement != null) && (targetElement != null))
             {
                 RelationProxy relationshipProxy = new RelationProxy();
                 relationshipProxy.setFrom(sourceElement.getFirstSubject());
@@ -403,13 +419,17 @@ public class DefaultDiagramEngine extends  DiagramEngine {
 
                 INamedElement source = (INamedElement)sourceElement.getFirstSubject();
                 INamedElement target = (INamedElement)targetElement.getFirstSubject();
-                System.out.println(source.getName() + " -> " + target.getName() + " = " + relationshipProxy.getRelationValidated());
                 if (relationshipProxy.getRelationValidated() == true)
                 {
                     // TODO: I also have to send our the correct events to see if
                     // we can create the relationship.
                     retVal = ConnectorState.ACCEPT;
                 }
+            }
+            else if(sameElement)
+            {
+                //reconnection back to the same widget should be lways allowed
+                retVal = ConnectorState.ACCEPT;
             }
             
             return retVal;
@@ -428,8 +448,14 @@ public class DefaultDiagramEngine extends  DiagramEngine {
         public void reconnect(ConnectionWidget connectionWidget, 
                               Widget replacementWidget, boolean reconnectingSource)
         {
+            if (replacementWidget == null)
+            {
+                return;//do not remove but restore to old place
+            }
             DesignerScene scene = getScene();
             IPresentationElement replacementNode = (IPresentationElement)scene.findObject(replacementWidget);
+            if(reconnectingSource && replacementNode==originalSource)return;
+            else if(!reconnectingSource && replacementNode==originalTarget)return;
             IPresentationElement edge = (IPresentationElement)scene.findObject(connectionWidget);
             IElement relationship = edge.getFirstSubject();
             
@@ -472,6 +498,10 @@ public class DefaultDiagramEngine extends  DiagramEngine {
                                             sourceElement.getFirstSubject());
                 }
             }
+            originalSource = null;
+            originalTarget = null;
+            originalSourceAnchor = null;
+            originalTargetAnchor = null;
         }
     }
 
