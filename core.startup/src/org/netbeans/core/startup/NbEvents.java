@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,6 +44,8 @@ package org.netbeans.core.startup;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.io.File;
+import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -136,17 +138,22 @@ final class NbEvents extends Events {
             // No need to print anything. ModuleSystem.deployTestModule prints
             // its own stuff (it needs to be printed synchronously to console
             // in order to appear in the output window). But status text is OK.
-            // Again no need for I18N as this is only for module developers.
-            setStatusText(
-                "Deploying test module in " + (File)args[0] + "..."); // NOI18N
+            // Fix for IZ#81566 - I18N: need to localize status messages for module dev
+            String msg = MessageFormat.format(
+                    NbBundle.getMessage(NbEvents.class, 
+                            "TEXT_start_deploy_test_module" ), (File)args[0]); // NOI18N
+            setStatusText( msg ); 
         } else if (message == FINISH_DEPLOY_TEST_MODULE) {
+            // Fix for IZ#81566 - I18N: need to localize status messages for module dev
             setStatusText(
-                "Finished deploying test module."); // NOI18N
+                    NbBundle.getMessage(NbEvents.class,  
+                    		"TEXT_finish_deploy_test_module")); // NOI18N
         } else if (message == FAILED_INSTALL_NEW) {
             Set<Module> modules = NbCollections.checkedSetByCopy((Set) args[0], Module.class, true);
             {
                 StringBuilder buf = new StringBuilder(NbBundle.getMessage(NbEvents.class, "MSG_failed_install_new"));
                 NbProblemDisplayer.problemMessagesForModules(buf, modules, false);
+                buf.append('\n'); // #123669
                 logger.log(Level.INFO, buf.toString());
             }
             {
@@ -158,16 +165,20 @@ final class NbEvents extends Events {
             setStatusText("");
         } else if (message == FAILED_INSTALL_NEW_UNEXPECTED) {
             Module m = (Module)args[0];
-            // ignore args[1]: InvalidException
+            List<Module> modules = new ArrayList<Module> ();
+            modules.add (m);
+            modules.addAll (NbCollections.checkedSetByCopy((Set) args[1], Module.class, true));
+            // ignore args[2]: InvalidException
             {
                 StringBuilder buf = new StringBuilder(NbBundle.getMessage(NbEvents.class, "MSG_failed_install_new_unexpected", m.getDisplayName()));
-                NbProblemDisplayer.problemMessagesForModules(buf, Collections.singleton(m), false);
+                NbProblemDisplayer.problemMessagesForModules(buf, modules, false);
+                buf.append('\n');
                 logger.log(Level.INFO, buf.toString());
             }
 
             {
                 StringBuilder buf = new StringBuilder(NbBundle.getMessage(NbEvents.class, "MSG_failed_install_new_unexpected", m.getDisplayName()));
-                NbProblemDisplayer.problemMessagesForModules(buf, Collections.singleton(m), true);
+                NbProblemDisplayer.problemMessagesForModules(buf, modules, true);
                 notify(buf.toString(), true);
             }
             setStatusText("");
@@ -292,7 +303,7 @@ final class NbEvents extends Events {
     private void notify(String text, boolean warn) {
         if (Boolean.getBoolean("netbeans.full.hack")) { // NOI18N
             // #21773: interferes with automated GUI testing.
-            logger.log(Level.INFO, text);
+            logger.log(Level.INFO, text + "\n");
         } else {
             // Normal - display dialog.
             new Notifier(text, warn);
