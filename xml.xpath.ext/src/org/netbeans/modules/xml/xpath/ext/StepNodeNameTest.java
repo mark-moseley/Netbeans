@@ -19,7 +19,16 @@
 
 package org.netbeans.modules.xml.xpath.ext;
 
+import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
+import org.netbeans.modules.xml.schema.model.SchemaComponent;
+import org.netbeans.modules.xml.xam.Named;
+import org.netbeans.modules.xml.xpath.ext.schema.ExNamespaceContext;
+import org.netbeans.modules.xml.xpath.ext.schema.InvalidNamespaceException;
+import org.netbeans.modules.xml.xpath.ext.schema.SchemaModelsStack;
+import org.netbeans.modules.xml.xpath.ext.schema.resolver.SchemaCompHolder;
+import org.netbeans.modules.xml.xpath.ext.spi.XPathPseudoComp;
+import org.openide.ErrorManager;
 
 /**
  * Represents a node test on name.
@@ -40,6 +49,152 @@ public class StepNodeNameTest extends StepNodeTest {
         super();
         mNodeName = nodeName;
     }
+
+    public StepNodeNameTest(XPathModel xPathModel, SchemaComponent sComp, 
+            SchemaModelsStack sms) {
+        super();
+        assert (sComp instanceof Named);
+        String componentName = ((Named)sComp).getName();
+        QName sCompQName = null;
+        //
+        if (XPathUtils.isPrefixRequired(sComp)) {
+            //
+            String nsPrefix = null;
+            String namespaceURI = null;
+            if (sms == null) {
+                namespaceURI = sComp.getModel().getEffectiveNamespace(sComp);
+            } else {
+                namespaceURI = SchemaModelsStack.getEffectiveNamespace(sComp, sms);
+            }
+            assert namespaceURI != null;
+            //
+            NamespaceContext nsContext = xPathModel.getNamespaceContext();
+            if (nsContext != null) {
+                nsPrefix = nsContext.getPrefix(namespaceURI);
+                //
+                if (nsPrefix == null) {
+                    if (nsContext instanceof ExNamespaceContext) {
+                        try {
+                            nsPrefix = ((ExNamespaceContext) nsContext).
+                                    addNamespace(namespaceURI);
+                        } catch (InvalidNamespaceException ex) {
+                            ErrorManager.getDefault().notify(ex);
+                        }
+                    }
+                }
+                //
+                // Log a warning if prefix still not accessible 
+                if (nsPrefix == null) {
+                    ErrorManager.getDefault().log(ErrorManager.WARNING, 
+                            "A prefix has to be declared for the namespace " +
+                            "\"" + namespaceURI + "\""); // NOI18N
+                }
+            }
+            //
+            if (nsPrefix == null || nsPrefix.length() == 0) {
+                sCompQName = new QName(componentName);
+            } else {
+                sCompQName = new QName(namespaceURI, componentName, nsPrefix);
+            }
+        } else {
+            sCompQName = new QName(componentName);
+        }
+        mNodeName = sCompQName;
+    }
+    
+    public StepNodeNameTest(XPathModel xPathModel, XPathPseudoComp pseudo, 
+            SchemaModelsStack sms) {
+        super();
+        String componentName = pseudo.getName();
+        QName sCompQName = null;
+        //
+        String namespaceURI = pseudo.getNamespace();
+        boolean prefixRequired = namespaceURI != null && namespaceURI.length() != 0;
+        //
+        if (prefixRequired) {
+            //
+            String nsPrefix = null;
+            //
+            NamespaceContext nsContext = xPathModel.getNamespaceContext();
+            if (nsContext != null) {
+                nsPrefix = nsContext.getPrefix(namespaceURI);
+                //
+                if (nsPrefix == null) {
+                    if (nsContext instanceof ExNamespaceContext) {
+                        try {
+                            nsPrefix = ((ExNamespaceContext) nsContext).
+                                    addNamespace(namespaceURI);
+                        } catch (InvalidNamespaceException ex) {
+                            ErrorManager.getDefault().notify(ex);
+                        }
+                    }
+                }
+                //
+                // Log a warning if prefix still not accessible 
+                if (nsPrefix == null) {
+                    ErrorManager.getDefault().log(ErrorManager.WARNING, 
+                            "A prefix has to be declared for the namespace " +
+                            "\"" + namespaceURI + "\""); // NOI18N
+                }
+            }
+            //
+            if (nsPrefix == null || nsPrefix.length() == 0) {
+                sCompQName = new QName(componentName);
+            } else {
+                sCompQName = new QName(namespaceURI, componentName, nsPrefix);
+            }
+        } else {
+            sCompQName = new QName(componentName);
+        }
+        mNodeName = sCompQName;
+    }
+    
+    public StepNodeNameTest(XPathModel xPathModel, SchemaCompHolder sCompHolder, 
+            SchemaModelsStack sms) {
+        super();
+        String componentName = sCompHolder.getName();
+        QName sCompQName = null;
+        //
+        String namespaceURI = sCompHolder.getNamespace(sms);
+        boolean prefixRequired = namespaceURI != null && namespaceURI.length() != 0;
+        //
+        if (prefixRequired) {
+            //
+            String nsPrefix = null;
+            //
+            NamespaceContext nsContext = xPathModel.getNamespaceContext();
+            if (nsContext != null) {
+                nsPrefix = nsContext.getPrefix(namespaceURI);
+                //
+                if (nsPrefix == null) {
+                    if (nsContext instanceof ExNamespaceContext) {
+                        try {
+                            nsPrefix = ((ExNamespaceContext) nsContext).
+                                    addNamespace(namespaceURI);
+                        } catch (InvalidNamespaceException ex) {
+                            ErrorManager.getDefault().notify(ex);
+                        }
+                    }
+                }
+                //
+                // Log a warning if prefix still not accessible 
+                if (nsPrefix == null) {
+                    ErrorManager.getDefault().log(ErrorManager.WARNING, 
+                            "A prefix has to be declared for the namespace " +
+                            "\"" + namespaceURI + "\""); // NOI18N
+                }
+            }
+            //
+            if (nsPrefix == null || nsPrefix.length() == 0) {
+                sCompQName = new QName(componentName);
+            } else {
+                sCompQName = new QName(namespaceURI, componentName, nsPrefix);
+            }
+        } else {
+            sCompQName = new QName(componentName);
+        }
+        mNodeName = sCompQName;
+    }
     
     /**
      * Gets the node name.
@@ -52,7 +207,17 @@ public class StepNodeNameTest extends StepNodeTest {
     public boolean isWildcard() {
         return mNodeName.getLocalPart().equals("*"); // NOI18N
     }
+    
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof StepNodeNameTest) {
+            QName nodeName2 = ((StepNodeNameTest)obj).getNodeName();
+            return XPathUtils.equalsIgnorNsUri(nodeName2, mNodeName);
+        }
+        return false;
+    }
 
+    @Override
     public String toString() {
         return XPathUtils.qNameObjectToString(mNodeName);
     }
