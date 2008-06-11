@@ -45,9 +45,9 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import org.netbeans.api.visual.action.ActionFactory;
 import org.netbeans.api.visual.action.WidgetAction;
 import org.netbeans.api.visual.border.BorderFactory;
@@ -89,6 +89,8 @@ import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.netbeans.modules.uml.drawingarea.widgets.CombinedFragment;
 import org.netbeans.modules.uml.drawingarea.widgets.ContainerWidget;
 import org.netbeans.modules.uml.drawingarea.LabelManager;
+import org.netbeans.modules.uml.drawingarea.persistence.PersistenceUtil;
+import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeReader;
 
 /**
  *
@@ -99,7 +101,7 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
     private InteractionOperatorWidget operator;
     private Widget body;
     private Widget operandsContainer;
-    protected CombinedFragmentContainerWidget childContainer;
+    protected ContainerWidget childContainer;
     //
     private HashMap<IInteractionOperand, InteractionOperandWidget> operands = new HashMap<IInteractionOperand, InteractionOperandWidget>();
     private boolean isShowWidget;
@@ -131,7 +133,7 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
         setMinimumSize(new Dimension(120, 100));
 
         body.setPreferredLocation(new Point(0, 0));
-        childContainer=new CombinedFragmentContainerWidget(getScene());
+        childContainer=new ContainerWidget(getScene());
         childContainer.setPreferredLocation(new Point(0, 0));
         body.addChild(childContainer);
 
@@ -188,8 +190,7 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
             InteractionOperandWidget w=addOperand(i);
             getScene().validate();
         }
-    //
-
+    
     }
 
     @Override
@@ -207,7 +208,13 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
     
     @Override
     public String toString() {
-        return "CombinedFragmentWidget, some name etc" + super.toString();
+        ICombinedFragment cf= null;
+        if(getObject()!=null)
+        {
+            cf=(ICombinedFragment) getObject().getFirstSubject();
+            return "CombinedFragmentWidget: operator: "+ cf.getOperator()+"; name: "+cf.getName()+"; num operands: "+cf.getOperands().size()+"; bounds: "+getBounds()+"; ////" + super.toString();
+        }
+        else return super.toString();
     }
 
     public String getKind() {
@@ -393,11 +400,26 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
                 OperandsMoveProvider provider = new OperandsMoveProvider();
                 WidgetAction operandMoveAction = ActionFactory.createMoveAction(provider, provider);
                 selectTool.addAction(operandMoveAction);
-                Dimension minS=getMinimumSize();
-                if(minS!=null)
+                switch(getResizeMode())
                 {
-                    minS.height+=100;
-                    setMinimumSize(minS);
+                    case MINIMUMSIZE:
+                    Dimension minS=getMinimumSize();
+                    if(minS!=null)
+                    {
+                        minS.height+=100;
+                        setMinimumSize(minS);
+                    }
+                    break;
+                    case PREFERREDBOUNDS:
+                        Rectangle prefBnd=null;
+                        if(isPreferredBoundsSet())prefBnd=getPreferredBounds();
+                        if(prefBnd!=null)
+                        {
+                            prefBnd.height+=100;
+                            setPreferredBounds(prefBnd);
+                        }
+                        break;
+                        //other unsupported
                 }
             }
         }
@@ -666,7 +688,7 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
             int x=40;//???
             if(messageBeforeW!=null)
             {
-                y=messageBeforeW.getSourceAnchor().getRelatedSceneLocation().y;
+                y=messageBeforeW.getSourceAnchor().getRelatedSceneLocation().y+10;
             }
             if(cfBeforeW!=null)
             {
@@ -676,7 +698,7 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
             y+=20;
             if(y<100)y=100;
             int width=150;
-            int height=operandsContainer.getChildren().size()*50;
+            int height=operandsContainer.getChildren().size()*40;
             if(height<50)height=50;
             bounds=new Rectangle(x,y,width,height);
             int ioHeight=height/operandInCf.size();
@@ -744,7 +766,13 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
         {
             revalidate();
         }
-        //scene.validate();
+        new AfterValidationExecutor(new ActionProvider() {
+            public void perfomeAction() {
+                getContainer().calculateChildren(true);;
+            }
+        }
+        , scene);
+        scene.validate();
         //if size changed especially but anyway also need to recalculate graphically contained children
         //getContainer().calculateChildren(true);
         //need to do it after all sizes determination if set of containers are positioned, so call outside
@@ -781,68 +809,69 @@ public class CombinedFragmentWidget extends ContainerNode implements PropertyCha
         this.cfAfter=cf;
         this.cfAfterW=(CombinedFragmentWidget) cfW;
     }
-    @Override
-    protected void notifyAdded () 
-    {
-        // this is invoked when this widget or its parent gets added, only need to
-        // process the case when this widget is changed, same for notifyRemoved to 
-        // avoid concurrent modification to children list
-        for(InteractionOperandWidget ioW:operands.values())
-        {
-            MovableLabelWidget labelWidget=ioW.getLabel();
-            if (labelWidget == null || getParentWidget() == labelWidget.getParentWidget())
-            {
-                return;
-            }
-            labelWidget.removeFromParent();
-            int index = getParentWidget().getChildren().indexOf(this);
-            getParentWidget().addChild(index + 1, labelWidget);
-        }
-    }
-    
-    @Override
-    protected void notifyRemoved()
-    {
-         for(InteractionOperandWidget ioW:operands.values())
-        {
-            MovableLabelWidget labelWidget=ioW.getLabel();
-            if (labelWidget != null && getParentWidget() == null)
-            {           
-                labelWidget.removeFromParent();
-            }
-         }
-    }
 
+//    @Override
+//    public void load(NodeInfo nodeReader) {
+//        super.load(nodeReader);
+//        ArrayList<String> offsetsStr=nodeReader.getDevidersOffests();//currently deviders are used from ts import only, may be will be used in 6.5 loading later
+//        for(int i=0;i<offsetsStr.size();i++)
+//        {
+//            int offset=Integer.parseInt(offsetsStr.get(i));
+//            if(operandsContainer.getChildren().size()>(i+1))
+//            {
+//                Widget opW=operandsContainer.getChildren().get(i+1);//1st operand do not count
+//                Point opWLoc=opW.getPreferredLocation();
+//                opWLoc.y=offset;
+//                opW.setPreferredLocation(opWLoc);
+//            }
+//        }
+//        ArrayList<NodeInfo.NodeLabel> nodeLabels=nodeReader.getLabels();
+//        ArrayList<IElement> shownElements=new ArrayList<IElement>();
+//        for(int i=0;i<nodeLabels.size();i++)
+//        {
+//            NodeInfo.NodeLabel nL=nodeLabels.get(i);
+//            shownElements.add(nL.getElement());
+//        }
+//        for(IInteractionOperand io:operands.keySet())
+//        {
+//            if(shownElements.contains(io.getGuard().getSpecification()))
+//            {
+//                operands.get(io).show(LabeledWidget.TYPE.BODY);
+//            }
+//        }
+//    }
+     IElementLocator locator = new ElementLocator();
     @Override
-    public void load(NodeInfo nodeReader) {
-        super.load(nodeReader);
-        ArrayList<String> offsetsStr=nodeReader.getDevidersOffests();//currently deviders are used from ts import only, may be will be used in 6.5 loading later
-        for(int i=0;i<offsetsStr.size();i++)
+    public void load(NodeInfo nodeReader)
+    {
+        IElement elt = nodeReader.getModelElement();
+        if (elt == null)
         {
-            int offset=Integer.parseInt(offsetsStr.get(i));
-            if(operandsContainer.getChildren().size()>(i+1))
+            elt = locator.findByID(nodeReader.getProject(), nodeReader.getMEID());
+        }            
+        if (elt != null && elt instanceof ICombinedFragment)
+        {
+            super.load(nodeReader);            
+        } 
+        else if (elt != null && elt instanceof IInteractionOperand)
+        {
+            //find the proper operand,and set its size and other properties
+            System.out.println("hello");
+            InteractionOperandWidget iow = operands.get(elt);
+            if (iow != null && iow instanceof DiagramNodeReader)
             {
-                Widget opW=operandsContainer.getChildren().get(i+1);//1st operand do not count
-                Point opWLoc=opW.getPreferredLocation();
-                opWLoc.y=offset;
-                opW.setPreferredLocation(opWLoc);
-            }
-        }
-        ArrayList<NodeInfo.NodeLabel> nodeLabels=nodeReader.getLabels();
-        ArrayList<IElement> shownElements=new ArrayList<IElement>();
-        for(int i=0;i<nodeLabels.size();i++)
-        {
-            NodeInfo.NodeLabel nL=nodeLabels.get(i);
-            shownElements.add(nL.getElement());
-        }
-        for(IInteractionOperand io:operands.keySet())
-        {
-            if(shownElements.contains(io.getGuard().getSpecification()))
-            {
-                operands.get(io).show(LabeledWidget.TYPE.BODY);
+                IPresentationElement pElt = PersistenceUtil.getPresentationElement(iow);
+                nodeReader.setPresentationElement(pElt);
+                ((DiagramNodeReader)iow).load(nodeReader);
             }
         }
     }
     
+    @Override
+    public void loadDependencies(NodeInfo nodeReader) {
+        Collection nodeLabels = nodeReader.getLabels();
+        //do we have any node labels here? guess not..
+        System.out.println(" NodeLabels = "+nodeLabels.toString());
+    }
     
 }
