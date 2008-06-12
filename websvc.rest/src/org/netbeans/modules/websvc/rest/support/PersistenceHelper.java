@@ -56,14 +56,12 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.websvc.rest.codegen.model.EntityClassInfo;
-import org.netbeans.modules.websvc.rest.codegen.model.EntityResourceBeanModel;
+import org.netbeans.modules.websvc.rest.RestUtils;
 import org.netbeans.modules.websvc.rest.spi.RestSupport;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
+import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 import org.w3c.dom.Document;
 import org.w3c.dom.DocumentType;
@@ -87,7 +85,11 @@ public class PersistenceHelper {
     private static final String PROPERTIES_TAG = "properties";      //NOI18N
     private static final String NAME_ATTR = "name";                 //NOI18N
     private static final String EXCLUDE_UNLISTED_CLASSES_TAG = "exclude-unlisted-classes";      //NOI18N
-    
+    private static final String TRANSACTION_TYPE_ATTR = "transaction-type";         //NOI18N
+    private static final String RESOURCE_LOCAL_VALUE = "RESOURCE_LOCAL";        //NOI18N
+    private static final String JTA_DATA_SOURCE_TAG = "jta-data-source";        //NOI18N
+    private static final String NON_JTA_DATA_SOURCE_TAG = "non-jta-data-source";        //NOI18N
+
     private static int TIME_TO_WAIT = 300;
     
     public static String getPersistenceUnitName(Project project) {
@@ -105,32 +107,26 @@ public class PersistenceHelper {
         return null;
     }
     
-    public static void addEntityClasses(Project project, Collection<String> classNames) throws IOException {
-        List<String> toAdd = new ArrayList<String>(classNames);
+    public static void modifyPersistenceXml(Project project, boolean useResourceLocalTx) throws IOException {
         FileObject fobj = getPersistenceXML(project);
         Document document = getDocument(fobj);
-        Element puElement = getPersistenceUnitElement(document);
-        NodeList nodes = puElement.getElementsByTagName(CLASS_TAG);
-        int length = nodes.getLength();
         
-        for (int i = 0; i < length; i++) {
-            toAdd.remove(getValue((Element) nodes.item(i)));
-        }
+        // Need to do this for Tomcat
+        unsetExcludeEnlistedClasses(document);
         
-        Element propElement = getPropertiesElement(document);
-        
-        for (String className : toAdd) {   
-            puElement.insertBefore(createElement(document, CLASS_TAG, className),
-                    propElement);
-        }
+        if (useResourceLocalTx)
+            switchToResourceLocalTransaction(document);
         
         writeDocument(fobj, document);
     }
     
-    
-    public static void unsetExcludeEnlistedClasses(Project project) throws IOException {
+    public static void unsetExcludeEnlistedClasses(Project project) throws IOException{
         FileObject fobj = getPersistenceXML(project);
         Document document = getDocument(fobj);
+        unsetExcludeEnlistedClasses(document);
+    }
+    
+    private static void unsetExcludeEnlistedClasses(Document document) throws IOException {
         Element puElement = getPersistenceUnitElement(document);
         NodeList nodes = puElement.getElementsByTagName(EXCLUDE_UNLISTED_CLASSES_TAG);
     
@@ -140,10 +136,23 @@ public class PersistenceHelper {
             puElement.insertBefore(createElement(document, EXCLUDE_UNLISTED_CLASSES_TAG, "false"),  //NOI18N
                     getPropertiesElement(document));
         }
-        
-        writeDocument(fobj, document);
     }
      
+    private static void switchToResourceLocalTransaction(Document document)  throws IOException {
+        Element puElement = getPersistenceUnitElement(document);
+        puElement.setAttribute(TRANSACTION_TYPE_ATTR, RESOURCE_LOCAL_VALUE);
+        
+        NodeList nodes = puElement.getElementsByTagName(JTA_DATA_SOURCE_TAG);
+        String dataSource = null;
+        
+        if (nodes.getLength() > 0) {
+            Element oldElement = (Element) nodes.item(0);
+            dataSource = getValue(oldElement);
+            Element newElement = createElement(document, NON_JTA_DATA_SOURCE_TAG, dataSource);
+            puElement.replaceChild(newElement, oldElement);
+        }
+    }
+    
     private static String getValue(Element element) {
         Node child = element.getFirstChild();
         
@@ -201,7 +210,7 @@ public class PersistenceHelper {
     }      
     
     private static FileObject getPersistenceXML(Project project) {
-        RestSupport rs = project.getLookup().lookup(RestSupport.class);
+        RestSupport rs = RestUtils.getRestSupport(project);
         if (rs != null) {
             return rs.getPersistenceXml();
         }
@@ -232,13 +241,13 @@ public class PersistenceHelper {
                     
                     //transformer.transform(source, new StreamResult(System.out));
                 } catch (Exception ex) {
-                    ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+                    Exceptions.printStackTrace(ex);
                 } finally {
                     if (os != null) {
                         try {
                             os.close();
                         } catch (IOException ex) {
-                            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+                            Exceptions.printStackTrace(ex);
                         }
                     }
                     
@@ -265,15 +274,15 @@ public class PersistenceHelper {
             is = fobj.getInputStream();
             document = builder.parse(is);
         } catch (SAXException ex) {
-            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+            Exceptions.printStackTrace(ex);
         } catch (IOException ex) {
-            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+            Exceptions.printStackTrace(ex);
         } finally {
             if (is != null) {
                 try {
                     is.close();
                 } catch (IOException ex) {
-                    ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+                    Exceptions.printStackTrace(ex);
                 }
             }
             
@@ -302,7 +311,7 @@ public class PersistenceHelper {
             builder = factory.newDocumentBuilder();
             builder.setEntityResolver(new SunWebDTDResolver());
         } catch (ParserConfigurationException ex) {
-            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+            Exceptions.printStackTrace(ex);
         }
         
         return builder;
