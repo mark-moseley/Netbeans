@@ -41,13 +41,8 @@
 
 package org.netbeans.modules.debugger.jpda;
 
-import com.sun.jdi.AbsentInformationException;
 import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.event.LocatableEvent;
-import java.beans.PropertyChangeListener;
-import java.lang.reflect.InvocationTargetException;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.awt.Color;
 import java.awt.Dialog;
 import java.awt.GridBagLayout;
@@ -71,14 +66,12 @@ import javax.swing.UIManager;
 
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.Session;
-import org.netbeans.api.debugger.jpda.CallStackFrame;
 import org.netbeans.api.debugger.jpda.JPDABreakpoint;
 import org.netbeans.api.debugger.jpda.JPDAStep;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import com.sun.jdi.event.Event;
 import com.sun.jdi.request.BreakpointRequest;
-import com.sun.jdi.ThreadReference;
 import com.sun.jdi.request.StepRequest;
 import com.sun.jdi.request.EventRequest;
 import com.sun.jdi.request.EventRequestManager;
@@ -91,24 +84,18 @@ import com.sun.jdi.ThreadReference;
 import com.sun.jdi.VirtualMachine;
 import org.netbeans.api.debugger.jpda.JPDAThreadGroup;
 import org.netbeans.api.debugger.jpda.MethodBreakpoint;
-import org.netbeans.api.debugger.jpda.SmartSteppingFilter;
 import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.api.debugger.jpda.event.JPDABreakpointEvent;
 import org.netbeans.api.debugger.jpda.event.JPDABreakpointListener;
 import org.netbeans.modules.debugger.jpda.JPDAStepImpl.SingleThreadedStepWatch;
-import org.netbeans.modules.debugger.jpda.actions.SmartSteppingFilterImpl;
 import org.netbeans.modules.debugger.jpda.breakpoints.MethodBreakpointImpl;
 import org.netbeans.modules.debugger.jpda.util.Executor;
-import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
 import org.netbeans.modules.debugger.jpda.actions.StepIntoActionProvider;
 import org.netbeans.modules.debugger.jpda.models.JPDAThreadImpl;
 import org.netbeans.spi.debugger.jpda.EditorContext.Operation;
 import org.openide.DialogDescriptor;
-import org.openide.DialogDescriptor;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.URLMapper;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
@@ -153,6 +140,7 @@ public class JPDAStepImpl extends JPDAStep implements Executor {
             erm.deleteEventRequests(stepRequests);
             for (StepRequest stepRequest : stepRequests) {
                 SingleThreadedStepWatch.stepRequestDeleted(stepRequest);
+                debuggerImpl.getOperator().unregister(stepRequest);
             }
             int size = getSize();
             boolean stepAdded = false;
@@ -405,16 +393,7 @@ public class JPDAStepImpl extends JPDAStep implements Executor {
             if (eventRequest instanceof StepRequest) {
                 SingleThreadedStepWatch.stepRequestDeleted((StepRequest) eventRequest);
             }
-            if (operationBreakpoints != null) {
-                for (Iterator<BreakpointRequest> it = operationBreakpoints.iterator(); it.hasNext(); ) {
-                    erm.deleteEventRequest(it.next());
-                }
-                this.operationBreakpoints = null;
-            }
-            if (boundaryStepRequest != null) {
-                erm.deleteEventRequest(boundaryStepRequest);
-                SingleThreadedStepWatch.stepRequestDeleted(boundaryStepRequest);
-            }
+            removed(eventRequest); // Clean-up
             int suspendPolicy = debugger.getSuspend();
             if (addExprStep) {
                 stepAdded = addOperationStep(tr, true, sourcePath,
@@ -433,16 +412,43 @@ public class JPDAStepImpl extends JPDAStep implements Executor {
             return true; // Resume
         }
         firePropertyChange(PROP_STATE_EXEC, null, null);
-        if (! getHidden()) {
-            DebuggerManager.getDebuggerManager().setCurrentSession(session);
-            debuggerImpl.setStoppedState(tr.getThreadReference());
-        }
         if (getHidden()) {
             return true; // Resume
         } else {
             tr.holdLastOperations(false);
             return false;
         }
+    }
+    
+    public void removed(EventRequest eventRequest) {
+        if (stepWatch != null) {
+            stepWatch.done();
+            stepWatch = null;
+        }
+        if (lastMethodExitBreakpointListener != null) {
+            lastMethodExitBreakpointListener.destroy();
+            lastMethodExitBreakpointListener = null;
+        }
+        JPDADebuggerImpl debuggerImpl = (JPDADebuggerImpl)debugger;
+        VirtualMachine vm = debuggerImpl.getVirtualMachine();
+        if (vm == null) {
+            return ; // The session has finished
+        }
+        EventRequestManager erm = vm.eventRequestManager();
+        if (operationBreakpoints != null) {
+            for (Iterator<BreakpointRequest> it = operationBreakpoints.iterator(); it.hasNext(); ) {
+                BreakpointRequest br = it.next();
+                erm.deleteEventRequest(br);
+                debuggerImpl.getOperator().unregister(br);
+            }
+            this.operationBreakpoints = null;
+        }
+        if (boundaryStepRequest != null) {
+            erm.deleteEventRequest(boundaryStepRequest);
+            SingleThreadedStepWatch.stepRequestDeleted(boundaryStepRequest);
+            debuggerImpl.getOperator().unregister(boundaryStepRequest);
+        }
+        
     }
     
     /**
@@ -531,7 +537,7 @@ public class JPDAStepImpl extends JPDAStep implements Executor {
                 return false; // The session has finished
             }
             int depth;
-            Map properties = (Map) session.lookupFirst (null, Map.class);
+            Map properties = session.lookupFirst(null, Map.class);
             if (properties != null && properties.containsKey (StepIntoActionProvider.SS_STEP_OUT)) {
                 depth = StepRequest.STEP_OUT;
             } else {
@@ -624,6 +630,7 @@ public class JPDAStepImpl extends JPDAStep implements Executor {
         
         public void done() {
             synchronized (this) {
+                if (watchTask == null) return;
                 watchTask.cancel();
                 watchTask = null;
                 if (dialog != null) {
