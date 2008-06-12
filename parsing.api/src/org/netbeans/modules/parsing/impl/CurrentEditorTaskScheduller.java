@@ -39,51 +39,50 @@
 
 package org.netbeans.modules.parsing.impl;
 
-import java.util.Collections;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 
-import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenHierarchyEvent;
-import org.netbeans.api.lexer.TokenHierarchyListener;
-import org.netbeans.modules.parsing.api.Source;
-import org.netbeans.modules.parsing.spi.SchedulerEvent;
-import org.netbeans.modules.parsing.spi.TokenHierarchySchedulerEvent;
+import org.netbeans.api.editor.EditorRegistry;
+import org.netbeans.modules.editor.NbEditorUtilities;
+import org.netbeans.modules.parsing.spi.TaskScheduler;
+import org.openide.filesystems.FileObject;
 
 
 /**
  *
  * @author Jan Jancura
  */
-public class CurrentDocumentTaskScheduller extends CurrentEditorTaskScheduller {
+public abstract class CurrentEditorTaskScheduller extends TaskScheduler {
     
-    private Document        currentDocument;
-    private Source          source;
-    private TokenHierarchyListener
-                            tokenHierarchyListener = new ATokenHierarchyListener ();
+    private JTextComponent  currentEditor;
     
-    protected void setEditor (JTextComponent editor) {
-        Document document = editor.getDocument ();
-        if (currentDocument == document) return;
-        if (currentDocument != null)
-            TokenHierarchy.get (document).removeTokenHierarchyListener (tokenHierarchyListener);
-        currentDocument = document;            
-        source = Source.create (currentDocument);
-        scheduleTasks (Collections.singleton (source), new SchedulerEvent (this) {});
-        TokenHierarchy.get (document).addTokenHierarchyListener (tokenHierarchyListener);
+    public CurrentEditorTaskScheduller () {
+        currentEditor = EditorRegistry.focusedComponent ();
+        EditorRegistry.addPropertyChangeListener (new AListener ());
     }
     
-    private class ATokenHierarchyListener implements TokenHierarchyListener {
-
-        public void tokenHierarchyChanged (TokenHierarchyEvent evt) {
-            scheduleTasks (
-                Collections.singleton (source), 
-                new TokenHierarchySchedulerEvent (this, evt) {}
-            );
+    protected abstract void setEditor (JTextComponent editor);
+    
+    private class AListener implements PropertyChangeListener {
+    
+        public void propertyChange (PropertyChangeEvent evt) {
+            if (evt.getPropertyName () == null ||
+                evt.getPropertyName ().equals (EditorRegistry.FOCUSED_DOCUMENT_PROPERTY) ||
+                evt.getPropertyName ().equals (EditorRegistry.FOCUS_GAINED_PROPERTY)
+            ) {
+                JTextComponent editor = EditorRegistry.focusedComponent ();
+                if (editor == currentEditor) return;
+                currentEditor = editor;
+                Document document = editor.getDocument ();
+                FileObject fileObject = NbEditorUtilities.getFileObject (document);
+                if (fileObject == null) {
+                    System.out.println("no file object for " + document);
+                    return;
+                }
+                setEditor (currentEditor);
+            }
         }
-        
     }
 }
-
-
-

@@ -39,6 +39,9 @@
 
 package org.netbeans.modules.parsing.api;
 
+import java.util.ArrayList;
+import java.util.List;
+
 
 /**
  * Snapshot represents some part of text. Snapshot can be created from 
@@ -57,7 +60,8 @@ public final class Snapshot {
     
     private CharSequence    text;
     private String          mimeType;
-    int[][]                 positions;
+    int[][]                 currentToOriginal;
+    int[][]                 originalToCurrent;
     private Source          source;
     
    
@@ -65,12 +69,16 @@ public final class Snapshot {
         CharSequence        text, 
         Source              source,
         String              mimeType,
-        int[][]             positions
+        int[][]             currentToOriginal,
+        int[][]             originalToCurrent
     ) {
         this.text =         text;
         this.source =       source;
         this.mimeType =     mimeType;
-        this.positions =    positions;
+        this.currentToOriginal =    
+                            currentToOriginal;
+        this.originalToCurrent = 
+                            originalToCurrent;
     }
     
     /**
@@ -89,12 +97,52 @@ public final class Snapshot {
         int                 length, 
         String              mimeType
     ) {
-        int originalOffset = getOriginalOffset (offset);
+        if (offset < 0 || length < 0)
+            throw new ArrayIndexOutOfBoundsException ();
+        if (offset + length >= getText ().length ())
+            throw new ArrayIndexOutOfBoundsException ();
+        List<int[]> newCurrentToOriginal = new ArrayList<int[]> ();
+        List<int[]> newOriginalToCurrent = new ArrayList<int[]> ();
+        int i = 1;
+        while (i < currentToOriginal.length && currentToOriginal [i] [0] <= offset) i++;
+        if (currentToOriginal [i - 1] [1] < 0)
+            newCurrentToOriginal.add (new int[] {
+                0, currentToOriginal [i - 1] [1]
+            });
+        else {
+            newCurrentToOriginal.add (new int[] {
+                0, currentToOriginal [i - 1] [1] + offset
+            });
+            newOriginalToCurrent.add (new int[] {
+                currentToOriginal [i - 1] [1] + offset, 0
+            });
+        }
+        for (; i < currentToOriginal.length && currentToOriginal [i] [0] < offset + length; i++) {
+            newCurrentToOriginal.add (new int[] {
+                currentToOriginal [i] [0] - offset, currentToOriginal [i] [1]
+            });
+            if (currentToOriginal [i] [1] >= 0)
+                newOriginalToCurrent.add (new int[] {
+                    currentToOriginal [i] [1], currentToOriginal [i] [0] - offset
+                });
+            else
+                newOriginalToCurrent.add (new int[] {
+                    newOriginalToCurrent.get (i - 1) [0] + newCurrentToOriginal.get (i) [0] - newCurrentToOriginal.get (i - 1) [0], -1
+                });
+        }
+        if (newOriginalToCurrent.get (newOriginalToCurrent.size () - 1) [1] >= 0)
+            newOriginalToCurrent.add (new int[] {
+                newOriginalToCurrent.get (newOriginalToCurrent.size () - 1) [0] + 
+                    length - 
+                    newOriginalToCurrent.get (newOriginalToCurrent.size () - 1) [1], 
+                -1
+            });
         Snapshot snapshot = new Snapshot (
             getText ().subSequence (offset, offset + length),
             source,
             mimeType,
-            new int[][] {new int[] {0, originalOffset}}
+            (int[][]) newCurrentToOriginal.toArray (new int [newCurrentToOriginal.size ()][]),
+            (int[][]) newOriginalToCurrent.toArray (new int [newOriginalToCurrent.size ()][])
         );
         return new Embedding (
             snapshot, 
@@ -114,7 +162,7 @@ public final class Snapshot {
         String              mimeType
     ) {
         return new Embedding (
-            new Snapshot (charSequence, source, mimeType, new int[][] {new int[] {}}),
+            new Snapshot (charSequence, source, mimeType, new int[][] {new int[] {0, -1}}, new int[][] {}),
             mimeType
         
         );
@@ -152,20 +200,25 @@ public final class Snapshot {
     public int getOriginalOffset (
         int                 offset
     ) {
+        if (offset >= getText ().length ())
+            throw new ArrayIndexOutOfBoundsException ();
 	int low = 0;
-	int high = positions.length - 1;
+	int high = currentToOriginal.length - 1;
 
 	while (low <= high) {
 	    int mid = (low + high) >> 1;
-	    int cmp = positions [mid] [0];
+	    int cmp = currentToOriginal [mid] [0];
             
             if (cmp > offset) 
 		high = mid - 1;
             else
-            if (mid == positions.length - 1 ||
-                positions [mid + 1] [0] > offset
+            if (mid == currentToOriginal.length - 1 ||
+                currentToOriginal [mid + 1] [0] > offset
             )
-                return offset - positions [mid] [0] + positions [mid] [1];
+                if (currentToOriginal [mid] [1] < 0)
+                    return currentToOriginal [mid] [1];
+                else
+                    return offset - currentToOriginal [mid] [0] + currentToOriginal [mid] [1];
             else
 		low = mid + 1;
 	}
@@ -186,22 +239,22 @@ public final class Snapshot {
         int                 originalOffset
     ) {
 	int low = 0;
-	int high = positions.length - 1;
+	int high = originalToCurrent.length - 1;
 
 	while (low <= high) {
 	    int mid = (low + high) >> 1;
-	    int cmp = positions [mid] [1];
+	    int cmp = originalToCurrent [mid] [0];
             
             if (cmp > originalOffset) 
 		high = mid - 1;
             else
-            if (mid == positions.length - 1 ||
-                positions [mid + 1] [1] > originalOffset
+            if (mid == originalToCurrent.length - 1 ||
+                originalToCurrent [mid + 1] [0] > originalOffset
             )
-                if (originalOffset < positions [mid + 1] [0] - positions [mid] [0] + positions [mid] [1])
-                    return originalOffset - positions [mid] [1] + positions [mid] [0];
+                if (originalToCurrent [mid] [1] < 0)
+                    return originalToCurrent [mid] [1];
                 else
-                    return -1;
+                    return originalOffset - originalToCurrent [mid] [0] + originalToCurrent [mid] [1];
             else
 		low = mid + 1;
 	}
@@ -209,9 +262,9 @@ public final class Snapshot {
     }
     
     /**
-     * Returns source this shapshot has originally been created from.
+     * Returns source this snapshot has originally been created from.
      * 
-     * @return              a source this shapshot has originally been created from.
+     * @return              a source this snapshot has originally been created from.
      */
     public Source getSource () {
         return source;
