@@ -42,6 +42,7 @@
 package org.netbeans.api.java.source;
 
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.Trees;
@@ -50,8 +51,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
@@ -59,12 +58,16 @@ import javax.lang.model.util.Types;
 import javax.swing.text.Document;
 import javax.tools.Diagnostic;
 import org.netbeans.api.lexer.TokenHierarchy;
+import org.netbeans.modules.java.source.parsing.CompilationInfoImpl;
+import org.netbeans.modules.java.source.parsing.DocPositionRegion;
 import org.netbeans.modules.java.source.parsing.FileObjects;
-import org.openide.cookies.EditorCookie;
+import org.netbeans.modules.java.source.parsing.JavacParser;
+import org.netbeans.modules.java.source.parsing.JavacParserResult;
+import org.netbeans.modules.java.source.usages.Pair;
+import org.netbeans.modules.parsing.spi.Parser;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.util.Parameters;
 
 /** Asorted information about the JavaSource.
  *
@@ -85,11 +88,23 @@ public class CompilationInfo {
     private TreeUtilities treeUtilities;
     //@GuarderBy(this)
     private TypeUtilities typeUtilities;
+    //@NotThreadSafe
+    private JavaSource javaSource;
     
     
     CompilationInfo (final CompilationInfoImpl impl)  {
         assert impl != null;
         this.impl = impl;
+    }
+    
+    public static CompilationInfo get (final Parser.Result result) {
+        Parameters.notNull("result", result);   //NOI18N
+        CompilationInfo info = null;
+        if (result instanceof JavacParserResult) {
+            final JavacParserResult javacResult = (JavacParserResult)result;            
+            info = javacResult.get(CompilationInfo.class);            
+        }
+        return info;
     }
              
     // API of the class --------------------------------------------------------
@@ -102,7 +117,36 @@ public class CompilationInfo {
         checkConfinement();
         return this.impl.getPhase();
     }
-       
+    
+    /**
+     * Returns tree which was reparsed by an incremental reparse.
+     * When the source file wasn't parsed yet or the parse was a full parse
+     * this method returns null.
+     * <p class="nonnormative">
+     * Currently the leaf tree is a MethodTree but this may change in the future.
+     * Client of this method is responsible to check the corresponding TreeKind
+     * to find out if it may perform on the changed subtree or it needs to
+     * reprocess the whole tree.
+     * </p>
+     * @return {@link TreePath} or null
+     * @since 0.31
+     */
+    public TreePath getChangedTree () {
+        checkConfinement();
+        if (JavaSource.Phase.PARSED.compareTo (impl.getPhase())>0) {
+            return null;
+        }
+        final Pair<DocPositionRegion,MethodTree> changedTree = impl.getChangedTree();
+        if (changedTree == null) {
+            return null;
+        }
+        final CompilationUnitTree cu = impl.getCompilationUnit();
+        if (cu == null) {
+            return null;
+        }
+        return TreePath.getPath(cu, changedTree.second);
+    }       
+    
     /**
      * Returns the javac tree representing the source file.
      * @return {@link CompilationUnitTree} the compilation unit cantaining the top level classes contained in the,
@@ -151,16 +195,15 @@ public class CompilationInfo {
      */
     public List<? extends TypeElement> getTopLevelElements () throws IllegalStateException {
         checkConfinement();
-        if (this.impl.getPositionConverter() == null) {
+        if (this.impl.getFileObject() == null) {
             throw new IllegalStateException ();
         }
         final List<TypeElement> result = new ArrayList<TypeElement>();
-        final JavaSource javaSource = this.impl.getJavaSource();
-        if (javaSource.isClassFile()) {
+        if (this.impl.isClassFile()) {
             Elements elements = getElements();
             assert elements != null;
-            assert javaSource.rootFo != null;
-            String name = FileObjects.convertFolder2Package(FileObjects.stripExtension(FileUtil.getRelativePath(javaSource.rootFo, getFileObject())));
+            assert this.impl.getRoot() != null;
+            String name = FileObjects.convertFolder2Package(FileObjects.stripExtension(FileUtil.getRelativePath(this.impl.getRoot(), this.impl.getFileObject())));
             TypeElement e = ((JavacElements)elements).getTypeElementByBinaryName(name);
             if (e != null) {                
                 result.add (e);
@@ -222,7 +265,11 @@ public class CompilationInfo {
      */
     public JavaSource getJavaSource() {
         checkConfinement();
-        return this.impl.getJavaSource();
+        return javaSource;
+    }
+    
+    void setJavaSource (final JavaSource javaSource) {
+        this.javaSource = javaSource;
     }
     
     /**
@@ -253,7 +300,10 @@ public class CompilationInfo {
      */
     public PositionConverter getPositionConverter() {
         checkConfinement();
-        return this.impl.getPositionConverter();
+        if (this.impl.getFileObject() == null) {
+            throw new IllegalStateException ();
+        }
+        return new PositionConverter(impl.getSnapshot());
     }
             
     /**
@@ -264,28 +314,7 @@ public class CompilationInfo {
      */
     public Document getDocument() throws IOException { //XXX cleanup: IOException is no longer required? Used by PositionEstimator, DiffFacility
         checkConfinement();
-        final PositionConverter binding = this.impl.getPositionConverter();
-        FileObject fo;
-        if (binding == null || (fo=binding.getFileObject()) == null) {
-            return null;
-        }
-        if (!fo.isValid()) {
-            return null;
-        }
-        try {
-            DataObject od = DataObject.find(fo);            
-            EditorCookie ec = od.getCookie(EditorCookie.class);
-            if (ec != null) {
-                return  ec.getDocument();
-            } else {
-                return null;
-            }
-        } catch (DataObjectNotFoundException e) {
-            //may happen when the underlying FileObject has just been deleted
-            //should be safe to ignore
-            Logger.getLogger(CompilationInfo.class.getName()).log(Level.FINE, null, e);
-            return null;
-        }
+        return this.impl.getDocument();
     }
     
     
@@ -332,6 +361,14 @@ public class CompilationInfo {
      */
     final void invalidate () {
         this.invalid = true;
+        doInvalidate();
+    }
+    
+    protected void doInvalidate () {
+        final JavacParser parser = this.impl.getParser();
+        if (parser != null) {
+            parser.resultFinished (true);
+        }
     }
     
     /**
