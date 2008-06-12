@@ -86,6 +86,8 @@ import org.openide.util.Parameters;
  */
 public final class Deployment {
 
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(Deployment.class.getName());
+            
     private static boolean alsoStartTargets = true;    //TODO - make it a property? is it really needed?
     
     private static Deployment instance = null;
@@ -306,11 +308,32 @@ public final class Deployment {
         }
         return (String[])result.toArray(new String[result.size()]);
     }
-    
+
+    /**
+     * Returns the display name of the instance identified by the given id.
+     *
+     * @param id id of the instance
+     * @return the display name of the instance, <code>null</code> if the
+     *             instance does not exist or not defined
+     * @deprecated use <code>getServerInstance(serverInstanceID).getDisplayName()</code>
+     */
     public String getServerInstanceDisplayName (String id) {
-        return ServerRegistry.getInstance ().getServerInstance (id).getDisplayName ();
+        ServerInstance si = ServerRegistry.getInstance().getServerInstance(id);
+        if (si != null) {
+            return si.getDisplayName();
+        }
+        return null;
     }
-    
+
+    /**
+     * Returns the id of the server to which the instance represented
+     * by the id belongs to.
+     *
+     * @param instanceId id of the instance
+     * @return the id of the server, <code>null</code> if the
+     *             instance does not exist
+     * @deprecated use <code>getServerInstance(serverInstanceID).getServerID()</code>
+     */
     public String getServerID (String instanceId) {
         ServerInstance si = ServerRegistry.getInstance().getServerInstance(instanceId);
         if (si != null) {
@@ -351,8 +374,12 @@ public final class Deployment {
         ServerInstance instance = ServerRegistry.getInstance().getServerInstance(instanceId);
         if (null != instance) {
             IncrementalDeployment incr = instance.getIncrementalDeployment();
-            if (null != incr) {
-                retVal = incr.canFileDeploy(null, mod);
+            try {
+                if (null != incr && null != mod.getContentDirectory()) {
+                    retVal = incr.canFileDeploy(null, mod);
+                }
+            } catch (IOException ioe) {
+                java.util.logging.Logger.getLogger("global").log(Level.FINER,"",ioe); // NOI18N                
             }
         }
         return retVal;
@@ -372,7 +399,20 @@ public final class Deployment {
         }
         return new String[0];
     }
-    
+
+    /**
+     * Returns the server instance allowing client to query its properties
+     * and/or status.
+     *
+     * @param serverInstanceId id of the server instance
+     * @return server instance
+     * @since 1.45
+     */
+    public org.netbeans.modules.j2ee.deployment.devmodules.api.ServerInstance getServerInstance(String serverInstanceId) {
+        Parameters.notNull("serverInstanceId", serverInstanceId);
+        return new org.netbeans.modules.j2ee.deployment.devmodules.api.ServerInstance(serverInstanceId);
+    }
+
     public String [] getServerIDs () {
         Collection c = ServerRegistry.getInstance ().getServers ();
         String ids [] = new String [c.size ()];
@@ -391,6 +431,7 @@ public final class Deployment {
      * @return <code>J2eePlatform</code> for the given server instance, <code>null</code> if
      *         server instance of the specified ID does not exist.
      * @since 1.5
+     * @deprecated use <code>getServerInstance(serverInstanceID).getJ2eePlatform()</code>
      */
     public J2eePlatform getJ2eePlatform(String serverInstanceID) {
         ServerInstance serInst = ServerRegistry.getInstance().getServerInstance(serverInstanceID);
@@ -398,6 +439,16 @@ public final class Deployment {
         return J2eePlatform.create(serInst);
     }
 
+    /**
+     * Returns the display name of the server with given id.
+     * <p>
+     * Client is usually searching for the display name of the server for particular
+     * instance. For this use <code>getServerInstance(serverInstanceID).getServerDisplyName()</code>.
+     *
+     * @param id id of the server
+     * @return the display name of the server with given id, <code>null</code>
+     *             if the server does not exist
+     */
     public String getServerDisplayName(String id) {
         Server server = ServerRegistry.getInstance ().getServer(id);
         if (server == null) { // probably uninstalled
@@ -421,6 +472,7 @@ public final class Deployment {
      * @throws  NullPointerException if serverInstanceID is <code>null</code>.
      * 
      * @since 1.32
+     * @deprecated use <code>getServerInstance(serverInstanceID).isRunning()</code>
      */
     public boolean isRunning(String serverInstanceID) {
         Parameters.notNull("serverInstanceID", serverInstanceID); // NOI18N
@@ -464,6 +516,8 @@ public final class Deployment {
         if (j2eeProvider instanceof J2eeApplicationProvider) {
             Collections.addAll(providers, ((J2eeApplicationProvider) j2eeProvider).getChildModuleProviders());
         }
+        
+        List<URL> urls = new ArrayList<URL>();
         for (J2eeModuleProvider provider : providers) {
             for (FileObject file : provider.getSourceFileMap().getSourceRoots()) {         
                 try {
@@ -471,7 +525,11 @@ public final class Deployment {
                     for (URL binary : binaries) {
                         FileObject object = URLMapper.findFileObject(binary);
                         if (object != null) {
-                            BuildArtifactMapper.addArtifactsUpdatedListener(file.getURL(), new ArtifactsUpdatedListenerImpl(j2eeProvider));
+                            URL url = URLMapper.findURL(file, URLMapper.EXTERNAL); 
+                            if (url != null) {
+                                urls.add(url);
+                            }
+                            //BuildArtifactMapper.addArtifactsUpdatedListener(file.getURL(), new ArtifactsUpdatedListenerImpl(j2eeProvider));
                         }
                     }
                 } catch (IOException ex) {
@@ -479,20 +537,43 @@ public final class Deployment {
                 }
             }
         }
+        
+        ArtifactsUpdatedListenerImpl listener = new ArtifactsUpdatedListenerImpl(j2eeProvider, urls);
+        for (URL url :urls) {
+            BuildArtifactMapper.addArtifactsUpdatedListener(url, listener);
+        }
     }
     
     private static final class ArtifactsUpdatedListenerImpl implements ArtifactsUpdated {
 
         private final J2eeModuleProvider provider;
 
-        public ArtifactsUpdatedListenerImpl(J2eeModuleProvider provider) {
+        private final List<URL> registered;
+        
+        public ArtifactsUpdatedListenerImpl(J2eeModuleProvider provider, List<URL> registered) {
             this.provider = provider;
+            this.registered = registered;
         }
         
         public void artifactsUpdated(Iterable<File> artifacts) {
+            if (LOGGER.isLoggable(Level.FINEST)) {
+                StringBuilder builder = new StringBuilder("Artifacts updated: [");
+                for (File file : artifacts) {
+                    builder.append(file.getAbsolutePath()).append(",");
+                }
+                builder.setLength(builder.length() - 1);
+                builder.append("]");
+                LOGGER.log(Level.FINEST, builder.toString());
+            }
+            
             DeploymentTargetImpl deploymentTarget = new DeploymentTargetImpl(provider, null);
             TargetServer server = new TargetServer(deploymentTarget);
-            server.notifyArtifactsUpdated(artifacts);
+            boolean keep = server.notifyArtifactsUpdated(artifacts);
+            if (!keep) {
+                for (URL url : registered) {
+                    BuildArtifactMapper.removeArtifactsUpdatedListener(url, this);
+                }
+            }
         }
         
     }    
