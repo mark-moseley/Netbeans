@@ -42,8 +42,10 @@
 package org.netbeans.modules.spring.beans.model.impl;
 
 import java.util.List;
+import java.util.Set;
 import org.netbeans.modules.spring.api.beans.model.Location;
 import org.netbeans.modules.spring.api.beans.model.SpringBean;
+import org.netbeans.modules.spring.api.beans.model.SpringBeanProperty;
 
 /**
  *
@@ -54,12 +56,28 @@ public class ConfigFileSpringBean implements SpringBean {
     private final String id;
     private final List<String> names;
     private final String className;
+    private final String parent;
+    private final String factoryBean;
+    private final String factoryMethod;
+    private final Set<SpringBeanProperty> properties;
     private final Location location;
 
-    public ConfigFileSpringBean(String id, List<String> names, String className, Location location) {
+    public ConfigFileSpringBean(
+            String id,
+            List<String> names,
+            String className,
+            String parent,
+            String factoryBean,
+            String factoryMethod,
+            Set<SpringBeanProperty> properties,
+            Location location) {
         this.id = id;
         this.names = names;
         this.className = className;
+        this.parent = parent;
+        this.factoryBean = factoryBean;
+        this.factoryMethod = factoryMethod;
+        this.properties = properties;
         this.location = location;
     }
 
@@ -75,7 +93,23 @@ public class ConfigFileSpringBean implements SpringBean {
         return className;
     }
 
+    public String getParent() {
+        return parent;
+    }
+
+    public String getFactoryBean() {
+        return factoryBean;
+    }
+
+    public String getFactoryMethod() {
+        return factoryMethod;
+    }
+
     public Location getLocation() {
         return location;
+    }
+
+    public Set<SpringBeanProperty> getProperties() {
+        return properties;
     }
 }
