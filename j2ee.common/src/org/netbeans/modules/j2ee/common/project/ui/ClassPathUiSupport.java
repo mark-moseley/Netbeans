@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.java.j2seproject.ui.customizer;
+package org.netbeans.modules.j2ee.common.project.ui;
 
 import java.io.File;
 import java.util.Arrays;
@@ -48,36 +48,28 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+
 import javax.swing.DefaultListModel;
 import javax.swing.ListSelectionModel;
+
 import org.netbeans.api.project.libraries.LibrariesCustomizer;
+
 import org.netbeans.api.project.libraries.Library;
-import org.netbeans.modules.java.j2seproject.classpath.ClassPathSupport;
+
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
 import org.netbeans.spi.java.project.support.ui.EditJarSupport;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.openide.util.NbCollections;
 
 /**
  *
- * @author Petr Hrebejk
+ * @author Petr Hrebejk, Radko Najman, David Konecny
  */
-public class ClassPathUiSupport {
-
-    private ClassPathSupport cps;
-     
-    /** Creates a new instance of ClassPathSupport */
-    /*
-    public ClassPathUiSupport( PropertyEvaluator evaluator, 
-                                ReferenceHelper referenceHelper,
-                                AntProjectHelper antProjectHelper,
-                                String wellKnownPaths[],
-                                String libraryPrefix,
-                                String librarySuffix,
-                                String antArtifactPrefix ) {
-        cps = new ClassPathSupport( evaluator, referenceHelper, antProjectHelper, wellKnownPaths, libraryPrefix, librarySuffix, antArtifactPrefix );
+public final class ClassPathUiSupport {
+    
+    private ClassPathUiSupport() {
     }
-     */
-        
+    
     // Methods for working with list models ------------------------------------
     
     public static DefaultListModel createListModel( Iterator it ) {
@@ -100,6 +92,36 @@ public class ClassPathUiSupport {
         return Collections.list(NbCollections.checkedEnumerationByFilter(model.elements(), ClassPathSupport.Item.class, true));
     }
         
+    
+    public static boolean canEdit( ListSelectionModel selectionModel, DefaultListModel listModel ) {        
+        boolean can =  selectionModel.getMinSelectionIndex() == selectionModel.getMaxSelectionIndex() 
+                          && selectionModel.getMinSelectionIndex() != -1;
+        if (can) {
+            ClassPathSupport.Item item = (ClassPathSupport.Item) listModel.get(selectionModel.getMinSelectionIndex());
+            can = item.canEdit();
+        }
+        return can;
+    }
+    
+    public static void edit(DefaultListModel listModel, int[] selectedIndices, AntProjectHelper helper) {
+        ClassPathSupport.Item item = (ClassPathSupport.Item) listModel.getElementAt(selectedIndices[0]);
+        if (item.getType() == ClassPathSupport.Item.TYPE_JAR) {
+            EditJarSupport.Item eji = new EditJarSupport.Item();
+            eji.setJarFile(item.getVariableBasedProperty() != null ? item.getVariableBasedProperty() : item.getFilePath());
+            eji.setSourceFile(item.getSourceFilePath());
+            eji.setJavadocFile(item.getJavadocFilePath());
+            eji = EditJarSupport.showEditDialog(helper, eji);
+            if (eji != null) {
+                item.setJavadocFilePath(eji.getJavadocFile());
+                item.setSourceFilePath(eji.getSourceFile());
+            }
+        }
+        if (item.getType() == ClassPathSupport.Item.TYPE_LIBRARY) {
+            if (item.getLibrary() != null) {
+                LibrariesCustomizer.showSingleLibraryCustomizer(item.getLibrary());
+            }
+        }
+    }
     
     /** Moves items up in the list. The indices array will contain 
      * indices to be selected after the change was done.
@@ -125,37 +147,7 @@ public class ClassPathUiSupport {
         return indices;
         
     } 
-    
-    public static boolean canEdit( ListSelectionModel selectionModel, DefaultListModel listModel ) {        
-        boolean can =  selectionModel.getMinSelectionIndex() == selectionModel.getMaxSelectionIndex() 
-                          && selectionModel.getMinSelectionIndex() != -1;
-        if (can) {
-            ClassPathSupport.Item item = (ClassPathSupport.Item) listModel.get(selectionModel.getMinSelectionIndex());
-            can = item.canEdit();
-        }
-        return can;
-    }
-    
-    static void edit(DefaultListModel listModel, int[] selectedIndices, AntProjectHelper helper) {
-        ClassPathSupport.Item item = (ClassPathSupport.Item) listModel.getElementAt(selectedIndices[0]);
-        if (item.getType() == ClassPathSupport.Item.TYPE_JAR) {
-            EditJarSupport.Item eji = new EditJarSupport.Item();
-            eji.setJarFile(item.getVariableBasedProperty() != null ? item.getVariableBasedProperty() : item.getFilePath());
-            eji.setSourceFile(item.getSourceFilePath());
-            eji.setJavadocFile(item.getJavadocFilePath());
-            eji = EditJarSupport.showEditDialog(helper, eji);
-            if (eji != null) {
-                item.setJavadocFilePath(eji.getJavadocFile());
-                item.setSourceFilePath(eji.getSourceFile());
-            }
-        }
-        if (item.getType() == ClassPathSupport.Item.TYPE_LIBRARY) {
-            if (item.getLibrary() != null) {
-                LibrariesCustomizer.showSingleLibraryCustomizer(item.getLibrary());
-            }
-        }
-    }
-    
+        
     public static boolean canMoveUp( ListSelectionModel selectionModel ) {        
         return selectionModel.getMinSelectionIndex() > 0;
     }
@@ -217,12 +209,16 @@ public class ClassPathUiSupport {
         
     }
     
-    public static int[] addLibraries( DefaultListModel listModel, int[] indices, Library[] libraries, Set/*<Library>*/ alreadyIncludedLibs ) {
-        
+    public static int[] addLibraries( DefaultListModel listModel, int[] indices, Library[] libraries, 
+            Set<Library> alreadyIncludedLibs, Callback callback) {
         int lastIndex = indices == null || indices.length == 0 ? listModel.getSize() - 1 : indices[indices.length - 1];
         for (int i = 0, j=1; i < libraries.length; i++) {
             if (!alreadyIncludedLibs.contains(libraries[i])) {
-                listModel.add( lastIndex + j++, ClassPathSupport.Item.create( libraries[i], null ) );
+                ClassPathSupport.Item item = ClassPathSupport.Item.create( libraries[i], null);
+                if (callback != null) {
+                    callback.initItem(item);
+                }
+                listModel.add( lastIndex + j++, item);
             }
         }
         Set<Library> addedLibs = new HashSet<Library>(Arrays.asList(libraries));
@@ -238,13 +234,16 @@ public class ClassPathUiSupport {
         return indexes;        
     }
 
-    public static int[] addJarFiles( DefaultListModel listModel, int[] indices, String[] files, String[] variables) {
-        
+    public static int[] addJarFiles( DefaultListModel listModel, int[] indices, String filePaths[], File base, 
+            String[] variables, Callback callback) {
         int lastIndex = indices == null || indices.length == 0 ? listModel.getSize() - 1 : indices[indices.length - 1];
-        int[] indexes = new int[files.length];
-        for( int i = 0, delta = 0; i+delta < files.length; ) {            
+        int[] indexes = new int[filePaths.length];
+        for( int i = 0, delta = 0; i+delta < filePaths.length; ) {            
             int current = lastIndex + 1 + i;
-            ClassPathSupport.Item item = ClassPathSupport.Item.create( files[i+delta], null, variables[i+delta] );
+            ClassPathSupport.Item item = ClassPathSupport.Item.create( filePaths[i], base, null, variables[i]);
+            if (callback != null) {
+                callback.initItem(item);
+            }
             if ( !listModel.contains( item ) ) {
                 listModel.add( current, item );
                 indexes[delta + i] = current;
@@ -253,30 +252,37 @@ public class ClassPathUiSupport {
             else {
                 indexes[i + delta] = listModel.indexOf( item );
                 delta++;
-            }
+            }            
         }
         return indexes;
 
     }
     
-    public static int[] addArtifacts( DefaultListModel listModel, int[] indices, AntArtifactChooser.ArtifactItem artifactItems[] ) {
-        
+    public static int[] addArtifacts( DefaultListModel listModel, int[] indices, AntArtifactChooser.ArtifactItem artifactItems[],
+            Callback callback) {
         int lastIndex = indices == null || indices.length == 0 ? listModel.getSize() - 1 : indices[indices.length - 1];
         int[] indexes = new int[artifactItems.length];
         for( int i = 0; i < artifactItems.length; i++ ) {
             int current = lastIndex + 1 + i;
-            ClassPathSupport.Item item = ClassPathSupport.Item.create( artifactItems[i].getArtifact(), artifactItems[i].getArtifactURI(), null ) ;
+            ClassPathSupport.Item item = ClassPathSupport.Item.create( artifactItems[i].getArtifact(), artifactItems[i].getArtifactURI(), null) ;
+            if (callback != null) {
+                callback.initItem(item);
+            }
             if ( !listModel.contains( item ) ) {
                 listModel.add( current, item );
                 indexes[i] = current;
             }
             else {
                 indexes[i] = listModel.indexOf( item );
-            }
+            }            
         }
         return indexes;
     }
-    
-    
-                
+   
+    /**
+     * Perform optional initialization of item
+     */
+    public static interface Callback {
+        void initItem(ClassPathSupport.Item item);
+    }
 }

@@ -41,31 +41,22 @@
 
 package org.netbeans.api.project.ant;
 
-import java.awt.Dialog;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
 import javax.swing.JFileChooser;
-import org.netbeans.api.project.FileOwnerQuery;
-import org.netbeans.api.project.Project;
 import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.modules.project.ant.FileChooserAccessory;
-import org.netbeans.modules.project.ant.RelativizeFilePathCustomizer;
 import org.netbeans.modules.project.ant.ProjectLibraryProvider;
-import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
-import org.openide.DialogDescriptor;
-import org.openide.DialogDisplayer;
-import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.NbBundle;
 
 
 /**
  * Custom file chooser allowing user to choose how a file will be referenced 
  * from a project - via absolute path, or relative path. Make sure you call
- * {@link #getFiles} instead of {@link #getSelectedFiles} as it returns relative
+ * {@link #getSelectedPaths} instead of {@link #getSelectedFiles} as it returns relative
  * files and performs file copying if necessary.
  * 
  * @author David Konecny
@@ -114,17 +105,34 @@ public final class FileChooser extends JFileChooser {
     }
     
     /**
-     * Returns array of files selected. The difference from 
-     * {@link #getSelectedFiles} is that depends on user's choice the files
-     * may be relative and they may have been copied to different location.
+     * Enable or disable variable based selection, that is show or hide 
+     * "Use Variable Path" option. For backward compatibility variable based 
+     * selection is disabled by default.
      * 
-     * @return array of files which may be relative to base folder this chooser
+     * @since org.netbeans.modules.project.ant/1 1.22
+     */
+    public void enableVariableBasedSelection(boolean enable) {
+        if (accessory != null) {
+            accessory.enableVariableBasedSelection(enable);
+        }
+    }
+    
+    /**
+     * Returns array of paths selected. The difference from 
+     * {@link #getSelectedFiles} is that returned paths might be relative to 
+     * base folder this file chooser was created for. If user selected in UI
+     * "Use Relative Path" or "Copy To Libraries Folder" then returned paths
+     * will be relative. For options "Use Absolute Path" and "Use Variable Path"
+     * this method return absolute paths. In case of option "Use Variable Path"
+     * see also {@link #getSelectedPathVariables}.
+     * 
+     * @return array of files which are absolute or relative to base folder this chooser
      *  was created for; e.g. project folder in case of AntProjectHelper 
      *  constructor; never null; can be empty array
      * @throws java.io.IOException any IO problem; for example during 
      *  file copying
      */
-    public File[] getFiles() throws IOException {
+    public String[] getSelectedPaths() throws IOException {
         if (accessory != null) {
             accessory.copyFilesIfNecessary();
             if (accessory.isRelative()) {
@@ -132,14 +140,40 @@ public final class FileChooser extends JFileChooser {
             }
         }
         if (isMultiSelectionEnabled()) {
-            return getSelectedFiles();
+            File[] sels = getSelectedFiles();
+            String[] toRet = new String[sels.length];
+            int index = 0;
+            for (File fil : sels) {
+                toRet[index] = fil.getAbsolutePath();
+                index++;
+            }
+            return toRet;
         } else {
             if (getSelectedFile() != null) {
-                return new File[]{getSelectedFile()};
+                return new String[]{ getSelectedFile().getAbsolutePath() };
             } else {
-                return new File[0];
+                return new String[0];
             }
         }
+    }
+    
+    /**
+     * For "Use Variable Path" option this method returns list of paths which 
+     * start with a variable from {@link PropertyUtils.getGlobalProperties()}. eg.
+     * "${var.MAVEN}/path/file.jar". For all other options selected this method 
+     * returns null.
+     * 
+     * @return null or list of variable based paths; if not null items in returned 
+     * array corresponds to items in array returned from {@link #getSelectedPaths}
+     * @since org.netbeans.modules.project.ant/1 1.22
+     */
+    public String[] getSelectedPathVariables() {
+        if (accessory != null) {
+            if (accessory.isVariableBased()) {
+                return accessory.getVariableBasedFiles();
+            }
+        }
+        return null;
     }
 
     @Override
@@ -150,67 +184,6 @@ public final class FileChooser extends JFileChooser {
         super.approveSelection();
     }
 
-    /**
-     * Show UI allowing user to decide how the given file should be referenced,
-     * that is via absolute or relative path. Optionally UI can allow to copy
-     * file to shared libraries folder.
-     * 
-     * @param fileToReference file in question
-     * @param projectArtifact any project artifact, e.g. project folder or project source etc.
-     * @param copyAllowed is file copying allowed
-     * @return possibly relative file; null if cancelled by user or project 
-     *  cannot be found for project artifact
-     * @throws java.io.IOException any IO failure during file copying
-     */
-    public static File showRelativizeFilePathCustomizer(File fileToReference, FileObject projectArtifact, 
-            boolean copyAllowed) throws IOException {
-        Project p = FileOwnerQuery.getOwner(projectArtifact);
-        if (p == null) {
-            return null;
-        }
-        AuxiliaryConfiguration aux = p.getLookup().lookup(AuxiliaryConfiguration.class);
-        assert aux != null : projectArtifact;
-        if (aux == null) {
-            return null;
-        }
-        File projFolder = FileUtil.toFile(p.getProjectDirectory());
-        File libBase = ProjectLibraryProvider.getLibrariesLocation(aux, projFolder);
-        if (libBase != null) {
-            libBase = libBase.getParentFile();
-        }
-        return showRelativizeFilePathCustomizer(fileToReference, projFolder, libBase, copyAllowed);
-    }
 
-    /**
-     * Show UI allowing user to decide how the given file should be referenced,
-     * that is via absolute or relative path. Optionally UI can allow to copy
-     * file to shared libraries folder.
-     * 
-     * @param fileToReference file in question
-     * @param baseFolder folder to relativize file against
-     * @param sharedLibrariesFolder optional shared libraries folder; can be null;
-     *  if provided UI will allow user to copy given file there
-     * @param copyAllowed is file copying allowed
-     * @return possibly relative file; null if cancelled by user
-     * @throws java.io.IOException any IO failure during file copying
-     */
-    private static File showRelativizeFilePathCustomizer(File fileToReference, File baseFolder, 
-            File sharedLibrariesFolder, boolean copyAllowed) throws IOException {
-        RelativizeFilePathCustomizer panel = new RelativizeFilePathCustomizer(
-            fileToReference, baseFolder, sharedLibrariesFolder, copyAllowed);
-        DialogDescriptor descriptor = new DialogDescriptor (panel,
-            NbBundle.getMessage(RelativizeFilePathCustomizer.class, "RelativizeFilePathCustomizer.title"));
-        Dialog dlg = DialogDisplayer.getDefault().createDialog(descriptor);
-        try {
-            dlg.setVisible(true);
-            if (descriptor.getValue() == DialogDescriptor.OK_OPTION) {
-                return panel.getFile();
-            } else {
-                return null;
-            }
-        } finally {
-            dlg.dispose();
-        }
-    }
 
 }

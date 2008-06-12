@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.java.j2seproject.ui;
+package org.netbeans.modules.j2ee.common.project.ui;
 
 import java.awt.Image;
 import java.awt.event.ActionEvent;
@@ -55,7 +55,6 @@ import java.net.URL;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -66,9 +65,7 @@ import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JFileChooser;
-import javax.swing.UIManager;
 import javax.swing.filechooser.FileFilter;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.Repository;
@@ -80,72 +77,68 @@ import org.openide.nodes.Node;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
-import org.openide.util.lookup.Lookups;
 import org.openide.windows.WindowManager;
+import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.libraries.Library;
+import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.project.ant.FileChooser;
-import org.netbeans.api.project.libraries.LibraryChooser;
-import org.netbeans.api.project.libraries.LibraryManager;
-import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.api.java.project.classpath.ProjectClassPathModifier;
 import org.netbeans.modules.java.api.common.ant.UpdateHelper;
-import org.netbeans.modules.java.j2seproject.J2SEProject;
-import org.netbeans.modules.java.j2seproject.classpath.ClassPathProviderImpl;
-import org.netbeans.modules.java.j2seproject.classpath.J2SEProjectClassPathModifier;
+import org.netbeans.api.project.libraries.LibraryChooser;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathModifier;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
+import org.netbeans.modules.j2ee.common.project.ui.AntArtifactChooser.ArtifactItem;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.util.CommonProjectUtils;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.java.project.support.ui.PackageView;
-import org.netbeans.spi.java.classpath.support.ClassPathSupport;
-import org.netbeans.modules.java.j2seproject.ui.customizer.AntArtifactChooser;
 import org.netbeans.spi.project.libraries.support.LibrariesSupport;
 import org.openide.util.Exceptions;
+import org.openide.util.lookup.Lookups;
 
 /**
  * LibrariesNode displays the content of classpath and optionaly Java platform.
  * @author Tomas Zezula
  */
-final class LibrariesNode extends AbstractNode {
-    
-    private static final String ICON_KEY_UIMANAGER = "Tree.closedIcon"; // NOI18N
-    private static final String OPENED_ICON_KEY_UIMANAGER = "Tree.openIcon"; // NOI18N
-    private static final String ICON_KEY_UIMANAGER_NB = "Nb.Explorer.Folder.icon"; // NOI18N
-    private static final String OPENED_ICON_KEY_UIMANAGER_NB = "Nb.Explorer.Folder.openedIcon"; // NOI18N
+public final class LibrariesNode extends AbstractNode {
 
-
-    private static final Image ICON_BADGE = Utilities.loadImage("org/netbeans/modules/java/j2seproject/ui/resources/libraries-badge.png");    //NOI18N
+    private static final Image ICON_BADGE = Utilities.loadImage("org/netbeans/modules/j2ee/common/project/ui/resources/libraries-badge.png");    //NOI18N
     static final RequestProcessor rp = new RequestProcessor ();
-    private static Image folderIconCache;
-    private static Image openedFolderIconCache;
+    private static Icon folderIconCache;
+    private static Icon openedFolderIconCache;
 
     private final String displayName;
     private final Action[] librariesNodeActions;
+
 
     /**
      * Creates new LibrariesNode named displayName displaying classPathProperty classpath
      * and optionaly Java platform.
      * @param displayName the display name of the node
-     * @param project the project owning this node, the proejct is placed into LibrariesNode's lookup
      * @param eval {@link PropertyEvaluator} used for listening
      * @param helper {@link UpdateHelper} used for reading and updating project's metadata
      * @param refHelper {@link ReferenceHelper} used for destroying unused references
      * @param classPathProperty the ant property name of classpath which should be visualized
      * @param classPathIgnoreRef the array of ant property names which should not be displayed, may be
      * an empty array but not null
-     * @param platformProperty the ant name property holding the J2SE platform system name or null
+     * @param platformProperty the ant name property holding the Web platform system name or null
      * if the platform should not be displayed
      * @param librariesNodeActions actions which should be available on the created node.
      */
-    LibrariesNode (String displayName, Project project, PropertyEvaluator eval, UpdateHelper helper, ReferenceHelper refHelper,
-                   String classPathProperty, String[] classPathIgnoreRef, String platformProperty,
-                   Action[] librariesNodeActions) {
-        super (new LibrariesChildren (project, eval, helper, refHelper, classPathProperty, classPathIgnoreRef, platformProperty), Lookups.singleton(project));
+    public LibrariesNode (String displayName, Project project, PropertyEvaluator eval, UpdateHelper helper, ReferenceHelper refHelper,
+                   String classPathProperty, String[] classPathIgnoreRef, String platformProperty, String j2eePlatformProperty,
+                   String j2eeClassPathProperty, Action[] librariesNodeActions, String webModuleElementName, ClassPathSupport cs,
+                   String[] libUpdaterProperties) {
+        super (new LibrariesChildren (eval, helper, refHelper, classPathProperty,
+                classPathIgnoreRef, platformProperty, j2eePlatformProperty, j2eeClassPathProperty, webModuleElementName, cs, libUpdaterProperties), Lookups.singleton(project));
         this.displayName = displayName;
         this.librariesNodeActions = librariesNodeActions;
     }
@@ -157,7 +150,7 @@ final class LibrariesNode extends AbstractNode {
     public String getName () {
         return this.getDisplayName();
     }    
-    
+
     public Image getIcon( int type ) {        
         return computeIcon( false, type );
     }
@@ -175,28 +168,26 @@ final class LibrariesNode extends AbstractNode {
     }
 
     //Static Action Factory Methods
-    public static Action createAddProjectAction (J2SEProject p, boolean sources) {
-        if (sources) {
-            return new AddProjectAction(p, p.getSourceRoots());
-        } else {
-            return new AddProjectAction(p, p.getTestSourceRoots());
+    public static Action createAddProjectAction (Project p, SourceRoots sources) {
+        if (sources.getRoots().length == 0) {
+            return null;
         }
+        return new AddProjectAction(p, sources.getRoots()[0]);
     }
 
-    public static Action createAddLibraryAction (J2SEProject p, boolean sources) {
-        if (sources) {
-            return new AddLibraryAction(p, p.getSourceRoots());
-        } else {
-            return new AddLibraryAction(p, p.getTestSourceRoots());
+    public static Action createAddLibraryAction (ReferenceHelper helper, 
+            SourceRoots sources, LibraryChooser.Filter filter) {
+        if (sources.getRoots().length == 0) {
+            return null;
         }
+        return new AddLibraryAction(helper, sources.getRoots()[0], filter);
     }
 
-    public static Action createAddFolderAction (J2SEProject p, boolean sources) {
-        if (sources) {
-            return new AddFolderAction(p, p.getSourceRoots());
-        } else {
-            return new AddFolderAction(p, p.getTestSourceRoots());
+    public static Action createAddFolderAction (AntProjectHelper p, SourceRoots sources) {
+        if (sources.getRoots().length == 0) {
+            return null;
         }
+        return new AddFolderAction(p, sources.getRoots()[0]);
     }
     
     /**
@@ -204,23 +195,23 @@ final class LibrariesNode extends AbstractNode {
      * @param opened should the icon represent opened folder
      * @return the folder icon
      */
-    static synchronized Image getFolderIcon (boolean opened) {
+    static synchronized Icon getFolderIcon (boolean opened) {
+        if (openedFolderIconCache == null) {
+            Node n = DataFolder.findFolder(Repository.getDefault().getDefaultFileSystem().getRoot()).getNodeDelegate();
+            openedFolderIconCache = new ImageIcon(n.getOpenedIcon(BeanInfo.ICON_COLOR_16x16));
+            folderIconCache = new ImageIcon(n.getIcon(BeanInfo.ICON_COLOR_16x16));
+        }
         if (opened) {
-            if (openedFolderIconCache == null) {
-                openedFolderIconCache = getTreeFolderIcon(opened);
-            }
             return openedFolderIconCache;
         }
         else {
-            if (folderIconCache == null) {
-                folderIconCache = getTreeFolderIcon(opened);
-            }
             return folderIconCache;
-        }        
+        }
     }
-    
-    private Image computeIcon( boolean opened, int type ) {
-        Image image = getFolderIcon(opened);
+
+    private Image computeIcon( boolean opened, int type ) {        
+        Icon icon = getFolderIcon(opened);
+        Image image = ((ImageIcon)icon).getImage();
         image = Utilities.mergeImages(image, ICON_BADGE, 7, 7 );
         return image;        
     }
@@ -247,38 +238,47 @@ final class LibrariesNode extends AbstractNode {
          */
         private static final String REF_PREFIX = "${"; //NOI18N
         
-        private static final String LIBRARIES_ICON = "org/netbeans/modules/java/j2seproject/ui/resources/libraries.gif"; //NOI18N
-        private static final String ARCHIVE_ICON = "org/netbeans/modules/java/j2seproject/ui/resources/jar.gif";//NOI18N        
+        private static final String LIBRARIES_ICON = "org/netbeans/modules/j2ee/common/project/ui/resources/libraries.gif"; //NOI18N
+        private static final String ARCHIVE_ICON = "org/netbeans/modules/j2ee/common/project/ui/resources/jar.gif";//NOI18N        
 
-        private final Project project;
         private final PropertyEvaluator eval;
         private final UpdateHelper helper;
         private final ReferenceHelper refHelper;
         private final String classPathProperty;
         private final String platformProperty;
+        private final String j2eePlatformProperty;
+        private final String j2eeClassPathProperty;
         private final Set classPathIgnoreRef;
-        
+        private final String webModuleElementName;
+        private final ClassPathSupport cs;
+        private final String[] libUpdaterProperties;
+
         //XXX: Workaround: classpath is used only to listen on non existent files.
         // This should be removed when there will be API for it
         // See issue: http://www.netbeans.org/issues/show_bug.cgi?id=33162
         private ClassPath fsListener;
 
 
-        LibrariesChildren (Project project, PropertyEvaluator eval, UpdateHelper helper, ReferenceHelper refHelper,
-                           String classPathProperty, String[] classPathIgnoreRef, String platformProperty) {
-            this.project = project;
+        LibrariesChildren (PropertyEvaluator eval, UpdateHelper helper, ReferenceHelper refHelper,
+                           String classPathProperty, String[] classPathIgnoreRef, String platformProperty, 
+                           String j2eePlatformProperty, String j2eeClassPathProperty, String webModuleElementName, 
+                           ClassPathSupport cs, String[] libUpdaterProperties) {
             this.eval = eval;
             this.helper = helper;
             this.refHelper = refHelper;
             this.classPathProperty = classPathProperty;
             this.classPathIgnoreRef = new HashSet(Arrays.asList(classPathIgnoreRef));
             this.platformProperty = platformProperty;
+            this.j2eePlatformProperty = j2eePlatformProperty;
+            this.j2eeClassPathProperty = j2eeClassPathProperty;
+            this.webModuleElementName = webModuleElementName;
+            this.cs = cs;
+            this.libUpdaterProperties = libUpdaterProperties;
         }
 
         public void propertyChange(PropertyChangeEvent evt) {
             String propName = evt.getPropertyName();
-            final boolean propRoots = ClassPath.PROP_ROOTS.equals(propName);
-            if (classPathProperty.equals(propName) || propRoots || LibraryManager.PROP_LIBRARIES.equals(propName)) {
+            if (classPathProperty.equals(propName) || ClassPath.PROP_ROOTS.equals(propName)) {
                 synchronized (this) {
                     if (fsListener!=null) {
                         fsListener.removePropertyChangeListener (this);
@@ -287,14 +287,8 @@ final class LibrariesNode extends AbstractNode {
                 rp.post (new Runnable () {
                     public void run () {
                         setKeys(getKeys());
-                        if (propRoots) {
-                            J2SELogicalViewProvider lvp = project.getLookup().lookup(J2SELogicalViewProvider.class);
-                            if (lvp != null) {
-                                lvp.testBroken();
-                            }
-                        }
                     }
-                });                
+                });
             }
         }
 
@@ -330,15 +324,19 @@ final class LibrariesNode extends AbstractNode {
                 Key key = (Key) obj;
                 switch (key.getType()) {
                     case Key.TYPE_PLATFORM:
-                        result = new Node[] {PlatformNode.create(eval, platformProperty)};
+                        result = new Node[] {PlatformNode.create(eval, platformProperty, cs)};
+                        break;
+                    case Key.TYPE_J2EE_PLATFORM:
+                        Project p = FileOwnerQuery.getOwner(helper.getAntProjectHelper().getProjectDirectory());
+                        result = new Node[] {J2eePlatformNode.create(p, eval, j2eePlatformProperty, cs)};
                         break;
                     case Key.TYPE_PROJECT:
-                        result = new Node[] {new ProjectNode(key.getProject(), key.getArtifactLocation(), helper, refHelper, key.getClassPathId(),
-                            key.getEntryId())};
+                        result = new Node[] {new ProjectNode(key.getProject(), key.getArtifactLocation(), helper, key.getClassPathId(),
+                            key.getEntryId(), webModuleElementName, cs, libUpdaterProperties, refHelper)};
                         break;
                     case Key.TYPE_LIBRARY:
                         result = new Node[] {ActionFilterNode.create(PackageView.createPackageView(key.getSourceGroup()),
-                            helper, refHelper, key.getClassPathId(), key.getEntryId())};
+                            helper, key.getClassPathId(), key.getEntryId(), webModuleElementName, cs, libUpdaterProperties, refHelper)};
                         break;
                 }
             }
@@ -355,14 +353,18 @@ final class LibrariesNode extends AbstractNode {
             EditableProperties privateProps = PropertyUtils.getGlobalProperties();
             List/*<URL>*/ rootsList = new ArrayList ();
             List result = getKeys (projectSharedProps, projectPrivateProps, privateProps, classPathProperty, rootsList);
-            //Add PlatformNode if needed and project exists
-            FileObject projectDir = helper.getAntProjectHelper().getProjectDirectory();
-            if (platformProperty!=null && projectDir !=null && projectDir.isValid() && !projectDir.isVirtual()) {
+            if (platformProperty!=null) {
                 result.add (new Key());
+            }
+            if (j2eePlatformProperty != null) {
+                String j2eePlatform = projectSharedProps.getProperty(j2eeClassPathProperty);
+                if (j2eePlatform == null) {
+                    result.add(new Key(true));
+                }
             }
             //XXX: Workaround: Remove this when there will be API for listening on nonexistent files
             // See issue: http://www.netbeans.org/issues/show_bug.cgi?id=33162
-            ClassPath cp = ClassPathSupport.createClassPath ((URL[])rootsList.toArray(new URL[rootsList.size()]));
+            ClassPath cp = org.netbeans.spi.java.classpath.support.ClassPathSupport.createClassPath ((URL[])rootsList.toArray(new URL[rootsList.size()]));
             cp.addPropertyChangeListener (this);
             cp.getRoots();
             synchronized (this) {
@@ -387,14 +389,14 @@ final class LibrariesNode extends AbstractNode {
             List pe = new ArrayList(Arrays.asList(PropertyUtils.tokenizePath( raw )));
             while (pe.size()>0){
                 String prop = (String) pe.remove(0);
-                String propName = org.netbeans.modules.java.j2seproject.classpath.ClassPathSupport.getAntPropertyName (prop);
+                String propName = CommonProjectUtils.getAntPropertyName (prop);
                 if (classPathIgnoreRef.contains(propName)) {
                     continue;
                 }
                 else if (prop.startsWith( LIBRARY_PREFIX )) {
                     //Library reference
-                    String val = prop.substring( LIBRARY_PREFIX.length(), prop.lastIndexOf('.') ); //NOI18N
-                    Library lib = refHelper.findLibrary(val);
+                    String eval = prop.substring( LIBRARY_PREFIX.length(), prop.lastIndexOf('.') ); //NOI18N
+                    Library lib = refHelper.findLibrary(eval);
                     if (lib != null) {
                         List/*<URL>*/ roots = lib.getContent("classpath");  //NOI18N
                         Icon libIcon = new ImageIcon (Utilities.loadImage(LIBRARIES_ICON));
@@ -429,22 +431,20 @@ final class LibrariesNode extends AbstractNode {
                 }
                 else if (prop.startsWith(ANT_ARTIFACT_PREFIX)) {
                     //Project reference
-                    Object ret[] = refHelper.findArtifactAndLocation(prop);
-                    if ( ret[0] != null && ret[1] != null) {
-                        AntArtifact artifact = (AntArtifact)ret[0];
-                        URI uri = (URI) ret[1];
-                        result.add (new Key(artifact, uri, currentClassPath, propName));
+                    Object[] ref = refHelper.findArtifactAndLocation(prop);
+                    if (ref[0] != null && ref[1] != null) {
+                        AntArtifact artifact = (AntArtifact)ref[0];
+                        URI uri = (URI)ref[1];
+                        result.add(new Key(artifact, uri, currentClassPath, propName));                 
                     }
                 }
                 else if (prop.startsWith(FILE_REF_PREFIX)) {
                     //File reference
                     String evaluatedRef = eval.getProperty(propName);
-                    if (evaluatedRef != null) {
-                        File file = helper.getAntProjectHelper().resolveFile(evaluatedRef);
-                        SourceGroup sg = createFileSourceGroup(file,rootsList);
-                        if (sg !=null) {
-                            result.add (new Key(sg,currentClassPath, propName));
-                        }
+                    File file = helper.getAntProjectHelper().resolveFile(evaluatedRef);
+                    SourceGroup sg = createFileSourceGroup(file,rootsList);
+                    if (sg !=null) {
+                        result.add (new Key(sg,currentClassPath, propName));
                     }
                 }
                 else if (prop.startsWith(REF_PREFIX)) {
@@ -479,8 +479,8 @@ final class LibrariesNode extends AbstractNode {
                     if (!sURL.endsWith("/")) {  //NOI18N
                         url = new URL (sURL+"/");   //NOI18N
                     }
-                    icon = new ImageIcon (getFolderIcon (false));
-                    openedIcon = new ImageIcon (getFolderIcon (true));
+                    icon = getFolderIcon (false);
+                    openedIcon = getFolderIcon (true);
                     displayName = file.getAbsolutePath();
                 }
                 rootsList.add (url);
@@ -489,7 +489,7 @@ final class LibrariesNode extends AbstractNode {
                     return new LibrariesSourceGroup (root,displayName,icon,openedIcon);
                 }
             } catch (MalformedURLException e) {
-                ErrorManager.getDefault().notify(e);
+                Exceptions.printStackTrace(e);
             }
             return null;
         }        
@@ -499,6 +499,7 @@ final class LibrariesNode extends AbstractNode {
         static final int TYPE_PLATFORM = 0;
         static final int TYPE_LIBRARY = 1;
         static final int TYPE_PROJECT = 2;
+        static final int TYPE_J2EE_PLATFORM = 3;
 
         private int type;
         private String classPathId;
@@ -506,9 +507,13 @@ final class LibrariesNode extends AbstractNode {
         private SourceGroup sg;
         private AntArtifact antArtifact;
         private URI uri;
-
+        
         Key () {
-            this.type = TYPE_PLATFORM;
+            this(false);
+        }
+
+        Key (boolean j2ee) {
+            this.type = j2ee ? TYPE_J2EE_PLATFORM : TYPE_PLATFORM;
         }
 
         Key (SourceGroup sg, String classPathId, String entryId) {
@@ -542,14 +547,14 @@ final class LibrariesNode extends AbstractNode {
             return this.sg;
         }
 
-        public AntArtifact getProject () {
+        public AntArtifact getProject() {
             return this.antArtifact;
         }
         
-        public URI getArtifactLocation () {
+        public URI getArtifactLocation() {
             return this.uri;
         }
-
+        
         public int hashCode() {
             int hashCode = this.type<<16;
             switch (this.type) {
@@ -581,6 +586,7 @@ final class LibrariesNode extends AbstractNode {
                         (this.classPathId == null ? other.classPathId == null : this.classPathId.equals (other.classPathId)) &&
                         (this.entryId == null ? other.entryId == null : this.entryId.equals (other.entryId));
                 case TYPE_PLATFORM:
+                case TYPE_J2EE_PLATFORM:
                     return true;
                 default:
                     throw new IllegalStateException();
@@ -590,133 +596,90 @@ final class LibrariesNode extends AbstractNode {
 
     private static class AddProjectAction extends AbstractAction {
 
-        private final J2SEProject project;
-        private final SourceRoots projectSourcesArtifact;
+        private final Project project;
+        private final FileObject projectSourcesArtifact;
 
-        public AddProjectAction (final J2SEProject project, final SourceRoots projectSourcesArtifact) {
+        public AddProjectAction (Project project, FileObject projectSourcesArtifact) {
             super( NbBundle.getMessage( LibrariesNode.class, "LBL_AddProject_Action" ) );
-            assert project != null;
-            assert projectSourcesArtifact != null;
             this.project = project;
             this.projectSourcesArtifact = projectSourcesArtifact;
         }
 
         public void actionPerformed(ActionEvent e) {
-            final ClassPathProviderImpl cpProvider = project.getClassPathProvider();
-            assert cpProvider != null;
-            final J2SEProjectClassPathModifier cpMod = this.project.getLookup().lookup(J2SEProjectClassPathModifier.class);
-            assert cpMod != null;
-            AntArtifactChooser.ArtifactItem ai[] = AntArtifactChooser.showDialog(
-                new String[] {JavaProjectConstants.ARTIFACT_TYPE_JAR, JavaProjectConstants.ARTIFACT_TYPE_FOLDER},
-                project, null);
-            if ( ai != null ) {
-                final String propName = cpProvider.getPropertyName(projectSourcesArtifact, ClassPath.COMPILE);
-                addArtifacts(ai, cpMod, propName);
-            }
+            ArtifactItem ai[] = AntArtifactChooser.showDialog(
+                    new String[] {JavaProjectConstants.ARTIFACT_TYPE_JAR, JavaProjectConstants.ARTIFACT_TYPE_FOLDER},
+                    project, null);
+                if ( ai != null ) {
+                    addArtifacts( ai );
+                }
         }
 
-        private void addArtifacts (final AntArtifactChooser.ArtifactItem[] artifactItems, final J2SEProjectClassPathModifier cpMod, final String propName) {
-            assert artifactItems != null;
-            assert cpMod != null;
-            assert propName != null;
-            for (int i=0; i<artifactItems.length;i++) {
-                try {                    
-                    cpMod.handleAntArtifacts(new AntArtifact[]{artifactItems[i].getArtifact()}, 
-                            new URI[]{artifactItems[i].getArtifactURI()}, propName, J2SEProjectClassPathModifier.ADD);
-                } catch (IOException ioe) {
-                    ErrorManager.getDefault().notify(ioe);
-                }
+        private void addArtifacts (AntArtifactChooser.ArtifactItem[] artifactItems) {
+            AntArtifact[] artifacts = new AntArtifact[artifactItems.length];
+            URI[] artifactURIs = new URI[artifactItems.length];
+            for (int i = 0; i < artifactItems.length; i++) {
+                artifacts[i] = artifactItems[i].getArtifact();
+                artifactURIs[i] = artifactItems[i].getArtifactURI();
+            }
+            try {
+                ProjectClassPathModifier.addAntArtifacts(artifacts, artifactURIs,
+                        projectSourcesArtifact, ClassPath.COMPILE);
+            } catch (IOException ioe) {
+                Exceptions.printStackTrace(ioe);
             }
         }
     }
 
     private static class AddLibraryAction extends AbstractAction {
 
-        private final J2SEProject project;
-        private final SourceRoots projectSourcesArtifact;
+        private final LibraryChooser.Filter filter;
+        private final FileObject projectSourcesArtifact;
+        private ReferenceHelper refHelper;
 
-        public AddLibraryAction (final J2SEProject project, final SourceRoots projectSourcesArtifact) {
+        public AddLibraryAction(ReferenceHelper refHelper, FileObject projectSourcesArtifact, LibraryChooser.Filter filter) {
             super( NbBundle.getMessage( LibrariesNode.class, "LBL_AddLibrary_Action" ) );
-            assert project != null;
-            assert projectSourcesArtifact != null;
-            this.project = project;
+            this.refHelper = refHelper;
             this.projectSourcesArtifact = projectSourcesArtifact;
+            this.filter = filter;
         }
 
         public void actionPerformed(ActionEvent e) {
-            final ClassPathProviderImpl cpProvider = project.getClassPathProvider();
-            assert cpProvider != null;
-            final J2SEProjectClassPathModifier cpMod = project.getProjectClassPathModifier();
-            assert cpMod != null;
             Set<Library> added = LibraryChooser.showDialog(
-                    project.getReferenceHelper().getProjectLibraryManager(), null, 
-                    project.getReferenceHelper().getLibraryChooserImportHandler()); // XXX restrict to j2se libs only?
+                    refHelper.getProjectLibraryManager(), filter,
+                    refHelper.getLibraryChooserImportHandler());
             if (added != null) {
-                final String propName = cpProvider.getPropertyName(projectSourcesArtifact, ClassPath.COMPILE);
-                addLibraries(added.toArray(new Library[added.size()]),cpMod,propName);
+                addLibraries(added.toArray(new Library[added.size()]));
             }
         }
 
-        private void addLibraries (final Library[] libraries, final J2SEProjectClassPathModifier cpMod, final String propName) {
-            assert libraries != null;
-            assert cpMod != null;
-            assert propName != null;
-            for (int i=0; i<libraries.length;i++) {
-                try {
-                    cpMod.handleLibraries(new Library[]{libraries[i]},propName, J2SEProjectClassPathModifier.ADD);
-                } catch (IOException ioe) {
-                    ErrorManager.getDefault().notify(ioe);
-                }
+        private void addLibraries (Library[] libraries) {
+            try {
+                ProjectClassPathModifier.addLibraries(libraries,
+                        projectSourcesArtifact, ClassPath.COMPILE);
+            } catch (IOException ioe) {
+                Exceptions.printStackTrace(ioe);
             }
         }
-
-    }
-    
-    /**
-     * Returns default folder icon as {@link java.awt.Image}. Never returns
-     * <code>null</code>.
-     *
-     * @param opened wheter closed or opened icon should be returned.
-     */
-    private static Image getTreeFolderIcon(boolean opened) {
-        Image base = null;
-        Icon baseIcon = UIManager.getIcon(opened ? OPENED_ICON_KEY_UIMANAGER : ICON_KEY_UIMANAGER); // #70263
-        if (baseIcon != null) {
-            base = Utilities.icon2Image(baseIcon);
-        } else {
-            base = (Image) UIManager.get(opened ? OPENED_ICON_KEY_UIMANAGER_NB : ICON_KEY_UIMANAGER_NB); // #70263
-            if (base == null) { // fallback to our owns                
-                final Node n = DataFolder.findFolder(Repository.getDefault().getDefaultFileSystem().getRoot()).getNodeDelegate();
-                base = opened ? n.getOpenedIcon(BeanInfo.ICON_COLOR_16x16) : n.getIcon(BeanInfo.ICON_COLOR_16x16);                                 
-            }
-        }
-        assert base != null;
-        return base;
+        
     }
 
     private static class AddFolderAction extends AbstractAction {
 
-        private final J2SEProject project;
-        private final SourceRoots projectSourcesArtifact;
+        private final AntProjectHelper helper;
+        private final FileObject projectSourcesArtifact;
 
-        public AddFolderAction (final J2SEProject project, final SourceRoots projectSourcesArtifact) {
+        public AddFolderAction (AntProjectHelper helper, FileObject projectSourcesArtifact) {
             super( NbBundle.getMessage( LibrariesNode.class, "LBL_AddFolder_Action" ) );
-            assert project != null;
-            assert projectSourcesArtifact != null;
-            this.project = project;            
+            this.helper = helper;
             this.projectSourcesArtifact = projectSourcesArtifact;
         }
 
         public void actionPerformed(ActionEvent e) {
-            final ClassPathProviderImpl cpProvider = project.getClassPathProvider();
-            assert cpProvider != null;
-            final J2SEProjectClassPathModifier cpMod = project.getProjectClassPathModifier();
-            assert cpMod != null;
-            FileChooser chooser;
-            if (project.getAntProjectHelper().isSharableProject()) {
-                chooser = new FileChooser(project.getAntProjectHelper(), true);
+            org.netbeans.api.project.ant.FileChooser chooser;
+            if (helper.isSharableProject()) {
+                chooser = new org.netbeans.api.project.ant.FileChooser(helper, true);
             } else {
-                chooser = new FileChooser(FileUtil.toFile(project.getProjectDirectory()), null);
+                chooser = new org.netbeans.api.project.ant.FileChooser(FileUtil.toFile(helper.getProjectDirectory()), null);
             }
             chooser.enableVariableBasedSelection(true);
             chooser.setFileHidingEnabled(false);
@@ -724,49 +687,41 @@ final class LibrariesNode extends AbstractNode {
             chooser.setFileSelectionMode( JFileChooser.FILES_AND_DIRECTORIES );
             chooser.setMultiSelectionEnabled( true );
             chooser.setDialogTitle( NbBundle.getMessage( LibrariesNode.class, "LBL_AddJar_DialogTitle" ) ); // NOI18N
-            FileFilter fileFilter = new SimpleFileFilter (
-                NbBundle.getMessage( LibrariesNode.class, "LBL_ZipJarFolderFilter" ),   // NOI18N
-                new String[] {"ZIP","JAR"} );   // NOI18N
             //#61789 on old macosx (jdk 1.4.1) these two method need to be called in this order.
             chooser.setAcceptAllFileFilterUsed( false );
-            chooser.setFileFilter(fileFilter);                                                                 
-            File curDir = FoldersListSettings.getDefault().getLastUsedClassPathFolder();
+            FileFilter fileFilter = new SimpleFileFilter (
+                    NbBundle.getMessage( LibrariesNode.class, "LBL_ZipJarFolderFilter" )); // NOI18N
+            chooser.setFileFilter(fileFilter);
+            File curDir = UserProjectSettings.getDefault().getLastUsedClassPathFolder();
             chooser.setCurrentDirectory (curDir);
             int option = chooser.showOpenDialog( WindowManager.getDefault().getMainWindow() );
             if ( option == JFileChooser.APPROVE_OPTION ) {
-                String files[];
+                String filePaths[];
                 try {
-                    files = chooser.getSelectedPaths();
+                    filePaths = chooser.getSelectedPaths();
                 } catch (IOException ex) {
                     Exceptions.printStackTrace(ex);
                     return;
                 }
-                final String propName = cpProvider.getPropertyName(projectSourcesArtifact, ClassPath.COMPILE);
-                addJarFiles(files, chooser.getSelectedPathVariables(), fileFilter , FileUtil.toFile(project.getProjectDirectory()),
-                        cpMod, propName);
+                addJarFiles( filePaths, chooser.getSelectedPathVariables(), fileFilter, FileUtil.toFile(helper.getProjectDirectory()));
                 curDir = FileUtil.normalizeFile(chooser.getCurrentDirectory());
-                FoldersListSettings.getDefault().setLastUsedClassPathFolder(curDir);
+                UserProjectSettings.getDefault().setLastUsedClassPathFolder(curDir);
             }
         }
 
-        private void addJarFiles (final String[] files, final String[] pathBasedVariables, final FileFilter fileFilter,
-                final File base, final J2SEProjectClassPathModifier cpMod, final String propName) {
-            assert files != null;
-            assert fileFilter != null;
-            assert cpMod != null;
-            assert propName != null;
-            for (int i=0; i<files.length;i++) {
+        private void addJarFiles (String[] filePaths, final String[] pathBasedVariables, FileFilter fileFilter, File base) {
+            for (int i=0; i<filePaths.length;i++) {
                 try {
                     //Check if the file is acceted by the FileFilter,
                     //user may enter the name of non displayed file into JFileChooser
-                    File fl = PropertyUtils.resolveFile(base, files[i]);
+                    File fl = PropertyUtils.resolveFile(base, filePaths[i]);
                     FileObject fo = FileUtil.toFileObject(fl);
                     assert fo != null : fl;
                     if (fo != null && fileFilter.accept(fl)) {
                         URI u;
                         boolean isArchiveFile = FileUtil.isArchiveFile(fo);
                         if (pathBasedVariables == null) {
-                            u = LibrariesSupport.convertFilePathToURI(files[i]);
+                            u = LibrariesSupport.convertFilePathToURI(filePaths[i]);
                         } else {
                             try {
                                 String path = pathBasedVariables[i];
@@ -778,7 +733,7 @@ final class LibrariesNode extends AbstractNode {
                                 u = new URI(null, null, path, null);
                             } catch (URISyntaxException ex) {
                                 Exceptions.printStackTrace(ex);
-                                u = LibrariesSupport.convertFilePathToURI(files[i]);
+                                u = LibrariesSupport.convertFilePathToURI(filePaths[i]);
                             }
                         }
                         if (isArchiveFile) {
@@ -790,25 +745,36 @@ final class LibrariesNode extends AbstractNode {
                                 throw new AssertionError(ex);
                             }
                         }
-                        cpMod.handleRoots(new URI[]{u}, propName, J2SEProjectClassPathModifier.ADD, false);
+                        Project prj = FileOwnerQuery.getOwner(helper.getProjectDirectory());
+                        ClassPathModifier modifierImpl = prj.getLookup().lookup(ClassPathModifier.class);
+                        assert modifierImpl != null : prj.getProjectDirectory();
+                        modifierImpl.addRoots(new URI[]{u}, findSourceGroup(projectSourcesArtifact, modifierImpl), ClassPath.COMPILE, ClassPathModifier.ADD_NO_HEURISTICS);
                     }
                 } catch (IOException ioe) {
-                    ErrorManager.getDefault().notify(ioe);
+                    Exceptions.printStackTrace(ioe);
                 }
             }
         }
 
     }
+    
+    private static SourceGroup findSourceGroup(FileObject fo, ClassPathModifier modifierImpl) {
+        SourceGroup[]sgs = modifierImpl.getExtensibleSourceGroups();
+        for (SourceGroup sg : sgs) {
+            if ((fo == sg.getRootFolder() || FileUtil.isParentOf(sg.getRootFolder(),fo)) && sg.contains(fo)) {
+                return sg;
+            }
+        }
+        throw new AssertionError("Cannot find source group for '"+fo+"' in "+Arrays.asList(sgs)); // NOI18N
+    }
 
     private static class SimpleFileFilter extends FileFilter {
 
         private String description;
-        private Collection extensions;
 
 
-        public SimpleFileFilter (String description, String[] extensions) {
+        public SimpleFileFilter (String description) {
             this.description = description;
-            this.extensions = Arrays.asList(extensions);
         }
 
         public boolean accept(File f) {
@@ -817,7 +783,7 @@ final class LibrariesNode extends AbstractNode {
             try {
                 return FileUtil.isArchiveFile(f.toURI().toURL());
             } catch (MalformedURLException mue) {
-                ErrorManager.getDefault().notify(mue);
+                Exceptions.printStackTrace(mue);
                 return false;
             }
         }
