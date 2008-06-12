@@ -41,29 +41,28 @@ package org.netbeans.modules.quicksearch;
 
 import java.util.*;
 import javax.swing.AbstractListModel;
-import org.netbeans.spi.quicksearch.SearchResult;
+import javax.swing.KeyStroke;
 /**
  * ListModel for SearchGroupResults 
  * @author Jan Becicka
  */
-class ResultsModel extends AbstractListModel {
+public final class ResultsModel extends AbstractListModel {
 
-    private static final int MAX_RESULTS = 5;
     private Iterable<? extends CategoryResult> results;
     private ArrayList ar = new ArrayList();
     
-    private Map<SearchResult, ProviderModel.Category> items2Cats = new HashMap<SearchResult, ProviderModel.Category>();
+    private Map<ItemResult, ProviderModel.Category> items2Cats = new HashMap<ItemResult, ProviderModel.Category>();
     
-    private HashSet<SearchResult> isFirstInCat = new HashSet<SearchResult>();
+    private HashSet<ItemResult> isFirstInCat = new HashSet<ItemResult>();
 
     public ResultsModel(String text) {
         super();
         results = CommandEvaluator.evaluate(text);
         for (CategoryResult cr : results) {
             boolean first = true;
-            Iterator<? extends SearchResult> it = cr.getItems().iterator();
-            SearchResult curSr = null;
-            for (int i = 0; i < Math.min(cr.getItems().size(), MAX_RESULTS); i++) {
+            Iterator<? extends ItemResult> it = cr.getItems().iterator();
+            ItemResult curSr = null;
+            for (int i = 0; i < cr.getItems().size(); i++) {
                 curSr = it.next();
                 ar.add(curSr);
                 items2Cats.put(curSr, cr.getCategory());
@@ -79,7 +78,7 @@ class ResultsModel extends AbstractListModel {
     public int getSize() {
         int size = 0;
         for (CategoryResult cr : results) {
-            size += Math.min(MAX_RESULTS, cr.getItems().size());
+            size += cr.getItems().size();
         }
         return size;
     }
@@ -88,13 +87,49 @@ class ResultsModel extends AbstractListModel {
         return ar.get(arg0);
     }
     
-    public ProviderModel.Category getCategory (SearchResult sr) {
+    public ProviderModel.Category getCategory (ItemResult sr) {
         return items2Cats.get(sr);
     } 
     
-    public boolean isFirstinCat(SearchResult sr) {
+    public boolean isFirstinCat(ItemResult sr) {
         return isFirstInCat.contains(sr);
     }
+
+    public static final class ItemResult {
     
+        private Runnable action;
+        private String displayName;
+        private KeyStroke shortcut;
+        private String displayHint;
+
+        public ItemResult (Runnable action, String displayName) {
+            this.action = action;
+            this.displayName = displayName;
+        }
+
+        public ItemResult (Runnable action, String displayName, KeyStroke shortcut, String displayHint) {
+            this.action = action;
+            this.displayName = displayName;
+            this.shortcut = shortcut;
+            this.displayHint = displayHint;
+        }
+
+        public Runnable getAction() {
+            return action;
+        }
+
+        public String getDisplayName () {
+            return displayName;
+        }
+
+        public String getDisplayHint() {
+            return displayHint;
+        }
+
+        public KeyStroke getShortcut() {
+            return shortcut;
+        }
+    
+    }
     
 }
