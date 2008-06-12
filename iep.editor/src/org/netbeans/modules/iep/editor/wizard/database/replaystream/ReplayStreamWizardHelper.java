@@ -37,7 +37,7 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.iep.editor.wizard.database.tableInput;
+package org.netbeans.modules.iep.editor.wizard.database.replaystream;
 
 
 import java.awt.Component;
@@ -45,7 +45,7 @@ import java.awt.Dialog;
 import java.text.MessageFormat;
 import javax.swing.JComponent;
 import org.netbeans.modules.iep.editor.wizard.database.DatabaseTableSelectionWizardPanel1;
-
+import org.netbeans.modules.iep.editor.wizard.database.DatabaseTableSelectionWizardPanel2;
 import org.openide.DialogDisplayer;
 import org.openide.WizardDescriptor;
 import org.openide.util.NbBundle;
@@ -54,7 +54,7 @@ import org.openide.util.NbBundle;
  *
  * @author radval
  */
-public class ExternalTableWizardHelper {
+public class ReplayStreamWizardHelper {
     
     private WizardDescriptor.Panel[] panels;
 
@@ -62,7 +62,7 @@ public class ExternalTableWizardHelper {
         WizardDescriptor wizardDescriptor = new WizardDescriptor(getPanels());
         // {0} will be replaced by WizardDesriptor.Panel.getComponent().getName()
         wizardDescriptor.setTitleFormat(new MessageFormat("{0}"));
-        wizardDescriptor.setTitle(NbBundle.getMessage(ExternalTableWizardHelper.class, "ExternalTableWizardHelper.title"));
+        wizardDescriptor.setTitle(NbBundle.getMessage(ReplayStreamWizardHelper.class, "ReplayStreamWizardHelper.title"));
         
         return wizardDescriptor;
     }
@@ -90,8 +90,8 @@ public class ExternalTableWizardHelper {
         if (panels == null) {
             panels = new WizardDescriptor.Panel[]{
                         new DatabaseTableSelectionWizardPanel1(),
-                        new DatabaseTableSelectionWizardPanel2()
-                        
+                        new DatabaseTableSelectionWizardPanel2(),
+                        new DatabaseTableSelectionWizardPanel3()
                     };
             String[] steps = new String[panels.length];
             for (int i = 0; i < panels.length; i++) {
@@ -120,6 +120,6 @@ public class ExternalTableWizardHelper {
     }
 
     public String getName() {
-        return NbBundle.getMessage(ExternalTableWizardHelper.class, "DatabaseTableSelectionWizardAction_SelectTable");
+        return NbBundle.getMessage(ReplayStreamWizardHelper.class, "DatabaseTableSelectionWizardAction_SelectTable");
     }
 }
