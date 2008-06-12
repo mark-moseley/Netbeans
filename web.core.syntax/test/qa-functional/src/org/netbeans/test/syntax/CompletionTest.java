@@ -50,6 +50,7 @@ import java.io.File;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -64,6 +65,7 @@ import junit.framework.Test;
 import org.netbeans.editor.Utilities;
 import org.netbeans.editor.ext.CompletionQuery.ResultItem;
 import org.netbeans.jellytools.JellyTestCase;
+import org.netbeans.jellytools.modules.j2ee.J2eeTestCase;
 import org.netbeans.jellytools.modules.editor.CompletionJListOperator;
 import org.netbeans.jemmy.JemmyException;
 import org.netbeans.jemmy.util.PNGEncoder;
@@ -73,6 +75,8 @@ import org.netbeans.editor.TokenID;
 import org.netbeans.editor.TokenItem;
 import org.netbeans.editor.ext.ExtSyntaxSupport;
 import org.netbeans.jellytools.EditorOperator;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.junit.NbTestSuite;
 import org.netbeans.spi.editor.completion.CompletionItem;
 import org.netbeans.test.web.FileObjectFilter;
 import org.netbeans.test.web.RecurrentSuiteFactory;
@@ -115,7 +119,7 @@ import org.openide.util.actions.SystemAction;
  * @author ms113234
  *
  */
-public class CompletionTest extends JellyTestCase {
+public class CompletionTest extends J2eeTestCase {
 
     private static boolean GENERATE_GOLDEN_FILES = false;//generate golden files, or test
     protected FileObject testFileObj;
@@ -130,27 +134,38 @@ public class CompletionTest extends JellyTestCase {
         this.testFileObj = testFileObj;
     }
 
+    @Override
     public void setUp() {
         System.out.println("########  " + getName() + "  #######");
     }
 
     public static Test suite() {
-        // find folder with test projects and define file objects filter
-        File datadir = new CompletionTest(null, null).getDataDir();
-        File projectsDir = new File(datadir, "CompletionTestProjects");
-        FileObjectFilter filter = new FileObjectFilter() {
-
-            public boolean accept(FileObject fo) {
-                String ext = fo.getExt();
-                String name = fo.getName();
-                return (name.startsWith("test") || name.startsWith("Test")) &&
-                        (XML_EXTS.contains(ext) || JSP_EXTS.contains(ext) || JS_EXTS.contains(ext));
-            }
-        };
-        return RecurrentSuiteFactory.createSuite(CompletionTest.class,
-                projectsDir, filter);
+        NbModuleSuite.Configuration conf = NbModuleSuite.emptyConfiguration();
+        conf = conf.enableModules(".*").clusters(".*");
+        return NbModuleSuite.create(conf.addTest(SuiteCreator.class));
     }
 
+    public static final class SuiteCreator extends NbTestSuite {
+
+        public SuiteCreator() {
+            super();
+            File datadir = new CompletionTest(null, null).getDataDir();
+            File projectsDir = new File(datadir, "CompletionTestProjects");
+            FileObjectFilter filter = new FileObjectFilter() {
+
+                public boolean accept(FileObject fo) {
+                    String ext = fo.getExt();
+                    String name = fo.getName();
+                    return (name.startsWith("test") || name.startsWith("Test")) &&
+                            (XML_EXTS.contains(ext) || JSP_EXTS.contains(ext) || JS_EXTS.contains(ext));
+                }
+            };
+            addTest(RecurrentSuiteFactory.createSuite(CompletionTest.class,
+                projectsDir, filter));
+        }
+    }
+    
+    @Override
     public void runTest() throws Exception {
         String ext = testFileObj.getExt();
         if (JSP_EXTS.contains(ext)) {
@@ -182,7 +197,7 @@ public class CompletionTest extends JellyTestCase {
     }
 
     protected void waitTypingFinished(BaseDocument doc) {
-        final int delay = 500;
+        final int delay = 2000;
         final int repeat = 20;
         final Object lock = new Object();
         Runnable posted = new Runnable() {
@@ -345,11 +360,11 @@ public class CompletionTest extends JellyTestCase {
             caret.setDot(step.getOffset() + 1);
             EditorOperator eo = new EditorOperator(testFileObj.getNameExt());
             eo.insert(step.getPrefix());
-            waitTypingFinished(doc);
             if (!isJavaScript()) {
                 caret.setDot(step.getCursorPos());
             }
 
+            waitTypingFinished(doc);
             CompletionJListOperator comp = null;
             boolean print = false;
             int counter = 0;
@@ -366,6 +381,7 @@ public class CompletionTest extends JellyTestCase {
                 }
                 if (comp != null) {
                     print = dumpCompletion(comp, step, editor, print) || print;
+                    waitTypingFinished(doc);
                     CompletionJListOperator.hideAll();
                     if (!print) {// wait for refresh
                         Thread.sleep(1000);
@@ -390,12 +406,14 @@ public class CompletionTest extends JellyTestCase {
             doc.atomicLock();
             int rowStart = Utilities.getRowStart(doc, step.getOffset() + 1);
             int rowEnd = Utilities.getRowEnd(doc, step.getOffset() + 1);
-            String result = doc.getText(new int[]{rowStart, rowEnd});
+            String result2 = doc.getText(new int[]{rowStart, rowEnd});
             doc.atomicUnlock();
-            if (!result.equals(step.getResult())) {
+            String result = result2.trim();
+            int removed_whitespaces = result2.length() - result.length();
+            if (!result.equals(step.getResult().trim())) {
                 ref("EE: unexpected CC result:\n< " + result + "\n> " + step.getResult());
             }
-            ref("End cursor position = " + caret.getDot());
+            ref("End cursor position = " + (caret.getDot() - removed_whitespaces));
         } finally {
             // undo all changes
             final UndoAction ua = SystemAction.get(UndoAction.class);
@@ -458,10 +476,16 @@ public class CompletionTest extends JellyTestCase {
                     assertInstanceOf(CompletionItem.class, next);
                     selectedItem = (CompletionItem) next;
                 }
-                if (printDirectly) {
+                if (printDirectly && !isJavaScript()) {
                     ref(g.getTextUni());
                 } else {
                     finalItems.add(g.getTextUni());
+                }
+            }
+            if (printDirectly && isJavaScript()){
+                Collections.sort(finalItems);
+                for (String str : finalItems) {
+                    ref(str);
                 }
             }
             class DefaultActionRunner implements Runnable {
@@ -483,12 +507,14 @@ public class CompletionTest extends JellyTestCase {
             if (selectedItem != null) {
                 // move to separate class
                 if (!printDirectly) {
+                    if (isJavaScript()){
+                        Collections.sort(finalItems);
+                    }
                     for (String str : finalItems) {
                         ref(str);
                     }
                 }
-                Runnable run = new DefaultActionRunner(selectedItem, editor);
-                runInAWT(run);
+                runInAWT(new DefaultActionRunner(selectedItem, editor));
                 return true;
             } else {
                 if (printDirectly) {
@@ -526,7 +552,7 @@ public class CompletionTest extends JellyTestCase {
         return method;
     }
 
-    protected void assertInstanceOf(Class expectedType, Object actual) {
+    protected void assertInstanceOf(Class<?> expectedType, Object actual) {
         if (!expectedType.isAssignableFrom(actual.getClass())) {
             fail("Expected type: " + expectedType.getName() + "\nbut was: " +
                     actual.getClass().getName());
@@ -556,6 +582,7 @@ public class CompletionTest extends JellyTestCase {
             cursorPos += offset + 1;
         }
 
+        @Override
         public String toString() {
             StringBuffer sb = new StringBuffer(prefix);
             sb.insert(cursorPos - offset - 1, '|');
@@ -593,13 +620,10 @@ public class CompletionTest extends JellyTestCase {
         return sb.toString();
     }
 
-    protected void ending() throws Exception {
-        if (!GENERATE_GOLDEN_FILES) {
-            compareReferenceFiles();
-        } else {
-            getRef().flush();
-            File ref = new File(getWorkDir(), this.getName() + ".ref");
-            File f = getDataDir();
+    static void generateGoldenFiles(JellyTestCase test) throws Exception {
+            test.getRef().flush();
+            File ref = new File(test.getWorkDir(), test.getName() + ".ref");
+            File f = test.getDataDir();
             ArrayList<String> names = new ArrayList<String>();
             names.add("goldenfiles");
             names.add("data");
@@ -611,13 +635,20 @@ public class CompletionTest extends JellyTestCase {
             for (int i = names.size() - 1; i > -1; i--) {
                 f = new File(f, names.get(i));
             }
-            f = new File(f, getClass().getName().replace('.', File.separatorChar));
-            f = new File(f, this.getName() + ".pass");
+            f = new File(f, test.getClass().getName().replace('.', File.separatorChar));
+            f = new File(f, test.getName() + ".pass");
             if (!f.getParentFile().exists()) {
                 f.getParentFile().mkdirs();
             }
             ref.renameTo(f);
             assertTrue("Generating golden files to " + f.getAbsolutePath(), false);
+    }
+    
+    protected void ending() throws Exception {
+        if (!GENERATE_GOLDEN_FILES) {
+            compareReferenceFiles();
+        } else {
+            generateGoldenFiles(this);
         }
 
     }
