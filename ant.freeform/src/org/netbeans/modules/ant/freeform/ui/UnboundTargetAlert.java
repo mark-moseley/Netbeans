@@ -51,12 +51,13 @@ import java.util.List;
 import java.util.StringTokenizer;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JPanel;
+import org.apache.tools.ant.module.api.support.AntScriptUtils;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.ant.freeform.Actions;
 import org.netbeans.modules.ant.freeform.FreeformProject;
 import org.netbeans.modules.ant.freeform.FreeformProjectGenerator;
-import org.netbeans.modules.ant.freeform.Util;
+import org.netbeans.spi.project.ActionProvider;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -114,11 +115,11 @@ public final class UnboundTargetAlert extends JPanel {
     private void listTargets() {
         FileObject script = FreeformProjectGenerator.getAntScript(project.helper(), project.evaluator());
         if (script != null) {
-            List<String> targets = Util.getAntScriptTargetNames(script);
-            if (targets != null) {
+            try {
+                List<String> targets = AntScriptUtils.getCallableTargetNames(script);
                 selectCombo.setModel(new DefaultComboBoxModel(targets.toArray(new String[targets.size()])));
                 selectCombo.setSelectedItem("");
-            }
+            } catch (IOException x) {/* ignore */}
         }
     }
 
@@ -186,7 +187,8 @@ public final class UnboundTargetAlert extends JPanel {
         FreeformProjectGenerator.putContextMenuAction(project.helper(), mappings);
     }
     
-    private void initComponents() {//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+    private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
         introLabel = new javax.swing.JLabel();
@@ -196,7 +198,7 @@ public final class UnboundTargetAlert extends JPanel {
 
         setLayout(new java.awt.GridBagLayout());
 
-        org.openide.awt.Mnemonics.setLocalizedText(introLabel, org.openide.util.NbBundle.getMessage(UnboundTargetAlert.class, "UTA_LBL_intro", label));
+        org.openide.awt.Mnemonics.setLocalizedText(introLabel, org.openide.util.NbBundle.getMessage(UnboundTargetAlert.class, "UTA_LBL_intro", label)); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = 2;
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 12, 0);
@@ -205,7 +207,7 @@ public final class UnboundTargetAlert extends JPanel {
         explanation.setBackground(javax.swing.UIManager.getDefaults().getColor("Label.background"));
         explanation.setEditable(false);
         explanation.setLineWrap(true);
-        explanation.setText(org.openide.util.NbBundle.getMessage(UnboundTargetAlert.class, "UTA_TEXT_explanation", label));
+        explanation.setText(org.openide.util.NbBundle.getMessage(UnboundTargetAlert.class, "UTA_TEXT_explanation", label)); // NOI18N
         explanation.setWrapStyleWord(true);
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -214,9 +216,11 @@ public final class UnboundTargetAlert extends JPanel {
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 12, 0);
         add(explanation, gridBagConstraints);
+        explanation.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(UnboundTargetAlert.class, "ASCN_UTA_TEXT_explanation" , label)); // NOI18N
+        explanation.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(UnboundTargetAlert.class, "ASCD_UTA_TEXT_explanation" , label)); // NOI18N
 
         selectLabel.setLabelFor(selectCombo);
-        org.openide.awt.Mnemonics.setLocalizedText(selectLabel, org.openide.util.NbBundle.getMessage(UnboundTargetAlert.class, "UTA_LBL_select", label));
+        org.openide.awt.Mnemonics.setLocalizedText(selectLabel, org.openide.util.NbBundle.getMessage(UnboundTargetAlert.class, "UTA_LBL_select", label)); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 2;
@@ -230,8 +234,7 @@ public final class UnboundTargetAlert extends JPanel {
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.EAST;
         add(selectCombo, gridBagConstraints);
-
-    }//GEN-END:initComponents
+    }// </editor-fold>//GEN-END:initComponents
     
     
     // Variables declaration - do not modify//GEN-BEGIN:variables

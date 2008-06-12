@@ -42,15 +42,16 @@
 package org.netbeans.modules.ant.freeform.ui;
 
 import java.io.File;
+import java.io.IOException;
 import java.text.MessageFormat;
 import javax.swing.JFileChooser;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import org.apache.tools.ant.module.api.support.AntScriptUtils;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
-import org.netbeans.modules.ant.freeform.Util;
 import org.netbeans.spi.project.ui.support.ProjectChooser;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -139,9 +140,13 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         }
         if (!antScriptValidityChecked) {
             FileObject fo = FileUtil.toFileObject(getAntScript());
-            if (fo != null && Util.getAntScriptTargetNames(fo) != null) {
-                antScriptValidityChecked = true;
-            } else {
+            if (fo != null) {
+                try {
+                    AntScriptUtils.getCallableTargetNames(fo);
+                    antScriptValidityChecked = true;
+                } catch (IOException x) {/* failed */}
+            }
+            if (!antScriptValidityChecked) {
                 return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_5");
             }
         }
@@ -250,7 +255,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
             if (as.exists()) {
                 FileObject fo = FileUtil.toFileObject(as);
                 assert fo != null : as;
-                String name = Util.getAntScriptName(fo);
+                String name = AntScriptUtils.getAntScriptName(fo);
                 if (name != null) {
                     projectName.setText(name);
                     return;
@@ -300,14 +305,14 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         jLabel7 = new javax.swing.JLabel();
         jTextArea2 = new javax.swing.JTextArea();
 
-        setPreferredSize(new java.awt.Dimension(323, 223));
+        setPreferredSize(new java.awt.Dimension(400, 360));
         setLayout(new java.awt.GridBagLayout());
 
         org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_jLabel1")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = 3;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(0, 0, 12, 0);
+        gridBagConstraints.insets = new java.awt.Insets(0, 0, 10, 0);
         add(jLabel1, gridBagConstraints);
         jLabel1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "ACSD_BasicProjectInfoPanel_jLabel1")); // NOI18N
 
@@ -327,7 +332,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         gridBagConstraints.gridy = 3;
         gridBagConstraints.gridwidth = 3;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(24, 0, 12, 0);
+        gridBagConstraints.insets = new java.awt.Insets(16, 0, 10, 0);
         add(jLabel3, gridBagConstraints);
         jLabel3.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "ACSD_BasicProjectInfoPanel_jLabel3")); // NOI18N
 
@@ -434,7 +439,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         gridBagConstraints.gridy = 6;
         gridBagConstraints.gridwidth = 3;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.insets = new java.awt.Insets(12, 0, 12, 0);
+        gridBagConstraints.insets = new java.awt.Insets(12, 0, 10, 0);
         add(jSeparator1, gridBagConstraints);
 
         mainProject.setSelected(true);
@@ -467,6 +472,8 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.insets = new java.awt.Insets(4, 10, 4, 4);
         jPanel2.add(jTextArea2, gridBagConstraints);
+        jTextArea2.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "ACSN_Freeform_Warning_Message")); // NOI18N
+        jTextArea2.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "ACSD_Freeform_Warning_Message")); // NOI18N
 
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
