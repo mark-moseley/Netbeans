@@ -144,13 +144,17 @@ public class DbSchemaEjbGenerator {
         return (EntityClass)beans.get(tableName);
     }
     
-    private EntityClass addBean(String tableName) {
+    private EntityClass addBean(String schemaName, String catalogName, String tableName) {
         EntityClass bean = getBean(tableName);
         if (bean != null) {
             return bean;
         }
         
-        bean = new EntityClass(tableName,
+        bean = new EntityClass(
+                genTables.isFullyQualifiedTableNames(),
+                schemaName, 
+                catalogName, 
+                tableName,
                 genTables.getRootFolder(tableName),
                 genTables.getPackageName(tableName),
                 genTables.getClassName(tableName));
@@ -167,7 +171,9 @@ public class DbSchemaEjbGenerator {
             if (isJoinTable(tableElement)) {
                 joinTables.add(tableElement);
             } else {
-                addBean(tableName);
+                String schemaName = genTables.getSchema(tableName);
+                String catalogName = genTables.getCatalog(tableName);
+                addBean(schemaName, catalogName, tableName);
             }
         }
         for (TableElement joinTable : joinTables) {
@@ -219,8 +225,8 @@ public class DbSchemaEjbGenerator {
         String roleAname = getRoleName(foreignKeys[0], roleAHelper.getClassName());
         String roleBname = getRoleName(foreignKeys[1], roleBHelper.getClassName());
         
-        String roleACmr = EntityMember.makeRelationshipFieldName(roleBname, true);
-        String roleBCmr = EntityMember.makeRelationshipFieldName(roleAname, true);
+        String roleACmr = EntityMember.makeRelationshipFieldName(roleBHelper.getClassName(), true);
+        String roleBCmr = EntityMember.makeRelationshipFieldName(roleAHelper.getClassName(), true);
         
         roleACmr = uniqueAlgorithm(getFieldNames(roleAHelper), roleACmr, null);
         List roleBFieldNames = getFieldNames(roleBHelper);
@@ -393,7 +399,8 @@ public class DbSchemaEjbGenerator {
                 roleBCmr,
                 false,
                 !oneToOne,
-                !isNullable(key));
+                !isNullable(key),
+                isNullable(key));
         roleBHelper.addRole(roleB);
         
         // role A
@@ -419,7 +426,8 @@ public class DbSchemaEjbGenerator {
                 roleACmr,
                 !oneToOne,
                 false,
-                false);
+                false,
+                isNullable(key));
         roleAHelper.addRole(roleA);
         
         EntityRelation relation = new EntityRelation(roleA, roleB);
@@ -461,6 +469,7 @@ public class DbSchemaEjbGenerator {
             }
             EntityClass helperData = getBean(tableName);
             helperData.usePkField(pk!= null && pk.getColumns().length == 1);
+            helperData.setIsForTable(table.isTable());
         }
         makeRelationsUnique();
     }
