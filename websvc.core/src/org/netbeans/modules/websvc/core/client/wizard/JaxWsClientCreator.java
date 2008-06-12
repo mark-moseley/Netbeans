@@ -58,10 +58,9 @@ import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
-import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.websvc.api.jaxws.client.JAXWSClientSupport;
+import org.netbeans.modules.websvc.api.jaxws.project.config.Client;
+import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;
 import org.netbeans.modules.websvc.core.ClientWizardProperties;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
@@ -74,6 +73,7 @@ import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Task;
 import org.netbeans.modules.websvc.core.ClientCreator;
+import org.netbeans.modules.websvc.core.WSStackUtils;
 
 /**
  *
@@ -99,8 +99,10 @@ public class JaxWsClientCreator implements ClientCreator {
         
     public void createClient() throws IOException {
         
-        final boolean isJsr109Supported = isJsr109Supported();
-        final boolean isJWSDPSupported = isJWSDPSupported();
+        
+        WSStackUtils stackUtils = new WSStackUtils(project);
+        final boolean isJsr109Supported = stackUtils.isJsr109Supported();
+        //final boolean isJWSDPSupported = isJWSDPSupported();
         
         // Use Progress API to display generator messages.
         final ProgressHandle handle = ProgressHandleFactory.createHandle(NbBundle.getMessage(JaxWsClientCreator.class, "MSG_WizCreateClient")); //NOI18N
@@ -109,7 +111,7 @@ public class JaxWsClientCreator implements ClientCreator {
             public void run() {
                 try {
                     handle.start();
-                    generate15Client((isJsr109Supported || isJWSDPSupported), handle);
+                    generate15Client((isJsr109Supported /*|| isJWSDPSupported*/), handle);
                 } catch (IOException exc) {
                     //finish progress bar
                     handle.finish();
@@ -136,18 +138,30 @@ public class JaxWsClientCreator implements ClientCreator {
             String mes = NbBundle.getMessage(WebServiceClientWizardIterator.class, "ERR_NoWebServiceClientSupport"); // NOI18N
             NotifyDescriptor desc = new NotifyDescriptor.Message(mes, NotifyDescriptor.Message.ERROR_MESSAGE);
             DialogDisplayer.getDefault().notify(desc);
+            handle.finish();
+            return;
         }
         
         String wsdlUrl = (String)wiz.getProperty(ClientWizardProperties.WSDL_DOWNLOAD_URL);
         String filePath = (String)wiz.getProperty(ClientWizardProperties.WSDL_FILE_PATH);
+        Boolean useDispatch = (Boolean) wiz.getProperty(ClientWizardProperties.USEDISPATCH);
         //if (wsdlUrl==null) wsdlUrl = "file:"+(filePath.startsWith("/")?filePath:"/"+filePath); //NOI18N
         if(wsdlUrl == null){
             wsdlUrl = FileUtil.toFileObject(FileUtil.normalizeFile(new File(filePath))).getURL().toExternalForm();
         }
         String packageName = (String)wiz.getProperty(ClientWizardProperties.WSDL_PACKAGE_NAME);
         if (packageName!=null && packageName.length()==0) packageName=null;
-        jaxWsClientSupport.addServiceClient(getWsdlName(wsdlUrl),wsdlUrl,packageName, isJsr109Platform); 
-        
+        String clientName = jaxWsClientSupport.addServiceClient(getWsdlName(wsdlUrl),wsdlUrl,packageName, isJsr109Platform); 
+        if (useDispatch) {
+            List clients = jaxWsClientSupport.getServiceClients();
+            for (Object c : clients) {
+                if (((Client)c).getName().equals(clientName)) {
+                    ((Client)c).setUseDispatch(useDispatch);
+                }
+            }
+            JaxWsModel jaxWsModel = (JaxWsModel) project.getLookup().lookup(JaxWsModel.class);
+            jaxWsModel.write();
+        }
         handle.finish();
     }
     
@@ -155,7 +169,7 @@ public class JaxWsClientCreator implements ClientCreator {
         int ind = wsdlUrl.lastIndexOf("/"); //NOI18N
         String wsdlName = ind>=0?wsdlUrl.substring(ind+1):wsdlUrl;
         if (wsdlName.toUpperCase().endsWith("?WSDL")) wsdlName = wsdlName.substring(0,wsdlName.length()-5); //NOI18N
-        ind = wsdlName.lastIndexOf(".wsdl"); //NOI18N
+        ind = wsdlName.lastIndexOf("."); //NOI18N
         if (ind>0) wsdlName = wsdlName.substring(0,ind);
         // replace special characters with '_'
         return convertAllSpecialChars(wsdlName);
@@ -254,41 +268,6 @@ public class JaxWsClientCreator implements ClientCreator {
             }
         }
         return result;
-    }
-    
-    private J2eePlatform getJ2eePlatform(){
-        J2eeModuleProvider provider = (J2eeModuleProvider) project.getLookup().lookup(J2eeModuleProvider.class);
-        if(provider != null){
-            String serverInstanceID = provider.getServerInstanceID();
-            if(serverInstanceID != null && serverInstanceID.length() > 0) {
-                return Deployment.getDefault().getJ2eePlatform(serverInstanceID);
-            }
-        }
-        return null;
-    }
-    
-    private boolean isJWSDPSupported(){
-        J2eePlatform j2eePlatform = getJ2eePlatform();
-        if(j2eePlatform != null){
-            return j2eePlatform.isToolSupported(J2eePlatform.TOOL_JWSDP);
-        }
-        return false;
-    }
-    
-    private boolean isJsr109Supported(){
-        J2eePlatform j2eePlatform = getJ2eePlatform();
-        if(j2eePlatform != null){
-            return j2eePlatform.isToolSupported(J2eePlatform.TOOL_JSR109);
-        }
-        return false;
-    }
-    
-    private boolean isJsr109OldSupported(){
-        J2eePlatform j2eePlatform = getJ2eePlatform();
-        if(j2eePlatform != null){
-            return j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSCOMPILE);
-        }
-        return false;
     }
 
     /**
