@@ -61,6 +61,7 @@ import org.netbeans.modules.uml.drawingarea.ModelElementChangedKind;
 import org.netbeans.modules.uml.drawingarea.palette.context.DefaultContextPaletteModel;
 import org.netbeans.modules.uml.drawingarea.view.ResourceType;
 import org.netbeans.modules.uml.drawingarea.view.UMLLabelWidget;
+import org.netbeans.modules.uml.drawingarea.view.UMLNodeWidget;
 import org.netbeans.modules.uml.drawingarea.view.UMLWidget.UMLWidgetIDString;
 import org.netbeans.modules.uml.drawingarea.widgets.ContainerWidget;
 import org.openide.util.NbBundle;
@@ -69,7 +70,7 @@ import org.openide.util.NbBundle;
  *
  * @author thuy
  */
-public class ActivityGroupWidget extends ContainerNode
+public class ActivityGroupWidget extends UMLNodeWidget//ContainerNode
 {
     private UMLLabelWidget groupKindWidget = null;
     private UMLNameWidget actGrpNameWidget = null;
@@ -264,8 +265,15 @@ public class ActivityGroupWidget extends ContainerNode
     }
 
     @Override
-    public ContainerWidget getContainer()
+    public void addContainedChild(Widget widget)
     {
-        return containerWidget;
+        widget.removeFromParent();
+        containerWidget.addChild(widget);
     }
+    
+//    @Override
+//    public ContainerWidget getContainer()
+//    {
+//        return containerWidget;
+//    }
 }
