@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.ResourceBundle;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import org.netbeans.modules.web.client.tools.projectsupport.CustomizerDebug;
 import org.netbeans.modules.web.project.ProjectWebModule;
 import org.netbeans.modules.web.project.WebProject;
 import org.netbeans.modules.websvc.api.client.WebServicesClientSupport;
@@ -69,6 +70,7 @@ public class WebCompositePanelProvider implements ProjectCustomizer.CompositeCat
     private static final String WAR = "War";
     private static final String JAVADOC = "Javadoc";
     public static final String RUN = "Run";
+    public static final String DEBUG = "Debug";
     
     private static final String WEBSERVICESCATEGORY = "WebServicesCategory";
     private static final String WEBSERVICES = "WebServices";
@@ -127,6 +129,12 @@ public class WebCompositePanelProvider implements ProjectCustomizer.CompositeCat
                     bundle.getString( "LBL_Config_Run" ), // NOI18N
                     null,
                     (Category[])null );
+        } else if (DEBUG.equals(name)) {
+            toReturn = ProjectCustomizer.Category.create(
+                    DEBUG,
+                    bundle.getString( "LBL_Config_Debug" ), // NOI18N
+                    null,
+                    (Category[])null );
         } else if (WEBSERVICESCATEGORY.equals(name) && showWebServicesCategory(
                 (WebProjectProperties)context.lookup(WebProjectProperties.class))) {
             ProjectCustomizer.Category services = ProjectCustomizer.Category.create(WEBSERVICES,
@@ -163,6 +171,12 @@ public class WebCompositePanelProvider implements ProjectCustomizer.CompositeCat
             return new CustomizerJavadoc(uiProps);
         } else if (RUN.equals(nm)) {
             return new CustomizerRun(uiProps);
+        } else if (DEBUG.equals(nm)) {
+            ResourceBundle bundle = NbBundle.getBundle( CustomizerProviderImpl.class );
+            String serverMsg = bundle.getString("LBL_CustomizeDebug_ServerDebug_JCheckBox"); // NOI18N
+            String clientMsg = bundle.getString("LBL_CustomizeDebug_ClientDebug_JCheckBox"); // NOI18N
+            
+            return new CustomizerDebug(category, uiProps.DEBUG_SERVER_MODEL, serverMsg, uiProps.DEBUG_CLIENT_MODEL, clientMsg);
         } else if (WEBSERVICES.equals(nm) || WEBSERVICECLIENTS.equals(nm)) {
             ProjectWebModule wm = (ProjectWebModule) uiProps.getProject().getLookup().lookup(ProjectWebModule.class);
             FileObject docBase = wm.getDocumentBase();
@@ -226,6 +240,10 @@ public class WebCompositePanelProvider implements ProjectCustomizer.CompositeCat
         return new WebCompositePanelProvider(RUN);
     }
 
+    public static WebCompositePanelProvider createDebug() {
+        return new WebCompositePanelProvider(DEBUG);
+    }
+    
     public static WebCompositePanelProvider createWebServicesCategory() {
         return new WebCompositePanelProvider(WEBSERVICESCATEGORY);
     }
