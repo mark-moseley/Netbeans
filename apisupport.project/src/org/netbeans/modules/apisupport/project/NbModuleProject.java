@@ -46,6 +46,7 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.util.Arrays;
@@ -232,6 +233,7 @@ public final class NbModuleProject implements Project {
             new Info(),
             aux,
             helper.createCacheDirectoryProvider(),
+            helper.createAuxiliaryProperties(),
             new SavedHook(),
             UILookupMergerSupport.createProjectOpenHookMerger(new OpenedHook()),
             new ModuleActions(this),
@@ -394,12 +396,12 @@ public final class NbModuleProject implements Project {
     
     public File getClassesDirectory() {
         String classesDir = evaluator().getProperty("build.classes.dir"); // NOI18N
-        return helper.resolveFile(classesDir);
+        return classesDir != null ? helper.resolveFile(classesDir) : null;
     }
     
     public File getTestClassesDirectory() {
         String testClassesDir = evaluator().getProperty("build.test.unit.classes.dir"); // NOI18N
-        return helper.resolveFile(testClassesDir);
+        return testClassesDir != null ? helper.resolveFile(testClassesDir) : null;
     }
     
     public FileObject getJavaHelpDirectory() {
@@ -504,7 +506,8 @@ public final class NbModuleProject implements Project {
         NbPlatform p = getPlatform(false);
         if (p == null) {
             // #67148: have to use something... (and getEntry(codeNameBase) will certainly fail!)
-            return ModuleList.getModuleList(getProjectDirectoryFile(), NbPlatform.getDefaultPlatform().getDestDir());
+            NbPlatform p2 = NbPlatform.getDefaultPlatform();
+            return ModuleList.getModuleList(getProjectDirectoryFile(), p2 != null ? p2.getDestDir() : null);
         }
         ModuleList ml;
         try {
@@ -512,7 +515,8 @@ public final class NbModuleProject implements Project {
         } catch (IOException x) {
             // #69029: maybe invalidated platform? Try the default platform instead.
             Logger.getLogger(NbModuleProject.class.getName()).log(Level.FINE, null, x);
-            return ModuleList.getModuleList(getProjectDirectoryFile(), NbPlatform.getDefaultPlatform().getDestDir());
+            NbPlatform p2 = NbPlatform.getDefaultPlatform();
+            return ModuleList.getModuleList(getProjectDirectoryFile(), p2 != null ? p2.getDestDir() : null);
         }
         if (ml.getEntry(getCodeNameBase()) == null) {
             ModuleList.refresh();
