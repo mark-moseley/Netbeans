@@ -36,52 +36,45 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.hibernate.hqleditor;
+package org.netbeans.modules.hibernate.hqleditor.ui;
 
-import org.hibernate.Query;
-import org.hibernate.Session;
-import org.hibernate.SessionFactory;
-import org.hibernate.cfg.Configuration;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.hibernate.hqleditor.HQLEditorController;
+import org.openide.nodes.Node;
+import org.openide.util.HelpCtx;
+import org.openide.util.NbBundle;
+import org.openide.util.actions.NodeAction;
 
 /**
- * Executes HQL query.
+ * Action which shows HQLEditor component.
  * 
  * @author Vadiraj Deshpande (Vadiraj.Deshpande@Sun.COM)
  */
-public class HQLExecutor {
+public class HQLEditorAction extends NodeAction {
+    
+    public HQLEditorAction() {
+        super();
+    }
 
-    /**
-     * Executes given HQL query and returns the result.
-     * @param hql the query
-     * @param configFileObject hibernate configuration object.
-     * @return HQLResult containing the execution result (including any errors).
-     */
-    public HQLResult execute(String hql, FileObject configFileObject) {
-        HQLResult result = new HQLResult();
-        try {
+    @Override
+    protected boolean asynchronous() {
+        return false;
+    }
 
-            Configuration configuration = new Configuration();
-            configuration.configure(FileUtil.toFile(configFileObject));
+    @Override
+    protected void performAction(final Node[] activatedNodes) {
+        new HQLEditorController().init(activatedNodes);
+    }
 
-            SessionFactory sessionFactory = configuration.buildSessionFactory();
-            Session session = sessionFactory.openSession();
-
-            Query query = session.createQuery(hql);
-
-            hql = hql.trim();
-            hql = hql.toUpperCase();
-
-            if (hql.startsWith("UPDATE") || hql.startsWith("DELETE")) { //NOI18N
-                result.setUpdateOrDeleteResult(query.executeUpdate());
-            } else {
-                result.setQueryResults(query.list());
-            }
-
-        } catch (Exception e) {
-            result.getExceptions().add(e);
-        }
-        return result;
+    @Override
+    protected boolean enable(Node[] activatedNodes) {
+        return true;
+    }
+    
+    public HelpCtx getHelpCtx() {
+        return HelpCtx.DEFAULT_HELP;
+    }
+    
+    public String getName() {
+        return NbBundle.getMessage(HQLEditorAction.class, "CTL_HQLEditorAction");
     }
 }
