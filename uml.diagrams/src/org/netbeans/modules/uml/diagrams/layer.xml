@@ -632,8 +632,15 @@ made subject to such option by the copyright holder.
             <file name="ClassAssociation.context_palette_item" url="resources/context/ClassAssociation.context_palette_item">
                 <attr name="factory" newvalue="org.netbeans.modules.uml.diagrams.edges.factories.AssociationClassFactory"/>
             </file>
+            <!--
             <file name="LinkComment.context_palette_item" url="resources/context/LinkComment.context_palette_item">
                 <attr name="model" newvalue="org.netbeans.modules.uml.diagrams.edges.CommentLinkPaletteModel"/>
+            </file>
+            -->
+            <file name="Comment.context_palette_item" url="resources/context/LinkComment.context_palette_item">
+                <!-- Since a comment is a relationship that represents a property.  We need to specify a model -->
+                <attr name="model" newvalue="org.netbeans.modules.uml.diagrams.edges.CommentLinkPaletteModel"/>
+                <attr name="factory" newvalue="org.netbeans.modules.uml.diagrams.edges.factories.CommentLinkFactory"/>
             </file>
             <file name="NestedLink.context_palette_item" url="resources/context/NestedLink.context_palette_item">
                 <attr name="model" newvalue="org.netbeans.modules.uml.diagrams.edges.NestedLinkPaletteModel"/>
@@ -708,14 +715,20 @@ made subject to such option by the copyright holder.
                     <file name="Datatype.modeling_palette_item" url="resources/palette/Datatype.modeling_palette_item">
                         <attr name="position" intvalue="150"/>
                     </file>
-                    <file name="Actor.modeling_palette_item" url="resources/palette/Actor.modeling_palette_item">
+                    <file name="Artifact.modeling_palette_item" url="resources/palette/Artifact.modeling_palette_item">
                         <attr name="position" intvalue="160"/>
                     </file>
-                    <file name="UtilityClass.modeling_palette_item" url="resources/palette/UtilityClass.modeling_palette_item">
+                    <file name="AliasedType.modeling_palette_item" url="resources/palette/AliasedType.modeling_palette_item">
                         <attr name="position" intvalue="170"/>
                     </file>
-                    <file name="Comment.modeling_palette_item" url="resources/palette/Comment.modeling_palette_item">
+                    <file name="Actor.modeling_palette_item" url="resources/palette/Actor.modeling_palette_item">
                         <attr name="position" intvalue="180"/>
+                    </file>
+                    <file name="UtilityClass.modeling_palette_item" url="resources/palette/UtilityClass.modeling_palette_item">
+                        <attr name="position" intvalue="190"/>
+                    </file>
+                    <file name="Comment.modeling_palette_item" url="resources/palette/Comment.modeling_palette_item">
+                        <attr name="position" intvalue="200"/>
                     </file>
                 </folder>
                 <folder name="Robustness">
@@ -1024,7 +1037,7 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="500"/>
                 </file>
@@ -1112,7 +1125,7 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="550"/>
                 </file>
@@ -1167,7 +1180,96 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
+                    <attr name="default-node" stringvalue="Comment"/>
+                    <attr name="position" intvalue="300"/>
+                </file>
+            </folder>
+            <folder name="AliasedType">
+                <file name="Generalization.shadow">
+                    <attr name="originalFile" stringvalue="modeling/relationships/Generalization.context_palette_item"/>
+                    <attr name="default-node" stringvalue="Class"/>
+                    <attr name="position" intvalue="100"/>
+                </file>
+                <file name="Implementation.shadow">
+                    <attr name="originalFile" stringvalue="modeling/relationships/Implementation.context_palette_item"/>
+                    <attr name="default-node" stringvalue="Interface"/>
+                    <attr name="position" intvalue="200"/>
+                </file>
+                <folder name="Dependencies">
+                    <attr name="position" intvalue="400"/>
+                    <file name="Dependency.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Dependency.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Class"/>
+                        <attr name="position" intvalue="110"/>
+                    </file>
+                    <file name="Realization.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Realization.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Interface"/>
+                        <attr name="position" intvalue="120"/>
+                    </file>
+                    <file name="Usage.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Usage.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Class"/>
+                        <attr name="position" intvalue="130"/>
+                    </file>
+                    <file name="Permission.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Permission.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Class"/>
+                        <attr name="position" intvalue="140"/>
+                    </file>
+                    <file name="Abstraction.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Abstraction.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Class"/>
+                        <attr name="position" intvalue="150"/>
+                    </file>
+                </folder>
+                <file name="LinkComment.shadow">
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
+                    <attr name="default-node" stringvalue="Comment"/>
+                    <attr name="position" intvalue="300"/>
+                </file>
+            </folder>
+            <folder name="Artifact">
+                <file name="Generalization.shadow">
+                    <attr name="originalFile" stringvalue="modeling/relationships/Generalization.context_palette_item"/>
+                    <attr name="default-node" stringvalue="Artifact"/>
+                    <attr name="position" intvalue="100"/>
+                </file>
+                <folder name="Dependencies">
+                    <attr name="position" intvalue="400"/>
+                    <file name="Dependency.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Dependency.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Class"/>
+                        <attr name="position" intvalue="110"/>
+                    </file>
+                    <file name="Usage.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Usage.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Class"/>
+                        <attr name="position" intvalue="130"/>
+                    </file>
+                    <file name="Permission.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Permission.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Class"/>
+                        <attr name="position" intvalue="140"/>
+                    </file>
+                    <file name="Abstraction.shadow">
+                        <attr name="group" stringvalue="depedency"/>
+                        <attr name="originalFile" stringvalue="modeling/relationships/Abstraction.context_palette_item"/>
+                        <attr name="default-node" stringvalue="Class"/>
+                        <attr name="position" intvalue="150"/>
+                    </file>
+                </folder>
+                <file name="LinkComment.shadow">
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="300"/>
                 </file>
@@ -1219,7 +1321,7 @@ made subject to such option by the copyright holder.
             </folder>
             <folder name="Comment">
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                 </file>
             </folder>
@@ -1236,7 +1338,7 @@ made subject to such option by the copyright holder.
                     <attr name="position" intvalue="300"/>
                 </file>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="200"/>
                 </file>
@@ -1281,14 +1383,14 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="300"/>
                 </file>
             </folder>
             <folder name="ActivityFinal">
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="100"/>
                 </file>
@@ -1300,7 +1402,7 @@ made subject to such option by the copyright holder.
                     <attr name="position" intvalue="100"/>
                 </file>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="200"/>
                 </file>
@@ -1312,7 +1414,7 @@ made subject to such option by the copyright holder.
                     <attr name="position" intvalue="100"/>
                 </file>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="200"/>
                 </file>
@@ -1361,7 +1463,7 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="500"/>
                 </file>
@@ -1406,7 +1508,7 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="500"/>
                 </file>
@@ -1451,7 +1553,7 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="500"/>
                 </file>
@@ -1495,7 +1597,7 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="500"/>
                 </file>
@@ -1560,7 +1662,7 @@ made subject to such option by the copyright holder.
                     <attr name="position" intvalue="600"/>
                 </file>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="700"/>
                 </file>
@@ -1615,7 +1717,7 @@ made subject to such option by the copyright holder.
                     <attr name="position" intvalue="500"/>
                 </file>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="600"/>
                 </file>
@@ -1717,7 +1819,7 @@ made subject to such option by the copyright holder.
                     </file>
                 </folder>
                 <file name="LinkComment.shadow">
-                    <attr name="originalFile" stringvalue="modeling/relationships/LinkComment.context_palette_item"/>
+                    <attr name="originalFile" stringvalue="modeling/relationships/Comment.context_palette_item"/>
                     <attr name="default-node" stringvalue="Comment"/>
                     <attr name="position" intvalue="500"/>
                 </file>
@@ -1784,6 +1886,12 @@ made subject to such option by the copyright holder.
             </folder>
             <folder name="DataType">
                 <file name="org-netbeans-modules-uml-diagrams-nodes-factories-DatatypeNodeFactory.instance"/>
+            </folder>
+            <folder name="Artifact">
+                <file name="org-netbeans-modules-uml-diagrams-nodes-factories-ArtifactNodeFactory.instance"/>
+            </folder>
+            <folder name="AliasedType">
+                <file name="org-netbeans-modules-uml-diagrams-nodes-factories-AliasedTypeNodeFactory.instance"/>
             </folder>
             <folder name="DerivationClassifier">
                 <file name="org-netbeans-modules-uml-diagrams-nodes-factories-DerivationClassifierNodeFactory.instance"/>
