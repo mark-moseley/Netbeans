@@ -51,12 +51,12 @@ import java.util.logging.Logger;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import org.openide.cookies.SaveCookie;
-
 import org.openide.filesystems.FileObject;
 import org.openide.WizardDescriptor;
-import org.openide.loaders.*;
+import org.openide.loaders.DataFolder;
+import org.openide.loaders.DataObject;
+import org.openide.loaders.TemplateWizard;
 import org.openide.util.NbBundle;
-
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.Sources;
@@ -64,11 +64,12 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.modules.web.api.webmodule.WebProjectConstants;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.modules.project.ui.api.PageLayoutChooserFactory;
 import org.netbeans.modules.web.core.Util;
-
 import org.netbeans.modules.web.taglib.TLDDataObject;
 import org.netbeans.modules.web.taglib.model.Taglib;
 import org.netbeans.modules.web.taglib.model.TagFileType;
+import org.openide.filesystems.Repository;
 
 
 /** A template wizard iterator (sequence of panels).
@@ -81,10 +82,12 @@ import org.netbeans.modules.web.taglib.model.TagFileType;
  */
 public class PageIterator implements TemplateWizard.Iterator {
 
+    private static final Logger LOG = Logger.getLogger(PageIterator.class.getName());
     private static final long serialVersionUID = -7586964579556513549L;
     
     private transient FileType fileType;
     private WizardDescriptor.Panel folderPanel;
+    private WizardDescriptor.Panel pageLayoutChooserPanel;
     private transient SourceGroup[] sourceGroups;
     
     public static PageIterator createJspIterator() { 
@@ -116,6 +119,7 @@ public class PageIterator implements TemplateWizard.Iterator {
     } 
 
     // You should define what panels you want to use here:
+    @SuppressWarnings("unchecked") // Generic Array Creation
     protected WizardDescriptor.Panel[] createPanels (Project project) {
         Sources sources = (Sources) project.getLookup().lookup(org.netbeans.api.project.Sources.class);
         if (fileType.equals(FileType.JSP)) {
@@ -123,9 +127,20 @@ public class PageIterator implements TemplateWizard.Iterator {
             if (sourceGroups==null || sourceGroups.length==0)
                 sourceGroups = sources.getSourceGroups(Sources.TYPE_GENERIC);
             folderPanel=new TargetChooserPanel(project,sourceGroups,fileType);
-            return new WizardDescriptor.Panel[] {
-                folderPanel
-            };
+             
+            FileObject template = Templates.getTemplate(wiz);
+            if (hasPageLayouts(template)) {
+                PageLayoutChooserFactory.getWizrdPanel(template);
+                pageLayoutChooserPanel = PageLayoutChooserFactory.getWizrdPanel(template);
+                return new WizardDescriptor.Panel[]{
+                            folderPanel,
+                            pageLayoutChooserPanel
+                        };
+            } else {
+                return new WizardDescriptor.Panel[]{
+                            folderPanel
+                        };
+            }
         }
         else if (fileType.equals(FileType.HTML) || fileType.equals(FileType.XHTML) || fileType.equals(FileType.CSS)) {
             SourceGroup[] docRoot = sources.getSourceGroups(WebProjectConstants.TYPE_DOC_ROOT);
@@ -164,12 +179,27 @@ public class PageIterator implements TemplateWizard.Iterator {
                 folderPanel
             };
         }
-        return new WizardDescriptor.Panel[] {
-            Templates.createSimpleTargetChooser(project,sourceGroups)
+        return new WizardDescriptor.Panel[]{
+              Templates.createSimpleTargetChooser(project, sourceGroups)
         };
     }
+    
+    /**
+     * Check if any Page Layouts available associated with this template
+     * @param template
+     * @return
+     */
+    private boolean hasPageLayouts(FileObject template) {
+        String pageLayoutsFolderName = "PageLayouts/" + template.getName(); // NOI18N
+        FileObject pageLayoutsFolder = Repository.getDefault().getDefaultFileSystem().findResource(pageLayoutsFolderName);
+        if (pageLayoutsFolder != null) {
+            return pageLayoutsFolder.getChildren().length > 0;
+        } else {
+            return false;
+        }
+    }
 
-    public Set instantiate (TemplateWizard wiz) throws IOException/*, IllegalStateException*/ {
+    public Set<DataObject> instantiate (TemplateWizard wiz) throws IOException/*, IllegalStateException*/ {
         // Here is the default plain behavior. Simply takes the selected
         // template (you need to have included the standard second panel
         // in createPanels(), or at least set the properties targetName and
@@ -186,15 +216,22 @@ public class PageIterator implements TemplateWizard.Iterator {
         TargetChooserPanel panel = (TargetChooserPanel)folderPanel;
         
         if (FileType.JSP.equals(fileType)) {
-            if (panel.isSegment()) {
-                if (panel.isXml()) {
-                    template = templateParent.getFileObject("JSPFX","jspf"); //NOI18N
-                } else {
-                    template = templateParent.getFileObject("JSPF","jspf"); //NOI18N
-                }
+            // If the finishing panel is PageLayoutChooserPanel, then use the selected Template
+            if (PageLayoutChooserFactory.isPageLayoutChooserPanel(panels[index])) {
+                template = PageLayoutChooserFactory.getSelectedTemplate(panels[index]);
+                PageLayoutChooserFactory.copyResources(panels[index], dir);
             } else {
-                if (panel.isXml()) {
-                    template = templateParent.getFileObject("JSPX","jspx"); //NOI18N
+
+                if (panel.isSegment()) {
+                    if (panel.isXml()) {
+                        template = templateParent.getFileObject("JSPFX", "jspf"); //NOI18N
+                    } else {
+                        template = templateParent.getFileObject("JSPF", "jspf"); //NOI18N
+                    }
+                } else {
+                    if (panel.isXml()) {
+                        template = templateParent.getFileObject("JSPX", "jspx"); //NOI18N
+                    }
                 }
             }
         } else if (FileType.TAG.equals(fileType)) {
@@ -242,7 +279,8 @@ public class PageIterator implements TemplateWizard.Iterator {
                         Taglib taglib=null;
                         try {
                             taglib = tldDO.getTaglib();
-                        } catch (IOException ex) {
+                        }
+                        catch (IOException ex) {
                             String mes = java.text.MessageFormat.format (
                                     NbBundle.getMessage (PageIterator.class, "MSG_tldCorrupted"),
                                     new Object [] {tldFo.getNameExt()});
@@ -263,8 +301,9 @@ public class PageIterator implements TemplateWizard.Iterator {
                             if (save!=null) save.save();
                             try {
                                 tldDO.write(taglib);
-                            } catch (IOException ex) {
-                                Logger.getLogger("global").log(Level.WARNING, null, ex);
+                            }
+                            catch (IOException ex) {
+                                LOG.log(Level.WARNING, null, ex);
                             }
                         }
                     }
@@ -352,7 +391,7 @@ public class PageIterator implements TemplateWizard.Iterator {
         if (! hasPrevious ()) throw new NoSuchElementException ();
         index--;
     }
-    public WizardDescriptor.Panel current () {
+    public WizardDescriptor.Panel current() {
         return panels[index];
     }
     
