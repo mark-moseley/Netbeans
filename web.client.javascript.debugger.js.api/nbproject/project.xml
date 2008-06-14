@@ -3,22 +3,15 @@
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
-            <code-name-base>org.netbeans.modules.web.client.tools.impl</code-name-base>
+            <code-name-base>org.netbeans.modules.web.client.javascript.debugger.js.api</code-name-base>
             <module-dependencies>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.web.client.javascript.debugger.api</code-name-base>
+                    <code-name-base>org.netbeans.api.debugger</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>0.6</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.web.client.javascript.debugger.js.api</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>0.6</specification-version>
+                        <release-version>1</release-version>
+                        <specification-version>1.12</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -34,15 +27,15 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.2</specification-version>
+                        <specification-version>7.0</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.openide.filesystems</code-name-base>
+                    <code-name-base>org.openide.execution</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.9</specification-version>
+                        <specification-version>1.11</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -50,11 +43,19 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.13</specification-version>
+                        <specification-version>7.12</specification-version>
                     </run-dependency>
                 </dependency>
             </module-dependencies>
-            <public-packages/>
+            <friend-packages>
+                <friend>org.netbeans.modules.web.client.javascript.debugger.api</friend>
+                <friend>org.netbeans.modules.web.client.javascript.debugger.firefox</friend>
+                <friend>org.netbeans.modules.web.client.tools.impl</friend>
+                <package>org.netbeans.modules.web.client.javascript.debugger.js.api</package>
+                <package>org.netbeans.modules.web.client.javascript.debugger.js.dbgp</package>
+                <package>org.netbeans.modules.web.client.javascript.debugger.js.impl</package>
+                <package>org.netbeans.modules.web.client.javascript.debugger.js.spi</package>
+            </friend-packages>
         </data>
     </configuration>
 </project>

@@ -36,15 +36,34 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.web.client.tools.api;
+
+package org.netbeans.modules.web.client.javascript.debugger.js.api;
+
+import java.net.URI;
+import org.netbeans.modules.web.client.tools.api.JSLocation;
 
 /**
- * This represents an abstract location.
  *
  * @author Sandip V. Chitale <sandipchitale@netbeans.org>
  */
-public interface JSAbstractLocation {
+public interface JSCallStackFrame extends JSDebuggerBase {
+    enum TYPE { FILE, EVAL, NATIVE};
+    
+    JSCallStackFrame[] EMPTY_ARRAY = new JSCallStackFrame[0];
+    
+    JSProperty getScope() throws IllegalStateException;
+    JSProperty getThis() throws IllegalStateException;
 
-    JSLocation getJSLocation();
+    URI getURI();
+    int getLineNumber();
+    int getColumnNumber();
+    String getFunctionName();
+
+    JSProperty eval(String expression) throws IllegalStateException;
+
     String getDisplayName();
+    JSLocation getLocation();
+    TYPE getType();
+    int getDepth();
 }
+

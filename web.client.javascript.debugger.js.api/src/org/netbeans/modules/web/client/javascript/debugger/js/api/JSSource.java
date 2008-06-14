@@ -36,15 +36,19 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.web.client.tools.api;
+
+package org.netbeans.modules.web.client.javascript.debugger.js.api;
+
+import org.netbeans.modules.web.client.tools.api.JSLocation;
 
 /**
- * This represents an abstract location.
+ * This represents the source of a URI containing the JavaScript code.
  *
  * @author Sandip V. Chitale <sandipchitale@netbeans.org>
  */
-public interface JSAbstractLocation {
-
-    JSLocation getJSLocation();
-    String getDisplayName();
+public interface JSSource extends JSDebuggerBase {
+    JSSource[] EMPTY_ARRAY = new JSSource[0];
+    JSLocation getLocation();
+    boolean isEnabled();
+    void setEnabled(boolean enabled);
 }

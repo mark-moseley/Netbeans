@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -36,15 +36,38 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.web.client.tools.api;
 
+package org.netbeans.modules.web.client.javascript.debugger.js.impl;
+
+import org.netbeans.modules.web.client.javascript.debugger.js.api.JSSource;
+import org.netbeans.modules.web.client.javascript.debugger.js.api.JSURILocation;
+import org.netbeans.modules.web.client.tools.api.JSLocation;
 /**
- * This represents an abstract location.
  *
- * @author Sandip V. Chitale <sandipchitale@netbeans.org>
+ * @author jdeva
  */
-public interface JSAbstractLocation {
+public class JSSourceImpl implements JSSource{
+    private JSLocation location;
+    private boolean enabled;
 
-    JSLocation getJSLocation();
-    String getDisplayName();
+    public JSSourceImpl(String uri, boolean enabled) {
+        this.location = new JSURILocation(uri, -1, -1);
+        this.enabled = enabled;
+    }
+
+    public JSSourceImpl(String uri) {
+        this(uri, true);
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public JSLocation getLocation() {
+        return location;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
 }

@@ -36,15 +36,68 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.web.client.tools.api;
+
+package org.netbeans.modules.web.client.javascript.debugger.js.api;
+
+import java.net.URI;
+import java.net.URL;
+import java.net.URISyntaxException;
+import java.util.logging.Level;
+import org.netbeans.modules.web.client.tools.api.JSLocation;
 
 /**
- * This represents an abstract location.
  *
  * @author Sandip V. Chitale <sandipchitale@netbeans.org>
  */
-public interface JSAbstractLocation {
+public class JSURILocation implements JSLocation {
+    private URI uri;
+    private int lineNumber;
+    private int columnNumber;
 
-    JSLocation getJSLocation();
-    String getDisplayName();
+    public JSURILocation(URI uri, int lineNumber) {
+        this(uri, lineNumber, -1);
+    }
+
+    public JSURILocation(URI uri, int lineNumber, int columnNumber) {
+        this.uri = uri;
+        this.lineNumber = lineNumber;
+        this.columnNumber = columnNumber;
+    }
+
+    public JSURILocation(URL url, int lineNumber){
+    	this( URI.create(url.getPath()), lineNumber);
+    }
+
+    public JSURILocation(String uri, int lineNumber, int columnNumber) {
+        try {
+            this.uri = new URI(uri);
+            assert this.uri.isAbsolute();
+            
+            this.lineNumber = lineNumber;
+            this.columnNumber = columnNumber;
+        } catch (URISyntaxException ex) {
+            Log.getLogger().log(Level.SEVERE, "URI syntax exception", ex);
+        }
+    }
+
+    public URI getURI() {
+        return uri;
+    }
+
+    public int getLineNumber() {
+        return lineNumber;
+    }
+
+    public int getColumnNumber() {
+        return columnNumber;
+    }
+
+    public JSLocation getJSLocation() {
+        return this;
+    }
+
+    public String getDisplayName() {
+        return getURI().toString() + ":" + getLineNumber();
+    }
+
 }
