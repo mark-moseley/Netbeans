@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,50 +39,17 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.test.editor;
 
-import java.lang.reflect.Method;
-import junit.framework.Test;
-import org.netbeans.junit.NbModuleSuite;
-import org.netbeans.junit.NbTestCase;
-import org.openide.util.Lookup;
-import org.openide.util.SharedClassObject;
+package org.netbeans.test.umllib.actions;
 
-/**
- * test for reflection used in multiview module that retrieves a setting value from editor.
- *
- * @author mkleint
- */
-public class MultiviewEditorReflectionTest extends NbTestCase {
+import org.netbeans.test.umllib.util.PopupConstants;
 
-    /** Creates a new instance of MultiviewEditorReflectionTest */
-    public MultiviewEditorReflectionTest(String name) {
-        super(name);
-    }
+public class SelectAllSimilarElementAction extends DiagramElementAction{
     
-    public static Test suite() {
-        return NbModuleSuite.create(
-            NbModuleSuite.createConfiguration(
-                MultiviewEditorReflectionTest.class
-            ).gui(false).clusters(".*").enableModules(".*")
-        );
-    }
-
-    public void testReflection() throws Exception {
-            final ClassLoader loader = (ClassLoader)Lookup.getDefault().lookup(ClassLoader.class);
-            Class settingsClass = Class.forName(
-                    "org.netbeans.editor.Settings", false, loader); //NOI18N
-            Class listenerClass = Class.forName(
-                    "org.netbeans.editor.SettingsChangeListener", false, loader); //NOI18N
-            Method addSettingsListener = settingsClass.getMethod(
-                    "addSettingsChangeListener",new Class[ ] { listenerClass });//NOI18N
-            Method removeSettingsListener = settingsClass.getMethod(
-                    "removeSettingsChangeListener",new Class[ ] { listenerClass });//NOI18N
-
-            Class editorBaseOption = Class.forName("org.netbeans.modules.editor.options.BaseOptions", true,
-                    loader);
-            SharedClassObject option = SharedClassObject.findObject(editorBaseOption, true);
-            Method is = option.getClass().getMethod("isToolbarVisible", new Class[0]);
+    private static final String actionPopup = PopupConstants.SELECT_ALL_SIMILAR;
+    
+    public SelectAllSimilarElementAction() {
+        super(null, actionPopup);
     }
 
 }
