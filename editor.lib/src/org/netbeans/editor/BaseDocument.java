@@ -74,8 +74,11 @@ import javax.swing.undo.UndoableEdit;
 import javax.swing.undo.CompoundEdit;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.CannotRedoException;
+import org.netbeans.lib.editor.util.ListenerList;
 import org.netbeans.lib.editor.util.swing.DocumentListenerPriority;
+import org.netbeans.modules.editor.lib.EditorPackageAccessor;
 import org.netbeans.modules.editor.lib.FormatterOverride;
+import org.netbeans.modules.editor.lib.TrailingWhitespaceRemove;
 import org.openide.util.Lookup;
 
 /**
@@ -86,6 +89,10 @@ import org.openide.util.Lookup;
 */
 
 public class BaseDocument extends AbstractDocument implements SettingsChangeListener, AtomicLockDocument {
+
+    static {
+        EditorPackageAccessor.register(new Accessor());
+    }
 
     // -J-Dorg.netbeans.editor.BaseDocument.level=FINE
     private static final Logger LOG = Logger.getLogger(BaseDocument.class.getName());
@@ -299,6 +306,10 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
     
     private DocumentListener postModificationDocumentListener;
     
+    private ListenerList<DocumentListener> postModificationDocumentListenerList = new ListenerList<DocumentListener>();
+    
+    private ListenerList<DocumentListener> updateDocumentListenerList = new ListenerList<DocumentListener>();
+    
     private Position lastPositionEditedByTyping = null;
     
     /** Formatter being used. */
@@ -348,6 +359,8 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
                               };
         FindSupport.getFindSupport().addPropertyChangeListener(findSupportListener);
         findSupportChange(null); // update doc by find settings
+        
+        TrailingWhitespaceRemove.install(this);
     }
     
     private DocumentContent getDocumentContent() {
@@ -571,7 +584,8 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
         boolean activePostModification;
         DocumentEvent postModificationEvent = null;
         synchronized (this) {
-            activePostModification = (postModificationDocumentListener != null);
+            activePostModification = (postModificationDocumentListener != null
+                    || postModificationDocumentListenerList.getListenerCount() > 0);
             if (activePostModification) {
                 atomicLock();
             }
@@ -668,6 +682,9 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
                         if (postModificationDocumentListener != null) {
                             postModificationDocumentListener.insertUpdate(postModificationEvent);
                         }
+                        for (DocumentListener listener: postModificationDocumentListenerList.getListeners()) {
+                            listener.insertUpdate(postModificationEvent);
+                        }
                     }
                 } finally {
                     atomicUnlock();
@@ -723,7 +740,8 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
             boolean activePostModification;
             DocumentEvent postModificationEvent = null;
             synchronized (this) {
-                activePostModification = (postModificationDocumentListener != null);
+                activePostModification = (postModificationDocumentListener != null
+                        || postModificationDocumentListenerList.getListenerCount() > 0);
                 if (activePostModification) {
                     atomicLock();
                 }
@@ -801,6 +819,9 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
                     if (postModificationEvent != null) { // Modification finished successfully
                         if (postModificationDocumentListener != null) {
                             postModificationDocumentListener.removeUpdate(postModificationEvent);
+                        }
+                        for (DocumentListener listener: postModificationDocumentListenerList.getListeners()) {
+                            listener.removeUpdate(postModificationEvent);
                         }
                     }
                     atomicUnlock();
@@ -912,6 +933,9 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
         org.netbeans.lib.editor.util.swing.DocumentUtilities.putEventProperty(
                 chng, String.class, bEvt.getText());
         
+        for (DocumentListener listener: updateDocumentListenerList.getListeners()) {
+            listener.insertUpdate(chng);
+        }
     }
     
     protected void preInsertUpdate(DefaultDocumentEvent chng, AttributeSet attr) {
@@ -962,6 +986,11 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
         BaseDocumentEvent bEvt = (BaseDocumentEvent)chng;
         org.netbeans.lib.editor.util.swing.DocumentUtilities.putEventProperty(
                 chng, String.class, bEvt.getText());
+
+        for (DocumentListener listener: updateDocumentListenerList.getListeners()) {
+            listener.removeUpdate(chng);
+        }
+        
     }
 
     public String getText(int[] block) throws BadLocationException {
@@ -1286,6 +1315,8 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
                 Analyzer.read(this, reader, pos);
             } else { // not initialized yet, we can use initialRead()
                 Analyzer.initialRead(this, reader, true);
+                // Reset modified regions accounting after the initial load
+                TrailingWhitespaceRemove.install(this).resetModRegions();
                 inited = true; // initialized but not modified
             }
             if (debugRead) {
@@ -1648,9 +1679,54 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
      * If there is an active post modification document listener
      * then each document modification is encapsulated in an atomic lock
      * transaction automatically to allow further changes inside a transaction.
+     * 
+     * @deprecated Use addPostModificationDocumentListener(DocumentListener)
      */
     public void setPostModificationDocumentListener(DocumentListener listener) {
         this.postModificationDocumentListener = listener;
+    }
+    
+    /**
+     * Add a special document listener that gets notified
+     * after the modification and that is allowed to do further
+     * mutations to the document.
+     * <br>
+     * Additional mutations will be made in a single atomic transaction
+     * with an original mutation.
+     * <br>
+     * This functionality may be used for example by code templates
+     * to synchronize other regions of the document with the one
+     * currently being modified.
+     * <br>
+     * If there is an active post modification document listener
+     * then each document modification is encapsulated in an atomic lock
+     * transaction automatically to allow further changes inside a transaction.
+     * 
+     * @since 1.25
+     */
+    public void addPostModificationDocumentListener(DocumentListener listener) {
+        postModificationDocumentListenerList.add(listener);
+    }
+
+    public void removePostModificationDocumentListener(DocumentListener listener) {
+        postModificationDocumentListenerList.remove(listener);
+    }
+
+    /**
+     * Add a special document listener that gets notified after physical
+     * insertion/removal has been done but when the document event
+     * (which is a {@link javax.swing.undo.CompoundEdit}) is still
+     * opened for extra undoable edits that can be added by the clients (listeners).
+     * 
+     * @param listener non-null listener to be added.
+     * @since 1.27
+     */
+    public void addUpdateDocumentListener(DocumentListener listener) {
+        updateDocumentListenerList.add(listener);
+    }
+
+    public void removeUpdateDocumentListener(DocumentListener listener) {
+        updateDocumentListenerList.remove(listener);
     }
 
     /** Was the document modified by either insert/remove
@@ -1783,6 +1859,14 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
         return new LazyPropertyMap(origDocumentProperties);
     }
 
+    CompoundEdit markAtomicEditsNonSignificant() {
+        assert (atomicDepth > 0); // Should only be called under atomic lock
+        if (atomicEdits == null)
+            atomicEdits = new AtomicCompoundEdit();
+        atomicEdits.setSignificant(false);
+        return atomicEdits;
+    }
+
     public @Override String toString() {
         return super.toString() + ", kitClass=" + getKitClass() // NOI18N
             + ", docLen=" + getLength(); // NOI18N
@@ -1799,6 +1883,8 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
     class AtomicCompoundEdit extends CompoundEdit {
         
         private UndoableEdit previousEdit;
+        
+        private boolean nonSignificant;
         
         public @Override void undo() throws CannotUndoException {
             atomicLock();
@@ -1842,6 +1928,12 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
         
         public @Override boolean replaceEdit(UndoableEdit anEdit) {
             UndoableEdit childEdit;
+            if (nonSignificant) { // Non-significant edit must be replacing
+                previousEdit = anEdit;
+                // Becomes significant
+                nonSignificant = false;
+                return true;
+            }
             if (size() == 1 && ((childEdit = (UndoableEdit)getEdits().get(0)) instanceof BaseDocumentEvent)) {
                 BaseDocumentEvent childEvt = (BaseDocumentEvent)childEdit;
                 if (anEdit instanceof BaseDocument.AtomicCompoundEdit) {
@@ -1870,6 +1962,15 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
         
         java.util.Vector getEdits() {
             return edits;
+        }
+
+        @Override
+        public boolean isSignificant() {
+            return !nonSignificant;
+        }
+
+        public void setSignificant(boolean significant) {
+            this.nonSignificant = !significant;
         }
 
     }
@@ -1982,5 +2083,13 @@ public class BaseDocument extends AbstractDocument implements SettingsChangeList
             return beforeModificationListener;
         }
     }
-    
+
+    private static final class Accessor extends EditorPackageAccessor {
+
+        @Override
+        public CompoundEdit markAtomicEditsNonSignificant(BaseDocument doc) {
+            return doc.markAtomicEditsNonSignificant();
+        }
+        
+    }
 }
