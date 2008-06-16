@@ -56,6 +56,7 @@ import org.netbeans.modules.cnd.api.model.CsmMethod;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmNamespaceAlias;
 import org.netbeans.modules.cnd.api.model.CsmObject;
+import org.netbeans.modules.cnd.api.model.CsmTemplateParameter;
 import org.netbeans.modules.cnd.api.model.CsmVariable;
 import org.netbeans.modules.cnd.modelutil.NbCsmPaintComponent;
 
@@ -125,6 +126,19 @@ public abstract class NbCsmResultItem extends CsmResultItem{
         
     }   
     
+    public final static class NbTemplateParameterResultItem extends TemplateParameterResultItem { 
+        
+        public NbTemplateParameterResultItem(CsmTemplateParameter par, int priority) {
+            super(par, priority);
+        }        
+
+        @Override
+        protected CsmPaintComponent.TemplateParameterPaintComponent createPaintComponent(){
+            return new NbCsmPaintComponent.NbTemplateParameterPaintComponent();
+        }
+        
+    }   
+            
     public final static class NbFieldResultItem extends FieldResultItem{
         
         public NbFieldResultItem(CsmField fld, int priority){
@@ -134,6 +148,19 @@ public abstract class NbCsmResultItem extends CsmResultItem{
         @Override
         protected CsmPaintComponent.FieldPaintComponent createPaintComponent(){
             return new NbCsmPaintComponent.NbFieldPaintComponent();
+        }
+        
+    }
+
+    public final static class NbFileLocalFunctionResultItem extends FileLocalFunctionResultItem {
+        
+        public NbFileLocalFunctionResultItem(CsmFunction fun, CsmCompletionExpression substituteExp, int priority) {
+            super(fun, substituteExp, priority);
+        }        
+
+        @Override
+        protected CsmPaintComponent.ConstructorPaintComponent createPaintComponent() {
+            return new NbCsmPaintComponent.NbFileLocalFunctionPaintComponent();
         }
         
     }
