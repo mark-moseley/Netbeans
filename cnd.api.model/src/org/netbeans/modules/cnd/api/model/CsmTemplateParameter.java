@@ -47,19 +47,19 @@ package org.netbeans.modules.cnd.api.model;
  */
 public interface CsmTemplateParameter extends CsmNamedElement {
 
-    enum Kind {
+    /*enum Kind {
         DECLARATION,
         TYPENAME,
         TEMPLATE
     }
     
     /** Gets this template parameter kind */
-    Kind getKind();
+    /*Kind getKind();
     
     
     /** Gets this parameter text  */
     // TODO: perhaps we'd  better move this to some common interface
-    CharSequence getText();
+    //CharSequence getText();
     
     
 }

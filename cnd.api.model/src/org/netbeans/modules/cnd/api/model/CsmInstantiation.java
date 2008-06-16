@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,63 +31,38 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.cnd.api.model;
 
+import java.util.Map;
+
 /**
- * Common ancestor for all declarations
- * @author Vladimir Kvashin
+ * instantiation information 
+ * i.e. A<int, double> aa;
+ * aa has type A<int, double> 
+ * this CsmType has getClassifier method which 
+ * returns classifier as CsmInstantiation object.
+ * getTemplateDeclaration() will be original template declaration
+ * of template class A and getInstantiationType
+ * will be CsmType presenting A<int, double> 
+ * @author Vladimir Voskresensky
  */
-
-public interface CsmDeclaration<T> extends CsmQualifiedNamedElement, 
-        CsmScopeElement, CsmIdentifiable<T> {
-
-    //TODO: fill in accordance to C++ standard
-
-    public enum Kind {
-
-        BUILT_IN,
-
-        CLASS,
-        UNION,
-        STRUCT,
-        
-        ENUM,
-        ENUMERATOR,
-        MACRO,
-        
-        VARIABLE,
-        VARIABLE_DEFINITION,
-        
-        FUNCTION,
-        FUNCTION_DEFINITION,
-        
-        TEMPLATE_SPECIALIZATION,
-        TYPEDEF,
-        ASM,
-        TEMPLATE_DECLARATION,
-        NAMESPACE_DEFINITION,
-        TEMPLATE_PARAMETER,
-        
-        NAMESPACE_ALIAS,
-        USING_DIRECTIVE,
-        USING_DECLARATION,
-        
-        CLASS_FORWARD_DECLARATION,
-
-        CLASS_FRIEND_DECLARATION
-    }
-    
-    Kind getKind();
+public interface CsmInstantiation extends CsmObject {
+    /**
+     * returns template declaration which was instantiated 
+     * i.e. template class A for A<int, double> aa;
+     * @return
+     */
+    CsmOffsetableDeclaration getTemplateDeclaration();
     
     /**
-     * Gets the name, which unequely identifies the given declaration
-     * within a project.
-     * For classes, enums and variables such names equals to their qualified name;
-     * for functions the signature should be added
-     * @see CsmProject#findDeclaration
-     * @see CsmProject#findDeclarations
+     * returns mapping of template parameters to the types
+     * @return
      */
-    CharSequence getUniqueName();
+    Map<CsmTemplateParameter, CsmType> getMapping();
 }
