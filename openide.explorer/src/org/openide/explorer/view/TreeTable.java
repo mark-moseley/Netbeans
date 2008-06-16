@@ -1132,7 +1132,7 @@ class TreeTable extends JTable implements Runnable {
                 }
 
                 MouseEvent newME = new MouseEvent(
-                        TreeTable.this.tree, me.getID(), me.getWhen(), me.getModifiers(),
+                        TreeTable.this.tree, me.getID(), me.getWhen(), me.getModifiers()+me.getModifiersEx(),
                         me.getX() - getCellRect(0, column, true).x + positionX, me.getY(), me.getClickCount(),
                         me.isPopupTrigger()
                     );
@@ -1610,6 +1610,7 @@ class TreeTable extends JTable implements Runnable {
                     table.changeSelection(row, column, 
                             Utilities.isMac() ? e.isMetaDown() : e.isControlDown(), //use META key on Mac to toggle selection
                             e.isShiftDown());
+                    setValueIsAdjusting(false);
                 }
             }
             
@@ -1826,8 +1827,9 @@ class TreeTable extends JTable implements Runnable {
             editCellAt(row, col, null);
         }
 
+        @Override
         public boolean isEnabled() {
-            return (getSelectedRow() != -1) && (getSelectedColumn() != -1) && !isEditing();
+            return (getSelectedRow() != -1) && (getSelectedColumn() != -1) && !isEditing() && getSelectedColumn() != getTreeColumnIndex();
         }
     }
 
