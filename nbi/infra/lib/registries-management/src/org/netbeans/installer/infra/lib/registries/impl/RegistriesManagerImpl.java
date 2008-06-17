@@ -654,6 +654,7 @@ public class RegistriesManagerImpl implements RegistriesManager {
                 "nb-javase",
                 "nb-javaee",
                 "glassfish",
+                "glassfish-mod",
                 "tomcat",
                 "sjsas");
         final List<String> javame = Arrays.asList(
@@ -664,12 +665,18 @@ public class RegistriesManagerImpl implements RegistriesManager {
         final List<String> ruby = Arrays.asList(
                 "nb-platform",
                 "nb-base",
-                "nb-ruby");
+                "nb-ruby",
+                "glassfish-mod");
         
         final List<String> cnd = Arrays.asList(
                 "nb-platform",
                 "nb-base",
                 "nb-cnd");
+
+        final List<String> php = Arrays.asList(
+                "nb-platform",
+                "nb-base",
+                "nb-php");
         
         final List<String> full = Arrays.asList(
                 "nb-platform",
@@ -683,6 +690,7 @@ public class RegistriesManagerImpl implements RegistriesManager {
                 "nb-ruby",
                 "nb-php",
                 "glassfish",
+                "glassfish-mod",
                 "openesb",
                 "sjsam",
                 "tomcat",
@@ -691,6 +699,7 @@ public class RegistriesManagerImpl implements RegistriesManager {
         final List<String> hidden = Arrays.asList(
                 "nb-platform",
                 //"nb-base",
+                //"nb-php",
                 "openesb",
                 "sjsam",
                 "jdk");
@@ -799,6 +808,10 @@ public class RegistriesManagerImpl implements RegistriesManager {
                 if (cnd.contains(product.getUid())) {
                     properties += " | PROPERTY_CND";
                 }
+                if (php.contains(product.getUid())) {
+                    properties += " | PROPERTY_PHP";
+                }
+
                 if (full.contains(product.getUid())) {
                     properties += " | PROPERTY_FULL";
                 }
@@ -1020,6 +1033,7 @@ public class RegistriesManagerImpl implements RegistriesManager {
             
             FileUtils.deleteFile(tempStatefile);
             FileUtils.deleteFile(tempPropertiesFile);
+            FileUtils.deleteFile(tempBundlePropertiesFile);
             FileUtils.deleteFile(tempUserDir, true);
             
             if (platform == Platform.WINDOWS) {
