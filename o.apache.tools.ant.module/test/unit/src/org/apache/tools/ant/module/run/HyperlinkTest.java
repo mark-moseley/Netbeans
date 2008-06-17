@@ -93,16 +93,28 @@ public class HyperlinkTest extends NbTestCase {
     }
 
     public void testMovingHyperlinkWithoutSave() throws Exception {
+        if (Boolean.getBoolean("ignore.random.failures")) {
+            return;
+        }
         doTestMovingHyperlink(false);
     }
 
     public void testMovingHyperlinkWithSave() throws Exception { // #62623
+        if (Boolean.getBoolean("ignore.random.failures")) {
+            return;
+        }
         doTestMovingHyperlink(true);
     }
 
     private void doTestMovingHyperlink(boolean save) throws Exception {
         click(h11);
-        JEditorPane ep1 = ((CloneableEditor) TopComponent.getRegistry().getActivated()).getEditorPane();
+        final JEditorPane[] _ep1 = {null};
+        EventQueue.invokeAndWait(new Runnable() {
+            public void run() {
+                _ep1[0] = ((CloneableEditor) TopComponent.getRegistry().getActivated()).getEditorPane();
+            }
+        });
+        JEditorPane ep1 = _ep1[0];
         assertEquals("#1\n", ep1.getDocument().getText(ep1.getCaretPosition(), 3));
         ep1.getDocument().insertString(ep1.getCaretPosition() + 3, "fixstuff\n", null);
         if (save) {
