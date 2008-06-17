@@ -50,6 +50,7 @@ import javax.swing.SwingUtilities;
 import org.netbeans.modules.cnd.api.model.CsmChangeEvent;
 import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmListeners;
 import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
 import org.netbeans.modules.cnd.api.model.CsmModelListener;
 import org.netbeans.modules.cnd.api.model.CsmProject;
@@ -78,12 +79,10 @@ final class HierarchyTopComponent extends TopComponent implements CsmModelListen
         setIcon(Utilities.loadImage(ICON_PATH, true));
     }
 
-    void setClass(CsmClass decl) {
+    void setClass(CsmClass decl, boolean setClose) {
         setName(decl.getName()+" - "+NbBundle.getMessage(getClass(), "CTL_HierarchyTopComponent")); // NOI18N
         setToolTipText(NbBundle.getMessage(getClass(), "HINT_TypeHierarchyTopComponent")); // NOI18N
-        if (last instanceof ClassHierarchyPanel) {
-            ((ClassHierarchyPanel)last).setClass(decl);
-        } else {
+        if (!(last instanceof ClassHierarchyPanel)) {
             removeAll();
             ClassHierarchyPanel panel = new ClassHierarchyPanel(true);
             add(panel, BorderLayout.CENTER);
@@ -91,23 +90,31 @@ final class HierarchyTopComponent extends TopComponent implements CsmModelListen
             panel.setClass(decl);
             last = panel;
         }
+        if (setClose) {
+            ((ClassHierarchyPanel)last).setClose();
+        } else {
+            ((ClassHierarchyPanel)last).clearClose();
+        }
+        ((ClassHierarchyPanel)last).setClass(decl);
         last.requestFocusInWindow();
     }
 
-    void setFile(CsmFile file) {
+    void setFile(CsmFile file, boolean setClose) {
         setName(file.getName()+" - "+NbBundle.getMessage(getClass(), "CTL_HierarchyTopComponent")); // NOI18N
         setToolTipText(NbBundle.getMessage(getClass(), "HINT_IncludeHierarchyTopComponent")); // NOI18N
-        if (last instanceof IncludeHierarchyPanel) {
-            ((IncludeHierarchyPanel)last).setFile(file);
-        } else {
+        if (!(last instanceof IncludeHierarchyPanel)) {
             removeAll();
             IncludeHierarchyPanel panel = new IncludeHierarchyPanel(true);
             add(panel, BorderLayout.CENTER);
             validate();
-            panel.setFile(file);
             last = panel;
         }
-        validate();
+        if (setClose) {
+            ((IncludeHierarchyPanel)last).setClose();
+        } else {
+            ((IncludeHierarchyPanel)last).clearClose();
+        }
+        ((IncludeHierarchyPanel)last).setFile(file);
         last.requestFocusInWindow();
     }
 
@@ -179,14 +186,14 @@ final class HierarchyTopComponent extends TopComponent implements CsmModelListen
     }
 
     public @Override void componentOpened() {
-        CsmModelAccessor.getModel().addModelListener(this);
+        CsmListeners.getDefault().addModelListener(this);
     }
 
     public @Override void componentClosed() {
         removeAll();
         initComponents();
         last = null;
-        CsmModelAccessor.getModel().removeModelListener(this);
+        CsmListeners.getDefault().removeModelListener(this);
     }
 
     /** replaces this in object stream */
