@@ -54,6 +54,7 @@ public class FileModelTest extends TraceModelTestBase {
     @Override
     protected void setUp() throws Exception {
 	System.setProperty("parser.report.errors", "true");
+        System.setProperty("antlr.exceptions.hideExpectedTokens", "true");
         super.setUp();
     }
 
@@ -62,6 +63,16 @@ public class FileModelTest extends TraceModelTestBase {
         // init flags needed for file model tests
         getTraceModel().setDumpModel(true);
         getTraceModel().setDumpPPState(true);
+    }
+    
+    public void testDeclSpec() throws Exception {
+        // IZ#132136: code completion for C++ and Qt does not work under Windows
+        performTest("declspec.cc");
+    }
+    
+    public void testTemplateFunctionInTemplateClass() throws Exception {
+        // IZ#
+        performTest("template_fun_in_template_class.cc");
     }
     
     public void testIncludeMacroExpansion() throws Exception {
@@ -255,7 +266,31 @@ public class FileModelTest extends TraceModelTestBase {
     public void testFunctionsAndVariables() throws Exception {
         performTest("functions_and_variables.cc"); // NOI18N
     }
+
+    public void testStaticFunction() throws Exception {
+        performTest("static_function.cc"); // NOI18N
+    }
+
+    public void testTypename() throws Exception {
+        // IZ 131012 : missed declaration with "typename" keyword
+        performTest("typename.cc"); // NOI18N
+    }
     
+    public void testArray() throws Exception {
+        // IZ 130678 : incorrect offsets for type of array delcaration
+        performTest("array.cc"); // NOI18N
+    }
+    
+    public void testTemplateDestrucror() throws Exception {
+        // IZ 131407 : parser doesn't handle specialized destructor
+        performTest("template_destructor.cc"); // NOI18N
+    }
+    
+    public void testStringizeMacro() throws Exception {
+        // IZ 137465 : wrong macro expansion for #x
+        performPreprocessorTest("stringize_macro.cc"); // NOI18N
+    }
+
     /////////////////////////////////////////////////////////////////////
     // FAILS
     
