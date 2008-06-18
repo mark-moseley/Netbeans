@@ -50,14 +50,17 @@ import java.util.HashSet;
 import java.util.List;
 import org.netbeans.api.visual.action.AcceptProvider;
 import org.netbeans.api.visual.action.ConnectorState;
+import org.netbeans.api.visual.model.ObjectScene;
 import org.netbeans.api.visual.widget.ConnectionWidget;
-import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
+import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityGroup;
+import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityNode;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.IRelationProxy;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.MetaLayerRelationFactory;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.IAutonomousElement;
 import org.netbeans.modules.uml.core.support.umlutils.ETArrayList;
 import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.drawingarea.LabelManager;
@@ -66,6 +69,7 @@ import org.netbeans.modules.uml.drawingarea.dataobject.PaletteItem;
 import org.netbeans.modules.uml.drawingarea.engines.DiagramEngine;
 import org.netbeans.modules.uml.drawingarea.util.Util;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
+import org.netbeans.modules.uml.drawingarea.view.MoveWidgetTransferable;
 import org.netbeans.modules.uml.drawingarea.view.UMLEdgeWidget;
 import org.netbeans.modules.uml.drawingarea.view.UMLNodeWidget;
 import org.netbeans.modules.uml.drawingarea.view.WidgetViewManager;
@@ -81,12 +85,19 @@ public class SceneAcceptProvider implements AcceptProvider
 {
 
     protected INamespace sceneNamespace = null;
+    protected boolean handleMovingNodes = false;
 
     public SceneAcceptProvider(INamespace space)
     {
-        sceneNamespace = space;
+        this(space, true);
     }
-
+    
+    public SceneAcceptProvider(INamespace space, boolean handleMoving)
+    {
+        sceneNamespace = space;
+        handleMovingNodes = handleMoving;
+    }
+    
     public ConnectorState isAcceptable(Widget widget, Point point, Transferable transferable)
     {
 //        if (!(widget instanceof Scene))
@@ -131,7 +142,42 @@ public class SceneAcceptProvider implements AcceptProvider
                     if (transferData.getModelElements().size() == 0 &&
                             transferData.getPresentationElements().size() == 0)
                         return ConnectorState.REJECT;
+                    else
+                    {
+                        IElement[] elements = new IElement[transferData.getModelElements().size()];
+                        if (!elementsAllowed(transferData.getModelElements().toArray(elements)))
+                            return ConnectorState.REJECT;
+                        for (IPresentationElement pe: transferData.getPresentationElements())
+                        {
+                            if (!elementsAllowed(new IElement[]{pe.getFirstSubject()}))
+                                return ConnectorState.REJECT;
+                        }
+                    }
                 } catch (UnsupportedFlavorException ex)
+                {
+                    Exceptions.printStackTrace(ex);
+                } catch (IOException ex)
+                {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+            else if ((handleMovingNodes == true) && 
+                     transferable.isDataFlavorSupported(MoveWidgetTransferable.FLAVOR))
+            {
+                try
+                {
+                    MoveWidgetTransferable tran = (MoveWidgetTransferable) transferable.getTransferData(MoveWidgetTransferable.FLAVOR);
+                    Widget transferWidget = tran.getWidget();
+                    if (transferWidget == null)
+                    {
+                        return ConnectorState.REJECT;
+                    }
+                    Object obj = ((ObjectScene) widget.getScene()).findObject(transferWidget);
+                    if (!(obj instanceof IPresentationElement) || !elementsAllowed(new IElement[]{((IPresentationElement) obj).getFirstSubject()}))
+                    {
+                        return ConnectorState.REJECT;
+                    }
+                } catch  (UnsupportedFlavorException ex)
                 {
                     Exceptions.printStackTrace(ex);
                 } catch (IOException ex)
@@ -303,6 +349,10 @@ public class SceneAcceptProvider implements AcceptProvider
                         int x = (int) p.getX() + 50;
                         int y = (int) p.getY() + 50;
                         p = new Point(x, y);
+                        
+                        // import element if from different project
+                        importElement(toDrop);
+                       
                     }
                 }
                 
@@ -352,12 +402,65 @@ public class SceneAcceptProvider implements AcceptProvider
                             int x = (int) p.getX() + 50;
                             int y = (int) p.getY() + 50;
                             p = new Point(x, y);
+                            
+                            importElement(toDrop);
                         }
                     }                            
                 }
                 // discover relationship        
 //                createConnection(engine.getScene(), presentations);
                 discoverRleationships = true;
+            }
+            
+            else if ((handleMovingNodes == true) && 
+                    transferable.isDataFlavorSupported(MoveWidgetTransferable.FLAVOR))
+            {
+                try
+                {
+                    MoveWidgetTransferable tran = (MoveWidgetTransferable) transferable.getTransferData(MoveWidgetTransferable.FLAVOR);
+                    Widget transferWidget = tran.getWidget();
+                    INamespace ns = getNamespace();
+
+                    IPresentationElement pe = (IPresentationElement) ((DesignerScene) engine.getScene()).findObject(transferWidget);
+                    IElement element = pe.getFirstSubject();
+                    
+                    // do not change ownership if it's an imported element
+                    if ( ns != null && ns.getProject() == element.getProject())
+                    {
+                        if (ns!=null && !ns.equals(element.getOwner()))
+                        {
+                            if (element instanceof INamedElement)
+                            {
+                                ns.addOwnedElement((INamedElement) element);
+                            }
+                        }
+                        else 
+                        {
+                             if (element instanceof IActivityNode)
+                            {   
+                                IActivityNode activityElem = (IActivityNode) element;
+                                ETList<IActivityGroup> groups = activityElem.getGroups();
+                                // Remove an activity node from its container nodes, i.e., activity groups
+                                for (IActivityGroup aGroup : groups)
+                                {
+                                    aGroup.removeNodeContent(activityElem);
+                                    activityElem.removeGroup(aGroup);
+                                }
+                                ns.addOwnedElement(activityElem);
+                            }
+                        }
+                    }
+                    
+                    transferWidget.removeFromParent();
+                    engine.getScene().getMainLayer().addChild(transferWidget);
+                    transferWidget.setPreferredLocation(point);
+                } catch (UnsupportedFlavorException ex)
+                {
+                    Exceptions.printStackTrace(ex);
+                } catch (IOException ex)
+                {
+                    Exceptions.printStackTrace(ex);
+                }
             }
             
             if(discoverRleationships == true)
@@ -395,7 +498,11 @@ public class SceneAcceptProvider implements AcceptProvider
         }
     }
 
-    
+    // todo: should be overriden by each individual diagram scene 
+    protected boolean elementsAllowed(IElement... element)
+    {
+        return true;
+    }
     
     private void createConnection(DesignerScene scene, ArrayList<IPresentationElement> presentations)
     {
@@ -470,5 +577,21 @@ public class SceneAcceptProvider implements AcceptProvider
         double y = dropPoint.getY() - startingPoint.getY();
         newPoint.setLocation(original.getX() + x, original.getY() + y);
         return newPoint;
+    }
+    
+    private void importElement(INamedElement element)
+    {
+        if (getNamespace() == null)
+            return;
+        
+        if (element.getProject() != getNamespace().getProject())
+        {
+            // Only AutonomousElements can be imported across Projects
+            if (element instanceof IAutonomousElement)
+            {
+                // create flat import element structure
+                MetaLayerRelationFactory.instance().establishImportIfNeeded(getNamespace().getProject(), element);
+            } 
+        }
     }
 }
