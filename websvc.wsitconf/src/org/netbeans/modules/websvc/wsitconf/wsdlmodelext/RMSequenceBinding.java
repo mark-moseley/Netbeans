@@ -39,68 +39,61 @@
  * made subject to such option by the copyright holder.
  */
 
+package org.netbeans.modules.websvc.wsitconf.wsdlmodelext;
 
-package org.netbeans.modules.websvc.wsitmodelext.policy;
-
-import javax.xml.namespace.QName;
-import java.util.HashSet;
-import java.util.Set;
 import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
-
-/**
- *
- * @author Martin Grebac
- */
-public enum PolicyQName {
-    ALL(createPolicyQName("All")),                              //NOI18N
-    EXACTLYONE(createPolicyQName("ExactlyOne")),                //NOI18N
-    POLICYREFERENCE(createPolicyQName("PolicyReference")),      //NOI18N
-    OPTIONAL(createPolicyQName("Optional")),      //NOI18N
-    POLICY(createPolicyQName("Policy"));                        //NOI18N
-
-    static final String POLICY_NS_URI = 
-            "http://schemas.xmlsoap.org/ws/2004/09/policy";      //NOI18N
-    static final String POLICY_12_NS_URI = 
-            "http://www.w3.org/ns/ws-policy";      //NOI18N
-    private static final String POLICY_NS_PREFIX = "wsp";         //NOI18N
-
-    static QName createPolicyQName(String localName){
-        return new QName(POLICY_NS_URI, localName, POLICY_NS_PREFIX);
-    }
-    
-    PolicyQName(QName name) {
-        qName = name;
-    }
-
-    public QName getQName(ConfigVersion cfgVersion) {
-        return new QName(getNamespaceUri(cfgVersion), qName.getLocalPart(), qName.getPrefix());
-    }
-
-    public static String getNamespaceUri(ConfigVersion cfgVersion) {
-        switch (cfgVersion) {
-            case CONFIG_1_0 : return POLICY_NS_URI;
-            case CONFIG_1_3 : return POLICY_12_NS_URI;
+import javax.xml.namespace.QName;
+import org.netbeans.modules.websvc.wsitmodelext.rm.RMQName;
+import org.netbeans.modules.websvc.wsitmodelext.rm.SequenceSTR;
+import org.netbeans.modules.websvc.wsitmodelext.rm.SequenceTransportSecurity;
+import org.netbeans.modules.xml.wsdl.model.Binding;
+import org.openide.util.NbBundle;
+ 
+public enum RMSequenceBinding {
+    SECURED_TRANSPORT {
+        public QName getQName() {
+            return RMQName.SEQUENCETRANSPORTSECURITY.getQName(ConfigVersion.CONFIG_1_3);
         }
-        return null;
-    }
+        public Class getAssertionClass() {
+            return SequenceTransportSecurity.class;
+        }
+    },
+    SECURED_TOKEN {
+        public QName getQName() {
+            return RMQName.SEQUENCESTR.getQName(ConfigVersion.CONFIG_1_3);
+        }
+        public Class getAssertionClass() {
+            return SequenceSTR.class;
+        }
+    };
     
-    public static ConfigVersion getConfigVersion(QName q) {
-        for (ConfigVersion cfgVersion : ConfigVersion.values()) {
-            if (getQNames(cfgVersion).contains(q)) {
-                return cfgVersion;
+    public final static RMSequenceBinding getDefault() {
+        return SECURED_TOKEN;
+    }
+
+    public final static RMSequenceBinding getValue(ConfigVersion cfgVersion, Binding b) {
+        if (ConfigVersion.CONFIG_1_3.equals(cfgVersion)) {
+            if (RMModelHelper.getInstance(cfgVersion).isSequenceBinding(b, SECURED_TRANSPORT)) {
+                return SECURED_TRANSPORT;
+            }
+            if (RMModelHelper.getInstance(cfgVersion).isSequenceBinding(b, SECURED_TOKEN)) {
+                return SECURED_TOKEN;
             }
         }
-        System.err.println("Not found config version for: " + q);
         return null;
     }
     
-    public static Set<QName> getQNames(ConfigVersion cfgVersion) {
-        Set<QName> qnames = new HashSet<QName>();
-        for (PolicyQName wq : values()) {
-            qnames.add(wq.getQName(cfgVersion));
-        }
-        return qnames;
-    }    
-    private final QName qName;
-
+    @Override
+    public String toString() {
+        return NbBundle.getMessage(RMSequenceBinding.class, this.name());
+    }
+    
+    public void set(ConfigVersion cfgVersion, Binding binding) {
+        RMModelHelper.getInstance(cfgVersion).setSequenceBinding(binding, this);
+    }
+        
+    public abstract QName getQName();
+    
+    public abstract Class getAssertionClass();
+    
 }
