@@ -146,15 +146,18 @@ public class VersioningManager implements PropertyChangeListener, LookupListener
      * List of versioning systems changed.
      */
     private synchronized void refreshVersioningSystems() {
-        unloadVersioningSystems();
+        // inline unloadVersioningSystems();
+        for (VersioningSystem system : versioningSystems) {
+            system.removePropertyChangeListener(this);
+        }
+        versioningSystems.clear();
+        assert versioningSystems.size() == 0;
+        localHistory = null;
+        // inline unloadVersioningSystems();
+        
         Collection<? extends VersioningSystem> systems = systemsLookupResult.allInstances();
-        loadVersioningSystems(systems);
-        flushFileOwnerCache();
-        refreshDiffSidebars(null);
-        VersioningAnnotationProvider.refreshAllAnnotations();
-    }
 
-    private void loadVersioningSystems(Collection<? extends VersioningSystem> systems) {
+        // inline loadVersioningSystems(systems);
         assert versioningSystems.size() == 0;
         assert localHistory == null;
         versioningSystems.addAll(systems);
@@ -164,14 +167,11 @@ public class VersioningManager implements PropertyChangeListener, LookupListener
             }
             system.addPropertyChangeListener(this);
         }
-    }
-
-    private void unloadVersioningSystems() {
-        for (VersioningSystem system : versioningSystems) {
-            system.removePropertyChangeListener(this);
-        }
-        versioningSystems.clear();
-        localHistory = null;
+        // inline loadVersioningSystems(systems);
+        
+        flushFileOwnerCache();
+        refreshDiffSidebars(null);
+        VersioningAnnotationProvider.refreshAllAnnotations();
     }
 
     InterceptionListener getInterceptionListener() {
@@ -230,7 +230,7 @@ public class VersioningManager implements PropertyChangeListener, LookupListener
             if (folder == null) return null;
         }
         
-        VersioningSystem owner = folderOwners.get(folder);
+        VersioningSystem owner = getKnownOwner(folder);
         if (owner == NULL_OWNER) return null;
         if (owner != null) return owner;
         
@@ -253,6 +253,27 @@ public class VersioningManager implements PropertyChangeListener, LookupListener
         return owner;
     }
 
+    private VersioningSystem getKnownOwner(File folder) {
+        VersioningSystem owner = folderOwners.get(folder);
+        if (owner == NULL_OWNER) return null;
+        if (owner != null) return owner;
+        
+        File ancestor = null;
+        for (File f : folderOwners.keySet()) {
+            if(folderOwners.get(ancestor) == NULL_OWNER) continue;
+            if(Utils.isAncestorOrEqual(f, folder)) {
+                if(ancestor == null && Utils.isAncestorOrEqual(ancestor, f)) {
+                    ancestor = f;
+                }
+            }
+        }
+        if(ancestor == null) {
+            return null;
+        } else {
+            return folderOwners.get(ancestor);
+        }
+    }
+    
     /**
      * Returns local history module that handles the given file.
      * 
