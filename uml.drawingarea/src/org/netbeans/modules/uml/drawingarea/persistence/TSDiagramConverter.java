@@ -95,6 +95,7 @@ import org.netbeans.modules.uml.drawingarea.actions.AfterValidationExecutor;
 import org.netbeans.modules.uml.drawingarea.actions.SQDMessageConnectProvider;
 import org.netbeans.modules.uml.drawingarea.engines.DiagramEngine;
 import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramEdgeReader;
+import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeReader;
 import org.netbeans.modules.uml.drawingarea.persistence.data.EdgeInfo;
 import org.netbeans.modules.uml.drawingarea.persistence.data.NodeInfo.NodeLabel;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
@@ -461,12 +462,19 @@ public class TSDiagramConverter
                                 else ioI.setPosition(new Point(0,Integer.parseInt(nodeInfo.getDevidersOffests().get(i-1))-10));//deviders to operands position convertion
                                 for(NodeLabel nL:nodeInfo.getLabels())
                                 {
-                                    if(nL.getElement().equals(ioE))
+                                    if(nL.getElement().equals(ioE.getGuard().getSpecification()))
                                     {
                                         ioI.addNodeLabel(nL);
                                     }
                                 }
                                 ((UMLNodeWidget) widget).load(ioI);
+                                //we have one cf per diagram
+                                IPresentationElement ioPE=ioE.getPresentationElements().get(0);
+                                Widget ioW=scene.findWidget(ioPE);
+                                if(ioW instanceof DiagramNodeReader)
+                                {
+                                    ((DiagramNodeReader) ioW).loadDependencies(ioI);
+                                }
                             }
                         }
  //                       else if(nodeInfo.getModelElement() instanceof IActivityPartition)
@@ -578,6 +586,7 @@ public class TSDiagramConverter
                         {
                             circleInfo.setProperty("ASSOCIATIONCLASSSOURCE",sourcePE);
                         }
+                        else circleInfo.setProperty("ASSOCIATIONCLASSASSOCIATIONCLASST",sourcePE);
                     }
                     else if(sourcePE==null && targetPE!=null)
                     {
@@ -586,6 +595,7 @@ public class TSDiagramConverter
                         {
                             circleInfo.setProperty("ASSOCIATIONCLASSTARGET",targetPE);
                         }
+                        else circleInfo.setProperty("ASSOCIATIONCLASSASSOCIATIONCLASST",targetPE);
                     }
                     else if(sourcePE!=null && targetPE!=null)
                     {
