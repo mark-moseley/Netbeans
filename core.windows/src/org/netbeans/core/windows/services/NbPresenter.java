@@ -69,6 +69,8 @@ import java.util.List;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.AbstractAction;
+import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -77,6 +79,8 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
+import javax.swing.MenuElement;
+import javax.swing.MenuSelectionManager;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
@@ -223,12 +227,9 @@ implements PropertyChangeListener, WindowListener, Mutex.Action<Void>, Comparato
         // set leaf by DialogDescriptor, NotifyDescriptor is leaf as default
         leaf = d instanceof DialogDescriptor ? ((DialogDescriptor)d).isLeaf () : true;
         
-        getRootPane().registerKeyboardAction(
-            buttonListener,
-            ESCAPE_COMMAND,
-            KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
-            JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT
-        );
+        getRootPane().getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), ESCAPE_COMMAND);
+        getRootPane().getActionMap().put(ESCAPE_COMMAND, new EscapeAction());
 
         initializePresenter();
 
@@ -727,11 +728,30 @@ implements PropertyChangeListener, WindowListener, Mutex.Action<Void>, Comparato
      */
     private void updateDefaultButton() {
         // bugfix 37083, respects DialogDescriptor's initial value ?
-        if (descriptor.getDefaultValue () != null && descriptor.getDefaultValue () instanceof JButton) {
-            JButton b = (JButton)descriptor.getDefaultValue ();
+        if (descriptor.getDefaultValue () != null) {
+            if (descriptor.getDefaultValue () instanceof JButton) {
+                JButton b = (JButton)descriptor.getDefaultValue ();
             if (b.isVisible() && b.isEnabled () && b.isDefaultCapable ()) {
-                getRootPane ().setDefaultButton (b);
-                return ;
+                    getRootPane ().setDefaultButton (b);
+                    return ;
+                }
+            } else {
+                JButton b = null;
+                if (descriptor.getDefaultValue ().equals (NotifyDescriptor.OK_OPTION) && stdOKButton.isEnabled ()) {;
+                    b = stdOKButton;
+                } else if (descriptor.getDefaultValue ().equals (NotifyDescriptor.YES_OPTION) && stdYesButton.isEnabled ()) {
+                    b = stdYesButton;
+                } else if (descriptor.getDefaultValue ().equals (NotifyDescriptor.NO_OPTION)) {
+                    b = stdNoButton;
+                } else if (descriptor.getDefaultValue ().equals (NotifyDescriptor.CANCEL_OPTION)) {
+                    b = stdCancelButton;
+                } else if (descriptor.getDefaultValue ().equals (NotifyDescriptor.CLOSED_OPTION)) {
+                    b = stdClosedButton;
+                }
+                if (b != null && b.isVisible() && b.isEnabled ()) {
+                    getRootPane ().setDefaultButton (b);
+                    return ;
+                }
             }
         } else {
             // ??? unset default button if descriptor.getValue() is null
@@ -902,8 +922,11 @@ implements PropertyChangeListener, WindowListener, Mutex.Action<Void>, Comparato
             Component fo = KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ();
             updateHelp();
             // In case buttons have changed: //just buttons!!
-            currentButtonsPanel.revalidate();
-            currentButtonsPanel.repaint();
+            // note, currentButtonsPanel may be null
+            if (currentButtonsPanel != null) {
+                currentButtonsPanel.revalidate();
+                currentButtonsPanel.repaint();
+            }
             if (fo != null) fo.requestFocus();
         } else if (DialogDescriptor.PROP_VALID.equals(evt.getPropertyName())) {
             updateOKButton(((Boolean)(evt.getNewValue())).booleanValue());
@@ -1004,6 +1027,18 @@ implements PropertyChangeListener, WindowListener, Mutex.Action<Void>, Comparato
         });
     }
     
+    private final class EscapeAction extends AbstractAction {
+
+        public EscapeAction () {
+            putValue(Action.ACTION_COMMAND_KEY, ESCAPE_COMMAND);
+        }
+
+        public void actionPerformed(ActionEvent e) {
+            buttonListener.actionPerformed(e);
+        }
+        
+    }
+    
     /** Button listener
      */
     private class ButtonListener implements ActionListener, ComponentListener, PropertyChangeListener {
@@ -1015,7 +1050,13 @@ implements PropertyChangeListener, WindowListener, Mutex.Action<Void>, Comparato
             Object pressedOption = evt.getSource();
             // handle ESCAPE
             if (ESCAPE_COMMAND.equals (evt.getActionCommand ())) {
-                pressedOption = NotifyDescriptor.CLOSED_OPTION;
+                MenuElement[] selPath = MenuSelectionManager.defaultManager().getSelectedPath();
+                // part of #130919 fix - handle ESC key well in dialogs with menus
+                if (selPath == null || selPath.length == 0) {
+                    pressedOption = NotifyDescriptor.CLOSED_OPTION;
+                } else {
+                    MenuSelectionManager.defaultManager().clearSelectedPath();
+                }
             } else {
                 // handle buttons
                 if (evt.getSource() == stdHelpButton) {
