@@ -40,7 +40,6 @@ package org.netbeans.test.mercurial.main.commit;
 
 import java.io.File;
 import java.io.PrintStream;
-import junit.textui.TestRunner;
 import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
@@ -49,7 +48,6 @@ import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.mercurial.utils.TestKit;
@@ -75,6 +73,7 @@ public class CloneTest extends JellyTestCase {
     }
 
     public void testCloneProject() throws Exception {
+        System.out.println("DEBUG: testCloneProject - start");
         long timeout = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
         try {
             JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 15000);
@@ -95,16 +94,17 @@ public class CloneTest extends JellyTestCase {
             JButtonOperator bo;
             JTextFieldOperator tfo;
             OutputTabOperator oto;
+            TestKit.loadOpenProject(TestKit.PROJECT_NAME, getDataDir());
             String s = TestKit.getProjectAbsolutePath(TestKit.PROJECT_NAME);
             nodeFile = new ProjectsTabOperator().getProjectRootNode(TestKit.PROJECT_NAME);
             nodeFile.performMenuActionNoBlock("Versioning|Clone -");
             ndo = new NbDialogOperator("Clone Repository");
             bo = new JButtonOperator(ndo, "Clone");
             bo.push();
-            String outputTabName=s;
+            String outputTabName = s;
             System.out.println(outputTabName);
             oto = new OutputTabOperator(outputTabName);
-//            oto.waitText("INFO: End of Clone");
+            oto.waitText("INFO: End of Clone"); 
             nodeFile = new ProjectsTabOperator().getProjectRootNode(TestKit.PROJECT_NAME);
             nodeFile.performMenuActionNoBlock("Versioning|Clone Other...");
             ndo = new NbDialogOperator("Clone External Repository");
@@ -126,14 +126,18 @@ public class CloneTest extends JellyTestCase {
             outputTabName=repoPath;
             System.out.println(outputTabName);
             oto = new OutputTabOperator(outputTabName);
-//            oto.waitText("INFO: End of Clone");
+            oto.waitText("INFO: End of Clone");
 
+            TestKit.closeProject(TestKit.PROJECT_NAME);
+            TestKit.closeProject(TestKit.PROJECT_NAME);
+            TestKit.closeProject(TestKit.PROJECT_NAME);
         } catch (Exception e) {
+            TestKit.closeProject(TestKit.PROJECT_NAME);
+            TestKit.closeProject(TestKit.PROJECT_NAME);
+            TestKit.closeProject(TestKit.PROJECT_NAME);
             throw new Exception("Test failed: " + e);
-        } finally {
-            // do not remove it as following tests will work on the project
-//            TestKit.closeProject(PROJECT_NAME);
         }
+        System.out.println("DEBUG: testCloneProject - finish");
     }
 }
 

@@ -40,11 +40,8 @@ package org.netbeans.test.mercurial.main.commit;
 
 import java.io.File;
 import java.io.PrintStream;
-import javax.swing.table.TableModel;
-import junit.textui.TestRunner;
 import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.OutputOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
@@ -79,23 +76,22 @@ public class InitializeTest extends JellyTestCase {
     }
     
     public void testInitializeAndFirstCommit() throws Exception {
+        System.out.println("DEBUG: testInitializeAndFirstCommit - start");
         long timeout = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
         try {
-            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 15000);
+            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 5000);
         } finally {
             JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", timeout);
         }
 
         timeout = JemmyProperties.getCurrentTimeout("DialogWaiter.WaitDialogTimeout");
         try {
-            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 15000);
+            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 5000);
         } finally {
             JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", timeout);
         }
 
         try {
-            TestKit.closeProject(TestKit.PROJECT_NAME);
-            org.openide.nodes.Node nodeIDE;
             long start;
             long end;
             JTableOperator table;
@@ -103,19 +99,19 @@ public class InitializeTest extends JellyTestCase {
             OutputOperator oo = OutputOperator.invoke();
             TestKit.showStatusLabels();
             f = TestKit.prepareProject(TestKit.PROJECT_CATEGORY, TestKit.PROJECT_TYPE, TestKit.PROJECT_NAME);
+            Thread.sleep(1000);
             String s = f.getAbsolutePath() + File.separator + TestKit.PROJECT_NAME;
             Thread.sleep(1000);
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
+            Thread.sleep(1000);
             nodeFile = new ProjectsTabOperator().getProjectRootNode(TestKit.PROJECT_NAME);
             nodeFile.performPopupActionNoBlock("Versioning|Initialize Mercurial Project");
-            NbDialogOperator ndo = new NbDialogOperator("Confirm Mercurial Version");
-            ndo.yes();
-//            System.out.println(ndo);
             System.out.println(s);
             OutputTabOperator oto = new OutputTabOperator(s);
             oto.waitText("INFO: End of Initialize");
             Thread.sleep(1000);
             nodeFile.performPopupAction("Mercurial|Status");
+            Thread.sleep(1000);
             VersioningOperator vo = VersioningOperator.invoke();
             table = vo.tabFiles();
             assertEquals("Wrong row count of table.", 8, table.getRowCount());
@@ -140,12 +136,11 @@ public class InitializeTest extends JellyTestCase {
             assertNotNull("There shouldn't be any table in Versioning view", tee);
             stream.flush();
             stream.close();
-
+            TestKit.closeProject(TestKit.PROJECT_NAME);
         } catch (Exception e) {
+            TestKit.closeProject(TestKit.PROJECT_NAME);
             throw new Exception("Test failed: " + e);
-        } finally {
-            // do not remove it as following tests will work on the project
-//            TestKit.closeProject(PROJECT_NAME);
         }
+        System.out.println("DEBUG: testInitializeAndFirstCommit - finish");
     }
 }
