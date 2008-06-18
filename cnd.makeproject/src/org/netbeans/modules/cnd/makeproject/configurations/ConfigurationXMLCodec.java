@@ -43,8 +43,7 @@ package org.netbeans.modules.cnd.makeproject.configurations;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Stack;
 import java.util.Vector;
@@ -190,7 +189,7 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
                     ((MakeConfigurationDescriptor)projectDescriptor).setExternalFileItems(currentFolder);
             }
         } else if (element.equals(SOURCE_ROOT_LIST_ELEMENT)) {
-            currentList = ((MakeConfigurationDescriptor)projectDescriptor).getSourceRootsRaw();
+            currentList = new ArrayList();
         } else if (element.equals(ItemXMLCodec.ITEM_ELEMENT)) {
             String path = atts.getValue(0);
             path = getString(adjustOffset(path));
@@ -308,15 +307,27 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
 	    if (descriptorVersion <= 33) {
 		currentText = currentText.equals("1") ? "GNU" : "Sun"; // NOI18N
             }
-            ((MakeConfiguration) currentConf).getCompilerSet().setValue(currentText);
-        } else if (element.equals(COMPILER_SET_ELEMENT+"2")) {
-            ((MakeConfiguration) currentConf).getCompilerSet2().setValue(currentText);
+            ((MakeConfiguration) currentConf).getCompilerSet().setNameAndFlavor(currentText, descriptorVersion);
+        } else if (element.equals(DEVELOPMENT_SERVER_ELEMENT)) {
+	    if (descriptorVersion <= 46) {
+		currentText = "localhost"; // NOI18N
+            }
+            ((MakeConfiguration) currentConf).getCompilerSet().setNameAndFlavor(currentText, descriptorVersion);
         } else if (element.equals(C_REQUIRED_ELEMENT)) {
-            ((MakeConfiguration) currentConf).getCRequired().setValue(currentText.equals(TRUE_VALUE));
+            if (descriptorVersion <= 41) {
+                return; // ignore
+            }
+            ((MakeConfiguration) currentConf).getCRequired().setValue(currentText.equals(TRUE_VALUE), !currentText.equals(TRUE_VALUE));
         } else if (element.equals(CPP_REQUIRED_ELEMENT)) {
-            ((MakeConfiguration) currentConf).getCppRequired().setValue(currentText.equals(TRUE_VALUE));
+            if (descriptorVersion <= 41) {
+                return; // ignore
+            }
+            ((MakeConfiguration) currentConf).getCppRequired().setValue(currentText.equals(TRUE_VALUE), !currentText.equals(TRUE_VALUE));
         } else if (element.equals(FORTRAN_REQUIRED_ELEMENT)) {
-            ((MakeConfiguration) currentConf).getFortranRequired().setValue(currentText.equals(TRUE_VALUE));
+            if (descriptorVersion <= 41) {
+                return; // ignore
+            }
+            ((MakeConfiguration) currentConf).getFortranRequired().setValue(currentText.equals(TRUE_VALUE), !currentText.equals(TRUE_VALUE));
         } else if (element.equals(PLATFORM_ELEMENT)) {
             int set = new Integer(currentText).intValue();
             if (descriptorVersion <= 37 && set == 4) {
@@ -376,6 +387,8 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
             } else {
                 currentFolder = null;
             }
+        } else if (element.equals(SOURCE_ENCODING_ELEMENT)) {
+            ((MakeConfigurationDescriptor)projectDescriptor).setSourceEncoding(currentText);
         } else if (element.equals(PREPROCESSOR_LIST_ELEMENT)) {
             currentList = null;
         } else if (element.equals(ITEM_PATH_ELEMENT)) {
@@ -435,6 +448,13 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
         } else if (element.equals(LINKER_ADD_LIB_ELEMENT)) {
             currentList = null;
         } else if (element.equals(LINKER_DYN_SERCH_ELEMENT)) {
+            currentList = null;
+        } else if (element.equals(SOURCE_ROOT_LIST_ELEMENT)) {
+            Iterator iter = currentList.iterator();
+            while (iter.hasNext()) {
+                String sf = (String)iter.next();
+                ((MakeConfigurationDescriptor)projectDescriptor).addSourceRootRaw(sf);
+            }
             currentList = null;
         } else if (element.equals(DIRECTORY_PATH_ELEMENT)) {
             if (currentList != null) {

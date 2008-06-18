@@ -39,88 +39,76 @@
 
 package org.netbeans.modules.cnd.remote.explorer.nodes;
 
-import java.util.List;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.io.IOException;
 import javax.swing.Action;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import org.netbeans.modules.cnd.remote.actions.AddNewServerAction;
+import org.netbeans.modules.cnd.remote.actions.DeleteServerAction;
+import org.netbeans.modules.cnd.remote.actions.DisplayPathMapperAction;
+import org.netbeans.modules.cnd.remote.actions.SetDefaultAction;
 import org.netbeans.modules.cnd.remote.server.RemoteServerList;
 import org.netbeans.modules.cnd.remote.server.RemoteServerRecord;
 import org.openide.nodes.AbstractNode;
-import org.openide.nodes.ChildFactory;
 import org.openide.nodes.Children;
-import org.openide.nodes.Node;
-import org.openide.util.NbBundle;
-import org.openide.util.WeakListeners;
 
 /**
  *
  * @author gordonp
  */
-public class RootNode extends AbstractNode {
+public class RemoteServerNode extends AbstractNode implements PropertyChangeListener {
     
-    private static RootNode rootNode = null;
-    private static final String SERVERS_ICON = "org/netbeans/modules/cnd/remote/resources/servers.png"; // NOI18N
-    private Action[] actions = null;
-    
-    public static RootNode getInstance() {
-        if (rootNode == null) {
-            rootNode = new RootNode();
-        }
-        return rootNode;
+    private RemoteServerRecord record;
+    private static final String SINGLE_SERVER_ICON = "org/netbeans/modules/cnd/remote/resources/single_server.png"; // NOI18N
+
+    public RemoteServerNode(RemoteServerRecord record) {
+        this(Children.LEAF, record);
+        setName(record.getUserName() + '@' + record.getServerName());
+        setIconBaseWithExtension(SINGLE_SERVER_ICON);
     }
     
-    private RootNode() {
-        super(Children.create(new RemoteServicesChildFactory(), true));
-        setDisplayName(NbBundle.getMessage(RootNode.class, "RootNode_Name"));
-        setIconBaseWithExtension(SERVERS_ICON);
+    public RemoteServerNode(Children children, RemoteServerRecord record) {
+        super(children);
+        this.record = record;
+        RemoteServerList.getInstance().addPropertyChangeListener(this);
     }
     
     @Override
     public Action[] getActions(boolean context) {
         if (Boolean.getBoolean("cnd.remote.enable")) { // DEBUG
-            if (actions == null) {
-                actions = new Action[1];
-                actions[0] = new AddNewServerAction();
-            }
-
+            Action[] actions = {
+                new DisplayPathMapperAction(record),
+                new SetDefaultAction(record),
+                null,
+                new DeleteServerAction(record),
+            };
             return actions;
         } else {
             return super.getActions(context);
         }
     }
     
-    private static class RemoteServicesChildFactory extends ChildFactory<RemoteServerRecord> 
-                    implements ChangeListener {
-        
-        public RemoteServicesChildFactory() {
-            super();
-            RemoteServerList registry = RemoteServerList.getInstance();
-            registry.addChangeListener(WeakListeners.create(ChangeListener.class, this, registry));
-            stateChanged(new ChangeEvent(registry));
-        }
+    @Override
+    public String getHtmlDisplayName() {
+        return record.isActive() ? "<b>" + getName() + "</b>" : getName(); // NOI18N
+    }
+    
+    @Override
+    public boolean canDestroy() {
+        return !record.getName().equals("localhost"); // NOI18N
+    }
 
-        @Override
-        protected boolean createKeys(List<RemoteServerRecord> toPopulate) {
-            try {
-                toPopulate.addAll(RemoteServerList.getInstance());
-            } catch (Exception ie) {
-                return false;
-            }
-            return true;
-        }
-
-        @Override
-        protected Node createNodeForKey(RemoteServerRecord record) {
-            if (record.isRemote()) {
-                return new RemoteServerNode(record);
+    public void propertyChange(PropertyChangeEvent evt) {
+        if (evt.getPropertyName().equals(RemoteServerList.PROP_SET_AS_ACTIVE)) {
+            if (record.isActive()) {
+                fireDisplayNameChange(getName(), getHtmlDisplayName());
             } else {
-                return new LocalhostNode(record);
+                fireDisplayNameChange("", getName());
             }
-        }
-
-        public synchronized void stateChanged(ChangeEvent e) {
-            refresh(false);
+        } else if (evt.getPropertyName().equals(RemoteServerList.PROP_DELETE_SERVER)) {
+            try {
+                destroy();
+            } catch (IOException ex) {
+            }
         }
     }
 }
