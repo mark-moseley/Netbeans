@@ -27,21 +27,14 @@
  */
 package org.netbeans.modules.cnd.refactoring.elements;
 
-import java.io.IOException;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.StyledDocument;
-import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.Utilities;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmOffsetable;
-import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceSupport;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
-import org.netbeans.modules.cnd.refactoring.support.CsmRefactoringUtils;
+import org.netbeans.modules.cnd.refactoring.support.ElementGripFactory;
 import org.netbeans.modules.refactoring.spi.RefactoringElementImplementation;
 import org.netbeans.modules.refactoring.spi.SimpleRefactoringElementImplementation;
 import org.openide.filesystems.FileObject;
-import org.openide.text.CloneableEditorSupport;
 import org.openide.text.PositionBounds;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
@@ -57,12 +50,19 @@ public class CsmRefactoringElementImpl extends
     private final PositionBounds bounds;
     private final FileObject fo;
     private final String displayText;
+    private final Object enclosing;
     public CsmRefactoringElementImpl(PositionBounds bounds, 
             CsmReference elem, FileObject fo, String displayText) {
         this.elem = elem;
         this.bounds = bounds;
         this.fo = fo;
+        assert displayText != null;
         this.displayText = displayText;
+        Object composite = ElementGripFactory.getDefault().putInComposite(fo, elem);
+        if (composite==null) {
+            composite = fo;
+        }  
+        this.enclosing = composite;
     }
         
     public String getText() {
@@ -70,33 +70,16 @@ public class CsmRefactoringElementImpl extends
     }
 
     public String getDisplayText() {
-        if (displayText != null) {
-            return displayText;
-        }
-        // returns in bold text on line
-        try {
-            int stOffset = elem.getStartOffset();
-            int endOffset = elem.getEndOffset();
-            int startLine = Utilities.getRowFirstNonWhite(getDocument(), stOffset);
-            int endLine = Utilities.getRowLastNonWhite(getDocument(), endOffset);
-            String lineText = getDocument().getText(startLine, endLine - startLine + 1);
-            StringBuilder out = new StringBuilder(lineText);
-            out.insert(endOffset-startLine, "</b>"); // NOI18N
-            out.insert(stOffset-startLine,"<b>"); // NOI18N
-            return out.toString();        
-        } catch (BadLocationException ex) {
-            
-        }
-        return "";
+        return displayText;
     }
 
     public void performChange() {
     }
 
     public Lookup getLookup() {
-        return Lookups.singleton(elem);
+        return Lookups.fixed(elem, enclosing);
     }
-
+    
     public FileObject getParentFile() {
         return fo;
     }
@@ -104,43 +87,12 @@ public class CsmRefactoringElementImpl extends
     public PositionBounds getPosition() {
         return bounds;
     }
-
-    @Override
-    public void openInEditor() {
-        CsmUtilities.openSource((CsmOffsetable)elem);
-    }
     
     public static RefactoringElementImplementation create(CsmReference ref,boolean nameInBold) {
         CsmFile csmFile = ref.getContainingFile();
         FileObject fo = CsmUtilities.getFileObject(csmFile);
         PositionBounds bounds = CsmUtilities.createPositionBounds(ref);
-        CloneableEditorSupport ces = CsmUtilities.findCloneableEditorSupport(csmFile);
-        StyledDocument stDoc = null;
-        try {
-            stDoc = ces.openDocument();
-        } catch (IOException iOException) {
-        }
-
-        String displayText = null;
-        if (stDoc instanceof BaseDocument) {
-            BaseDocument doc = (BaseDocument) stDoc;
-            try {
-                int stOffset = ref.getStartOffset();
-                int endOffset = ref.getEndOffset();
-                int startLine = Utilities.getRowFirstNonWhite(doc, stOffset);
-                int endLine = Utilities.getRowLastNonWhite(doc, endOffset) + 1;
-                if (!nameInBold) {
-                    stOffset = -1;
-                    endOffset = -1;
-                }
-                displayText = CsmRefactoringUtils.getHtml(startLine, endLine, stOffset, endOffset, doc);
-            } catch (BadLocationException ex) {
-            }
-        }
+        String displayText = CsmReferenceSupport.getContextLineHtml(ref, nameInBold).toString();
         return new CsmRefactoringElementImpl(bounds, ref, fo, displayText);
-    }
-
-    private BaseDocument getDocument() {
-        return (BaseDocument) bounds.getBegin().getCloneableEditorSupport().getDocument();
     }
 }
