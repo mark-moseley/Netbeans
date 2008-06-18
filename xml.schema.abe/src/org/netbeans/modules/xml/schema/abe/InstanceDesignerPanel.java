@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.xml.schema.abe;
 
 import java.awt.BorderLayout;
@@ -169,7 +168,7 @@ public class InstanceDesignerPanel extends ABEBaseDropPanel {
         context.setFocusTraversalManager(new FocusTraversalManager(context));
 
         // vlv: print
-        wrapperPanel.putClientProperty(java.awt.print.Printable.class, ""); // NOI18N
+        wrapperPanel.putClientProperty("print.printable", Boolean.TRUE); // NOI18N
     }
     
     private static String globalElementsStr = NbBundle.getMessage(InstanceDesignerPanel.class,"" +
