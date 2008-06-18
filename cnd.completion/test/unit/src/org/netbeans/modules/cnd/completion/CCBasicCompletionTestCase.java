@@ -124,7 +124,7 @@ public class CCBasicCompletionTestCase extends CompletionBaseTestCase {
     }
 
     public void testGlobalCompletionInGlobal() throws Exception {
-        super.performTest("file.cc", 5, 1, "::");
+        super.performTest("file.cc", 47, 1, "::");
     } 
     
     public void testGlobalCompletionInClassFunction() throws Exception {
@@ -180,6 +180,11 @@ public class CCBasicCompletionTestCase extends CompletionBaseTestCase {
     public void testErrorCompletion9() throws Exception {
         super.performTest("file.cc", 5, 1, "#");
     } 
+   
+    public void testErrorCompletion10() throws Exception {
+        // IZ#77774: Code completion list appears, when include header file
+        super.performTest("file.cc", 1, 1, "#include \"file.");
+    }
     
     public void testErrorCompletionInFun1() throws Exception {
         super.performTest("file.cc", 7, 1, "->");
@@ -223,5 +228,52 @@ public class CCBasicCompletionTestCase extends CompletionBaseTestCase {
 
     public void testCompletionInEmptySysInclude() throws Exception {
         super.performTest("file.cc", 1, 1, "#include <>", -1);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // tests for static function completion
+    // IZ#126622 : Static function is missed in Code Completion listbox
+    
+    public void testCompletionForStaticFunctions1() throws Exception {
+        super.performTest("static.cc", 18, 5);
+    }
+
+    public void testCompletionForStaticFunctions2() throws Exception {
+        super.performTest("static.cc", 18, 5, "func");
+    }
+
+    public void testCompletionForStaticFunctions3() throws Exception {
+        super.performTest("static.cc", 18, 5, "b");
+    }
+
+    public void testCompletionForStaticFunctions4() throws Exception {
+        super.performTest("static.cc", 23, 1);
+    }
+
+    public void testRestrictPointers1() throws Exception {
+        super.performTest("restrict.cc", 15, 5);
+    }
+
+    public void testRestrictPointers2() throws Exception {
+        super.performTest("restrict.c", 15, 5);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // tests for cast completion
+    // IZ#92198 : Code completion works wrong with static_cast expression
+    public void testCast1() throws Exception {
+        super.performTest("cast.cc", 9, 23);
+    }
+
+    public void testCast2() throws Exception {
+        super.performTest("cast.cc", 10, 34);
+    }
+    
+    public void testCast3() throws Exception {
+        super.performTest("cast.cc", 19, 21);
+    }
+
+    public void testCast4() throws Exception {
+        super.performTest("cast.cc", 20, 33);
     }
 }
