@@ -105,6 +105,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import org.netbeans.modules.openide.util.AWTBridge;
 import org.openide.util.actions.Presenter;
+import org.openide.util.lookup.Lookups;
 
 /** Otherwise uncategorized useful static methods.
 *
@@ -2584,14 +2585,13 @@ widthcheck:  {
      * over the first one with its top-left corner at x, y. Images need not be of the same size.
      * New image will have a size of max(second image size + top-left corner, first image size).
      * Method is used mostly when second image contains transparent pixels (e.g. for badging).
+     * <p>Please use {@link ImageUtilities#mergeImages}.
      * @param image1 underlying image
      * @param image2 second image
      * @param x x position of top-left corner
      * @param y y position of top-left corner
      * @return new merged image
-     * @deprecated Use {@link ImageUtilities#mergeImages}.
      */
-    @Deprecated
     public static final Image mergeImages(Image image1, Image image2, int x, int y) {
         return ImageUtilities.mergeImages(image1, image2, x, y);
     }
@@ -2599,23 +2599,21 @@ widthcheck:  {
     /**
      * Loads an image from the specified resource ID. The image is loaded using the "system" classloader registered in
      * Lookup.
+     * <p>Please use {@link ImageUtilities#loadImage(java.lang.String)}.
      * @param resourceID resource path of the icon (no initial slash)
      * @return icon's Image, or null, if the icon cannot be loaded.
-     * @deprecated Use {@link ImageUtilities#loadImage(java.lang.String)}.
      */
-    @Deprecated
     public static final Image loadImage(String resourceID) {
         return ImageUtilities.loadImage(resourceID);
     }
 
     /**
      * Converts given icon to a {@link java.awt.Image}.
+     * <p>Please use {@link ImageUtilities#icon2Image}.
      *
      * @param icon {@link javax.swing.Icon} to be converted.
      * @since 7.3
-     * @deprecated Use {@link ImageUtilities#icon2Image}.
      */
-    @Deprecated
     public static final Image icon2Image(Icon icon) {
         return ImageUtilities.icon2Image(icon);
     }
@@ -2740,6 +2738,29 @@ widthcheck:  {
     }
 
     /**
+     * Load a menu sequence from a lookup path.
+     * Any {@link Action} instances are returned as is;
+     * any {@link JSeparator} instances are translated to nulls.
+     * Warnings are logged for any other instances.
+     * @param path a path as given to {@link Lookups#forPath}, generally a layer folder name
+     * @return a list of actions interspersed with null separators
+     * @since org.openide.util 7.14
+     */
+    public static List<? extends Action> actionsForPath(String path) {
+        List<Action> actions = new ArrayList<Action>();
+        for (Object item : Lookups.forPath(path).lookupAll(Object.class)) {
+            if (item instanceof Action) {
+                actions.add((Action) item);
+            } else if (item instanceof JSeparator) {
+                actions.add(null);
+            } else {
+                Logger.getLogger(Utilities.class.getName()).warning("Unrecognized object of " + item.getClass() + " found in actions path " + path);
+            }
+        }
+        return actions;
+    }
+
+    /**
      * Global context for actions. Toolbar, menu or any other "global"
      * action presenters shall operate in this context.
      * Presenters for context menu items should <em>not</em> use
@@ -2779,11 +2800,10 @@ widthcheck:  {
      * or <samp>org/netbeans/modules/foo/resources/foo_mybranding.gif</samp>.
      * 
      * <p>Caching of loaded images can be used internally to improve performance.
+     * <p>Please use {@link ImageUtilities#loadImage(java.lang.String, boolean)}.
      * 
      * @since 3.24
-     * @deprecated Use {@link ImageUtilities#loadImage(java.lang.String, boolean)}.
      */
-    @Deprecated
     public static final Image loadImage(String resource, boolean localized) {
         return ImageUtilities.loadImage(resource, localized);
     }
