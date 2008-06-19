@@ -108,6 +108,7 @@ options {
 	codeGenBitsetTestThreshold = 3;
 	noConstructors = true;
 	buildAST = true;
+        genASTClassMap = false;
 }
 
 //
@@ -166,6 +167,9 @@ tokens {
 	CSM_NAMESPACE_ALIAS<AST=org.netbeans.modules.cnd.modelimpl.parser.NamedFakeAST>;
 	CSM_USING_DIRECTIVE<AST=org.netbeans.modules.cnd.modelimpl.parser.NamedFakeAST>;
 	CSM_USING_DECLARATION<AST=org.netbeans.modules.cnd.modelimpl.parser.NamedFakeAST>;
+
+        CSM_CTOR_INITIALIZER<AST=org.netbeans.modules.cnd.modelimpl.parser.FakeAST>;
+        CSM_CTOR_INITIALIZER_LIST<AST=org.netbeans.modules.cnd.modelimpl.parser.FakeAST>;
 
 	CSM_QUALIFIED_ID<AST=org.netbeans.modules.cnd.modelimpl.parser.NamedFakeAST>;
 
@@ -403,6 +407,7 @@ tokens {
 	protected static final  int ANSI_C	= 0x4;
 	protected static final  int KandR_C	= 0x8;
 
+        protected static final int ERROR_LIMIT = 100;
 	private int errorCount = 0;
 
 	public int getErrorCount() {
@@ -410,11 +415,21 @@ tokens {
 	    return cnt;
 	}
 
+        public boolean shouldProceed() {
+            boolean res = errorCount < ERROR_LIMIT;
+            if (!res) {
+                reportError("Too many errors. Parsing is being stopped."); // NOI18N
+            }
+            return res;
+        }
+
 	public void reportError(RecognitionException e) {
             // Do not report errors that we had reported already
-            if (lastRecoveryPosition == inputState.input.index()) {
+            if (lastRecoveryPosition == input.index()) {
                 return;
             }
+
+            onError(e);
             
             if (Diagnostic.needStatistics()) Diagnostic.onParserError(e);
 
@@ -449,7 +464,7 @@ tokens {
         private int lastRecoveryPosition = -1;
         
         public void recover(RecognitionException ex, BitSet tokenSet) {
-            if (lastRecoveryPosition == inputState.input.index()) {
+            if (lastRecoveryPosition == input.index()) {
                 if (recoveryCounter > RECOVERY_LIMIT) {
                     consume();
                     recoveryCounter = 0;
@@ -458,7 +473,7 @@ tokens {
                 }
             } else {
                 recoveryCounter = 0;
-                lastRecoveryPosition = inputState.input.index();
+                lastRecoveryPosition = input.index();
             }
             tokenSet.orInPlace(stopSet);
             consumeUntil(tokenSet);
@@ -634,6 +649,9 @@ tokens {
 	protected void printf (String pattern, int i1, int i2, int i3, String s) { /*TODO: implement*/ throw new NotImplementedException(); }
 
 	protected void balanceBraces(int left, int right) throws RecognitionException, TokenStreamException { throw new NotImplementedException(); };
+
+        /** Is called when an error occurred */
+        protected void onError(RecognitionException e) {}
 }
 
 public translation_unit:
@@ -641,8 +659,10 @@ public translation_unit:
                 /* Do not generate ambiguity warnings: we intentionally want to match everything that
                    can not be matched in external_declaration in the second alternative */
 		(options{generateAmbigWarnings = false;}:
+                    {shouldProceed()}?
                     external_declaration 
                     | 
+                    {shouldProceed()}?
                     /* Here we match everything that can not be matched by external_declaration rule,
                        report it as an error and not include in AST */
                     .! { reportError(new NoViableAltException(LT(0), getFilename())); }
@@ -668,7 +688,11 @@ template_explicit_specialization
 		{ #template_explicit_specialization = #(#[CSM_TEMPLATE_FUNCTION_DEFINITION_EXPLICIT_SPECIALIZATION, "CSM_TEMPLATE_FUNCTION_DEFINITION_EXPLICIT_SPECIALIZATION"], #template_explicit_specialization); }
 	|
 	// Template explicit specialisation ctor definition 
-		(ctor_declarator[true] LCURLY)=>
+		(ctor_declarator[true] 
+		  (COLON        // DEFINITION :ctor_initializer
+		   |LCURLY       // DEFINITION (compound Statement) ?
+	 	  )
+                )=>
 		{if(statementTrace >= 1)
 			printf("template_explicit_specialization_0b[%d]: template " +
 				"explicit-specialisation ctor definition\n", LT(1).getLine());
@@ -913,12 +937,12 @@ external_declaration {String s; K_and_R = false; boolean definition;}
 		    else	   #external_declaration = #(#[CSM_USER_TYPE_CAST, "CSM_USER_TYPE_CAST"], #external_declaration); }
 	|   
 		// Function declaration
-		((LITERAL___extension__)? (function_attribute_specification)? declaration_specifiers function_declarator[false] (EOF|SEMICOLON))=> 
+		((LITERAL___extension__)? (options {greedy=true;} :function_attribute_specification)? declaration_specifiers function_declarator[false] (EOF|SEMICOLON))=> 
 		{if (statementTrace>=1) 
 			printf("external_declaration_7[%d]: Function prototype\n",
 				LT(1).getLine());
 		}
-		(LITERAL___extension__!)? (function_attribute_specification!)? declaration
+		(LITERAL___extension__!)? (options {greedy=true;} :function_attribute_specification!)? declaration
 		{ #external_declaration = #(#[CSM_FUNCTION_DECLARATION, "CSM_FUNCTION_DECLARATION"], #external_declaration); }
 	|
 		// Function definition with return value
@@ -1013,7 +1037,7 @@ decl_namespace
 			//	    antlrTrace(true);
 			//	 }	// Used for diagnostic trigger
 			//}
-			(namespace_attribute_specification)?
+			(options {greedy=true;} : namespace_attribute_specification)?
 			LCURLY!
 			//{enterNewLocalScope();}
 			((external_declaration)*)
@@ -1045,18 +1069,6 @@ member_declaration_template
 			}                           
 			declaration
 			{ #member_declaration_template = #(#[CSM_TEMPLATE_CLASS_DECLARATION, "CSM_TEMPLATE_CLASS_DECLARATION"], #member_declaration_template); }
-		|         
-			// templated forward class decl, init/decl of static member in template
-			(declaration_specifiers
-				(init_declarator_list)? SEMICOLON! /*{end_of_stmt();}*/)=>
-			//{beginTemplateDeclaration();}
-			{ if (statementTrace>=1) 
-				printf("member_declaration_12a[%d]: Class template declaration\n",
-					LT(1).getLine());
-			}
-			declaration_specifiers
-				(init_declarator_list)? SEMICOLON! //{end_of_stmt();}
-			{/*endTemplateDeclaration();*/ #member_declaration_template = #(#[CSM_TEMPL_FWD_CL_OR_STAT_MEM, "CSM_TEMPL_FWD_CL_OR_STAT_MEM"], #member_declaration_template); } 		
 		|  
 			// Templated FUNCTIONS and CONSTRUCTORS matched here.
 			// DW 27/06/03 Copied here from external_declaration since templates
@@ -1087,6 +1099,10 @@ member_declaration_template
 			// restriction is added that ctor cannot be virtual
 			(ctor_decl_spec
 			 {qualifiedItemIsOneOf(qiCtor)}?
+			 ctor_declarator[true]
+			 ( COLON        // DEFINITION :ctor_initializer
+			  |LCURLY       // DEFINITION (compound Statement) ?
+			 )
 			)=>
 			{if (statementTrace>=1) 
 				printf("member_declaration_13a[%d]: Template constructor " +
@@ -1121,6 +1137,19 @@ member_declaration_template
 			definition = conversion_function_decl_or_def
 			{ if( definition ) #member_declaration_template = #(#[CSM_USER_TYPE_CAST_DEFINITION, "CSM_USER_TYPE_CAST_DEFINITION"], #member_declaration_template);
 			    else	   #member_declaration_template = #(#[CSM_USER_TYPE_CAST, "CSM_USER_TYPE_CAST"], #member_declaration_template); }
+		|         
+                        // this rule must be after handling functions 
+			// templated forward class decl, init/decl of static member in template
+			(declaration_specifiers
+				(init_declarator_list)? SEMICOLON! /*{end_of_stmt();}*/)=>
+			//{beginTemplateDeclaration();}
+			{ if (statementTrace>=1) 
+				printf("member_declaration_12a[%d]: Class template declaration\n",
+					LT(1).getLine());
+			}
+			declaration_specifiers
+				(init_declarator_list)? SEMICOLON! //{end_of_stmt();}
+			{/*endTemplateDeclaration();*/ #member_declaration_template = #(#[CSM_TEMPL_FWD_CL_OR_STAT_MEM, "CSM_TEMPL_FWD_CL_OR_STAT_MEM"], #member_declaration_template); } 		
 		)
 		{endTemplateDefinition();}
 
@@ -1134,7 +1163,8 @@ member_declaration
 		// This is separated out otherwise the next alternative
 		// would look for "class A { ... } f() {...}" which is
 		// an unacceptable level of backtracking.
-		( (LITERAL_typedef)? class_head) => 
+                // we need "static" here for the case "static struct XX {...} myVar; - see issue #135149
+		( (LITERAL_typedef | LITERAL_static)? class_head) => 
 		{if (statementTrace>=1) 
 			printf("member_declaration_1[%d]: Class definition\n",
 				LT(1).getLine());
@@ -1379,28 +1409,29 @@ function_K_R_parameter
 
 function_definition
 	:	// don't want next action as an init-action due to (...)=> caller
-	//{ beginFunctionDefinition(); }
-	(	// Next line is equivalent to guarded predicate in PCCTS
-		// (SCOPE | ID)? => <<qualifiedItemIsOneOf(qiType|qiCtor)>>?
-		{( !(LA(1)==SCOPE || LA(1)==ID) || qualifiedItemIsOneOf(qiType | qiCtor) )}?
-		declaration_specifiers function_declarator[true]
+// IZ 132404 : Parser failed on code taken from boost
+//	//{ beginFunctionDefinition(); }
+//	(	// Next line is equivalent to guarded predicate in PCCTS
+//		// (SCOPE | ID)? => <<qualifiedItemIsOneOf(qiType|qiCtor)>>?
+//              {( !(LA(1)==SCOPE || LA(1)==ID) || qualifiedItemIsOneOf(qiType | qiCtor) )}?
+                declaration_specifiers function_declarator[true]
 		(	options{warnWhenFollowAmbig = false;}:
 			//(declaration)*	// Possible for K & R definition
                         (function_K_R_parameter_list)?
 			{in_parameter_list = false;}
 		)?
 		compound_statement
-	|	// Next line is equivalent to guarded predicate in PCCTS
-		// (SCOPE | ID)? => <<qualifiedItemIsOneOf(qiPtrMember)>>?
-		//{( !(LA(1)==SCOPE||LA(1)==ID) || (qualifiedItemIsOneOf(qiPtrMember)) )}?
-		function_declarator[true]
-		(	options{warnWhenFollowAmbig = false;}:
-			(declaration)*	// Possible for K & R definition
-			{in_parameter_list = false;}
-		)?		    
-                compound_statement             
-	)
-	//{endFunctionDefinition();}
+//	|	// Next line is equivalent to guarded predicate in PCCTS
+//		// (SCOPE | ID)? => <<qualifiedItemIsOneOf(qiPtrMember)>>?
+//		//{( !(LA(1)==SCOPE||LA(1)==ID) || (qualifiedItemIsOneOf(qiPtrMember)) )}?
+//		function_declarator[true]
+//		(	options{warnWhenFollowAmbig = false;}:
+//			(declaration)*	// Possible for K & R definition
+//			{in_parameter_list = false;}
+//		)?		    
+//                compound_statement             
+//	)
+//	//{endFunctionDefinition();}
 	;
 
 // rule for predicting "declaration"
@@ -1465,12 +1496,15 @@ declaration_specifiers
                         {if (statementTrace>=1) 
                                 printf("declaration_specifiers_1[%d]: Typedef\n", LT(1).getLine());
                         }                        
-                        LITERAL_typedef (options {greedy=true;} : LITERAL_typename)? {td=true;} 		
+                        LITERAL_typedef (options {greedy=true;} : LITERAL_typename)? {td=true;} 
+		|	LITERAL_typename
 		|	LITERAL_friend	{fd=true;}
 		|	literal_stdcall
                 |      { LT(1).getText().equals(LITERAL___global_ext) == true}? ID 
 		)*
-		(	ts = type_specifier[ds] 
+		(	
+                        (options {greedy=true;} :type_attribute_specification)?
+                        ts = type_specifier[ds] 
                         // support for "A const*";
                         // need to catch postfix_cv_qualifier
                         (postfix_cv_qualifier)? 
@@ -1483,7 +1517,7 @@ declaration_specifiers
 
 
                         (options {greedy=true;} :type_attribute_specification)?
-		|	LITERAL_typename	{td=true;}	direct_declarator 
+//		|	LITERAL_typename	{td=true;}	direct_declarator 
                 |       literal_typeof LPAREN typeof_param RPAREN
                                  
 		)                
@@ -1535,13 +1569,16 @@ simple_type_specifier returns [/*TypeSpecifier*/int ts = tsInvalid]
 			|	LITERAL_float		{ts |= tsFLOAT;}
 			|	LITERAL_double	{ts |= tsDOUBLE;}
 			|	LITERAL_void		{ts |= tsVOID;}
-			|	literal_declspec LPAREN ID RPAREN 
 			)+
 			{ #simple_type_specifier = #([CSM_TYPE_BUILTIN, "CSM_TYPE_BUILTIN"], #simple_type_specifier); }
 		|
 			// Fix towards allowing us to parse *.cpp files directly
-			(qualified_type qualified_id)=> qualified_type { ts=tsTYPEID; }
-			{ #simple_type_specifier = #([CSM_TYPE_COMPOUND, "CSM_TYPE_COMPOUND"], #simple_type_specifier); }
+			
+                        // IZ 132404 : Parser failed on code taken from boost
+                        //(qualified_type qualified_id)=> qualified_type { ts=tsTYPEID; }
+                        (qualified_type) => qualified_type { ts=tsTYPEID; }
+			
+                        { #simple_type_specifier = #([CSM_TYPE_COMPOUND, "CSM_TYPE_COMPOUND"], #simple_type_specifier); }
 		)
 	;
 
@@ -1554,7 +1591,7 @@ qualified_type
 		// predicate on
 		// {qualifiedItemIsOneOf(qiType|qiCtor)}?
 
-		s = scope_override 
+		s = scope_override
 		id:ID 
 		(options {warnWhenFollowAmbig = false;}:
 		 LESSTHAN template_argument_list GREATERTHAN
@@ -1766,7 +1803,7 @@ restrict_declarator
 		(ptr_operator)=> ptr_operator // AMPERSAND or STAR
 		restrict_declarator
 	|	
-		(LITERAL___restrict!)? direct_declarator
+		(literal_restrict!)? direct_declarator
         ;
 
 direct_declarator
@@ -1774,9 +1811,9 @@ direct_declarator
 	 TypeQualifier tq;}  
 	:
 		// Must be function declaration               
-		((function_attribute_specification)? idInBalanceParensHard LPAREN (RPAREN|parameter_list))=>
+		((options {greedy=true;} :function_attribute_specification)? idInBalanceParensHard LPAREN (RPAREN|parameter_list))=>
 		// TODO: refactor the grammar and use function_declarator here
-		(function_attribute_specification)?
+		(options {greedy=true;} :function_attribute_specification)?
 		id = idInBalanceParensHard                                                     
 		{declaratorID(id, qiFun);}                
 		LPAREN! //{declaratorParameterList(false);}
@@ -1796,7 +1833,7 @@ direct_declarator
 		RPAREN
 		{#direct_declarator = #(#[CSM_VARIABLE_DECLARATION, "CSM_VARIABLE_DECLARATION"], #direct_declarator);}
 	|
-                (variable_attribute_specification)?
+                (options {greedy=true;} :variable_attribute_specification)?
                 (
                     (qualified_id LSQUARE)=>	// Must be array declaration
                     id = qualified_id 
@@ -1888,7 +1925,7 @@ function_declarator [boolean definition]
 function_direct_declarator [boolean definition] 
 	{String q; CPPParser.TypeQualifier tq;}
 	:
-                (function_attribute_specification)?
+                (options {greedy=true;} : function_attribute_specification)?
 		(
 		function_direct_declarator_2[definition]		
 		)
@@ -1898,7 +1935,7 @@ function_direct_declarator [boolean definition]
 		(ASSIGNEQUAL OCTALINT)?	// The value of the octal must be 0
 		//{functionEndParameterList(definition);}
 		(exception_specification)?
-                (function_attribute_specification)?
+                (options {greedy=true;} :function_attribute_specification)?
                 (asm_block!)?
 	;
         
@@ -2023,13 +2060,17 @@ ctor_body
 
 ctor_initializer
 	:
-	COLON superclass_init (COMMA superclass_init)*
+	COLON! superclass_init (COMMA! superclass_init)*
+
+        {#ctor_initializer = #(#[CSM_CTOR_INITIALIZER_LIST, "CSM_CTOR_INITIALIZER_LIST"], #ctor_initializer);}
 	;
 
 superclass_init
 	{String q;} 
 	: 
-	q = qualified_id LPAREN (expression_list)? RPAREN
+	q = qualified_id LPAREN! (expression_list)? RPAREN!
+
+        {#superclass_init = #(#[CSM_CTOR_INITIALIZER, "CSM_CTOR_INITIALIZER"], #superclass_init);}
 	;
 
 dtor_head[boolean definition]
@@ -2083,6 +2124,7 @@ dtor_declarator[boolean definition]
 	//({definition}? dtor_scope_override)
         dtor_scope_override
 	TILDE ID
+       (LESSTHAN template_argument_list GREATERTHAN)?
 	//{declaratorParameterList(definition);}
         // VV: /06/06/06 ~dtor(void) is valid construction
 	LPAREN (LITERAL_void)? RPAREN
@@ -2162,7 +2204,7 @@ type_name // aka type_id
  */
 abstract_declarator
 	:	//{( !(LA(1)==SCOPE||LA(1)==ID) || qualifiedItemIsOneOf(qiPtrMember) )}?
-		ptr_operator (LITERAL___restrict!)? abstract_declarator 
+		ptr_operator (literal_restrict!)? abstract_declarator 
 	|	
 		LPAREN abstract_declarator RPAREN
 		(abstract_declarator_suffix)*
@@ -2191,7 +2233,7 @@ exception_specification
 	{String so;}
 	:	LITERAL_throw 
 		LPAREN 
-		(exception_type_id (COMMA exception_type_id)? )? 
+		(exception_type_id (COMMA exception_type_id)* )? 
 		RPAREN
 	;
 
@@ -2217,9 +2259,15 @@ variable_attribute_specification!
         ;
 
 protected
+declspec!
+        : 
+            literal_declspec balanceParens
+        ;
+
+protected
 type_attribute_specification!
         :
-            attribute_specification_list
+            attribute_specification_list | declspec
         ;
 
 protected
@@ -2326,7 +2374,7 @@ template_parameter
 protected template_template_parameter
     :
 	LITERAL_template LESSTHAN tpl:template_parameter_list GREATERTHAN 
-	LITERAL_class ID
+	LITERAL_class ID (ASSIGNEQUAL assigned_type_name)?
 	{ #template_template_parameter = #(#[CSM_TEMPLATE_TEMPLATE_PARAMETER, "CSM_TEMPLATE_TEMPLATE_PARAMETER"], #template_template_parameter);}
 
     ;
@@ -2733,7 +2781,7 @@ remainder_expression
 
 conditional_expression
 	:	
-		logical_or_expression
+		general_logical_expression
 		(QUESTIONMARK expression COLON conditional_expression)?
 	;
 
@@ -2743,6 +2791,15 @@ constant_expression
 		{#constant_expression = #(#[CSM_EXPRESSION, "CSM_EXPRESSION"], #constant_expression);}
 	;
 
+/* Due to problems with stack overflow on expressions like ((((....(((1+1)+1)+...)+1)
+   RepositoryValidationTest started to fail, so we intentionally loose operator precedence here 
+   greatly reducing peak stack size */
+general_logical_expression
+        :
+                relational_expression ((OR | AND | BITWISEOR | BITWISEXOR | AMPERSAND | NOTEQUAL | EQUAL) relational_expression)*
+        ;
+
+/*
 logical_or_expression
 	:	
 		logical_and_expression (OR logical_and_expression)* 
@@ -2772,7 +2829,7 @@ equality_expression
 	:	
 		relational_expression ((NOTEQUAL | EQUAL) relational_expression)*
 	;
-
+*/
 relational_expression
 	:	shift_expression
 		(options {warnWhenFollowAmbig = false;}:
@@ -3148,11 +3205,22 @@ primary_expression
 	;
 
 id_expression 
-	{String s;}
+	{String s;
+         TypeQualifier tq;
+	 /*TypeSpecifier*/int ts;}
 	:
 		s = scope_override
 		(	ID 
-		|	LITERAL_OPERATOR optor
+		|	LITERAL_OPERATOR
+                        (       optor
+                        |       // Fix for IZ 137468: grammar does not support
+                                // conversion operator invocation.
+                                // Code adopted from cast_expression_type_specifier.
+                                (tq = cv_qualifier)? 
+                                (LITERAL_struct|LITERAL_union|LITERAL_class|LITERAL_enum)? 
+                                ts = simple_type_specifier 
+                                (options{greedy=true;} : ptr_operator)*
+                        )
 		|	TILDE (STAR)? ID	// DW 29/07/03 STAR included to allow 
 						// for *_S = ~*_S; seen in vector
 		)
@@ -3367,13 +3435,13 @@ post_cast_unambig_unary_optor : (TILDE | NOT);
 // it's better to have them alphabetically ordered...
 
 protected
-literal_asm : LITERAL__asm|LITERAL___asm|LITERAL___asm__;
+literal_asm : LITERAL_asm|LITERAL__asm|LITERAL___asm|LITERAL___asm__;
 
 protected
 literal_cdecl : LITERAL__cdecl|LITERAL___cdecl;
 
 protected
-literal_const : LITERAL_const | LITERAL___const;
+literal_const : LITERAL_const|LITERAL___const|LITERAL___const__;
 
 protected
 literal_declspec : LITERAL__declspec|LITERAL___declspec;
@@ -3388,10 +3456,10 @@ protected
 literal_int64 : LITERAL__int64|LITERAL___int64;
 
 protected
-literal_signed: LITERAL___signed__ | LITERAL_signed;
+literal_signed: LITERAL_signed|LITERAL___signed|LITERAL___signed__;
 
 protected
-literal_unsigned: LITERAL___unsigned__ | LITERAL_unsigned;
+literal_unsigned: LITERAL_unsigned|LITERAL___unsigned__;
 
 protected
 literal_near : LITERAL__near|LITERAL___near;
@@ -3403,7 +3471,10 @@ protected
 literal_stdcall : LITERAL__stdcall|LITERAL___stdcall;
 
 protected
-literal_volatile : LITERAL_volatile|LITERAL___volatile__;
+literal_volatile : LITERAL_volatile|LITERAL___volatile|LITERAL___volatile__;
 
 protected
 literal_typeof : LITERAL_typeof | LITERAL___typeof | LITERAL___typeof__ ;
+
+protected
+literal_restrict : LITERAL_restrict | LITERAL___restrict;
