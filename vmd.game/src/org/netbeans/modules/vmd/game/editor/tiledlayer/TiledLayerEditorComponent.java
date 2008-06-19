@@ -199,7 +199,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         this.setEditMode(EDIT_MODE_PAINT);
     
         // vlv: print
-        putClientProperty(java.awt.print.Printable.class, ""); // NOI18N
+        putClientProperty("print.printable", Boolean.TRUE); // NOI18N
     }
     
     public Dimension getMaximumSize() {
@@ -514,7 +514,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         if (this.isSelectMode()) {
             synchronized (this.cellsSelected) {
                 if (e.isControlDown()) {
-                    //ctrl-left_press toogle a single cell without affecting other selection
+                    //ctrl-left_press toggle a single cell without affecting other selection
                     if (!this.cellsSelected.remove(cell)) {
                         this.cellsSelected.add(cell);
                     }
@@ -1188,11 +1188,11 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         this.repaint();
     }
 
-	public void tilesStructureChanged(TiledLayer source) {
-		if (DEBUG) System.out.println("tilesStructureChanged()");
+    public void tilesStructureChanged(TiledLayer source) {
+        if (DEBUG) System.out.println("tilesStructureChanged()");
         this.revalidate();
         this.repaint();
-	}
+    }
     
     public void columnsInserted(TiledLayer tiledLayer, int index, int count) {
         this.shiftSelectedCellColumns(index, count);

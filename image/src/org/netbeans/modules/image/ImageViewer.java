@@ -177,6 +177,8 @@ public class ImageViewer extends CloneableTopComponent {
         };
         
         obj.addPropertyChangeListener(WeakListeners.propertyChange(nameChangeL, obj));
+        
+        setFocusable(true);
     }
     
     /**
@@ -225,7 +227,8 @@ public class ImageViewer extends CloneableTopComponent {
 
         };
         // vlv: print
-        panel.putClientProperty(java.awt.print.Printable.class, getToolTipText());
+        panel.putClientProperty("print.printable", Boolean.TRUE); // NOI18N
+        panel.putClientProperty("print.name", getToolTipText()); // NOI18N
 
         storedImage.setImageObserver(panel);
         panel.setPreferredSize(new Dimension(storedImage.getIconWidth(), storedImage.getIconHeight() ));
@@ -528,7 +531,12 @@ public class ImageViewer extends CloneableTopComponent {
     private boolean discard () {
         return storedObject == null;
     }
-    
+
+    protected boolean closeLast() {
+        ((ImageOpenSupport)storedObject.getCookie(ImageOpenSupport.class)).lastClosed();
+        return true;
+    }
+
     /** Serialize this top component. Serializes its data object in addition
      * to common superclass behaviour.
      * @param out the stream to serialize to
