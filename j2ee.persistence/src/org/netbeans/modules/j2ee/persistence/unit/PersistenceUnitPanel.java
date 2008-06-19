@@ -260,7 +260,8 @@ public class PersistenceUnitPanel extends SectionInnerPanel {
      */
     private void setTableGeneration(){
         Provider provider = getSelectedProvider();
-        Property tableGeneration = ProviderUtil.getProperty(persistenceUnit, provider.getTableGenerationPropertyName());
+        // issue 123224. The user can have a persistence.xml in J2SE project without provider specified
+        Property tableGeneration = (provider == null) ? null : ProviderUtil.getProperty(persistenceUnit, provider.getTableGenerationPropertyName());
         if (tableGeneration != null){
             if (provider.getTableGenerationCreateValue().equals(tableGeneration.getValue())){
                 ddCreate.setSelected(true);
@@ -270,7 +271,7 @@ public class PersistenceUnitPanel extends SectionInnerPanel {
         } else {
             ddUnknown.setSelected(true);
         }
-        boolean toggle = provider.supportsTableGeneration();
+        boolean toggle = (provider == null) ? false : provider.supportsTableGeneration();
         
         ddCreate.setEnabled(toggle);
         ddDropCreate.setEnabled(toggle);
@@ -289,14 +290,17 @@ public class PersistenceUnitPanel extends SectionInnerPanel {
             Properties props = persistenceUnit.getProperties();
             if (props != null){
                 Property[] properties = props.getProperty2();
-                String url = "custom";
+                String url = null;
                 Provider provider = ProviderUtil.getProvider(persistenceUnit);
                 for (int i = 0; i < properties.length; i++) {
                     String key = properties[i].getName();
-                    if (key.equals(provider.getJdbcUrl())) {
+                    if (provider.getJdbcUrl().equals(key)) {
                         url = properties[i].getValue();
                         break;
                     }
+                }
+                if (url == null) {
+                    url = NbBundle.getMessage(PersistenceUnitPanel.class, "LBL_CustomConnection");
                 }
                 jdbcComboBox.addItem(url);
                 jdbcComboBox.setSelectedItem(url);
