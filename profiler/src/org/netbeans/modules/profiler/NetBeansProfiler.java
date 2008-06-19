@@ -93,8 +93,6 @@ import org.netbeans.modules.profiler.ui.ProfilerDialogs;
 import org.netbeans.modules.profiler.ui.stats.ProjectAwareStatisticalModule;
 import org.netbeans.modules.profiler.utils.IDEUtils;
 import org.netbeans.modules.profiler.utils.OutputParameter;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
-import org.netbeans.modules.profiler.utils.SourceUtils;
 import org.openide.DialogDescriptor;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
@@ -139,6 +137,11 @@ import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
+import org.apache.tools.ant.module.api.support.ActionUtils;
+import org.netbeans.modules.profiler.heapwalk.HeapDumpWatch;
+import org.netbeans.modules.profiler.utils.GoToSourceHelper;
+import org.netbeans.modules.profiler.spi.ProjectTypeProfiler;
+import org.openide.execution.ExecutorTask;
 
 
 /**
@@ -1394,7 +1397,8 @@ public final class NetBeansProfiler extends Profiler {
     public void openJavaSource(final Project project, final String className, final String methodName, final String methodSig) {
         IDEUtils.runInProfilerRequestProcessor(new Runnable() {
                 public void run() {
-                    SourceUtils.openSource(project, className, methodName, methodSig);
+                    GoToSourceHelper.openSource(project, className, methodName, className);
+//                    SourceUtils.openSource(project, className, methodName, methodSig);
                 }
             });
     }
@@ -1519,7 +1523,7 @@ public final class NetBeansProfiler extends Profiler {
 
     public void rerunLastProfiling() {
         if (rerunTarget != null) {
-            ProjectUtilities.runTarget(rerunScript, rerunTarget, rerunProps);
+            doRunTarget(rerunScript, rerunTarget, rerunProps);
         }
     }
 
@@ -1646,7 +1650,7 @@ public final class NetBeansProfiler extends Profiler {
                 }
             });
 
-        ProjectUtilities.runTarget(buildScriptFO, target, props);
+        doRunTarget(buildScriptFO, target, props);
     }
 
     // TODO [ian] - perform saving of global settings differently
@@ -2084,11 +2088,8 @@ public final class NetBeansProfiler extends Profiler {
             }
 
             ProfilerClient client = getTargetAppRunner().getProfilerClient();
-            MarkingEngine.getDefault().addStateObserver(collector);
 
             mFilter.reset(); // clean up the filter before reusing it
-            client.registerMarkFilter(mFilter);
-            client.registerTimeCollector(collector);
 
             // init context aware instances
             Collection<?extends ContextAware> contextAwareInstances = Lookup.getDefault().lookupAll(ContextAware.class);
@@ -2100,10 +2101,17 @@ public final class NetBeansProfiler extends Profiler {
             boolean isMarksEnabled = (profilingSettings.getProfilingType() == ProfilingSettings.PROFILE_CPU_ENTIRE)
                                      || (profilingSettings.getProfilingType() == ProfilingSettings.PROFILE_CPU_PART);
 
-            final MarkMapping[] marks = isMarksEnabled
-                                        ? ProjectUtilities.getProjectTypeProfiler(project).getMethodMarker(project).getMarks()
-                                        : new MarkMapping[0];
-            MarkingEngine.configure(ProjectUtilities.getProjectTypeProfiler(project).getMarkHierarchyRoot(), marks);
+            ProjectTypeProfiler ptp = org.netbeans.modules.profiler.utils.ProjectUtilities.getProjectTypeProfiler(project);
+//            Marker marker = ptp.getProjectMarker(project);
+//            final MarkMapping[] marks = isMarksEnabled
+//                                        ? marker.getMarks()
+//                                        : new MarkMapping[0];
+            // TODO profilingSettings should go to the Project-Lookup
+            if (isMarksEnabled) {
+                MarkingEngine.configure(project.getLookup());
+            } else {
+                MarkingEngine.deconfigure();
+            }
 
             Collection listeners = null;
 
@@ -2240,11 +2248,8 @@ public final class NetBeansProfiler extends Profiler {
             // deconfigure the profiler client
             ProfilerClient client = getTargetAppRunner().getProfilerClient();
             client.registerFlatProfileProvider(null);
-            client.registerMarkFilter(null);
-            client.registerTimeCollector(null);
             // deconfigure the marking engine
-            MarkingEngine.getDefault().removeStateObserver(collector);
-            MarkingEngine.configure(null, null);
+            MarkingEngine.deconfigure();
         }
     }
 
@@ -2265,5 +2270,29 @@ public final class NetBeansProfiler extends Profiler {
         }
 
         return false;
+    }
+    
+    /**
+     * Runs an target in Ant script with properties context.
+     *
+     * @param buildScript The build script to run the target from
+     * @param target The name of target to run
+     * @param props The properties context to run the task in
+     * @return ExecutorTask to track the running Ant process
+     */
+    public static ExecutorTask doRunTarget(final FileObject buildScript, final String target, final Properties props) {
+        try {
+            String oomeenabled = props.getProperty(HeapDumpWatch.OOME_PROTECTION_ENABLED_KEY);
+
+            if ((oomeenabled != null) && oomeenabled.equals("yes")) { // NOI18N
+                HeapDumpWatch.getDefault().monitor(props.getProperty(HeapDumpWatch.OOME_PROTECTION_DUMPPATH_KEY));
+            }
+
+            return ActionUtils.runTarget(buildScript, new String[] { target }, props);
+        } catch (IOException e) {
+            Profiler.getDefault().notifyException(Profiler.EXCEPTION, e);
+        }
+
+        return null;
     }
 }

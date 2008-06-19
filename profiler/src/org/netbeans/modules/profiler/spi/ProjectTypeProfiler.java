@@ -47,10 +47,8 @@ import org.netbeans.lib.profiler.common.ProfilingSettings;
 import org.netbeans.lib.profiler.common.SessionSettings;
 import org.netbeans.lib.profiler.common.filters.SimpleFilter;
 import org.netbeans.lib.profiler.marker.Marker;
-import org.netbeans.lib.profiler.results.cpu.marking.HierarchicalMark;
 import org.netbeans.modules.profiler.ui.stp.DefaultSettingsConfigurator;
 import org.netbeans.modules.profiler.ui.stp.SelectProfilingTask;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.filesystems.FileObject;
 import java.util.Collections;
 import java.util.HashSet;
@@ -58,6 +56,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import javax.swing.JComponent;
+import org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities;
 
 
 /**
@@ -123,10 +122,6 @@ public interface ProjectTypeProfiler {
             return EMPTY_SELECTION;
         }
 
-        public Marker getMethodMarker(Project project) {
-            return Marker.DEFAULT;
-        }
-
         public List<SimpleFilter> getPredefinedInstrumentationFilters(Project project) {
             return Collections.emptyList();
         }
@@ -190,12 +185,8 @@ public interface ProjectTypeProfiler {
         public void unintegrateProfiler(Project project) {
         }
 
-        public HierarchicalMark getMarkHierarchyRoot() {
-            return HierarchicalMark.DEFAULT;
-        }
-
         public float getProfilingOverhead(ProfilingSettings settings) {
-            return ProjectUtilities.getProfilingOverhead(settings);
+            return 0F;
         }
     };
 
@@ -261,10 +252,6 @@ public interface ProjectTypeProfiler {
      * @return true if the specified FileObject can be profiled, false otherwise.
      */
     boolean isFileObjectSupported(Project project, FileObject fo);
-
-    HierarchicalMark getMarkHierarchyRoot();
-
-    Marker getMethodMarker(Project project);
 
     // Returns list of instrumentation filters defined by the ProjectTypeProfiler (related to concrete project type)
     // These filters are typically just placeholders useds for Instr. filter combo, real filter is computed in computePredefinedInstrumentationFilter
