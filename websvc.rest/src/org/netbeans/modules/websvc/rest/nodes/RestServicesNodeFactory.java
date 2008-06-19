@@ -52,6 +52,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModelAction;
+import org.netbeans.modules.websvc.rest.RestUtils;
 import org.netbeans.modules.websvc.rest.model.api.RestServices;
 import org.netbeans.modules.websvc.rest.model.api.RestServicesMetadata;
 import org.netbeans.modules.websvc.rest.model.api.RestServicesModel;
@@ -59,6 +60,7 @@ import org.netbeans.modules.websvc.rest.spi.RestSupport;
 import org.netbeans.spi.project.ui.support.NodeFactory;
 import org.netbeans.spi.project.ui.support.NodeList;
 import org.openide.nodes.Node;
+import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 
 /**
@@ -73,6 +75,8 @@ public class RestServicesNodeFactory implements NodeFactory {
     
     public NodeList createNodes(Project p) {
         assert p != null;
+        
+        RestUtils.upgrade(p);
         return new RestNodeList(p);
     }
     
@@ -111,7 +115,7 @@ public class RestServicesNodeFactory implements NodeFactory {
                     }
                 });
             } catch (IOException ex) {
-                
+                Exceptions.printStackTrace(ex);
             }
             
             return result;
