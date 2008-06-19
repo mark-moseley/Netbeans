@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.netbeans.modules.cnd.api.model.CsmBuiltIn;
 import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmClassifier;
+import org.netbeans.modules.cnd.api.model.CsmDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmInclude;
 import org.netbeans.modules.cnd.api.model.CsmMacro;
@@ -91,7 +92,8 @@ public class UIDUtilities {
     public static <T extends CsmOffsetableDeclaration> CsmUID<T> createDeclarationUID(T declaration) {
         assert (! (declaration instanceof CsmBuiltIn)) : "built-in have own UIDs";
         CsmUID<T> uid;
-        if (!ProjectBase.canRegisterDeclaration(declaration)) {
+        //if (!ProjectBase.canRegisterDeclaration(declaration)) {
+        if (!namedDeclaration(declaration)) {
             uid = handleUnnamedDeclaration((CsmOffsetableDeclaration)declaration);
         } else {
             if (declaration instanceof CsmTypedef) {
@@ -103,6 +105,12 @@ public class UIDUtilities {
             }
         }
         return UIDManager.instance().getSharedUID(uid);
+    }
+    
+    private static <T extends CsmOffsetableDeclaration> boolean namedDeclaration(T declaration){
+        assert declaration != null;
+        assert declaration.getName() != null;
+        return declaration.getName().length() > 0;
     }
     
     public static CsmUID<CsmMacro> createMacroUID(CsmMacro macro) {
@@ -123,6 +131,22 @@ public class UIDUtilities {
 
     public static CsmUID<CsmNamespace> createUnresolvedNamespaceUID(CsmProject project) {
 	return UIDManager.instance().getSharedUID(new UnresolvedNamespaceUID(project));
+    }
+
+    public static CsmDeclaration.Kind getKind(CsmUID<CsmOffsetableDeclaration> uid){
+        if (uid instanceof KeyBasedUID) {
+            Key key = ((KeyBasedUID)uid).getKey();
+            return KeyUtilities.getKeyKind(key);
+        }
+        return null;
+    }
+
+    public static CharSequence getName(CsmUID<CsmOffsetableDeclaration> uid){
+        if (uid instanceof KeyBasedUID) {
+            Key key = ((KeyBasedUID)uid).getKey();
+            return KeyUtilities.getKeyName(key);
+        }
+        return null;
     }
     
     private static CsmUID handleUnnamedDeclaration(CsmOffsetableDeclaration decl) {
