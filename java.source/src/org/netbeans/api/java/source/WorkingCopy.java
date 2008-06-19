@@ -67,10 +67,12 @@ import javax.tools.JavaFileObject;
 import org.netbeans.api.java.lexer.JavaTokenId;
 import static org.netbeans.api.java.source.ModificationResult.*;
 import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.modules.java.source.save.CasualDiff.Diff;
 import org.netbeans.modules.java.source.builder.TreeFactory;
 import org.netbeans.modules.java.source.engine.SourceReader;
 import org.netbeans.modules.java.source.engine.SourceRewriter;
+import org.netbeans.modules.java.source.parsing.CompilationInfoImpl;
 import org.netbeans.modules.java.source.pretty.ImportAnalysis2;
 import org.netbeans.modules.java.source.pretty.VeryPretty;
 import org.netbeans.modules.java.source.save.CasualDiff;
@@ -429,7 +431,7 @@ public class WorkingCopy extends CompilationController {
             
             CompilationUnitTree nue = (CompilationUnitTree) translator.translate(t, changes);
             
-            VeryPretty printer = new VeryPretty(getContext());
+            VeryPretty printer = new VeryPretty(getContext(), CodeStyle.getDefault(FileOwnerQuery.getOwner(t.getSourceFile().toUri())));
             printer.print((JCTree.JCCompilationUnit) nue);
             result.add(new CreateChange(nue.getSourceFile(), printer.toString()));
         }
