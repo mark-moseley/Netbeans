@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
@@ -119,6 +120,7 @@ public class FileObjectInLookupTest extends NbTestCase {
         assertFileObjects(obj);
     }
 
+    @RandomlyFails
     public void testShadow() throws Exception {
         DataObject obj = DataObject.find(root.getFileObject("adir/file.own"));
         DataShadow shadow = obj.createShadow(obj.getFolder().getFolder());
@@ -167,7 +169,11 @@ public class FileObjectInLookupTest extends NbTestCase {
                 i++;
                 continue;
             }
-            fail(msg + "\nError at position " + i + " expected: " + fo + " but was: " + all.get(i) + "\nAll: " + all);
+            fail(msg + "\nError at position " + i + " expected: " + fo 
+                    + "@" + Integer.toHexString(fo.hashCode()) + 
+                    " but was: " + all.get(i) + "@" + Integer.toHexString(all.get(i).hashCode()) 
+                    + " \nAll: " + all
+            );
         }
     }
     

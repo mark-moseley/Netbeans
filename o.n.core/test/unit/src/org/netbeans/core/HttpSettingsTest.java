@@ -43,14 +43,12 @@ package org.netbeans.core;
 
 import java.lang.reflect.Field;
 import java.net.ProxySelector;
-import java.util.logging.Logger;
 import java.util.prefs.AbstractPreferences;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import java.util.prefs.Preferences;
 import junit.framework.TestResult;
 import org.netbeans.junit.*;
-import junit.textui.TestRunner;
 import org.openide.util.NbPreferences;
 
 /** Tests HTTP Proxy settings.
@@ -58,6 +56,7 @@ import org.openide.util.NbPreferences;
  * @author Jiri Rechtacek
  * @see http://www.netbeans.org/issues/show_bug.cgi?id=51641
  */
+@RandomlyFails
 public class HttpSettingsTest extends NbTestCase {
     private final Object sync = getEventQueueSync ();
     private static String SYSTEM_PROXY_HOST = "system.cache.org";
@@ -80,20 +79,19 @@ public class HttpSettingsTest extends NbTestCase {
         super (name);
     }
     
-    public static void main(String[] args) {
-        TestRunner.run (new NbTestSuite (HttpSettingsTest.class));
-    }
-    
+    @Override
     public void run (final TestResult result) {
         //just initialize Preferences before code NbTestCase
         Preferences.userRoot ();                        
         super.run (result);
     }
     
+    @Override
     protected int timeOut () {
         return 20 * 1000;
     }
     
+    @Override
     protected void setUp () throws Exception {
         super.setUp ();
         System.setProperty ("http.nonProxyHosts", NETBEANS_ORG + ',' + NETBEANS_ORG);
@@ -408,10 +406,8 @@ public class HttpSettingsTest extends NbTestCase {
             Field f = AbstractPreferences.class.getDeclaredField("eventQueue");
             f.setAccessible(true);
             return f.get(null);
-            
         } catch (Exception ex) {
-            Logger.getLogger("global").log(java.util.logging.Level.SEVERE,ex.getMessage(), ex);
+            throw new ExceptionInInitializerError(ex);
         }
-        return null;
     }
 }

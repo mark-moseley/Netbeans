@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,6 +43,7 @@ package org.netbeans.modules.autoupdate.services;
 
 import java.io.File;
 import org.netbeans.api.autoupdate.UpdateUnit;
+import org.netbeans.junit.RandomlyFails;
 
 /**
  *
@@ -56,19 +57,22 @@ public class InstallTest extends OperationsTestImpl {
     protected String moduleCodeNameBaseForTest() {
         return "org.yourorghere.independent";//NOI18N
     } 
-    
-    public void testSelf() throws Exception {
-        long now = System.currentTimeMillis();
-        Thread.sleep(100);
-        
-        UpdateUnit toInstall = UpdateManagerImpl.getInstance().getUpdateUnit(moduleCodeNameBaseForTest());
-        installModule(toInstall, null);
-        
-        File pf = getWorkDir();
-        File lastModified = new File(pf, ".lastModified");
-        assertTrue("Check mark created", lastModified.exists());
-        if (now >= lastModified.lastModified()) {
-            fail("The file shall have newer timestamp: " + lastModified.lastModified());
+
+    @RandomlyFails
+    public void testSelf () throws Exception {
+        File pf = getWorkDir ();
+        File lastModified = new File (pf, ".lastModified"); // NOI18N
+        lastModified.createNewFile ();
+        assertTrue ("Check mark created", lastModified.exists ());
+
+        long before = lastModified.lastModified ();
+        Thread.sleep (1000);
+
+        UpdateUnit toInstall = UpdateManagerImpl.getInstance ().getUpdateUnit (moduleCodeNameBaseForTest ());
+        installModule (toInstall, null);
+
+        if (before >= lastModified.lastModified ()) {
+            fail ("The file shall have newer timestamp: " + lastModified.lastModified ());
         }
     }
     

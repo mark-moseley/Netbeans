@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,29 +39,62 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.autoupdate.services;
+package org.openide.explorer.propertysheet;
 
-import org.netbeans.api.autoupdate.UpdateUnit;
+import javax.swing.JWindow;
+import org.netbeans.junit.NbTestCase;
 import org.netbeans.junit.RandomlyFails;
-
-/**
- *
- * @author Jirka Rechtacek
- */
-public class InstallWhenDependsOnUpdateTest extends OperationsTestImpl {
-    public InstallWhenDependsOnUpdateTest (String testName) {
-        super (testName);
+import org.openide.nodes.AbstractNode;
+import org.openide.nodes.Children;
+import org.openide.nodes.Node;
+public class MorePropertySheetTest extends NbTestCase {
+    public MorePropertySheetTest(String name) {
+        super(name);
     }
     
-    protected String moduleCodeNameBaseForTest() {
-        return "org.yourorghere.depending_on_new_one_engine";//NOI18N
+    protected boolean runInEQ() {
+        return true;
+    }
+    
+/*
+ * This test creates a Property, Editor and Node. First test checks if initialized
+ * editor contains the same value as property. The second checks if the property
+ * value is changed if the same change will be done in the editor.
+ */
+    protected void setUp() throws Exception {
+    }
+    
+    public void testSetNodesSurvivesMultipleAdd_RemoveNotifyCalls() throws Exception {
+        final PropertySheet ps = new PropertySheet();
+        Node n = new AbstractNode( Children.LEAF );
+        JWindow window = new JWindow();
+        ps.setNodes( new Node[] {n} );
+        window.add( ps );
+        window.remove( ps );
+        window.add( ps );
+        window.remove( ps );
+        window.add( ps );
+        window.remove( ps );
+        window.setVisible(true);
+        assertNotNull(ps.helperNodes);
+        assertEquals("Helper nodes are still available even after several addNotify()/removeNotify() calls",
+                ps.helperNodes[0], n);
     }
 
     @RandomlyFails
-    public void testSelf() throws Exception {
-        UpdateUnit toInstall = UpdateManagerImpl.getInstance ().getUpdateUnit (moduleCodeNameBaseForTest ());
-        installModule (UpdateManagerImpl.getInstance ().getUpdateUnit ("org.yourorghere.engine"), null);
-        installModule (toInstall, null);
+    public void testSheetCleared_126818 () throws Exception {
+        final PropertySheet ps = new PropertySheet();
+        Node n = new AbstractNode( Children.LEAF );
+        ps.setNodes( new Node[] {n} );
+        Thread.sleep(70);
+        ps.setNodes(null);
+        
+        for (int i = 0; i < 10; i++) {
+            Node[] curNodes = ps.getCurrentNodes();
+            assertTrue("Cur nodes should be empty", 
+                    curNodes == null || curNodes.length == 0);
+            Thread.sleep(50);
+        }
+        
     }
-    
 }

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,29 +39,31 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.autoupdate.services;
+package org.openide.loaders;
 
-import org.netbeans.api.autoupdate.UpdateUnit;
-import org.netbeans.junit.RandomlyFails;
 
-/**
- *
- * @author Jirka Rechtacek
+import java.io.IOException;
+import org.openide.filesystems.*;
+import org.netbeans.junit.*;
+
+/** Check what can be done when registering loaders in layer. And how it works
+ * on system file system.
+ * @author Jaroslav Tulach
  */
-public class InstallWhenDependsOnUpdateTest extends OperationsTestImpl {
-    public InstallWhenDependsOnUpdateTest (String testName) {
-        super (testName);
-    }
-    
-    protected String moduleCodeNameBaseForTest() {
-        return "org.yourorghere.depending_on_new_one_engine";//NOI18N
+@RandomlyFails
+public class DataLoaderInLayerOnSFSTest extends DataLoaderInLayerTest {
+
+    public DataLoaderInLayerOnSFSTest(String name) {
+        super(name);
     }
 
-    @RandomlyFails
-    public void testSelf() throws Exception {
-        UpdateUnit toInstall = UpdateManagerImpl.getInstance ().getUpdateUnit (moduleCodeNameBaseForTest ());
-        installModule (UpdateManagerImpl.getInstance ().getUpdateUnit ("org.yourorghere.engine"), null);
-        installModule (toInstall, null);
+    @Override
+    protected FileSystem createFS(String... resources) throws IOException {
+        FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
+        for (String s : resources) {
+            assertNotNull("creating: " + s, FileUtil.createData(sfs.getRoot(), s));
+        }
+        return sfs;
     }
     
 }

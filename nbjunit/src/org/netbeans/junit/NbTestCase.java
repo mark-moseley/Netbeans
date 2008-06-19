@@ -125,6 +125,18 @@ public abstract class NbTestCase extends TestCase implements NbTest {
      * @return true if the test can run
      */
     public boolean canRun() {
+        if (NbTestSuite.ignoreRandomFailures()) {
+            if (getClass().isAnnotationPresent(RandomlyFails.class)) {
+                return false;
+            }
+            try {
+                if (getClass().getMethod(getName()).isAnnotationPresent(RandomlyFails.class)) {
+                    return false;
+                }
+            } catch (NoSuchMethodException x) {
+                // Specially named methods; let it pass.
+            }
+        }
         if (null == filter) {
             //System.out.println("NBTestCase.canRun(): filter == null name=" + name ());
             return true; // no filter was aplied
@@ -279,8 +291,9 @@ public abstract class NbTestCase extends TestCase implements NbTest {
                 }
 
                 if (!finished) {
-                    throw new AssertionFailedError ("The test " + getName() + " did not finish in " + time + "ms\n" +
-                        threadDump());
+                    throw Log.wrapWithMessages(new AssertionFailedError ("The test " + getName() + " did not finish in " + time + "ms\n" +
+                        threadDump())
+                    );
                 }
             }
         }
@@ -723,7 +736,7 @@ public abstract class NbTestCase extends TestCase implements NbTest {
             boolean result = workdir.mkdirs();
             if (result == false) {
                 // mkdirs() failed - throw an exception
-                throw new IOException("workdir creation failed, workdir = "+path);
+                throw new IOException("workdir creation failed: " + workdir);
             } else {
                 // everything looks ok - return path
                 return workdir;
@@ -732,7 +745,7 @@ public abstract class NbTestCase extends TestCase implements NbTest {
     }
     
     // private method for deleting a file/directory (and all its subdirectories/files)
-    private void deleteFile(File file) throws IOException {
+    private static void deleteFile(File file) throws IOException {
         if (file.isDirectory()) {
             // file is a directory - delete sub files first
             File files[] = file.listFiles();
@@ -750,7 +763,7 @@ public abstract class NbTestCase extends TestCase implements NbTest {
     }
     
     // private method for deleting every subfiles/subdirectories of a file object
-    private void deleteSubFiles(File file) throws IOException {
+    static void deleteSubFiles(File file) throws IOException {
         if (file.isDirectory()) {
             File files[] = file.listFiles();
             for (int i = 0; i < files.length; i++) {
@@ -1284,9 +1297,8 @@ public abstract class NbTestCase extends TestCase implements NbTest {
             }
             return sum;
         } catch (Exception e) {
-            fail("Could not traverse reference graph");
+            throw new AssertionFailedErrorException("Could not traverse reference graph", e);
         }
-        return -1; // fail throws for sure
     }
 
     /**
