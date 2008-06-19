@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.util.Collection;
 
 import org.netbeans.modules.cnd.MIMENames;
+import org.netbeans.modules.cnd.editor.filecreation.ExtensionsSettings;
 import org.openide.filesystems.FileObject;
 import org.openide.util.NbBundle;
 import org.openide.loaders.MultiDataObject;
@@ -58,21 +59,17 @@ import org.openide.util.SharedClassObject;
  *  This data loader recognizes .h header data files, creates a data object for
  *  each file, and sets up an appropriate action menus for .h file objects.
  */
-public final class HDataLoader extends CndAbstractDataLoader {
+public final class HDataLoader extends CndAbstractDataLoaderExt {
     
     private static HDataLoader instance = null;
 
     /** Serial version number */
     static final long serialVersionUID = -2924582006340980748L;
 
-    /** The suffix list for C/C++ header files */
-    private static final String[] hdrExtensions =
-				{ "h", "H", "hpp", "hxx", "SUNWCCh", "tcc" }; // NOI18N
-
     public HDataLoader() {
         super("org.netbeans.modules.cnd.loaders.HDataObject"); // NOI18N
         instance = this;
-        createExtentions(hdrExtensions);
+        //createExtentions(hdrExtensions);
     }
 
     public static HDataLoader getInstance(){
@@ -92,7 +89,7 @@ public final class HDataLoader extends CndAbstractDataLoader {
         for (String name : newExt) {
             newList.addExtension(name);
         }   
-        putProperty(PROP_EXTENSIONS, newList, true);
+        setExtensions(newList);
     }
     
     protected String getMimeType(){
@@ -123,36 +120,11 @@ public final class HDataLoader extends CndAbstractDataLoader {
 	return new HDataObject(primaryFile, this);
     }
 
-    public String getDefaultExtension() {
-        String l = (String)getProperty (PROP_DEFAULT_EXTENSIONS);
-        if (l == null) {
-            l = hdrExtensions[0];
-            putProperty (PROP_DEFAULT_EXTENSIONS, l, false);
+        public String getDisplayNameForExtensionList() {
+            return NbBundle.getMessage(HDataLoader.class, "HDataLoader_Name_ForExtList"); // NOI18N
         }
-        return l;
-    }
 
-    public void setDefaultExtension(String defaultExtension) {
-        String oldExtension = getDefaultExtension();
-        if (!defaultExtension.equals(oldExtension) && getExtensions().isRegistered("a."+defaultExtension)){ // NOI18N
-            TemplateExtensionUtils.renameCppHExtension(defaultExtension);
-            TemplateExtensionUtils.renameCHExtension(defaultExtension);
-            putProperty (PROP_DEFAULT_EXTENSIONS, defaultExtension, true);
+        public String getSettingsName() {
+            return ExtensionsSettings.HEADER;
         }
-    }
-
-    @Override
-    public void writeExternal (java.io.ObjectOutput oo) throws IOException {
-        super.writeExternal (oo);
-        oo.writeObject (getProperty (PROP_DEFAULT_EXTENSIONS));
-    }
-
-    @Override
-    public void readExternal (java.io.ObjectInput oi)  throws IOException, ClassNotFoundException {
-        super.readExternal (oi);
-        setDefaultExtension((String)oi.readObject ());
-    }
-
-    public static final String PROP_DEFAULT_EXTENSIONS = "defaultExtension"; // NOI18N
 }
-

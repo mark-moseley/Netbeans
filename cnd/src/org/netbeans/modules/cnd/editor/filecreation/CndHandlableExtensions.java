@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,64 +31,23 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.loaders;
+package org.netbeans.modules.cnd.editor.filecreation;
 
-import java.io.IOException;
-
-import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObjectExistsException;
-import org.openide.loaders.MultiDataObject;
-import org.openide.util.NbBundle;
-
-import org.netbeans.modules.cnd.MIMENames;
-import org.netbeans.modules.cnd.editor.filecreation.ExtensionsSettings;
-import org.openide.util.SharedClassObject;
+import org.openide.loaders.ExtensionList;
 
 /**
+ * Marker for DataLoaders what their files extensions would be handled by cnd
  *
- * @author Alexander Simon
+ * @author Sergey Grinev
  */
-public class AsmDataLoader extends CndAbstractDataLoaderExt {
-    
-    private static AsmDataLoader instance;
-
-    /** Serial version number */
-    static final long serialVersionUID = 6801389470714975683L;
-
-    protected AsmDataLoader() {
-	super("org.netbeans.modules.cnd.loaders.AsmDataObject"); // NOI18N
-        instance = this;
-    }
-
-    public static AsmDataLoader getInstance(){
-        if (instance == null) {
-            instance = SharedClassObject.findObject(AsmDataLoader.class, true);
-        }
-        return instance;
-    }
-    
-    /** set the default display name */
-    protected String defaultDisplayName() {
-	return NbBundle.getMessage(CndAbstractDataLoader.class,
-		    "PROP_AsmDataLoader_Name"); // NOI18N
-    }
-
-    protected String getMimeType(){
-        return MIMENames.ASM_MIME_TYPE;
-    }
-
-    protected MultiDataObject createMultiObject(FileObject primaryFile)
-		    throws DataObjectExistsException, IOException {
-        return new AsmDataObject(primaryFile, this);
-    }
-
-    public String getDisplayNameForExtensionList() {
-	throw new UnsupportedOperationException();
-    }
-
-    public String getSettingsName() {
-        return ExtensionsSettings.ASM;
-    }
+public interface CndHandlableExtensions {
+    ExtensionList getDefaultExtensionList();
+    String getSettingsName();
+    String getDisplayNameForExtensionList();
 }
