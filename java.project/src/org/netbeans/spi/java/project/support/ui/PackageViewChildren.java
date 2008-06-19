@@ -152,14 +152,17 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
         if ( fo != null && fo.isValid()) {
             Object o = names2nodes.get(path);
             PackageNode n;
+            DataFolder folder = DataFolder.findFolder(fo);
             if ( o == NODE_NOT_CREATED ) {
-                n = new PackageNode( root, DataFolder.findFolder( fo ), false );
+                n = new PackageNode(root, folder, false);
             }
             else if ( o ==  NODE_NOT_CREATED_EMPTY ) {
-                n = new PackageNode( root, DataFolder.findFolder( fo ), true );
+                 // Possible cause of IDEValidation.testJUnit failure? Known to be thrown randomly in testCopyPaste:
+                assert isEmpty(folder) : "Package was not really empty: " + FileUtil.getFileDisplayName(fo);
+                n = new PackageNode(root, folder, true);
             }
             else {
-                n = new PackageNode( root, DataFolder.findFolder( fo ) );
+                n = new PackageNode(root, folder);
             }            
             names2nodes.put(path, n);
             return new Node[] {n};
@@ -1146,7 +1149,7 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
                 
         public boolean acceptDataObject(DataObject obj) {                
             FileObject fo = obj.getPrimaryFile();                
-            return  VisibilityQuery.getDefault().isVisible(fo) && !(obj instanceof DataFolder) && group.contains(fo);
+            return  fo.isValid() && VisibilityQuery.getDefault().isVisible(fo) && !(obj instanceof DataFolder) && group.contains(fo);
         }
         
         public void stateChanged( ChangeEvent e) {            
