@@ -1673,13 +1673,14 @@ public class UMLDiagramTopComponent extends TopComponent
             {
                 ResourceBundle bundle = NbBundle.getBundle(SceneDeleteAction.class);
                 String title = bundle.getString("DELETE_QUESTIONDIALOGTITLE"); // NO18N
-                String question = bundle.getString("DELETE_GRAPH_OBJECTS_MESSAGE"); // NO18N
+//                String question = bundle.getString("DELETE_GRAPH_OBJECTS_MESSAGE"); // NO18N
+                String question = getMessage(bundle);
                 String checkQuestion = bundle.getString("DELETE_ELEMENTS_QUESTION"); // NO18N
                 IQuestionDialog questionDialog = UIFactory.createQuestionDialog();
                 QuestionResponse result = questionDialog.displaySimpleQuestionDialogWithCheckbox(MessageDialogKindEnum.SQDK_YESNO, MessageIconKindEnum.EDIK_ICONWARNING, question, checkQuestion, title, MessageResultKindEnum.SQDRK_RESULT_NO, false);
 
                 if (result.getResult() != MessageResultKindEnum.SQDRK_RESULT_NO && result.getResult() != MessageResultKindEnum.SQDRK_RESULT_CANCEL)
-                {
+                {   ((DiagramModelElementNode)nodesToDestroy[0]).getElementType();
                     List<Node> a = Arrays.asList(nodesToDestroy);
                     for (Node node : a)
                     {
@@ -1740,6 +1741,32 @@ public class UMLDiagramTopComponent extends TopComponent
                 }
                 nodesToDestroy = null;
             }
+        }
+        
+        private String getMessage(ResourceBundle bundle)
+        {
+            String messageStr = bundle.getString("DELETE_GRAPH_OBJECTS_MESSAGE"); // NO18N
+            if (nodesToDestroy != null && nodesToDestroy.length > 0)
+            {
+                if (nodesToDestroy.length == 1 && nodesToDestroy[0] instanceof DiagramModelElementNode)
+                {
+                    DiagramModelElementNode modelNode = (DiagramModelElementNode) nodesToDestroy[0];
+                    IElement elem = modelNode.getElement();
+                    if (elem != null)
+                    {
+                        String elemType = elem.getElementType();
+                        if ("Attribute".equals(elemType))
+                        {
+                            messageStr = bundle.getString("DELETE_ATTRIBUTE_MESSAGE"); // NO18N
+                        }
+                        else if ("Operation".equals(elemType))
+                        {
+                            messageStr = bundle.getString("DELETE_OPERATION_MESSAGE"); // NO18N
+                        }
+                    }
+                }
+            }
+            return messageStr;
         }
     }
     
