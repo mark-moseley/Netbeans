@@ -38,69 +38,96 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.print.impl.util;
+package org.netbeans.modules.print.impl.provider;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import javax.swing.JButton;
+import java.awt.Graphics;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+
+import org.netbeans.modules.print.api.PrintManager;
 import static org.netbeans.modules.print.impl.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2006.03.09
+ * @version 2008.02.22
  */
-public enum Macro {
-  NAME, // the name of area
-  USER, // the user name
-  ROW, // row number
-  COLUMN, // column number
-  COUNT, // total count
-  MODIFIED_DATE, // date of the last modification
-  MODIFIED_TIME, // time of the last modification
-  PRINTED_DATE, // date of printing
-  PRINTED_TIME; // time of printing
+final class ComponentPanel extends JPanel {
 
-  public interface Listener {
+  ComponentPanel(List<JComponent> components) {
+    myComponents = sort(components);
 
-    /**
-     * Invoked when macro buttom is pressed.
-     * @param macro name of it
-     */
-    void pressed(Macro macro);
+    myHeight = 0;
+    myWidth = 0;
+
+    for (int i=0; i < myComponents.size(); i++) {
+      JComponent component = myComponents.get(i);
+//out();
+//out("see: " + component.getClass().getName());
+      int width = component.getWidth();
+      int height = component.getHeight();
+//out("   width: " + width);
+//out("  height: " + height);
+      myWidth += width;
+
+      if (height > myHeight) {
+        myHeight = height;
+      }
+    }
   }
 
-  private Macro() {
-    myName = "%" + name() + "%"; // NOI18N
-    myButton = new JButton();
-    myButton.setFocusable(false);
-    myButton.setToolTipText(getToolTipText());
-    myButton.setMnemonic(KeyEvent.VK_1 + ordinal());
-    myButton.setIcon(icon(getClass(), name().toLowerCase()));
+  @Override
+  public void print(Graphics g) {
+    for (JComponent component : myComponents) {
+      component.print(g);
+//    g.setColor(java.awt.Color.green);
+//    g.drawRect(0, 0, component.getWidth(), component.getHeight());
+      g.translate(component.getWidth(), 0);
+    }
   }
 
-  public String getName() {
-    return myName;
+  @Override
+  public int getWidth() {
+    return myWidth;
   }
 
-  public JButton getButton() {
-    return myButton;
+  @Override
+  public int getHeight() {
+    return myHeight;
   }
 
-  private String getToolTipText() {
-    String alt = " (Alt-" + (ordinal() + 1) + ")"; // NOI18N
-    return i18n(Macro.class, name()) + alt;
-  }
+  private List<JComponent> sort(List<JComponent> components) {
+    Collections.sort(components, new Comparator<JComponent>() {
+      public int compare(JComponent component1, JComponent component2) {
+        int weight1 = getInteger(component1).intValue();
+        int weight2 = getInteger(component2).intValue();
 
-  public JButton getButton(final Listener listener) {
-    myButton.addActionListener(new ActionListener() {
-      public void actionPerformed(ActionEvent event) {
-        listener.pressed(Macro.this);
+        if (weight1 < weight2) {
+          return -1;
+        }
+        if (weight1 == weight2) {
+          return 0;
+        }
+        return 1;
+      }
+
+      private Integer getInteger(JComponent component) {
+        Object object = component.getClientProperty(PrintManager.PRINT_WEIGHT);
+
+        if (object instanceof Integer) {
+          return (Integer) object;
+        }
+        return Integer.MIN_VALUE;
       }
     });
-    return getButton();
+
+    return components;
   }
 
-  private String myName;
-  private JButton myButton;
+  private int myWidth;
+  private int myHeight;
+  private List<JComponent> myComponents;
 }

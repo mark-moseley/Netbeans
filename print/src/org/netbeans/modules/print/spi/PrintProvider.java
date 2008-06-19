@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -43,29 +43,45 @@ package org.netbeans.modules.print.spi;
 import java.util.Date;
 
 /**
+ * Print provider is the collection of the pages
+ * to be printed, where collection is the 2D matrix.
+ *
  * @author Vladimir Yaroslavskiy
  * @version 2006.04.24
  */
 public interface PrintProvider {
 
   /**
-   * Returns pages for given option.
-   * @param width of page.
-   * @param height of page.
-   * @param zoom of page.
-   * @return pages for given option
+   * Returns print pages being shown and printed.
+   * The pages will be shown in the Print Preview dialog
+   * as 2D matrix, e.g. page <code>pages[1][2]</code> will
+   * be shown in second row and third column in the dialog.
+   *
+   * @param width specifies the width of pages in pixels.
+   * @param height specifies the height of pages in pixels.
+   * @param zoom specifies the scale of pages.
+   * The zoom can take positive double value:
+   * <code>0.2</code> means <code>20%</code>,
+   * <code>1.0</code> - <code>100%</code>,
+   * <code>3.1415</code> - <code>314.5%</code> etc.
+   *
+   * @return pages being printed for given width, height and zoom
    */
   PrintPage [][] getPages(int width, int height, double zoom);
 
   /**
-   * Returns name of printed area.
-   * @return name of printed area
+   * Indicates the name of the document being printed which
+   * will be shown in the header/footer. By default, the
+   * name is shown in the left part of the header.
+   * @return name of the document which can be used in header/footer
    */
   String getName();
 
   /**
-   * Returns date of last modification.
-   * @return date of last modification
+   * Indicates the time at which the user last made a modification to
+   * the document, diagram, etc. being printed which might affect its
+   * printed appearance. The document might not have been saved since then.
+   * @return time at which the printable document was last changed
    */
-  Date getLastModifiedDate();
+  Date lastModified();
 }
