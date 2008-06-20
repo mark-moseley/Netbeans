@@ -42,8 +42,6 @@ package org.netbeans.modules.uml.diagrams.nodes;
 
 import java.awt.Font;
 import java.awt.Rectangle;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseEvent;
 import java.util.EnumSet;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -55,10 +53,12 @@ import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
+import org.netbeans.modules.uml.diagrams.DiagramEditorNameCollisionHandler;
 import org.netbeans.modules.uml.drawingarea.palette.context.ContextPaletteManager;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.netbeans.modules.uml.drawingarea.view.UMLLabelWidget;
 import org.netbeans.modules.uml.ui.controls.editcontrol.EditControlImpl;
+import org.netbeans.modules.uml.ui.support.applicationmanager.NameCollisionListener;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.AbstractLookup;
 import org.openide.util.lookup.InstanceContent;
@@ -194,21 +194,22 @@ public class EditableCompartmentWidget extends UMLLabelWidget {
         private Widget baseFitWidget;
         private Widget basePresentationWidget;
         private IElement modelElement;
-        
+        private NameCollisionListener m_NameCollisionListener = new NameCollisionListener();
+	private DiagramEditorNameCollisionHandler m_CollisionHandler = new DiagramEditorNameCollisionHandler();
+				
         public EditControlEditorProvider()
         {
-            
+            m_NameCollisionListener.setHandler(m_CollisionHandler);
         }
         
         
         /**
          * @param toFit border of toFit widget will be considered as bounds for edit control jm=[]
          * @param presentationWidget will be used to get presentation element
-         * JJJJJJJJU+N
-         * .mmmmK{"?',
-         * H         */
+         */
         public EditControlEditorProvider(Widget toFit,Widget presentationWidget)
         {
+            this();
             baseFitWidget=toFit;
             basePresentationWidget=presentationWidget;
         }
@@ -219,6 +220,7 @@ public class EditableCompartmentWidget extends UMLLabelWidget {
          */
         public EditControlEditorProvider(Widget toFit,IElement element)
         {
+            this();
             baseFitWidget=toFit;
             modelElement=element;
         }
@@ -226,7 +228,7 @@ public class EditableCompartmentWidget extends UMLLabelWidget {
         public void notifyOpened(final EditorController controller, Widget widget, final EditControlImpl editor) {
             editor.setVisible(true);
             editor.setAssociatedParent(controller);
-            
+            m_NameCollisionListener.setEnabled(true);
             DocumentListener listener = new DocumentListener()
             {
 
@@ -278,6 +280,7 @@ public class EditableCompartmentWidget extends UMLLabelWidget {
             {
                 manager.selectionChanged(null);
             }
+            m_NameCollisionListener.setEnabled(false);
         }
 
         public EditControlImpl createEditorComponent(EditorController controller, Widget widget)
