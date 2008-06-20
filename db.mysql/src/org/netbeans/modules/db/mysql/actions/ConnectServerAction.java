@@ -45,15 +45,15 @@ import org.openide.util.HelpCtx;
 import org.openide.util.actions.CookieAction;
 
 /**
- * Disconnects a connected server
+ * Connects to a server
  * 
  * @author David Van Couvering
  */
-public class DisconnectServerAction extends CookieAction {
+public class ConnectServerAction extends CookieAction {
     private static final Class[] COOKIE_CLASSES = 
             new Class[] { DatabaseServer.class };
     
-    public DisconnectServerAction() {
+    public ConnectServerAction() {
         putValue("noIconInMenu", Boolean.TRUE);
     }
 
@@ -63,11 +63,11 @@ public class DisconnectServerAction extends CookieAction {
     }
 
     public String getName() {
-        return Utils.getBundle().getString("LBL_DisconnectServerAction");
+        return Utils.getBundle().getString("LBL_ConnectServerAction");
     }
 
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(DisconnectServerAction.class);
+        return new HelpCtx(ConnectServerAction.class);
     }
 
     @Override
@@ -78,7 +78,7 @@ public class DisconnectServerAction extends CookieAction {
         
         DatabaseServer server = activatedNodes[0].getCookie(DatabaseServer.class);
         
-        return server != null && server.isConnected();
+        return server != null && !server.isConnected();
     }
 
     @Override
@@ -87,7 +87,7 @@ public class DisconnectServerAction extends CookieAction {
 
         // Run this on a separate thread so that we don't hang up the AWT 
         // thread if the database server is not responding
-        server.disconnect();
+        server.reconnect(false, true); // quiet, async
     }
     
     @Override
