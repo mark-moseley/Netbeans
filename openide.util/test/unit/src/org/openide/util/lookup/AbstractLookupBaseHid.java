@@ -47,7 +47,6 @@ import org.openide.util.*;
 
 import java.lang.ref.WeakReference;
 import java.util.*;
-import junit.framework.*;
 import org.netbeans.junit.*;
 import java.io.Serializable;
 import java.lang.ref.Reference;
@@ -144,7 +143,12 @@ public class AbstractLookupBaseHid extends NbTestCase {
         }
         
     }
-    
+
+    public void testToString() {
+        String txt = lookup.toString();
+        assertNotNull("Something is there", txt);
+        assertTrue("Something2: " + txt, txt.length() > 0);
+    }
 
 
     /** Tests ordering of items in the lookup.
@@ -1683,6 +1687,7 @@ public class AbstractLookupBaseHid extends NbTestCase {
     protected static class LL implements LookupListener {
         private int count = 0;
         public Object source;
+        public Thread changesIn;
         
         public LL () {
             this (null);
@@ -1693,6 +1698,11 @@ public class AbstractLookupBaseHid extends NbTestCase {
         }
         
         public void resultChanged(LookupEvent ev) {
+            if (changesIn != null) {
+                assertEquals("Changes in the same thread", changesIn, Thread.currentThread());
+            } else {
+                changesIn = Thread.currentThread();
+            }
             ++count;
             if (source != null) {
                 assertSame ("Source is the same", source, ev.getSource ());
