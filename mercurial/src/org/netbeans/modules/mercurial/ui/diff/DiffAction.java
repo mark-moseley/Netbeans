@@ -46,11 +46,14 @@ import org.netbeans.modules.versioning.util.Utils;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.util.Set;
 
 import org.netbeans.modules.mercurial.FileInformation;
 import org.netbeans.modules.mercurial.FileStatusCache;
 import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.mercurial.OutputLogger;
 import org.netbeans.modules.mercurial.util.HgUtils;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.openide.nodes.Node;
 import org.openide.util.NbBundle;
 
@@ -60,7 +63,7 @@ import org.openide.util.NbBundle;
  * 
  * @author John Rice
  */
-public class DiffAction extends AbstractAction {
+public class DiffAction extends ContextAction {
     
     private final VCSContext context;
 
@@ -69,8 +72,7 @@ public class DiffAction extends AbstractAction {
         putValue(Action.NAME, name);
     }
     
-    public void actionPerformed(ActionEvent e) {
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()) return;
+    public void performAction(ActionEvent e) {
         String contextName = Utils.getContextDisplayName(context);
                 
         File root = HgUtils.getRootFile(context);
@@ -78,11 +80,13 @@ public class DiffAction extends AbstractAction {
         boolean bNotManaged = (root == null) || ( files == null || files.length == 0);
 
         if (bNotManaged) {
-            HgUtils.outputMercurialTabInRed( NbBundle.getMessage(DiffAction.class,"MSG_DIFF_TITLE")); // NOI18N
-            HgUtils.outputMercurialTabInRed( NbBundle.getMessage(DiffAction.class,"MSG_DIFF_TITLE_SEP")); // NOI18N
-            HgUtils.outputMercurialTabInRed(
+            OutputLogger logger = OutputLogger.getLogger(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE);
+            logger.outputInRed( NbBundle.getMessage(DiffAction.class,"MSG_DIFF_TITLE")); // NOI18N
+            logger.outputInRed( NbBundle.getMessage(DiffAction.class,"MSG_DIFF_TITLE_SEP")); // NOI18N
+            logger.outputInRed(
                     NbBundle.getMessage(DiffAction.class, "MSG_DIFF_NOT_SUPPORTED_INVIEW_INFO")); // NOI18N
-            HgUtils.outputMercurialTab(""); // NOI18N
+            logger.output(""); // NOI18N
+            logger.closeLog();
             JOptionPane.showMessageDialog(null,
                     NbBundle.getMessage(DiffAction.class, "MSG_DIFF_NOT_SUPPORTED_INVIEW"),// NOI18N
                     NbBundle.getMessage(DiffAction.class, "MSG_DIFF_NOT_SUPPORTED_INVIEW_TITLE"),// NOI18N
@@ -94,8 +98,10 @@ public class DiffAction extends AbstractAction {
     }
     
     public boolean isEnabled() {
-        FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();
-        return cache.containsFileOfStatus(context, FileInformation.STATUS_LOCAL_CHANGE);
+        Set<File> ctxFiles = context != null? context.getRootFiles(): null;
+        if(HgUtils.getRootFile(context) == null || ctxFiles == null || ctxFiles.size() == 0)
+            return false;
+        return true;
     } 
 
     public static void diff(VCSContext ctx, int type, String contextName) {
