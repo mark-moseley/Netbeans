@@ -123,12 +123,13 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
         <property name="build.classes.dir" location="build/classes"/>
         <property name="build.classes.dir.ml" location="build/ml/classes"/>
         <property name="nbm" value="${code.name.base.dashes}.nbm"/>
-        <property name="nbm.homepage" value="http://${nbm.domain}.netbeans.org/"/>
+        <property name="nbm.homepage" value="http://www.netbeans.org/"/>
         <property name="nbm.distribution" value="${dist.base}/${nbm}"/>
         <property name="nbm.module.author" value=""/>
         <property name="nbm.release.date" value=""/>
         <property name="nbm.needs.restart" value="false"/>
         <property name="nbm.is.global" value=""/>
+        <property name="nbm_alias" value="nb_ide"/>
         <condition property="nbm.target.dir" value="${basedir}/build">
              <not>
                  <isset property="base.nbm.target.dir"/>
@@ -265,6 +266,9 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
 
     <target name="nbm" depends="-create-dest-dir-nbm,-create-license.file,projectized-common.nbm"/>
     
+    <target name="run" depends="netbeans">
+        <ant dir="${nb_all}/nbbuild" target="tryme"/>
+    </target>
     <!-- apisupport/project could calls this for the debug action. -->
     <!-- You can also call it directly from the nbbuild/misc pseudoproject. -->
     <target name="debug" depends="netbeans">
@@ -626,7 +630,6 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
         <javac srcdir="${test.qa-functional.src.dir}" destdir="${build.test.qa-functional.classes.dir}"
                debug="true" deprecation="${build.compiler.deprecation}" encoding="UTF-8"
                source="${javac.source}" target="${javac.target}" optimize="${build.compiler.optimize}" includeantruntime="false">
-               <exclude name="**/jars/**"/><!-- XXX for core only; fix in core, not here -->
                <exclude name="**/data/**"/><!-- XXX for openide/util and co. -->
             <classpath refid="test.qa-functional.cp"/>
             <compilerarg line="${javac.compilerargs}"/>
@@ -727,7 +730,6 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
         <javac srcdir="${test.qa-performance.src.dir}" destdir="${build.test.qa-performance.classes.dir}"
                debug="true" deprecation="${build.compiler.deprecation}" encoding="UTF-8"
                source="${javac.source}" target="${javac.target}" optimize="${build.compiler.optimize}" includeantruntime="false">
-               <exclude name="**/jars/**"/><!-- XXX for core only; fix in core, not here -->
                <exclude name="**/data/**"/><!-- XXX for openide/util and co. -->
             <classpath refid="test.qa-performance.cp"/>
             <compilerarg line="${javac.compilerargs}"/>
@@ -881,12 +883,13 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
 
     <target name="-sigtest-init" depends="build-init">
         <property name="sigtest.basedir" location="nbproject"/>
+        <property name="sigtest.output.dir" location="build/test/sigtest/results"/>
         <mkdir dir="${sigtest.basedir}"/>
         <property name="sigtest.file" location="${sigtest.basedir}/${code.name.base.dashes}.sig"/>
         <property name="sigtest.public.packages" value="${public.packages}"/>
         <property name="sigtest.fail.on.error" value="true"/>
         <taskdef name="sigtest" classname="org.netbeans.nbbuild.Sigtest" classpath="${nb_all}/nbbuild/nbantext.jar"/>
-        <property name="sigtest.jar" location="${nb_all}/nbbuild/external/apitest-29.jar"/> 
+        <property name="sigtest.jar" location="${nb_all}/nbbuild/external/apitest.jar"/> 
         <property file="${manifest.mf}" prefix="mf."/>
         <condition property="mf.OpenIDE-Module-Specification-Version" value="${spec.version.base}"> <!-- fallback -->
             <isset property="spec.version.base"/>
@@ -934,19 +937,21 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
 
     <target name="check-sigtest" depends="-sigtest-init" unless="sigtest.skip.check.condition">
         <property name="sigtest.check.type" value="check"/>
+        <mkdir dir="${sigtest.output.dir}"/>
         <sigtest fileName="${sigtest.file}"
                  sigtestJar="${sigtest.jar}"
                  classpath="${sigtest.class.path}"
                  version="${mf.OpenIDE-Module-Specification-Version}"
                  action="${sigtest.check.type}"
                  packages="${sigtest.public.packages}"
+                 report="${sigtest.output.dir}/${code.name.base.dashes}.xml"
                  failonerror="${sigtest.fail.on.error}"
         />
     </target>
 
-    <target name="findbugs-init">
+    <target name="findbugs-init" depends="build-init">       
         <property name="findbugs.home" location="${nb_all}/nbbuild/external/findbugs"/>
-        <ant dir="${findbugs.home}"/>
+        <ant dir="${findbugs.home}" inheritall="false"/>
     </target>
     
     <target name="findbugs" depends="build-init,jar,findbugs-init">
@@ -961,13 +966,14 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
             <path path="${cp.extra}"/>
             <path path="${cluster}/${module.jar}"/>
         </path>
-        <pathconvert refid="findbugs.class.path.ref" property="findbugs.class.path">
-            
-        </pathconvert>    
+        <pathconvert refid="findbugs.class.path.ref" property="findbugs.class.path"/>
+
         <echo>Findbugs module: ${module.name}</echo>
         <findbugs home="${findbugs.home}"
               output="xml"
-              outputFile="${report.file}">
+              outputFile="${report.file}"
+              failOnError="true"
+              jvmargs="-Xmx256m">
             <auxClasspath path="${findbugs.class.path}" />
             <sourcePath path="${src.dir}" />
             <class location="${build.classes.dir}" />
@@ -979,6 +985,7 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
         </condition>
         <antcall target="findbugs.delete"/>
     </target>
+    
     <target name="findbugs.delete" if="findbugs.error">
         <delete file="${report.file}" failonerror="false"/>
     </target>
