@@ -38,16 +38,17 @@
  */
 package org.netbeans.modules.hibernate.loaders.cfg.multiview;
 
-import javax.swing.DefaultComboBoxModel;
+import java.awt.event.ActionListener;
+import javax.swing.JTextField;
 
 /**
- *
+ * 
+ * 
  * @author  Dongmei Cao
  */
-public class NewEventPanel extends javax.swing.JPanel {
+public class EventListenerPanel extends javax.swing.JPanel {
 
-    // TODO: hard code here for now
-    private static final String[] types = new String[]{
+    private static final String[] listenerTypes = new String[]{
         "auto-flush",
         "merge",
         "create",
@@ -78,14 +79,26 @@ public class NewEventPanel extends javax.swing.JPanel {
         "post-commit-delete"
     };
 
-    /** Creates new form NewEventPanel */
-    public NewEventPanel() {
+    /** Creates new form ResRefPanel */
+    public EventListenerPanel() {
         initComponents();
-        eventTypeComboBox.setModel( new DefaultComboBoxModel(types));
     }
-   
-    public String getEventType() {
-        return (String)eventTypeComboBox.getSelectedItem();
+
+    public void initValues(String listenerClass) {
+        this.listenerClassTextField.setText(listenerClass);
+
+    }
+    
+    public void addBrowseClassActionListener( ActionListener listener ) {
+        this.browseButton.addActionListener(listener);
+    }
+
+    public JTextField getListenerClassTextField() {
+        return this.listenerClassTextField;
+    }
+
+    public String getListenerClass() {
+        return this.listenerClassTextField.getText().trim();
     }
 
     /** This method is called from within the constructor to
@@ -97,27 +110,47 @@ public class NewEventPanel extends javax.swing.JPanel {
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
-        eventTypeLabel = new javax.swing.JLabel();
-        eventTypeComboBox = new javax.swing.JComboBox();
+        listenerClassLabel = new javax.swing.JLabel();
+        listenerClassTextField = new javax.swing.JTextField();
+        browseButton = new javax.swing.JButton();
 
         setLayout(new java.awt.GridBagLayout());
 
-        eventTypeLabel.setLabelFor(eventTypeComboBox);
-        org.openide.awt.Mnemonics.setLocalizedText(eventTypeLabel, org.openide.util.NbBundle.getMessage(NewEventPanel.class, "NewEventPanel.eventTypeLabel.text")); // NOI18N
+        listenerClassLabel.setLabelFor(listenerClassTextField);
+        org.openide.awt.Mnemonics.setLocalizedText(listenerClassLabel, org.openide.util.NbBundle.getMessage(EventListenerPanel.class, "LBL_Listener_Class")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 0;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
         gridBagConstraints.insets = new java.awt.Insets(5, 12, 0, 0);
-        add(eventTypeLabel, gridBagConstraints);
-        eventTypeLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(NewEventPanel.class, "NewEventPanel.eventTypeLabel.text")); // NOI18N
-        eventTypeLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(NewEventPanel.class, "NewEventPanel.eventTypeLabel.text")); // NOI18N
+        add(listenerClassLabel, gridBagConstraints);
+        listenerClassLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(EventListenerPanel.class, "LBL_Listener_Class")); // NOI18N
+        listenerClassLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(EventListenerPanel.class, "LBL_Listener_Class")); // NOI18N
 
+        listenerClassTextField.setColumns(20);
+        listenerClassTextField.setPreferredSize(new java.awt.Dimension(200, 19));
         gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 1;
+        gridBagConstraints.gridy = 0;
+        gridBagConstraints.gridwidth = 2;
+        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        gridBagConstraints.weightx = 1.0;
+        gridBagConstraints.insets = new java.awt.Insets(5, 12, 0, 0);
+        add(listenerClassTextField, gridBagConstraints);
+
+        org.openide.awt.Mnemonics.setLocalizedText(browseButton, org.openide.util.NbBundle.getMessage(EventListenerPanel.class, "LBL_Browse")); // NOI18N
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 3;
+        gridBagConstraints.gridy = 0;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.insets = new java.awt.Insets(5, 12, 0, 12);
-        add(eventTypeComboBox, gridBagConstraints);
+        add(browseButton, gridBagConstraints);
+        browseButton.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(EventListenerPanel.class, "LBL_Browse")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JComboBox eventTypeComboBox;
-    private javax.swing.JLabel eventTypeLabel;
+    private javax.swing.JButton browseButton;
+    private javax.swing.JLabel listenerClassLabel;
+    private javax.swing.JTextField listenerClassTextField;
     // End of variables declaration//GEN-END:variables
 }
