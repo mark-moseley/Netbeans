@@ -53,7 +53,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.modules.j2ee.dd.api.common.ComponentInterface;
 import org.netbeans.modules.j2ee.deployment.common.api.OriginalCMPMapping;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeApplication;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
@@ -119,7 +118,7 @@ public final class ConfigSupportImpl implements J2eeModuleProvider.ConfigSupport
     public ConfigSupportImpl (J2eeModuleProvider provider) {
         this.provider = provider;
         j2eeModule = provider.getJ2eeModule();
-        J2eeModuleAccessor.DEFAULT.setJ2eeModuleProvider(j2eeModule, provider);
+        J2eeModuleAccessor.getDefault().setJ2eeModuleProvider(j2eeModule, provider);
         String serverInstanceId = provider.getServerInstanceID();
         if (serverInstanceId != null) {
             instance = ServerRegistry.getInstance().getServerInstance(serverInstanceId);
@@ -716,14 +715,16 @@ public final class ConfigSupportImpl implements J2eeModuleProvider.ConfigSupport
         
     public J2eeModule getJ2eeModule(String moduleUri) {
         if (j2eeModule instanceof J2eeApplication) {
+            // If the moduleUri is null, the j2eeModule needs to be sent back,
+            //     to enable directory deployment of EAR projects.
+            if (moduleUri == null)
+                return j2eeModule;
+            
             for (J2eeModule childModule : ((J2eeApplication) j2eeModule).getModules()) {
-                if (childModule.getUrl().equals(moduleUri)) {
+                if (moduleUri.equals(childModule.getUrl())) {
                     return childModule;
                 }
             }
-            // If the moduleUri is null, the j2eeModule needs to be sent back,
-            //     to enable directory deployment of EAR projects.
-            return moduleUri == null ? j2eeModule : null;
         }
         return j2eeModule;
     }
