@@ -45,28 +45,29 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import org.netbeans.spi.options.OptionsCategory;
 import org.netbeans.spi.options.OptionsPanelController;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 /**
  * Defines a new options category in the IDE's options dialog.
  */
 public final class RubyOptionsCategory extends OptionsCategory {
 
+    @Override
     public Icon getIcon() {
-	return new ImageIcon(Utilities.loadImage("org/netbeans/modules/ruby/resources/RubyOptions_32.png"));
+        return new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/ruby/resources/RubyOptions_32.png"));
     }
     
     public String getCategoryName() {
-	return NbBundle.getMessage(RubyOptionsCategory.class, "OptionsCategory_Name");
+        return NbBundle.getMessage(RubyOptionsCategory.class, "OptionsCategory_Name");
     }
     
     public String getTitle() {
-	return NbBundle.getMessage(RubyOptionsCategory.class, "OptionsCategory_Title");
+        return NbBundle.getMessage(RubyOptionsCategory.class, "OptionsCategory_Title");
     }
     
     public OptionsPanelController create() {
-	return new RubyOptionsPanelController();
+        return new RubyOptionsPanelController();
     }
 }
 
