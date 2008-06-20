@@ -54,6 +54,7 @@ import java.util.Set;
 import java.io.IOException;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.net.URI;
 import java.net.URL;
 import java.text.DateFormat;
 import java.util.Date;
@@ -62,9 +63,24 @@ import java.util.List;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.JComponent;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Result;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import org.netbeans.api.project.Project;
 import org.netbeans.modules.xml.api.EncodingUtil;
 
-import org.openide.WizardDescriptor.Panel;
+import org.netbeans.modules.xml.retriever.RetrieveEntry;
+import org.netbeans.modules.xml.retriever.RetrieverEngine;
+import org.netbeans.modules.xml.retriever.catalog.Utilities;
+import org.netbeans.modules.xml.retriever.catalog.Utilities.DocumentTypesEnum;
+
+import org.netbeans.spi.project.CacheDirectoryProvider;
+import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.loaders.TemplateWizard;
 import org.openide.WizardDescriptor;
 import org.openide.loaders.DataFolder;
@@ -73,7 +89,10 @@ import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileUtil;
-import org.openide.nodes.Node;
+import org.openide.util.NbBundle;
+import org.w3c.dom.Attr;
+import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
 
 
 /**
@@ -200,6 +219,7 @@ public class XMLWizardIterator implements TemplateWizard.Iterator {
         final FileObject[] fileObject = new FileObject[1];
         FileSystem.AtomicAction fsAction = new FileSystem.AtomicAction() {
             public void run() throws IOException {
+                // XXX use Freemarker instead of this hardcoded template!
                 //use the project's encoding if there is one
                 String encoding = EncodingUtil.getProjectEncoding(folder.getPrimaryFile());
                 if(!EncodingUtil.isValidEncoding(encoding))
@@ -252,14 +272,13 @@ public class XMLWizardIterator implements TemplateWizard.Iterator {
                                 writer.write("<" +prefix +":" + root + "  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'\n"); 
                             }
                         
-                            //if (namespace == null || "".equals(namespace)) {
-                              //  writer.write("  xsi:noNamespaceSchemaLocation='" + model.getSystemID() + "'>\n");
-                            //}
                             
+                            Map<String, String> nsToPre = new HashMap<String, String>();
                             if(nodes != null){
                                 for(int i=0;i < nodes.size(); i++ ){
-                                    Node n = (Node)nodes.get(i);
-                                    ExternalReferenceDataNode erdn = (ExternalReferenceDataNode)n;
+                                    SchemaObject erdn = (SchemaObject)nodes.get(i);
+                                    nsToPre.put(erdn.getNamespace(), erdn.getPrefix());
+                                    
                                     if(erdn.getPrefix() == null || "".equals(erdn.getPrefix()) ){
                                         writer.write("   xmlns='" + erdn.getNamespace() + "'\n");
                                     }else {
@@ -267,8 +286,12 @@ public class XMLWizardIterator implements TemplateWizard.Iterator {
                                     }
                                 }
                                 for(int i=0; i<nodes.size();i++){
-                                    ExternalReferenceDataNode erdn = (ExternalReferenceDataNode)nodes.get(i);
-                                    String relativePath = Util.getRelativePath((new File(erdn.getSchemaFileName())), pobj);
+                                    SchemaObject erdn = (SchemaObject)nodes.get(i);
+                                    String relativePath = null;
+                                    if(erdn.toString().startsWith("http"))
+                                        relativePath = erdn.toString();
+                                    else
+                                        relativePath = Util.getRelativePath((new File(erdn.getSchemaFileName())), pobj);
                                     if(i==0) {
                                         if(nodes.size() ==1)
                                             writer.write("   xsi:schemaLocation='" + erdn.getNamespace() + " " + relativePath + "'>\n");
@@ -281,7 +304,7 @@ public class XMLWizardIterator implements TemplateWizard.Iterator {
                                 }
                                
                             }
-                            
+                        model.getXMLContentAttributes().setNamespaceToPrefixMap(nsToPre);
                         generateXMLBody(model, root, writer);
                         
                     } else {
@@ -314,13 +337,14 @@ public class XMLWizardIterator implements TemplateWizard.Iterator {
                 
         filesystem.runAtomicAction(fsAction);
 
+        modifyRootElementAttrs(fileObject[0]);
         // perform default action and return
         
         Set set = new HashSet(1);                
         DataObject createdObject = DataObject.find(fileObject[0]);        
         Util.performDefaultAction(createdObject);
-        set.add(createdObject);      
-       
+        set.add(createdObject);    
+        
         return set;
     }
     
@@ -377,7 +401,8 @@ public class XMLWizardIterator implements TemplateWizard.Iterator {
     }
             
     public String name() {
-        return "//TODO";
+        return NbBundle.getMessage(XMLWizardIterator.class, "TITLE_x_of_y",
+            Integer.valueOf(current + 1), Integer.valueOf(current));
     }
     
     public void nextPanel() {
@@ -569,9 +594,91 @@ public class XMLWizardIterator implements TemplateWizard.Iterator {
     }
     
     private void generateXMLBody(DocumentModel model, String root, Writer writer){
-        XMLGeneratorVisitor visitor = new XMLGeneratorVisitor(model.getPrimarySchema(), model.getXMLContentAttributes(), writer);
-        visitor.generateXML(root);
-       
-       
+        String schemaFileName = model.getPrimarySchema();
+        if(model.getPrimarySchema().startsWith("http")) {
+            schemaFileName = retrieveURLSchema(model.getPrimarySchema());             
+        }
+         XMLGeneratorVisitor visitor = new XMLGeneratorVisitor(schemaFileName, model.getXMLContentAttributes(), writer);
+         visitor.generateXML(root);
     }
+    
+    private String retrieveURLSchema(String sourceURL)  {
+        try {
+            Project prj = Templates.getProject(templateWizard); 
+            FileObject prjrtfo = prj.getProjectDirectory();
+           // File saveFile = new File(selectedSaveRootFolder.getPath() + File.separator + "nbproject" + File.separator + "private" + File.separator+ schemaFileName);
+            
+            File prjrt = FileUtil.toFile(prjrtfo);
+            URI privateCatalogURI = null;
+            URI privateCacheURI = null;
+            //determine the cache dir
+            CacheDirectoryProvider cdp = (CacheDirectoryProvider) prj.getLookup().
+                lookup(CacheDirectoryProvider.class);
+            String cachestr = Utilities.DEFAULT_PRIVATE_CAHCE_URI_STR;
+            try{
+                if( (cdp != null) && (cdp.getCacheDirectory() != null) ){
+                    URI prjrturi = prjrt.toURI();
+                    URI cpduri = FileUtil.toFile(cdp.getCacheDirectory()).toURI();
+                    String cachedirstr = Utilities.relativize(prjrturi, cpduri);
+                    cachestr = cachedirstr+"/"+Utilities.PRIVATE_CAHCE_URI_STR;
+                }
+                privateCacheURI = new URI(cachestr);
+           }catch(Exception e){
+                
+           }
+           if(privateCacheURI == null)
+               return null;
+            URI cacheURI = prjrt.toURI().resolve(privateCacheURI);
+            File saveFile = new File(cacheURI );
+            if(!saveFile.isDirectory())
+               saveFile.mkdirs();
+            
+            RetrieverEngine instance = RetrieverEngine.getRetrieverEngine(saveFile, false);
+            RetrieveEntry rent =new RetrieveEntry(null, sourceURL, null, null, DocumentTypesEnum.schema, true);
+            instance.addResourceToRetrieve(rent);
+            instance.setFileOverwrite(true);
+            instance.start();
+           
+            //find where the file was downloaded, remove the "http:/" from the url
+            String returnstr = saveFile.getPath() + sourceURL.substring(6, sourceURL.length());
+            return returnstr;
+        } catch (Exception e) {
+            //e.printStackTrace();
+            return null;
+        }
+    }
+    
+     private void modifyRootElementAttrs(FileObject fobj) {
+        try {
+            File file = new File(fobj.getPath());
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.parse(file);
+            doc.getDocumentElement().normalize();
+            
+            NamedNodeMap rootAttributes = doc.getDocumentElement().getAttributes();
+            Map<String, String> nsAttrs = model.getXMLContentAttributes().getNamespaceToPrefixMap();
+            
+            if(nsAttrs == null || nsAttrs.size() == 0)
+                return;
+            for(String ns:nsAttrs.keySet()) {
+                Attr attr = doc.createAttribute("xmlns:" + nsAttrs.get(ns));
+                attr.setValue(ns);
+                rootAttributes.setNamedItem(attr);
+            }
+
+            //write to oputput file
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            DOMSource source = new DOMSource(doc);
+            Result result = new StreamResult(file);
+            transformer.transform(source, result);
+ 
+       } catch(Exception e) {
+          
+       }
+    }
+    
+
 }
