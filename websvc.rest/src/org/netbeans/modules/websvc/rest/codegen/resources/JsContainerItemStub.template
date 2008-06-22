@@ -35,15 +35,8 @@ __FIELDS_INIT__
    findValue : function(field, value) {
       if(value == undefined)
           return field;
-      if(value['$'] == undefined) {
-         var r = {};
-         for(var i in value) {
-            r[i] = value[i]['$'];
-         }
-         return r;
-      } else {
-         return value['$'];
-      }
+      else
+         return value;
    },
 
    flush : function() {
@@ -62,7 +55,7 @@ __FIELDS_INIT__
       var myObj = 
          '"__GENERIC_PATH_NAME__":'+
          '{'+
-         '"@uri":"'+this.uri+'",'+
+         '"@uri":"'+this.uri+'"'+
          __FIELDS_TOSTRING__
          '}';
       return myObj;
