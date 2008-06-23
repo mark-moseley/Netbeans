@@ -44,6 +44,8 @@ package org.netbeans.modules.j2ee.deployment.impl;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -71,6 +73,8 @@ import javax.enterprise.deploy.spi.Target;
 import javax.enterprise.deploy.spi.TargetModuleID;
 import javax.enterprise.deploy.spi.exceptions.TargetException;
 import javax.enterprise.deploy.spi.status.ProgressObject;
+import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeApplication;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleChangeReporter;
 import org.netbeans.modules.j2ee.deployment.execution.ModuleConfigurationProvider;
@@ -79,6 +83,7 @@ import org.netbeans.modules.j2ee.deployment.plugins.api.AppChangeDescriptor;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.IncrementalDeployment;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.config.ModuleConfiguration;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.TargetModuleIDResolver;
+import org.openide.util.Exceptions;
 
 /**
  * Encapsulates a set of ServerTarget(s), provides a wrapper for deployment
@@ -93,6 +98,8 @@ import org.netbeans.modules.j2ee.deployment.plugins.spi.TargetModuleIDResolver;
  *      deploymentTarget.setTargetModules(tms);
  */
 public class TargetServer {
+    
+    private static final Logger LOGGER = Logger.getLogger(TargetServer.class.getName());
     
     private Target[] targets;
     private final ServerInstance instance;
@@ -112,13 +119,25 @@ public class TargetServer {
         this.instance = dtarget.getServer().getServerInstance();
     }
     
-    private void init(ProgressUI ui) throws ServerException {
+    private void init(ProgressUI ui, boolean start, boolean processLast) throws ServerException {
         if (targets == null) {
-            instance.start(ui);
-            targets = dtarget.getServer().toTargets();
+            if (start) {
+                instance.start(ui);
+                targets = dtarget.getServer().toTargets();
+            } else {
+                Set<Target> tempTargets = new HashSet<Target>(Arrays.asList(dtarget.getServer().toTargets()));
+                for (Iterator<Target> it = tempTargets.iterator(); it.hasNext();) {
+                    Target target = it.next();
+                    if (!instance.getStartServer().isRunning(target)) {
+                        it.remove();
+                    }                    
+                }
+                targets = tempTargets.toArray(new Target[tempTargets.size()]);
+            }
+            
         }        
         incremental = instance.getIncrementalDeployment();
-        if (incremental != null && ! checkServiceImplementations())
+        if (incremental != null && !checkServiceImplementations())
             incremental = null;
 
         try {
@@ -140,28 +159,30 @@ public class TargetServer {
             }
         }
         
-        processLastTargetModules();
+        if (processLast) {
+            processLastTargetModules();
+        }
     }
     
-    private boolean canFileDeploy(Target[] targetz, J2eeModule deployable) {
+    private boolean canFileDeploy(Target[] targetz, J2eeModule deployable) throws IOException {
         if (targetz == null || targetz.length != 1) {
             Logger.getLogger("global").log(Level.INFO, NbBundle.getMessage(TargetServer.class, "MSG_MoreThanOneIncrementalTargets"));
             return false;
         }
         
-        if (deployable == null || !instance.getIncrementalDeployment().canFileDeploy(targetz[0], deployable))
+        if (deployable == null || null == deployable.getContentDirectory() || !instance.getIncrementalDeployment().canFileDeploy(targetz[0], deployable))
             return false;
         
         return true;
     }
     
-    private boolean canFileDeploy(TargetModule[] targetModules, J2eeModule deployable) {
+    private boolean canFileDeploy(TargetModule[] targetModules, J2eeModule deployable) throws IOException {
         if (targetModules == null || targetModules.length != 1) {
             Logger.getLogger("global").log(Level.INFO, NbBundle.getMessage(TargetServer.class, "MSG_MoreThanOneIncrementalTargets"));
             return false;
         }
         
-        if (deployable == null || !instance.getIncrementalDeployment().canFileDeploy(targetModules[0].getTarget(), deployable))
+        if (deployable == null || null == deployable.getContentDirectory() || !instance.getIncrementalDeployment().canFileDeploy(targetModules[0].getTarget(), deployable))
             return false;
         
         return true;
@@ -177,6 +198,13 @@ public class TargetServer {
         } finally {
             ui.setProgressObject(null);
         }
+    }
+    
+    private AppChangeDescriptor distributeChangesOnSave(TargetModule targetModule, Iterable<File> artifacts) throws IOException {
+        ServerFileDistributor sfd = new ServerFileDistributor(instance, dtarget);
+        ModuleChangeReporter mcr = dtarget.getModuleChangeReporter();
+        AppChangeDescriptor acd = sfd.distributeOnSave(targetModule, mcr, artifacts);
+        return acd;
     }
     
     private File initialDistribute(Target target, ProgressUI ui) {
@@ -319,13 +347,13 @@ public class TargetServer {
         return (TargetModule[]) toRedeploy.toArray(new TargetModule[toRedeploy.size()]);
     }
 
-    private Map getAvailableTMIDsMap() {
+    private Map<String, TargetModuleID> getAvailableTMIDsMap() {
         if (availablesMap != null)
             return availablesMap;
         
         // existing TMID's
         DeploymentManager dm = instance.getDeploymentManager();
-        availablesMap = new HashMap();
+        availablesMap = new HashMap<String, TargetModuleID>();
         try {
             ModuleType type = (ModuleType) dtarget.getModule().getModuleType();
             TargetModuleID[] ids = dm.getAvailableModules(type, targets);
@@ -341,6 +369,24 @@ public class TargetServer {
             throw illegalArgumentException;
         }
         return availablesMap;
+    }
+
+    private IncrementalDeployment isModuleImplComplete(J2eeModule deployable) throws IOException {
+        // defend against incomplete J2eeModule objects.
+        IncrementalDeployment retVal = incremental;
+        if (null != retVal && null == deployable.getContentDirectory()) {
+            retVal = null;
+        }
+        if (null != retVal && deployable instanceof J2eeApplication) {
+            // make sure all the sub modules will support directory deployment, too
+            J2eeModule[] childModules = ((J2eeApplication) deployable).getModules();
+            for (int i = 0; i < childModules.length; i++) {
+                if (null == childModules[i].getContentDirectory()) {
+                    retVal = null;
+                }
+            }
+        }
+        return retVal;
     }
     
     /**
@@ -476,7 +522,7 @@ public class TargetServer {
         ProgressObject po = null;
         boolean hasActivities = false;
         
-        init(ui);
+        init(ui, true, true);
         if (forceRedeploy) {
             if (redeployTargetModules == null) {
             } else {
@@ -512,11 +558,11 @@ public class TargetServer {
         if (distributeTargets.size() > 0) {
             hasActivities = true;
             Target[] targetz = (Target[]) distributeTargets.toArray(new Target[distributeTargets.size()]);
-
-            if (incremental != null && hasDirectory && canFileDeploy(targetz, deployable)) {
+            IncrementalDeployment lincremental = isModuleImplComplete(deployable);
+            if (lincremental != null && hasDirectory && canFileDeploy(targetz, deployable)) {
                 ModuleConfiguration cfg = dtarget.getModuleConfigurationProvider().getModuleConfiguration();
                 File dir = initialDistribute(targetz[0], ui);
-                po = incremental.initialDeploy(targetz[0], deployable, cfg, dir);
+                po = lincremental.initialDeploy(targetz[0], deployable, cfg, dir);
                 trackDeployProgressObject(ui, po, false);
             } else {  // standard DM.distribute
                 if (getApplication() == null) {
@@ -533,11 +579,13 @@ public class TargetServer {
         // handle increment or standard redeploy
         if (redeployTargetModules != null && redeployTargetModules.length > 0) {
             hasActivities = true;
-            if (incremental != null && hasDirectory && canFileDeploy(redeployTargetModules, deployable)) {
+            // defend against incomplete J2eeModule objects.
+            IncrementalDeployment lincremental = isModuleImplComplete(deployable);
+            if (lincremental != null && hasDirectory && canFileDeploy(redeployTargetModules, deployable)) {
                 AppChangeDescriptor acd = distributeChanges(redeployTargetModules[0], ui);
                 if (anyChanged(acd)) {
                     ui.progress(NbBundle.getMessage(TargetServer.class, "MSG_IncrementalDeploying", redeployTargetModules[0]));
-                    po = incremental.incrementalDeploy(redeployTargetModules[0].delegate(), acd);
+                    po = lincremental.incrementalDeploy(redeployTargetModules[0].delegate(), acd);
                     trackDeployProgressObject(ui, po, true);
                     
                 } else { // return original target modules
@@ -579,6 +627,179 @@ public class TargetServer {
     public static boolean anyChanged(AppChangeDescriptor acd) {
         return (acd.manifestChanged() || acd.descriptorChanged() || acd.classesChanged()
         || acd.ejbsChanged() || acd.serverDescriptorChanged());
+    }
+    
+    public boolean notifyArtifactsUpdated(Iterable<File> artifacts) {        
+        if (!dtarget.getServer().getServerInstance().isRunning()) {
+            return false;
+        }
+        
+        try {
+            init(null, false, false);
+        } catch (ServerException ex) {
+            // this should never occur
+            Exceptions.printStackTrace(ex);
+        }
+
+        TargetModule[] modules = getDeploymentDirectoryModules();
+
+        J2eeModule deployable = null;
+        ModuleConfigurationProvider deployment = dtarget.getModuleConfigurationProvider();
+        if (deployment != null) {
+            deployable = deployment.getJ2eeModule(null);
+        }
+        try {
+            boolean hasDirectory = (dtarget.getModule().getContentDirectory() != null);
+            IncrementalDeployment lincremental = isModuleImplComplete(deployable);
+            if (lincremental == null || !hasDirectory || !canFileDeploy(modules, deployable)) {
+                return false;
+            }
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+
+        // FIXME target
+        TargetModule targetModule = dtarget.getTargetModules()[0];
+        if (!targetModule.hasDelegate()) {
+            return false;
+        }
+        
+        try {
+            AppChangeDescriptor changes = distributeChangesOnSave(targetModule, artifacts);
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.log(Level.FINE, changes.toString());
+            }
+            reloadArtifacts(modules, artifacts);
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+        
+//        File dir = incremental.getDirectoryForNewApplication(dtarget.getDeploymentName(),
+//                targetModule.getTarget(), deployment.getModuleConfiguration());            
+//        LOGGER.log(Level.INFO, dir == null ? "In place deployment" : dir.getAbsolutePath());
+//
+//        if (dir != null) {
+//            Map<FileObject, File> contentDirs = new HashMap<FileObject, File>();
+//            try {
+//                FileObject contentDir = dtarget.getModule().getContentDirectory();
+//                if (contentDir != null) {
+//                    contentDirs.put(contentDir, dir);
+//                }
+//            } catch (IOException ex) {
+//                LOGGER.log(Level.INFO, null, ex);
+//            }
+//            
+//            if (dtarget.getModule() instanceof J2eeApplication) {
+//                for (J2eeModule module : ((J2eeApplication) dtarget.getModule()).getModules()) {
+//                    // TODO what is this url stuff
+//                    try {
+//                        if (module.getContentDirectory() != null) {
+//                            String uri = module.getUrl();
+//                            J2eeModule childModule = deployment.getJ2eeModule(uri);
+//                            File subdir = incremental.getDirectoryForNewModule(dir,
+//                                    uri, childModule, deployment.getModuleConfiguration());                    
+//                            contentDirs.put(module.getContentDirectory(), subdir);
+//                        }
+//                    } catch (IOException ex) {
+//                        LOGGER.log(Level.INFO, null, ex);
+//                    }
+//                }
+//            }
+//            
+//            List<File> files = new ArrayList<File>();
+//            for (File file : artifacts) {
+//                for (Map.Entry<FileObject, File> content : contentDirs.entrySet()) {
+//                    FileObject artifact = FileUtil.toFileObject(FileUtil.normalizeFile(file));
+//                    if (artifact != null) {
+//                        String relative = FileUtil.getRelativePath(content.getKey(), artifact);
+//                        if (relative != null) {
+//                            //copy
+//                            try {
+//                                FileObject updated = updateDeploymentDirectory(content.getValue(), relative, file);
+//                                File updatedFile = FileUtil.toFile(updated);
+//                                if (updatedFile != null) {
+//                                    files.add(updatedFile);
+//                                }
+//                            } catch (IOException ex) {
+//                                LOGGER.log(Level.INFO, null, ex);
+//                            }
+//                            break;
+//                        }
+//                    }
+//                }
+//            }         
+//            reloadArtifacts(modules, files);
+//        } else {
+//            reloadArtifacts(modules, artifacts);
+//        }
+        
+        return true;
+    }
+    
+    private void reloadArtifacts(TargetModule[] modules, Iterable<File> files) {
+        for (TargetModule module : modules) {
+            ProgressObject obj = incremental.reloadArtifacts(module.delegate(), files);
+            ProgressUI ui = new ProgressUI("Deploying", false);
+            ui.start();
+            try {
+                // this also save last deploy timestamp
+                trackDeployProgressObject(ui, obj, true);
+            } catch (ServerException ex) {
+                Exceptions.printStackTrace(ex);
+            } finally {
+                ui.finish();
+            }
+        }
+    }
+    
+//    private FileObject updateDeploymentDirectory(File targetDir, String relativePath, File artifact) throws IOException {
+//        FileObject destRoot = FileUtil.createFolder(targetDir);
+//        FileObject destObject = FileUtil.createData(destRoot, relativePath);
+//        FileObject artifactObject = FileUtil.toFileObject(FileUtil.normalizeFile(artifact));
+//        
+//        if (artifactObject != null && artifactObject.isData()) {
+//            InputStream is = artifactObject.getInputStream();
+//            try {
+//                OutputStream os = destObject.getOutputStream();
+//                try {
+//                    FileUtil.copy(is, os);
+//                } finally {
+//                    os.close();
+//                }
+//            } finally {
+//                is.close();
+//            }
+//        }
+//        
+//        return destObject;
+//    }
+    
+    private TargetModule[] getDeploymentDirectoryModules() {
+        TargetModule[] modules = dtarget.getTargetModules();
+        
+        ServerInstance serverInstance = dtarget.getServer().getServerInstance();
+        Set<String> targetNames = new HashSet<String>();
+        for (int i = 0; i < targets.length; i++) {
+            targetNames.add(targets[i].getName());
+        }
+        
+        Set<TargetModule> ret = new HashSet<TargetModule>();
+        for (TargetModule module : modules) {
+            // not my module
+            if (!module.getInstanceUrl().equals(serverInstance.getUrl())
+                    || ! targetNames.contains(module.getTargetName())) {
+                continue;
+            }
+            
+            TargetModuleID tmID = (TargetModuleID) getAvailableTMIDsMap().get(module.getId());
+            
+            // no longer a deployed module on server
+            if (tmID != null) {
+                module.initDelegate(tmID);
+                ret.add(module);
+            }
+        }
+        return ret.toArray(new TargetModule[ret.size()]);
     }
     
     /**
