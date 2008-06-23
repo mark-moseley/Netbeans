@@ -589,8 +589,16 @@ final class Central implements ControllerHandler {
         
         TopComponent[] tcs = getModeOpenedTopComponents(mode).toArray(new TopComponent[0]);
         
-        for(int i = 0; i < tcs.length; i++) {
-            model.addModeClosedTopComponent(mode, tcs[i]);
+        for (int i = 0; i < tcs.length; i++) {
+            if (PersistenceHandler.isTopComponentPersistentWhenClosed(tcs[i])) {
+                model.addModeClosedTopComponent(mode, tcs[i]);
+            } else {
+                if (Boolean.TRUE.equals(tcs[i].getClientProperty(Constants.KEEP_NON_PERSISTENT_TC_IN_MODEL_WHEN_CLOSED))) {
+                    model.addModeClosedTopComponent(mode, tcs[i]);
+                } else {
+                    model.removeModeTopComponent(mode, tcs[i], null);
+                }
+            }
         }
         
         ModeImpl oldActive = getActiveMode();
@@ -775,15 +783,15 @@ final class Central implements ControllerHandler {
         WindowManagerImpl.getInstance().notifyTopComponentOpened(tc);
     }
     
-    public void addModeClosedTopComponent(ModeImpl mode, TopComponent tc) {
+    public boolean addModeClosedTopComponent(ModeImpl mode, TopComponent tc) {
         boolean opened = getModeOpenedTopComponents(mode).contains(tc);
         
         if(opened && !tc.canClose()) {
-            return;
+            return false;
         }
         
         if(containsModeTopComponent(mode,tc) && !opened) {
-            return;
+            return false;
         }
         
         // Validate the TopComponent was removed from other modes.
@@ -827,6 +835,7 @@ final class Central implements ControllerHandler {
         if(opened) {
             WindowManagerImpl.getInstance().notifyTopComponentClosed(tc);
         }
+        return true;
     }
 
     // XXX Could be called only during load phase of window system.
@@ -894,15 +903,15 @@ final class Central implements ControllerHandler {
     }
     
     /** Removed top component from model and requests view (if needed). */
-    public void removeModeTopComponent(ModeImpl mode, TopComponent tc) {
+    public boolean removeModeTopComponent(ModeImpl mode, TopComponent tc) {
         if(!containsModeTopComponent(mode, tc)) {
-            return;
+            return false;
         }
         
         boolean viewChange = getModeOpenedTopComponents(mode).contains(tc);
         
         if(viewChange && !tc.canClose()) {
-            return;
+            return false;
         }
         
         TopComponent recentTc = null;
@@ -969,6 +978,7 @@ final class Central implements ControllerHandler {
             WindowManagerImpl.notifyRegistryTopComponentActivated(
                 null);
         }
+        return true;
     }
     
     /**
@@ -1211,7 +1221,15 @@ final class Central implements ControllerHandler {
                     } else {
                         tc.putClientProperty(GROUP_SELECTED, null);
                     }
-                    model.addModeClosedTopComponent(mode, tc);
+                    if (PersistenceHandler.isTopComponentPersistentWhenClosed(tc)) {
+                        model.addModeClosedTopComponent(mode, tc);
+                    } else {
+                        if (Boolean.TRUE.equals(tc.getClientProperty(Constants.KEEP_NON_PERSISTENT_TC_IN_MODEL_WHEN_CLOSED))) {
+                            model.addModeClosedTopComponent(mode, tc);
+                        } else {
+                            model.removeModeTopComponent(mode, tc, null);
+                        }
+                    }
                     closedTcs.add(tc);
                 }
             }
@@ -1904,9 +1922,55 @@ final class Central implements ControllerHandler {
             //an editor document is being closed so let's find the most recent editor to select
             recentTc = getRecentTopComponent( mode, tc );
         }
-        addModeClosedTopComponent(mode, tc);
-        if( null != recentTc )
+        boolean wasTcClosed = false;
+        if (PersistenceHandler.isTopComponentPersistentWhenClosed(tc)) {
+            wasTcClosed = addModeClosedTopComponent(mode, tc);
+        } else {
+            if (Boolean.TRUE.equals(tc.getClientProperty(Constants.KEEP_NON_PERSISTENT_TC_IN_MODEL_WHEN_CLOSED))) {
+                wasTcClosed = addModeClosedTopComponent(mode, tc);
+            } else {
+                wasTcClosed = removeModeTopComponent(mode, tc);
+            }
+        }
+        if( wasTcClosed 
+                && mode.getKind() == Constants.MODE_KIND_EDITOR 
+                && "editor".equals(mode.getName())  //NOI18N
+                && mode.getOpenedTopComponentsIDs().isEmpty() ) {
+            
+            //134945 - if user just closed the last topcomponent in the default
+            //and permanent "editor" mode then pick some other arbitrary editor mode
+            //and move its topcomponents to the default editor mode. otherwise opening
+            //of a new editor window will cause a split in the editor area.
+            ModeImpl otherEditorMode = findSomeOtherEditorModeImpl();
+            if( null != otherEditorMode ) {
+                for( String closedTcId : otherEditorMode.getClosedTopComponentsIDs() ) {
+                    mode.addUnloadedTopComponent(closedTcId);
+                }
+                List<TopComponent> tcs = otherEditorMode.getOpenedTopComponents();
+                for( TopComponent t : tcs ) {
+                    int index = otherEditorMode.getTopComponentTabPosition(t);
+                    mode.addOpenedTopComponent(t, index);
+                }
+                removeMode(otherEditorMode);
+            }
+        }
+        if ((recentTc != null) && wasTcClosed) {
             recentTc.requestActive();
+        }
+    }
+    
+    /**
+     * @return ModeImpl with opened TopComponents which is 'editor' kind but 
+     * not the default and permanent one. Returns null if there is no such mode.
+     */
+    private ModeImpl findSomeOtherEditorModeImpl() {
+        for( ModeImpl m : getModes() ) {
+            if( m.getKind() == Constants.MODE_KIND_EDITOR 
+                    && !"editor".equals(m.getName()) //NOI18N
+                    && !m.getOpenedTopComponentsIDs().isEmpty() )
+                return m;
+        }
+        return null;
     }
     
     public void userClosedMode(ModeImpl mode) {
@@ -2085,6 +2149,7 @@ final class Central implements ControllerHandler {
         if(isVisible()) {
             viewRequestor.scheduleRequest(
                 new ViewRequest(null, View.CHANGE_DND_PERFORMED, null, null));
+            FloatingWindowTransparencyManager.getDefault().update();
         }
     }
 
