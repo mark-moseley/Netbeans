@@ -56,10 +56,10 @@ import java.lang.ref.WeakReference;
 import java.util.*;
 
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 import javax.swing.SwingUtilities;
 import javax.swing.event.EventListenerList;
 import javax.swing.tree.TreeNode;
+import org.openide.util.ImageUtilities;
 
 
 /** Visual representation of one node. Holds necessary information about nodes
@@ -118,6 +118,9 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
     /** the VisualizerChildren that contains this VisualizerNode or null */
     private VisualizerChildren parent;
 
+    /** index in parent */
+    int indexOf = -1;
+    
     /** cached name */
     private String name;
 
@@ -206,7 +209,14 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
         if (desc == UNKNOWN) {
             shortDescription = desc = node.getShortDescription();
         }
-
+        if (icon instanceof Image) {
+            String toolTip = ImageUtilities.getImageToolTip((Image) icon);
+            if (toolTip.length() > 0) {
+                StringBuilder str = new StringBuilder(128);
+                str.append("<html>").append(desc).append("<br>").append(toolTip).append("</html>");
+                desc = str.toString();
+            }
+        }
         return desc;
     }
 
@@ -235,13 +245,10 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
     /** Getter for list of children of this visualizer.
     * @return list of VisualizerNode objects
     */
-    public List<VisualizerNode> getChildren() {
+    public VisualizerChildren getChildren() {
         VisualizerChildren ch = children.get();
 
         if ((ch == null) && !node.isLeaf()) {
-            // initialize the nodes children before we enter
-            // the readAccess section
-            Node[] tmpInit = node.getChildren().getNodes();
 
             // go into lock to ensure that no childrenAdded, childrenRemoved,
             // childrenReordered notifications occures and that is why we do
@@ -249,29 +256,22 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
             ch = Children.MUTEX.readAccess(
                     new Mutex.Action<VisualizerChildren>() {
                         public VisualizerChildren run() {
-                            Node[] nodes = node.getChildren().getNodes();
-                            VisualizerChildren vc = new VisualizerChildren(VisualizerNode.this, nodes);
-                            notifyVisualizerChildrenChange(nodes.length, vc);
-
+                            int nodesCount = node.getChildren().getNodesCount();
+                            VisualizerChildren vc = new VisualizerChildren(VisualizerNode.this, nodesCount);
+                            notifyVisualizerChildrenChange(true, vc);
                             return vc;
                         }
                     }
                 );
         }
-
-        if (LOG.isLoggable(Level.FINER)) {
-            // this assert is too expensive during the performance tests:
-            assert (ch == null) || !ch.list.contains(null) : ch.list + " from " + node; 
-        }
-
-        return (ch == null) ? Collections.<VisualizerNode>emptyList() : ch.list;
+        return ch == null ? VisualizerChildren.EMPTY : ch;
     }
 
     //
     // TreeNode interface (callable only from AWT-Event-Queue)
     //
     public int getIndex(final javax.swing.tree.TreeNode p1) {
-        return getChildren().indexOf(p1);
+        return getChildren().getIndex(p1);
     }
 
     public boolean getAllowsChildren() {
@@ -279,22 +279,15 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
     }
 
     public javax.swing.tree.TreeNode getChildAt(int p1) {
-        List ch = getChildren();
-        VisualizerNode vn = (VisualizerNode) ch.get(p1);
-        assert vn != null : "Null child in " + ch + " from " + node;
-
-        return vn;
+        return getChildren().getChildAt(p1);
     }
 
     public int getChildCount() {
-        return getChildren().size();
+        return getChildren().getChildCount();
     }
 
     public java.util.Enumeration<VisualizerNode> children() {
-        List<VisualizerNode> l = getChildren();
-        assert !l.contains(null) : "Null child in " + l + " from " + node;
-
-        return java.util.Collections.enumeration(l);
+        return getChildren().children();
     }
 
     public boolean isLeaf() {
@@ -407,47 +400,27 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
         if (Node.PROP_NAME.equals(name) || Node.PROP_DISPLAY_NAME.equals(name) || isIconChange) {
             if (isIconChange) {
                 //Ditch the cached icon type so the next call to getIcon() will
-                //recreate the ImageIcon
+                //recreate the Icon
                 cachedIconType = -1;
             }
 
             if (Node.PROP_DISPLAY_NAME.equals(name)) {
                 htmlDisplayName = null;
             }
-
-            SwingUtilities.invokeLater(this);
-
+            
+            QUEUE.runSafe(this);
             return;
         }
 
         // bugfix #37748, VisualizerNode ignores change of short desc if it is not read yet (set to UNKNOWN)
         if (Node.PROP_SHORT_DESCRIPTION.equals(name) && (shortDescription != UNKNOWN)) {
-            SwingUtilities.invokeLater(this);
-
+            QUEUE.runSafe(this);
             return;
         }
 
         if (Node.PROP_LEAF.equals(name)) {
-            SwingUtilities.invokeLater(
-                new Runnable() {
-                    public void run() {
-                        children = NO_REF;
-
-                        // notify models               
-                        VisualizerNode parent = VisualizerNode.this;
-
-                        while (parent != null) {
-                            Object[] listeners = parent.getListenerList();
-
-                            for (int i = listeners.length - 1; i >= 0; i -= 2) {
-                                ((NodeModel) listeners[i]).structuralChange(VisualizerNode.this);
-                            }
-
-                            parent = (VisualizerNode) parent.getParent();
-                        }
-                    }
-                }
-            );
+            QUEUE.runSafe(new PropLeafChange());
+            return;
         }
     }
 
@@ -499,8 +472,8 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
     * @param size amount of children
     * @param ch the children
     */
-    void notifyVisualizerChildrenChange(int size, VisualizerChildren ch) {
-        if (size == 0) {
+    void notifyVisualizerChildrenChange(boolean strongly, VisualizerChildren ch) {
+        if (strongly) {
             // hold the children hard
             children = new StrongReference<VisualizerChildren>(ch);
         } else {
@@ -578,7 +551,7 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
 
                 icon = getDefaultIcon();
             } else {
-                icon = new ImageIcon(image);
+                icon = ImageUtilities.image2Icon(image);
             }
         }
 
@@ -597,9 +570,8 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
     /** Loads default icon if not loaded. */
     private static Icon getDefaultIcon() {
         if (defaultIcon == null) {
-            defaultIcon = new ImageIcon(Utilities.loadImage(DEFAULT_ICON));
+            defaultIcon = ImageUtilities.image2Icon(ImageUtilities.loadImage(DEFAULT_ICON));
         }
-
         return defaultIcon;
     }
 
@@ -675,7 +647,6 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
                 queue = null;
                 LOG.log(Level.FINER, "Queue emptied"); // NOI18N
             }
-
             while (en.hasMoreElements()) {
                 Runnable r = en.nextElement();
                 LOG.log(Level.FINER, "Running {0}", r); // NOI18N
@@ -684,5 +655,49 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
             }
             LOG.log(Level.FINER, "Queue processing over"); // NOI18N
         }
+    }
+
+    private class PropLeafChange implements Runnable {
+
+        public PropLeafChange() {
+        }
+
+        public void run() {
+            children = NO_REF;
+
+            // notify models
+            VisualizerNode parent = VisualizerNode.this;
+
+            while (parent != null) {
+                Object[] listeners = parent.getListenerList();
+
+                for (int i = listeners.length - 1; i >= 0; i -= 2) {
+                    ((NodeModel) listeners[i]).structuralChange(VisualizerNode.this);
+                }
+
+                parent = (VisualizerNode) parent.getParent();
+            }
+        }
+    }
+
+    /**
+     * Builds the parents of vis. node up to and including the root node
+     * from VisualizerNode hierarchy
+    */
+    VisualizerNode[] getPathToRoot() {
+        return getPathToRoot(0);
+    }
+
+    VisualizerNode[] getPathToRoot(int depth) {
+        depth++;
+        VisualizerNode[] retNodes;
+        if (parent == null || parent.parent == null) {
+            retNodes = new VisualizerNode[depth];
+        }
+        else {
+            retNodes = parent.parent.getPathToRoot(depth);
+        }
+        retNodes[retNodes.length - depth] = this;
+        return retNodes;
     }
 }
