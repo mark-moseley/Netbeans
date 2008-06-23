@@ -48,11 +48,14 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.ruby.platform.RubyExecution;
 import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
+import org.netbeans.modules.ruby.platform.execution.ExecutionService;
 import org.netbeans.modules.ruby.platform.execution.FileLocator;
+import org.netbeans.modules.ruby.rubyproject.RubyProjectUtil;
 import org.netbeans.modules.ruby.rubyproject.spi.TestRunner;
 import org.netbeans.modules.ruby.testrunner.ui.TestSession;
 import org.netbeans.modules.ruby.testrunner.ui.Manager;
 import org.netbeans.modules.ruby.testrunner.ui.TestRecognizer;
+import org.netbeans.modules.ruby.testrunner.ui.TestSession.SessionType;
 import org.netbeans.modules.ruby.testrunner.ui.TestUnitHandlerFactory;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -66,49 +69,55 @@ import org.openide.modules.InstalledFileLocator;
 public final class TestUnitRunner implements TestRunner {
 
     private static final Logger LOGGER = Logger.getLogger(TestUnitRunner.class.getName());
-    private static final String MEDIATOR_SCRIPT = "nb_test_mediator.rb";
+    public static final String MEDIATOR_SCRIPT_NAME = "nb_test_mediator.rb";  //NOI18N
     private static final TestRunner INSTANCE = new TestUnitRunner();
 
     public TestRunner getInstance() {
         return INSTANCE;
     }
 
-    public void runSingleTest(FileObject testFile, String testMethod) {
-        throw new UnsupportedOperationException("Not supported yet.");
+    public void runSingleTest(FileObject testFile, String testMethod, boolean debug) {
+        List<String> additionalArgs = getTestFileArgs(testFile);
+        additionalArgs.add("-m");
+        additionalArgs.add(testMethod);
+        run(FileOwnerQuery.getOwner(testFile), additionalArgs, testMethod, debug);
     }
 
-    public void runTest(FileObject testFile) {
+    public void runTest(FileObject testFile, boolean debug) {
+        run(FileOwnerQuery.getOwner(testFile), getTestFileArgs(testFile), testFile.getName(), debug);
+    }
+
+    private List<String> getTestFileArgs(FileObject testFile) {
         String testFilePath = FileUtil.toFile(testFile).getAbsolutePath();
         List<String> additionalArgs = new ArrayList<String>();
         additionalArgs.add("-f"); //NOI18N
         additionalArgs.add(testFilePath);
-        run(FileOwnerQuery.getOwner(testFile), additionalArgs, testFile.getName());
-
+        return additionalArgs;
     }
-
+    
     static File getMediatorScript() {
         File mediatorScript = InstalledFileLocator.getDefault().locate(
-                MEDIATOR_SCRIPT, "org.netbeans.modules.ruby.testrunner", false);  // NOI18N
+                MEDIATOR_SCRIPT_NAME, "org.netbeans.modules.ruby.testrunner", false);  // NOI18N
 
         if (mediatorScript == null) {
-            throw new IllegalStateException("Could not locate " + MEDIATOR_SCRIPT); // NOI18N
+            throw new IllegalStateException("Could not locate " + MEDIATOR_SCRIPT_NAME); // NOI18N
 
         }
         return mediatorScript;
 
     }
 
-    public void runAllTests(Project project) {
+    public void runAllTests(Project project, boolean debug) {
         List<String> additionalArgs = new ArrayList<String>();
         additionalArgs.add("-d"); //NOI18N
         additionalArgs.add(FileUtil.toFile(project.getProjectDirectory()).getAbsolutePath());
         
         String name = ProjectUtils.getInformation(project).getDisplayName();
         
-        run(project, additionalArgs, name);
+        run(project, additionalArgs, name, debug);
     }
     
-    private void run(Project project, List<String> additionalArgs, String name) {
+    private void run(Project project, List<String> additionalArgs, String name, boolean debug) {
         FileLocator locator = project.getLookup().lookup(FileLocator.class);
         RubyPlatform platform = RubyPlatform.platformFor(project);
         
@@ -117,16 +126,19 @@ public final class TestUnitRunner implements TestRunner {
         String charsetName = null;
         desc = new ExecutionDescriptor(platform, name, FileUtil.toFile(project.getProjectDirectory()), targetPath);
         desc.additionalArgs(additionalArgs.toArray(new String[additionalArgs.size()]));
+        desc.initialArgs(RubyProjectUtil.getLoadPath(project)); //NOI18N
 
-        desc.debug(false);
+        desc.debug(debug);
         desc.allowInput();
         desc.fileLocator(locator);
         desc.addStandardRecognizers();
+        final ExecutionService execution = new RubyExecution(desc, charsetName);
         TestRecognizer recognizer = new TestRecognizer(Manager.getInstance(), 
-                new TestSession(locator), 
-                TestUnitHandlerFactory.getHandlers());
+                locator, 
+                TestUnitHandlerFactory.getHandlers(),
+                debug ? SessionType.DEBUG : SessionType.TEST);
         desc.addOutputRecognizer(recognizer);
-        new RubyExecution(desc, charsetName).run();
+        TestExecutionManager.getInstance().start(execution);
     }
 
     public boolean supports(TestType type) {
