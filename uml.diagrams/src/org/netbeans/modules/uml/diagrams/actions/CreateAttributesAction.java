@@ -41,6 +41,8 @@
 package org.netbeans.modules.uml.diagrams.actions;
 
 import org.netbeans.modules.uml.core.metamodel.core.constructs.IClass;
+import org.netbeans.modules.uml.core.metamodel.core.constructs.IEnumeration;
+import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IAssociationEnd;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IAttribute;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IClassifier;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IInterface;
@@ -61,6 +63,12 @@ public final class CreateAttributesAction extends CookieAction
             if(attr != null)
             {
                 classifier = attr.getFeaturingClassifier();
+                if((classifier == null) && (attr.getAssociationEnd() != null))
+                {
+                    IAssociationEnd end = attr.getAssociationEnd();
+                    IAttribute qualifier = end.createQualifier3();
+                    end.addQualifier(qualifier);
+                }
             }
         }
         
@@ -83,7 +91,7 @@ public final class CreateAttributesAction extends CookieAction
 
     protected Class[] cookieClasses()
     {
-        return new Class[]{IClass.class, IInterface.class, IAttribute.class};
+        return new Class[]{IClass.class, IInterface.class, IEnumeration.class, IAttribute.class};
     }
 
     @Override
