@@ -1,6 +1,6 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <!--
- *     	  Copyright © 2006 Sun Microsystems, Inc. All rights reserved. 
+ *     	  Copyright © 2008 Sun Microsystems, Inc. All rights reserved. 
  *	  Use is subject to license terms.
 > -->
 <html>
@@ -50,6 +50,11 @@
 	  </ul>
 	<li><b>Open on Application Start.</b> Specifies whether the window component is open
 	 by default or not.
+         <li><b>Keep preferred size when slided in.</b> Specifies the size of the
+         window when minimized. When selected, the following line is added
+         to the TopComponent's constructor:
+         <tt>putClientProperty("netbeans.winsys.tc.keep_preferred_size_when_slided_in", Boolean.TRUE);</tt>
+
  </ul>
  <li>In the Name, Icon, and Location page, you have to set the following: 
 <ul>
