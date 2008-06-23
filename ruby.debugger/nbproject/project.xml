@@ -196,7 +196,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>0-1</release-version>
-                        <specification-version>1.29</specification-version>
+                        <specification-version>1.32</specification-version>
                     </run-dependency>
                 </dependency>
             </module-dependencies>
@@ -222,6 +222,12 @@ made subject to such option by the copyright holder.
                     </test-dependency>
                     <test-dependency>
                         <code-name-base>org.netbeans.modules.ruby.platform</code-name-base>
+                        <compile-dependency/>
+                        <test/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.gsf</code-name-base>
+                        <recursive/>
                         <compile-dependency/>
                         <test/>
                     </test-dependency>
