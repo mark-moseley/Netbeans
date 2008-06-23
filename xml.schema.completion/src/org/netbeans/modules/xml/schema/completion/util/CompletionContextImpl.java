@@ -41,7 +41,6 @@
 package org.netbeans.modules.xml.schema.completion.util;
 
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -51,11 +50,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.xml.XMLConstants;
 import javax.xml.namespace.QName;
-import org.w3c.dom.Attr;
-import org.w3c.dom.NamedNodeMap;
 
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.TokenItem;
+import org.netbeans.modules.xml.axi.AbstractAttribute;
+import org.netbeans.modules.xml.axi.Element;
 import org.openide.filesystems.FileObject;
 import org.netbeans.modules.xml.text.syntax.dom.StartTag;
 import org.netbeans.modules.xml.text.syntax.SyntaxElement;
@@ -65,6 +64,8 @@ import org.netbeans.modules.xml.schema.completion.spi.CompletionContext;
 import org.netbeans.modules.xml.schema.completion.spi.CompletionContext.CompletionType;
 import org.netbeans.modules.xml.schema.completion.spi.CompletionModelProvider;
 import org.netbeans.modules.xml.schema.completion.spi.CompletionModelProvider.CompletionModel;
+import org.netbeans.modules.xml.schema.completion.util.CompletionUtil.DocRoot;
+import org.netbeans.modules.xml.schema.completion.util.CompletionUtil.DocRootAttribute;
 import org.netbeans.modules.xml.text.syntax.dom.EmptyTag;
 import org.netbeans.modules.xml.text.syntax.dom.EndTag;
 import org.netbeans.modules.xml.text.syntax.dom.Tag;
@@ -91,7 +92,7 @@ public class CompletionContextImpl extends CompletionContext {
             this.document = support.getDocument();
             this.element = support.getElementChain(offset);
             this.token = support.getPreviousToken(offset);
-            this.docRoot = CompletionUtil.getRoot(element);
+            this.docRoot = CompletionUtil.getDocRoot(document);
             this.lastTypedChar = support.lastTypedChar();
             populateNamespaces();            
         } catch(Exception ex) {
@@ -163,13 +164,13 @@ public class CompletionContextImpl extends CompletionContext {
             return;        
         //Check if the tag has any prefix. If yes, the defaultNamespace
         //is the one with this prefix.
-        String tagName = docRoot.getTagName();
+        String tagName = docRoot.getName();
         String defNS = XMLConstants.XMLNS_ATTRIBUTE;
         String temp = CompletionUtil.getPrefixFromTag(tagName);
         if(temp != null) defNS = defNS+":"+temp; //NOI18N
-        NamedNodeMap attributes = docRoot.getAttributes();
-        for(int index=0; index<attributes.getLength(); index++) {
-            Attr attr = (Attr)attributes.item(index);
+        List<DocRootAttribute> attributes = docRoot.getAttributes();
+        for(int index=0; index<attributes.size(); index++) {
+            DocRootAttribute attr = attributes.get(index);
             String attrName = attr.getName();
             if(CompletionUtil.getLocalNameFromTag(attrName).
                     equals(XSI_SCHEMALOCATION)) {
@@ -197,12 +198,15 @@ public class CompletionContextImpl extends CompletionContext {
     public boolean initContext() {
         try {
             fromNoNamespace = false;
-            noNamespaceModel = null;
             int id = token.getTokenID().getNumericID();
             switch ( id) {
                 //user enters < character
                 case XMLDefaultTokenContext.TEXT_ID:
                     String chars = token.getImage().trim();
+                    if(chars != null && chars.startsWith("&")) {
+                        completionType = CompletionType.COMPLETION_TYPE_UNKNOWN;
+                        break;
+                    }                    
                     if(chars != null && chars.equals("") &&
                        token.getPrevious().getImage().trim().equals("/>")) {
                         completionType = CompletionType.COMPLETION_TYPE_UNKNOWN;
@@ -210,7 +214,7 @@ public class CompletionContextImpl extends CompletionContext {
                     }                    
                     if(chars != null && chars.equals("") &&
                        token.getPrevious().getImage().trim().equals(">")) {
-                        completionType = CompletionType.COMPLETION_TYPE_VALUE;
+                        completionType = CompletionType.COMPLETION_TYPE_ELEMENT_VALUE;
                         break;
                     }
                     if(chars != null && !chars.equals("<") &&
@@ -257,7 +261,8 @@ public class CompletionContextImpl extends CompletionContext {
                     if(element instanceof StartTag) {
                         if(token != null &&
                            token.getImage().trim().equals(">")) {
-                            completionType = CompletionType.COMPLETION_TYPE_UNKNOWN;
+                            pathFromRoot = getPathFromRoot(element);
+                            completionType = CompletionType.COMPLETION_TYPE_ELEMENT_VALUE;
                             break;
                         }
                         if(element.getElementOffset() + 1 == this.completionAtOffset) {
@@ -268,7 +273,7 @@ public class CompletionContextImpl extends CompletionContext {
                         }
                     }
                     if(lastTypedChar == '>') {
-                        completionType = CompletionType.COMPLETION_TYPE_VALUE;
+                        completionType = CompletionType.COMPLETION_TYPE_ELEMENT_VALUE;
                         break;
                     }
                     completionType = CompletionType.COMPLETION_TYPE_ELEMENT;
@@ -284,11 +289,25 @@ public class CompletionContextImpl extends CompletionContext {
 
                 //some random character
                 case XMLDefaultTokenContext.CHARACTER_ID:
+                    completionType = CompletionType.COMPLETION_TYPE_UNKNOWN;
+                    break;
+                    
                 //user enters = character, we should ignore all other operators
                 case XMLDefaultTokenContext.OPERATOR_ID:
                 //user enters either ' or "
                 case XMLDefaultTokenContext.VALUE_ID:
-                    completionType = CompletionType.COMPLETION_TYPE_UNKNOWN;
+                    attribute = element.getPrevious().toString();
+                    completionType = CompletionType.COMPLETION_TYPE_ATTRIBUTE_VALUE;
+                    pathFromRoot = getPathFromRoot(element);
+                    TokenItem t = token;                    
+                    while(t != null) {
+                        int nId = t.getTokenID().getNumericID();
+                        if(nId == XMLDefaultTokenContext.ARGUMENT_ID) {
+                            attribute = t.getImage();
+                            break;
+                        }
+                        t = t.getPrevious();
+                    }
                     break;
 
                 //user enters white-space character
@@ -317,12 +336,16 @@ public class CompletionContextImpl extends CompletionContext {
         return true;        
     }
        
-    public NamedNodeMap getDocRootAttributes() {
+    public List<DocRootAttribute> getDocRootAttributes() {
         return docRoot.getAttributes();
     }
     
-    public StartTag getDocRoot() {
+    public DocRoot getDocRoot() {
         return docRoot;
+    }
+    
+    public String getAttribute() {
+        return attribute;
     }
     
     private List<QName> getPathFromRoot(SyntaxElement se) {
@@ -381,7 +404,7 @@ public class CompletionContextImpl extends CompletionContext {
                 if(ns == null)
                     qname = new QName(defaultNamespace, lName);
                 else
-                    qname = new QName(ns, lName);                
+                    qname = new QName(ns, lName);
             } else {
                 qname = new QName(declaredNamespaces.get(XMLConstants.XMLNS_ATTRIBUTE+":"+prefix), lName, prefix); //NOI18N
             }
@@ -495,6 +518,10 @@ public class CompletionContextImpl extends CompletionContext {
             }
         }
         
+        if(noNamespaceSchemaLocation != null && noNSModels.size() == 1) {
+            noNamespaceModel = noNSModels.get(0);
+        }
+        
         //last resort: try special completion
         if(nsModelMap.size() == 0 && noNSModels.size() == 0)
             specialCompletion();
@@ -522,6 +549,9 @@ public class CompletionContextImpl extends CompletionContext {
         if(primaryFile == null)
             return;
         java.io.File file = FileUtil.toFile(primaryFile);
+        if(file == null || !file.isFile())
+            return;
+        
         String[] schemas = CompletionUtil.getDeclaredNamespaces(file);
         for(String temp : schemas) {
             try {
@@ -574,6 +604,23 @@ public class CompletionContextImpl extends CompletionContext {
                 get(XMLConstants.XMLNS_ATTRIBUTE+":"+prefix) != null;
     }
     
+    public boolean canReplace(String text) {
+        if(completionType == CompletionType.COMPLETION_TYPE_ELEMENT && element instanceof Tag) {
+            String name = ((Tag)element).getTagName();
+            if(name != null && name.equals(typedChars) && text.equals(name))
+                return false;
+        }
+        if(completionType == CompletionType.COMPLETION_TYPE_ATTRIBUTE) {
+            Element e = CompletionUtil.findAXIElementAtContext(this);
+            for(AbstractAttribute a : e.getAttributes()) {
+                if(a.getName().equals(typedChars))
+                    return false;
+            }
+        }
+        
+        return true;
+    }
+    
     /**
      * Returns target namespace for a given prefix.
      */
@@ -620,12 +667,14 @@ public class CompletionContextImpl extends CompletionContext {
         return existingAttributes;
     }
     
+    
     private int completionAtOffset = -1;
     private FileObject primaryFile;
     private String typedChars;
     private TokenItem token;
     private SyntaxElement element;
-    private StartTag docRoot;
+    private String attribute;
+    private DocRoot docRoot;
     private char lastTypedChar;
     private CompletionType completionType = CompletionType.COMPLETION_TYPE_UNKNOWN;
     private List<QName> pathFromRoot;
