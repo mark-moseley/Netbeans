@@ -48,6 +48,7 @@ package org.netbeans.modules.cnd.completion.cplusplus.hyperlink;
 public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
     public ClassMembersHyperlinkTestCase(String testName) {
         super(testName);
+        System.setProperty("cnd.repository.hardrefs", "true");
     }        
         
     public void testSameName() throws Exception {
@@ -172,6 +173,10 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("ClassA.cc", 69, 30, "ClassA.h", 33, 5); // /*static*/ void ClassA::privateFooSt()
     }
     
+    public void testInitList() throws Exception {
+        performTest("ClassA.cc", 8, 25, "ClassA.h", 46, 5); // privateMemberInt in "ClassA::ClassA() : privateMemberInt(1)"
+    }
+    
     public void testConstructors() throws Exception {
         // declaration do definition
         performTest("ClassA.h", 7, 10, "ClassA.cc", 8, 1); // public ClassA();
@@ -294,6 +299,67 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("ClassA.h", 69, 25, "ClassA.cc", 102, 1); // friend ostream& operator<< (ostream&, const ClassA&);
         // from definition to declaration
         performTest("ClassA.cc", 102, 15, "ClassA.h", 69, 5); // ostream& operator <<(ostream& output, const ClassA& item) {
+    }
+
+    public void testIZ136102() throws Exception {
+        // from usage to definition
+        performTest("IZ136102.cc", 15, 8, "IZ136102.cc", 6, 12);
+    }
+
+    public void testIZ136140() throws Exception {
+        // from usage to definition
+        performTest("IZ136140.cc", 16, 11, "IZ136140.cc", 11, 5);
+        performTest("IZ136140.cc", 17, 12, "IZ136140.cc", 11, 5);
+    }
+    
+    public void testIZ136894() throws Exception {
+        performTest("main.cc", 67, 35, "main.cc", 59, 5); // itd_state in state->ehci_itd_pool_addr->itd_state;
+        performTest("main.cc", 68, 35, "main.cc", 59, 5); // itd_state in state->ehci_itd_pool_addr[i].itd_state;
+        performTest("main.cc", 70, 19, "main.cc", 59, 5); // itd_state in pool_addr[i].itd_state;
+        performTest("main.cc", 71, 35, "main.cc", 59, 5); // itd_state in state->ehci_itd_pool_addr[0].itd_state;
+        performTest("main.cc", 72, 19, "main.cc", 59, 5); // itd_state in pool_addr[0].itd_state;
+    }
+    
+    public void testIZ136975() throws Exception {
+        performTest("iz136975.cc", 18, 14, "iz136975.cc", 13, 5); // OP in if (OP::Release(*static_cast<SP*> (this))) {
+        performTest("iz136975.cc", 19, 14, "iz136975.cc", 12, 5); // SP in SP::Destroy();
+        performTest("iz136975.cc", 18, 39, "iz136975.cc", 12, 5); // SP in if (OP::Release(*static_cast<SP*> (this))) {
+        performTest("iz136975.cc", 23, 10, "iz136975.cc", 15, 5); // PointerType in PointerType operator->() {
+    }
+    
+    public void testIZ137483() throws Exception {
+        performTest("main.cc", 75, 39, "main.cc", 75, 34);
+        performTest("main.cc", 75, 24, "main.cc", 75, 15);
+        performTest("main.cc", 76, 15, "main.cc", 75, 34);
+        performTest("main.cc", 77, 18, "main.cc", 75, 15);
+    }
+
+    public void testIZ137798() throws Exception {
+        performTest("IZ137799and137798.h", 2, 15, "IZ137799and137798.h", 2, 1);
+        performTest("IZ137799and137798.h", 19, 15, "IZ137799and137798.h", 2, 1);
+        performTest("IZ137799and137798.h", 3, 15, "IZ137799and137798.h", 3, 1);
+        performTest("IZ137799and137798.h", 16, 25, "IZ137799and137798.h", 3, 1);
+    }
+    
+    public void testIZ137799() throws Exception {
+        performTest("IZ137799and137798.h", 12, 21, "IZ137799and137798.h", 12, 13);
+        performTest("IZ137799and137798.h", 13, 21, "IZ137799and137798.h", 13, 13);
+        performTest("IZ137799and137798.h", 14, 21, "IZ137799and137798.h", 14, 13);
+        performTest("IZ137799and137798.h", 15, 21, "IZ137799and137798.h", 15, 13);
+        performTest("IZ137799and137798.h", 16, 21, "IZ137799and137798.h", 16, 13);
+        performTest("IZ137799and137798.h", 17, 21, "IZ137799and137798.h", 17, 13);
+        performTest("IZ137799and137798.h", 18, 21, "IZ137799and137798.h", 18, 13);
+    }
+
+    public void testNestedStructAndVar() throws Exception {
+        performTest("IZ137799and137798.h", 19, 12, "IZ137799and137798.h", 19, 11);
+        performTest("IZ137799and137798.h", 11, 17, "IZ137799and137798.h", 11, 9);
+    } 
+
+    public void testMethodPrefix() throws Exception {
+        // IZ#125760: Hyperlink works wrongly if user created
+        // method without declaration in class
+        performNullTargetTest("IZ125760.cpp", 6, 10);
     }
 
     public static class Failed extends HyperlinkBaseTestCase {
