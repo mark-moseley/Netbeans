@@ -45,7 +45,7 @@
 
 function TestSupport() {
     this.wadlDoc = null;
-    this.wadlURL = baseURL+"/application.wadl";
+    this.wadlURL = '';
     this.wadlErr = 'Cannot access WADL: Please restart your RESTful application, and refresh this page.';
     this.currentValidUrl = '';
     this.breadCrumbs = [];
@@ -91,6 +91,22 @@ TestSupport.prototype = {
 
     init : function () {
         this.debug('Initializing scripts...');
+        var patterns = baseURL.split('||');
+        baseURL = patterns[0];
+        if(patterns.length == 3) {
+          var servletNames = patterns[1].split(',');
+          var servletUrl = patterns[2].split(',');
+          for(var i in servletNames) {
+              var name = servletNames[i];
+              if('ServletAdaptor' == name)
+                  baseURL = this.concatPath(baseURL, servletUrl[i].replace('*', ''));
+          }
+        }
+        this.wadlURL = this.concatPath(baseURL, "application.wadl");
+        this.initFromWadl();
+    },
+
+    initFromWadl : function () {
         var wadlData = this.xhr.get(this.wadlURL);
         if(wadlData != "-1") {
             this.wdr.updateMenu(wadlData);
@@ -98,6 +114,14 @@ TestSupport.prototype = {
             this.setvisibility('main', 'inherit');
             this.updatepage('content', '<span class=bld>Help Page</span><br/><br/><p>Cannot access WADL: Please restart your REST application, and refresh this page.</p><p>If you still see this error and if you are accessing this page using Firefox with Firebug plugin, then<br/>you need to disable firebug for local files. That is from Firefox menubar, check <br/>Tools > Firebug > Disable Firebug for Local Files</p>');
         }            
+    },
+
+    concatPath : function(url, pathElem) {
+        if(url.substring(url.length-1) == '/')
+            url = url.substring(0, url.length-1);
+        if(pathElem.substring(0,1) == '/')
+            pathElem = pathElem.substring(1);
+        return url + '/' + pathElem;
     },
     
     setvisibility : function (id, state) {
@@ -156,9 +180,9 @@ TestSupport.prototype = {
                 var mimeType = mimeTypes[k];
                 var dispName = this.wdr.getMethodNameForDisplay(mName, mimeType);
                 if(mName == 'GET')
-                    str += "  <option class=MnuJmp_sun4 selected value='"+dispName+"["+j+"]' selected>"+dispName+"</option>";
+                    str += "  <option class=MnuJmpOpt_sun4 selected value='"+dispName+"["+j+"]' selected>"+dispName+"</option>";
                 else
-                    str += "  <option class=MnuJmp_sun4 selected value='"+dispName+"["+j+"]'>"+dispName+"</option>";
+                    str += "  <option class=MnuJmpOpt_sun4 selected value='"+dispName+"["+j+"]'>"+dispName+"</option>";
             }
         }   
         str += "</select></span></td><td width=46/><td><a class='Btn1_sun4 Btn1Hov_sun4' onclick='ts.testResource()'>Test</a></td></tr></tbody></table>";
@@ -193,16 +217,25 @@ TestSupport.prototype = {
         }
     },
     
+    getResourcePath : function (n) {
+        var path = this.getPath(n, '')
+        return path.replace(/\/\//g,"\/");
+    },
+    
     getPath : function (n, pathVal) {
-        if(n.parentNode == null || n.attributes.getNamedItem('path') == null)
-            return pathVal.replace(/\/\//g,"\/");
-        else {
+        if(n.parentNode == null || n.attributes.getNamedItem('path') == null) {
+            if(pathVal == null || pathVal == '')
+                return '';
+            else
+                return pathVal;
+        } else {
             var path = n.attributes.getNamedItem('path');
             var pathElem = path.nodeValue;
-            pathElem = pathElem.replace(/\/\//g,"\/");
-            pathElem = ts.wdr.trimSeperator(pathElem);
-            pathElem = ts.wdr.prependSeperator(pathElem);
-            return this.getPath(n.parentNode, pathElem+'/'+pathVal);
+            if(pathVal == null || pathVal == '') {
+                return this.getPath(n.parentNode, pathElem);
+            } else {
+                return this.getPath(n.parentNode, pathElem+'/'+pathVal);
+            }
         }
     },
     
@@ -219,19 +252,19 @@ TestSupport.prototype = {
         var str = '<br/><table border=0><tbody><tr><td valign="top"><span id="j_id14"><label for="methodSel" class="LblLev2Txt_sun4">'+
                             '<span>Choose method to test: </span></label></span></td>';
         str += "<td><span id=j_id14><select id='methodSel' class=MnuJmp_sun4 name='methodSel' onchange='javascript:ts.changeMethod();'>";
-        str += "  <option class=MnuJmp_sun4 selected value='GET'>GET</option>";
-        str += "  <option class=MnuJmp_sun4 value='PUT'>PUT</option>";
-        str += "  <option class=MnuJmp_sun4 value='DELETE'>DELETE</option>";
+        str += "  <option class=MnuJmpOpt_sun4 selected value='GET'>GET</option>";
+        str += "  <option class=MnuJmpOpt_sun4 value='PUT'>PUT</option>";
+        str += "  <option class=MnuJmpOpt_sun4 value='DELETE'>DELETE</option>";
         str += "</select></span></td>";
         str += '<td valign="top"><span id="j_id14"><label for="methodSel" style="padding-left: 6px;" class="LblLev2Txt_sun4">'+
             '<span>MIME: </span></label></span></td>';
         str += "<td><span id=j_id14><select id='mimeSel' class=MnuJmp_sun4 name='mimeSel' onchange='javascript:ts.changeMimeType();'>";
-        str += "  <option class=MnuJmp_sun4 value='application/xml'>application/xml</option>";
-        str += "  <option class=MnuJmp_sun4 value='application/json'>application/json</option>";
-        str += "  <option class=MnuJmp_sun4 value='text/xml'>text/xml</option>";
-        str += "  <option class=MnuJmp_sun4 value='text/plain'>text/plain</option>";
-        str += "  <option class=MnuJmp_sun4 value='text/html'>text/html</option>";
-        str += "  <option class=MnuJmp_sun4 value='image/*'>image/*</option>"; 
+        str += "  <option class=MnuJmpOpt_sun4 value='application/xml'>application/xml</option>";
+        str += "  <option class=MnuJmpOpt_sun4 value='application/json'>application/json</option>";
+        str += "  <option class=MnuJmpOpt_sun4 value='text/xml'>text/xml</option>";
+        str += "  <option class=MnuJmpOpt_sun4 value='text/plain'>text/plain</option>";
+        str += "  <option class=MnuJmpOpt_sun4 value='text/html'>text/html</option>";
+        str += "  <option class=MnuJmpOpt_sun4 value='image/*'>image/*</option>"; 
         str += "</select></span></td>";
         str += "<td width=30/>"
         str += "<td><span id=j_id14><a class='Btn2_sun4 Btn1Hov_sun4' onclick='ts.addParam()'>Add Parameter</a>";
@@ -241,20 +274,24 @@ TestSupport.prototype = {
         var paramRep = "";
         var req = this.getDisplayUri(uri);
         var paths = req.split('/');
-        for(var i=0;i<paths.length;i++) {
+        for(var i in paths) {
             var path = paths[i];
-            if(path.indexOf('{') > -1) {
-                var pname = path.substring(1, path.length-1);
-                paramRep += '<td valign="top"><span id="j_id14"><label for="tparams" class="LblLev2Txt_sun4">';
-                paramRep += '<span>'+pname+': </span></label></span></td>';
-                paramRep += '<td><span id="j_id14"><input id=tparams name="'+pname+'" type=text value="" size=40 title="'+pname+'" class="TxtFld_sun4 TxtFldVld_sun4"/></span></td>';
+            var compositeIds = path.split(',');
+            for(var j in compositeIds) {
+              var compositeId = compositeIds[j];
+              if(compositeId.indexOf('{') > -1) {
+                  var pname = compositeId.substring(1, compositeId.length-1);
+                  paramRep += '<tr><td valign="top"><span id="j_id14"><label for="tparams" class="LblLev2Txt_sun4">';
+                  paramRep += '<span>'+pname+': </span></label></span></td>';
+                  paramRep += '<td><span id="j_id14"><input id=tparams name="'+pname+'" type=text value="" size=40 title="'+pname+'" class="TxtFld_sun4 TxtFldVld_sun4"/></span></td></tr>';
+              }
             }
         }
         if(paramRep != "") {
             paramRep = '<tr><td valign="top"><span id="j_id14"><label for="dummy" class="LblLev2Txt_sun4">'+
                             '<span>Click \'Test\' to continue:</span></label></span></td>'+
                             '<td><span id="j_id14"></span></td></tr>' + paramRep;
-            ts.updatepage('paramHook', "<table border=0><tbody><tr>"+paramRep+"</tr></tbody></table>");
+            ts.updatepage('pathParamHook', "<table border=0><tbody><tr>"+paramRep+"</tr></tbody></table>");
         }
         var req = uri;
         var disp = this.getDisplayUri(req);
@@ -292,6 +329,7 @@ TestSupport.prototype = {
         //ts.debug(req + uri + mName + mediaType);
         var str = "<div id='formSubmittal'>";
         str += "<form action='javascript:ts.dummyMethod()' method="+mName+" id='form1' name='form1'>";
+        str += "<div id='pathParamHook'></div>";
         str += "<div id='paramHook'></div>";
         str += "<input name='path' value='"+uri+"' type='hidden'>";
         str += "<input id='methodName' name='methodName' value='"+mName+"' type='hidden'>";
@@ -389,20 +427,28 @@ TestSupport.prototype = {
         this.updatepage('resultheaders', '');
     },
     
+    trimEndingPathDelim : function(path) {
+        var req = path;
+        if(req.substring(req.length-1) == '/')
+            req = req.substring(0, req.length-1);
+        return req;
+    },
+    
     showBreadCrumbs : function (uri) {
         var disp = this.getDisplayUri(uri);
         this.breadCrumbs[1] = disp;
         var str = "<a class=Hyp_sun4 href=javascript:ts.clearAll() >"+ts.projectName+"</a>";
         var req = this.getDisplayUri(uri);
         var currPath = baseURL;
-        if(req.substring(req.length-1) == '/')
-            req = req.substring(0, req.length-1);
+        if(currPath.substring(currPath.length-1) != '/')
+            currPath = currPath + '/';
+        req = this.trimEndingPathDelim(req);
         var paths = req.split('/');
         for(var i=0;i<paths.length-1;i++) {
             var pname = paths[i];
             if(pname == '')
                 continue;
-            currPath += '/'+pname;
+            currPath += pname+'/';
             var ndx = 0;
             var jsmethod = "ts.doShowContent('"+currPath+"')";
             for(var j=0;j<ts.allcat.length;j++) {
@@ -636,7 +682,10 @@ TestSupport.prototype = {
     },
     
     showViews : function (name) {
-        var c = '';
+        var c = 
+          '<table cellspacing="0" cellpadding="0" border="0" title="" class="Tab1TblNew_sun4">'+
+                '<tbody>'+
+                    '<tr id="tabRow">';
         for(var i in this.viewIds) {
             var vid = this.viewIds[i]['id'];
             var tabMain = document.getElementById(this.viewIds[i]['type']);
@@ -648,7 +697,8 @@ TestSupport.prototype = {
                 tabMain.style.display="none";
             }
         }
-        this.updatepage('tabRow', c);
+        c += '</tr></tbody></table>';
+        this.updatepage('tabTable', c);
     },
 
     monitor : function (xmlHttpReq, param) {
@@ -712,13 +762,7 @@ TestSupport.prototype = {
                     subResources = 'No Sub-Resources available.';
                 this.updatepage('result', '<br/><span class=bld>Status:</span> '+ this.currentXmlHttpReq.status+' ('+this.currentXmlHttpReq.statusText+')<br/><br/>'+
                     '<span class=bld>Response:</span> '+
-                    '<div class="Tab1Div_sun4">'+
-                        '<table cellspacing="0" cellpadding="0" border="0" title="" class="Tab1TblNew_sun4">'+
-                            '<tbody>'+
-                                '<tr id="tabRow">'+
-                                '</tr>'+
-                            '</tbody>'+
-                        '</table>'+
+                    '<div class="Tab1Div_sun4" id="tabTable">'+
                     '</div>'+
                     '<div class="tabMain">'+
                     '<div id="menu_bottom" class="stab tabsbottom"></div>'+
@@ -769,7 +813,6 @@ TestSupport.prototype = {
     },
     
     prettyPrint : function (/*Node*/ node) {
-       var lineBrk = 30;
        printIndented(node, 0);
 
        function printIndented(/*Node*/ node, /*int*/ indent) {
@@ -777,15 +820,15 @@ TestSupport.prototype = {
              prettyContent += node.nodeValue;
          } else {
              var nd = getIndent(indent);
-             prettyContent += nd + breakLine(getContent(node, true), this.lineBrk, nd);
+             prettyContent += nd + getContent(node, true);
              if(node.childNodes != null && node.childNodes.length > 0) {
                  for (var i = 0; i < node.childNodes.length; ++i) {
                    printIndented(node.childNodes[i], indent+2);
                  }
                  if(node.childNodes[0].nodeValue == null)
-                    prettyContent += nd + breakLine(getContent(node, false), this.lineBrk, nd);
+                    prettyContent += nd + getContent(node, false);
                  else
-                    prettyContent += breakLine(getContent(node, false), this.lineBrk, nd);
+                    prettyContent += getContent(node, false);
              }
          }
        }
@@ -805,7 +848,10 @@ TestSupport.prototype = {
                            c += ' ' + attr.nodeName + '="' + attr.nodeValue+'"';
                         }
                     }
-                    c += '>';
+                    if(n.childNodes != null && n.childNodes.length > 0)
+                        c += '&gt;';
+                    else
+                        c += '/&gt;';
                 } else {
                     c += '&lt;/'+n.nodeName+'&gt;';
                 }
@@ -829,8 +875,7 @@ TestSupport.prototype = {
        }
        
        function breakLine(line, len, indent) {
-         //var c = breakLine2(line, len, indent);
-         var c = line;
+         var c = breakLine2(line, len, indent);
          return c;
        }
        
@@ -985,8 +1030,7 @@ TestSupport.prototype = {
         }
         if(id == null)
             id = '-';
-        this.tcCount++;
-        str += '<tr><th align="left" scope="row" class="TblTdLyt_sun4" ><span id="j_id9"><span class="">'+id+'</span></span></th>';
+        str += '<tr><th align="left" scope="row" class="TblTdLyt_sun4" ><span id="j_id9"><span class="">'+(++this.tcCount)+'</span></span></th>';
         var uri = refChild.attributes.getNamedItem('uri').nodeValue;
         str += '<td align="left" class="TblTdLyt_sun4" ><span id="j_id10"><span class="">';
         var disp = this.getDisplayUri(uri);
@@ -1011,15 +1055,14 @@ TestSupport.prototype = {
         var c = content.replace(/\\\//g,"/");   
         var uris = c.split('\"');
         var str = '';
-        var count = 1;
         var cvl = this.currentValidUrl.indexOf("?");
         if(cvl == -1)
             cvl = this.currentValidUrl.length;
-        this.tcCount = uris.length;
+        this.tcCount = 0;
         for(var i=0;i<uris.length;i++) {
             var uri = uris[i];
             if(uri.indexOf(baseURL) == 0 && uri.length > cvl) {
-                str += '<tr><th align="left" scope="row" class="TblTdLyt_sun4" ><span id="j_id9"><span class="">'+(count++)+'</span></span></th>';    
+                str += '<tr><th align="left" scope="row" class="TblTdLyt_sun4" ><span id="j_id9"><span class="">'+(++this.tcCount)+'</span></span></th>';    
                 str += '<td align="left" class="TblTdLyt_sun4" ><span id="j_id10"><span class="">';
                 var disp = this.getDisplayUri(uri);
                 str += "<a id='"+uri+"' href=javascript:ts.doShowContent('"+uri+"') >"+this.getDisplayURL(disp, 70)+"</a>";
@@ -1119,7 +1162,8 @@ TestSupport.prototype = {
     }
 }
 
-function WADLParser() {    
+function WADLParser() {
+  this.wadlResources = [];
 }
 
 WADLParser.prototype = {
@@ -1128,13 +1172,13 @@ WADLParser.prototype = {
             var newUrl = prompt(ts.wadlErr, baseURL);
             if(newUrl != null && baseURL != newUrl) {
                 baseURL = newUrl;
-                ts.wadlURL = baseURL+"/application.wadl";
-                ts.init();
+                ts.wadlURL = ts.concatPath(baseURL, "application.wadl");
+                ts.initFromWadl();
             }
             return;
         }
         ts.setvisibility('main', 'inherit');
-        ts.updatepage('subheader', '<br/><span class=bld>WADL: </span>'+ts.wadlURL);
+        ts.updatepage('subheader', '<br/><span class=MstLbl_sun4>WADL: </span><a class=MstLnk_sun4 href=\"'+ts.wadlURL+'\">'+ts.wadlURL+'</a>');
         ts.wadlDoc = ts.xhr.loadXml(rtext);
         if(ts.wadlDoc != null) {                
             this.initTree(ts.wadlDoc);
@@ -1290,33 +1334,82 @@ WADLParser.prototype = {
         }
         return cName;
     },
-
+    
     evaluateWADLUpdate : function (uri, content) {
-        
-        function nsResolver(prefix) {
-            var ns = {
-                'xmlns' : 'http://research.sun.com/wadl/2006/10'
-            };
-            return ns[prefix] || null;
-        }
-
-        var xmlDoc = ts.xhr.loadXml(content);
-        var iterator = xmlDoc.evaluate('//xmlns:resource', xmlDoc, nsResolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null );
-
         var str = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><root>';
         try {
-          var thisNode = iterator.iterateNext();
-          thisNode = iterator.iterateNext();
-          while (thisNode) {
-            str += '<node uri="'+baseURL+ts.getPath(thisNode, '')+'"/>';
-            thisNode = iterator.iterateNext();
-          }	
-          str += '</root>';
+          var resources = this.getAllResourcesFromWadl(content);
+          if(resources != null) {
+              for (i=0;i<resources.length;i++) {
+                  var path = ts.getResourcePath(resources[i]);
+                  var url = '';
+                  if(baseURL.substring(baseURL.length-1, baseURL.length) != '/' && path.substring(0, 1) != '/')
+                      url = baseURL + '/' + path;
+                  else
+                      url = baseURL + path;
+                  str += '<node uri="'+url+'"/>';
+              }
+          }
         }
         catch (e) {
-          dump( 'Error: Document tree modified during iteration ' + e );
+          ts.debug('evaluateWADLUpdate() err name: [' + e.name + '] message: [' + e.message+']');
         }
+        str += '</root>';
         return str;
+    },
+    
+        /*
+        <?xml version="1.0" encoding="UTF-8"?>
+           <application xmlns="http://research.sun.com/wadl/2006/10">
+               <resources base="http://localhost:8080/NewCustomerDB/resources/">
+                   <resource path="/discountCodes/"> 
+        */
+    getAllResourcesFromWadl : function (content) {
+        try {
+            if(content.indexOf("<?xml ") != -1) {
+                var doc2 = ts.xhr.loadXml(content);
+                if(doc2 != null && doc2.documentElement.nodeName == 'parsererror')
+                    return null;
+                container=doc2.documentElement;
+                if(container == null || container.nodeName == 'html')
+                    return null;
+            }
+            if(container != null)
+                return this.findResourcesFromWadl(container);
+        } catch(e) {
+            ts.debug('getAllResourcesFromWadl() err name: [' + e.name + '] message: [' + e.message+"]");
+        }
+
+        return null;
+    },
+    
+    findResourcesFromWadl : function (container) {
+        this.wadlResources = [];
+        this.findResourcesFromWadlRecursively(container);
+        return this.wadlResources;
+    },
+
+    findResourcesFromWadlRecursively : function (refChild) {
+        if(refChild == null)
+            return;
+        var subChilds = refChild.childNodes;
+        if(subChilds == null || subChilds.length == 0)
+            return;
+        var j = 0;
+        for(j=0;j<subChilds.length;j++) {
+            var subChild = subChilds[j];            
+            if(subChild.nodeValue == null) {//DOM Elements only
+                if(subChild.nodeName == 'resource' &&
+                    subChild.attributes != null && subChild.attributes.length > 0 && 
+                      subChild.attributes.getNamedItem('path') != null) {
+                    this.wadlResources.push(subChild);
+                }
+                if(subChild.nodeName == 'resource' ||
+                    subChild.nodeName == 'resources') {
+                  this.findResourcesFromWadlRecursively(subChild);
+                }
+            }
+        }
     },
     
     showCategory : function (category){
