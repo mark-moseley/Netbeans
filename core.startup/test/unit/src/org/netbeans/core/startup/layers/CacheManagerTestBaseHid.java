@@ -41,22 +41,25 @@
 
 package org.netbeans.core.startup.layers;
 
+import java.awt.Image;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.netbeans.junit.NbTestCase;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.MultiFileSystem;
+import org.openide.util.ImageUtilities;
 /** Test layer cache managers generally.
  * @author Jesse Glick
  */
 public abstract class CacheManagerTestBaseHid extends NbTestCase {
     private long initTime = System.currentTimeMillis ();
+    private static Image icon;
     
     /**
      * Called from layer, do not rename!
@@ -66,11 +69,23 @@ public abstract class CacheManagerTestBaseHid extends NbTestCase {
         return String.valueOf(fo.getAttribute("x")) + "/" + attr;
     }
     
+    public static Image icon() {
+        assertNull("Called just once", icon);
+        icon = new BufferedImage(133, 133, BufferedImage.TYPE_INT_ARGB);
+        return icon;
+    }
+    
     public static Object map1(Map map) {
         return String.valueOf(map.get("x"));
     }
     public static Object map2(Map map, String attr) {
         return String.valueOf(map.get("x")) + "/" + attr;
+    }
+    public static Object mapImage(Map map) {
+        return map.get("image");
+    }
+    public static Object mapDisplayName(Map map) {
+        return map.get("displayName");
     }
     
     protected CacheManagerTestBaseHid(String name) {
@@ -88,10 +103,9 @@ public abstract class CacheManagerTestBaseHid extends NbTestCase {
         clearWorkDir();
         LayerCacheManager m = mf.createManager();
         // layer2.xml should override layer1.xml where necessary:
-        List urls = Arrays.asList(new URL[] {
+        List<URL> urls = Arrays.asList(
             CacheManagerTestBaseHid.class.getResource("data/layer2.xml"),
-            CacheManagerTestBaseHid.class.getResource("data/layer1.xml"),
-        });
+            CacheManagerTestBaseHid.class.getResource("data/layer1.xml"));
         FileSystem f = BinaryCacheManagerTest.store(m, urls);
         // Initial run.
         checkStruct(f);
@@ -145,6 +159,10 @@ public abstract class CacheManagerTestBaseHid extends NbTestCase {
         assertEquals("val/a", attr(mfs, "foo/29356", "a"));
         assertEquals("val", attr(mfs, "foo/29356", "map1"));
         assertEquals("val/map2", attr(mfs, "foo/29356", "map2"));
+        assertEquals("Ahoj", attr(mfs, "foo/29356", "mapDisplayName"));
+        Image read = (Image) attr(mfs, "foo/29356", "mapImage");
+        assertNotNull("Image loaded", icon);
+        assertEquals("Same image", icon, read);
     }
     
     private static String slurp(FileSystem f, String path) throws IOException {
