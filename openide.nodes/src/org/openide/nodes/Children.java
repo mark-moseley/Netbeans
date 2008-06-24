@@ -123,6 +123,11 @@ public abstract class Children extends Object {
     /** Constructor.
     */
     public Children() {
+        this(false);
+    }
+
+    public Children(boolean lazy) {
+        lazySupport = lazy;
     }
 
     /**
@@ -137,13 +142,14 @@ public abstract class Children extends Object {
             return entrySupport;
         }
     }
-
+    
+    private final boolean lazySupport;
     /**
      * Creates appropriate entry support for this children.
      * Overriden in Children.Keys to sometimes make lazy support.
      */
     EntrySupport createEntrySource() {
-        return new EntrySupport.Default(this);
+        return lazySupport ? new EntrySupport.Lazy(this) : new EntrySupport.Default(this);
     }
 
     /**
@@ -261,7 +267,7 @@ public abstract class Children extends Object {
      * Create a <code>Children</code> object using the passed <code>ChildFactory</code>
      * object.  The <code>ChildFactory</code> will be asked to create a list
      * of model objects that are the children;  then for each object in the list,
-     * {@link ChildFactory#createNodesFor} will be called to instantiate
+     * {@link ChildFactory#createNodesForKey} will be called to instantiate
      * one or more <code>Node</code>s for that object.
      * @param factory a factory which will provide child objects
      * @param asynchronous If true, the factory will always be called to
@@ -310,6 +316,7 @@ public abstract class Children extends Object {
     *   a parent node
     * *exception CloneNotSupportedException if <code>Cloneable</code> interface is not implemented
     */
+    @Override
     protected Object clone() throws CloneNotSupportedException {
         Children ch = (Children) super.clone();
         ch.parent = null;
@@ -504,7 +511,7 @@ public abstract class Children extends Object {
      * @param current state of nodes
      * @return array of nodes that were deleted
      */
-    Node[] notifyRemove(Collection<Node> nodes, Node[] current) {
+    Node[] notifyRemove(Collection<Node> nodes, Node[] current, Entry sourceEntry) {
         //System.err.println("notifyRemove from: " + getNode ());
         //System.err.println("notifyRemove: " + nodes);
         //System.err.println("Current     : " + Arrays.asList (current));
@@ -521,7 +528,7 @@ public abstract class Children extends Object {
 
         // fire change of nodes
         parent.fireSubNodesChange(false, // remove
-                arr, current);
+                arr, current, sourceEntry);
 
         // fire change of parent
         Iterator it = nodes.iterator();
@@ -542,7 +549,7 @@ public abstract class Children extends Object {
      *
      * @param nodes list of removed nodes
      */
-    void notifyAdd(Collection<Node> nodes) {
+    void notifyAdd(Collection<Node> nodes, Entry sourceEntry) {
         // notify about parent change
         for (Node n : nodes) {
             n.assignTo(this, -1);
@@ -554,7 +561,7 @@ public abstract class Children extends Object {
         Node n = parent;
 
         if (n != null) {
-            n.fireSubNodesChange(true, arr, null);
+            n.fireSubNodesChange(true, arr, null, sourceEntry);
         }
     }
 
@@ -622,6 +629,11 @@ public abstract class Children extends Object {
         * first time, children will be used.
         */
         public Array() {
+            this(false);
+        }
+
+        Array(boolean lazy) {
+            super(lazy);
             nodesEntry = createNodesEntry();
             entrySupport().setEntries(Collections.singleton(getNodesEntry()));
         }
@@ -741,12 +753,8 @@ public abstract class Children extends Object {
                     // no change to the collection
                     return false;
                 }
-
-                ;
             }
-
             refresh();
-
             return true;
         }
 
@@ -1020,12 +1028,14 @@ public abstract class Children extends Object {
 
             /** Hash code.
             */
+            @Override
             public int hashCode() {
                 return key.hashCode();
             }
 
             /** Equals.
             */
+            @Override
             public boolean equals(Object o) {
                 if (o instanceof ME) {
                     ME me = (ME) o;
@@ -1036,6 +1046,7 @@ public abstract class Children extends Object {
                 return false;
             }
 
+            @Override
             public String toString() {
                 return "Key (" + key + ")"; // NOI18N
             }
@@ -1090,6 +1101,7 @@ public abstract class Children extends Object {
         /** This method allows subclasses (only in this package) to
         * provide own version of entry. Useful for SortedArray.
         */
+        @Override
         Entry createNodesEntry() {
             return new SAE();
         }
@@ -1164,6 +1176,7 @@ public abstract class Children extends Object {
         * @param map the map (Object, Node)
         * @return collection of (Entry)
         */
+        @Override
         Collection<? extends Entry> createEntries(java.util.Map<T,Node> map) {
             // SME objects use natural ordering
             Set<ME> l = new TreeSet<ME>(new SMComparator());
@@ -1237,14 +1250,19 @@ public abstract class Children extends Object {
         private static java.util.Map<Keys<?>,Runnable> lastRuns = new HashMap<Keys<?>,Runnable>(11);
 
         /** add array children before or after keys ones */
-        private boolean before;
-
+        boolean before;
+        
         public Keys() {
-            super();
+            this(false);
         }
-
+        
+        public Keys(boolean lazy) {
+            super(lazy);
+        }
+        
         /** Special handling for clonning.
         */
+        @Override
         public Object clone() {
             Keys<?> k = (Keys<?>) super.clone();
 
@@ -1255,6 +1273,7 @@ public abstract class Children extends Object {
          * @deprecated Do not use! Just call {@link #setKeys(Collection)} with a larger set.
          */
         @Deprecated
+        @Override
         public boolean add(Node[] arr) {
             return super.add(arr);
         }
@@ -1263,6 +1282,7 @@ public abstract class Children extends Object {
          * @deprecated Do not use! Just call {@link #setKeys(Collection)} with a smaller set.
          */
         @Deprecated
+        @Override
         public boolean remove(final Node[] arr) {
             try {
                 PR.enterWriteAccess();
@@ -1417,7 +1437,7 @@ public abstract class Children extends Object {
                 PR.exitWriteAccess();
             }
         }
-
+        
         /** Create nodes for a given key.
         * @param key the key
         * @return child nodes for this key or null if there should be no
@@ -1441,8 +1461,9 @@ public abstract class Children extends Object {
 
         /** Notifies the children class that nodes has been released.
         */
-        Node[] notifyRemove(Collection<Node> nodes, Node[] current) {
-            Node[] arr = super.notifyRemove(nodes, current);
+        @Override
+        Node[] notifyRemove(Collection<Node> nodes, Node[] current, Entry sourceEntry) {
+            Node[] arr = super.notifyRemove(nodes, current, sourceEntry);
             destroyNodes(arr);
 
             return arr;
@@ -1478,7 +1499,7 @@ public abstract class Children extends Object {
 
         /** Entry for a key
         */
-        private final class KE extends Dupl<T> {
+        class KE extends Dupl<T> {
             /** Has default constructor that allows to create a factory
             * of KE objects for use with updateList
             */
@@ -1590,7 +1611,7 @@ public abstract class Children extends Object {
         * @return the key
         */
         @SuppressWarnings("unchecked") // data structure really weird
-        public final T getKey() {
+        public T getKey() {
             if (key instanceof Dupl) {
                 return (T) ((Dupl) key).getKey();
             } else {
@@ -1601,7 +1622,7 @@ public abstract class Children extends Object {
         /** Counts the index of this key.
         * @return integer
         */
-        public final int getCnt() {
+        public int getCnt() {
             int cnt = 0;
             Dupl d = this;
 
