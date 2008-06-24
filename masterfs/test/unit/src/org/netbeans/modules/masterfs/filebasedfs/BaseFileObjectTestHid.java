@@ -44,7 +44,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.util.*;
-import org.netbeans.modules.masterfs.filebasedfs.FileBasedFileSystem;
 import org.openide.filesystems.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,12 +51,13 @@ import java.util.zip.ZipEntry;
 import java.util.jar.JarOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import org.openide.util.RequestProcessor;
 
 import org.openide.util.io.NbMarshalledObject;
 import org.openide.util.Utilities;
 
 import javax.swing.filechooser.FileSystemView;
+import org.netbeans.junit.RandomlyFails;
+import org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObjectFactory;
 import org.netbeans.modules.masterfs.filebasedfs.fileobjects.WriteLockUtils;
 import org.netbeans.modules.masterfs.providers.ProvidedExtensionsTest;
 
@@ -90,7 +90,7 @@ public class BaseFileObjectTestHid extends TestBaseHid{
     }
 
     public void testRootToFileObject() throws Exception {
-        FileBasedFileSystem fs = FileBasedFileSystem.getInstance(getWorkDir());
+        FileObjectFactory fs = FileObjectFactory.getInstance(getWorkDir());
         assertNotNull(fs);
         FileObject root = fs.getRoot();
         assertNotNull(root);
@@ -351,7 +351,8 @@ public class BaseFileObjectTestHid extends TestBaseHid{
         assertEquals(name, fo2.getName());
         assertEquals(ext, fo2.getExt());
     }
-    
+
+    @RandomlyFails
     public void testFileUtilToFileObjectIsValid() throws Exception {
         char SEP = File.separatorChar;
         final File fileF = new File(FileUtil.toFile(root).getAbsolutePath() + SEP + "dir" + SEP + "file2");
@@ -630,6 +631,9 @@ public class BaseFileObjectTestHid extends TestBaseHid{
             boolean created;
             public void fileDataCreated(FileEvent e) {
                 created = true;
+                synchronized(BaseFileObjectTestHid.this) {
+                    BaseFileObjectTestHid.this.notifyAll();
+                }
             }
         }        
         FCLImpl fl = new FCLImpl();        
@@ -645,6 +649,9 @@ public class BaseFileObjectTestHid extends TestBaseHid{
         
         
         parent.refresh();
+        synchronized(this) {
+            wait(1000);
+        }
         parent.removeFileChangeListener(fl);
         assertTrue("Didn't receive a FileEvent on the parent.", fl.created);
     }
