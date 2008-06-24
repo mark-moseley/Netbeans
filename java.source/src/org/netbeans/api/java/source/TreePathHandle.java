@@ -69,6 +69,7 @@ import org.openide.text.CloneableEditorSupport;
 import org.openide.text.EditorSupport;
 import org.openide.text.PositionRef;                                                                                                                                                                                           
 import org.openide.util.Exceptions;
+import org.openide.util.Parameters;
                                                                                                                                                                                                                                
 /**                                                                                                                                                                                                                            
  * Represents a handle for {@link TreePath} which can be kept and later resolved                                                                                                                                               
@@ -147,7 +148,7 @@ public final class TreePathHandle {
             return false;
         }
         
-        return delegate.equals(((TreePathHandle) obj).delegate);
+        return delegate.equalsHandle(((TreePathHandle) obj).delegate);
     }
 
     @Override
@@ -162,6 +163,8 @@ public final class TreePathHandle {
      * the classpath/sourcepath of {@link javax.tools.CompilationTask}.                                                                                                                                                        
      */                                                                                                                                                                                                                        
     public Element resolveElement(final CompilationInfo info) {
+        Parameters.notNull("info", info);
+        
         return this.delegate.resolveElement(info);
     }                                                                                                                                                                                                                          
                                                                                                                                                                                                                                
@@ -185,6 +188,9 @@ public final class TreePathHandle {
      * @throws java.lang.IllegalArgumentException if arguments are not supported
      */
     public static TreePathHandle create(final TreePath treePath, CompilationInfo info) throws IllegalArgumentException {
+        Parameters.notNull("treePath", treePath);
+        Parameters.notNull("info", info);
+        
         FileObject file;
         try {
             file = URLMapper.findFileObject(treePath.getCompilationUnit().getSourceFile().toUri().toURL());
