@@ -56,6 +56,7 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.modules.java.api.common.SourceRoots;
 import org.netbeans.modules.web.api.webmodule.WebProjectConstants;
 import org.netbeans.modules.web.project.ui.customizer.WebProjectProperties;
 import org.netbeans.spi.project.support.ant.SourcesHelper;
@@ -133,7 +134,7 @@ public class WebSources implements Sources, PropertyChangeListener, ChangeListen
                 else {
                     //If the name is not given, it should be either a relative path in the project dir
                     //or absolute path when the root is not under the project dir
-                    File sourceRoot = helper.resolveFile(evaluator.evaluate(prop));
+                    File sourceRoot = evaluator.evaluate(prop) != null ? helper.resolveFile(evaluator.evaluate(prop)) : null;
                     if (sourceRoot != null) {
                         String srPath = sourceRoot.getAbsolutePath();
                         String pdPath = projectDir.getAbsolutePath() + File.separatorChar;
@@ -165,7 +166,7 @@ public class WebSources implements Sources, PropertyChangeListener, ChangeListen
                 else {
                     //If the name is not given, it should be either a relative path in the project dir
                     //or absolute path when the root is not under the project dir
-                    File sourceRoot = helper.resolveFile(evaluator.evaluate(prop));
+                    File sourceRoot = evaluator.evaluate(prop) != null ? helper.resolveFile(evaluator.evaluate(prop)) : null;
                     if (sourceRoot != null) {
                         String srPath = sourceRoot.getAbsolutePath();
                         String pdPath = projectDir.getAbsolutePath() + File.separatorChar;

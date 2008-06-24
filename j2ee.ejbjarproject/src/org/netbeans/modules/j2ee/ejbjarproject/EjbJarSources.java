@@ -55,6 +55,7 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.modules.java.api.common.SourceRoots;
 import org.netbeans.spi.project.support.ant.SourcesHelper;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
@@ -128,7 +129,7 @@ public class EjbJarSources implements Sources, PropertyChangeListener, ChangeLis
                 else {
                     //If the name is not given, it should be either a relative path in the project dir
                     //or absolute path when the root is not under the project dir
-                    File sourceRoot = helper.resolveFile(evaluator.evaluate(prop));
+                    File sourceRoot = evaluator.evaluate(prop) != null ? helper.resolveFile(evaluator.evaluate(prop)) : null;
                     if (sourceRoot != null) {
                         String srPath = sourceRoot.getAbsolutePath();
                         String pdPath = projectDir.getAbsolutePath() + File.separatorChar;
@@ -160,7 +161,7 @@ public class EjbJarSources implements Sources, PropertyChangeListener, ChangeLis
                 else {
                     //If the name is not given, it should be either a relative path in the project dir
                     //or absolute path when the root is not under the project dir
-                    File sourceRoot = helper.resolveFile(evaluator.evaluate(prop));
+                    File sourceRoot = evaluator.evaluate(prop) != null ? helper.resolveFile(evaluator.evaluate(prop)) : null;
                     if (sourceRoot != null) {
                         String srPath = sourceRoot.getAbsolutePath();
                         String pdPath = projectDir.getAbsolutePath() + File.separatorChar;
