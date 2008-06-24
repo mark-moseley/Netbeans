@@ -71,6 +71,7 @@ public final class AddToPaletteWizardAction extends CallableSystemAction {
     }
 
     public void performAction() {
+        /* // fix for #133074.
         DesignDocument document = ActiveDocumentSupport.getDefault ().getActiveDocument ();
         if (document == null) {
             return;
@@ -78,12 +79,14 @@ public final class AddToPaletteWizardAction extends CallableSystemAction {
         
         if (! MidpDocumentSupport.PROJECT_TYPE_MIDP.equals (document.getDocumentInterface ().getProjectType ()))
             return;
-
+        */
         WizardDescriptor wizardDescriptor = new WizardDescriptor(getPanels());
         // {0} will be replaced by WizardDesriptor.Panel.getComponent().getName()
         wizardDescriptor.setTitleFormat(new MessageFormat("{0}")); // NOI18N
         wizardDescriptor.setTitle(NbBundle.getMessage (AddToPaletteWizardAction.class, "TITLE_AddToPaletteWizard")); // NOI18N
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizardDescriptor);
+        dialog.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddToPaletteWizardAction.class, "TITLE_AddToPaletteWizard")); //NOI18N
+        dialog.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddToPaletteWizardAction.class, "TITLE_AddToPaletteWizard")); //NOI18N
         dialog.setVisible(true);
         dialog.toFront();
         boolean cancelled = wizardDescriptor.getValue() != WizardDescriptor.FINISH_OPTION;
