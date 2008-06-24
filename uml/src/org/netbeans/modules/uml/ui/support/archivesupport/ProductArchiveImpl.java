@@ -122,24 +122,15 @@ public class ProductArchiveImpl implements IProductArchive
 	public boolean save(String sFilename)
 	{
 		boolean retVal = false;
-
-		try
-		{
-			if ((sFilename != null) && (sFilename.length() > 0))
-			{
-				setArchiveFilename(sFilename);
-			}
-
-			if ((m_Document != null) && (m_Loaded))
-			{
-				XMLManip.savePretty(m_Document, m_ArchiveFilename);
-				retVal = true;
-			}
-		} catch (IOException e)
-		{
-			// TODO: Send a message to the message center.
-		}
-
+                if ((sFilename != null) && (sFilename.length() > 0))
+                {
+                    setArchiveFilename(sFilename);
+                    if ((m_Document != null) && (m_Loaded))
+                    {
+                            XMLManip.savePretty(m_Document, m_ArchiveFilename);
+                            retVal = true;
+                    }
+                }
 		return retVal;
 	}
 
@@ -717,4 +708,23 @@ public class ProductArchiveImpl implements IProductArchive
       return element != null &&
            element.getAttribute(IProductArchiveDefinitions.TABLE_ENTRY_DELETED) != null;
    }
+   
+      public IProductArchiveElement getDiagramElement(String sID)
+    {
+        if (m_Document != null && m_Loaded && sID != null && sID.length() > 0)
+        {
+            Element root = m_Document.getRootElement();
+            if (root != null)
+            {
+                String query = ".//" + sID;
+                Node foundNode = XMLManip.selectSingleNode(root, query);
+                if (foundNode instanceof Element)
+                {
+                    return new ProductArchiveElementImpl((Element) foundNode);
+                }
+            }
+        }
+        return null;
+    }
+
 }
