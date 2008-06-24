@@ -42,104 +42,70 @@ import java.util.ArrayList;
 import java.util.List;
 import org.netbeans.modules.ruby.platform.execution.OutputRecognizer.FilteredOutput;
 import org.netbeans.modules.ruby.platform.execution.OutputRecognizer.RecognizedOutput;
-import org.netbeans.modules.ruby.testrunner.TestUnitRunner;
+import org.netbeans.modules.ruby.testrunner.RspecRunner;
 
 /**
- * An output recognizer for parsing output of the test/unit runner script, 
- * <code>nb_test_mediator.rb</code>. Updates the test result UI.
+ * An output recognizer for parsing output of the rspec runner script, 
+ * <code>nb_rspec_mediator.rb</code>. Updates the test result UI.
  *
  * @author Erno Mononen
  */
-public class TestUnitHandlerFactory {
+public class RspecHandlerFactory {
 
-    public static List<TestRecognizerHandler> getHandlers() {
+    public static  List<TestRecognizerHandler> getHandlers() {
         List<TestRecognizerHandler> result = new ArrayList<TestRecognizerHandler>();
         result.add(new SuiteStartingHandler());
         result.add(new SuiteStartedHandler());
         result.add(new SuiteFinishedHandler());
         result.add(new TestStartedHandler());
         result.add(new TestFailedHandler());
-        result.add(new TestErrorHandler());
+        result.add(new TestPendingHandler());
         result.add(new TestFinishedHandler());
-        result.add(new TestMiscHandler());
-        result.add(new SuiteMiscHandler());
+        result.add(new StackTraceFilterHandler());
         return result;
     }
 
     static class TestFailedHandler extends TestRecognizerHandler {
 
         public TestFailedHandler() {
-            super("%TEST_FAILED%\\stime=(\\d+\\.\\d+)\\stestname=([\\w]+)\\(([\\w]+)\\)\\smessage=(.*)\\slocation=(.*)"); //NOI18N
+            super(".*%TEST_FAILED%\\s(.*)\\stime=(\\d+\\.\\d+)\\smessage=(.*)\\slocation=(.*)"); //NOI18N
         }
 
         @Override
         void updateUI( Manager manager, TestSession session) {
             Report.Testcase testcase = new Report.Testcase();
-            testcase.timeMillis = toMillis(matcher.group(1));
-            testcase.name = matcher.group(2);
-            testcase.className = matcher.group(3);
+            testcase.timeMillis = toMillis(matcher.group(2));
+            testcase.className = matcher.group(1);
+            testcase.name = matcher.group(1);
             testcase.trouble = new Report.Trouble(false);
-            String message = matcher.group(4);
-            String location = matcher.group(5);
-            testcase.trouble.stackTrace = new String[]{message, location};
+            testcase.trouble.stackTrace = filterStackTrace(matcher.group(3), matcher.group(4));
             session.addTestCase(testcase);
-            manager.displayOutput(session, testcase.name + "(" + testcase.className + "):", false); //NOI18N
-            manager.displayOutput(session, message, false);
-            manager.displayOutput(session, location, false);
-            manager.displayOutput(session, "", false);
+            for (String line : testcase.trouble.stackTrace) {
+                manager.displayOutput(session, line, false);
+            }
         }
 
         @Override
         RecognizedOutput getRecognizedOutput() {
-            return new FilteredOutput(matcher.group(4));
-        }
-    }
-
-    static class TestErrorHandler extends TestRecognizerHandler {
-
-        public TestErrorHandler() {
-            super("%TEST_ERROR%\\stime=(\\d+\\.\\d+)\\stestname=([\\w]+)\\(([\\w]+)\\)\\smessage=(.*)\\slocation=(.*)"); //NOI18N
-        }
-
-        @Override
-        void updateUI( Manager manager, TestSession session) {
-            Report.Testcase testcase = new Report.Testcase();
-            testcase.timeMillis = toMillis(matcher.group(1));
-            testcase.className = matcher.group(3);
-            testcase.name = matcher.group(2);
-            testcase.trouble = new Report.Trouble(true);
-            testcase.trouble.stackTrace = getStackTrace();
-            session.addTestCase(testcase);
-            manager.displayOutput(session, testcase.name + "(" + testcase.className + "):", false); //NOI18N
-            for (String line : testcase.trouble.stackTrace) {
-                manager.displayOutput(session, line, true);
-            }
-            manager.displayOutput(session, "", false);
-        }
-
-        // package private for tests
-        String[] getStackTrace() {
-            String message = matcher.group(4);
-            List<String> stackTrace = new ArrayList<String>();
-            stackTrace.add(message);
-            for (String location : matcher.group(5).split("%BR%")) { //NOI18N
-                if (!location.contains(TestUnitRunner.MEDIATOR_SCRIPT_NAME)) { //NOI18N
-                    stackTrace.add(location);
-                }
-            }
-            return stackTrace.toArray(new String[stackTrace.size()]);
+            return new FilteredOutput(matcher.group(3), matcher.group(4));
         }
         
-        @Override
-        RecognizedOutput getRecognizedOutput() {
-            return new FilteredOutput(matcher.group(4));
+        private String[] filterStackTrace(String... stackTrace) {
+            List<String> result = new ArrayList<String>();
+            for (String location : stackTrace) {
+                if (!location.contains(RspecRunner.RSPEC_MEDIATOR_SCRIPT)) {
+                    result.add(location);
+                }
+            }
+            return result.toArray(new String[result.size()]);
         }
+        
     }
 
     static class TestStartedHandler extends TestRecognizerHandler {
 
         public TestStartedHandler() {
-            super("%TEST_STARTED%\\s([\\w]+)\\(([\\w]+)\\)"); //NOI18N
+            super(".*%TEST_STARTED%\\s(.*)"); //NOI18N
         }
 
         @Override
@@ -150,46 +116,49 @@ public class TestUnitHandlerFactory {
     static class TestFinishedHandler extends TestRecognizerHandler {
 
         public TestFinishedHandler() {
-            super("%TEST_FINISHED%\\stime=(.+)\\s([\\w]+)\\(([\\w]+)\\)"); //NOI18N
+            super(".*%TEST_FINISHED%\\s(.*)\\stime=(.+)"); //NOI18N
         }
 
         @Override
         void updateUI( Manager manager, TestSession session) {
             Report.Testcase testcase = new Report.Testcase();
-            testcase.timeMillis = toMillis(matcher.group(1));
-            testcase.className = matcher.group(3);
-            testcase.name = matcher.group(2);
+            testcase.timeMillis = toMillis(matcher.group(2));
+            testcase.className = session.getSuiteName();
+            testcase.name = matcher.group(1);
             session.addTestCase(testcase);
         }
     }
 
-    /**
-     * Captures the rest of %TEST_* patterns that are not handled
-     * otherwise (yet). 
-     */
-    static class TestMiscHandler extends TestRecognizerHandler {
+    static class TestPendingHandler extends TestRecognizerHandler {
 
-        public TestMiscHandler() {
-            super("%TEST_.*"); //NOI18N
+        public TestPendingHandler() {
+            super(".*%TEST_PENDING%\\s(.*)\\stime=(.+)\\smessage=(.*)"); //NOI18N
         }
 
         @Override
         void updateUI( Manager manager, TestSession session) {
+            Report.Testcase testcase = new Report.Testcase();
+            testcase.timeMillis = toMillis(matcher.group(2));
+            testcase.className = session.getSuiteName();
+            testcase.name = matcher.group(1);
+            testcase.trouble = new Report.Trouble(false);
+            testcase.trouble.stackTrace = new String[]{matcher.group(3)};
+            testcase.setStatus(Status.PENDING);
+            session.addTestCase(testcase);
         }
     }
 
     static class SuiteFinishedHandler extends TestRecognizerHandler {
 
         public SuiteFinishedHandler() {
-            super("%SUITE_FINISHED%\\s(\\d+\\.\\d+)"); //NOI18N
+            super(".*%SUITE_FINISHED%\\s(.+)\\stime=(.+)"); //NOI18N
         }
 
         @Override
         void updateUI( Manager manager, TestSession session) {
             String timeInSeconds = matcher.group(1);
-            Double elapsedTimeMillis = Double.parseDouble(timeInSeconds) * 1000;
             Report result = session.getReport();
-            result.elapsedTimeMillis = elapsedTimeMillis.intValue();
+            result.elapsedTimeMillis = toMillis(matcher.group(2));
             manager.displayReport(session, result);
         }
     }
@@ -197,7 +166,7 @@ public class TestUnitHandlerFactory {
     static class SuiteStartedHandler extends TestRecognizerHandler {
 
         public SuiteStartedHandler() {
-            super("%SUITE_STARTED%\\s.*"); //NOI18N
+            super(".*%SUITE_STARTED%\\s.*"); //NOI18N
         }
 
         @Override
@@ -208,9 +177,9 @@ public class TestUnitHandlerFactory {
     static class SuiteStartingHandler extends TestRecognizerHandler {
 
         private boolean firstSuite = true;
-        
+
         public SuiteStartingHandler() {
-            super("%SUITE_STARTING%\\s(\\w+)"); //NOI18N
+            super(".*%SUITE_STARTING%\\s(.+)"); //NOI18N
         }
 
         @Override
@@ -225,14 +194,10 @@ public class TestUnitHandlerFactory {
         }
     }
 
-    /**
-     * Captures the rest of %SUITE_* patterns that are not handled
-     * otherwise (yet). 
-     */
-    static class SuiteMiscHandler extends TestRecognizerHandler {
+    static class StackTraceFilterHandler extends TestRecognizerHandler {
 
-        public SuiteMiscHandler() {
-            super("%SUITE_.*"); //NOI18N
+        public StackTraceFilterHandler() {
+            super(".*" + RspecRunner.RSPEC_MEDIATOR_SCRIPT + ".*"); //NOI18N
         }
 
         @Override
