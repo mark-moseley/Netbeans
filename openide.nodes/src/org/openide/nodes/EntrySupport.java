@@ -49,7 +49,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
@@ -69,7 +68,7 @@ abstract class EntrySupport {
     Reference<ChildrenArray> array = new WeakReference<ChildrenArray>(null);
     
     /** collection of all entries */
-    protected List<? extends Entry> entries = Collections.emptyList();
+    protected List<Entry> entries = Collections.emptyList();
 
     /** Creates a new instance of EntrySupport */
     protected EntrySupport(Children children) {
@@ -99,6 +98,8 @@ abstract class EntrySupport {
     protected final List<Entry> getEntries() {
         return new ArrayList<Entry>(this.entries);
     }
+    
+    abstract Collection<Node> getEntryNodes(Entry entry);
     
     /** Refreshes content of one entry. Updates the state of children appropriately. */
     abstract void refreshEntry(Entry entry);
@@ -364,7 +365,7 @@ abstract class EntrySupport {
             //printStackTrace();
             clearNodes();
 
-            children.notifyRemove(nodes, current);
+            children.notifyRemove(nodes, current, null);
         }
 
         /** Updates the order of entries.
@@ -488,7 +489,7 @@ abstract class EntrySupport {
          * @param infos list of Info objects to add
          * @param entries the final state of entries that should occur
          */
-        private void updateAdd(Collection<Info> infos, List<? extends Entry> entries) {
+        private void updateAdd(Collection<Info> infos, List<Entry> entries) {
             List<Node> nodes = new LinkedList<Node>();
             for (Info info : infos) {
                 nodes.addAll(info.nodes());
@@ -504,7 +505,7 @@ abstract class EntrySupport {
             //      printStackTrace();
             clearNodes();
 
-            children.notifyAdd(nodes);
+            children.notifyAdd(nodes, null);
         }
 
         /** Refreshes content of one entry. Updates the state of children
@@ -557,7 +558,7 @@ abstract class EntrySupport {
                 clearNodes();
 
                 // now everything should be consistent => notify the remove
-                children.notifyRemove(toRemove, current);
+                children.notifyRemove(toRemove, current, entry);
 
                 current = holder.nodes();
             }
@@ -568,7 +569,7 @@ abstract class EntrySupport {
             if (!toAdd.isEmpty()) {
                 // modifies the list associated with the info
                 clearNodes();
-                children.notifyAdd(toAdd);
+                children.notifyAdd(toAdd, entry);
             }
         }
 
@@ -580,23 +581,6 @@ abstract class EntrySupport {
          */
         private List<Node> refreshOrder(Entry entry, Collection<Node> oldNodes, Collection<Node> newNodes) {
             List<Node> toAdd = new LinkedList<Node>();
-
-            int currentPos = 0;
-
-            // cycle thru all entries to find index of the entry
-            Iterator<? extends Entry> it1 = this.entries.iterator();
-
-            for (;;) {
-                Entry e = it1.next();
-
-                if (e.equals(entry)) {
-                    break;
-                }
-
-                Info info = findInfo(e);
-                currentPos += info.length();
-            }
-
             Set<Node> oldNodesSet = new HashSet<Node>(oldNodes);
             Set<Node> toProcess = new HashSet<Node>(oldNodesSet);
 
@@ -637,7 +621,6 @@ abstract class EntrySupport {
                     p.fireReorderChange(perm);
                 }
             }
-
             return toAdd;
         }
 
@@ -715,13 +698,9 @@ abstract class EntrySupport {
                                 initThread = null;
                                 LOCK.notifyAll();
                             }
-
                             if (IS_LOG_GET_ARRAY) {
-                                LOG_GET_ARRAY.fine(
-                                        "notifyAll done"); // NOI18N
-
+                                LOG_GET_ARRAY.fine("notifyAll done"); // NOI18N
                             }
-
                         }
                     }
 
@@ -866,6 +845,11 @@ abstract class EntrySupport {
                 arr.finalizeNodes();
             }
         }
+        
+        Collection<Node> getEntryNodes(Entry entry) {
+            Info info = findInfo(entry);
+            return info.nodes();
+        }
 
         /** Information about an entry. Contains number of nodes,
          * position in the array of nodes, etc.
@@ -917,82 +901,162 @@ abstract class EntrySupport {
     
     static final class Lazy extends EntrySupport {
         private Map<Entry, EntryInfo> entryToInfo = new HashMap<Entry, EntryInfo>();
-        private List<WeakReference<Node>> childrenNodes = new ArrayList<WeakReference<Node>>();
-        /** Computed size of nodes in this support or -1 if the size
-         * needs to be recomputed once again. Clear to -1 if you do some
-         * changes in nodes count.
-         */
-        private int nodesCount = -1;
+        private static final Logger LAZY_LOG = Logger.getLogger("org.openide.nodes.Children.getArray"); // NOI18N
+        
+        static final Node NONEXISTING_NODE = new NonexistingNode();
 
         public Lazy(Children ch) {
             super(ch);
         }
 
-        @Override
-        public Node getNodeAt(int index) {
-            try {
-                Children.PR.enterReadAccess();
-                if (childrenNodes != null) {
-                    if (index >= childrenNodes.size()) {
-                        return null;
+        private final Object LOCK = new Object();
+        private boolean initInProgress = false;
+        private boolean inited = false;
+        private Thread initThread; 
+        public boolean checkInit() {
+            if (inited) {
+                return true;
+            }
+            boolean doInit = false;
+            synchronized (LOCK) {
+                if (!initInProgress) {
+                    doInit = true;
+                    initInProgress = true;
+                    initThread = Thread.currentThread();
+                }
+            }
+
+            if (doInit) {
+
+                try {
+                    children.callAddNotify();
+                } finally {
+                    class Notify implements Runnable {
+                        public void run() {
+                            synchronized (LOCK) {
+                                inited = true;
+                                initThread = null;
+                                LOCK.notifyAll();
+                            }
+                        }
                     }
-                    Node node = childrenNodes.get(index).get();
-                    if (node != null) {
-                        return node;
+                    Notify notify = new Notify();
+                    if (Children.MUTEX.isReadAccess()) {
+                        Children.MUTEX.postWriteRequest(notify);
+                    } else {
+                        notify.run();
                     }
                 }
+            } else {
+                if (Children.MUTEX.isReadAccess() || Children.MUTEX.isWriteAccess() || (initThread == Thread.currentThread())) {
+                    // we cannot wait
+                    return false;
+                }
+
+                // otherwise we can wait
+                synchronized (LOCK) {
+                    while (initThread != null) {
+                        try {
+                            LOCK.wait();
+                        } catch (InterruptedException ex) {
+                        }
+                    }
+                }
+            }
+            return true;
+    }
+
+        @Override
+        public Node getNodeAt(int index) {
+            if (!checkInit()) {
+                return null;
+            }
+            try {
+                Children.PR.enterReadAccess();
+                if (index >= entries.size()) {
+                    return null;
+                }
+                Entry e = entries.get(index);
+                EntryInfo info = entryToInfo.get(e);
+                return info.getNode();
             } finally {
                 Children.PR.exitReadAccess();
             }
-            return computeAt(index);
-        }
-        
-        final Node computeAt(final int index) {
-            int low = 0;
-            int high = entries.size() - 1;
-            while (low <= high) {
-                int mid = (low + high) / 2;
-                Entry e = entries.get(mid);
-                EntryInfo info = entryToInfo.get(e);
-                if (info.getIndex() > index) {
-                    high = mid - 1;
-                    continue;
-                }
-                int above = info.getIndex() + info.size();
-                if (above > index) {
-                    List<Node> list = info.getNodes();
-                    int size = info.getIndex();
-
-                    /*if (list.size() <= index - size) {
-                        return NO_NODE;
-                    }*/
-                    Node n = (Node) list.get(index - size);
-                    n.assignTo(children, index);
-                    return n;
-                }
-                low = mid + 1;
-            }
-            return null;
         }
 
         @Override
         public Node[] getNodes(boolean optimalResult) {
-            throw new UnsupportedOperationException("Not supported yet.");
+            if (!checkInit()) {
+                return new Node[0];
+            }            
+            if (optimalResult) {
+                children.findChild(null);
+            }
+            try {
+                Children.PR.enterReadAccess();
+                Node[] nodes = new Node[entries.size()];
+                for (int i = 0; i < nodes.length; i++) {
+                    Entry e = entries.get(i);
+                    EntryInfo info = entryToInfo.get(e);
+                    Node node = info.getNode();
+                    nodes[i] = node;
+                }
+                nodesCreated = true;
+                return nodes;
+            } finally {
+                Children.PR.exitReadAccess();
+            }
         }
 
+        boolean nodesCreated = false;
         @Override
-        public int getNodesCount() {
-            throw new UnsupportedOperationException("Not supported yet.");
+        public Node[] testNodes() {
+            return nodesCreated ? getNodes(false) : null;
+        }        
+        
+        @Override
+        public synchronized int getNodesCount() {
+            try {
+                Children.PR.enterReadAccess();
+                return entries.size();
+            } finally {
+                Children.PR.exitReadAccess();
+            }
         }
 
         @Override
         public boolean isInitialized() {
-            throw new UnsupportedOperationException("Not supported yet.");
+            return inited;
         }
 
         @Override
         void refreshEntry(Entry entry) {
-            throw new UnsupportedOperationException("Not supported yet.");
+            if (!inited) {
+                return;
+            }
+            EntryInfo info = entryToInfo.get(entry);
+
+            if (info == null) {
+                // no such entry
+                return;
+            }
+            
+            Node oldNode = info.currentNode();
+            Node newNode = info.refreshNode();
+
+            if (newNode.equals(oldNode)) {
+                // same node =>
+                return;
+            }
+            
+            oldNode.deassignFrom(children);
+            info.useNode(oldNode);
+            fireSubNodesChangeIdx(false, new int[]{info.getIndex()});
+
+            //children.destroyNodes((Node[]) removeNodes.toArray(new Node[0]));
+
+            info.useNode(newNode);
+            fireSubNodesChangeIdx(true, new int[]{info.getIndex()});
         }
         
         /** Gets info for given entry, or create one if not registered yet. */
@@ -1008,43 +1072,40 @@ abstract class EntrySupport {
         }        
 
         @Override
-        void setEntries(Collection<? extends Entry> entries) {
-            entries = new ArrayList(entries);
-            nodesCount = -1;
+        void setEntries(Collection<? extends Entry> newEntries) {
+            assert entries.size() == entryToInfo.size();
 
-            assert this.entries.size() == entryToInfo.size();
+            if (entries.isEmpty()) {
+                entries = new ArrayList<Entry>(newEntries);
+                for (int i = 0; i < entries.size(); i++) {
+                    Entry entry = entries.get(i);
+                    EntryInfo info = new EntryInfo(entry);
+                    info.setIndex(i++);
+                    entryToInfo.put(entry, info);
+                }
+                return;
+            }
 
-            HashSet<Entry> retain = new HashSet<Entry>(entries);
-            Iterator<? extends Entry> it = this.entries.iterator();
+            HashSet<Entry> retain = new HashSet<Entry>(newEntries);
+            Iterator<Entry> it = this.entries.iterator();
             int index = 0;
             ArrayList<Integer> removedIdxs = new ArrayList<Integer>();
             ArrayList<Node> removedNodes = new ArrayList<Node>();
             while (it.hasNext()) {
                 EntryInfo info = entryToInfo.get(it.next());
-                int size = info.size();
                 if (!retain.contains(info.entry)) {
-                    for (int i = 0; i < size; i++) {
-                        removedIdxs.add(new Integer(index + i));
-                    }
+                    removedIdxs.add(new Integer(index));
                     // unassign from parent
-                    Collection<Node> nodes = info.currentNodes(null);
-                    if (nodes != null) {
-                        removedNodes = new ArrayList<Node>(nodes.size());
-                        Iterator nodeIt = nodes.iterator();
-                        while (nodeIt.hasNext()) {
-                            Node n = (Node) nodeIt.next();
-                            if (n != null) {
-                                n.deassignFrom(children);
-                                removedNodes.add(n);
-                            }
-                        }
+                    Node node = info.currentNode();
+                    if (node != null) {
+                        node.deassignFrom(children);
+                        removedNodes.add(node);
                     }
                     // remove the entry from collection
                     it.remove();
                     entryToInfo.remove(info.entry);
                 }
-                info.setIndex(index);
-                index += size;
+                info.setIndex(index++);
             }
 
             if (!removedIdxs.isEmpty()) {
@@ -1052,44 +1113,21 @@ abstract class EntrySupport {
                 for (int i = 0; i < idxs.length; i++) {
                     idxs[i] = ((Integer) removedIdxs.get(i)).intValue();
                 }
-                childrenNodes.clear();
-                //fireIndexesAddedOrRemoved(false, idxs);
+                fireSubNodesChangeIdx(false, idxs);
                 //children.destroyNodes(removedNodes.toArray(new Node[removedNodes.size()]));
             }
 
             // change the order of entries, notifies
             // it and again brings children to up-to-date state, recomputes indexes
-            Collection<EntryInfo> toAdd = updateOrder(entries);
-
+            Collection<EntryInfo> toAdd = updateOrder(newEntries);
             if (!toAdd.isEmpty()) {
-                // now we know that this.entries are subset of entries and
-                // are also properly sorted. So we can just iterate over 
-                // entries and whenever there is a different, just add once
-                ArrayList addedIndixes = new ArrayList(toAdd.size());
+                entries = new ArrayList<Entry>(newEntries);
+                int[] idxs = new int[toAdd.size()];
+                int i = 0;
                 for (EntryInfo info : toAdd) {
-                    final int size = info.size();
-                    final int idx = info.getIndex();
-                    Collection<Node> nodes = info.currentNodes(null);
-                    Iterator nodeIt = nodes == null ? null : nodes.iterator();
-                    for (int i = 0; i < size; i++) {
-                        addedIndixes.add(new Integer(idx + i));
-                        if (nodeIt != null) {
-                            // assign to new parent
-                            Node n = (Node) nodeIt.next();
-                            if (n != null) {
-                                n.assignTo(children, i);
-                            }
-                        }                     
-                    }
+                    idxs[i++] = info.getIndex();
                 }
-                if (!addedIndixes.isEmpty()) {
-                    int[] idxs = new int[addedIndixes.size()];
-                    for (int i = 0; i < idxs.length; i++) {
-                        idxs[i] = ((Integer) addedIndixes.get(i)).intValue();
-                    }
-                    childrenNodes.clear();
-                    //fireIndexesAddedOrRemoved(true, idxs);
-                }
+                fireSubNodesChangeIdx(true, idxs);
             }
         }
 
@@ -1100,23 +1138,7 @@ abstract class EntrySupport {
          */
         private List<EntryInfo> updateOrder(Collection<? extends Entry> newEntries) {
             List<EntryInfo> toAdd = new LinkedList<EntryInfo>();
-
-            // that assignes entries their begining position in the array of nodes
-            Map<EntryInfo, Integer> offsets = new HashMap<EntryInfo, Integer>();
-            int previousPos = 0;
-            for (Entry entry : entries) {
-                EntryInfo info = entryToInfo.get(entry);
-                offsets.put(info, previousPos);
-                previousPos += info.size();
-            }
-
-            // because map can contain some additional items,
-            // that has not been garbage collected yet,
-            // retain only those that are in current list of
-            // entries
-            entryToInfo.keySet().retainAll(new HashSet<Entry>(entries));
-
-            int[] perm = new int[previousPos];
+            int[] perm = new int[entries.size()];
             int currentPos = 0;
             int permSize = 0;
             List<Entry> reorderedEntries = null;
@@ -1131,27 +1153,19 @@ abstract class EntrySupport {
                     entryToInfo.put(entry, info);
                     toAdd.add(info);
                 } else {
-                    int len = info.size();
-
                     if (reorderedEntries == null) {
                         reorderedEntries = new LinkedList<Entry>();
                     }
-
                     reorderedEntries.add(entry);
-                    info.setIndex(currentPos);
-
+                    int oldPos = info.getIndex();
                     // already there => test if it should not be reordered
-                    Integer previousInt = offsets.get(info);
-                    previousPos = previousInt;
-
-                    if (currentPos != previousPos) {
-                        for (int i = 0; i < len; i++) {
-                            perm[previousPos + i] = 1 + currentPos + i;
-                        }
-                        permSize += len;
+                    if (currentPos != oldPos) {
+                        info.setIndex(currentPos);
+                        perm[oldPos] = 1 + currentPos;
+                        permSize++;
                     }
                 }
-                currentPos += info.size();
+                currentPos++;
             }
 
             if (permSize > 0) {
@@ -1170,11 +1184,8 @@ abstract class EntrySupport {
 
                 // reorderedEntries are not null
                 this.entries = reorderedEntries;
-                childrenNodes.clear();
 
-                //System.err.println("Paremutaiton! " + getNode ());
                 Node p = children.parent;
-
                 if (p != null) {
                     p.fireReorderChange(perm);
                 }
@@ -1183,22 +1194,31 @@ abstract class EntrySupport {
         }
 
         @Override
-        public Node[] testNodes() {
-            throw new UnsupportedOperationException("Not supported yet.");
+        Collection<Node> getEntryNodes(Entry entry) {
+            EntryInfo info = entryToInfo.get(entry);
+            if (info == null) {
+                return Collections.emptyList();
+            }
+            return Arrays.asList(info.getNode());
+        }
+
+        /** @param added added or removed
+         *  @param indices list of integers with indexes that changed
+         */
+        protected void fireSubNodesChangeIdx(boolean added, int[] idxs) {
+            if (children.parent != null) {
+                children.parent.fireSubNodesChangeIdx(added, idxs);
+            }
         }
         
-      
+        /** holds node for entry; 1:1 mapping */
         final class EntryInfo {
-            
             /** corresponding entry */
             final Entry entry;
 
-            /** my length, -1 means uninitialized */
-            private int length = -1;
-
-            /** cached nodes for this entry */
-            private List<WeakReference<Node>> nodesCache;
-
+            /** cached node for this entry */
+            private WeakReference<Node> refNode;
+            
             /** my index (including sizes) in list of entries */
             private int index = -1;
             
@@ -1207,56 +1227,49 @@ abstract class EntrySupport {
             }
 
             /** Returns size of this entry */
-            public final int size() {
-                if (length < 0) {
-                    length = getNodes().size();
-                }
-                return length;
-            }
+            /*public final int size() {
+                return 1;
+            }*/
 
             /** Gets or computes the nodes. It holds them using weak reference
              * so they can get garbage collected.
              */
-            public final synchronized List<Node> getNodes() {
-                boolean[] containsNulls = new boolean[1];
-                List<Node> curNodes = currentNodes(containsNulls);
-                if (curNodes != null && containsNulls[0] == false) {
-                    return curNodes;
+            public final synchronized Node getNode() {
+                Node n = null;
+                if (refNode != null) {
+                    n = refNode.get();
                 }
-                Collection<Node> nodes = entry.nodes();
-                useNodes(nodes);
-                return new ArrayList<Node>(nodes);
+                if (n == null) {
+                    n = refreshNode();
+                }
+                return n;
             }
 
-            /** extract current nodes */
-            synchronized List<Node> currentNodes(boolean[] containsNulls) {
-                if (nodesCache == null) {
-                    return null;
-                }
-                ArrayList<Node> arr = new ArrayList<Node>(nodesCache.size());
-                for (int i = 0; i < nodesCache.size(); i++) {
-                    Node n = nodesCache.get(i).get();
-                    if (n == null && containsNulls != null) {
-                        containsNulls[0] = true;
+            /** extract current node (if was already created) */
+            synchronized Node currentNode() {
+                return refNode == null ? null : refNode.get();
+            }
+            
+            synchronized Node refreshNode() {
+                Collection<Node> nodes = entry.nodes();
+                if (nodes.size() != 1) {
+                    LAZY_LOG.fine("Number of nodes for Entry: " + entry + " is " + nodes.size() + " instead of 1");
+                    if (nodes.size() == 0) {
+                        return useNode(NONEXISTING_NODE);
                     }
-                    arr.add(n);
                 }
-                return arr;
+                return useNode(nodes.iterator().next());
             }
 
             /** Assignes new set of nodes to this entry. */
-            public final synchronized void useNodes(Collection<Node> nodes) {
-                nodesCache = new ArrayList<WeakReference<Node>>(nodes.size());
-                for (Node n : nodes) {
-                    nodesCache.add(new WeakReference<Node>(n));
-                }
-                length = nodes.size();
+            public final synchronized Node useNode(Node node) {
+                refNode = new WeakReference<Node>(node);
                 /*
-                // assign all there nodes the new children
-                for (Node n : list) {
-                n.assignTo(Children.this, -1);
-                n.fireParentNodeChange(null, parent);
+                // assign node to the new children
+                node.assignTo(Children.this, -1);
+                node.fireParentNodeChange(null, parent);
                 }*/
+                return node;
             }
 
             /** Sets the index of the entry. */
@@ -1272,13 +1285,17 @@ abstract class EntrySupport {
 
             @Override
             public String toString() {
-                String clazz = super.toString();
-                int in = clazz.lastIndexOf('$');
-                if (in >= 0) {
-                    clazz = clazz.substring(in + 1);
-                }
-                return clazz + "[index: " + index + ",length:" + length + "]"; // NOI18N
+                return "EntryInfo for entry: " + entry + ", node: " + (refNode == null ? null : refNode.get()); // NOI18N
             }
-        }        
+        }
+
+        /** Dummy node for nonexisting Node */
+        private static final class NonexistingNode extends AbstractNode {
+
+            public NonexistingNode() {
+                super(Children.LEAF);
+                setName("Nonexisting node"); // NOI18N
+            }
+        }
     }
 }
