@@ -127,7 +127,7 @@ public class StackGetResponse extends DbgpResponse {
             String expression = watch.getExpression();
             EvalCommand command = new EvalCommand( session.getTransactionId());
             command.setData( expression );
-            /* TODO : uncomment later. 
+            /* TODO : uncommented but it may cause following problems: 
              * I found a bug in XDEbug with eval command:
              * after response to eval request it performs two actions:
              * 1) Stops script execution ( and debugging ) unexpectedly
@@ -138,8 +138,8 @@ public class StackGetResponse extends DbgpResponse {
              * XDrbug bug submitted: 
              * http://bugs.xdebug.org/bug_view_page.php?bug_id=0000313
              * 
-             * session.sendCommandLater(command);
              */ 
+            session.sendCommandLater(command);
         }
     }
 
@@ -155,8 +155,9 @@ public class StackGetResponse extends DbgpResponse {
         session.getBridge().hideAnnotations();
         for (Stack stack : stacks) {
             int level = stack.getLevel();
-            Line line = Utils.getLine( stack.getLine() , stack.getFileName() ,
-                    session.getSessionId() );
+            final int lineno = stack.getLine();
+            Line line = Utils.getLine(lineno > 0 ? lineno : 1,stack.getFileName() , 
+                    session.getSessionId()  );
             if ( level == 0 ) {
                 session.getBridge().showCurrentDebuggerLine(line);
             }
