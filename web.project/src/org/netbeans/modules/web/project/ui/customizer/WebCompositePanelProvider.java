@@ -225,7 +225,7 @@ public class WebCompositePanelProvider implements ProjectCustomizer.CompositeCat
     public static WebCompositePanelProvider createRun() {
         return new WebCompositePanelProvider(RUN);
     }
-
+    
     public static WebCompositePanelProvider createWebServicesCategory() {
         return new WebCompositePanelProvider(WEBSERVICESCATEGORY);
     }
