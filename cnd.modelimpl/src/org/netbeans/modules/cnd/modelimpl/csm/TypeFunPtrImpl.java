@@ -43,7 +43,6 @@ package org.netbeans.modules.cnd.modelimpl.csm;
 
 import java.io.DataInput;
 import org.netbeans.modules.cnd.modelimpl.parser.FakeAST;
-import java.util.*;
 
 import antlr.collections.AST;
 import java.io.DataOutput;
@@ -62,33 +61,48 @@ public class TypeFunPtrImpl extends TypeImpl {
     private CharSequence functionPointerParamList;
     private short functionPointerDepth;
     
-    private static class Pair {
+    static class Pair {
 	public String paramList;
 	public short pointerDepth;
     }
-    
-    public TypeFunPtrImpl(AST classifier, CsmFile file, int pointerDepth, boolean reference, int arrayDepth) {
-	super(classifier, file, pointerDepth, reference, arrayDepth);
-	Pair pair = getFunctionPointerParamList(classifier, true);
-	assert pair != null;
+
+    /*public TypeFunPtrImpl(AST ast, CsmFile file, int pointerDepth, boolean reference, int arrayDepth) {
+        super(ast, file, pointerDepth, reference, arrayDepth);
+	Pair pair = getFunctionPointerParamList(ast, true);
+        assert pair != null;
 	functionPointerParamList = pair.paramList;
 	functionPointerDepth = pair.pointerDepth;
+    }*/
+    
+    //public TypeFunPtrImpl(AST ast, CsmFile file, int pointerDepth, boolean reference, int arrayDepth) {
+    TypeFunPtrImpl(CsmFile file, int pointerDepth, boolean reference, int arrayDepth, boolean _const, int startOffset, int endOffset) {
+	super(file, pointerDepth, reference, arrayDepth, _const, startOffset, endOffset);
+	/*Pair pair = getFunctionPointerParamList(ast, true);
+	assert pair != null;
+	functionPointerParamList = pair.paramList;
+	functionPointerDepth = pair.pointerDepth;*/
+    }
+
+    void init(Pair params) {
+        assert params != null;
+	functionPointerParamList = params.paramList;
+	functionPointerDepth = params.pointerDepth;
     }
     
     @Override
-    protected StringBuilder getText(boolean canonical, CharSequence variableNameToInsert) {
+    public StringBuilder decorateText(CharSequence classifierText, CsmType decorator, boolean canonical, CharSequence variableNameToInsert) {
 	StringBuilder sb = new StringBuilder();
-	if( isConst() ) {
+	if( decorator.isConst() ) {
 	    sb.append("const "); // NOI18N
 	}
-	sb.append(getClassifierText());
-	for( int i = 0; i < getPointerDepth(); i++ ) {
+	sb.append(classifierText);
+	for( int i = 0; i < decorator.getPointerDepth(); i++ ) {
 	    sb.append('*');
 	}
-	if( isReference() ) {
+	if( decorator.isReference() ) {
 	    sb.append('&');
 	}
-	for( int i = 0; i < getArrayDepth(); i++ ) {
+	for( int i = 0; i < decorator.getArrayDepth(); i++ ) {
 	    sb.append(canonical ? "*" : "[]"); // NOI18N
 	}
 	
@@ -108,14 +122,14 @@ public class TypeFunPtrImpl extends TypeImpl {
 	return sb;
     }
     
-    public static boolean isFunctionPointerParamList(AST classifier) {
-	return getFunctionPointerParamList(classifier, false) != null;
+    public static boolean isFunctionPointerParamList(AST ast) {
+	return getFunctionPointerParamList(ast, false) != null;
     }
     
-    private static Pair getFunctionPointerParamList(AST classifier, boolean fillText) {
+    static Pair getFunctionPointerParamList(AST ast, boolean fillText) {
 	
 	// find opening brace
-	AST brace = AstUtil.findSiblingOfType(classifier, CPPTokenTypes.LPAREN);
+	AST brace = AstUtil.findSiblingOfType(ast, CPPTokenTypes.LPAREN);
 	if( brace == null ) {
 	    return null;
 	}
