@@ -305,6 +305,16 @@ public class FileModelTest extends TraceModelTestBase {
         // IZ 137531 : IDE highlights db.template cursor<T> line as error
         performTest("class_template_method_call.cc"); // NOI18N
     }
+
+    public void testGccAttribute() throws Exception {
+        // IZ 136947 : IDE highlights code with 'typedef' as wrong
+        performTest("gcc_attribute.c"); // NOI18N
+    }
+
+    public void testAttributeInConstructor() throws Exception {
+        // IZ 136239 : C++ grammar does not allow attributes after constructor
+        performTest("attribute_in_constructor.cc"); // NOI18N
+    }
     
     public void testStringizeMacro() throws Exception {
         // IZ 137465 : wrong macro expansion for #x
