@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,46 +31,43 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb;
+package org.netbeans.modules.cnd.debugger.gdb.disassembly;
 
 import java.io.IOException;
+import java.util.Collection;
 import javax.swing.JEditorPane;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.StyledDocument;
-
+import org.netbeans.modules.cnd.debugger.gdb.GdbContext;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.cookies.EditorCookie;
 import org.openide.loaders.DataObject;
 import org.openide.text.Annotation;
 import org.openide.text.DataEditorSupport;
 import org.openide.text.Line;
-import org.openide.text.NbDocument;
 import org.openide.text.Line.Part;
-import org.netbeans.api.debugger.DebuggerEngine;
-import org.netbeans.api.debugger.DebuggerManager;
-import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
+import org.openide.text.NbDocument;
 import org.openide.util.RequestProcessor;
 
-/*
- * ToolTipAnnotation.java
- * This class implements "Balloon Evaluation" feature.
- *
- * @author Nik Molchanov (copied from JPDA implementation)
+/**
+ * Copied from CND ToolTipAnnotation
+ * @author eu155513
  */
-public class ToolTipAnnotation extends Annotation implements Runnable {
+public class DisToolTipAnnotation extends Annotation implements Runnable {
     
     private Part lp;
     private EditorCookie ec;
     
     public String getShortDescription() {
-        DebuggerEngine currentEngine = DebuggerManager.getDebuggerManager().getCurrentEngine();
-        if (currentEngine == null) {
-            return null;
-        }
-        GdbDebugger debugger = (GdbDebugger) currentEngine.lookupFirst(null, GdbDebugger.class);
-        if (debugger == null) {
+        Disassembly dis = Disassembly.getCurrent();
+        if (dis == null) {
             return null;
         }
         Part lp = (Part) getAttachedAnnotatable();
@@ -98,7 +89,7 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         RequestProcessor.getDefault ().post (this);
         return null;
     }
-        
+    
     public void run() {
         if (lp == null || ec == null) {
             return;
@@ -114,27 +105,23 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
             return;
         }
         
-        String expression = getIdentifier(doc, ep, NbDocument.findLineOffset(doc, 
+        String register = getRegister(doc, ep, NbDocument.findLineOffset(doc, 
                 lp.getLine().getLineNumber()) + lp.getColumn());
         
-        if (expression == null) {
+        if (register == null) {
             return;
         }
         
-        DebuggerEngine currentEngine = DebuggerManager.getDebuggerManager().getCurrentEngine();
-        if (currentEngine == null) {
-            return;
-        }
-        GdbDebugger debugger = (GdbDebugger) currentEngine.lookupFirst(null, GdbDebugger.class);
-        if (debugger == null) {
-            return;
-        }
+        String toolTipText = null;
         
-        if (!GdbDebugger.STATE_STOPPED.equals(debugger.getState())) {
-            return;
+        Collection<RegisterValue> regValues = (Collection<RegisterValue>)GdbContext.getInstance().getProperty(GdbContext.PROP_REGISTERS);
+        if (regValues != null) {
+            for (RegisterValue value : regValues) {
+                if (register.equals(value.getName())) {
+                    toolTipText = value.getValue();
+                }
+            }
         }
-        
-        String toolTipText = debugger.evaluate(expression);
         
         firePropertyChange (PROP_SHORT_DESCRIPTION, null, toolTipText);
     }
@@ -143,7 +130,7 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         return null; // Currently return null annotation type
     }
 
-    private static String getIdentifier(StyledDocument doc, JEditorPane ep, int offset) {
+    private static String getRegister(StyledDocument doc, JEditorPane ep, int offset) {
         String t = null;
         if ((ep.getSelectionStart() <= offset) && (offset <= ep.getSelectionEnd())) {
             t = ep.getSelectedText();
@@ -168,6 +155,9 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
                         (t.charAt (identStart - 1) == '.'))) {
                 identStart--;
             }
+            if (identStart==0 || t.charAt(identStart-1) != '%') {
+                return null;
+            }
             int identEnd = col;
             while (identEnd < lineLen && Character.isJavaIdentifierPart(t.charAt(identEnd))) {
                 identEnd++;
@@ -183,4 +173,5 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
     }
     
 }
+
 
