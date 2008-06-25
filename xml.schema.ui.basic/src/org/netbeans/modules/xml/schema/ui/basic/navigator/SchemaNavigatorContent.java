@@ -42,7 +42,6 @@
 package org.netbeans.modules.xml.schema.ui.basic.navigator;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.EventQueue;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyVetoException;
@@ -51,9 +50,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import javax.swing.JTree;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.schema.model.SchemaModel;
 import org.netbeans.modules.xml.schema.ui.basic.SchemaModelCookie;
@@ -67,10 +64,10 @@ import org.openide.explorer.ExplorerManager;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
 import org.openide.util.Lookup;
-import org.openide.util.NbBundle;
 import org.openide.util.lookup.Lookups;
 import org.openide.windows.TopComponent;
 import org.netbeans.modules.xml.text.navigator.base.AbstractXMLNavigatorContent;
+import org.openide.util.RequestProcessor;
 
 /**
  * XML Schema Navigator component containing a tree of schema components.
@@ -82,14 +79,8 @@ public class SchemaNavigatorContent extends AbstractXMLNavigatorContent  impleme
     private static final long serialVersionUID = 1L;
     /** The lookup for our component tree. */
     private static Lookup lookup;
-    /** Indicates that the tree view is not in the component hierarchy. */
-    private boolean treeInHierarchy;
-    /** indicator that currently listening to topcomponent.registry.activatednodes **/
-    private boolean listeningOnActivatedNodes = false;
     /** Explorer root node **/
     private Node explorerRoot;
-    private final javax.swing.JLabel notAvailableLabel = new javax.swing.JLabel(
-            NbBundle.getMessage(SchemaNavigatorContent.class, "MSG_NotAvailable")); //NOI18N
     
     static {
         // Present a read-only view of the schema components.
@@ -102,13 +93,6 @@ public class SchemaNavigatorContent extends AbstractXMLNavigatorContent  impleme
     public SchemaNavigatorContent() {
         super();
         setLayout(new BorderLayout());
-        //initialize the notAvailableLabel
-        notAvailableLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        notAvailableLabel.setEnabled(false);
-        Color usualWindowBkg = UIManager.getColor("window"); //NOI18N
-        notAvailableLabel.setBackground(usualWindowBkg != null ? usualWindowBkg : Color.white);
-        // to ensure our background color will have effect
-        notAvailableLabel.setOpaque(true);
     }
     
     /**
@@ -191,15 +175,29 @@ public class SchemaNavigatorContent extends AbstractXMLNavigatorContent  impleme
      *
      * @param  dobj  data object to show.
      */
-    public void navigate(DataObject dobj) {
-        SchemaModel model = getSchemaModel(dobj);
-        if (model == null || model.getState() != SchemaModel.State.VALID) {
-            showError();
-        } else {
-            show(model);
-        }
+    public void navigate(final DataObject dobj) {
+        showWaitPanel();
+        
+        //get the model and create the new UI on background
+        RequestProcessor.getDefault().post(new Runnable() {
+            public void run() {
+                //find the model in RPT
+                final SchemaModel model = getSchemaModel(dobj);
+                //finally update the UI in EDT
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        if (model == null || model.getState() != SchemaModel.State.VALID) {
+                            showError(AbstractXMLNavigatorContent.ERROR_NO_DATA_AVAILABLE);
+                        } else {
+                            show(model);
+                        }
+                    }
+                });
+            }
+        });
     }
     
+    @Override
     public boolean requestFocusInWindow() {
         return treeView.requestFocusInWindow();
     }
@@ -210,6 +208,7 @@ public class SchemaNavigatorContent extends AbstractXMLNavigatorContent  impleme
         selectActivatedNodes();
     }
     
+    @Override
     public void propertyChange(PropertyChangeEvent event) {
         String property = event.getPropertyName();
         if(SchemaModel.STATE_PROPERTY.equals(property)) {
@@ -267,22 +266,12 @@ public class SchemaNavigatorContent extends AbstractXMLNavigatorContent  impleme
         }
         
         //model is broken
-        showError();
+        showError(AbstractXMLNavigatorContent.ERROR_NO_DATA_AVAILABLE);
         return;
     }
-    
-    private void showError() {
-        if (notAvailableLabel.isShowing()) {
-            return;
-        }
-        remove(treeView);
-        add(notAvailableLabel, BorderLayout.CENTER);
-        revalidate();
-        repaint();
-    }
-    
+        
     private void show(SchemaModel model) {
-        remove(notAvailableLabel);
+        removeAll();
         add(treeView, BorderLayout.CENTER);
         SchemaNodeFactory factory = new CategorizedSchemaNodeFactory(
                 model, lookup);
