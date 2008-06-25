@@ -17,28 +17,38 @@
  * Microsystems, Inc. All Rights Reserved.
  */
 
-package org.netbeans.modules.bpel.mapper.tree.search;
+package org.netbeans.modules.bpel.mapper.cast;
 
-import org.netbeans.modules.bpel.mapper.tree.spi.TreeItemFinder;
+import org.netbeans.modules.soa.ui.tree.impl.SimpleFinder;
+import org.netbeans.modules.xml.schema.model.ReferenceableSchemaComponent;
+import org.netbeans.modules.xml.schema.model.SchemaComponent;
 
 /**
- *
+ * Looks for a schema component item in the SubtypeTreeModel.
+ * 
  * @author nk160297
  */
-public abstract class SimpleFinder implements TreeItemFinder {
+public class GlobalSchemaComponentFinder extends SimpleFinder {
 
-    public FindResult process(Object treeItem, FindResult result) {
-        if (result == null) {
-            return new FindResult(isFit(treeItem), drillDeeper(treeItem));
-        } else {
-            result.setFit(isFit(treeItem));
-            result.setDrillDeeper(drillDeeper(treeItem));
-            return result;
+    private SchemaComponent mGlobalSComp;
+    
+    public GlobalSchemaComponentFinder(SchemaComponent gSchemaComp) {
+        mGlobalSComp = gSchemaComp;
+    }
+    
+    protected boolean isFit(Object treeItem) {
+        if (treeItem == mGlobalSComp) {
+             // found!!!
+            return true;
         }
+        return false;
     }
 
-    protected abstract boolean isFit(Object treeItem);
-
-    protected abstract boolean drillDeeper(Object treeItem);
+    protected boolean drillDeeper(Object treeItem) {
+        if (treeItem instanceof ReferenceableSchemaComponent) {
+            return false;
+        }
+        return true;
+    }
 
 }

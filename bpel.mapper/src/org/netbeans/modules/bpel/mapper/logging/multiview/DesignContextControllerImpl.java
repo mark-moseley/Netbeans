@@ -21,7 +21,7 @@ package org.netbeans.modules.bpel.mapper.logging.multiview;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.lang.ref.WeakReference;
-import javax.swing.JTree;
+import java.util.EventObject;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import org.netbeans.modules.bpel.mapper.logging.model.LoggingMapperModelFactory;
@@ -29,10 +29,10 @@ import org.netbeans.modules.bpel.mapper.multiview.BpelDesignContext;
 import org.netbeans.modules.bpel.mapper.multiview.BpelModelSynchListener;
 import org.netbeans.modules.bpel.mapper.multiview.DesignContextController;
 import org.netbeans.modules.bpel.mapper.tree.TreeExpandedState;
-import org.netbeans.modules.bpel.mapper.tree.spi.MapperTcContext;
+import org.netbeans.modules.bpel.mapper.tree.TreeExpandedStateImpl;
+import org.netbeans.modules.bpel.mapper.model.MapperTcContext;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
-import org.netbeans.modules.bpel.model.api.events.ChangeEvent;
 import org.netbeans.modules.soa.mappercore.Mapper;
 import org.netbeans.modules.soa.mappercore.model.MapperModel;
 import org.netbeans.modules.xml.xam.Model.State;
@@ -133,11 +133,12 @@ public class DesignContextControllerImpl implements DesignContextController {
     }
     
     private synchronized Object getBpelModelUpdateSource() {
-        if (mBpelModelUpdateSourceRef != null) {
+        if (mBpelModelUpdateSourceRef == null) {
+            // Mapper is the default synchronization source
+            return mMapperTcContext.getMapper();
+        } else {
             return mBpelModelUpdateSourceRef.get();
         }
-        //
-        return null;
     }
     
     public synchronized BpelDesignContext getContext() {
@@ -178,7 +179,7 @@ public class DesignContextControllerImpl implements DesignContextController {
         nodeUpdateTimer.start();
     }
     
-    public synchronized void reloadMapper(ChangeEvent event) {
+    public synchronized void reloadMapper(EventObject event) {
         //
         // Ignore reload if is has been initiated by the mapper itself 
         if (event.getSource() == getBpelModelUpdateSource()) {
@@ -242,18 +243,18 @@ public class DesignContextControllerImpl implements DesignContextController {
             // No need to resubscribe to another BPEL model here 
             // because of the same design context.
             //
-            MapperModel newMapperModel = new LoggingMapperModelFactory().
-                    constructModel(mMapperTcContext, mContext);
+            MapperModel newMapperModel = new LoggingMapperModelFactory(mMapperTcContext, 
+                mContext).constructModel();
             //
             // Save left tree state
             TreeExpandedState leftTreeState = null;
             Mapper mapper = mMapperTcContext.getMapper();
             if (mapper != null) {
-                JTree leftTree = mapper.getLeftTree();
-                if (leftTree != null) {
-                    leftTreeState = new TreeExpandedState(leftTree);
+//                JTree leftTree = mapper.getLeftTree();
+//                if (leftTree != null) {
+                    leftTreeState = new TreeExpandedStateImpl(mapper);
                     leftTreeState.save();
-                }
+//                }
             }
             //
             setMapperModel(newMapperModel);
@@ -300,8 +301,8 @@ public class DesignContextControllerImpl implements DesignContextController {
                         setListenBpelModel(newContext.getBpelModel(), true);
                     }
                     //
-                    MapperModel newMapperModel = new LoggingMapperModelFactory().
-                            constructModel(mMapperTcContext, newContext);
+                    MapperModel newMapperModel = new LoggingMapperModelFactory(mMapperTcContext, 
+                        newContext).constructModel();
                     //
                     mContext = newContext;
                     setMapperModel(newMapperModel);
@@ -364,5 +365,9 @@ public class DesignContextControllerImpl implements DesignContextController {
 
     public void cleanup() {
         //TODO a
+    }
+
+    public void processDataObject(Object dataObject) {
+        // Do nothing. This DCC implementation is never used
     }
 }

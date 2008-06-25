@@ -17,26 +17,29 @@
  * Microsystems, Inc. All Rights Reserved.
  */
 
-package org.netbeans.modules.bpel.mapper.tree.spi;
+package org.netbeans.modules.bpel.mapper.tree.search;
 
-import java.util.List;
-import javax.swing.Action;
-import javax.swing.Icon;
-import javax.swing.tree.TreePath;
+import org.netbeans.modules.bpel.model.api.BpelEntity;
+import org.netbeans.modules.bpel.model.api.Variable;
+import org.netbeans.modules.soa.ui.tree.SoaTreeModel;
+import org.netbeans.modules.soa.ui.tree.TreeItemFinder;
+import org.netbeans.modules.soa.ui.tree.TreeItemFinder.FindResult;
 
 /**
- * The SPI interface for rendering tree items.
- * 
- * An external code can provide an instance of such interface 
- * to perform required view of tree items. 
- * 
+ * Looks for all variables in the tree. 
  * @author nk160297
  */
-public interface TreeItemInfoProvider {
-    public String getDisplayName(Object treeItem);
-    public Icon getIcon(Object treeItem);
-    public List<Action> getMenuActions(MapperTcContext mapperTcContext, 
-            boolean inLeftTree, TreePath treePath, 
-            RestartableIterator<Object> dataObjectPathItr);
-    public String getTooltipText(Object treeItem);
+public class AllVariablesFinder implements TreeItemFinder {
+
+    public AllVariablesFinder() {
+    }
+
+    public FindResult process(Object treeItem, FindResult result) {
+        boolean isFit = (treeItem instanceof Variable);
+        boolean drillDeeper = !isFit && 
+                (treeItem == SoaTreeModel.TREE_ROOT || 
+                treeItem instanceof BpelEntity);
+        return new FindResult(isFit, drillDeeper);
+    }
+
 }
