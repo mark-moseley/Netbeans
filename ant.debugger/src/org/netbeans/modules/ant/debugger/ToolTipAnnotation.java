@@ -62,6 +62,7 @@ import org.openide.util.RequestProcessor;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.Watch;
 
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.nodes.Node;
 import org.openide.windows.TopComponent;
 
@@ -75,8 +76,7 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         DebuggerEngine currentEngine = DebuggerManager.getDebuggerManager ().
             getCurrentEngine ();
         if (currentEngine == null) return null;
-        AntDebugger d = (AntDebugger) currentEngine.lookupFirst 
-            (null, AntDebugger.class);
+        AntDebugger d = currentEngine.lookupFirst(null, AntDebugger.class);
         if (d == null) return null;
 
         Part lp = (Part)
@@ -86,8 +86,7 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         DataObject dob = DataEditorSupport.findDataObject (line);
         if (dob == null) return null;
         EditorCookie ec = 
-            (EditorCookie) dob.getCookie 
-            (EditorCookie.class);
+            dob.getCookie(EditorCookie.class);
 
         if (ec == null) return null;
         this.lp = lp;
@@ -105,7 +104,7 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         } catch (IOException ex) {
             return ;
         }                    
-        JEditorPane ep = getCurrentEditor ();
+        JEditorPane ep = EditorContextDispatcher.getDefault().getCurrentEditor();
         if (ep == null) return ;
         String expression = getIdentifier (
             doc, 
@@ -119,8 +118,7 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         DebuggerEngine currentEngine = DebuggerManager.getDebuggerManager ().
             getCurrentEngine ();
         if (currentEngine == null) return;
-        AntDebugger d = (AntDebugger) currentEngine.lookupFirst 
-            (null, AntDebugger.class);
+        AntDebugger d = currentEngine.lookupFirst(null, AntDebugger.class);
         if (d == null) return;
         String value = d.evaluate (expression);
         if ( value == null ||
@@ -183,52 +181,5 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         }
     }
     
-    /** 
-     * Returns current editor component instance.
-     *
-     * Used in: ToolTipAnnotation
-     */
-    private static JEditorPane getCurrentEditor_() {
-        EditorCookie e = getCurrentEditorCookie ();
-        if (e == null) return null;
-        JEditorPane[] op = e.getOpenedPanes ();
-        if ((op == null) || (op.length < 1)) return null;
-        return op [0];
-    }
-
-    static JEditorPane getCurrentEditor () {
-        if (SwingUtilities.isEventDispatchThread()) {
-            return getCurrentEditor_();
-        } else {
-            final JEditorPane[] ce = new JEditorPane[1];
-            try {
-                SwingUtilities.invokeAndWait(new Runnable() {
-                    public void run() {
-                        ce[0] = getCurrentEditor_();
-                    }
-                });
-            } catch (InvocationTargetException ex) {
-                ErrorManager.getDefault().notify(ex.getTargetException());
-            } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
-            }
-            return ce[0];
-        }
-    }
-    
-    /** 
-     * Returns current editor component instance.
-     *
-     * @return current editor component instance
-     */
-    private static EditorCookie getCurrentEditorCookie () {
-        Node[] nodes = TopComponent.getRegistry ().getActivatedNodes ();
-        if ( (nodes == null) ||
-             (nodes.length != 1) ) return null;
-        Node n = nodes [0];
-        return (EditorCookie) n.getCookie (
-            EditorCookie.class
-        );
-    }
 }
 
