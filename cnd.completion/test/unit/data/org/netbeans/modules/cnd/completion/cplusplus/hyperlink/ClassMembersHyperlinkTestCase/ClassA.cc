@@ -5,7 +5,7 @@
 /*static*/ int ClassA::protectedMemberStInt = 2;
 /*static*/ int ClassA::privateMemberStInt = 3;
     
-ClassA::ClassA() { // in test testConstructors
+ClassA::ClassA() : privateMemberInt(1) { // in test testConstructors
     
 }
 
@@ -105,5 +105,5 @@ ostream& operator <<(ostream& output, const ClassA& item) {
 }
 
 void friendFoo() {
-
+    int i = ClassA::publicMemberStInt;
 }
