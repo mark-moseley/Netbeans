@@ -42,7 +42,6 @@
 package org.netbeans.api.debugger;
 
 import java.beans.*;
-import java.io.*;
 import java.util.*;
 
 import org.netbeans.spi.debugger.ActionsProvider;
@@ -127,6 +126,17 @@ public final class ActionsManager {
      */
     ActionsManager (Lookup lookup) {
         this.lookup = lookup;
+        
+        if (lookup instanceof Lookup.MetaInf) {
+            // listen on module install/uninstall notifications
+            ((Lookup.MetaInf)lookup).addClearCacheListener(new PropertyChangeListener() {
+                public void propertyChange(PropertyChangeEvent evt) {
+                    synchronized (actionProvidersLock) {
+                        actionProviders = null;
+                    }
+                }
+            });
+        }
     }
     
     
@@ -418,9 +428,7 @@ public final class ActionsManager {
     
     private void initActionImpls () {
         actionProviders = new HashMap ();
-        Iterator i = lookup.lookup (null, ActionsProvider.class).iterator ();
-        while (i.hasNext ()) {
-            ActionsProvider ap = (ActionsProvider) i.next ();
+        for (ActionsProvider ap : lookup.lookup(null, ActionsProvider.class)) {
             Iterator ii = ap.getActions ().iterator ();
             while (ii.hasNext ())
                 registerActionsProvider (ii.next (), ap);
