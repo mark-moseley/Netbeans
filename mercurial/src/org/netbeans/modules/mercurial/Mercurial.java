@@ -43,7 +43,10 @@ package org.netbeans.modules.mercurial;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.*;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 import org.netbeans.modules.mercurial.util.HgUtils;
@@ -55,8 +58,10 @@ import org.openide.filesystems.FileUtil;
 import org.netbeans.modules.mercurial.ui.diff.Setup;
 import org.netbeans.modules.mercurial.util.HgCommand;
 import org.openide.util.NbBundle;
-import javax.swing.JOptionPane;
 import java.util.prefs.Preferences;
+import org.netbeans.modules.mercurial.config.HgConfigFiles;
+import org.netbeans.modules.versioning.util.Utils;
+import org.openide.util.Utilities;
 
 /**
  * Main entry point for Mercurial functionality, use getInstance() to get the Mercurial object.
@@ -64,7 +69,14 @@ import java.util.prefs.Preferences;
  * @author Maros Sandor
  */
 public class Mercurial {
-    public static final String MERCURIAL_OUTPUT_TAB_TITLE = org.openide.util.NbBundle.getMessage(Mercurial.class, "CTL_Mercurial_MainMenu"); // NOI18N
+    public static final int HG_FETCH_20_REVISIONS = 20;
+    public static final int HG_FETCH_50_REVISIONS = 50;
+    public static final int HG_FETCH_ALL_REVISIONS = -1;
+    public static final int HG_NUMBER_FETCH_OPTIONS = 3;
+    public static final int HG_NUMBER_TO_FETCH_DEFAULT = 7;
+    public static final int HG_MAX_REVISION_COMBO_SIZE = HG_NUMBER_TO_FETCH_DEFAULT + HG_NUMBER_FETCH_OPTIONS;
+    
+    public static final String MERCURIAL_OUTPUT_TAB_TITLE = org.openide.util.NbBundle.getMessage(Mercurial.class, "CTL_Mercurial_DisplayName"); // NOI18N
     public static final String CHANGESET_STR = "changeset:"; // NOI18N
 
     static final String PROP_ANNOTATIONS_CHANGED = "annotationsChanged"; // NOI18N
@@ -83,10 +95,13 @@ public class Mercurial {
             FileInformation.STATUS_VERSIONED_MODIFIEDINREPOSITORY |
             FileInformation.STATUS_VERSIONED_MODIFIEDINREPOSITORY;
 
-    private static final String MERCURIAL_GOOD_VERSION = "0.9.3"; // NOI18N
-    private static final String MERCURIAL_BETTER_VERSION = "0.9.4"; // NOI18N
+    private static final String MERCURIAL_SUPPORTED_VERSION_093 = "0.9.3"; // NOI18N
+    private static final String MERCURIAL_SUPPORTED_VERSION_094 = "0.9.4"; // NOI18N
+    private static final String MERCURIAL_SUPPORTED_VERSION_095 = "0.9.5"; // NOI18N
+    private static final String MERCURIAL_SUPPORTED_VERSION_100 = "1.0"; // NOI18N
     private static Mercurial instance;
     private final PropertyChangeSupport support = new PropertyChangeSupport(this);
+    private List<File> knownRoots = Collections.synchronizedList(new ArrayList<File>());
     
     public static synchronized Mercurial getInstance() {
         if (instance == null) {
@@ -104,18 +119,30 @@ public class Mercurial {
     private String version;
     private String runVersion;
     private boolean checkedVersion;
+    private boolean gotVersion;
 
     private Mercurial() {
     }
     
     
     private void init() {
-        checkedVersion = false;
+        loadIniParserClassesWorkaround();
         setDefaultPath();
         fileStatusCache = new FileStatusCache();
         mercurialAnnotator = new MercurialAnnotator();
         mercurialInterceptor = new MercurialInterceptor();
         checkVersion(); // Does the Hg check but postpones querying user until menu is activated
+    }
+    
+    private void loadIniParserClassesWorkaround() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
+        try {
+            // triggers ini4j initialization in call to loadSystemAndGlobalFile()
+            HgConfigFiles.getSysInstance();   
+        } finally {
+            Thread.currentThread().setContextClassLoader(cl);
+        }
     }
 
     private void setDefaultPath() {
@@ -132,51 +159,69 @@ public class Mercurial {
                      } 
                  } 
             }
+        }else if (Utilities.isWindows()) { // NOI18N
+            String defaultPath = HgModuleConfig.getDefault().getExecutableBinaryPath ();
+            if (defaultPath == null || defaultPath.length() == 0) {
+                String path = HgUtils.findInUserPath(HgCommand.HG_COMMAND + HgCommand.HG_WINDOWS_EXE);
+                if (path != null && !path.equals("")) { // NOI18N
+                    HgModuleConfig.getDefault().setExecutableBinaryPath (path); // NOI18N
+                } 
+            }
         }
     }
 
-    private void checkVersion() {
-        version = HgCommand.getHgVersion();
-        LOG.log(Level.FINE, "version: {0}", version); // NOI18N
-        if (version != null) {
-            goodVersion = version.startsWith(MERCURIAL_GOOD_VERSION) ||
-                          version.startsWith(MERCURIAL_BETTER_VERSION);
-            if (!goodVersion){
-                Preferences prefs = HgModuleConfig.getDefault().getPreferences();
-                runVersion = prefs.get(HgModuleConfig.PROP_RUN_VERSION, null);
-                if (runVersion != null && runVersion.equals(version)) {
-                    goodVersion = true;
+    public void checkVersion() {
+        checkedVersion = false;
+        runVersion = null;
+        gotVersion = false;
+        RequestProcessor rp = getRequestProcessor();
+        Runnable doCheck = new Runnable() {
+            public void run() {
+                version = HgCommand.getHgVersion();
+                LOG.log(Level.FINE, "version: {0}", version); // NOI18N
+                if (version != null) {
+                    goodVersion = version.startsWith(MERCURIAL_SUPPORTED_VERSION_093) ||
+                                  version.startsWith(MERCURIAL_SUPPORTED_VERSION_094) ||
+                                  version.startsWith(MERCURIAL_SUPPORTED_VERSION_095) ||
+                                  version.startsWith(MERCURIAL_SUPPORTED_VERSION_100);
+                    if (!goodVersion){
+                        Preferences prefs = HgModuleConfig.getDefault().getPreferences();
+                        runVersion = prefs.get(HgModuleConfig.PROP_RUN_VERSION, null);
+                        if (runVersion != null && runVersion.equals(version)) {
+                            goodVersion = true;
+                        }
+                   }
+                } else {
+                    goodVersion = false;
                 }
-           }
-        } else {
-            goodVersion = false;
-        }
+                gotVersion = true;
+            }
+        };
+        rp.post(doCheck);
     }
     
     public void checkVersionNotify() {  
+        if (!gotVersion) {
+            LOG.log(Level.FINE, "Call to hg version not finished"); // NOI18N
+            return;
+        }
         if (version != null && !goodVersion) {
-             if (runVersion == null || !runVersion.equals(version)) {
+            if (runVersion == null || !runVersion.equals(version)) {
                 Preferences prefs = HgModuleConfig.getDefault().getPreferences();
-                int response = JOptionPane.showOptionDialog(null,
-                        NbBundle.getMessage(Mercurial.class, "MSG_VERSION_CONFIRM_QUERY", version, MERCURIAL_BETTER_VERSION), // NOI18N
-                        NbBundle.getMessage(Mercurial.class, "MSG_VERSION_CONFIRM"), // NOI18N
-                        JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, null, null);
-                if (response == JOptionPane.YES_OPTION) {
-                    goodVersion = true;
-                    prefs.put(HgModuleConfig.PROP_RUN_VERSION, version);
-                    HgUtils.outputMercurialTabInRed(NbBundle.getMessage(Mercurial.class, "MSG_USING_VERSION_MSG", version)); // NOI18N);
-                } else {
-                    prefs.remove(HgModuleConfig.PROP_RUN_VERSION);
-                    HgUtils.outputMercurialTabInRed(NbBundle.getMessage(Mercurial.class, "MSG_NOT_USING_VERSION_MSG", version)); // NOI18N);
-                }
-            } else {
-                goodVersion = true;
+
+                OutputLogger logger = getLogger(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE);
+                prefs.put(HgModuleConfig.PROP_RUN_VERSION, version);
+                logger.outputInRed(NbBundle.getMessage(Mercurial.class, "MSG_USING_UNRECOGNIZED_VERSION_MSG", version)); // NOI18N);
+                logger.closeLog();
             }
+            goodVersion = true;         
         } else if (version == null) {
             Preferences prefs = HgModuleConfig.getDefault().getPreferences();
             prefs.remove(HgModuleConfig.PROP_RUN_VERSION);
-            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(Mercurial.class, "MSG_VERSION_NONE_OUTPUT_MSG")); // NOI18N);
+            OutputLogger logger = getLogger(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE);
+            logger.outputInRed(NbBundle.getMessage(Mercurial.class, "MSG_VERSION_NONE_OUTPUT_MSG")); // NOI18N);
             HgUtils.warningDialog(Mercurial.class, "MSG_VERSION_NONE_TITLE", "MSG_VERSION_NONE_MSG");// NOI18N
+            logger.closeLog();
         }
     }
 
@@ -220,6 +265,13 @@ public class Mercurial {
     }
 
     public File getTopmostManagedParent(File file) {
+        Mercurial.LOG.log(Level.FINE, "getTopmostManagedParent " + file);
+        File parent = getKnownParent(file);
+        if(parent != null) {
+            Mercurial.LOG.log(Level.FINE, "  getTopmostManagedParent returning known parent " + parent);
+            return parent;
+        }
+        
         if (HgUtils.isPartOfMercurialMetadata(file)) {
             for (;file != null; file = file.getParentFile()) {
                 if (isAdministrative(file)) {
@@ -236,7 +288,23 @@ public class Mercurial {
                 break;
             }
         }
+        Mercurial.LOG.log(Level.FINE, "  getTopmostManagedParent found parent " + topmost);
+        if(topmost != null) {
+            knownRoots.add(topmost);
+        }
+        
         return topmost;
+    }
+
+    private File getKnownParent(File file) {
+        File[] roots = knownRoots.toArray(new File[knownRoots.size()]);
+        File knownParent = null;
+        for (File r : roots) {
+            if(Utils.isAncestorOrEqual(r, file) && (knownParent == null || Utils.isAncestorOrEqual(knownParent, r))) {
+                knownParent = r;
+            }             
+        }
+        return knownParent;
     }
 
     public HgFileNode [] getNodes(VCSContext context, int includeStatus) {
@@ -305,14 +373,16 @@ public class Mercurial {
 
     public void getOriginalFile(File workingCopy, File originalFile) {
         FileInformation info = fileStatusCache.getStatus(workingCopy);
+        LOG.log(Level.FINE, "getOriginalFile: {0} {1}", new Object[] {workingCopy, info}); // NOI18N
         if ((info.getStatus() & STATUS_DIFFABLE) == 0) return;
+
+        // We can get status returned as UptoDate instead of LocallyNew
+        // because refreshing of status after creation has been scheduled
+        // but may not have happened yet.
 
         try {
             File original = VersionsCache.getInstance().getFileRevision(workingCopy, Setup.REVISION_BASE);
-            if (original == null) {
-                Logger.getLogger(Mercurial.class.getName()).log(Level.INFO, "Unable to get original file {0}", workingCopy); // NOI18N
-                 return;
-            }
+            if (original == null) return;
             org.netbeans.modules.versioning.util.Utils.copyStreamsCloseAll(new FileOutputStream(originalFile), new FileInputStream(original));
             original.delete();
         } catch (IOException e) {
@@ -360,4 +430,21 @@ public class Mercurial {
         }
     }
 
+    public void notifyFileChanged(File file) {
+        fileStatusCache.notifyFileChanged(file);
+    }
+
+    /**
+     *
+     * @param repositoryRoot String of Mercurial repository so that logger writes to correct output tab. Can be null
+     * in which case the logger will not print anything
+     * @return OutputLogger logger to write to
+     */
+    public OutputLogger getLogger(String repositoryRoot) {
+        return OutputLogger.getLogger(repositoryRoot);
+    }
+
+    public Boolean isRefreshScheduled(File file) {
+        return mercurialInterceptor.isRefreshScheduled(file);
+    }
 }
