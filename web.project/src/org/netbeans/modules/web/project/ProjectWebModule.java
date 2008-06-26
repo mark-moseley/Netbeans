@@ -82,6 +82,7 @@ import org.netbeans.modules.j2ee.dd.spi.MetadataUnit;
 import org.netbeans.modules.j2ee.dd.spi.web.WebAppMetadataModelFactory;
 import org.netbeans.modules.j2ee.dd.spi.webservices.WebservicesMetadataModelFactory;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.websvc.spi.webservices.WebServicesConstants;
 
 /** A web module implementation on top of project.
@@ -299,6 +300,11 @@ public final class ProjectWebModule extends J2eeModuleProvider
         return this;
     }
 
+    @Override
+    public DeployOnSaveSupport getDeployOnSaveSupport() {
+        return project.getDeployOnSaveSupport();
+    }
+    
     public File getDeploymentConfigurationFile(String name) {
         assert name != null : "File name of the deployement configuration file can't be null"; //NOI18N
         
@@ -328,10 +334,6 @@ public final class ProjectWebModule extends J2eeModuleProvider
 
     public FileObject getModuleFolder () {
         return getDocumentBase ();
-    }
-
-    public boolean useDefaultServer () {
-        return false;
     }
     
     public String getServerID () {
