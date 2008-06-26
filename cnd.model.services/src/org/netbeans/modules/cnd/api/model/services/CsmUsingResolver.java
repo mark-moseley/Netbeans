@@ -94,6 +94,14 @@ public abstract class CsmUsingResolver {
     public abstract Collection<CsmDeclaration> findUsedDeclarations(CsmFile file, int offset, CsmProject onlyInProject);
     
     /**
+     * Finds all declarations visible in given namespace through "using" delcarations.
+     * 
+     * @param namespace  namespace of interest
+     * @return unmodifiable collection of declarations visible in given namespace through "using" declarations
+     */
+    public abstract Collection<CsmDeclaration> findUsedDeclarations(CsmNamespace namespace);
+    
+    /**
      * return all namespace visible for offsetable element, i.e.
      *  using namespace std;
      *  using namespace myNS;
@@ -163,6 +171,10 @@ public abstract class CsmUsingResolver {
         }
 
         public Collection<CsmDeclaration> findUsedDeclarations(CsmFile file, int offset, CsmProject onlyInProject) {
+            return Collections.<CsmDeclaration>emptyList();
+        }
+        
+        public Collection<CsmDeclaration> findUsedDeclarations(CsmNamespace namespace) {
             return Collections.<CsmDeclaration>emptyList();
         }
 
