@@ -329,11 +329,9 @@ public class TSDiagramConverter
                     {
                         ObjectScene scene=(ObjectScene) w.getScene();
                         IPresentationElement pe=(IPresentationElement) scene.findObject(w);
-                        if(pe.getFirstSubject() instanceof ICombinedFragment)continue;
+                        if(pe.getFirstSubject() instanceof ICombinedFragment)continue;//TBD need to solve concurrent modification issue
                          ContainerNode cont=(ContainerNode) w;
                          cont.getContainer().calculateChildren(false);
-                         //cont.getResizeStrategyProvider().resizingStarted(cont);
-                         //cont.getResizeStrategyProvider().resizingFinished(cont);
                     }
                 }
                 scene.validate();
@@ -501,6 +499,7 @@ public class TSDiagramConverter
                 {
                     //most likely unsupported widgets and it wasn't created
                     //or not named element (for example expression
+                    if(scene.isNode(presEl))scene.removeNode(presEl);
                     presEl.getFirstSubject().removePresentationElement(presEl);
                     presEltList.remove(presEl);
                     nodeInfo.getProperties().remove(PRESENTATIONELEMENT);
