@@ -44,6 +44,7 @@ package org.netbeans.modules.refactoring.java.ui;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import javax.lang.model.element.Element;
@@ -82,18 +83,34 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
                 }
             };
         } else if (RefactoringActionsProvider.nodeHandle(lookup)) {
-            task = new TreePathHandleTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new TreePathHandleTask(new HashSet<Node>(lookup.lookupAll(Node.class)), true) {
+
+                RefactoringUI ui;
+
                 @Override
-                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles, CompilationInfo cinfo) {
-                    return new ExtractInterfaceRefactoringUI(handles.iterator().next(), cinfo);
+                protected void treePathHandleResolved(TreePathHandle handle, CompilationInfo javac) {
+                    ui = new ExtractInterfaceRefactoringUI(handle, javac);
+                }
+
+                @Override
+                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles) {
+                    return ui;
                 }
             };
         } else {
-            task = new NodeToFileObjectTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new NodeToFileObjectTask(Collections.singleton(lookup.lookup(Node.class))) {
+
+                RefactoringUI ui;
+
+                @Override
+                protected void nodeTranslated(Node node, Collection<TreePathHandle> handles, CompilationInfo javac) {
+                    TreePathHandle tph = handles.iterator().next();
+                    ui = new ExtractInterfaceRefactoringUI(tph, javac);
+                }
+
                 @Override
                 protected RefactoringUI createRefactoringUI(FileObject[] selectedElements, Collection<TreePathHandle> handles) {
-                    TreePathHandle tph = handles.iterator().next();
-                    return new ExtractInterfaceRefactoringUI(tph, cinfo.get());
+                    return ui;
                 }
             };
         }
@@ -102,7 +119,7 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
 
     @Override
     public boolean canExtractInterface(Lookup lookup) {
-        Collection<? extends Node> nodes = new HashSet(lookup.lookupAll(Node.class));
+        Collection<? extends Node> nodes = new HashSet<Node>(lookup.lookupAll(Node.class));
         if (nodes.size() != 1) {
             return false;
         }
@@ -133,18 +150,34 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
                 }
             };
         } else if (RefactoringActionsProvider.nodeHandle(lookup)) {
-            task = new TreePathHandleTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new TreePathHandleTask(new HashSet<Node>(lookup.lookupAll(Node.class)), true) {
+
+                RefactoringUI ui;
+
                 @Override
-                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles, CompilationInfo cinfo) {
-                    return new ExtractSuperclassRefactoringUI(handles.iterator().next(), cinfo);
+                protected void treePathHandleResolved(TreePathHandle handle, CompilationInfo javac) {
+                    ui = new ExtractSuperclassRefactoringUI(handle, javac);
+                }
+                
+                @Override
+                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles) {
+                    return ui;
                 }
             };
         } else {
-            task = new NodeToFileObjectTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new NodeToFileObjectTask(Collections.singleton(lookup.lookup(Node.class))) {
+
+                RefactoringUI ui;
+
+                @Override
+                protected void nodeTranslated(Node node, Collection<TreePathHandle> handles, CompilationInfo javac) {
+                    TreePathHandle tph = handles.iterator().next();
+                    ui = new ExtractSuperclassRefactoringUI(tph, javac);
+                }
+
                 @Override
                 protected RefactoringUI createRefactoringUI(FileObject[] selectedElements, Collection<TreePathHandle> handles) {
-                    TreePathHandle tph = handles.iterator().next();
-                    return new ExtractSuperclassRefactoringUI(tph, cinfo.get());
+                    return ui;
                 }
             };
         }
@@ -153,7 +186,7 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
 
     @Override
     public boolean canExtractSuperclass(Lookup lookup) {
-        Collection<? extends Node> nodes = new HashSet(lookup.lookupAll(Node.class));
+        Collection<? extends Node> nodes = new HashSet<Node>(lookup.lookupAll(Node.class));
         if (nodes.size() != 1) {
             return false;
         }
@@ -193,22 +226,38 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
                             return null;
                         selectedElement = TreePathHandle.create(path, info);
                     }
-                    return new PushDownRefactoringUI(new TreePathHandle[]{selectedElement}, info);
+                    return new PushDownRefactoringUI(selectedElement, info);
                 }
             };
         } else if (RefactoringActionsProvider.nodeHandle(lookup)) {
-            task = new TreePathHandleTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new TreePathHandleTask(new HashSet<Node>(lookup.lookupAll(Node.class)), true) {
+
+                RefactoringUI ui;
+
                 @Override
-                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles, CompilationInfo cinfo) {
-                    return new PushDownRefactoringUI(handles.toArray(new TreePathHandle[handles.size()]), cinfo);
+                protected void treePathHandleResolved(TreePathHandle handle, CompilationInfo javac) {
+                    ui = new PushDownRefactoringUI(handle, javac);
+                }
+
+                @Override
+                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles) {
+                    return ui;
                 }
                 
             };
         } else {
-            task = new NodeToFileObjectTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new NodeToFileObjectTask(Collections.singleton(lookup.lookup(Node.class))) {
+
+                RefactoringUI ui;
+
+                @Override
+                protected void nodeTranslated(Node node, Collection<TreePathHandle> handles, CompilationInfo javac) {
+                    ui = new PushDownRefactoringUI(handles.iterator().next(), javac);
+                }
+
                 @Override
                 protected RefactoringUI createRefactoringUI(FileObject[] selectedElements, Collection<TreePathHandle> handles) {
-                    return new PushDownRefactoringUI(new TreePathHandle[]{handles.iterator().next()}, cinfo.get());
+                    return ui;
                 }
             };
         }
@@ -217,7 +266,7 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
 
     @Override
     public boolean canPushDown(Lookup lookup) {
-        Collection<? extends Node> nodes = new HashSet(lookup.lookupAll(Node.class));
+        Collection<? extends Node> nodes = new HashSet<Node>(lookup.lookupAll(Node.class));
         if (nodes.size() != 1) {
             return false;
         }
@@ -258,23 +307,38 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
                             return null;
                         selectedElement = TreePathHandle.create(path, info);
                     }
-                    return new PullUpRefactoringUI(new TreePathHandle[]{selectedElement}, info);
+                    return new PullUpRefactoringUI(selectedElement, info);
                 }
             };
         } else if (RefactoringActionsProvider.nodeHandle(lookup)) {
-            task = new TreePathHandleTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new TreePathHandleTask(new HashSet<Node>(lookup.lookupAll(Node.class)), true) {
+
+                RefactoringUI ui;
 
                 @Override
-                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles, CompilationInfo cinfo) {
-                    return new PullUpRefactoringUI(handles.toArray(new TreePathHandle[handles.size()]), cinfo);
+                protected void treePathHandleResolved(TreePathHandle handle, CompilationInfo javac) {
+                    ui = new PullUpRefactoringUI(handle, javac);
+                }
+
+                @Override
+                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles) {
+                    return ui;
                 }
                 
             };
         } else {
-            task = new NodeToFileObjectTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new NodeToFileObjectTask(Collections.singleton(lookup.lookup(Node.class))) {
+
+                RefactoringUI ui;
+
+                @Override
+                protected void nodeTranslated(Node node, Collection<TreePathHandle> handles, CompilationInfo javac) {
+                    ui = new PullUpRefactoringUI(handles.iterator().next(), javac);
+                }
+
                 @Override
                 protected RefactoringUI createRefactoringUI(FileObject[] selectedElements, Collection<TreePathHandle> handles) {
-                    return new PullUpRefactoringUI(new TreePathHandle[]{handles.iterator().next()}, cinfo.get());
+                    return ui;
                 }
             };
         }
@@ -283,7 +347,7 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
 
     @Override
     public boolean canPullUp(Lookup lookup) {
-        Collection<? extends Node> nodes = new HashSet(lookup.lookupAll(Node.class));
+        Collection<? extends Node> nodes = new HashSet<Node>(lookup.lookupAll(Node.class));
         if (nodes.size() != 1) {
             return false;
         }
@@ -304,7 +368,7 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
 
     @Override
     public boolean canUseSuperType(Lookup lookup) {
-        Collection<? extends Node> nodes = new HashSet(lookup.lookupAll(Node.class));
+        Collection<? extends Node> nodes = new HashSet<Node>(lookup.lookupAll(Node.class));
         if(nodes.size() != 1)
             return false;
         Node node = nodes.iterator().next();
@@ -345,7 +409,7 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
     
     @Override
     public boolean canChangeParameters(Lookup lookup) {
-        Collection<? extends Node> nodes = new HashSet(lookup.lookupAll(Node.class));
+        Collection<? extends Node> nodes = new HashSet<Node>(lookup.lookupAll(Node.class));
         if(nodes.size() != 1)
             return false;
         Node node = nodes.iterator().next();
@@ -377,14 +441,22 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
                         int endOffset,
                         CompilationInfo info) {
                     Element selected = selectedElement.resolveElement(info);
-                    return new ChangeParametersUI(selectedElement, info);
+                    return ChangeParametersUI.create(selectedElement, info);
                 }
             };
         } else {
-            task = new TreePathHandleTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new TreePathHandleTask(new HashSet<Node>(lookup.lookupAll(Node.class)), true) {
+
+                RefactoringUI ui;
+
                 @Override
-                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles, CompilationInfo cinfo) {
-                    return new ChangeParametersUI(handles.iterator().next(), cinfo);                
+                protected void treePathHandleResolved(TreePathHandle handle, CompilationInfo javac) {
+                    ui = ChangeParametersUI.create(handle, javac);
+                }
+
+                @Override
+                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles) {
+                    return ui;
                 }
             };
         }
@@ -393,7 +465,7 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
     
     @Override
     public boolean canInnerToOuter(Lookup lookup) {
-        Collection<? extends Node> nodes = new HashSet(lookup.lookupAll(Node.class));
+        Collection<? extends Node> nodes = new HashSet<Node>(lookup.lookupAll(Node.class));
         if(nodes.size() != 1)
             return false;
         Node node = nodes.iterator().next();
@@ -429,11 +501,18 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
                 }
             };
         } else {
-            task = new TreePathHandleTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new TreePathHandleTask(new HashSet<Node>(lookup.lookupAll(Node.class)), true) {
+
+                RefactoringUI ui;
 
                 @Override
-                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles, CompilationInfo cinfo) {
-                    return new InnerToOuterRefactoringUI(handles.iterator().next(), cinfo);                
+                protected void treePathHandleResolved(TreePathHandle handle, CompilationInfo javac) {
+                    ui = new InnerToOuterRefactoringUI(handle, javac);
+                }
+
+                @Override
+                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles) {
+                    return ui;
                 }
                 
             };
@@ -443,7 +522,7 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
 
     @Override
     public boolean canEncapsulateFields(Lookup lookup) {
-        Collection<? extends Node> nodes = new HashSet(lookup.lookupAll(Node.class));
+        Collection<? extends Node> nodes = new HashSet<Node>(lookup.lookupAll(Node.class));
         if (nodes.size() != 1) {
             return false;
         }
@@ -474,20 +553,35 @@ public class JavaRefactoringActionsProvider extends JavaActionsImplementationPro
                 }
             };
         } else if (RefactoringActionsProvider.nodeHandle(lookup)) {
-            task = new TreePathHandleTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new TreePathHandleTask(new HashSet<Node>(lookup.lookupAll(Node.class)), true) {
+
+                RefactoringUI ui;
 
                 @Override
-                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles, CompilationInfo cinfo) {
-                    return new EncapsulateFieldUI(handles.iterator().next(), cinfo);                
+                protected void treePathHandleResolved(TreePathHandle handle, CompilationInfo javac) {
+                    ui = new EncapsulateFieldUI(handle, javac);
+                }
+
+                @Override
+                protected RefactoringUI createRefactoringUI(Collection<TreePathHandle> handles) {
+                    return ui;
                 }
                 
             };
         } else {
-            task = new NodeToFileObjectTask(new HashSet(lookup.lookupAll(Node.class))) {
+            task = new NodeToFileObjectTask(Collections.singleton(lookup.lookup(Node.class))) {
+
+                RefactoringUI ui;
+
+                @Override
+                protected void nodeTranslated(Node node, Collection<TreePathHandle> handles, CompilationInfo javac) {
+                    TreePathHandle tph = handles.iterator().next();
+                    ui = new EncapsulateFieldUI(tph, javac);
+                }
+
                 @Override
                 protected RefactoringUI createRefactoringUI(FileObject[] selectedElements, Collection<TreePathHandle> handles) {
-                    TreePathHandle tph = handles.iterator().next();
-                    return new EncapsulateFieldUI(tph, cinfo.get());
+                    return ui;
                 }
             };
         }
