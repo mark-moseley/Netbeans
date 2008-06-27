@@ -59,10 +59,8 @@ import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
-import static org.netbeans.modules.java.source.usages.ClassIndexImpl.UsageType.*;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.URLMapper;
-import org.openide.util.Exceptions;
 import org.openide.util.Exceptions;
 
 /**
@@ -164,6 +162,20 @@ public class PersistentClassIndex extends ClassIndexImpl {
         }
     }
     
+    public <T> void getDeclaredElements (final String ident, final ClassIndex.NameKind kind, final ResultConvertor<T> convertor, final Set<Pair<String,T>> result) throws InterruptedException {
+        updateDirty();
+        try {
+            ClassIndexManager.getDefault().readLock(new ClassIndexManager.ExceptionAction<Void>() {
+                public Void run () throws IOException, InterruptedException {
+                    index.getDeclaredElements(ident, kind, convertor, result);
+                    return null;
+                }
+            });                    
+        } catch (IOException ioe) {
+            Exceptions.printStackTrace(ioe);
+        }
+    }
+    
     
     public void getPackageNames (final String prefix, final boolean directOnly, final Set<String> result) throws InterruptedException {
         try {
@@ -216,18 +228,18 @@ public class PersistentClassIndex extends ClassIndexImpl {
                 Iterator<FileObject> files = js.getFileObjects().iterator();
                 FileObject fo = files.hasNext() ? files.next() : null;
                 if (fo != null && fo.isValid()) {                    
-                    if (JavaSourceAccessor.INSTANCE.isDispatchThread()) {
+                    if (JavaSourceAccessor.getINSTANCE().isDispatchThread()) {
                         //Already under javac's lock
                         try {
                             ClassIndexManager.getDefault().writeLock(
                                 new ClassIndexManager.ExceptionAction<Void>() {
                                     public Void run () throws IOException {
-                                        CompilationInfo compilationInfo = JavaSourceAccessor.INSTANCE.getCurrentCompilationInfo (js, JavaSource.Phase.RESOLVED);                                        
+                                        CompilationInfo compilationInfo = JavaSourceAccessor.getINSTANCE().getCurrentCompilationInfo (js, JavaSource.Phase.RESOLVED);                                        
                                         if (compilationInfo != null) {
                                             //Not cancelled
                                             final SourceAnalyser sa = getSourceAnalyser();
                                             long st = System.currentTimeMillis();
-                                            sa.analyseUnitAndStore(compilationInfo.getCompilationUnit(), JavaSourceAccessor.INSTANCE.getJavacTask(compilationInfo),
+                                            sa.analyseUnitAndStore(compilationInfo.getCompilationUnit(), JavaSourceAccessor.getINSTANCE().getJavacTask(compilationInfo),
                                                 ClasspathInfoAccessor.getINSTANCE().getFileManager(compilationInfo.getClasspathInfo()));
                                             long et = System.currentTimeMillis();
                                             }
@@ -253,7 +265,7 @@ public class PersistentClassIndex extends ClassIndexImpl {
                                                     controller.toPhase(Phase.RESOLVED);
                                                     final SourceAnalyser sa = getSourceAnalyser();
                                                     long st = System.currentTimeMillis();
-                                                    sa.analyseUnitAndStore(controller.getCompilationUnit(), JavaSourceAccessor.INSTANCE.getJavacTask(controller),
+                                                    sa.analyseUnitAndStore(controller.getCompilationUnit(), JavaSourceAccessor.getINSTANCE().getJavacTask(controller),
                                                     ClasspathInfoAccessor.getINSTANCE().getFileManager(controller.getClasspathInfo()));
                                                     long et = System.currentTimeMillis();
                                                     return null;
