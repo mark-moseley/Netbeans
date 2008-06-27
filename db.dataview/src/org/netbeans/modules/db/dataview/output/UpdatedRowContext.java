@@ -38,89 +38,71 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.db.dataview.meta;
+
+package org.netbeans.modules.db.dataview.output;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.Map;
+import java.util.Set;
+import javax.swing.table.TableModel;
+import org.netbeans.modules.db.dataview.meta.DBException;
 
 /**
- * Holds DB PrimaryKey meta info of a given table.
+ * Holds the updated row data
  *
  * @author Ahimanikya Satapathy
  */
-public final class DBPrimaryKey extends DBObject<DBTable> {
-    private static final String RS_COLUMN_NAME = "COLUMN_NAME"; // NOI18N
-    private List<String> columnNames;
-    private String name;
-    private DBTable parent;
+ class UpdatedRowContext {
 
-    public DBPrimaryKey(ResultSet rs) throws SQLException {
-        assert rs != null;
-        columnNames = new ArrayList<String>();
-        while (rs.next()) {
-            columnNames.add(rs.getString(RS_COLUMN_NAME));
-        }
+    private Map<String, String> updateStatements = new LinkedHashMap<String, String>();
+    private Map<String, String> rawUpdateSQL = new LinkedHashMap<String, String>();
+    private Map<String, List<Object>> valuesList = new LinkedHashMap<String, List<Object>>();
+    private Map<String, List<Integer>> typesList = new LinkedHashMap<String, List<Integer>>();
+    private SQLStatementGenerator stmtGenerator;
+    
+    public UpdatedRowContext(SQLStatementGenerator stmtGenerator) {
+        this.stmtGenerator = stmtGenerator;
     }
 
-    public boolean contains(DBColumn col) {
-        return contains(col.getName());
+    // TODO: We can defer creating these statements till user request to execute
+    public void createUpdateStatement(int row, int col, Object value, TableModel tblModel) throws DBException {
+        List<Object> values = new ArrayList<Object>();
+        List<Integer> types = new ArrayList<Integer>();
+        String changeData = (row + 1) + ";" + (col + 1); // NOI18N
+        String[] updateStmt = stmtGenerator.generateUpdateStatement(row, col, value, values, types, tblModel);
+
+        updateStatements.put(changeData, updateStmt[0]);
+        rawUpdateSQL.put(changeData, updateStmt[1]);
+        valuesList.put(changeData, values);
+        typesList.put(changeData, types);
     }
 
-    public boolean contains(String columnName) {
-        return columnNames.contains(columnName);
+    public void resetUpdateState() {
+        updateStatements = new LinkedHashMap<String, String>();
+        rawUpdateSQL = new LinkedHashMap<String, String>();
+        valuesList = new LinkedHashMap<String, List<Object>>();
+        typesList = new LinkedHashMap<String, List<Integer>>();
     }
 
-    @Override
-    public boolean equals(Object refObj) {
-        if (this == refObj) {
-            return true;
-        }
-
-        if (!(refObj instanceof DBPrimaryKey)) {
-            return false;
-        }
-
-        DBPrimaryKey ref = (DBPrimaryKey) refObj;
-        boolean result = (getName() != null) ? name.equals(ref.name) : (ref.name == null);
-        result &= (columnNames != null) ? columnNames.equals(ref.columnNames) : (ref.columnNames != null);
-        return result;
+    public Set<String> getUpdateKeys() {
+        return updateStatements.keySet();
     }
 
-    public int getColumnCount() {
-        return columnNames.size();
+    public String getUpdateStmt(String key) {
+        return updateStatements.get(key);
     }
 
-    public List<String> getColumnNames() {
-        return Collections.unmodifiableList(columnNames);
+    public String getRawUpdateStmt(String key) {
+        return rawUpdateSQL.get(key);
     }
 
-    public String getName() {
-        if (name == null && parent != null) {
-            name = "PK_" + parent.getName();
-        }
-        return name;
+    public List<Integer> getTypeList(String key) {
+        return typesList.get(key);
     }
 
-    @Override
-    public int hashCode() {
-        int myHash = (getName() != null) ? name.hashCode() : 0;
-        myHash += (columnNames != null) ? columnNames.hashCode() : 0;
-
-        return myHash;
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder buf = new StringBuilder(100);
-        for (int i = 0; i < columnNames.size(); i++) {
-            if (i != 0) {
-                buf.append(","); // NOI18N
-            }
-            buf.append((columnNames.get(i)).trim());
-        }
-        return buf.toString();
+    public List<Object> getValueList(String key) {
+        return valuesList.get(key);
     }
 }
