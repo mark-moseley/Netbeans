@@ -43,7 +43,6 @@ package org.netbeans.modules.cnd.highlight.semantic;
 
 import java.util.List;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
-import org.netbeans.modules.cnd.highlight.semantic.SemanticHighlighter;
 import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 
 /**
@@ -66,7 +65,7 @@ public class MacroUsagesTest extends SemanticHighlightingTestBase {
         performTest(source, source + ".dat", source + ".err"); // NOI18N
     }
 
-    protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile) {
-        return SemanticHighlighter.getMacroBlocks(testFile);
+    protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile,int offset) {
+        return ModelUtils.getMacroBlocks(testFile);
     }
 }
