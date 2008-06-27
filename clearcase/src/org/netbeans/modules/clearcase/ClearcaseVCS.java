@@ -38,54 +38,41 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.mercurial;
+package org.netbeans.modules.clearcase;
 
 import java.io.File;
-import java.util.Set;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
 
-import org.netbeans.spi.queries.CollocationQueryImplementation;
+import java.util.Set;
 import org.netbeans.modules.versioning.spi.VCSAnnotator;
 import org.netbeans.modules.versioning.spi.VCSInterceptor;
 import org.netbeans.modules.versioning.spi.VersioningSystem;
+import org.netbeans.modules.versioning.util.VersioningEvent;
+import org.netbeans.modules.versioning.util.VersioningListener;
+import org.netbeans.spi.queries.CollocationQueryImplementation;
+import org.openide.util.NbBundle;
 
 /**
- * Extends framework <code>VersioningSystem</code> to Mercurial module functionality.
+ * Extends framework <code>VersioningSystem</code> to Clearcase module functionality.
  * 
  * @author Maros Sandor
  */
-public class MercurialVCS extends VersioningSystem implements PropertyChangeListener {
+public class ClearcaseVCS extends VersioningSystem implements PropertyChangeListener, VersioningListener {
 
-    public MercurialVCS() {
-        putProperty(PROP_DISPLAY_NAME, org.openide.util.NbBundle.getMessage(MercurialVCS.class, "CTL_Mercurial_DisplayName")); // NOI18N
-        putProperty(PROP_MENU_LABEL, org.openide.util.NbBundle.getMessage(MercurialVCS.class, "CTL_Mercurial_MainMenu")); // NOI18N
-
-        Mercurial.getInstance().addPropertyChangeListener(this);
-        Mercurial.getInstance().getFileStatusCache().addPropertyChangeListener(this);
+    /**
+     * Fired when textual annotations and badges have changed. The NEW value is Set<File> of files that changed or NULL
+     * if all annotaions changed.
+     */
+    static final String PROP_ANNOTATIONS_CHANGED = "annotationsChanged";
+    
+    public ClearcaseVCS() {
+        putProperty(PROP_DISPLAY_NAME, NbBundle.getMessage(ClearcaseVCS.class, "VCS_Clearcase_Name"));
+        putProperty(PROP_MENU_LABEL, NbBundle.getMessage(ClearcaseVCS.class, "VCS_Clearcase_Menu_Label"));
+        Clearcase.getInstance().getFileStatusCache().addVersioningListener(this);
+        Clearcase.getInstance().getAnnotator().addPropertyChangeListener(this);
     }
 
-    @Override
-    public CollocationQueryImplementation getCollocationQueryImplementation() {
-        return collocationQueryImplementation;
-    }
-
-    private final CollocationQueryImplementation collocationQueryImplementation = new CollocationQueryImplementation() {
-        public boolean areCollocated(File a, File b) {
-            File fra = getTopmostManagedAncestor(a);
-            File frb = getTopmostManagedAncestor(b);
-
-            if (fra == null || !fra.equals(frb)) return false;
-
-            return true;
-        }
-
-        public File findRoot(File file) {
-            // TODO: we should probably return the closest common ancestor
-            return getTopmostManagedAncestor(file);
-        }
-    };
-            
     /**
      * Tests whether the file is managed by this versioning system. If it is, 
      * the method should return the topmost 
@@ -95,37 +82,64 @@ public class MercurialVCS extends VersioningSystem implements PropertyChangeList
      * @return File the file itself or one of its ancestors or null if the 
      *  supplied file is NOT managed by this versioning system
      */
+    @Override
     public File getTopmostManagedAncestor(File file) {
-        return Mercurial.getInstance().getTopmostManagedParent(file);
+        return Clearcase.getInstance().getTopmostManagedParent(file);
     }
     
     /**
      * Coloring label, modifying icons, providing action on file
      */
+    @Override
     public VCSAnnotator getVCSAnnotator() {
-        return Mercurial.getInstance().getMercurialAnnotator();
+        return Clearcase.getInstance().getAnnotator();
     }
     
     /**
      * Handle file system events such as delete, create, remove etc.
      */
+    @Override
     public VCSInterceptor getVCSInterceptor() {
-        return Mercurial.getInstance().getMercurialInterceptor();
+        return Clearcase.getInstance().getInterceptor();
     }
 
-    public void getOriginalFile(File workingCopy, File originalFile) {
-        Mercurial.getInstance().getOriginalFile(workingCopy, originalFile);
+    @Override
+    public CollocationQueryImplementation getCollocationQueryImplementation() {
+        return collocationQueryImplementation;
     }
 
-    @SuppressWarnings("unchecked") // Property Change event.getNewValue returning Object
-    public void propertyChange(PropertyChangeEvent event) {
-        if (event.getPropertyName().equals(FileStatusCache.PROP_FILE_STATUS_CHANGED)) {
-            FileStatusCache.ChangedEvent changedEvent = (FileStatusCache.ChangedEvent) event.getNewValue();
-            fireStatusChanged(changedEvent.getFile());
-        } else if (event.getPropertyName().equals(Mercurial.PROP_ANNOTATIONS_CHANGED)) {
-            fireAnnotationsChanged((Set<File>) event.getNewValue());
-        } else if (event.getPropertyName().equals(Mercurial.PROP_VERSIONED_FILES_CHANGED)) {
-            fireVersionedFilesChanged();
+    private final CollocationQueryImplementation collocationQueryImplementation = new CollocationQueryImplementation() {
+    
+        public boolean areCollocated(File a, File b) {
+            File fra = getTopmostManagedAncestor(a);
+            File frb = getTopmostManagedAncestor(b);
+            if (fra == null || !fra.equals(frb)) return false;
+            
+            // TODO: should we check that they come from the same view?
+            return true;
         }
+    
+        public File findRoot(File file) {
+            // TODO: we should probably return the closest common ancestor
+            return getTopmostManagedAncestor(file);
+        }
+    };
+    
+    public void propertyChange(PropertyChangeEvent event) {
+        if (event.getPropertyName().equals(ClearcaseAnnotator.PROP_ANNOTATIONS_CHANGED)) {
+            fireAnnotationsChanged((Set<File>) event.getNewValue());
+        } 
+    }
+
+    public void versioningEvent(VersioningEvent event) {
+        if (event.getId() == FileStatusCache.EVENT_FILE_STATUS_CHANGED) {
+            File file = (File) event.getParams()[0];
+            fireStatusChanged(file);
+        }
+    }
+    
+    @Override
+    public void getOriginalFile(File workingCopy, File originalFile) {
+        Clearcase.getInstance().getOriginalFile(workingCopy, originalFile);
     }
 }
