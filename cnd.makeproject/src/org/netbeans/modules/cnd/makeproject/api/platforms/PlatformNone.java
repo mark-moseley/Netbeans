@@ -45,15 +45,15 @@ import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.makeproject.api.configurations.LibraryItem;
 import org.openide.util.NbBundle;
 
-public class PlatformGeneric extends Platform {
-    public static final String NAME = "Generic"; // NOI18N
+public class PlatformNone extends Platform {
+    public static final String NAME = "None"; // NOI18N
 
     public static final LibraryItem.StdLibItem[] standardLibrariesLinux = {
         // empty
     };
 
-    public PlatformGeneric() {
-        super(NAME, NbBundle.getBundle(PlatformGeneric.class).getString("GenericName"), Platform.PLATFORM_GENERIC);
+    public PlatformNone() {
+        super(NAME, NbBundle.getBundle(PlatformNone.class).getString("NoPlatform"), Platform.PLATFORM_NONE);
     }
 
     public LibraryItem.StdLibItem[] getStandardLibraries() {

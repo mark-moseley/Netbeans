@@ -43,56 +43,53 @@ package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
-import org.netbeans.modules.cnd.makeproject.api.configurations.IntConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.PlatformConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
 import org.openide.nodes.Node;
 
-public class IntNodeProp extends Node.Property {
-    private IntConfiguration intConfiguration;
+public class PlatformNodeProp extends Node.Property {
+    private PlatformConfiguration platformConfiguration;
     private boolean canWrite;
-    private String txt1;
-    private String txt2;
-    private String txt3;
+    private String name;
+    private String description;
 
-    public IntNodeProp(IntConfiguration intConfiguration, boolean canWrite, String txt1, String txt2, String txt3) {
+    public PlatformNodeProp(PlatformConfiguration platformConfiguration, boolean canWrite, String name, String description) {
         super(Integer.class);
-        this.intConfiguration = intConfiguration;
+        this.platformConfiguration = platformConfiguration;
 	this.canWrite = canWrite;
-	this.txt1 = txt1;
-	this.txt2 = txt2;
-	this.txt3 = txt3;
+	this.name = name;
+	this.description = description;
     }
 
     @Override
     public String getName() {
-	return txt2;
+	return name;
     }
 
     @Override
     public String getShortDescription() {
-	return txt3;
+	return description;
     }
     
     @Override
     public String getHtmlDisplayName() {
-        if (intConfiguration.getModified())
+        if (platformConfiguration.getModified())
             return "<b>" + getDisplayName(); // NOI18N
         else
             return null;
     }
     
     public Object getValue() {
-        return new Integer(intConfiguration.getValue());
+        return new Integer(platformConfiguration.getValue());
     }
     
     public void setValue(Object v) {
-        intConfiguration.setValue((String)v);
+        platformConfiguration.setValue((String)v);
     }
     
     @Override
     public void restoreDefaultValue() {
-        intConfiguration.reset();
+        platformConfiguration.reset();
     }
     
     @Override
@@ -102,7 +99,7 @@ public class IntNodeProp extends Node.Property {
     
     @Override
     public boolean isDefaultValue() {
-        return !intConfiguration.getModified();
+        return !platformConfiguration.getModified();
     }
 
     public boolean canWrite() {
@@ -117,6 +114,10 @@ public class IntNodeProp extends Node.Property {
     public PropertyEditor getPropertyEditor() {
 	return new IntEditor();
     }
+    
+    public void repaint() {
+        //getPropertyEditor().repaint();
+    }
 
     private class IntEditor extends PropertyEditorSupport {
         @Override
@@ -126,17 +127,31 @@ public class IntNodeProp extends Node.Property {
         
         @Override
         public String getAsText() {
-            return intConfiguration.getName();
+            if (platformConfiguration instanceof PlatformConfiguration) {
+                if (platformConfiguration.getValue() == Platform.PLATFORM_NONE) {
+                    System.err.println("");
+                }
+            }
+            return platformConfiguration.getName();
         }
         
         @Override
         public void setAsText(String text) throws java.lang.IllegalArgumentException {
+            if (platformConfiguration instanceof PlatformConfiguration) {
+                if (platformConfiguration.getValue() == Platform.PLATFORM_NONE) {
+                    System.err.println("");
+                }
+            }
             setValue(text);
         }
         
         @Override
         public String[] getTags() {
-            return intConfiguration.getNames();
+            return platformConfiguration.getNames();
+        }
+        
+        public void repaint() {
+            
         }
     }
 }

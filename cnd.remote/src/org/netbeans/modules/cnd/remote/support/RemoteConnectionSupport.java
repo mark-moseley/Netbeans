@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,44 +31,73 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.makeproject.api.platforms;
+package org.netbeans.modules.cnd.remote.support;
 
-import org.netbeans.modules.cnd.api.compilers.CompilerSet;
-import org.netbeans.modules.cnd.makeproject.api.configurations.LibraryItem;
-import org.openide.util.NbBundle;
+import com.jcraft.jsch.Channel;
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.Session;
+import com.jcraft.jsch.UserInfo;
+import java.util.logging.Logger;
 
-public class PlatformGeneric extends Platform {
-    public static final String NAME = "Generic"; // NOI18N
-
-    public static final LibraryItem.StdLibItem[] standardLibrariesLinux = {
-        // empty
-    };
-
-    public PlatformGeneric() {
-        super(NAME, NbBundle.getBundle(PlatformGeneric.class).getString("GenericName"), Platform.PLATFORM_GENERIC);
-    }
-
-    public LibraryItem.StdLibItem[] getStandardLibraries() {
-        return standardLibrariesLinux;
-    }
+/**
+ *
+ * @author gordonp
+ */
+public abstract class RemoteConnectionSupport {
     
-    public String getLibraryName(String baseName) {
-        // Use Linux style
-        return "lib" + baseName + ".so"; // NOI18N
-    }
+    private JSch jsch;
+    protected String key;
+    protected Session session;
+    protected Channel channel;
+    private String user;
+    protected static Logger log = Logger.getLogger("cnd.remote.logger"); // NOI18N
     
-    public String getLibraryLinkOption(String libName, String libDir, String libPath, CompilerSet compilerSet) {
-        if (libName.endsWith(".so")) { // NOI18N
-            int i = libName.indexOf(".so"); // NOI18N
-            if (i > 0)
-                libName = libName.substring(0, i);
-            if (libName.startsWith("lib")) // NOI18N
-                libName = libName.substring(3);
-            return compilerSet.getLibrarySearchOption() + libDir + " " + compilerSet.getLibraryOption() + libName; // NOI18N
-        } else {
-            return libPath;
+    public RemoteConnectionSupport(String key, int port) {
+        this.key = key;
+        int pos = key.indexOf('@');
+        user = key.substring(0, pos);
+        String host = key.substring(pos + 1);
+        
+        try {
+            jsch = new JSch();
+            jsch.setKnownHosts(System.getProperty("user.home") + "/.ssh/known_hosts");
+            session = jsch.getSession(user, host, port);
+
+            UserInfo ui = RemoteUserInfo.getUserInfo(key);
+            session.setUserInfo(ui);
+            session.connect();
+        } catch (JSchException jsce) {
+            log.warning("RPB<Init>: Got JSchException [" + jsce.getMessage() + "]");
         }
+    }
+    
+    public RemoteConnectionSupport(String key) {
+        this(key, 22);
+    }
+    
+    public Channel getChannel() {
+        return channel;
+    }
+    
+    public void setChannel(Channel channel) {
+        this.channel = channel;
+    }
+    
+    protected abstract Channel createChannel() throws JSchException;
+    
+    protected void disconnect() {
+        channel.disconnect();
+        session.disconnect();
+    }
+    
+    public String getUser() {
+        return user;
     }
 }

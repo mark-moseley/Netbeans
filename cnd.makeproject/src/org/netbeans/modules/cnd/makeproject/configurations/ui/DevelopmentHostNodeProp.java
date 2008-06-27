@@ -43,56 +43,53 @@ package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
-import org.netbeans.modules.cnd.makeproject.api.configurations.IntConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.configurations.PlatformConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
+import org.netbeans.modules.cnd.makeproject.api.configurations.DevelopmentHostConfiguration;
 import org.openide.nodes.Node;
 
-public class IntNodeProp extends Node.Property {
-    private IntConfiguration intConfiguration;
+public class DevelopmentHostNodeProp extends Node.Property {
+    private DevelopmentHostConfiguration configuration;
     private boolean canWrite;
-    private String txt1;
-    private String txt2;
-    private String txt3;
+    private String name;
+    private String description;
 
-    public IntNodeProp(IntConfiguration intConfiguration, boolean canWrite, String txt1, String txt2, String txt3) {
+    public DevelopmentHostNodeProp(DevelopmentHostConfiguration configuration, boolean canWrite, String name, String description) {
         super(Integer.class);
-        this.intConfiguration = intConfiguration;
+        this.configuration = configuration;
 	this.canWrite = canWrite;
-	this.txt1 = txt1;
-	this.txt2 = txt2;
-	this.txt3 = txt3;
+	this.name = name;
+	this.description = description;
     }
 
     @Override
     public String getName() {
-	return txt2;
+	return name;
     }
 
     @Override
     public String getShortDescription() {
-	return txt3;
+	return description;
     }
     
     @Override
     public String getHtmlDisplayName() {
-        if (intConfiguration.getModified())
-            return "<b>" + getDisplayName(); // NOI18N
-        else
+        if (configuration.getModified()) {
+            return "<b>" + getDisplayName() + "</b>"; // NOI18N
+        } else {
             return null;
+        }
     }
     
     public Object getValue() {
-        return new Integer(intConfiguration.getValue());
+        return configuration.getValue();
     }
     
-    public void setValue(Object v) {
-        intConfiguration.setValue((String)v);
-    }
+    public void setValue(Object value) {
+        configuration.setValue((String) value, true);
+}
     
     @Override
     public void restoreDefaultValue() {
-        intConfiguration.reset();
+        configuration.reset();
     }
     
     @Override
@@ -102,7 +99,7 @@ public class IntNodeProp extends Node.Property {
     
     @Override
     public boolean isDefaultValue() {
-        return !intConfiguration.getModified();
+        return !configuration.getModified();
     }
 
     public boolean canWrite() {
@@ -126,17 +123,17 @@ public class IntNodeProp extends Node.Property {
         
         @Override
         public String getAsText() {
-            return intConfiguration.getName();
+            return configuration.getDisplayName();
         }
         
         @Override
-        public void setAsText(String text) throws java.lang.IllegalArgumentException {
+        public void setAsText(String text) throws IllegalArgumentException {
             setValue(text);
         }
         
         @Override
         public String[] getTags() {
-            return intConfiguration.getNames();
+            return configuration.getServerNames();
         }
     }
 }
