@@ -38,39 +38,50 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.performance.enterprise;
 
-
+import junit.framework.Test;
+import org.netbeans.junit.NbTestCase;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.junit.NbModuleSuite;
-import org.netbeans.performance.enterprise.actions.*;
-import org.netbeans.performance.enterprise.setup.EnterpriseSetup;
+import org.netbeans.performance.enterprise.actions.AddNewBpelProcess;
+import org.netbeans.performance.enterprise.actions.CreateBPELmodule;
+import org.netbeans.performance.enterprise.actions.CreateCompositeApplication;
+import org.netbeans.performance.enterprise.actions.OpenSchemaView;
+import org.netbeans.performance.enterprise.actions.WatchProjects;
 
-/**
- * Measure UI-RESPONSIVENES and WINDOW_OPENING.
- *
- * @author  mmirilovic@netbeans.org
- */
-public class MeasureEnterpriseActions1Test {
+public class MeasureEnterpriseGCTest extends NbTestCase {
 
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite("UI Responsiveness Enterprise Actions suite. Part 1");
-        
-        // EPMeasureActions1
-        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(EnterpriseSetup.class)
-                .addTest(EnterpriseSetup.class, "cleanTempDir")
+    public MeasureEnterpriseGCTest(String name) {
+        super(name);
+    }
+
+    public static Test suite() {
+        NbTestSuite suite = new NbTestSuite("Enterprise Performance GC suite");
+
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(WatchProjects.class)
+                .addTest(WatchProjects.class, "testInitGCProjects")
+                .addTest(AddNewBpelProcess.class, "measureTime")
 
                 // TODO: Uncomment once issue 138456 is fixed
-                // .addTest(CreateBPELmodule.class, "measureTime")
-                .addTest(CreateCompositeApplication.class, "measureTime")
-                .addTest(AddNewWSDLDocument.class, "measureTime")
-                .addTest(AddNewXMLSchema.class, "measureTime")
-                .addTest(AddNewXMLDocument.class, "measureTime")
-                .addTest(AddNewBpelProcess.class, "measureTime")
+                //.addTest(CreateBPELmodule.class, "measureTime")
+                
+                .addTest(CreateCompositeApplication.class, "measureTime")    
+//                .addTest(OpenSchemaView.class, "testGCwithOpenComplexSchemaView")    
+                .addTest(WatchProjects.class, "testGCProjects")
                 .enableModules(".*").clusters(".*").reuseUserDir(true)));    
-
+/*
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(AddNewBpelProcess.class)
+                .addTest("measureTime").enableModules(".*").clusters(".*")));    
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(CreateBPELmodule.class)
+                .addTest("measureTime").enableModules(".*").clusters(".*")));    
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(CreateCompositeApplication.class)
+                .addTest("measureTime").enableModules(".*").clusters(".*")));    
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(WatchProjects.class)
+                .addTest("testGCProjects").enableModules(".*").clusters(".*")));    
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(OpenSchemaView.class)
+                .addTest("testGCwithOpenComplexSchemaView").enableModules(".*").clusters(".*")));    
+*/
         return suite;
     }
-    
 }

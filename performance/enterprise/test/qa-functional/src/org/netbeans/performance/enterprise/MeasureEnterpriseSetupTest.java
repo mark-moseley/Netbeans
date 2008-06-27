@@ -38,29 +38,52 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.performance.enterprise;
 
-
-import org.netbeans.junit.NbTestSuite;
+import junit.framework.Test;
 import org.netbeans.junit.NbModuleSuite;
-import org.netbeans.performance.enterprise.actions.*;
+import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.performance.enterprise.setup.EnterpriseSetup;
 
 /**
- * Measure UI-RESPONSIVENES and WINDOW_OPENING.
+ * Test suite that actually does not perform any test but sets up user directory
+ * for UI responsiveness tests
  *
- * @author  mmirilovic@netbeans.org
+ * @author  rkubacki@netbeans.org, mmirilovic@netbeans.org
  */
-public class MeasureEnterpriseActions4Test {
+public class MeasureEnterpriseSetupTest extends NbTestCase {
 
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite("UI Responsiveness Enterprise Actions suite. Part 4");
-        
-        // EPMeasureActions4
-        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(OpenSchemaView.class)
-                .addTest("testOpenSchemaView").enableModules(".*").clusters(".*").reuseUserDir(true)));
-
-        return suite;
+    public MeasureEnterpriseSetupTest(java.lang.String testName) {
+        super(testName);
     }
     
+    public static Test suite(NbTestSuite suite) {
+        suite.addTest(NbModuleSuite.create(
+            NbModuleSuite.createConfiguration(EnterpriseSetup.class)
+            .addTest("cleanTempDir")
+            .addTest("closeMemoryToolbar")
+            .addTest("closeWelcome")
+
+            .addTest("addApplicationServer")
+            .addTest("addTomcatServer")
+
+            .addTest("openWebProject")
+            .addTest("openReservationPartnerServicesProject")
+            .addTest("openTravelReservationServiceProject")
+            .addTest("openTravelReservationServiceApplicationProject")
+            .addTest("openSoaTestProject")
+            .addTest("openBPELTestProject")
+            .addTest("closeAllDocuments")
+            .enableModules(".*")
+            .clusters(".*")
+        ));    
+        
+        return suite;        
+    }
+
+    public static Test suite() {
+        NbTestSuite suite = new NbTestSuite("UI Responsiveness Enterprise Setup suite");
+        return suite(suite);
+    }
 }
