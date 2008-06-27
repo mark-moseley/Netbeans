@@ -24,8 +24,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.concurrent.Callable;
+import java.util.List;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
@@ -47,7 +48,6 @@ import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.api.Process;
 import org.netbeans.modules.bpel.model.api.PartnerLinkContainer;
 import org.netbeans.modules.bpel.model.api.PartnerLink;
-import org.netbeans.modules.bpel.model.api.Variable;
 import org.netbeans.modules.bpel.model.api.VariableDeclaration;
 import org.netbeans.modules.bpel.model.api.references.BpelReference;
 import org.netbeans.modules.bpel.model.api.references.ReferenceCollection;
@@ -55,7 +55,6 @@ import org.netbeans.modules.bpel.model.api.references.WSDLReference;
 import org.netbeans.modules.soa.ui.ExtendedLookup;
 import org.netbeans.modules.bpel.properties.editors.controls.filter.VariableTypeFilter;
 import org.netbeans.modules.bpel.model.api.support.VisibilityScope;
-import org.netbeans.modules.bpel.editors.api.ui.valid.NodeEditorDescriptor;
 import org.netbeans.modules.bpel.nodes.VariableNode;
 import org.netbeans.modules.bpel.properties.Constants;
 import org.netbeans.modules.bpel.properties.PropertyType;
@@ -70,10 +69,14 @@ import org.netbeans.modules.xml.wsdl.model.Output;
 import org.netbeans.modules.xml.wsdl.model.PortType;
 import org.netbeans.modules.xml.wsdl.model.extensions.bpel.PartnerLinkType;
 import org.openide.nodes.Node.Property;
-import org.netbeans.modules.soa.ui.form.CustomNodeEditor.EditingMode;
 import org.netbeans.modules.soa.ui.form.valid.SoaDialogDisplayer;
 import org.netbeans.modules.soa.ui.form.valid.DefaultValidator;
 import org.netbeans.modules.bpel.editors.api.ui.valid.ErrorMessagesBundle;
+import org.netbeans.modules.bpel.properties.editors.InvokeCustomEditor;
+import org.netbeans.modules.bpel.properties.editors.OnEventCustomEditor;
+import org.netbeans.modules.bpel.properties.editors.OnMessageCustomEditor;
+import org.netbeans.modules.bpel.properties.editors.ReceiveCustomEditor;
+import org.netbeans.modules.bpel.properties.editors.ReplyCustomEditor;
 import org.netbeans.modules.soa.ui.form.valid.DefaultDialogDescriptor;
 import org.netbeans.modules.soa.ui.form.valid.Validator;
 import org.netbeans.modules.xml.wsdl.model.Message;
@@ -157,7 +160,8 @@ public class MessageConfigurationController extends EditorLifeCycleAdapter
             declarationVisible = showVariableDecl;
         }
     }
-    
+
+    @Override
     public void createContent() {
         //
         btnChooseInputVariable = new JButton();
@@ -212,6 +216,7 @@ public class MessageConfigurationController extends EditorLifeCycleAdapter
         //
         cbxPartnerLink.setRenderer(new DefaultListCellRenderer() {
             static final long serialVersionUID = 1L;
+            @Override
             public Component getListCellRendererComponent(
                     JList list, Object value, int index,
                     boolean isSelected, boolean cellHasFocus) {
@@ -228,6 +233,7 @@ public class MessageConfigurationController extends EditorLifeCycleAdapter
         //
         cbxOperation.setRenderer(new DefaultListCellRenderer() {
             static final long serialVersionUID = 1L;
+            @Override
             public Component getListCellRendererComponent(
                     JList list, Object value, int index,
                     boolean isSelected, boolean cellHasFocus) {
@@ -455,6 +461,7 @@ public class MessageConfigurationController extends EditorLifeCycleAdapter
         return true;
     }
     
+    @Override
     public boolean initControls() {
         try {
             Lookup lookup = myEditor.getLookup();
@@ -472,8 +479,25 @@ public class MessageConfigurationController extends EditorLifeCycleAdapter
                         //
                         // Load a list of PartnerLink
                         PartnerLink[] partnerLinkArr = plContainer.getPartnerLinks();
+
+                        List<PartnerLink> pList = new ArrayList<PartnerLink>();
+                        for (int i = 0; i < partnerLinkArr.length; i++) {
+                            PartnerLink pLink = partnerLinkArr[i];
+                            if (myEditor instanceof InvokeCustomEditor &&
+                                    pLink.getPartnerRole() != null) {
+                                pList.add(pLink);
+                            }
+
+                            if ((myEditor instanceof ReceiveCustomEditor ||
+                                    myEditor instanceof OnMessageCustomEditor ||
+                                    myEditor instanceof OnEventCustomEditor ||
+                                    myEditor instanceof ReplyCustomEditor) &&
+                                    pLink.getMyRole() != null) {
+                                pList.add(pLink);
+                            }
+                        }
                         cbxPartnerLink.setModel(
-                                new DefaultComboBoxModel(partnerLinkArr));
+                                new DefaultComboBoxModel(pList.toArray()));
                         //
                         // Set selection to PartnerLink combo-box
                         cbxPartnerLink.setSelectedIndex(-1);
@@ -504,6 +528,7 @@ public class MessageConfigurationController extends EditorLifeCycleAdapter
         return true;
     }
     
+    @Override
     public boolean applyNewValues() {
         try {
             Node node = myEditor.getEditedNode();
@@ -935,37 +960,38 @@ public class MessageConfigurationController extends EditorLifeCycleAdapter
         if (myValidator == null) {
             myValidator = new DefaultValidator(myEditor, ErrorMessagesBundle.class) {
                 
-                public boolean doFastValidation() {
-                    return true;
+                public void doFastValidation() {
                 }
                 
-                public boolean doDetailedValidation() {
+                @Override
+                public void doDetailedValidation() {
                     int plIndex = cbxPartnerLink.getSelectedIndex();
                     if (plIndex == -1) {
-                        addReasonKey("ERR_EMPTY_PARTNER_LINK"); //NOI18N
+                        addReasonKey(Severity.ERROR, "ERR_EMPTY_PARTNER_LINK"); //NOI18N
                     } else {
                         int operCount = cbxOperation.getItemCount();
                         if (operCount == 0) {
-                            addReasonKey("ERR_PARTNER_LINK_WITHOUT_OPERATIONS"); //NOI18N
+                            addReasonKey(Severity.ERROR,
+                                    "ERR_PARTNER_LINK_WITHOUT_OPERATIONS"); //NOI18N
                         } else {
                             int operIndex = cbxOperation.getSelectedIndex();
                             if (operIndex == -1) {
-                                addReasonKey("ERR_EMPTY_OPERATION"); //NOI18N
+                                addReasonKey(Severity.ERROR, "ERR_EMPTY_OPERATION"); //NOI18N
                             }
                             //
                             // Check operation parameters types
                             if (inputVisible && !isCorrectType(true, currInputVar)) {
-                                addReasonKey("ERR_INCORRECT_INPUT_VAR_TYPE"); //NOI18N
+                                addReasonKey(Severity.ERROR, 
+                                        "ERR_INCORRECT_INPUT_VAR_TYPE"); //NOI18N
                             }
                             //
                             if (outputVisible && isOutputVarEnabled &&
                                     !isCorrectType(false, currOutputVar)) {
-                                addReasonKey("ERR_INCORRECT_OUTPUT_VAR_TYPE"); //NOI18N
+                                addReasonKey(Severity.ERROR,
+                                        "ERR_INCORRECT_OUTPUT_VAR_TYPE"); //NOI18N
                             }
                         }
                     }
-                    //
-                    return isReasonsListEmpty();
                 }
                 
             };
