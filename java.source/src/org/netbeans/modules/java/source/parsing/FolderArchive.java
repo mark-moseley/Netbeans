@@ -64,6 +64,7 @@ import org.openide.filesystems.FileUtil;
 public class FolderArchive implements Archive {
 
     private static final Logger LOG = Logger.getLogger(FolderArchive.class.getName());
+    private static final boolean normalize = Boolean.getBoolean("FolderArchive.normalize"); //NOI18N
     
     final File root;
     final Charset encoding;
@@ -85,14 +86,21 @@ public class FolderArchive implements Archive {
             encoding = null;
         }
     }
-
+    
     public Iterable<JavaFileObject> getFiles(String folderName, ClassPath.Entry entry, Set<JavaFileObject.Kind> kinds, JavaFileFilterImplementation filter) throws IOException {
         assert folderName != null;
         if (folderName.length()>0) {
             folderName+='/';                                                                            //NOI18N
         }
         if (entry == null || entry.includes(folderName)) {
-            final File folder = new File (this.root, folderName.replace('/', File.separatorChar));      //NOI18N
+            File folder = new File (this.root, folderName.replace('/', File.separatorChar));      //NOI18N
+            //Issue: #126392 on Mac
+            //The problem when File ("A/").listFiles()[0].equals(new File("a/").listFiles[0]) returns false
+            //Normalization is slow - turn on this workaround only for users which require it.
+            //The problem only happens in case when there is file with wrong case in import.
+            if (normalize) {
+                folder = FileUtil.normalizeFile(folder);
+            }
             if (folder.canRead()) {
                 File[] content = folder.listFiles();            
                 if (content != null) {
