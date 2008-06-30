@@ -497,7 +497,7 @@ public class LifelineWidget extends UMLNodeWidget implements PropertyChangeListe
     }
 
     @Override
-    public void refresh()
+    public void refresh(boolean resizetocontent)
     {
         IPresentationElement pe = getObject();
         if (pe != null && pe.getFirstSubject() != null && !pe.getFirstSubject().isDeleted())
@@ -511,24 +511,6 @@ public class LifelineWidget extends UMLNodeWidget implements PropertyChangeListe
         getScene().validate();
     }
    
-    @Override
-    public void load(NodeInfo nodeReader) {
-        super.load(nodeReader);
-        IClassifier classifier = null;
-        String stereotypes = null;
-        this.getBox().updateLabel(this.getObject());
-        IElement elt = this.getObject().getFirstSubject();
-        if (elt instanceof Lifeline) {
-            classifier = ((Lifeline)elt).getRepresentingClassifier();
-            if (classifier != null) {
-                stereotypes = classifier.getAppliedStereotypesAsString(false);
-            }
-        }        
-        this.getBox().setStereotype(stereotypes);  
-       
-
-    }
-
     @Override
     protected void saveAnchorage(NodeWriter nodeWriter) {
         //write anchor info
