@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -76,7 +76,6 @@ import static java.util.Calendar.MILLISECOND;
 import static java.util.logging.Level.FINER;
 import static java.util.logging.Level.FINEST;
 import static org.netbeans.modules.junit.output.RegexpUtils.END_OF_TEST_PREFIX;
-import static org.netbeans.modules.junit.output.RegexpUtils.NESTED_EXCEPTION_PREFIX;
 import static org.netbeans.modules.junit.output.RegexpUtils.OUTPUT_DELIMITER_PREFIX;
 import static org.netbeans.modules.junit.output.RegexpUtils.START_OF_TEST_PREFIX;
 import static org.netbeans.modules.junit.output.RegexpUtils.TESTCASE_PREFIX;
@@ -97,7 +96,7 @@ import static org.netbeans.modules.junit.output.RegexpUtils.XML_DECL_PREFIX;
  */
 final class JUnitOutputReader {
 
-    private static final int MAX_REPORT_FILE_SIZE = 1 << 19;    //512 kBytes
+    private static final int MAX_REPORT_FILE_SIZE = 1 << 22;    //2 MiB
     /** number of progress bar workunits */
     private static final int PROGRESS_WORKUNITS = (1 << 15) / 100 * 100;    //sqrt(Integer.MAX), rounded down to hundreds
     /** */
@@ -186,16 +185,14 @@ final class JUnitOutputReader {
     private String suiteName;
     
     /** */
-    private StringBuffer xmlOutputBuffer;
+    private StringBuilder xmlOutputBuffer;
     
     /**
      * Are we reading standard output or standard error output?
      * This variable is used only when reading output from the test cases
      * (when {@link #outputBuffer} is non-<code>null</code>).
-     * If <code>true</code>, standard output is being read,
-     * if <code>false</code>, standard error output is being read.
      */
-    private boolean readingOutputReport;
+    private boolean readingSuiteOutputSummary;
     /** */
     private boolean lastHeaderBrief;
     /** */
@@ -338,12 +335,12 @@ final class JUnitOutputReader {
             }
             return;
         }//</editor-fold>
-        //<editor-fold defaultstate="collapsed" desc="if (readingOutputReport) ...">
-        if (readingOutputReport) {
+        //<editor-fold defaultstate="collapsed" desc="if (readingSuiteOutputSummary) ...">
+        if (readingSuiteOutputSummary) {
             if (msg.startsWith(OUTPUT_DELIMITER_PREFIX)) {
                 Matcher matcher = regexp.getOutputDelimPattern().matcher(msg);
                 if (matcher.matches() && (matcher.group(1) == null)) {
-                    readingOutputReport = false;
+                    readingSuiteOutputSummary = false;
                 }
             }
             return;
@@ -401,7 +398,7 @@ final class JUnitOutputReader {
             if (report == null) {
                 return;
             }
-            readingOutputReport = true;
+            readingSuiteOutputSummary = true;
         }//</editor-fold>
         //<editor-fold defaultstate="collapsed" desc="XML_DECL_PREFIX">
         else if (expectXmlReport && msg.startsWith(XML_DECL_PREFIX)) {
@@ -409,7 +406,7 @@ final class JUnitOutputReader {
             if (matcher.matches()) {
                 suiteStarted(null);
                 
-                xmlOutputBuffer = new StringBuffer(4096);
+                xmlOutputBuffer = new StringBuilder(4096);
                 xmlOutputBuffer.append(msg);
             }
         }//</editor-fold>
@@ -1066,7 +1063,7 @@ final class JUnitOutputReader {
         }
         
         xmlOutputBuffer = null;
-        readingOutputReport = false;
+        readingSuiteOutputSummary = false;
         testcase = null;
         trouble = null;
         troubleParser = null;
