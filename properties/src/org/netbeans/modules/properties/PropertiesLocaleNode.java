@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,16 +43,10 @@ package org.netbeans.modules.properties;
 
 import java.awt.Component;
 import java.awt.datatransfer.Transferable;
-import java.awt.Dialog;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.IOException;
-import java.text.MessageFormat;
 import java.util.List;
 import javax.swing.Action;
-import javax.swing.JPanel;
 
-import org.openide.actions.*;
 import org.openide.DialogDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -61,6 +55,17 @@ import org.openide.nodes.Node;
 import org.openide.nodes.NodeTransfer;
 import org.openide.NotifyDescriptor;
 import org.openide.DialogDisplayer;
+import org.openide.actions.CopyAction;
+import org.openide.actions.CutAction;
+import org.openide.actions.DeleteAction;
+import org.openide.actions.EditAction;
+import org.openide.actions.FileSystemAction;
+import org.openide.actions.NewAction;
+import org.openide.actions.OpenAction;
+import org.openide.actions.PasteAction;
+import org.openide.actions.PropertiesAction;
+import org.openide.actions.SaveAsTemplateAction;
+import org.openide.actions.ToolsAction;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.datatransfer.NewType;
 import org.openide.util.datatransfer.PasteType;
@@ -73,6 +78,7 @@ import org.openide.util.NbBundle;
  *
  * @see  PropertiesDataNode
  * @author Ian Formanek
+ * @author Marian Petras
  */
 public final class PropertiesLocaleNode extends FileEntryNode
                                         implements CookieSet.Factory,
@@ -206,65 +212,31 @@ public final class PropertiesLocaleNode extends FileEntryNode
 
                 /** Creates new type. */
                 public void create() throws IOException {
-                    final Dialog[] dialog = new Dialog[1];
-                    final Element.ItemElem item = new Element.ItemElem(
-                        null, 
-                        new Element.KeyElem(null, ""), // NOI18N
-                        new Element.ValueElem(null, ""), // NOI18N
-                        new Element.CommentElem(null, "") // NOI18N
-                    );
-                    final JPanel panel = new PropertyPanel(item);
+                    final PropertyPanel panel = new PropertyPanel();
 
-                    DialogDescriptor dd = new DialogDescriptor(
-                        panel,
-                        NbBundle.getBundle(PropertiesLocaleNode.class).getString("CTL_NewPropertyTitle"),
-                        true,
-                        DialogDescriptor.OK_CANCEL_OPTION,
-                        DialogDescriptor.OK_OPTION,
-                        new ActionListener() {
-                            private boolean bulkFlag = false;
-                            public void actionPerformed(ActionEvent evt) {
+                    Object selectedOption = DialogDisplayer.getDefault().notify(
+                            new DialogDescriptor(
+                                    panel,
+                                    NbBundle.getMessage(BundleEditPanel.class,
+                                                        "CTL_NewPropertyTitle")));  //NOI18N
+                    if (selectedOption != NotifyDescriptor.OK_OPTION) {
+                        return;
+                    }
 
-                                // prevent double notification #11364
-                                if (bulkFlag) return;
-                                bulkFlag =true;
+                    String key = panel.getKey();
+                    String value = panel.getValue();
+                    String comment = panel.getComment();
 
-                                // OK pressed
-                                if(evt.getSource() == DialogDescriptor.OK_OPTION) {
-                                    dialog[0].setVisible(false);
-                                    dialog[0].dispose();
-
-
-                                    String key = item.getKey();
-                                    String value = item.getValue();
-                                    String comment = item.getComment();
-
-                                    // add key to all entries
-                                    if(!((PropertiesFileEntry)getFileEntry()).getHandler().getStructure().addItem(key, value, comment)) {
-                                        NotifyDescriptor.Message msg = new NotifyDescriptor.Message(
-                                            MessageFormat.format(
-                                                NbBundle.getBundle(PropertiesLocaleNode.class).getString("MSG_KeyExists"),
-                                                new Object[] {
-                                                    item.getKey(),
-                                                    Util.getLocaleLabel(getFileEntry())
-                                                }
-                                            ),
-                                            NotifyDescriptor.ERROR_MESSAGE);
-                                        DialogDisplayer.getDefault().notify(msg);
-                                    }
-
-                                // Cancel pressed
-                                } else if (evt.getSource() == DialogDescriptor.CANCEL_OPTION) {
-                                    dialog[0].setVisible(false);
-                                    dialog[0].dispose();
-                                }
-                            }
-                        }
-                    );
-
-                    dialog[0] = DialogDisplayer.getDefault().createDialog(dd);
-                    dialog[0].setVisible(true);
-
+                    // add key to all entries
+                    if(!((PropertiesFileEntry)getFileEntry()).getHandler().getStructure().addItem(key, value, comment)) {
+                        DialogDisplayer.getDefault().notify(
+                                new NotifyDescriptor.Message(
+                                        NbBundle.getMessage(
+                                                PropertiesLocaleNode.class, "MSG_KeyExists",
+                                                key,
+                                                Util.getLocaleLabel(getFileEntry())),
+                                        NotifyDescriptor.ERROR_MESSAGE));
+                    }
                 }
                 
             } // End of annonymous class.
