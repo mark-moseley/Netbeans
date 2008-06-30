@@ -56,7 +56,6 @@ import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.ModificationResult;
-import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.TreeMaker;
 import org.netbeans.api.java.source.TypeMirrorHandle;
 import org.netbeans.api.java.source.WorkingCopy;
@@ -84,11 +83,13 @@ public final class CreateMethodFix implements Fix {
     private String name;
     private String inFQN;
     private String methodDisplayName;
+    private CompilationInfo info;
     
     public CreateMethodFix(CompilationInfo info, String name, Set<Modifier> modifiers, TypeElement target, TypeMirror returnType, List<? extends TypeMirror> argumentTypes, List<String> argumentNames, FileObject targetFile) {
         this.name = name;
         this.inFQN = target.getQualifiedName().toString();
         this.cpInfo = info.getClasspathInfo();
+        this.info = info;
         this.modifiers = modifiers;
         this.targetFile = targetFile;
         this.target = ElementHandle.create(target);
@@ -141,6 +142,8 @@ public final class CreateMethodFix implements Fix {
     public ChangeInfo implement() throws IOException {
         //use the original cp-info so it is "sure" that the proposedType can be resolved:
         JavaSource js = JavaSource.create(cpInfo, targetFile);
+        // tag used for selection
+        final String methodBodyTag = "mbody"; //NOI18N
         
         ModificationResult diff = js.runModificationTask(new Task<WorkingCopy>() {
             public void run(final WorkingCopy working) throws IOException {
@@ -181,6 +184,11 @@ public final class CreateMethodFix implements Fix {
                 }
                 
                 BlockTree body = targetType.getKind().isClass() ? createDefaultMethodBody(working, returnType) : null;
+                
+                if(body != null && !body.getStatements().isEmpty()) {
+                    working.tag(body.getStatements().get(0), methodBodyTag);
+                }
+                
                 MethodTree mt = make.Method(make.Modifiers(modifiers), name, returnType != null ? make.Type(returnType) : null, Collections.<TypeParameterTree>emptyList(), argTypes, Collections.<ExpressionTree>emptyList(), body, null);
                 ClassTree decl = GeneratorUtils.insertClassMember(working, targetTree, mt);
                 
@@ -188,7 +196,7 @@ public final class CreateMethodFix implements Fix {
             }
         });
         
-        return Utilities.commitAndComputeChangeInfo(targetFile, diff);
+        return Utilities.commitAndComputeChangeInfo(targetFile, diff, methodBodyTag);
     }
     
     private void addArguments(CompilationInfo info, StringBuilder value) {
@@ -245,6 +253,6 @@ public final class CreateMethodFix implements Fix {
         }
         return make.Block(blockStatements, false);
     }
-    
+
 }
 

@@ -45,7 +45,10 @@ import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.Scope;
+import com.sun.source.tree.StatementTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import java.io.IOException;
@@ -68,11 +71,11 @@ import javax.swing.text.Position;
 import org.netbeans.api.java.source.Comment;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.ElementUtilities.ElementAcceptor;
-import org.netbeans.api.java.source.GeneratorUtilities;
 import org.netbeans.api.java.source.ModificationResult;
 import org.netbeans.api.java.source.ModificationResult.Difference;
 import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.TreeMaker;
+import org.netbeans.api.java.source.TypeMirrorHandle;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.editor.GuardedDocument;
 import org.netbeans.editor.MarkBlock;
@@ -137,13 +140,17 @@ public class Utilities {
     }
     
     public static String getName(ExpressionTree et) {
+        return getName((Tree) et);
+    }
+    
+    public static String getName(Tree et) {
         return adjustName(getNameRaw(et));
     }
     
-    private static String getNameRaw(ExpressionTree et) {
+    private static String getNameRaw(Tree et) {
         if (et == null)
             return null;
-        
+
         switch (et.getKind()) {
         case IDENTIFIER:
             return ((IdentifierTree) et).getName().toString();
@@ -151,6 +158,10 @@ public class Utilities {
             return getName(((MethodInvocationTree) et).getMethodSelect());
         case MEMBER_SELECT:
             return ((MemberSelectTree) et).getIdentifier().toString();
+        case NEW_CLASS:
+            return firstToLower(getName(((NewClassTree) et).getIdentifier()));
+        case PARAMETERIZED_TYPE:
+            return firstToLower(getName(((ParameterizedTypeTree) et).getType()));
         default:
             return null;
         }
@@ -203,10 +214,21 @@ public class Utilities {
         }
         
     }
-    
-    public static ChangeInfo commitAndComputeChangeInfo(FileObject target, ModificationResult diff) throws IOException {
+
+    /**
+     * Commits changes and provides selection bounds
+     *
+     * @param target target FileObject
+     * @param diff set of changes made by ModificationTask
+     * @param tag mark used for selection of generated text
+     * @return set of changes made by hint
+     * @throws java.io.IOException
+     */
+    public static ChangeInfo commitAndComputeChangeInfo(FileObject target, final ModificationResult diff, final Object tag) throws IOException {
         List<? extends Difference> differences = diff.getDifferences(target);
         ChangeInfo result = null;
+        
+        diff.commit();
         
         try {
             if (differences != null) {
@@ -219,14 +241,20 @@ public class Utilities {
                             doc = start.getCloneableEditorSupport().openDocument();
                         }
                         
-                        final Position[] pos = new Position[1];
+                        final Position[] pos = new Position[2];
                         final Document fdoc = doc;
                         
                         doc.render(new Runnable() {
-
                             public void run() {
                                 try {
-                                    pos[0] = NbDocument.createPosition(fdoc, start.getOffset(), Position.Bias.Backward);
+                                    int[] span = diff.getSpan(tag);
+                                    if(span != null) {
+                                        pos[0] = fdoc.createPosition(span[0]);
+                                        pos[1] = fdoc.createPosition(span[1]);
+                                    } else {
+                                        pos[0] = NbDocument.createPosition(fdoc, start.getOffset(), Position.Bias.Backward);
+                                        pos[1] = pos[0];
+                                    }
                                 } catch (BadLocationException ex) {
                                     Exceptions.printStackTrace(ex);
                                 }
@@ -234,7 +262,7 @@ public class Utilities {
                         });
                         
                         if (pos[0] != null) {
-                            result = new ChangeInfo(target, pos[0], pos[0]);
+                            result = new ChangeInfo(target, pos[0], pos[1]);
                         }
                         
                         break;
@@ -244,8 +272,6 @@ public class Utilities {
         } catch (IOException e) {
             Exceptions.printStackTrace(e);
         }
-        
-        diff.commit();
         
         return result;
     }
@@ -273,7 +299,13 @@ public class Utilities {
         TypeMirror type = resolveCapturedTypeInt(info, tm);
         
         if (type.getKind() == TypeKind.WILDCARD) {
-            return ((WildcardType) type).getExtendsBound();
+            TypeMirror tmirr = ((WildcardType) type).getExtendsBound();
+            if (tmirr != null)
+                return tmirr;
+            else { //no extends, just '?'
+                return info.getElements().getTypeElement("java.lang.Object").asType(); // NOI18N
+            }
+                
         }
         
         return type;
@@ -303,8 +335,6 @@ public class Utilities {
     public static <T extends Tree> T copyComments(WorkingCopy wc, Tree from, T to) {
         TreeMaker make = wc.getTreeMaker();
         
-        GeneratorUtilities.get(wc).importComments(from, wc.getCompilationUnit());
-
         for (Comment c : wc.getTreeUtilities().getComments(from, true)) {
             make.addComment(to, c, true);
         }

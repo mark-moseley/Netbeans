@@ -44,7 +44,6 @@ import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.GeneratorUtilities;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
-import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.TreeMaker;
 import org.netbeans.api.java.source.TypeMirrorHandle;
 import org.netbeans.api.java.source.WorkingCopy;
@@ -132,7 +131,7 @@ public final class CreateFieldFix implements Fix {
             }
         });
         
-        return Utilities.commitAndComputeChangeInfo(targetFile, diff);
+        return Utilities.commitAndComputeChangeInfo(targetFile, diff, null);
     }
     
     String toDebugString(CompilationInfo info) {
