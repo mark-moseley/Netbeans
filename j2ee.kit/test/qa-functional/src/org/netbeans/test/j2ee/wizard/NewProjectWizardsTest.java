@@ -83,7 +83,7 @@ public class NewProjectWizardsTest extends JellyTestCase {
     private Reporter reporter;
 
     public NewProjectWizardsTest(String testName) {
-        this(testName, "1.4");
+        this(testName, "5");
     }
     
     public NewProjectWizardsTest(String testName, String version) {
@@ -91,10 +91,12 @@ public class NewProjectWizardsTest extends JellyTestCase {
         this.version = version;
     }
     
+    @Override
     public void setUp() throws Exception {
         reporter = Reporter.getReporter((NbTestCase)this);
     }
     
+    @Override
     public void tearDown() throws Exception {
         reporter.close();
     }
@@ -173,7 +175,6 @@ public class NewProjectWizardsTest extends JellyTestCase {
                 projectLocation);
         WizardUtils.setJ2eeSpecVersion(op, WizardUtils.MODULE_WAR, version);
         wiz.finish();
-        Thread.sleep(1000);
         checkProjectStructure(WEB);
         checkProjectNodes();
     }
