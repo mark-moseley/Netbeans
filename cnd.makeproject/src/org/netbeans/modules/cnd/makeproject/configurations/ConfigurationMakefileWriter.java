@@ -99,21 +99,29 @@ public class ConfigurationMakefileWriter {
     }
     
     private void writeMakefileImpl() {
+        String resource = "/org/netbeans/modules/cnd/makeproject/resources/MasterMakefile-impl.mk"; // NOI18N
         InputStream is = null;
         FileOutputStream os = null;
         try {
-            URL url = new URL("nbresloc:/org/netbeans/modules/cnd/makeproject/resources/MasterMakefile-impl.mk"); // NOI18N
+            URL url = new URL("nbresloc:" + resource); // NOI18N
             is = url.openStream();
-            String outputFileName = projectDescriptor.getBaseDir() + '/' + "nbproject" + '/' + MakeConfiguration.MAKEFILE_IMPL; // UNIX path // NOI18N
-            os = new FileOutputStream(outputFileName);
         } catch (Exception e) {
-            // FIXUP
+            is = MakeConfigurationDescriptor.class.getResourceAsStream(resource);
         }
+        
+        String outputFileName = projectDescriptor.getBaseDir() + '/' + "nbproject" + '/' + MakeConfiguration.MAKEFILE_IMPL; // UNIX path // NOI18N
+        try {
+            os = new FileOutputStream(outputFileName);
+        }
+        catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+        
         if (is == null || os == null) {
             // FIXUP: ERROR
             return;
         }
-        
+
         BufferedReader br = new BufferedReader(new InputStreamReader(is));
         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os));
         
@@ -202,8 +210,14 @@ public class ConfigurationMakefileWriter {
                 fortranCompilerName = fortranCompiler.getName();
         }
         
+        if (CompilerSetManager.useFakeRemoteCompilerSet) {
+            // XXX: temporary, all this should be done automatically from correct CS
+            cCompilerName = CompilerSetManager.fakeRemoteCS.getTool(Tool.CCompiler).getPath();
+            ccCompilerName = CompilerSetManager.fakeRemoteCS.getTool(Tool.CCCompiler).getPath();
+        }
+
         bw.write("#\n"); // NOI18N
-        bw.write("# Gererated Makefile - do not edit!\n"); // NOI18N
+        bw.write("# Generated Makefile - do not edit!\n"); // NOI18N
         bw.write("#\n"); // NOI18N
         bw.write("# Edit the Makefile in the project folder instead (../Makefile). Each target\n"); // NOI18N
         bw.write("# has a -pre and a -post target defined where you can add customized code.\n"); // NOI18N
