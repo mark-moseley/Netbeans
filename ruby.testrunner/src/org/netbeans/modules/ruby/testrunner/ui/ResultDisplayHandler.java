@@ -48,6 +48,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.ruby.testrunner.TestRunnerSettings;
@@ -59,6 +61,8 @@ import org.netbeans.modules.ruby.testrunner.TestRunnerSettings.DividerSettings;
  */
 final class ResultDisplayHandler {
 
+    private static final Logger LOGGER = Logger.getLogger(ResultDisplayHandler.class.getName());
+    
     /** */
     private static java.util.ResourceBundle bundle = org.openide.util.NbBundle.getBundle(
             ResultDisplayHandler.class);
@@ -68,8 +72,6 @@ final class ResultDisplayHandler {
     private ResultPanelOutput outputListener;
     /** */
     private JSplitPane displayComp;
-    private Component left;
-    private Component right;
     
     /** Creates a new instance of ResultDisplayHandler */
     ResultDisplayHandler() {
@@ -77,25 +79,18 @@ final class ResultDisplayHandler {
 
     /**
      */
-    Component getDisplayComponent() {
+    JSplitPane getDisplayComponent() {
         if (displayComp == null) {
             displayComp = createDisplayComp();
         }
         return displayComp;
     }
 
-    Component refreshDisplayComponent(int orientation) {
-        int location = TestRunnerSettings.getDefault().getDividerSettings(orientation).getLocation();
-        return createDisplayComp(left, right, orientation, location);
-    }
-    
     /**
      */
     private JSplitPane createDisplayComp() {
-        left = new StatisticsPanel(this);
-        right = new ResultPanelOutput(this);
         DividerSettings dividerSettings = TestRunnerSettings.getDefault().getDividerSettings(null);
-        return createDisplayComp(left, right, dividerSettings.getOrientation(), dividerSettings.getLocation());
+        return createDisplayComp(new StatisticsPanel(this), new ResultPanelOutput(this), dividerSettings.getOrientation(), dividerSettings.getLocation());
     }
 
     private JSplitPane createDisplayComp(Component left, Component right, int orientation, final int location) {
@@ -319,6 +314,7 @@ final class ResultDisplayHandler {
 
         final Method method = prepareMethod(methodName);
         if (method == null) {
+            LOGGER.log(Level.WARNING, "No such method: " + methodName);
             return;
         }
 
@@ -326,6 +322,9 @@ final class ResultDisplayHandler {
 
             public void run() {
                 try {
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.log(Level.FINE, "Invoking: " + methodName + " with param: " + param + ". RPT: " + treePanel);
+                    }
                     method.invoke(treePanel, new Object[]{param});
                 } catch (InvocationTargetException ex) {
                     ErrorManager.getDefault().notify(ex.getTargetException());
