@@ -130,14 +130,15 @@ public class PHPIndex {
     }
 
     /** Get the FileObject corresponding to a URL returned from the index */
-    public static FileObject getFileObject(String url) {
+    public static FileObject getFileObject(String urlStr) {
         try {
-            if (url.startsWith(CLUSTER_URL)) {
-                url = getClusterUrl() + url.substring(CLUSTER_URL.length()); // NOI18N
+            if (urlStr.startsWith(CLUSTER_URL)) {
+                urlStr = getClusterUrl() + urlStr.substring(CLUSTER_URL.length()); // NOI18N
 
             }
-
-            return URLMapper.findFileObject(new URL(url));
+            
+            URL url = new URL(urlStr);
+            return URLMapper.findFileObject(url);
         } catch (MalformedURLException mue) {
             Exceptions.printStackTrace(mue);
         }
@@ -434,6 +435,10 @@ public class PHPIndex {
                     if (kind == NameKind.PREFIX) {
                         //case sensitive
                         if (!constName.startsWith(name)) {
+                            continue;
+                        }
+                    } else if (kind == NameKind.EXACT_NAME){
+                        if (!constName.equals(name)) {
                             continue;
                         }
                     }
