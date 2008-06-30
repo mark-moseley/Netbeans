@@ -40,9 +40,9 @@
  */
 package org.netbeans.jellytools.actions;
 
-import org.netbeans.core.windows.Constants;
-import org.netbeans.core.windows.ModeImpl;
-import org.netbeans.core.windows.WindowManagerImpl;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import javax.swing.JSplitPane;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.nodes.Node;
@@ -50,7 +50,10 @@ import org.netbeans.jemmy.JemmyException;
 import org.netbeans.jemmy.Waitable;
 import org.netbeans.jemmy.Waiter;
 import org.netbeans.jemmy.operators.ComponentOperator;
+import org.openide.util.Exceptions;
+import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
+import org.openide.windows.WindowManager;
 
 /** Used to attach a window to a new position by IDE API.
  * It also defines constants used for attaching.
@@ -69,48 +72,17 @@ import org.openide.windows.TopComponent;
  * @author Jiri.Skrivanek@sun.com
  */
 public class AttachWindowAction extends Action {
-    /* Attach action is currently hidden in menus. If it is enabled in some
-     * next release, only uncomment apropriate methods.
-     *
-     * // former class javadoc:
-     * Used to call "Attach to" popup menu item, "Window|Attach "MyWindow" to" main menu item.
-     * It also defines constants used for attaching.
-     * @see Action
-     */
     
-    /** Constants used in "Attach to" menu items. */
-    /* As a Last Tab */
-    private static final String AS_LAST_TAB_LABEL = Bundle.getString(
-                                        "org.netbeans.core.windows.actions.Bundle",
-                                        "CTL_SideAsLastTab");
-    private static final String RIGHT_LABEL = Bundle.getString(
-                                        "org.netbeans.core.windows.actions.Bundle",
-                                        "CTL_SideRight");
-    private static final String LEFT_LABEL = Bundle.getString(
-                                        "org.netbeans.core.windows.actions.Bundle",
-                                        "CTL_SideLeft");
-    private static final String TOP_LABEL = Bundle.getString(
-                                        "org.netbeans.core.windows.actions.Bundle",
-                                        "CTL_SideTop");
-    private static final String BOTTOM_LABEL = Bundle.getString(
-                                        "org.netbeans.core.windows.actions.Bundle",
-                                        "CTL_SideBottom");
-    public static final String DOCUMENTS = Bundle.getString(
-                                        "org.netbeans.core.windows.actions.Bundle",
-                                        "CTL_Documents");
-    
-    public static final String BOTTOM = Constants.BOTTOM;
-    public static final String TOP = Constants.TOP;
-    public static final String RIGHT = Constants.RIGHT;
-    public static final String LEFT = Constants.LEFT;
+    public static final String TOP    = JSplitPane.TOP;
+    public static final String BOTTOM = JSplitPane.BOTTOM;
+    public static final String LEFT   = JSplitPane.LEFT;
+    public static final String RIGHT  = JSplitPane.RIGHT;
     public static final String AS_LAST_TAB = "As a Last Tab";
     
     /** "Window" main menu item. */
-    private static final String windowItem = Bundle.getStringTrimmed("org.netbeans.core.Bundle",
+    private static final String windowItem = Bundle.getStringTrimmed("org.netbeans.core.windows.resources.Bundle",
                                                                      "Menu/Window");
 
-    /** Parameter used in menu operations. E.g. "As a Last Tab", "Top", "Right", ... */
-    private String sideItem;
     /** Parameter used in API operations. */
     private String sideConstant;
 
@@ -167,51 +139,21 @@ public class AttachWindowAction extends Action {
     /** Set sideItem and sideConstant from given parameter.
      */
     private void mapSide(String side) {
-        if(side == null || side == AS_LAST_TAB || getComparator().equals(AS_LAST_TAB_LABEL, side)) {
-            sideItem = AS_LAST_TAB_LABEL;
+        if(side == null || side == AS_LAST_TAB) {
             sideConstant = AS_LAST_TAB;
-        } else if(side == RIGHT || getComparator().equals(RIGHT_LABEL, side)) {
-            sideItem = RIGHT_LABEL;
+        } else if(side == RIGHT) {
             sideConstant = RIGHT;
-        } else if(side == LEFT || getComparator().equals(LEFT_LABEL, side)) {
-            sideItem = LEFT_LABEL;
+        } else if(side == LEFT) {
             sideConstant = LEFT;
-        } else if(side == TOP || getComparator().equals(TOP_LABEL, side)) {
-            sideItem = TOP_LABEL;
+        } else if(side == TOP) {
             sideConstant = TOP;
-        } else if(side == BOTTOM || getComparator().equals(BOTTOM_LABEL, side)) {
-            sideItem = BOTTOM_LABEL;
+        } else if(side == BOTTOM) {
             sideConstant = BOTTOM;
         } else {
             throw new JemmyException("Cannot attach to position \""+side+"\".");
         }
     }
 
-    /** Currently hidden
-    public void performMenu(ComponentOperator compOperator) {
-        if(compOperator instanceof TopComponentOperator) {
-            performMenu((TopComponentOperator)compOperator);
-        } else {
-            throw new UnsupportedOperationException(
-                "AttachWindowAction can only be called on TopComponentOperator.");
-        }
-    }
-     */
-
-    /** Currently hidden.
-    public void performMenu(TopComponentOperator tco) {
-        // Window|Attach "tco.name" to|target.name|Top
-        menuPath = windowItem+"|"+
-                   Bundle.getString("org.netbeans.core.windows.actions.Bundle",
-                                    "CTL_AttachWindowAction", 
-                                    new String[] {tco.getName()})+
-                    "|"+getTargetTopComponentName()+"|"+sideItem;
-        getTargetTopComponentOperator().makeComponentVisible();
-        tco.makeComponentVisible();
-        performMenu();
-    }
-     */
-    
     /** Perform popup action on given TopComponent's tab.
      * @param tco TopComponentOperator instance on which perform
      * the action
@@ -255,13 +197,13 @@ public class AttachWindowAction extends Action {
         // run in dispatch thread
         tco.getQueueTool().invokeSmoothly(new Runnable() {
             public void run() {
-                ModeImpl mode = (ModeImpl)WindowManagerImpl.getDefault().findMode(targetTc);
+                Mode mode = (Mode)WindowManager.getDefault().findMode(targetTc);
                 if(sideConstant == AS_LAST_TAB) {
                     mode.dockInto(sourceTc);
                     sourceTc.open();
                     sourceTc.requestActive();
                 } else {
-                    WindowManagerImpl.getInstance().attachTopComponentToSide(sourceTc, mode, sideConstant);
+                    callWindowManager("attachTopComponentToSide", sourceTc, mode, sideConstant);
                 }
             }
         });
@@ -280,6 +222,30 @@ public class AttachWindowAction extends Action {
             throw new JemmyException("Interrupted.", e); // NOI18N
         }
     }
+
+    static Object callWindowManager(String method, Object... args) {
+        return callWindowManager(WindowManager.getDefault().getClass(), method, args);
+    }
+
+    private static Object callWindowManager(Class clazz, String method, Object... args) {
+        for (Method m : clazz.getDeclaredMethods()) {
+            if (!method.equals(m.getName())) {
+                continue;
+            }
+            if (args == null && m.getParameterTypes().length > 0 ||
+                    args != null && m.getParameterTypes().length != args.length) {
+                continue;
+            }
+            try {
+                return m.invoke(WindowManager.getDefault(), args);
+            } catch (Exception ex) {
+                throw (IllegalStateException)new IllegalStateException("Cannot execute " + method).initCause(ex);
+            }
+        }
+        return callWindowManager(clazz.getSuperclass(), method, args);
+    }
+
+
     
     /** Throws UnsupportedOperationException because AttachWindowAction doesn't have
      * representation on nodes.

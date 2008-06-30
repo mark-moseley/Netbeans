@@ -75,8 +75,9 @@ public class MainWindowOperatorTest extends JellyTestCase {
      * @return Test suite.
      */
     public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite(MainWindowOperatorTest.class);
-        return suite;
+        //NbTestSuite suite = new NbTestSuite(MainWindowOperatorTest.class);
+        //return suite;
+        return (NbTestSuite) createModuleTest(MainWindowOperatorTest.class);
     }
     
     
@@ -140,7 +141,7 @@ public class MainWindowOperatorTest extends JellyTestCase {
     
     /** Test of getToolbarCount method. */
     public void testGetToolbarCount() {
-        assertEquals("Wrong toolbar count.", 4, mainWindowOper.getToolbarCount());
+        assertEquals("Wrong toolbar count.", 5, mainWindowOper.getToolbarCount());
     }
     
     /** Test of getToolbarName method. */
@@ -172,7 +173,7 @@ public class MainWindowOperatorTest extends JellyTestCase {
     public void testPushToolbarPopupMenu() {
         int expectedToolbarsCount = mainWindowOper.getToolbarCount();
         // "File"
-        String popupPath = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Toolbars/File");
+        String popupPath = Bundle.getStringTrimmed("org.netbeans.core.ui.resources.Bundle", "Toolbars/File");
         mainWindowOper.pushToolbarPopupMenu(popupPath);
         int actualToolbarCount = mainWindowOper.getToolbarCount();
         mainWindowOper.pushToolbarPopupMenu(popupPath);
@@ -184,7 +185,7 @@ public class MainWindowOperatorTest extends JellyTestCase {
         // at the time no item in menu is blocking so we use testPushToolbarPopupMenu
         int expectedToolbarsCount = mainWindowOper.getToolbarCount();
         // "File"
-        String popupPath = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Toolbars/File");
+        String popupPath = Bundle.getStringTrimmed("org.netbeans.core.ui.resources.Bundle", "Toolbars/File");
         mainWindowOper.pushToolbarPopupMenuNoBlock(popupPath);
         new EventTool().waitNoEvent(500);
         int actualToolbarCount = mainWindowOper.getToolbarCount();

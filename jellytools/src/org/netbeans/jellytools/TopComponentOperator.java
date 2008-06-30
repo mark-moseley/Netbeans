@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -48,8 +48,6 @@ import java.io.IOException;
 import javax.swing.JComponent;
 import org.netbeans.jemmy.QueueTool;
 import org.netbeans.jemmy.TestOut;
-import org.netbeans.swing.tabcontrol.*;
-import org.netbeans.core.windows.view.ui.tabcontrol.TabbedAdapter;
 import org.netbeans.jellytools.actions.AttachWindowAction;
 import org.netbeans.jellytools.actions.CloneViewAction;
 import org.netbeans.jellytools.actions.CloseAllDocumentsAction;
@@ -72,6 +70,7 @@ import org.openide.cookies.SaveCookie;
 import org.openide.loaders.DataObject;
 import org.openide.windows.TopComponent;
 import org.netbeans.core.multiview.MultiViewCloneableTopComponent;
+import org.netbeans.swing.tabcontrol.TabbedContainer;
 
 /** Represents org.openide.windows.TopComponent. It is IDE wrapper for a lot of
  * panels in IDE. TopComponent is for example Filesystems panel, every editor
@@ -477,7 +476,13 @@ public class TopComponentOperator extends JComponentOperator {
         if(subchooser == null) {
             return c;
         } else {
-            if(c instanceof MultiViewCloneableTopComponent) {
+            boolean isMultiView = false;
+            try {
+                isMultiView = c instanceof MultiViewCloneableTopComponent;
+            } catch (Throwable t) {
+                // ignore possible NoClassDefFoundError because org.netbeans.core.multiview module is not enabled in IDE
+            }
+            if(isMultiView) {
                 TopComponentOperator tco = new TopComponentOperator((JComponent)c);
                 // suppress output when finding sub component
                 tco.setOutput(TestOut.getNullOutput());
@@ -557,7 +562,8 @@ public class TopComponentOperator extends JComponentOperator {
     public void pushMenuOnTab(String popupPath) {
         if(isOpened()) {
             this.makeComponentVisible();
-            TabbedAdapter ta = findTabbedAdapter();
+            TabbedContainer ta = (TabbedContainer)findTabbedAdapter();
+
             int index = ta.indexOf((TopComponent)getSource());
 
             Rectangle r = new Rectangle();
@@ -577,11 +583,11 @@ public class TopComponentOperator extends JComponentOperator {
     /** Returns TabbedAdapter component from parents hierarchy.
      * Used also in EditorWindowOperator.
      */
-    TabbedAdapter findTabbedAdapter() {
-        Component parent = getSource().getParent();
+    TabbedContainer findTabbedAdapter() {
+        Container parent = getSource().getParent();
         while(parent != null) {
-            if(parent instanceof TabbedAdapter) {
-                return (TabbedAdapter)parent;
+            if(parent instanceof TabbedContainer) { // NOI18N
+                return (TabbedContainer)parent;
             } else {
                 parent = parent.getParent();
             }

@@ -41,7 +41,6 @@
 
 package org.netbeans.jellytools.actions;
 
-import org.netbeans.core.windows.WindowManagerImpl;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.nodes.Node;
@@ -57,7 +56,7 @@ import org.netbeans.jemmy.operators.ComponentOperator;
 public class RestoreWindowAction extends Action {
     
     /** "Window" main menu item. */
-    private static final String windowItem = Bundle.getStringTrimmed("org.netbeans.core.Bundle",
+    private static final String windowItem = Bundle.getStringTrimmed("org.netbeans.core.windows.resources.Bundle",
                                                                      "Menu/Window");
     
     /** "Window|Restore Window" */
@@ -104,7 +103,7 @@ public class RestoreWindowAction extends Action {
         // run in dispatch thread
         new QueueTool().invokeSmoothly(new Runnable() {
             public void run() {
-                WindowManagerImpl.getInstance().switchMaximizedMode(null);
+                AttachWindowAction.callWindowManager("switchMaximizedMode", new Object[] {null});
             }
         });
     }
