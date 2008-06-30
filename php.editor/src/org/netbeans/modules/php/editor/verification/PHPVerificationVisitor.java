@@ -43,11 +43,15 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.php.editor.PHPLanguage;
 import org.netbeans.modules.php.editor.PredefinedSymbols;
+import org.netbeans.modules.php.editor.indent.PHPIndentTask;
+import org.netbeans.modules.php.editor.index.PHPIndex;
 import org.netbeans.modules.php.editor.parser.astnodes.ASTNode;
 import org.netbeans.modules.php.editor.parser.astnodes.Assignment;
 import org.netbeans.modules.php.editor.parser.astnodes.Block;
 import org.netbeans.modules.php.editor.parser.astnodes.ClassDeclaration;
+import org.netbeans.modules.php.editor.parser.astnodes.ClassInstanceCreation;
 import org.netbeans.modules.php.editor.parser.astnodes.DoStatement;
 import org.netbeans.modules.php.editor.parser.astnodes.FieldAccess;
 import org.netbeans.modules.php.editor.parser.astnodes.FieldsDeclaration;
@@ -84,6 +88,7 @@ class PHPVerificationVisitor extends DefaultTreePathVisitor {
         this.context = context;
         context.variableStack = varStack;
         context.path = getPath();
+        context.index = PHPIndex.get(context.compilationInfo.getIndex(PHPLanguage.PHP_MIME_TYPE));
         this.rules = rules;
     }
 
@@ -131,6 +136,20 @@ class PHPVerificationVisitor extends DefaultTreePathVisitor {
         }        
     }
 
+    @Override
+    public void visit(ClassInstanceCreation node) {
+        for (PHPRule rule : rules){
+            rule.setContext(context);
+            rule.visit(node);
+            result.addAll(rule.getResult());
+            rule.resetResult();
+        }
+        
+        super.visit(node);
+    }
+
+    
+    
     
     @Override
     public void visit(IfStatement node) {
@@ -377,7 +396,10 @@ class PHPVerificationVisitor extends DefaultTreePathVisitor {
             if (variable != null && variable.getName() instanceof Identifier) {
                 Identifier identifier = (Identifier) variable.getName();
                 String varName = identifier.getName();
-                vars.getLast().put(new VariableWrapper(var), varName);
+                
+                if (!isVariableDefined(varName)){
+                    vars.getLast().put(new VariableWrapper(var), varName);
+                }
             }
         }
         
