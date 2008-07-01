@@ -64,6 +64,7 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.modules.j2ee.api.ejbjar.Car;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbJar;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
 import org.netbeans.modules.j2ee.dd.api.application.Application;
 import org.netbeans.modules.j2ee.dd.api.application.ApplicationMetadata;
 import org.netbeans.modules.j2ee.dd.api.application.DDProvider;
@@ -73,13 +74,14 @@ import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeApplication;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleChangeReporter;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleListener;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.ArtifactListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeApplicationProvider;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeApplicationImplementation;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleFactory;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider.DeployOnSaveSupport;
 import org.netbeans.modules.j2ee.earproject.model.ApplicationMetadataModelImpl;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.EarProjectProperties;
-import org.netbeans.modules.j2ee.earproject.ui.customizer.VisualClassPathItem;
 import org.netbeans.modules.j2ee.earproject.util.EarProjectUtil;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
 import org.netbeans.modules.j2ee.metadata.model.spi.MetadataModelFactory;
@@ -117,6 +119,8 @@ public final class ProjectEar extends J2eeApplicationProvider
     /* application reference for JAVA EE 5 only (if application.xml doesn't exist)  */
     private Application application;
     private MetadataModel<ApplicationMetadata> metadataModel;
+    
+    private DeployOnSaveSupport deployOnSaveSupport;
     
     ProjectEar (EarProject project) { // ], AntProjectHelper helper) {
         this.project = project;
@@ -168,11 +172,6 @@ public final class ProjectEar extends J2eeApplicationProvider
     }
     
     @Override
-    public boolean useDefaultServer () {
-        return false;
-    }
-    
-    @Override
     public String getServerID () {
         return project.getServerID(); //helper.getStandardPropertyEvaluator ().getProperty (EarProjectProperties.J2EE_SERVER_TYPE);
     }
@@ -192,7 +191,9 @@ public final class ProjectEar extends J2eeApplicationProvider
      * contain module archives.
      */
     public Iterator getArchiveContents () throws IOException {
-        return new IT (this, getContentDirectory ());
+        FileObject content = getContentDirectory();
+        content.refresh();
+        return new IT(this, content);
     }
 
     public FileObject getContentDirectory() {
@@ -286,9 +287,8 @@ public final class ProjectEar extends J2eeApplicationProvider
 
         application = DDProvider.getDefault().getDDRoot(dd);
         application.setDisplayName(ProjectUtils.getInformation(project).getDisplayName());
-        EarProjectProperties epp = project.getProjectProperties();
-        for (VisualClassPathItem vcpi : epp.getJarContentAdditional()) {
-            epp.addItemToAppDD(application, vcpi);
+        for (ClassPathSupport.Item item : EarProjectProperties.getJarContentAdditional(project)) {
+            EarProjectProperties.addItemToAppDD(project, application, item);
         }
         
         return application;
@@ -514,6 +514,36 @@ public final class ProjectEar extends J2eeApplicationProvider
     public  J2eeModuleProvider[] getChildModuleProviders() {
         return mods.values().toArray(new J2eeModuleProvider[mods.size()]);
     }
+
+    @Override
+    public DeployOnSaveSupport getDeployOnSaveSupport() {
+        synchronized (this) {
+            if (deployOnSaveSupport == null) {
+                deployOnSaveSupport = new DeployOnSaveSupport() {
+
+                    public void addArtifactListener(ArtifactListener listener) {
+                        for (J2eeModuleProvider provider : getChildModuleProviders()) {
+                            DeployOnSaveSupport support = provider.getDeployOnSaveSupport();
+                            if (support != null) {
+                                support.addArtifactListener(listener);
+                            }
+                        }
+                    }
+
+                    public void removeArtifactListener(ArtifactListener listener) {
+                        for (J2eeModuleProvider provider : getChildModuleProviders()) {
+                            DeployOnSaveSupport support = provider.getDeployOnSaveSupport();
+                            if (support != null) {
+                                support.removeArtifactListener(listener);
+                            }
+                        }
+                    }
+                };
+            }
+            return deployOnSaveSupport;
+        }
+    }
+    
     
     public File getDeploymentConfigurationFile(String name) {
         String path = getConfigSupport().getContentRelativePath(name);
@@ -561,7 +591,7 @@ public final class ProjectEar extends J2eeApplicationProvider
             Logger.getLogger("global").log(Level.INFO,
                                            "Unable to add module to the Enterpise Application. Owner project not found."); // NOI18N
         } else {
-            project.getProjectProperties().addJ2eeSubprojects(new Project [] {owner});
+            EarProjectProperties.addJ2eeSubprojects(project, new Project [] {owner});
         }
     }
 
