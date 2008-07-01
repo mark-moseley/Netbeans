@@ -32,7 +32,7 @@ import org.netbeans.modules.bpel.model.api.events.EntityRemoveEvent;
 import org.netbeans.modules.bpel.model.api.events.PropertyUpdateEvent;
 import org.netbeans.modules.bpel.model.api.events.VetoException;
 import org.netbeans.modules.bpel.model.api.support.TBoolean;
-import org.netbeans.modules.bpel.nodes.actions.ActionType;
+import org.netbeans.modules.bpel.editors.api.nodes.actions.ActionType;
 import org.netbeans.modules.bpel.properties.Constants;
 import org.netbeans.modules.bpel.properties.PropertyType;
 import org.netbeans.modules.bpel.properties.props.PropertyUtils;
@@ -59,6 +59,7 @@ public class ForEachNode extends BpelNode<ForEach> {
         return NodeType.FOR_EACH;
     }
     
+    @Override
     protected Sheet createSheet() {
         Sheet sheet = super.createSheet();
 
@@ -76,6 +77,9 @@ public class ForEachNode extends BpelNode<ForEach> {
         PropertyUtils.registerAttributeProperty(this, mainPropertySet,
                 ForEach.COUNTER_NAME, PropertyType.COUNTER_NAME,
                 "getCounterName", "setCounterName", null); // NOI18N
+        //
+        PropertyUtils.registerCalculatedProperty(this, mainPropertySet,
+                PropertyType.PARALLEL, "isParallel", "setParallel", null); // NOI18N
         //
         PropertyUtils.registerElementProperty(this, null, mainPropertySet,
                 StartCounterValue.class, PropertyType.START_COUNTER_EXPR,
@@ -226,6 +230,31 @@ public class ForEachNode extends BpelNode<ForEach> {
         }
     }
     
+    public Boolean isParallel() {
+        ForEach forEachObj = getReference();
+        if (forEachObj != null) {
+            TBoolean value = forEachObj.getParallel();
+            if (TBoolean.YES.equals(value)) {
+                return Boolean.TRUE;
+            }
+        }
+        //
+        return Boolean.FALSE;
+    }
+    
+    public void setParallel(Boolean newValue) {
+        ForEach forEachObj = getReference();
+        if (forEachObj != null) {
+            if (newValue != null && newValue == Boolean.TRUE) {
+                forEachObj.setParallel(TBoolean.YES);
+                return;
+            }
+        }
+        //
+        forEachObj.setParallel(TBoolean.NO);
+    }
+    
+    @Override
     protected ActionType[] getActionsArray() {
         return new ActionType[] {
 //            ActionType.GO_TO_SOURCE,
@@ -248,10 +277,12 @@ public class ForEachNode extends BpelNode<ForEach> {
         };
     }
     
+    @Override
     public String getHelpId() {
         return getNodeType().getHelpId();
     }
     
+    @Override
     protected void updateComplexProperties(ChangeEvent event) {
         if (event instanceof EntityRemoveEvent) {
             BpelEntity oldEntityParent = event.getParent();

@@ -133,7 +133,7 @@ public enum PropertyType {
     IMPORT_LOCATION(String.class, StringPropEditor.class), 
     IMPORT_TYPE(String.class, StringPropEditor.class), 
     IMPORT_NAMESPACE(String.class, StringPropEditor.class), 
-    // PARALLEL(TBoolean.class, TBooleanEditor.class), 
+    PARALLEL(Boolean.class), 
     COUNTER_NAME(String.class, StringPropEditor.class), 
     START_COUNTER_EXPR(StartCounterValue.class, StartCounterExprEditor.class), 
     FINAL_COUNTER_EXPR(FinalCounterValue.class, FinalCounterExprEditor.class), 
@@ -145,7 +145,8 @@ public enum PropertyType {
     FOR_EXPRESSION(TimeEvent.class, ForExprEditor.class), 
     UNTIL_EXPRESSION(TimeEvent.class, UntilExprEditor.class), 
     REPEAT_EVERY_EXPRESSION(RepeatEvery.class, RepeatEveryExprEditor.class), 
-    COMPENSATION_TARGET(BpelReference.class, CompensationTargetEditor.class);
+    COMPENSATION_TARGET(BpelReference.class, CompensationTargetEditor.class), 
+    ATOMIC_PROCESS(Boolean.class);
 
     private Class<?> myClass;
     private String myDisplayName;
