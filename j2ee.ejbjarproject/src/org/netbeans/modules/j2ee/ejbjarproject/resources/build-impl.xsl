@@ -49,7 +49,8 @@ made subject to such option by the copyright holder.
                 xmlns:ejbjarproject3="http://www.netbeans.org/ns/j2ee-ejbjarproject/3"
                 xmlns:projdeps="http://www.netbeans.org/ns/ant-project-references/1"
                 xmlns:projdeps2="http://www.netbeans.org/ns/ant-project-references/2"
-                exclude-result-prefixes="xalan p projdeps projdeps2">
+                xmlns:libs="http://www.netbeans.org/ns/ant-project-libraries/1"
+                exclude-result-prefixes="xalan p projdeps projdeps2 libs">
     <xsl:output method="xml" indent="yes" encoding="UTF-8" xalan:indent-amount="4"/>
 
     <xsl:template match="/">
@@ -96,13 +97,38 @@ is divided into following sections:
                 <property file="nbproject/private/private.properties"/>
             </target>
             
+            <xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">
+                <target name="-init-libraries" depends="-pre-init,-init-private">
+                    <xsl:for-each select="/p:project/p:configuration/libs:libraries/libs:definitions">
+                        <property name="libraries.{position()}.path" location="{.}"/>
+                        <dirname property="libraries.{position()}.dir.nativedirsep" file="${{libraries.{position()}.path}}"/>
+                        <!-- Do not want \ on Windows, since it would act as an escape char: -->
+                        <pathconvert property="libraries.{position()}.dir" dirsep="/">
+                            <path path="${{libraries.{position()}.dir.nativedirsep}}"/>
+                        </pathconvert>
+                        <basename property="libraries.{position()}.basename" file="${{libraries.{position()}.path}}" suffix=".properties"/>
+                        <touch file="${{libraries.{position()}.dir}}/${{libraries.{position()}.basename}}-private.properties"/> <!-- has to exist, yuck -->
+                        <loadproperties srcfile="${{libraries.{position()}.dir}}/${{libraries.{position()}.basename}}-private.properties">
+                            <filterchain>
+                                <replacestring from="$${{base}}" to="${{libraries.{position()}.dir}}"/>
+                            </filterchain>
+                        </loadproperties>
+                        <loadproperties srcfile="${{libraries.{position()}.path}}">
+                            <filterchain>
+                                <replacestring from="$${{base}}" to="${{libraries.{position()}.dir}}"/>
+                            </filterchain>
+                        </loadproperties>
+                    </xsl:for-each>
+                </target>
+            </xsl:if>
+            
             <target name="-init-userdir">
-                <xsl:attribute name="depends">-pre-init,-init-private</xsl:attribute>
+                <xsl:attribute name="depends">-pre-init,-init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if></xsl:attribute>
                 <property name="user.properties.file" location="${{netbeans.user}}/build.properties"/>
             </target>
             
             <target name="-init-user">
-                <xsl:attribute name="depends">-pre-init,-init-private,-init-userdir</xsl:attribute>
+                <xsl:attribute name="depends">-pre-init,-init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if>,-init-userdir</xsl:attribute>
                 <property file="${{user.properties.file}}"/>
                 <xsl:comment> The two properties below are usually overridden </xsl:comment>
                 <xsl:comment> by the active platform. Just a fallback. </xsl:comment>
@@ -111,12 +137,12 @@ is divided into following sections:
             </target>
             
             <target name="-init-project">
-                <xsl:attribute name="depends">-pre-init,-init-private,-init-userdir,-init-user</xsl:attribute>
+                <xsl:attribute name="depends">-pre-init,-init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if>,-init-userdir,-init-user</xsl:attribute>
                 <property file="nbproject/project.properties"/>
             </target>
             
             <target name="-do-init">
-                <xsl:attribute name="depends">-pre-init,-init-private,-init-userdir,-init-user,-init-project,-init-macrodef-property</xsl:attribute>
+                <xsl:attribute name="depends">-pre-init,-init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if>,-init-userdir,-init-user,-init-project,-init-macrodef-property</xsl:attribute>
                 <xsl:if test="/p:project/p:configuration/ejbjarproject3:data/ejbjarproject3:explicit-platform">
                     <ejbjarproject1:property name="platform.home" value="platforms.${{platform.active}}.home"/>
                     <ejbjarproject1:property name="platform.bootcp" value="platforms.${{platform.active}}.bootclasspath"/>
@@ -147,7 +173,14 @@ is divided into following sections:
                     <fail unless="platform.bootcp">Must set platform.bootcp</fail>
                     <fail unless="platform.java">Must set platform.java</fail>
                     <fail unless="platform.javac">Must set platform.javac</fail>
-                    <fail if="platform.invalid">Platform is not correctly set up</fail>
+  <fail if="platform.invalid">
+ The J2SE Platform is not correctly set up.
+ Your active platform is: ${platform.active}, but the corresponding property "platforms.${platform.active}.home" is not found in the project's properties files. 
+ Either open the project in the IDE and setup the Platform with the same name or add it manually.
+ For example like this:
+     ant -Duser.properties.file=&lt;path_to_property_file&gt; jar (where you put the property "platforms.${platform.active}.home" in a .properties file)
+  or ant -Dplatforms.${platform.active}.home=&lt;path_to_JDK_home&gt; jar (where no properties file is used) 
+  </fail>
                 </xsl:if>
                 <xsl:comment> Ensure configuration directory exists. </xsl:comment>
                 <mkdir dir="${{meta.inf}}"/>
@@ -203,6 +236,17 @@ is divided into following sections:
                         <available file="nbproject/jaxws-build.xml"/>
                     </and>
                 </condition>
+                
+                <!-- COS feature -->
+                <condition>
+                    <xsl:attribute name="property">ensure.built.source.roots</xsl:attribute>
+                    <xsl:attribute name="value">
+                        <xsl:call-template name="createPath">
+                            <xsl:with-param name="roots" select="/p:project/p:configuration/ejbjarproject3:data/ejbjarproject3:source-roots"/>
+                        </xsl:call-template>
+                    </xsl:attribute>
+                    <istrue value="${{deploy.on.save}}"/>
+                </condition>             
             </target>
             
             <target name="-post-init">
@@ -211,7 +255,7 @@ is divided into following sections:
             </target>
             
             <target name="-init-check">
-                <xsl:attribute name="depends">-pre-init,-init-private,-init-userdir,-init-user,-init-project,-do-init</xsl:attribute>
+                <xsl:attribute name="depends">-pre-init,-init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if>,-init-userdir,-init-user,-init-project,-do-init</xsl:attribute>
                 <!-- XXX XSLT 2.0 would make it possible to use a for-each here -->
                 <!-- Note that if the properties were defined in project.xml that would be easy -->
                 <!-- But required props should be defined by the AntBasedProjectType, not stored in each project -->
@@ -228,6 +272,13 @@ is divided into following sections:
                 <fail unless="dist.javadoc.dir">Must set dist.javadoc.dir</fail>
                 <fail unless="build.classes.excludes">Must set build.classes.excludes</fail>
                 <fail unless="dist.jar">Must set dist.jar</fail>
+                <fail unless="j2ee.platform.classpath">
+The Java EE server classpath is not correctly set up. Your active server type is ${j2ee.server.type}.
+Either open the project in the IDE and assign the server or setup the server classpath manually.
+For example like this:
+   ant -Duser.properties.file=&lt;path_to_property_file&gt; (where you put the property "j2ee.platform.classpath" in a .properties file)
+or ant -Dj2ee.platform.classpath=&lt;server_classpath&gt; (where no properties file is used)
+                </fail>                
             </target>
             
             <target name="-init-macrodef-property">
@@ -485,8 +536,22 @@ is divided into following sections:
                 </macrodef>
             </target>
             
+            <target name="-init-taskdefs">
+                <fail unless="libs.CopyLibs.classpath">
+The libs.CopyLibs.classpath property is not set up.
+This property must point to 
+org-netbeans-modules-java-j2seproject-copylibstask.jar file which is part
+of NetBeans IDE installation and is usually located at 
+&lt;netbeans_installation&gt;/java&lt;version&gt;/ant/extra folder.
+Either open the project in the IDE and make sure CopyLibs library
+exists or setup the property manually. For example like this:
+ ant -Dlibs.CopyLibs.classpath=a/path/to/org-netbeans-modules-java-j2seproject-copylibstask.jar
+                </fail>
+                <taskdef resource="org/netbeans/modules/java/j2seproject/copylibstask/antlib.xml" classpath="${{libs.CopyLibs.classpath}}"/>
+            </target>
+
             <target name="init">
-                <xsl:attribute name="depends">-pre-init,-init-private,-init-userdir,-init-user,-init-project,-do-init,-post-init,-init-check,-init-macrodef-property,-init-macrodef-javac,-init-macrodef-junit,-init-macrodef-java,-init-macrodef-nbjpda,-init-macrodef-debug</xsl:attribute>
+                <xsl:attribute name="depends">-pre-init,-init-private,-init-userdir,-init-user,-init-project,-do-init,-post-init,-init-check,-init-macrodef-property,-init-macrodef-javac,-init-macrodef-junit,-init-macrodef-java,-init-macrodef-nbjpda,-init-macrodef-debug,-init-taskdefs</xsl:attribute>
             </target>
             
             <xsl:comment>
@@ -650,37 +715,9 @@ is divided into following sections:
                     <xsl:variable name="included.prop.name">
                         <xsl:value-of select="."/>
                     </xsl:variable>
-                    <xsl:if test="//ejbjarproject3:included-library[@files]">
-                        <xsl:if test="(@files &gt; 1) or (@files &gt; 0 and (@dirs &gt; 0))">
-                            <xsl:call-template name="copyIterateFiles">
-                                <xsl:with-param name="files" select="@files"/>
-                                <xsl:with-param name="target" select="'${build.classes.dir}'"/>
-                                <xsl:with-param name="libfile" select="$included.prop.name"/>
-                            </xsl:call-template>
-                        </xsl:if>
-                        <xsl:if test="@files = 1 and (@dirs = 0 or not(@dirs))">
-                            <xsl:variable name="target" select="'${build.classes.dir}'"/>
-                            <xsl:variable name="libfile" select="concat('${',$included.prop.name,'}')"/>
-                            <copy file="{$libfile}" todir="{$target}"/>
-                        </xsl:if>
-                        
-                    </xsl:if>
-                    <xsl:if test="//ejbjarproject3:included-library[@dirs]">
-                        <xsl:if test="(@dirs &gt; 1) or (@files &gt; 0 and (@dirs &gt; 0))">
-                            <xsl:call-template name="copyIterateDirs">
-                                <xsl:with-param name="files" select="@dirs"/>
-                                <xsl:with-param name="target" select="'${build.classes.dir}'"/>
-                                <xsl:with-param name="libfile" select="$included.prop.name"/>
-                            </xsl:call-template>
-                        </xsl:if>
-                        <xsl:if test="@dirs = 1 and (@files = 0 or not(@files))">
-                            <xsl:variable name="target" select="'${build.classes.dir}'"/>
-                            <xsl:variable name="libfile" select="concat('${',$included.prop.name,'}')"/>
-                            <copy todir="{$target}">
-                                <fileset dir="{$libfile}" includes="**/*"/>
-                            </copy>
-                        </xsl:if>
-                    </xsl:if>
+                    <copyfiles todir="${{build.classes.dir}}">
+                       <xsl:attribute name="files"><xsl:value-of select="concat('${',$included.prop.name,'}')"/></xsl:attribute>
+                    </copyfiles>
                 </xsl:for-each>   
             </target> 
             
@@ -689,52 +726,12 @@ is divided into following sections:
                     <xsl:variable name="included.prop.name">
                         <xsl:value-of select="."/>
                     </xsl:variable>
-                    <xsl:variable name="base.prop.name">
-                        <xsl:value-of select="concat('included.lib.', $included.prop.name, '')"/>
-                    </xsl:variable>
-                    <xsl:if test="//ejbjarproject3:included-library[@files]">
-                        <xsl:if test="(@files &gt; 1) or (@files &gt; 0 and (@dirs &gt; 0))">
-                            <xsl:call-template name="manifestBasenameIterateFiles">
-                                <xsl:with-param name="property" select="$base.prop.name"/>
-                                <xsl:with-param name="files" select="@files"/>
-                                <xsl:with-param name="libfile" select="$included.prop.name"/>
-                            </xsl:call-template>
-                        </xsl:if>
-                        <xsl:if test="@files = 1 and (@dirs = 0 or not(@dirs))">
-                            <xsl:variable name="libfile" select="concat('${',$included.prop.name,'}')"/>
-                            <basename property="{$base.prop.name}" file="{$libfile}"/>
-                        </xsl:if>
-                    </xsl:if>
-                    <xsl:if test="//ejbjarproject3:included-library[@files]">
-                        <xsl:if test="(@files &gt; 1) or (@files &gt; 0 and (@dirs &gt; 0))">
-                            <xsl:call-template name="copyIterateFiles">
-                                <xsl:with-param name="files" select="@files"/>
-                                <xsl:with-param name="target" select="'${dist.ear.dir}'"/>
-                                <xsl:with-param name="libfile" select="$included.prop.name"/>
-                            </xsl:call-template>
-                        </xsl:if>
-                        <xsl:if test="@files = 1 and (@dirs = 0 or not(@dirs))">
-                            <xsl:variable name="target" select="'${dist.ear.dir}'"/>
-                            <xsl:variable name="libfile" select="concat('${',$included.prop.name,'}')"/>
-                            <copy file="{$libfile}" todir="{$target}"/>
-                        </xsl:if>
-                    </xsl:if>
-                    <xsl:if test="//ejbjarproject3:included-library[@dirs]">
-                        <xsl:if test="(@files &gt; 1) or (@files &gt; 0 and (@dirs &gt; 0))">
-                            <xsl:call-template name="copyIterateDirs">
-                                <xsl:with-param name="files" select="@dirs"/>
-                                <xsl:with-param name="target" select="'${dist.ear.dir}'"/>
-                                <xsl:with-param name="libfile" select="$included.prop.name"/>
-                            </xsl:call-template>
-                        </xsl:if>
-                        <xsl:if test="@dirs = 1 and (@files = 0 or not(@files))">
-                            <xsl:variable name="target" select="'${dist.ear.dir}'"/>
-                            <xsl:variable name="libfile" select="concat('${',$included.prop.name,'}')"/>
-                            <copy todir="{$target}">
-                                <fileset dir="{$libfile}" includes="**/*"/>
-                            </copy>
-                        </xsl:if>
-                    </xsl:if>
+                    <copyfiles todir="${{dist.ear.dir}}">
+                       <xsl:attribute name="files"><xsl:value-of select="concat('${',$included.prop.name,'}')"/></xsl:attribute>
+                       <xsl:attribute name="manifestproperty">
+                           <xsl:value-of select="concat('manifest.', $included.prop.name)"/>
+                       </xsl:attribute>
+                    </copyfiles>
                 </xsl:for-each>   
                 
                 <manifest file="${{build.ear.classes.dir}}/META-INF/MANIFEST.MF" mode="update">
@@ -742,28 +739,12 @@ is divided into following sections:
                         <attribute>
                             <xsl:attribute name="name">Class-Path</xsl:attribute>
                             <xsl:attribute name="value">
-                                <!-- classpath element for directories -->
-                                <xsl:if test="//ejbjarproject3:included-library[(@dirs &gt; 0)]">
-                                    <xsl:text>. </xsl:text>
-                                </xsl:if>
                                 <!-- cp elements for included libraries and files -->
                                 <xsl:for-each select="//ejbjarproject3:included-library">
-                                    <xsl:variable name="base.prop.name">
-                                        <xsl:value-of select="concat('included.lib.', .)"/>
-                                    </xsl:variable>
                                     <xsl:variable name="included.prop.name">
                                         <xsl:value-of select="."/>
                                     </xsl:variable>
-                                    <xsl:if test="(@files &gt; 1) or (@files &gt; 0 and (@dirs &gt; 0))">
-                                        <xsl:call-template name="manifestPrintEntriesIterateFiles">
-                                            <xsl:with-param name="property" select="$base.prop.name"/>
-                                            <xsl:with-param name="files" select="@files"/>
-                                            <xsl:with-param name="libfile" select="$included.prop.name"/>
-                                        </xsl:call-template>
-                                    </xsl:if>
-                                    <xsl:if test="@files = 1 and (@dirs = 0 or not(@dirs))">
-                                        <xsl:text>${</xsl:text><xsl:value-of select="$base.prop.name"/><xsl:text>} </xsl:text>
-                                    </xsl:if>
+                                    <xsl:value-of select="concat('${manifest.', $included.prop.name, '} ')"/>
                                 </xsl:for-each>  
                             </xsl:attribute>
                         </attribute>
@@ -952,7 +933,7 @@ is divided into following sections:
             <target name="-init-deploy-ant" unless="netbeans.home">
                 <property name="deploy.ant.archive" value="${{dist.jar}}"/>
                 <property name="deploy.ant.resource.dir" value="${{resource.dir}}"/>
-                <property name="deploy.ant.enabled" value="true"/>
+                <property name="deploy.ant.enabled" value="true"/>                
             </target>
             
             <target name="run-undeploy">
@@ -1553,88 +1534,6 @@ to simulate
             <xsl:value-of select="@id"/>
             <xsl:text>}</xsl:text>
         </xsl:for-each>						
-    </xsl:template>
-    
-    <xsl:template name="manifestBasenameIterateFiles" >
-        <xsl:param name="property"/>
-        <xsl:param name="files" /><!-- number of files in the libfile property -->
-        <xsl:param name="libfile"/>
-        <xsl:if test="$files &gt; 0">
-            <xsl:variable name="fileNo" select="$files+(-1)"/>
-            <xsl:variable name="lib" select="concat('${',$libfile,'.libfile.',$files,'}')"/>
-            <xsl:variable name="propertyName" select="concat($property, '.', $fileNo+1)"/>
-            <basename property="{$propertyName}" file="{$lib}"/>
-            <xsl:call-template name="manifestBasenameIterateFiles">
-                <xsl:with-param name="files" select="$fileNo"/>
-                <xsl:with-param name="libfile" select="$libfile"/>
-                <xsl:with-param name="property" select="$property"/>
-            </xsl:call-template>
-        </xsl:if>
-    </xsl:template>
-    
-    <xsl:template name="manifestPrintEntriesIterateFiles" >
-        <xsl:param name="property"/>
-        <xsl:param name="files" /><!-- number of files in the libfile property -->
-        <xsl:param name="libfile"/>
-        <xsl:if test="$files &gt; 0">
-            <xsl:call-template name="manifestPrintEntriesIterateFilesIncreasingOrder">
-                <xsl:with-param name="files" select="$files"/>
-                <xsl:with-param name="index" select="1"/>
-                <xsl:with-param name="libfile" select="$libfile"/>
-                <xsl:with-param name="property" select="$property"/>
-            </xsl:call-template>
-        </xsl:if>
-    </xsl:template>
-    
-    <xsl:template name="manifestPrintEntriesIterateFilesIncreasingOrder" >
-        <xsl:param name="property"/>
-        <xsl:param name="files" /><!-- number of files in the libfile property -->
-        <xsl:param name="index" /><!-- index of file in the libfile property -->
-        <xsl:param name="libfile"/>
-        <xsl:if test="$files &gt; 0">
-            <xsl:variable name="propertyName" select="concat($property, '.', $index)"/>
-            <xsl:text>${</xsl:text><xsl:value-of select="$propertyName"/><xsl:text>} </xsl:text>
-            <xsl:call-template name="manifestPrintEntriesIterateFilesIncreasingOrder">
-                <xsl:with-param name="files" select="$files+(-1)"/>
-                <xsl:with-param name="index" select="$index+1"/>
-                <xsl:with-param name="libfile" select="$libfile"/>
-                <xsl:with-param name="property" select="$property"/>
-            </xsl:call-template>
-        </xsl:if>
-    </xsl:template>
-    
-    <xsl:template name="copyIterateFiles" >
-        <xsl:param name="files" />
-        <xsl:param name="target"/>
-        <xsl:param name="libfile"/>
-        <xsl:if test="$files &gt; 0">
-            <xsl:variable name="fileNo" select="$files+(-1)"/>
-            <xsl:variable name="lib" select="concat('${',$libfile,'.libfile.',$files,'}')"/>
-            <copy file="{$lib}" todir="{$target}"/>
-            <xsl:call-template name="copyIterateFiles">
-                <xsl:with-param name="files" select="$fileNo"/>
-                <xsl:with-param name="target" select="$target"/>
-                <xsl:with-param name="libfile" select="$libfile"/>
-            </xsl:call-template>
-        </xsl:if>
-    </xsl:template>
-    
-    <xsl:template name="copyIterateDirs" >
-        <xsl:param name="files" />
-        <xsl:param name="target"/>
-        <xsl:param name="libfile"/>
-        <xsl:if test="$files &gt; 0">
-            <xsl:variable name="fileNo" select="$files+(-1)"/>
-            <xsl:variable name="lib" select="concat('${',$libfile,'.libdir.',$files,'}')"/>
-            <copy todir="{$target}">
-                <fileset dir="{$lib}" includes="**/*"/>
-            </copy>
-            <xsl:call-template name="copyIterateDirs">
-                <xsl:with-param name="files" select="$fileNo"/>
-                <xsl:with-param name="target" select="$target"/>
-                <xsl:with-param name="libfile" select="$libfile"/>
-            </xsl:call-template>
-        </xsl:if>
     </xsl:template>
     
 </xsl:stylesheet>
