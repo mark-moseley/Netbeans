@@ -45,6 +45,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
@@ -59,7 +60,7 @@ import org.netbeans.spi.quicksearch.SearchProvider;
 import org.netbeans.spi.quicksearch.SearchRequest;
 import org.netbeans.spi.quicksearch.SearchResponse;
 import org.openide.cookies.EditorCookie;
-import org.openide.util.Exceptions;
+import org.openide.nodes.Node;
 import org.openide.util.Lookup;
 import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
@@ -79,30 +80,47 @@ public class ActionsSearchProvider implements SearchProvider {
      */
     public void evaluate(SearchRequest request, SearchResponse response) {
         List<Object[]> possibleResults = new ArrayList<Object[]>(7);
+        Map<ShortcutAction, Set<String>> curKeymap;
         // iterate over all found KeymapManagers
         for (KeymapManager m : Lookup.getDefault().lookupAll(KeymapManager.class)) {
+            curKeymap = m.getKeymap(m.getCurrentProfile());
             for (Entry<String, Set<ShortcutAction>> entry : m.getActions().entrySet()) {
                 for (ShortcutAction sa : entry.getValue()) {
                     // check action and obtain only meaningful ones
-                    Object[] actAndEvent = getActionAndEvent(sa);
+                    Object[] actAndEvent = getActionInfo(sa, curKeymap.get(sa));
                     if (actAndEvent == null) {
                         continue;
                     }
-                    int index = sa.getDisplayName().toLowerCase().indexOf(request.getText().toLowerCase());
-                    if (index == 0) {
-                        // typed text is prefix of action name, return these actions first
-                        if (!addAction(actAndEvent, response)) {
-                            return;
-                        }
-                    } else if (index != -1) {
-                        // typed text is contained in action name, but not as prefix,
-                        // store such actions if there are not enough "prefix" actions
-                        possibleResults.add(actAndEvent);
+                    if (!doEvaluation(sa.getDisplayName(), request, actAndEvent, response, possibleResults)) {
+                        return;
                     }
                 }
             }
         }
         
+        // try also actions of activated nodes
+        Node[] actNodes = TopComponent.getRegistry().getActivatedNodes();
+        for (int i = 0; i < actNodes.length; i++) {
+            Action[] acts = actNodes[i].getActions(false);
+            for (int j = 0; j < acts.length; j++) {
+                Action action = checkNodeAction(acts[j]);
+                if (action == null) {
+                    continue;
+                }
+                Object[] actAndEvent = new Object[] {
+                    action, createActionEvent(action), null, null
+                };
+                Object name = action.getValue(Action.NAME);
+                if (!(name instanceof String)) {
+                    // skip action without proper name
+                    continue;
+                }
+                if (!doEvaluation((String)name, request, actAndEvent, response, possibleResults)) {
+                    return;
+                }
+            }
+        }
+
         // add results stored above, actions that contain typed text, but not as prefix
         for (Object[] actAndEvent : possibleResults) {
             if (!addAction(actAndEvent, response)) {
@@ -110,24 +128,61 @@ public class ActionsSearchProvider implements SearchProvider {
             }
         }
     }
+    
 
     private boolean addAction(Object[] actAndEvent, SearchResponse response) {
-        Object shortcut = ((Action) actAndEvent[0]).getValue(Action.ACCELERATOR_KEY);
         KeyStroke stroke = null;
-        if (shortcut instanceof KeyStroke) {
-            stroke = (KeyStroke) shortcut;
+        // obtaining shortcut, first try Keymaps
+        Set<String> shortcuts = (Set<String>)actAndEvent[3];
+        if (shortcuts != null && shortcuts.size() > 0) {
+            String shortcut = shortcuts.iterator().next();
+            stroke = Utilities.stringToKey(shortcut);
         }
+        // try accelerator key property if Keymaps returned no shortcut
+        Action action = (Action) actAndEvent[0];
+        if (stroke == null) {
+            Object shortcut = action.getValue(Action.ACCELERATOR_KEY);
+            if (shortcut instanceof KeyStroke) {
+                stroke = (KeyStroke)shortcut;
+            }
+        }
+        
         /* uncomment if needed
          Object desc = ((Action) actAndEvent[0]).getValue(Action.SHORT_DESCRIPTION);
         String sDesc = null;
         if (sDesc instanceof String) {
             sDesc = (String) desc;
         }*/
-        return response.addResult(new ActionResult((Action) actAndEvent[0], (ActionEvent) actAndEvent[1]),
-                ((ShortcutAction)actAndEvent[2]).getDisplayName(), null, Collections.singletonList(stroke));
+        
+        String displayName = null;
+        ShortcutAction sa= (ShortcutAction)actAndEvent[2];
+        if (sa != null) {
+            displayName = sa.getDisplayName();
+        } else {
+            Object name = action.getValue(Action.NAME);
+            if (name instanceof String) {
+                displayName = (String)name;
+            }
+        }
+        
+        return response.addResult(new ActionResult(action, (ActionEvent) actAndEvent[1]),
+                displayName, null, Collections.singletonList(stroke));
+    }
+
+    private boolean doEvaluation(String name, SearchRequest request,
+            Object[] actAndEvent, SearchResponse response, List<Object[]> possibleResults) {
+        int index = name.toLowerCase().indexOf(request.getText().toLowerCase());
+        if (index == 0) {
+            return addAction(actAndEvent, response);
+        } else if (index != -1) {
+            // typed text is contained in action name, but not as prefix,
+            // store such actions if there are not enough "prefix" actions
+            possibleResults.add(actAndEvent);
+        }
+        return true;
     }
     
-    private Object[] getActionAndEvent(ShortcutAction sa) {
+    private Object[] getActionInfo(ShortcutAction sa, Set<String> shortcuts) {
         Class clazz = sa.getClass();
         Field f = null;
         try {
@@ -141,28 +196,8 @@ public class ActionsSearchProvider implements SearchProvider {
                 return null;
             }
             
-            Object evSource = null;
-            int evId = ActionEvent.ACTION_PERFORMED;
-            
-            // text (editor) actions
-            if (action instanceof TextAction) {
-                EditorCookie ec = Utilities.actionsGlobalContext().lookup(EditorCookie.class);
-                if (ec == null) {
-                    return null;
-                }
-                
-                JEditorPane[] editorPanes = ec.getOpenedPanes();
-                if (editorPanes == null || editorPanes.length <= 0) {
-                    return null;
-                }
-                evSource = editorPanes[0];
-            }
-            
-            if (evSource == null) {
-                evSource = TopComponent.getRegistry().getActivated();
-            }
-            
-            return new Object[] {action, new ActionEvent(evSource, evId, null), sa};
+            return new Object[] {action, createActionEvent(action),
+                                    sa, shortcuts};
             
         } catch (Throwable thr) {
             if (thr instanceof ThreadDeath) {
@@ -174,6 +209,51 @@ public class ActionsSearchProvider implements SearchProvider {
                     "Some problem getting action " + sa.getDisplayName(), thr);
         }
         // fallback
+        return null;
+    }
+    
+    
+    private ActionEvent createActionEvent (Action action) {
+        Object evSource = null;
+        int evId = ActionEvent.ACTION_PERFORMED;
+
+        // text (editor) actions
+        if (action instanceof TextAction) {
+            EditorCookie ec = Utilities.actionsGlobalContext().lookup(EditorCookie.class);
+            if (ec == null) {
+                return null;
+            }
+
+            JEditorPane[] editorPanes = ec.getOpenedPanes();
+            if (editorPanes == null || editorPanes.length <= 0) {
+                return null;
+            }
+            evSource = editorPanes[0];
+        }
+
+        if (evSource == null) {
+            evSource = TopComponent.getRegistry().getActivated();
+        }
+        
+        return new ActionEvent(evSource, evId, null);
+    }
+    
+    private Action checkNodeAction (Action action) {
+        if (action == null) {
+            return null;
+        }
+        try {
+            if (action.isEnabled()) {
+                return action;
+            }
+        } catch (Throwable thr) {
+            if (thr instanceof ThreadDeath) {
+                throw (ThreadDeath)thr;
+            }
+            // just log problems, it is common that some actions may complain
+            Logger.getLogger(getClass().getName()).log(Level.FINE,
+                    "Problem asking isEnabled on action " + action, thr);
+        }
         return null;
     }
     
