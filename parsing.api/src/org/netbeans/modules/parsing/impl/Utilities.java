@@ -39,12 +39,11 @@
 
 package org.netbeans.modules.parsing.impl;
 
-import java.util.Collection;
 import java.util.Collections;
 import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.impl.event.EventSupport;
 import org.netbeans.modules.parsing.spi.ParserResultTask;
 import org.netbeans.modules.parsing.spi.SchedulerTask;
-import org.netbeans.modules.parsing.spi.TaskScheduler;
 
 /**
  * Temporary helpe functions needed by the java.source
@@ -83,13 +82,16 @@ public class Utilities {
     }
     
     public static void revalidate (final Source source) {
-        Scheduler.revalidate (source);
+        final EventSupport support = SourceAccessor.getINSTANCE().getEventSupport(source);
+        assert support != null;
+        support.resetState(true);
     }
     
     public static void addParserResultTask (final ParserResultTask<?> task, final Source source) {
         assert task != null;
         assert source != null;
-        TaskProcessor.addPhaseCompletionTask(task, source, null);
+        SourceCache cache = SourceAccessor.getINSTANCE ().getCache (source);
+        TaskProcessor.addPhaseCompletionTasks (Collections.<SchedulerTask>singleton (task), cache, null);
     }
     
     public static void removeParserResultTask (final ParserResultTask<?> task, final Source source) {
@@ -101,6 +103,6 @@ public class Utilities {
     public static void rescheduleTask (final ParserResultTask<?> task, final Source source) {
         assert task != null;
         assert source != null;
-        TaskProcessor.rescheduleTask(task, source, null);
+        TaskProcessor.rescheduleTasks (Collections.<SchedulerTask>singleton (task), source, null);
     }
 }

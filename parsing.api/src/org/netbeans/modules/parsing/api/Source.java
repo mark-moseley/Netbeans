@@ -41,6 +41,7 @@ package org.netbeans.modules.parsing.api;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
@@ -49,6 +50,7 @@ import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
@@ -56,6 +58,7 @@ import javax.swing.text.Document;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.parsing.impl.SourceAccessor;
+import org.netbeans.modules.parsing.impl.SourceCache;
 import org.netbeans.modules.parsing.impl.SourceFlags;
 import org.netbeans.modules.parsing.impl.event.EventSupport;
 import org.netbeans.modules.parsing.spi.Parser;
@@ -213,19 +216,24 @@ public final class Source {
         }
         FileObject fileObject = getFileObject ();
         try {
-            BufferedReader bufferedReader = new BufferedReader (new InputStreamReader (fileObject.getInputStream (),FileEncodingQuery.getEncoding(fileObject)));
-            CharBuffer charBuffer = CharBuffer.allocate (4096);
-            StringBuilder sb = new StringBuilder ();
-            int i = bufferedReader.read (charBuffer);
-            while (i > 0) {
-                charBuffer.flip();
-                sb.append (charBuffer);
-                charBuffer.clear();
-                i = bufferedReader.read (charBuffer);
+            final InputStream inputStream = fileObject.getInputStream ();
+            try {
+                BufferedReader bufferedReader = new BufferedReader (new InputStreamReader (inputStream, FileEncodingQuery.getEncoding (fileObject)));
+                CharBuffer charBuffer = CharBuffer.allocate (4096);
+                StringBuilder sb = new StringBuilder ();
+                int i = bufferedReader.read (charBuffer);
+                while (i > 0) {
+                    charBuffer.flip();
+                    sb.append (charBuffer);
+                    charBuffer.clear();
+                    i = bufferedReader.read (charBuffer);
+                }
+                return new Snapshot (
+                    sb.toString (), this, mimeType, new int[][] {new int[] {0, 0}}, new int[][] {new int[] {0, 0}}
+                );
+            } finally {
+                inputStream.close ();
             }
-            return new Snapshot (
-                sb.toString (), this, mimeType, new int[][] {new int[] {0, 0}}, new int[][] {new int[] {0, 0}}
-            );
         } catch (IOException ex) {
             Exceptions.printStackTrace (ex);
             return new Snapshot (
@@ -243,8 +251,10 @@ public final class Source {
     
     private final Set<SourceFlags> 
                             flags = EnumSet.of(SourceFlags.INVALID);
+    private int taskCount;
     private volatile Parser cachedParser;
     private SchedulerEvent  schedulerEvent;
+    private SourceCache     cache;
     
     
     private static class MySourceAccessor extends SourceAccessor {
@@ -300,6 +310,31 @@ public final class Source {
         @Override
         public SchedulerEvent getEvent(Source source) {
             return source.schedulerEvent;
+        }
+
+        @Override
+        public SourceCache getCache (Source source) {
+            if (source.cache == null)
+                source.cache = new SourceCache (source, null);
+            return source.cache;
+        }
+
+        @Override
+        public int taskAdded(final Source source) {
+            assert source != null;
+            int ret;
+            synchronized (source) {
+                ret = source.taskCount++;
+            }
+            return ret;
+        }
+
+        @Override
+        public int taskRemoved(final Source source) {
+            assert source != null;
+            synchronized (source) {
+                return --source.taskCount;
+            }
         }
     }
     
