@@ -146,15 +146,18 @@ public class VersioningManager implements PropertyChangeListener, LookupListener
      * List of versioning systems changed.
      */
     private synchronized void refreshVersioningSystems() {
-        unloadVersioningSystems();
+        // inline unloadVersioningSystems();
+        for (VersioningSystem system : versioningSystems) {
+            system.removePropertyChangeListener(this);
+        }
+        versioningSystems.clear();
+        assert versioningSystems.size() == 0;
+        localHistory = null;
+        // inline unloadVersioningSystems();
+        
         Collection<? extends VersioningSystem> systems = systemsLookupResult.allInstances();
-        loadVersioningSystems(systems);
-        flushFileOwnerCache();
-        refreshDiffSidebars(null);
-        VersioningAnnotationProvider.refreshAllAnnotations();
-    }
 
-    private void loadVersioningSystems(Collection<? extends VersioningSystem> systems) {
+        // inline loadVersioningSystems(systems);
         assert versioningSystems.size() == 0;
         assert localHistory == null;
         versioningSystems.addAll(systems);
@@ -164,14 +167,11 @@ public class VersioningManager implements PropertyChangeListener, LookupListener
             }
             system.addPropertyChangeListener(this);
         }
-    }
-
-    private void unloadVersioningSystems() {
-        for (VersioningSystem system : versioningSystems) {
-            system.removePropertyChangeListener(this);
-        }
-        versioningSystems.clear();
-        localHistory = null;
+        // inline loadVersioningSystems(systems);
+        
+        flushFileOwnerCache();
+        refreshDiffSidebars(null);
+        VersioningAnnotationProvider.refreshAllAnnotations();
     }
 
     InterceptionListener getInterceptionListener() {
@@ -235,24 +235,28 @@ public class VersioningManager implements PropertyChangeListener, LookupListener
         if (owner != null) return owner;
         
         File closestParent = null;
-            for (VersioningSystem system : versioningSystems) {
-                if (system != localHistory) {    // currently, local history is never an owner of a file
-                    File topmost = system.getTopmostManagedAncestor(folder);                
-                    if (topmost != null && (closestParent == null || Utils.isAncestorOrEqual(closestParent, topmost))) {
-                        owner = system;
-                        closestParent = topmost;
-                    }                    
-                }    
+        for (VersioningSystem system : versioningSystems) {
+            if (system != localHistory) {    // currently, local history is never an owner of a file
+                File topmost = system.getTopmostManagedAncestor(folder);
+                if (topmost != null && (closestParent == null || Utils.isAncestorOrEqual(closestParent, topmost))) {
+                    owner = system;
+                    closestParent = topmost;
+                }
             }
+        }
                 
         if (owner != null) {
             folderOwners.put(folder, owner);
         } else {
-            folderOwners.put(folder, NULL_OWNER);
+            // nobody owns the folder => all parents aren't owned
+            while(folder != null) {
+                folderOwners.put(folder, NULL_OWNER);
+                folder = folder.getParentFile();
+            }
         }
         return owner;
     }
-
+    
     /**
      * Returns local history module that handles the given file.
      * 
