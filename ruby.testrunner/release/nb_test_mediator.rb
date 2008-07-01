@@ -38,6 +38,7 @@
  
 require 'test/unit'
 require 'test/unit/testcase'
+require 'test/unit/testsuite'
 require 'test/unit/ui/testrunnermediator'
 require 'getoptlong'
 require 'rubygems'
@@ -55,30 +56,31 @@ class NbTestMediator
       ["-m", "--testmethod", GetoptLong::OPTIONAL_ARGUMENT]
     )
     
-    
     loop do
       begin
         opt, arg = parser.get
         break if not opt
         case opt
+        # single file
         when "-f"
           add_to_suites arg
-          #          @filename = arg
-          #          require "#{@filename}"
-          #          last_slash = @filename.rindex("/")
-          #          test_class = @filename[last_slash + 1..@filename.length]
-          #          instance = Object.const_get(camelize(test_class))
-          #          if (instance.respond_to?(:suite))
-          #            @suite = instance.suite
-          #          else
-          #            @suite = instance
-          #          end
-          #        end
+        # directory
         when "-d"
-          Rake::FileList["#{arg}/test/**/*.rb"].each { |file| add_to_suites(file) }
+          Rake::FileList["#{arg}/**/*.rb"].each { |file| add_to_suites(file) }
+        # single test method
         when "-m"
           if "-m" != ""
-            @testmethod = arg
+            @suites.each do |s| 
+              tests_to_delete = []
+              s.tests.each do |t|
+                unless t.method_name == arg 
+                  tests_to_delete << t
+                end
+              end
+              tests_to_delete.each do |t|
+                s.delete(t)
+              end
+            end
           end
         end
       end
@@ -88,8 +90,14 @@ class NbTestMediator
   def add_to_suites file_name
     file_name = file_name[0..file_name.length - 4]
     require "#{file_name}"
-    last_slash = file_name.rindex("/")
-    test_class = file_name[last_slash + 1..file_name.length]
+    last_slash = file_name.rindex(File::SEPARATOR)
+     # try ALT_SEPARATOR for some Windows versions
+    last_slash = file_name.rindex(File::ALT_SEPARATOR) unless last_slash
+    if last_slash
+      test_class = file_name[last_slash + 1..file_name.length]
+    else 
+      test_class = file_name
+    end
     begin
       instance = Object.const_get(camelize(test_class))
     rescue NameError
@@ -97,12 +105,12 @@ class NbTestMediator
     end
     if (instance.respond_to?(:suite))
       @suites << instance.suite
-    else
+    elsif instance.kind_of? Test::Unit::TestSuite
       @suites << instance
     end
-    
+
   end
-  
+
   def get_filename class_name
     class_name.to_s.gsub(/::/, '/').
       gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
@@ -119,40 +127,34 @@ class NbTestMediator
     end
   end
 
-  def run_all
-    @test_files = Rake::FileList['test/**/*.rb']
-    @test_files.each do |t|
-      puts t
-    end
-  end
-  
-  def run
-    #      class_name = ARGV[0]
-    #      file_name = ARGV[1]
-    require "#{@filename}"
-    test_class = Object.const_get(class_name)
-    run_mediator
-  end
-  
   def run_mediator
-    #    @suite.tests.each { |i| puts "test #{i}" }
+    parse_args
     
     @suites.each do |suite| 
       @mediator = Test::Unit::UI::TestRunnerMediator.new(suite)
       attach_listeners
       begin
         puts "%SUITE_STARTING% #{suite}"
+        start_suite_timer
         result = @mediator.run_suite
         puts "%SUITE_SUCCESS% #{result.passed?}"
         puts "%SUITE_FAILURES% #{result.failure_count}"
         puts "%SUITE_ERRORS% #{result.error_count}"
       rescue => err
-        puts err
+        puts "%SUITE_FINISHED% time=#{elapsed_suite_time}"
+        puts "%SUITE_ERROR_OUTPUT% error=#{err}"
       end
     end
     
   end
   
+  def start_suite_timer
+    @suite_start_time = Time.now
+  end
+  
+  def elapsed_suite_time
+    Time.now - @suite_start_time
+  end
   def attach_listeners
     @mediator.add_listener(Test::Unit::UI::TestRunnerMediator::STARTED, &method(:suite_started))
     @mediator.add_listener(Test::Unit::UI::TestRunnerMediator::FINISHED, &method(:suite_finished))
@@ -164,9 +166,10 @@ class NbTestMediator
   
   def test_fault(result)
     if (result.instance_of?(Test::Unit::Failure))
-      puts "%TEST_FAILED% time=#{elapsed_time} #{result.to_s.gsub($/, "")}"
+      puts "%TEST_FAILED% time=#{elapsed_time} testname=#{result.test_name} message=#{result.message.to_s.gsub($/, " ")} location=#{result.location}"
     else
-      puts "%TEST_ERROR% time=#{elapsed_time} #{result.to_s.gsub($/, "")}"
+      stacktrace = result.exception.backtrace.join("%BR%")
+      puts "%TEST_ERROR% time=#{elapsed_time} testname=#{result.test_name} message=#{result.message.to_s.gsub($/, " ")} location=#{stacktrace}"
     end
   end
   
@@ -179,7 +182,7 @@ class NbTestMediator
   end
 
   def suite_finished(result)
-    puts "%SUITE_FINISHED% #{result}"
+    puts "%SUITE_FINISHED% time=#{result}"
   end
   
   def test_started(result)
@@ -200,7 +203,4 @@ class NbTestMediator
   end
 end
 
-tm = NbTestMediator.new
-tm.parse_args
-tm.run_mediator
-#tm.run_all
+NbTestMediator.new.run_mediator
