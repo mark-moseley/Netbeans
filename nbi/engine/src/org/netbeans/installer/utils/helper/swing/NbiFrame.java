@@ -183,7 +183,7 @@ public class NbiFrame extends JFrame {
     }
     
     // protected ////////////////////////////////////////////////////////////////////
-    protected void initComponents() {
+    private void initComponents() {
         // the frame itself
         try {
             setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -206,6 +206,7 @@ public class NbiFrame extends JFrame {
         }
         
         addComponentListener(new ComponentAdapter() {
+            @Override
             public void componentResized(ComponentEvent event) {
                 if ((frameMinimumWidth != -1) &&
                         (getSize().width < frameMinimumWidth)) {
@@ -311,13 +312,7 @@ public class NbiFrame extends JFrame {
     public static final String DEFAULT_FRAME_ICON_URI =
             ExtendedUri.RESOURCE_SCHEME +
             ":org/netbeans/installer/utils/helper/swing/frame-icon.png";
-    
-    /**
-     * Name of a resource bundle entry.
-     */
-    private static final String RESOURCE_FAILED_TO_PARSE_SYSTEM_PROPERTY =
-            "NF.error.failed.to.parse.property"; // NOI18N
-    
+            
     /**
      * Name of a resource bundle entry.
      */
