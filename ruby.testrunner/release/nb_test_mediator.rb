@@ -38,6 +38,7 @@
  
 require 'test/unit'
 require 'test/unit/testcase'
+require 'test/unit/testsuite'
 require 'test/unit/ui/testrunnermediator'
 require 'getoptlong'
 require 'rubygems'
@@ -55,30 +56,31 @@ class NbTestMediator
       ["-m", "--testmethod", GetoptLong::OPTIONAL_ARGUMENT]
     )
     
-    
     loop do
       begin
         opt, arg = parser.get
         break if not opt
         case opt
+        # single file
         when "-f"
           add_to_suites arg
-          #          @filename = arg
-          #          require "#{@filename}"
-          #          last_slash = @filename.rindex("/")
-          #          test_class = @filename[last_slash + 1..@filename.length]
-          #          instance = Object.const_get(camelize(test_class))
-          #          if (instance.respond_to?(:suite))
-          #            @suite = instance.suite
-          #          else
-          #            @suite = instance
-          #          end
-          #        end
+        # directory
         when "-d"
-          Rake::FileList["#{arg}/test/**/*.rb"].each { |file| add_to_suites(file) }
+          Rake::FileList["#{arg}/**/*.rb"].each { |file| add_to_suites(file) }
+        # single test method
         when "-m"
           if "-m" != ""
-            @testmethod = arg
+            @suites.each do |s| 
+              tests_to_delete = []
+              s.tests.each do |t|
+                unless t.method_name == arg 
+                  tests_to_delete << t
+                end
+              end
+              tests_to_delete.each do |t|
+                s.delete(t)
+              end
+            end
           end
         end
       end
@@ -88,8 +90,14 @@ class NbTestMediator
   def add_to_suites file_name
     file_name = file_name[0..file_name.length - 4]
     require "#{file_name}"
-    last_slash = file_name.rindex("/")
-    test_class = file_name[last_slash + 1..file_name.length]
+    last_slash = file_name.rindex(File::SEPARATOR)
+     # try ALT_SEPARATOR for some Windows versions
+    last_slash = file_name.rindex(File::ALT_SEPARATOR) unless last_slash
+    if last_slash
+      test_class = file_name[last_slash + 1..file_name.length]
+    else 
+      test_class = file_name
+    end
     begin
       instance = Object.const_get(camelize(test_class))
     rescue NameError
@@ -119,23 +127,8 @@ class NbTestMediator
     end
   end
 
-  def run_all
-    @test_files = Rake::FileList['test/**/*.rb']
-    @test_files.each do |t|
-      puts t
-    end
-  end
-  
-  def run
-    #      class_name = ARGV[0]
-    #      file_name = ARGV[1]
-    require "#{@filename}"
-    test_class = Object.const_get(class_name)
-    run_mediator
-  end
-  
   def run_mediator
-    #    @suite.tests.each { |i| puts "test #{i}" }
+    parse_args
     
     @suites.each do |suite| 
       @mediator = Test::Unit::UI::TestRunnerMediator.new(suite)
@@ -164,9 +157,10 @@ class NbTestMediator
   
   def test_fault(result)
     if (result.instance_of?(Test::Unit::Failure))
-      puts "%TEST_FAILED% time=#{elapsed_time} #{result.to_s.gsub($/, "")}"
+      puts "%TEST_FAILED% time=#{elapsed_time} testname=#{result.test_name} message=#{result.message.to_s.gsub($/, " ")} location=#{result.location}"
     else
-      puts "%TEST_ERROR% time=#{elapsed_time} #{result.to_s.gsub($/, "")}"
+      stacktrace = result.exception.backtrace.join("%BR%")
+      puts "%TEST_ERROR% time=#{elapsed_time} testname=#{result.test_name} message=#{result.message.to_s.gsub($/, " ")} location=#{stacktrace}"
     end
   end
   
@@ -179,7 +173,7 @@ class NbTestMediator
   end
 
   def suite_finished(result)
-    puts "%SUITE_FINISHED% #{result}"
+    puts "%SUITE_FINISHED% time=#{result}"
   end
   
   def test_started(result)
@@ -200,7 +194,4 @@ class NbTestMediator
   end
 end
 
-tm = NbTestMediator.new
-tm.parse_args
-tm.run_mediator
-#tm.run_all
+NbTestMediator.new.run_mediator
