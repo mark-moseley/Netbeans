@@ -44,10 +44,10 @@ package org.netbeans.modules.form;
 
 import java.beans.*;
 import java.lang.reflect.*;
-import org.netbeans.modules.form.editors.AbstractFormatterFactoryEditor;
 import org.openide.ErrorManager;
 
 import org.netbeans.modules.form.editors.*;
+import org.netbeans.modules.form.editors2.JTableSelectionModelEditor;
 import org.netbeans.modules.form.fakepeer.FakePeerSupport;
 
 /**
@@ -69,7 +69,7 @@ public class RADProperty extends FormProperty {
     private Object defaultValue;
 
     public RADProperty(RADComponent metacomp, PropertyDescriptor propdesc) {
-        super(new FormPropertyContext.Component(metacomp),//new RADPropertyContext(metacomp),
+        super(new FormPropertyContext.Component(metacomp),
               propdesc.getName(),
               propdesc.getPropertyType(),
               propdesc.getDisplayName(),
@@ -99,8 +99,6 @@ public class RADProperty extends FormProperty {
     public PropertyDescriptor getPropertyDescriptor() {
         return desc;
     }
-
-    // -------------------------------
 
     public Object getTargetValue() throws IllegalAccessException,
                                           InvocationTargetException {
@@ -211,14 +209,10 @@ public class RADProperty extends FormProperty {
                 ? specialDefaultValue : defaultValue;
     }
 
-    // ----------
-
     @Override
     public boolean canWrite() {
          return component.isReadOnly() ? false : super.canWrite();
     }
-
-    // ----------
 
     @Override
     public PropertyEditor getExpliciteEditor() {
@@ -229,11 +223,22 @@ public class RADProperty extends FormProperty {
             && ("mnemonic".equals(descriptor.getName()) // NOI18N
                 || "displayedMnemonic".equals(descriptor.getName()))) { // NOI18N
                 prEd = new MnemonicEditor();
+        } else if (descriptor.getPropertyType().isArray()) {
+            String typeName = descriptor.getPropertyType().getSimpleName();
+            
+            if (typeName.equals("boolean[]") || typeName.equals("byte[]")       // NOI18N
+               || typeName.equals("short[]") || typeName.equals("int[]")        // NOI18N
+               || typeName.equals("long[]") || typeName.equals("float[]")       // NOI18N
+               || typeName.equals("double[]") || typeName.equals("char[]")) {   // NOI18N
+               prEd = new PrimitiveTypeArrayEditor();
+            }
         } else {
             if ("editor".equals(descriptor.getName()) && (javax.swing.JSpinner.class.isAssignableFrom(component.getBeanClass()))) { // NOI18N
                 prEd = new SpinnerEditorEditor();
             } else if ("formatterFactory".equals(descriptor.getName()) && (javax.swing.JFormattedTextField.class.isAssignableFrom(component.getBeanClass()))) { // NOI18N
                 prEd = new AbstractFormatterFactoryEditor();
+            } else if ("selectionModel".equals(descriptor.getName()) && (javax.swing.JTable.class.equals(component.getBeanClass()))) { // NOI18N
+                prEd = new JTableSelectionModelEditor();
             } else {
                 prEd = createEnumEditor(descriptor);
             }
@@ -321,27 +326,6 @@ public class RADProperty extends FormProperty {
                     component, SYNTH_POST_CODE + getName(), old, value);
         }
     }
-
-    // ----------------------------------
-
-/*    protected void firePropertyValueChange(Object old, Object current) {
-        super.firePropertyValueChange(old, current);
-
-        if (isChangeFiring() && component.getFormModel() != null)
-            component.getFormModel().fireComponentPropertyChanged(component,
-                                                  desc.getName(), old, current);
-    }
-
-    protected void fireCurrentEditorChange(PropertyEditor old, PropertyEditor current) {
-        super.fireCurrentEditorChange(old, current);
-
-        if (isChangeFiring() && component.getFormModel() != null)
-            component.getFormModel().fireComponentPropertyChanged(component,
-                                                  desc.getName(), null, null);
-    } */
-
-    // -------------------
-    // innerclasses
 
     // Descriptor for fake-properties (not real, design-time only) that
     // need to pretend they are of certain type although without both
