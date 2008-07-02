@@ -43,14 +43,21 @@ package org.netbeans.modules.cnd.modelimpl.impl.services;
 
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
 import org.netbeans.modules.cnd.api.model.CsmDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
+import org.netbeans.modules.cnd.api.model.CsmListeners;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmNamespaceAlias;
+import org.netbeans.modules.cnd.api.model.CsmNamespaceDefinition;
+import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmProgressListener;
 import org.netbeans.modules.cnd.api.model.CsmProject;
+import org.netbeans.modules.cnd.api.model.CsmUsingDeclaration;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect;
 import org.netbeans.modules.cnd.api.model.services.CsmUsingResolver;
 
 /**
@@ -61,12 +68,31 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
     
     public UsingResolverImpl() {
         if (cache) {
-            CsmModelAccessor.getModel().addProgressListener(this);
+            CsmListeners.getDefault().addProgressListener(this);
         }
     }
     
     public Collection<CsmDeclaration> findUsedDeclarations(CsmFile file, int offset, CsmProject onlyInProject) {
         return getCollector(file, offset, onlyInProject).getUsedDeclarations();
+    }
+    
+    public Collection<CsmDeclaration> findUsedDeclarations(CsmNamespace namespace) {
+        CsmDeclaration.Kind[] kinds = { CsmDeclaration.Kind.USING_DECLARATION };
+        CsmSelect select = CsmSelect.getDefault();
+        List<CsmUsingDeclaration> res = new ArrayList<CsmUsingDeclaration>();
+        Iterator<CsmOffsetableDeclaration> udecls = select.getDeclarations(
+                    namespace, select.getFilterBuilder().createKindFilter(kinds));
+        while (udecls.hasNext()) {
+            res.add((CsmUsingDeclaration) udecls.next());
+        }
+//        for (CsmNamespaceDefinition def : namespace.getDefinitions()) {
+//            Iterator<CsmOffsetableDeclaration> udecls = select.getDeclarations(
+//                    def, select.getFilterBuilder().createKindFilter(kinds));
+//            while (udecls.hasNext()) {
+//                res.add((CsmUsingDeclaration) udecls.next());
+//            }
+//        }
+        return extractDeclarations(res);
     }
     
     public Collection<CsmNamespace> findVisibleNamespaces(CsmFile file, int offset, CsmProject onlyInProject) {
@@ -93,7 +119,10 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
                 if (search == null || !search.valid(file, offset, onlyInProject)) {
                     FileElementsCollector collector = new FileElementsCollector(file, offset, onlyInProject);
                     search = new SearchInfo(file, offset, onlyInProject, collector);
-                    lastSearch = new SoftReference(search);
+                    lastSearch = new SoftReference<SearchInfo>(search);
+                } else {
+                    search.offset = offset;
+                    search.collector.incrementOffset(offset);
                 }
                 assert search != null;
                 assert search.collector != null;
@@ -104,7 +133,7 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
     
     private static final class SearchInfo {
         public final CsmFile file;
-        public final int offset;
+        public int offset;
         public final FileElementsCollector collector;
         public final CsmProject onlyInProject;
         public SearchInfo(CsmFile file, int offset, CsmProject onlyInProject, FileElementsCollector collector) {
@@ -115,7 +144,7 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
         }
         
         private boolean valid(CsmFile file, int offset, CsmProject onlyInProject) {
-            return this.file.equals(file) && this.offset == offset && this.onlyInProject == onlyInProject;
+            return this.file.equals(file) && this.offset <= offset && this.onlyInProject == onlyInProject;
         }
     }
     

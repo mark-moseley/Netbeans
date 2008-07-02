@@ -52,6 +52,8 @@ import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.utils.cache.APTStringManager;
 import org.netbeans.modules.cnd.modelimpl.csm.BuiltinTypes;
 import org.netbeans.modules.cnd.modelimpl.csm.BuiltinTypes.BuiltInUID;
+import org.netbeans.modules.cnd.modelimpl.csm.Instantiation;
+import org.netbeans.modules.cnd.modelimpl.csm.Instantiation.InstantiationUID;
 import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 import org.netbeans.modules.cnd.modelimpl.repository.KeyObjectFactory;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDUtilities.ClassifierUID;
@@ -150,14 +152,29 @@ public class UIDObjectFactory extends AbstractObjectFactory {
         
     }
 
-    public <T> void writeSortedStringToUIDMap(Map <FileImpl.SortedKey, CsmUID<T>> aMap, DataOutput aStream, boolean sync) throws IOException {
+    public <T> void writeOffsetSortedToUIDMap(Map <FileImpl.OffsetSortedKey, CsmUID<T>> aMap, DataOutput aStream, boolean sync) throws IOException {
         assert aMap != null;
         assert aStream != null;
         aMap = sync ? copySyncMap(aMap) : aMap;
         int collSize = aMap.size();
         aStream.writeInt(collSize);
         
-        for (Map.Entry<FileImpl.SortedKey, CsmUID<T>> anEntry : aMap.entrySet()) {
+        for (Map.Entry<FileImpl.OffsetSortedKey, CsmUID<T>> anEntry : aMap.entrySet()) {
+            anEntry.getKey().write(aStream);
+            CsmUID anUID = anEntry.getValue();
+            assert anUID != null;
+            writeUID(anUID, aStream);
+        }
+    }
+
+    public <T> void writeNameSortedToUIDMap(Map <FileImpl.NameSortedKey, CsmUID<T>> aMap, DataOutput aStream, boolean sync) throws IOException {
+        assert aMap != null;
+        assert aStream != null;
+        aMap = sync ? copySyncMap(aMap) : aMap;
+        int collSize = aMap.size();
+        aStream.writeInt(collSize);
+        
+        for (Map.Entry<FileImpl.NameSortedKey, CsmUID<T>> anEntry : aMap.entrySet()) {
             anEntry.getKey().write(aStream);
             CsmUID anUID = anEntry.getValue();
             assert anUID != null;
@@ -223,14 +240,29 @@ public class UIDObjectFactory extends AbstractObjectFactory {
         }
     }
 
-    public <T> void readSortedStringToUIDMap(Map <FileImpl.SortedKey, CsmUID<T>> aMap, DataInput aStream, APTStringManager manager) throws IOException {
+    public <T> void readOffsetSortedToUIDMap(Map <FileImpl.OffsetSortedKey, CsmUID<T>> aMap, DataInput aStream, APTStringManager manager) throws IOException {
         assert aMap != null;
         assert aStream != null;
         
         int collSize = aStream.readInt();
         
         for (int i = 0; i < collSize; ++i) {
-            FileImpl.SortedKey key = new FileImpl.SortedKey(aStream);
+            FileImpl.OffsetSortedKey key = new FileImpl.OffsetSortedKey(aStream);
+            assert key != null;
+            CsmUID uid = readUID(aStream);
+            assert uid != null;
+            aMap.put(key, uid);
+        }
+    }
+    
+    public <T> void readNameSortedToUIDMap(Map <FileImpl.NameSortedKey, CsmUID<T>> aMap, DataInput aStream, APTStringManager manager) throws IOException {
+        assert aMap != null;
+        assert aStream != null;
+        
+        int collSize = aStream.readInt();
+        
+        for (int i = 0; i < collSize; ++i) {
+            FileImpl.NameSortedKey key = new FileImpl.NameSortedKey(aStream);
             assert key != null;
             CsmUID uid = readUID(aStream);
             assert uid != null;
@@ -290,6 +322,8 @@ public class UIDObjectFactory extends AbstractObjectFactory {
             aHandler = UID_DECLARATION_UID;
         } else if (object instanceof BuiltInUID) {
             aHandler = UID_BUILT_IN_UID;
+        } else if (object instanceof InstantiationUID) {
+            aHandler = UID_INSTANTIATION_UID;
         } else if (object instanceof UnresolvedClassUID) {
             aHandler = UID_UNRESOLVED_CLASS;
         } else if (object instanceof UnresolvedFileUID) {
@@ -353,6 +387,11 @@ public class UIDObjectFactory extends AbstractObjectFactory {
                 share = false;
                 break;
 
+            case UID_INSTANTIATION_UID:
+                anUID = new Instantiation.InstantiationUID(aStream);
+                share = false;
+                break;
+                
             case UID_UNRESOLVED_CLASS:
 		anUID = new UIDUtilities.UnresolvedClassUID(aStream);
                 break;
@@ -394,8 +433,9 @@ public class UIDObjectFactory extends AbstractObjectFactory {
     private static final int UID_UNNAMED_OFFSETABLE_DECLARATION_UID = UID_INCLUDE_UID + 1;
     private static final int UID_DECLARATION_UID        = UID_UNNAMED_OFFSETABLE_DECLARATION_UID + 1;
     private static final int UID_BUILT_IN_UID           = UID_DECLARATION_UID + 1;
+    private static final int UID_INSTANTIATION_UID      = UID_BUILT_IN_UID + 1;
     
-    private static final int UID_UNRESOLVED_CLASS       = UID_BUILT_IN_UID + 1;
+    private static final int UID_UNRESOLVED_CLASS       = UID_INSTANTIATION_UID + 1;
     private static final int UID_UNRESOLVED_FILE        = UID_UNRESOLVED_CLASS + 1;
     private static final int UID_UNRESOLVED_NAMESPACE   = UID_UNRESOLVED_FILE + 1;
     
