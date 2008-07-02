@@ -41,12 +41,14 @@ package org.netbeans.modules.project.ui;
 
 import java.awt.EventQueue;
 import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.EventObject;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ui.OpenProjects;
@@ -62,46 +64,35 @@ import org.openide.nodes.NodeEvent;
 import org.openide.nodes.NodeListener;
 import org.openide.nodes.NodeMemberEvent;
 import org.openide.nodes.NodeReorderEvent;
-import org.openide.util.Lookup;
+import org.openide.util.RequestProcessor;
 import org.openide.util.lookup.Lookups;
-import org.openidex.search.SearchInfo;
 
 /** 
  *
  * @author Jaroslav Tulach <jtulach@netbeans.org>
  */
-public class ProjectsRootNodePreferredOpenTest extends NbTestCase 
-implements PropertyChangeListener {
-    CountDownLatch first;
-    CountDownLatch middle;
-    CountDownLatch rest;
-    private int events;
+public class CloseProjectsTest extends NbTestCase {
+    CountDownLatch down;
     
-    public ProjectsRootNodePreferredOpenTest(String testName) {
+    public CloseProjectsTest(String testName) {
         super(testName);
     }            
-    
-    Lookup createLookup(TestSupport.TestProject project, Object instance) {
-        return Lookups.singleton(instance);
-    }
 
     @Override
     protected void setUp() throws Exception {
         clearWorkDir();
-
+        
         MockServices.setServices(TestSupport.TestProjectFactory.class);
         
         FileObject workDir = FileUtil.toFileObject(getWorkDir());
         assertNotNull(workDir);
         
-        first = new CountDownLatch(1);
-        middle = new CountDownLatch(1);
-        rest = new CountDownLatch(2);
+        down = new CountDownLatch(1);
         
         List<URL> list = new ArrayList<URL>();
         List<ExtIcon> icons = new ArrayList<ExtIcon>();
         List<String> names = new ArrayList<String>();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 30; i++) {
             FileObject prj = TestSupport.createTestProject(workDir, "prj" + i);
             URL url = URLMapper.findURL(prj, URLMapper.EXTERNAL);
             list.add(url);
@@ -109,108 +100,44 @@ implements PropertyChangeListener {
             icons.add(new ExtIcon());
             TestSupport.TestProject tmp = (TestSupport.TestProject)ProjectManager.getDefault ().findProject (prj);
             assertNotNull("Project found", tmp);
-            CountDownLatch down = i == 0 ? first : (i == 5 ? middle : rest);
-            tmp.setLookup(createLookup(tmp, new TestProjectOpenedHookImpl(down)));
+            tmp.setLookup(Lookups.singleton(new TestProjectOpenedHookImpl(down)));
         }
         
         OpenProjectListSettings.getInstance().setOpenProjectsURLs(list);
         OpenProjectListSettings.getInstance().setOpenProjectsDisplayNames(names);
         OpenProjectListSettings.getInstance().setOpenProjectsIcons(icons);
-        
-        OpenProjects.getDefault().addPropertyChangeListener(this);
     }
 
-    public void testPreferencesInOpenCanBeChanged() throws InterruptedException {
-        assertEquals("No events in API", 0, events);
-        
+    public void testClose() throws Exception {
         Node logicalView = new ProjectsRootNode(ProjectsRootNode.LOGICAL_VIEW);
         L listener = new L();
         logicalView.addNodeListener(listener);
         
-        assertEquals("No events in API", 0, events);
-        assertEquals("10 children", 10, logicalView.getChildren().getNodesCount());
+        assertEquals("30 children", 30, logicalView.getChildren().getNodesCount());
         listener.assertEvents("None", 0);
         assertEquals("No project opened yet", 0, TestProjectOpenedHookImpl.opened);
-        assertEquals("No events in API", 0, events);
         
-        for (Node n : logicalView.getChildren().getNodes()) {
-            TestSupport.TestProject p = n.getLookup().lookup(TestSupport.TestProject.class);
+        Node[] nodeArray = logicalView.getChildren().getNodes();
+        Project[] arr = new Project[nodeArray.length];
+        int i = 0;
+        for (Node n : nodeArray) {
+            Project p = n.getLookup().lookup(TestSupport.TestProject.class);
             assertNull("No project of this type, yet", p);
+            
+            arr[i] = n.getLookup().lookup(Project.class);
+            assertNotNull("but some project is there", arr[i]);
+            
+            i++;
         }
-        assertEquals("No events in API", 0, events);
+        // let the project open hook run
+        down.countDown();
         
-        Node midNode = logicalView.getChildren().getNodes()[5];
-        {
-            TestSupport.TestProject p = midNode.getLookup().lookup(TestSupport.TestProject.class);
-            assertNull("No project of this type, yet", p);
-        }
-        Project lazyP = midNode.getLookup().lookup(Project.class);
-        assertNotNull("Some project is found", lazyP);
-        assertEquals("It is lazy project", LazyProject.class, lazyP.getClass());
-        assertEquals("No events in API", 0, events);
+        OpenProjects.getDefault().close(arr);
         
-        middle.countDown();
-        // not necessary, but to ensure middle really does not run
-        Thread.sleep(300);
-        assertEquals("Still no processing", 0, TestProjectOpenedHookImpl.opened);
-        // trigger initialization of the node, shall trigger OpenProjectList.preferredProject(lazyP);
-        midNode.getChildren().getNodes();
-        first.countDown();
-        
-        TestProjectOpenedHookImpl.toOpen.await();
-
-        {
-            TestSupport.TestProject p = null;
-            for (int i = 0; i < 10; i++) {
-                Node midNode2 = logicalView.getChildren().getNodes()[5];
-                p = midNode.getLookup().lookup(TestSupport.TestProject.class);
-                if (p != null) {
-                    break;
-                }
-                Thread.sleep(100);
-            }
-            assertNotNull("The right project opened", p);
-        }
-        assertEquals("No events in API", 0, events);
-
-        {
-            int cnt = 0;
-            for (int i = 0; i < 10; i++) {
-                Node n = logicalView.getChildren().getNodes()[i];
-                TestSupport.TestProject p = null;
-                p = n.getLookup().lookup(TestSupport.TestProject.class);
-                if (p != null) {
-                    cnt++;
-                }
-            }
-            assertEquals("First and fifth projects are open, nobody else is", 2, cnt);
-        }
-        
-        assertEquals("No events in API", 0, events);
-        rest.countDown();
-        rest.countDown();
-        
-        OpenProjectList.waitProjectsFullyOpen();
-        assertEquals("Finally notified in API", 1, events);
-        
-        assertEquals("All projects opened", 10, TestProjectOpenedHookImpl.opened);
-        
-
-        for (Node n : logicalView.getChildren().getNodes()) {
-            TestSupport.TestProject p = n.getLookup().lookup(TestSupport.TestProject.class);
-            assertNotNull("Nodes have correct project of this type", p);
-            SearchInfo s = n.getLookup().lookup(SearchInfo.class);
-            assertNotNull("Nodes have correct project of this type", s);
-        }
-    }
-
-    public void propertyChange(PropertyChangeEvent evt) {
-        if (OpenProjects.PROPERTY_OPEN_PROJECTS.equals(evt.getPropertyName())) {
-            events++;
-        }
+        assertEquals("View is empty", 0, logicalView.getChildren().getNodesCount());
     }
     
-    private static class L implements NodeListener, PropertyChangeListener {
+    private static class L implements NodeListener {
         public List<EventObject> events = new ArrayList<EventObject>();
         
         public void childrenAdded(NodeMemberEvent ev) {
@@ -245,9 +172,10 @@ implements PropertyChangeListener {
         
     }
     
-    private static class TestProjectOpenedHookImpl extends ProjectOpenedHook {
+    private static class TestProjectOpenedHookImpl extends ProjectOpenedHook 
+    implements Runnable {
         
-        public static CountDownLatch toOpen = new CountDownLatch(2);
+        public static CountDownLatch toOpen = new CountDownLatch(30);
         public static int opened = 0;
         public static int closed = 0;
         
@@ -262,7 +190,24 @@ implements PropertyChangeListener {
             closed++;
         }
         
+        Project[] arr;
+        public void run() {
+            try {
+                arr = OpenProjects.getDefault().openProjects().get(50, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException ex) {
+                fail("Wrong exception");
+            } catch (ExecutionException ex) {
+                fail("Wrong exception");
+            } catch (TimeoutException ex) {
+                // OK
+            }
+        }
+        
         protected void projectOpened() {
+            assertFalse("Running", OpenProjects.getDefault().openProjects().isDone());
+            // now verify that other threads do not see results from the Future
+            RequestProcessor.getDefault().post(this).waitFinished();
+            assertNull("TimeoutException thrown", arr);
             if (toWaitOn != null) {
                 try {
                     toWaitOn.await();

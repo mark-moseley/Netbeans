@@ -34,68 +34,64 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.project.ui;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.logging.Level;
-import org.netbeans.junit.Log;
-import org.netbeans.modules.project.ui.actions.TestSupport.TestProject;
-import org.netbeans.spi.project.ui.LogicalViewProvider;
-import org.openide.loaders.DataObject;
-import org.openide.nodes.AbstractNode;
-import org.openide.nodes.Children;
-import org.openide.nodes.Node;
+import java.lang.ref.WeakReference;
+import org.netbeans.api.project.Project;
+import org.netbeans.junit.NbTestCase;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
-import org.openide.util.lookup.Lookups;
 
-/** 
+/**
  *
- * @author Jaroslav Tulach <jtulach@netbeans.org>
+ * @author Jaroslav Tulach <jaroslav.tulach@netbeans.org>
  */
-public class ProjectsRootNodePreferredOpen3Test extends ProjectsRootNodePreferredOpenTest {
-    private CharSequence log;
+public class TemplateChooserPanelGUITest extends NbTestCase {
+    TemplateChooserPanelGUI instance;
     
-    public ProjectsRootNodePreferredOpen3Test(String testName) {
+    public TemplateChooserPanelGUITest(String testName) {
         super(testName);
-    }            
-    
-    @Override
-    Lookup createLookup(TestProject project, Object instance) {
-        return Lookups.fixed(instance, project, new MyTestProjectAdditions(project));
     }
 
     @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-        log = Log.enable("", Level.WARNING);
+    protected boolean runInEQ() {
+        return true;
     }
 
-    private static final class MyTestProjectAdditions
-    implements LogicalViewProvider {
-        private TestProject project;
-        public MyTestProjectAdditions(TestProject project) {
-            this.project = project;
+    /**
+     * Test of readValues method, of class TemplateChooserPanelGUI.
+     */
+    public void testReadValues() {
+        Project p = new P();
+        String category = "";
+        String template = "";
+        instance = new TemplateChooserPanelGUI();
+        instance.readValues(p, category, template);
+        
+        instance.addNotify();
+        
+        instance.removeNotify();
+        
+        WeakReference<Project> ref = new WeakReference<Project>(p);
+        p = null;
+        assertGC("Panel does not hold ref", ref);
+    }
+
+        
+    class P implements Project {
+        FileObject root = FileUtil.createMemoryFileSystem().getRoot();
+        
+        public FileObject getProjectDirectory() {
+            return root;
+        }
+
+        public Lookup getLookup() {
+            return Lookup.EMPTY;
         }
         
-        public boolean canSearch() {
-            return false;
-        }
-
-        public Iterator<DataObject> objectsToSearch() {
-            return Collections.<DataObject>emptyList().iterator();
-        }
-
-        public Node createLogicalView() {
-            return new AbstractNode(Children.LEAF, Lookups.singleton(project));
-        }
-
-        public Node findPath(Node root, Object target) {
-            return null;
-        }
     }
-    
-}
+    }

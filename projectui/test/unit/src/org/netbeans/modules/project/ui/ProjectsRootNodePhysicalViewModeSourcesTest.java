@@ -42,27 +42,33 @@ package org.netbeans.modules.project.ui;
 import java.awt.EventQueue;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.EventObject;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import javax.swing.Icon;
+import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
-import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.Sources;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.project.ui.actions.TestSupport;
+import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
+import org.openide.nodes.AbstractNode;
+import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.nodes.NodeEvent;
 import org.openide.nodes.NodeListener;
 import org.openide.nodes.NodeMemberEvent;
 import org.openide.nodes.NodeReorderEvent;
-import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 import org.openidex.search.SearchInfo;
 
@@ -70,38 +76,28 @@ import org.openidex.search.SearchInfo;
  *
  * @author Jaroslav Tulach <jtulach@netbeans.org>
  */
-public class ProjectsRootNodePreferredOpenTest extends NbTestCase 
-implements PropertyChangeListener {
-    CountDownLatch first;
-    CountDownLatch middle;
-    CountDownLatch rest;
-    private int events;
+public class ProjectsRootNodePhysicalViewModeSourcesTest extends NbTestCase {
+    CountDownLatch down;
     
-    public ProjectsRootNodePreferredOpenTest(String testName) {
+    public ProjectsRootNodePhysicalViewModeSourcesTest(String testName) {
         super(testName);
     }            
-    
-    Lookup createLookup(TestSupport.TestProject project, Object instance) {
-        return Lookups.singleton(instance);
-    }
 
     @Override
     protected void setUp() throws Exception {
         clearWorkDir();
-
+        
         MockServices.setServices(TestSupport.TestProjectFactory.class);
         
         FileObject workDir = FileUtil.toFileObject(getWorkDir());
         assertNotNull(workDir);
         
-        first = new CountDownLatch(1);
-        middle = new CountDownLatch(1);
-        rest = new CountDownLatch(2);
+        down = new CountDownLatch(1);
         
         List<URL> list = new ArrayList<URL>();
         List<ExtIcon> icons = new ArrayList<ExtIcon>();
         List<String> names = new ArrayList<String>();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 30; i++) {
             FileObject prj = TestSupport.createTestProject(workDir, "prj" + i);
             URL url = URLMapper.findURL(prj, URLMapper.EXTERNAL);
             list.add(url);
@@ -109,108 +105,52 @@ implements PropertyChangeListener {
             icons.add(new ExtIcon());
             TestSupport.TestProject tmp = (TestSupport.TestProject)ProjectManager.getDefault ().findProject (prj);
             assertNotNull("Project found", tmp);
-            CountDownLatch down = i == 0 ? first : (i == 5 ? middle : rest);
-            tmp.setLookup(createLookup(tmp, new TestProjectOpenedHookImpl(down)));
+            tmp.setLookup(Lookups.fixed(tmp, new TestProjectOpenedHookImpl(down), new TestSources(tmp)));
         }
         
         OpenProjectListSettings.getInstance().setOpenProjectsURLs(list);
         OpenProjectListSettings.getInstance().setOpenProjectsDisplayNames(names);
         OpenProjectListSettings.getInstance().setOpenProjectsIcons(icons);
-        
-        OpenProjects.getDefault().addPropertyChangeListener(this);
     }
 
-    public void testPreferencesInOpenCanBeChanged() throws InterruptedException {
-        assertEquals("No events in API", 0, events);
-        
-        Node logicalView = new ProjectsRootNode(ProjectsRootNode.LOGICAL_VIEW);
+    public void testBehaviourOfProjectsLogicNode() throws InterruptedException {
+        Node view = new ProjectsRootNode(ProjectsRootNode.PHYSICAL_VIEW);
         L listener = new L();
-        logicalView.addNodeListener(listener);
+        view.addNodeListener(listener);
         
-        assertEquals("No events in API", 0, events);
-        assertEquals("10 children", 10, logicalView.getChildren().getNodesCount());
+        assertEquals("30 children", 30, view.getChildren().getNodesCount());
         listener.assertEvents("None", 0);
         assertEquals("No project opened yet", 0, TestProjectOpenedHookImpl.opened);
-        assertEquals("No events in API", 0, events);
         
-        for (Node n : logicalView.getChildren().getNodes()) {
+        for (Node n : view.getChildren().getNodes()) {
             TestSupport.TestProject p = n.getLookup().lookup(TestSupport.TestProject.class);
             assertNull("No project of this type, yet", p);
+            SearchInfo  info = n.getLookup().lookup(SearchInfo.class);
+            assertNoRealSearchInfo(n, info);
         }
-        assertEquals("No events in API", 0, events);
         
-        Node midNode = logicalView.getChildren().getNodes()[5];
-        {
-            TestSupport.TestProject p = midNode.getLookup().lookup(TestSupport.TestProject.class);
-            assertNull("No project of this type, yet", p);
-        }
-        Project lazyP = midNode.getLookup().lookup(Project.class);
-        assertNotNull("Some project is found", lazyP);
-        assertEquals("It is lazy project", LazyProject.class, lazyP.getClass());
-        assertEquals("No events in API", 0, events);
-        
-        middle.countDown();
-        // not necessary, but to ensure middle really does not run
-        Thread.sleep(300);
-        assertEquals("Still no processing", 0, TestProjectOpenedHookImpl.opened);
-        // trigger initialization of the node, shall trigger OpenProjectList.preferredProject(lazyP);
-        midNode.getChildren().getNodes();
-        first.countDown();
-        
+        // let project open code run
+        down.countDown();
         TestProjectOpenedHookImpl.toOpen.await();
-
-        {
-            TestSupport.TestProject p = null;
-            for (int i = 0; i < 10; i++) {
-                Node midNode2 = logicalView.getChildren().getNodes()[5];
-                p = midNode.getLookup().lookup(TestSupport.TestProject.class);
-                if (p != null) {
-                    break;
-                }
-                Thread.sleep(100);
-            }
-            assertNotNull("The right project opened", p);
-        }
-        assertEquals("No events in API", 0, events);
-
-        {
-            int cnt = 0;
-            for (int i = 0; i < 10; i++) {
-                Node n = logicalView.getChildren().getNodes()[i];
-                TestSupport.TestProject p = null;
-                p = n.getLookup().lookup(TestSupport.TestProject.class);
-                if (p != null) {
-                    cnt++;
-                }
-            }
-            assertEquals("First and fifth projects are open, nobody else is", 2, cnt);
-        }
         
-        assertEquals("No events in API", 0, events);
-        rest.countDown();
-        rest.countDown();
+        assertEquals("All projects opened", 30, TestProjectOpenedHookImpl.opened);
         
         OpenProjectList.waitProjectsFullyOpen();
-        assertEquals("Finally notified in API", 1, events);
-        
-        assertEquals("All projects opened", 10, TestProjectOpenedHookImpl.opened);
-        
 
-        for (Node n : logicalView.getChildren().getNodes()) {
-            TestSupport.TestProject p = n.getLookup().lookup(TestSupport.TestProject.class);
-            assertNotNull("Nodes have correct project of this type", p);
-            SearchInfo s = n.getLookup().lookup(SearchInfo.class);
-            assertNotNull("Nodes have correct project of this type", s);
+        Node[] all = view.getChildren().getNodes();
+        assertEquals("3x30", 90, all.length);
+        for (Node n : all) {
+            SearchInfo  info = n.getLookup().lookup(SearchInfo.class);
+            assertNoRealSearchInfo(n, info);
+            LogicalView v = n.getLookup().lookup(LogicalView.class);
+            assertEquals("View is not present in physical view", null, v);
         }
-    }
-
-    public void propertyChange(PropertyChangeEvent evt) {
-        if (OpenProjects.PROPERTY_OPEN_PROJECTS.equals(evt.getPropertyName())) {
-            events++;
-        }
+        
+        // too bad, looks that we need to generate some events
+        //listener.assertEvents("Goal is to receive no events at all", 0);
     }
     
-    private static class L implements NodeListener, PropertyChangeListener {
+    private static class L implements NodeListener {
         public List<EventObject> events = new ArrayList<EventObject>();
         
         public void childrenAdded(NodeMemberEvent ev) {
@@ -247,7 +187,7 @@ implements PropertyChangeListener {
     
     private static class TestProjectOpenedHookImpl extends ProjectOpenedHook {
         
-        public static CountDownLatch toOpen = new CountDownLatch(2);
+        public static CountDownLatch toOpen = new CountDownLatch(30);
         public static int opened = 0;
         public static int closed = 0;
         
@@ -274,5 +214,90 @@ implements PropertyChangeListener {
             toOpen.countDown();
         }
         
+    }
+    private static class LVP implements LogicalViewProvider {
+        public Node createLogicalView() {
+            return new LogicalView();
+        }
+
+        public Node findPath(Node root, Object target) {
+            return null;
+        }
+    }
+    
+    private static class LogicalView extends AbstractNode {
+        public LogicalView() {
+            super(Children.LEAF);
+        }
+    }
+
+    static void assertNoRealSearchInfo(Node n, SearchInfo info) {
+        if (info != null) {
+            if (info instanceof LazyProject) {
+                // OK
+            } else {
+                fail("No search info at " + n + "\nwas: " + info);
+            }
+        }
+    }
+    
+    private static class TestSources implements Sources {
+        private SourceGroup[] arr;
+        public TestSources(Project p) throws IOException {
+            FileObject internal = FileUtil.createFolder(p.getProjectDirectory(), "src");
+            FileObject external = FileUtil.createFolder(p.getProjectDirectory().getParent(), "src" + p.getProjectDirectory().getNameExt());
+            
+            this.arr = new SourceGroup[] {
+                new TestGroup(p.getProjectDirectory()),
+                new TestGroup(internal),
+                new TestGroup(external),
+            };
+        }
+        
+
+        public SourceGroup[] getSourceGroups(String type) {
+            return arr;
+        }
+
+        public void addChangeListener(ChangeListener listener) {
+        }
+
+        public void removeChangeListener(ChangeListener listener) {
+        }
+    }
+    
+    private static class TestGroup implements SourceGroup {
+        private FileObject root;
+        
+        public TestGroup(FileObject r) {
+            this.root = r;
+        }
+        
+
+        public FileObject getRootFolder() {
+            return root;
+        }
+
+        public String getName() {
+            return root.getNameExt();
+        }
+
+        public String getDisplayName() {
+            return root.getNameExt();
+        }
+
+        public Icon getIcon(boolean opened) {
+            return null;
+        }
+
+        public boolean contains(FileObject file) throws IllegalArgumentException {
+            return file.equals(root);
+        }
+
+        public void addPropertyChangeListener(PropertyChangeListener listener) {
+        }
+
+        public void removePropertyChangeListener(PropertyChangeListener listener) {
+        }
     }
 }

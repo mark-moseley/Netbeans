@@ -34,68 +34,78 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.project.ui;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.logging.Level;
-import org.netbeans.junit.Log;
-import org.netbeans.modules.project.ui.actions.TestSupport.TestProject;
-import org.netbeans.spi.project.ui.LogicalViewProvider;
-import org.openide.loaders.DataObject;
-import org.openide.nodes.AbstractNode;
+import java.awt.Component;
+import java.awt.Container;
+import java.lang.ref.WeakReference;
+import javax.swing.JEditorPane;
+import org.netbeans.junit.NbTestCase;
+import org.openide.loaders.DataFolder;
 import org.openide.nodes.Children;
-import org.openide.nodes.Node;
-import org.openide.util.Lookup;
-import org.openide.util.lookup.Lookups;
 
-/** 
+/**
  *
- * @author Jaroslav Tulach <jtulach@netbeans.org>
+ * @author Jaroslav Tulach <jaroslav.tulach@netbeans.org>
  */
-public class ProjectsRootNodePreferredOpen3Test extends ProjectsRootNodePreferredOpenTest {
-    private CharSequence log;
-    
-    public ProjectsRootNodePreferredOpen3Test(String testName) {
+public class TemplatesPanelTest extends NbTestCase implements TemplatesPanelGUI.Builder {
+    public TemplatesPanelTest(String testName) {
         super(testName);
-    }            
-    
-    @Override
-    Lookup createLookup(TestProject project, Object instance) {
-        return Lookups.fixed(instance, project, new MyTestProjectAdditions(project));
     }
 
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-        log = Log.enable("", Level.WARNING);
-    }
-
-    private static final class MyTestProjectAdditions
-    implements LogicalViewProvider {
-        private TestProject project;
-        public MyTestProjectAdditions(TestProject project) {
-            this.project = project;
-        }
+    private static Object editor;
+    public void testTemplatesPanel() {
+        TemplatesPanelGUI inst;
+        inst = new TemplatesPanelGUI(this);
         
-        public boolean canSearch() {
-            return false;
-        }
-
-        public Iterator<DataObject> objectsToSearch() {
-            return Collections.<DataObject>emptyList().iterator();
-        }
-
-        public Node createLogicalView() {
-            return new AbstractNode(Children.LEAF, Lookups.singleton(project));
-        }
-
-        public Node findPath(Node root, Object target) {
-            return null;
-        }
+        inst.addNotify();
+        editor = find(inst, JEditorPane.class, true);
+        WeakReference<Object> ref = new WeakReference<Object>(inst);
+        
+        inst.removeNotify();
+        
+        inst = null;
+        assertGC("Panel does not hold ref", ref);
     }
     
+    private static Component find(Component c, Class<?> clazz, boolean fail) {
+        if (clazz.isInstance(c)) {
+            return c;
+        }
+        if (c instanceof Container) {
+            Container cont = (Container)c;
+            for (Component p : cont.getComponents()) {
+                Component r = find(p, clazz, false);
+                if (r != null) {
+                    return r;
+                }
+            }
+        }
+        if (fail) {
+            fail("Not found " + clazz + " in children of " + c);
+        }
+        return null;
+    }
+    
+    public Children createCategoriesChildren(DataFolder folder) {
+        return Children.LEAF;
+    }
+
+    public Children createTemplatesChildren(DataFolder folder) {
+        return Children.LEAF;
+    }
+
+    public String getCategoriesName() {
+        return "";
+    }
+
+    public String getTemplatesName() {
+        return "";
+    }
+
+    public void fireChange() {
+    }
 }
