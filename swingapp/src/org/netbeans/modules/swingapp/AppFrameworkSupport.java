@@ -106,7 +106,7 @@ class AppFrameworkSupport {
     }
 
     static boolean isApplicationProject(Project project) {
-        AuxiliaryConfiguration ac = project.getLookup().lookup(AuxiliaryConfiguration.class);
+        AuxiliaryConfiguration ac = ProjectUtils.getAuxiliaryConfiguration(project);
         return ac.getConfigurationFragment(SWINGAPP_ELEMENT, SWINGAPP_NS, true) != null;
         // [would be better to check for presence of valid application class in ac]
     }
@@ -148,7 +148,7 @@ class AppFrameworkSupport {
     static String getApplicationClassName(FileObject fileInProject) {
         Project project = FileOwnerQuery.getOwner(fileInProject);
         if (project != null) {
-            AuxiliaryConfiguration ac = project.getLookup().lookup(AuxiliaryConfiguration.class);
+            AuxiliaryConfiguration ac = ProjectUtils.getAuxiliaryConfiguration(project);
             return getApplicationClassName(fileInProject, project, ac);
         } else {
             return null;
@@ -158,7 +158,7 @@ class AppFrameworkSupport {
     static String getApplicationClassName(Project project) {
         FileObject fileRep = getSourceRoot(project);
         if (fileRep != null) {
-            AuxiliaryConfiguration ac = project.getLookup().lookup(AuxiliaryConfiguration.class);
+            AuxiliaryConfiguration ac = ProjectUtils.getAuxiliaryConfiguration(project);
             return getApplicationClassName(fileRep, project, ac);
         }
         return null;
@@ -204,7 +204,7 @@ class AppFrameworkSupport {
         }
 
         if (searched) { // possibly update project and cache
-            if (storedInProject) {
+            if (appClassName != null) { // valid app class found - make sure it is stored in project
                 org.w3c.dom.Document xml = XMLUtil.createDocument(SWINGAPP_ELEMENT, SWINGAPP_NS, null, null);
                 appEl = xml.createElementNS(SWINGAPP_NS, SWINGAPP_ELEMENT);
                 if (appClassName != null) {
@@ -213,6 +213,15 @@ class AppFrameworkSupport {
                     appEl.appendChild(clsEl);
                 }
                 ac.putConfigurationFragment(appEl, true);
+                storedInProject = true;
+                try {
+                    ProjectManager.getDefault().saveProject(project);
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            } else if (storedInProject) { // app class disappeared
+                ac.removeConfigurationFragment(SWINGAPP_ELEMENT, SWINGAPP_NS, true);
+                storedInProject = false;
                 try {
                     ProjectManager.getDefault().saveProject(project);
                 } catch (IOException ex) {
