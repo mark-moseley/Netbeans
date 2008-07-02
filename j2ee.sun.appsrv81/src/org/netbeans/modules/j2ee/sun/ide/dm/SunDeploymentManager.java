@@ -87,7 +87,7 @@ import org.netbeans.modules.j2ee.sun.api.SunURIManager;
 import org.netbeans.modules.j2ee.sun.appsrvapi.PortDetector;
 import org.netbeans.modules.j2ee.sun.ide.editors.AdminAuthenticator;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.DeploymentManagerProperties;
-import org.netbeans.modules.j2ee.sun.ide.j2ee.ProgressEventSupport;
+import org.netbeans.modules.glassfish.eecommon.api.ProgressEventSupport;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.runtime.actions.ViewLogAction;
 
 import org.netbeans.modules.j2ee.sun.share.configbean.SunONEDeploymentConfiguration;
@@ -659,9 +659,9 @@ public class SunDeploymentManager implements Constants, DeploymentManager, SunDe
                             isLocal = false;
                         }
                         String domainName = dmProps.getDomainName();
-                        domainDir = new File(domainDir).getCanonicalPath();
                         domainDir += File.separator +
                                 domainName;
+                        domainDir = new File(domainDir).getCanonicalPath();
                     }
                     if (isLocal()){// if the server is local, make sure we are talking to the correct one
                         //we do that by testing the server location known by the IDE with the server location known by the
@@ -1220,6 +1220,19 @@ public class SunDeploymentManager implements Constants, DeploymentManager, SunDe
         } catch (IllegalAccessException ex) {
             goodUserNamePassword =false;
         } catch (IOException e){
+            // If the server at the "other end" doesn't speak the admin protocol
+            // we need to ignore it.  If the server on the other end speaks remotejmx
+            // we will probably end up with some other error here.  I have no test
+            // for that.
+            //
+            // most common problem: a v3 instance and a v2 instance are installed
+            // on one machine and share the admin port... so only one can execute
+            // at a time
+            if (e.getMessage().contains("remotejmx")) {
+                goodUserNamePassword = false;
+                return;
+            }
+            
             if(!e.getMessage().contains("500")){//not an internal error, so user/password error!!!
                 maybeRunningButWrongUserName =true ;
             }
