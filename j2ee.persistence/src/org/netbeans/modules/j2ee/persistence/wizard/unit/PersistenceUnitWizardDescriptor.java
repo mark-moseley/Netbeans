@@ -47,12 +47,11 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.project.libraries.Library;
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.provider.Provider;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
+import org.netbeans.modules.j2ee.persistence.spi.provider.PersistenceProviderSupplier;
 import org.netbeans.modules.j2ee.persistence.wizard.Util;
-import org.netbeans.modules.j2ee.persistence.wizard.entity.EntityWizardDescriptor;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.WizardDescriptor;
 import org.openide.util.ChangeSupport;
@@ -72,11 +71,12 @@ public class PersistenceUnitWizardDescriptor implements WizardDescriptor.Finisha
     private WizardDescriptor wizardDescriptor;
     private Project project;
     private boolean isContainerManaged;
-    private static String ERROR_MSG_KEY = "WizardPanel_errorMessage";
+    private static String ERROR_MSG_KEY = WizardDescriptor.PROP_ERROR_MESSAGE;
     
     public PersistenceUnitWizardDescriptor(Project project) {
         this.project = project;
-        this.isContainerManaged = Util.isSupportedJavaEEVersion(project);
+        PersistenceProviderSupplier providerSupplier = project.getLookup().lookup(PersistenceProviderSupplier.class);
+        this.isContainerManaged = Util.isSupportedJavaEEVersion(project) && providerSupplier != null && providerSupplier.supportsDefaultProvider();
     }
     
     public void addChangeListener(javax.swing.event.ChangeListener l) {
@@ -159,10 +159,6 @@ public class PersistenceUnitWizardDescriptor implements WizardDescriptor.Finisha
     
     String getPersistenceUnitName() {
         return panel.getPersistenceUnitName();
-    }
-    
-    Library getPersistenceLibrary() {
-        return jdbcPanel == null ? null : jdbcPanel.getPersistenceLibrary();
     }
     
     DatabaseConnection getPersistenceConnection() {

@@ -37,6 +37,8 @@ import java.awt.Dialog;
 import java.text.MessageFormat;
 import javax.swing.JComponent;
 
+import net.java.hulp.i18n.Logger;
+import org.netbeans.modules.etl.logger.Localizer;
 import org.netbeans.modules.mashup.db.ui.wizard.SelectDatabasePanel;
 import org.openide.DialogDisplayer;
 import org.openide.WizardDescriptor;
@@ -48,15 +50,18 @@ import org.openide.util.actions.CallableSystemAction;
  * @author  ks161616
  */
 public final class FlatfileDBViewerAction extends CallableSystemAction {
-
+    private static transient final Logger mLogger = Logger.getLogger(NewFlatfileTableAction.class.getName());
+    private static transient final Localizer mLoc = Localizer.get();
+    public String nbBundle1 = mLoc.t("BUND264: Mashup Database Viewer");
     private WizardDescriptor.Panel[] panels;
 
     public void performAction() {
         WizardDescriptor wizardDescriptor = new WizardDescriptor(getPanels());
         // {0} will be replaced by WizardDesriptor.Panel.getComponent().getName()
         wizardDescriptor.setTitleFormat(new MessageFormat("{0}"));
-        wizardDescriptor.setTitle("Mashup Database Viewer");
+        wizardDescriptor.setTitle(nbBundle1.substring(15));
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizardDescriptor);
+        dialog.getAccessibleContext().setAccessibleDescription("This is the dialog which displays mashupdb information");
         dialog.setVisible(true);
         dialog.toFront();
         boolean cancelled = wizardDescriptor.getValue() != WizardDescriptor.FINISH_OPTION;
@@ -85,15 +90,15 @@ public final class FlatfileDBViewerAction extends CallableSystemAction {
                 if (c instanceof JComponent) { // assume Swing components
                     JComponent jc = (JComponent) c;
                     // Sets step number of a component
-                    jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i));
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i));
                     // Sets steps names for a panel
-                    jc.putClientProperty("WizardPanel_contentData", steps);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);
                     // Turn on subtitle creation on each step
-                    jc.putClientProperty("WizardPanel_autoWizardStyle", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE);
                     // Show steps on the left side with the image on the background
-                    jc.putClientProperty("WizardPanel_contentDisplayed", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE);
                     // Turn on numbering of all steps
-                    jc.putClientProperty("WizardPanel_contentNumbered", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE);
                 }
             }
         }
@@ -101,7 +106,7 @@ public final class FlatfileDBViewerAction extends CallableSystemAction {
     }
 
     public String getName() {
-        return "Mashup Database Viewer";
+        return nbBundle1.substring(15);
     }
 
     @Override

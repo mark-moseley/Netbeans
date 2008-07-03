@@ -172,7 +172,7 @@ public abstract class AbstractPanel extends JPanel implements Customizer {
          * Cunstruct help ctx from WizardPanel_helpURL property.
          */
         public final HelpCtx getHelp() {
-    //        URL url = (URL) getClientProperty("WizardPanel_helpURL");
+    //        URL url = (URL) getClientProperty(WizardDescriptor.PROP_HELP_URL);
     //        if (url != null) {
     //            return new HelpCtx(peer.getClass());  // warning getClass(0 returns a subclass
     //        }
@@ -184,12 +184,14 @@ public abstract class AbstractPanel extends JPanel implements Customizer {
         }
 
         public boolean isValid() {
+            if(peer instanceof XMLContentPanel)
+              return ((XMLContentPanel)peer).isPanelValid();
             if(peer instanceof SchemaPanel){
-                int num = ((SchemaPanel)peer).countSelectedNodes();
-                if(num > 0 && ((SchemaPanel)peer).isPrimarySchemaSelected())
-                    return true;
-                else 
-                    return false;
+              return ((SchemaPanel)peer).isPanelValid();              
+                //if(num > 0 && ((SchemaPanel)peer).isPrimarySchemaSelected())
+                //    return true;
+               //0 e//lse 
+                   // return false;
             }
             return valid;
         }

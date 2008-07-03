@@ -95,7 +95,7 @@ class ChooseBeansWizardPanel implements WizardDescriptor.Panel<AddToPaletteWizar
             noBeansLabel.setPreferredSize(new Dimension(400, 300));
             noBeansLabel.setVerticalAlignment(SwingConstants.TOP);
             noBeansLabel.setName(PaletteUtils.getBundleString("CTL_NoBeans_Caption")); // NOI18N
-            noBeansLabel.putClientProperty("WizardPanel_contentSelectedIndex", // NOI18N
+            noBeansLabel.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, // NOI18N
                 new Integer(1));
             return noBeansLabel;
         } else {
@@ -104,7 +104,7 @@ class ChooseBeansWizardPanel implements WizardDescriptor.Panel<AddToPaletteWizar
                 
                 // wizard API: set the caption and index of this panel
                 beanSelector.setName(PaletteUtils.getBundleString("CTL_SelectBeans_Caption")); // NOI18N
-                beanSelector.putClientProperty("WizardPanel_contentSelectedIndex", // NOI18N
+                beanSelector.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, // NOI18N
                 new Integer(1));
                 if (markedBeans != null || allBeans != null)
                     beanSelector.setBeans(markedBeans, allBeans);
@@ -184,7 +184,6 @@ class ChooseBeansWizardPanel implements WizardDescriptor.Panel<AddToPaletteWizar
             JLabel label1 = new JLabel();
             org.openide.awt.Mnemonics.setLocalizedText(
                 label1, PaletteUtils.getBundleString("CTL_SelectBeans")); // NOI18N
-            label1.setLabelFor(list);
             gridBagConstraints = new java.awt.GridBagConstraints();
             gridBagConstraints.gridwidth = 3;
             gridBagConstraints.insets = new java.awt.Insets(0, 0, 6, 0);
@@ -197,6 +196,7 @@ class ChooseBeansWizardPanel implements WizardDescriptor.Panel<AddToPaletteWizar
             list.setCellRenderer(new ItemInfoRenderer());
             list.getAccessibleContext().setAccessibleDescription(
                 PaletteUtils.getBundleString("ACSD_CTL_SelectBeans")); // NOI18N
+            label1.setLabelFor(list);
 
             JScrollPane scrollPane = new JScrollPane();
             scrollPane.setViewportView(list);

@@ -118,9 +118,9 @@ public class UMLBankAppSampleWizardIterator
         File javaPrjDir = 
             FileUtil.normalizeFile((File)wiz.getProperty("projdir")); // NOI18N
         
-        javaPrjDir.mkdirs();
+        //javaPrjDir.mkdirs();
         FileObject template = Templates.getTemplate(wiz);
-        FileObject javaPrjFO = FileUtil.toFileObject(javaPrjDir);
+        FileObject javaPrjFO = FileUtil.createFolder(javaPrjDir);
         unZipFile(template.getInputStream(), javaPrjFO, false);
         
         renameJavaProjectTokens(javaPrjDir, wiz.getProperty("name").toString()); // NOI18N
@@ -186,10 +186,10 @@ public class UMLBankAppSampleWizardIterator
                 JComponent jc = (JComponent) c;
                 // Step #.
                 jc.putClientProperty(
-                    "WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+                    WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
                 
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }
     }

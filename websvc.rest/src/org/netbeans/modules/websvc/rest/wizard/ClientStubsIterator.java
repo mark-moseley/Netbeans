@@ -41,13 +41,10 @@
 package org.netbeans.modules.websvc.rest.wizard;
 
 import java.awt.Component;
-import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.progress.ProgressHandle;
@@ -55,6 +52,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.websvc.rest.codegen.ClientStubsGenerator;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
@@ -94,15 +92,15 @@ public final class ClientStubsIterator implements WizardDescriptor.Instantiating
                 if (c instanceof JComponent) { // assume Swing components
                     JComponent jc = (JComponent) c;
                     // Sets step number of a component
-                    jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i));
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i));
                     // Sets steps names for a panel
-                    jc.putClientProperty("WizardPanel_contentData", steps);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);
                     // Turn on subtitle creation on each step
-                    jc.putClientProperty("WizardPanel_autoWizardStyle", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE);
                     // Show steps on the left side with the image on the background
-                    jc.putClientProperty("WizardPanel_contentDisplayed", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE);
                     // Turn on numbering of all steps
-                    jc.putClientProperty("WizardPanel_contentNumbered", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE);
                 }
             }
         }
@@ -126,7 +124,7 @@ public final class ClientStubsIterator implements WizardDescriptor.Instantiating
             generatorTask = RequestProcessor.getDefault().create(new Runnable() {
                 public void run() {
                     ProgressHandle pHandle = dialog.getProgressHandle();
-                    pHandle.start();
+                    //pHandle.start();
                     
                     try {
                         if(isProjectSelected) {
@@ -137,17 +135,17 @@ public final class ClientStubsIterator implements WizardDescriptor.Instantiating
                             result.addAll(new ClientStubsGenerator(stubRoot, stubFolder, wadlFile, createJmaki, overwrite).generate(pHandle));
                         }
                     } catch(Exception iox) {
-                        Logger.getLogger(getClass().getName()).log(Level.INFO, "instantiate", iox);
+                        Exceptions.printStackTrace(iox);
                     } finally {
                         dialog.close();
-                        pHandle.finish();
+                        //pHandle.finish();
                     }
                 }
             });
             generatorTask.schedule(50);
             dialog.open();
         } catch (Exception ex) {
-            Logger.getLogger(getClass().getName()).log(Level.INFO, "instantiate", ex);
+            Exceptions.printStackTrace(ex);
         }
         return result;
     }
@@ -201,7 +199,7 @@ public final class ClientStubsIterator implements WizardDescriptor.Instantiating
     // client code.
     private String[] createSteps() {
         String[] beforeSteps = null;
-        Object prop = wizard.getProperty("WizardPanel_contentData");
+        Object prop = wizard.getProperty(WizardDescriptor.PROP_CONTENT_DATA);
         if (prop != null && prop instanceof String[]) {
             beforeSteps = (String[]) prop;
         }

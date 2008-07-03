@@ -57,6 +57,7 @@ import org.netbeans.modules.mobility.end2end.client.config.ClientConfiguration;
 import org.netbeans.modules.mobility.end2end.client.config.Configuration;
 import org.netbeans.modules.mobility.end2end.client.config.ServerConfiguration;
 import org.netbeans.spi.project.ui.templates.support.Templates;
+import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.TemplateWizard;
 import org.openide.util.HelpCtx;
@@ -79,7 +80,7 @@ public class ClientOptionsPanel implements TemplateWizard.Panel, ChangeListener 
     
     final private static String TRUE = "true";
     final private static String FALSE = "false";           
-    final private static String WPEM = "WizardPanel_errorMessage";
+    final private static String WPEM = WizardDescriptor.PROP_ERROR_MESSAGE;
         
     public java.awt.Component getComponent() {
         if( gui == null ) {
@@ -174,6 +175,9 @@ public class ClientOptionsPanel implements TemplateWizard.Panel, ChangeListener 
             return false;
         } else if( gui.getCreatedFile() != null && new File( gui.getCreatedFile()).exists()) {
             templateWizard.putProperty(WPEM, NbBundle.getMessage(ClientOptionsPanel.class, "ERR_File_AlreadyExists", gui.getTargetName() + ".java")); // NOI18N
+            return false;
+        } else if( "".equals(gui.getTargetName())) {
+            templateWizard.putProperty(WPEM, NbBundle.getMessage(ClientOptionsPanel.class, "ERR_File_NoClassName")); // NOI18N
             return false;
         } else if( !Utilities.isJavaIdentifier( gui.getTargetName())) {
             templateWizard.putProperty(WPEM, NbBundle.getMessage(ClientOptionsPanel.class, "ERR_File_InvalidClassName")); // NOI18N

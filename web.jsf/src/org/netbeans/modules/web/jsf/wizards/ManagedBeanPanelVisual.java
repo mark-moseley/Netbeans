@@ -65,7 +65,7 @@ public class ManagedBeanPanelVisual extends javax.swing.JPanel implements HelpCt
         
         WebModule wm = WebModule.getWebModule(proj.getProjectDirectory());
         if (wm != null){
-            String[] configFiles = JSFConfigUtilities.getConfigFiles(wm.getDeploymentDescriptor());
+            String[] configFiles = JSFConfigUtilities.getConfigFiles(wm);
             jComboBoxConfigFile.setModel(new javax.swing.DefaultComboBoxModel(configFiles));
         }
         ManagedBean.Scope[] scopes = ManagedBean.Scope.values();
@@ -168,7 +168,7 @@ public class ManagedBeanPanelVisual extends javax.swing.JPanel implements HelpCt
         String configFile = (String) jComboBoxConfigFile.getSelectedItem();
         boolean result = (configFile != null && !configFile.trim().equals("")); 
         if (!result){
-            wizardDescriptor.putProperty("WizardPanel_errorMessage",
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE,
                     NbBundle.getMessage(ManagedBeanPanelVisual.class, "MSG_NoConfFileSelected"));
         }
         return result;

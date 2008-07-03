@@ -8,27 +8,34 @@ import java.awt.Component;
 import java.awt.Dialog;
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.StringWriter;
 import java.io.Writer;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.text.DateFormat;
 import java.text.MessageFormat;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Result;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
 import org.netbeans.modules.xml.api.EncodingUtil;
 import org.netbeans.modules.xml.schema.SchemaDataObject;
 import org.netbeans.modules.xml.wizard.AbstractPanel;
@@ -36,25 +43,23 @@ import org.netbeans.modules.xml.wizard.DocumentModel;
 import org.netbeans.modules.xml.wizard.Util;
 import org.netbeans.modules.xml.wizard.XMLContentPanel;
 import org.netbeans.modules.xml.wizard.XMLGeneratorVisitor;
-import org.netbeans.modules.xml.xam.ui.ProjectConstants;
 import org.openide.DialogDisplayer;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataFolder;
-import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.util.NbBundle;
+import org.w3c.dom.Attr;
+import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
 
 public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.InstantiatingIterator {
 
     private int index;
-    private WizardDescriptor wizard;
     private WizardDescriptor.Panel[] panels;
     private Project srcProject;
-    private DataFolder df;
     private FileObject schemaFileObject;
     private DocumentModel model;
     private XMLContentPanel xmlPanel;
@@ -70,8 +75,12 @@ public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.
         WizardDescriptor wizardDescriptor = new WizardDescriptor(getPanels());
         initialize(wizardDescriptor);
         wizardDescriptor.setTitleFormat(new MessageFormat("{0}"));
-        wizardDescriptor.setTitle(NbBundle.getMessage(SampleXMLGeneratorWizardIterator.class,"TITLE_XML_WIZARD"));
+        wizardDescriptor.setTitle(NbBundle.getMessage(SampleXMLGeneratorWizardIterator.class,"TITLE_XML_WIZARD"));        
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizardDescriptor);
+        dialog.getAccessibleContext().setAccessibleName(
+                NbBundle.getMessage(SampleXMLGeneratorWizardIterator.class,"TITLE_XML_WIZARD"));
+        dialog.getAccessibleContext().setAccessibleDescription(
+                NbBundle.getMessage(SampleXMLGeneratorWizardIterator.class,"TITLE_XML_WIZARD"));
         dialog.setVisible(true);
         dialog.toFront();
         boolean cancelled = wizardDescriptor.getValue() != WizardDescriptor.FINISH_OPTION;
@@ -91,16 +100,7 @@ public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.
      * various properties for them influencing wizard appearance.
      */
     private WizardDescriptor.Panel[] getPanels() {
-        Sources sources = ProjectUtils.getSources(srcProject);
-        SourceGroup[] folders = sources.getSourceGroups(ProjectConstants.JAVA_SOURCES_TYPE);
-        if (folders == null || folders.length == 0) {
-                folders = sources.getSourceGroups(Sources.TYPE_GENERIC);
-        }
-        
-        if (folders != null && folders.length != 0) {
-                df = DataFolder.findFolder(folders[0].getRootFolder());
-        }
-        
+               
         xmlPanel = new XMLContentPanel(true);
         
         if (panels == null) {
@@ -120,15 +120,15 @@ public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.
                 if (c instanceof JComponent) { // assume Swing components
                     JComponent jc = (JComponent) c;
                     // Sets step number of a component
-                    jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i));
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i));
                     // Sets steps names for a panel
-                    jc.putClientProperty("WizardPanel_contentData", steps);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);
                     // Turn on subtitle creation on each step
-                    jc.putClientProperty("WizardPanel_autoWizardStyle", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE);
                     // Show steps on the left side with the image on the background
-                    jc.putClientProperty("WizardPanel_contentDisplayed", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE);
                     // Turn on numbering of all steps
-                    jc.putClientProperty("WizardPanel_contentNumbered", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE);
                 }
             }
         }
@@ -145,7 +145,7 @@ public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.
         
         final FileObject targetFolder = schemaFileObject.getParent();
         String uniqueTargetName = targetName;
-        int i = 2;        
+        int i = 1;        
         while (targetFolder.getFileObject(uniqueTargetName, extension) != null) {
             uniqueTargetName = targetName + i;
             i++;
@@ -240,6 +240,7 @@ public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.
 
         // perform default action and return
         
+        modifyRootElementAttrs(fileObject[0]);
         Set set = new HashSet(1);                
         DataObject createdObject = DataObject.find(fileObject[0]);        
         Util.performDefaultAction(createdObject);
@@ -250,7 +251,6 @@ public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.
 
     public void initialize(WizardDescriptor wiz) {
         index=0;
-        wizard = wiz;
         URL targetFolderURL = null;
         try {
             FileObject folder = schemaFileObject.getParent();
@@ -283,15 +283,15 @@ public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.
 
     public void uninitialize(WizardDescriptor wizard) {
         panels = null;
-        wizard=null;
     }
 
     public WizardDescriptor.Panel current() {
-        return getPanels()[index];
+        return panels[index];
     }
 
     public String name() {
-        return index + 1 + ". from " + getPanels().length;
+        return NbBundle.getMessage(SchemaWizardIterator.class, "TITLE_x_of_y",
+            Integer.valueOf(index + 1), Integer.valueOf(panels.length));
     }
 
     public boolean hasNext() {
@@ -328,6 +328,38 @@ public final class SampleXMLGeneratorWizardIterator implements WizardDescriptor.
         XMLGeneratorVisitor visitor = new XMLGeneratorVisitor(model.getPrimarySchema(), model.getXMLContentAttributes(), writer);
         visitor.generateXML(root);
        
+    }
+    
+    private void modifyRootElementAttrs(FileObject fobj) {
+        try {
+            File file = new File(fobj.getPath());
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.parse(file);
+            doc.getDocumentElement().normalize();
+            
+            NamedNodeMap rootAttributes = doc.getDocumentElement().getAttributes();
+            Map<String, String> nsAttrs = model.getXMLContentAttributes().getNamespaceToPrefixMap();
+            
+            if(nsAttrs == null || nsAttrs.size() == 0)
+                return;
+            for(String ns:nsAttrs.keySet()) {
+                Attr galaxy = doc.createAttribute("xmlns:" + nsAttrs.get(ns));
+                galaxy.setValue(ns);
+                rootAttributes.setNamedItem(galaxy);
+            }
+
+            //write to oputput file
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            DOMSource source = new DOMSource(doc);
+            Result result = new StreamResult(file);
+            transformer.transform(source, result);
+ 
+       } catch(Exception e) {
+          
+       }
     }
 
     // If something changes dynamically (besides moving between panels), e.g.

@@ -50,6 +50,7 @@ import java.util.Set;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.j2ee.earproject.EarProject;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
@@ -71,7 +72,7 @@ public class ApplicationXmlWizardPanel1 implements WizardDescriptor.Panel {
     private final Set<ChangeListener> listeners = new HashSet<ChangeListener>(1);
     private final ApplicationXmlVisualPanel1 component = new ApplicationXmlVisualPanel1();
     private WizardDescriptor wizardDescriptor;
-    private Project project;
+    private EarProject project;
 
     public ApplicationXmlWizardPanel1() {
         component.addPropertyChangeListener(new PropertyChangeListener() {
@@ -85,7 +86,7 @@ public class ApplicationXmlWizardPanel1 implements WizardDescriptor.Panel {
         return component.getSelectedLocation();
     }
 
-    Project getProject() {
+    EarProject getProject() {
         return project;
     }
 
@@ -101,10 +102,10 @@ public class ApplicationXmlWizardPanel1 implements WizardDescriptor.Panel {
         if (component.getSelectedLocation() == null
                 || component.getCreatedFile() == null
                 || component.getCreatedFile().canRead()) {
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(ApplicationXmlWizardPanel1.class,"ERR_FileExistsOrNoValidLocation")); //NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(ApplicationXmlWizardPanel1.class,"ERR_FileExistsOrNoValidLocation")); //NOI18N
             return false;
         }
-        wizardDescriptor.putProperty("WizardPanel_errorMessage", " "); //NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, " "); //NOI18N
         return true;
     }
 
@@ -134,9 +135,13 @@ public class ApplicationXmlWizardPanel1 implements WizardDescriptor.Panel {
     public void readSettings(Object settings) {
         wizardDescriptor = (WizardDescriptor) settings;
         if (project == null) {
-            project = Templates.getProject(wizardDescriptor);
+            project = (EarProject)Templates.getProject(wizardDescriptor);
             component.setProject(project);
         }
+
+        wizardDescriptor.putProperty ("NewFileWizard_Title", // NOI18N
+            NbBundle.getMessage(ApplicationXmlWizardPanel1.class, "TITLE_StdDdFile"));
+        
     }
 
     public void storeSettings(Object settings) {}

@@ -9,7 +9,9 @@ import java.text.MessageFormat;
 import java.util.Iterator;
 import java.util.List;
 import javax.swing.JComponent;
+import net.java.hulp.i18n.Logger;
 import org.axiondb.ExternalConnectionProvider;
+import org.netbeans.modules.etl.logger.Localizer;
 import org.netbeans.modules.mashup.db.common.FlatfileDBConnectionFactory;
 import org.netbeans.modules.mashup.db.ui.wizard.SelectDatabasePanel;
 import org.netbeans.modules.mashup.tables.wizard.JDBCTablePanel;
@@ -21,7 +23,9 @@ import org.openide.util.HelpCtx;
 import org.openide.util.actions.CallableSystemAction;
 
 public final class NewJDBCTableAction extends CallableSystemAction {
-
+    private static transient final Logger mLogger = Logger.getLogger(NewJDBCTableAction.class.getName());
+    private static transient final Localizer mLoc = Localizer.get();
+    public String nbBundle1 = mLoc.t("BUND277: Add JDBC Table(s)");
     private WizardDescriptor.Panel[] panels;
     public static final String DEFAULT_FLATFILE_JDBC_URL_PREFIX = "jdbc:axiondb:";
 
@@ -29,8 +33,9 @@ public final class NewJDBCTableAction extends CallableSystemAction {
         WizardDescriptor wizardDescriptor = new WizardDescriptor(getPanels());
         // {0} will be replaced by WizardDesriptor.Panel.getComponent().getName()
         wizardDescriptor.setTitleFormat(new MessageFormat("{0}"));
-        wizardDescriptor.setTitle("Add JDBC Table(s)");
+        wizardDescriptor.setTitle(nbBundle1.substring(15));
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizardDescriptor);
+        dialog.getAccessibleContext().setAccessibleDescription("This dialog lets user to create flatfile tables from jdbc sources");
         dialog.setVisible(true);
         dialog.toFront();
         boolean cancelled = wizardDescriptor.getValue() != WizardDescriptor.FINISH_OPTION;
@@ -82,12 +87,14 @@ public final class NewJDBCTableAction extends CallableSystemAction {
                 }
             }
             if (status) {
+                String nbBundle2 = mLoc.t("BUND275: Tables successfully created.");
                 NotifyDescriptor d =
-                        new NotifyDescriptor.Message("Tables successfully created.", NotifyDescriptor.INFORMATION_MESSAGE);
+                        new NotifyDescriptor.Message(nbBundle2.substring(15), NotifyDescriptor.INFORMATION_MESSAGE);
                 DialogDisplayer.getDefault().notify(d);
             } else {
+                String nbBundle3 = mLoc.t("BUND276: Tables creation failed.");
                 NotifyDescriptor d =
-                        new NotifyDescriptor.Message("Tables creation failed.", NotifyDescriptor.WARNING_MESSAGE);
+                        new NotifyDescriptor.Message(nbBundle3.substring(15), NotifyDescriptor.WARNING_MESSAGE);
                 DialogDisplayer.getDefault().notify(d);
             }
         }
@@ -113,15 +120,15 @@ public final class NewJDBCTableAction extends CallableSystemAction {
                 if (c instanceof JComponent) { // assume Swing components
                     JComponent jc = (JComponent) c;
                     // Sets step number of a component
-                    jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i));
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i));
                     // Sets steps names for a panel
-                    jc.putClientProperty("WizardPanel_contentData", steps);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);
                     // Turn on subtitle creation on each step
-                    jc.putClientProperty("WizardPanel_autoWizardStyle", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE);
                     // Show steps on the left side with the image on the background
-                    jc.putClientProperty("WizardPanel_contentDisplayed", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE);
                     // Turn on numbering of all steps
-                    jc.putClientProperty("WizardPanel_contentNumbered", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE);
                 }
             }
         }
@@ -129,7 +136,7 @@ public final class NewJDBCTableAction extends CallableSystemAction {
     }
 
     public String getName() {
-        return "Add JDBC Table(s)";
+        return nbBundle1.substring(15);
     }
 
     @Override
