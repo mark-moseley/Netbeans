@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,13 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
+ * Contributor(s):
+ *
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,80 +37,50 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
- * Contributor(s):
- * 
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.uml.diagrams.nodes.state;
+package org.netbeans.modules.uml.diagrams.nodes.activity;
 
-import java.awt.Point;
-import org.netbeans.api.visual.graph.GraphScene;
+import java.beans.PropertyChangeListener;
 import org.netbeans.api.visual.widget.Scene;
-import org.netbeans.api.visual.widget.Widget;
-import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.IRegion;
-import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.ITransition;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
+import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityPartition;
 import org.netbeans.modules.uml.diagrams.nodes.CompartmentWidget;
-import org.netbeans.modules.uml.drawingarea.util.Util;
-import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
+import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeReader;
+import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeWriter;
 import org.netbeans.modules.uml.drawingarea.view.UMLWidget;
 import org.netbeans.modules.uml.drawingarea.widgets.ContainerWidget;
 
 /**
  *
- * @author Sheryl Su
+ * @author Thuy
  */
-public class RegionWidget extends CompartmentWidget
+public class SubPartitionWidget extends CompartmentWidget
 {
-    private ContainerWidget stateContainerWidget;
- 
-    
-    public RegionWidget(Scene scene, IRegion region, CompositeStateWidget compositeStateWidget)
-    {
-        super(scene, region, compositeStateWidget);       
-    }
+    private Scene scene;
+    private ContainerWidget containerWidget;
 
+    public SubPartitionWidget(Scene scene, IActivityPartition subPart,
+                               ActivityPartitionWidget actPartitionWidget)
+    {
+        super(scene, subPart, actPartitionWidget);
+        this.scene = scene;
+    }
+   
     public String getWidgetID()
     {
-        return UMLWidget.UMLWidgetIDString.STATEWIDGET.toString();
+        return UMLWidget.UMLWidgetIDString.SUBPARTITIONWIDGET.toString();
     }
 
-    
+    @Override
     public void initContainedElements()
     {
-        if (!(getScene() instanceof GraphScene))
-        {
-            return;
-        }
- 
-        Point point = new Point(10,10);
-        for (IElement element : getElement().getElements())
-        {
-            if (element instanceof ITransition)
-                continue;
-            IPresentationElement presentation = Util.createNodePresentationElement();
-            presentation.addSubject(element);
-
-            Widget w = ((DesignerScene) getScene()).addNode(presentation);
-            if (w != null)
-            {
-                w.removeFromParent();
-                getContainerWidget().addChild(w);
-                w.setPreferredLocation(point);
-                point = new Point(point.x + 50, point.y + 50);
-            }
-        }
+        // do nothing
     }
 
     @Override
     public ContainerWidget getContainerWidget()
     {
-        if (stateContainerWidget == null)
-        {
-            stateContainerWidget = new RegionContainerWidget(getScene());
-        }
-        return stateContainerWidget;
+        if (containerWidget == null)
+            containerWidget = new ContainerWidget(getScene());
+        return containerWidget;
     }
 }
