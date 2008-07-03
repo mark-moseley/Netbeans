@@ -55,8 +55,8 @@ import java.util.Map;
 import java.util.Properties;
 import net.java.hulp.i18n.Logger;
 import org.netbeans.modules.etl.codegen.DBConnectionDefinitionTemplate;
+import org.netbeans.modules.etl.codegen.ETLCodegenUtil;
 import org.netbeans.modules.etl.logger.Localizer;
-import org.netbeans.modules.etl.logger.LogUtil;
 import org.netbeans.modules.sql.framework.codegen.DB;
 import org.netbeans.modules.sql.framework.codegen.DBFactory;
 import org.netbeans.modules.sql.framework.codegen.StatementContext;
@@ -78,7 +78,7 @@ import org.openide.awt.StatusDisplayer;
  */
 public class RejectedRowsDataPanel extends DataOutputPanel {
 
-    private static transient final Logger mLogger = LogUtil.getLogger(RejectedRowsDataPanel.class.getName());
+    private static transient final Logger mLogger = Logger.getLogger(RejectedRowsDataPanel.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
     public RejectedRowsDataPanel(SQLObject etlObject, SQLDefinition sqlDefinition) {
         super(etlObject, sqlDefinition, false, false);
@@ -90,12 +90,12 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
 
     public void generateResult(SQLObject aTable) {
         this.table = aTable;
-        String nbBundle1 = mLoc.t("PRSR001: Rejected Data: {0} ",table.getDisplayName());
-        this.setName(Localizer.parse(nbBundle1));
-        String nbBundle2 = mLoc.t("PRSR001: Loading Data");
-        String title = Localizer.parse(nbBundle2);
-        String nbBundle3 = mLoc.t("PRSR001: Loading from database, please wait...");
-        String msg = Localizer.parse(nbBundle3);
+        String nbBundle1 = mLoc.t("BUND353: Rejected Data: {0} ",table.getDisplayName());
+        this.setName(nbBundle1.substring(15));
+        String nbBundle2 = mLoc.t("BUND351: Loading Data");
+        String title = nbBundle2.substring(15);
+        String nbBundle3 = mLoc.t("BUND352: Loading from database, please wait...");
+        String msg = nbBundle3.substring(15);
         UIUtil.startProgressDialog(title, msg);
         generateRejectionTableData();
     }
@@ -103,7 +103,7 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
     private void generateRejectionTableData() {
         refreshButton.setEnabled(false);
         refreshField.setEnabled(false);
-        RejectionViewWorkerThread rejectionQueryThread = new RejectionViewWorkerThread(table);
+        RejectionViewWorkerThread rejectionQueryThread = new RejectionViewWorkerThread(table,super.sqlDefinition);
         rejectionQueryThread.start();
     }
 
@@ -111,14 +111,16 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
 
         DBConnectionFactory factory = DBConnectionFactory.getInstance();
         private SQLObject aTable;
+        private SQLDefinition sqlDef;
         private Connection conn;
         private Throwable ex;
         private PreparedStatement pstmt;
         private ResultSet rs;
         private Statement stmt;
 
-        public RejectionViewWorkerThread(SQLObject table) {
+        public RejectionViewWorkerThread(SQLObject table, SQLDefinition sqlDef) {
             this.aTable = table;
+            this.sqlDef = sqlDef;
         }
 
         public Object construct() {
@@ -130,10 +132,11 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
                 clone.setTablePrefix(MonitorUtil.LOG_DETAILS_TABLE_PREFIX);
 
                 DBConnectionDefinitionTemplate connTemplate = new DBConnectionDefinitionTemplate();
-                conDef = connTemplate.getDBConnectionDefinition("AXIONMEMORYDB");
-
+                //conDef = connTemplate.getDBConnectionDefinition("AXIONMEMORYDB");
+                conDef = connTemplate.getDBConnectionDefinition("STCDBADAPTER");
                 Map connParams = new HashMap();
-                connParams.put(DBConnectionDefinitionTemplate.KEY_DATABASE_NAME, "MonitorDB");
+                connParams.put(DBConnectionDefinitionTemplate.KEY_DATABASE_NAME, this.sqlDef.getDisplayName());
+                connParams.put(DBConnectionDefinitionTemplate.KEY_METADATA_DIR, ETLCodegenUtil.getMonitorDBDir(sqlDef.getDisplayName(), sqlDef.getAxiondbWorkingDirectory()));
                 conDef.setConnectionURL(StringUtil.replace(conDef.getConnectionURL(), connParams));
                 DB db = DBFactory.getInstance().getDatabase(DB.AXIONDB);
 
@@ -164,7 +167,7 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
                 String psSql = SQLUtils.createPreparedStatement(sql, attribMap, paramList);
                 pstmt = conn.prepareStatement(psSql);
                 SQLUtils.populatePreparedStatement(pstmt, attribMap, paramList);
-                mLogger.infoNoloc(mLoc.t("PRSR175: Select statement used for show data:{0}is{1}",NL,sql));
+                mLogger.infoNoloc(mLoc.t("EDIT155: Select statement used for show data:{0}is{1}",NL,sql));
                 this.rs = pstmt.executeQuery();
                 queryView.setResultSet(rs, maxRows, 0);
                 pstmt.close();
@@ -172,7 +175,7 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
                 //get the count of all rows
                 sqlPart = db.getStatements().getRowCountStatement(clone, context);
                 String countSql = db.getStatements().normalizeSQLForExecution(sqlPart).getSQL();
-                mLogger.infoNoloc(mLoc.t("PRSR176: Select count(*) statement used for total rows:{0}is{1}",NL,countSql));
+                mLogger.infoNoloc(mLoc.t("EDIT156: Select count(*) statement used for total rows:{0}is{1}",NL,countSql));
                 paramList.clear();
                 psSql = SQLUtils.createPreparedStatement(countSql, attribMap, paramList);
                 pstmt = conn.prepareStatement(psSql);
@@ -184,7 +187,7 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
                 cntRs.close();
             } catch (Exception e) {
                 this.ex = e;
-                mLogger.errorNoloc(mLoc.t("PRSR177: Can't get contents for table{0}in{1}",((aTable != null) ? aTable.getDisplayName() : ""),DataOutputPanel.class.getName()),e);
+                mLogger.errorNoloc(mLoc.t("EDIT157: Can't get contents for table{0}in{1}",((aTable != null) ? aTable.getDisplayName() : ""),DataOutputPanel.class.getName()),e);
                 queryView.clearView();
                 totalRowsLabel.setText("0");
             }
@@ -195,14 +198,14 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
         @Override
         public void finished() {
             if (this.ex != null) {
-                String nbBundle1 = mLoc.t("PRSR001: Error fetching data for table {0}.\nCause: {1}",aTable.getDisplayName(),ex.getMessage());
-                String errorMsg = Localizer.parse(nbBundle1);
+                String nbBundle1 = mLoc.t("BUND354: Error fetching data for table {0}.\nCause: {1}",aTable.getDisplayName(),ex.getMessage());
+                String errorMsg = nbBundle1.substring(15);
 
                 // If rejection table does not exist, show a brief user-friendly message
                 // that doesn't include a stack trace.
                 if (ex instanceof SQLException && "42704".equals(((SQLException) ex).getSQLState())) {
-                    String nbBundle4 = mLoc.t("PRSR001: No rejection rows available for table {0}.",aTable.getDisplayName());
-                    errorMsg = Localizer.parse(nbBundle4);
+                    String nbBundle4 = mLoc.t("BUND355: No rejection rows available for table {0}.",aTable.getDisplayName());
+                    errorMsg = nbBundle4.substring(15);
                 }
                 StatusDisplayer.getDefault().setStatusText(errorMsg);
             }
@@ -251,7 +254,7 @@ public class RejectedRowsDataPanel extends DataOutputPanel {
                     stmt.close();
                 }
             } catch (SQLException sqle) {
-                mLogger.errorNoloc(mLoc.t("PRSR178: Could not close statement after retrieving aTable contents."),sqle);
+                mLogger.errorNoloc(mLoc.t("EDIT701: Could not close statement after retrieving aTable contents."),sqle);
             } finally {
                 if (conn != null) {
                     factory.closeConnection(conn);
