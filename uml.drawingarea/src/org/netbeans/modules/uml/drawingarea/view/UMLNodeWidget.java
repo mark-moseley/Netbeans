@@ -126,6 +126,13 @@ public abstract class UMLNodeWidget extends Widget
     public final String PSK_RESIZE_UNLESSMANUAL = "PSK_RESIZE_UNLESSMANUAL";
     public final String PSK_RESIZE_NEVER = "PSK_RESIZE_NEVER";   
     public final String VIEW_NAME = "ViewName";
+    
+    public static final String ATTRIBUTES_COMPARTMENT = "AttributesCompartment";
+    public static final String OPERATIONS_COMPARTMENT = "OperationsCompartment";
+    public static final String REDEFINED_ATTR_COMPARTMENT = "RedefinedAttrCompartment";
+    public static final String REDEFINED_OPER_COMPARTMENT = "RedefinedOperCompartment";
+    public static final String LITERALS_COMPARTMENT = "LiteralsCompartment";
+    
 
     
     public UMLNodeWidget(Scene scene)
@@ -629,7 +636,7 @@ public abstract class UMLNodeWidget extends Widget
 //                }
                     if (label instanceof UMLWidget)
                     {
-                        ((UMLWidget) label).refresh();
+                        ((UMLWidget) label).refresh(false);
                     }
                 }
             }
@@ -787,7 +794,7 @@ public abstract class UMLNodeWidget extends Widget
     }
 
     
-    public void refresh()
+    public void refresh(boolean resizetocontent)
     {
         IPresentationElement pe = getObject();
         if (pe != null && pe.getFirstSubject() != null && !pe.getFirstSubject().isDeleted())
@@ -800,7 +807,7 @@ public abstract class UMLNodeWidget extends Widget
             remove();
         }
         
-        Util.resizeNodeToContents(this);
+        if(resizetocontent)Util.resizeNodeToContents(this);
         scene.validate();
         //Util.resizeNodeToContents(this);
     }
