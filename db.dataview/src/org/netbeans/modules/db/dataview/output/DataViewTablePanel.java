@@ -184,7 +184,7 @@ class DataViewTablePanel extends JPanel {
     }
 
     private TableModel createModelFrom(List<Object[]> rows) {
-        DataViewTableModel dtm = new DataViewTableModel(rows);
+        DataViewTableModel dtm = new DataViewTableModel();
         DataViewTableSorter sorter = new DataViewTableSorter(dtm);
         sorter.setTableHeader(tableUI.getTableHeader());
         // Obtain display name
@@ -210,27 +210,12 @@ class DataViewTablePanel extends JPanel {
             for (Object colVal : (Vector) row) {
                 rowObj[i++] = colVal;
             }
+            rows.add(rowObj);
         }
         return rows;
     }
 
     class DataViewTableModel extends DefaultTableModel {
-
-        Class[] collumnClasses;
-
-        DataViewTableModel(List<Object[]> rows) {
-            super();
-            // TODO there should be a better way to do this
-            collumnClasses = new Class[tblMeta.getColumnCount()];
-            if (rows.size() > 0) {
-                Object[] row = rows.get(0);
-                for (int i = 0, I = row.length; i < I; i++) {
-                    if(row[i] != null) {
-                        collumnClasses[i] = row[i].getClass();
-                    }
-                }
-            }
-        }
 
         @Override
         public boolean isCellEditable(int row, int column) {
@@ -253,7 +238,7 @@ class DataViewTablePanel extends JPanel {
             }
 
             Object oldVal = getValueAt(row, col);
-            if (oldVal != null && oldVal.toString().equals(value ==  null ? "" : value.toString()) || (oldVal == null && value == null)) {
+            if (oldVal != null && oldVal.toString().equals(value == null ? "" : value.toString()) || (oldVal == null && value == null)) {
                 return;
             }
 
@@ -274,15 +259,6 @@ class DataViewTablePanel extends JPanel {
             }
             tableUI.revalidate();
             tableUI.repaint();
-        }
-
-        @Override
-        public Class getColumnClass(int columnIndex) {
-            if (collumnClasses[columnIndex] == null) {
-                return super.getColumnClass(columnIndex);
-            } else {
-                return collumnClasses[columnIndex];
-            }
         }
     }
 }
