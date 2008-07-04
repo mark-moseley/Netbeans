@@ -275,8 +275,8 @@ public class ThreadsPanel extends JPanel implements AdjustmentListener, ActionLi
             }); // NOI18N
 
         scrollBar = new ThreadsScrollBar();
-        zoomInButton = new JButton(new ImageIcon(getClass().getResource("/org/netbeans/lib/profiler/ui/resources/zoomIn.png"))); // NOI18N
-        zoomOutButton = new JButton(new ImageIcon(getClass().getResource("/org/netbeans/lib/profiler/ui/resources/zoomOut.png"))); // NOI18N
+        zoomInButton = new JButton(new ImageIcon(ThreadsPanel.class.getResource("/org/netbeans/lib/profiler/ui/resources/zoomIn.png"))); // NOI18N
+        zoomOutButton = new JButton(new ImageIcon(ThreadsPanel.class.getResource("/org/netbeans/lib/profiler/ui/resources/zoomOut.png"))); // NOI18N
         scaleToFitButton = new JButton(new ImageIcon(getClass()
                                                          .getResource(scaleToFit
                                                                       ? "/org/netbeans/lib/profiler/ui/resources/zoom.png"
@@ -541,14 +541,15 @@ public class ThreadsPanel extends JPanel implements AdjustmentListener, ActionLi
                         }
                     }
                 }
+                
             });
-        addComponentListener(new ComponentAdapter() {
-                public void componentShown(ComponentEvent e) {
-                    // since the data were not processed when this component was not showing,
-                    // we need to do the updateState when the component becomes visible
-                    dataChanged();
+        addHierarchyListener(new HierarchyListener() {
+            public void hierarchyChanged(HierarchyEvent e) {
+                if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
+                    if (isShowing()) dataChanged();
                 }
-            });
+            }
+        });
 
         // Disable traversing table cells using TAB and Shift+TAB
         Set keys = new HashSet(table.getFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS));
@@ -619,7 +620,7 @@ public class ThreadsPanel extends JPanel implements AdjustmentListener, ActionLi
         if (e.getSource() == scaleToFitButton) {
             if (!scaleToFit) {
                 scrollBar.setVisible(true);
-                scaleToFitButton.setIcon(new ImageIcon(getClass().getResource("/org/netbeans/lib/profiler/ui/resources/zoom.png"))); // NOI18N
+                scaleToFitButton.setIcon(new ImageIcon(ThreadsPanel.class.getResource("/org/netbeans/lib/profiler/ui/resources/zoom.png"))); // NOI18N
                 scaleToFit = true;
             } else {
                 scaleToFit = false;
