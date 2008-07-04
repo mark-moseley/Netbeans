@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,9 +31,9 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+ *
  * Contributor(s):
- * 
+ *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
@@ -56,10 +56,10 @@ import org.openide.windows.TopComponent;
  * @author  Jan Becicka
  */
 public class QuickSearchComboBar extends javax.swing.JPanel {
-    
+
     QuickSearchPopup displayer = new QuickSearchPopup(this);
     WeakReference<TopComponent> caller;
-    
+
     Color origForeground;
     private KeyStroke keyStroke;
 
@@ -72,7 +72,7 @@ public class QuickSearchComboBar extends javax.swing.JPanel {
     /** Creates new form SilverLightComboBar */
     public QuickSearchComboBar() {
         initComponents();
-        
+
         command.getDocument().addDocumentListener(new DocumentListener() {
 
             public void insertUpdate(DocumentEvent arg0) {
@@ -86,13 +86,13 @@ public class QuickSearchComboBar extends javax.swing.JPanel {
             public void changedUpdate(DocumentEvent arg0) {
                 textChanged();
             }
-            
+
             private void textChanged () {
                 if (command.isFocusOwner()) {
                     displayer.maybeEvaluate(command.getText());
                 }
             }
-            
+
         });
     }
 
@@ -112,7 +112,7 @@ public class QuickSearchComboBar extends javax.swing.JPanel {
         command = new javax.swing.JTextArea();
         jSeparator1 = new javax.swing.JSeparator();
 
-        setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 4, 1, 1));
+        setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
         setMaximumSize(new java.awt.Dimension(200, 2147483647));
         setName("Form"); // NOI18N
         setOpaque(false);
@@ -142,7 +142,6 @@ public class QuickSearchComboBar extends javax.swing.JPanel {
         jScrollPane1.setBorder(null);
         jScrollPane1.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         jScrollPane1.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
-        jScrollPane1.setViewportBorder(null);
         jScrollPane1.setMinimumSize(new java.awt.Dimension(2, 18));
         jScrollPane1.setName("jScrollPane1"); // NOI18N
 
@@ -207,6 +206,7 @@ private void commandKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_c
         invokeSelectedItem();
     } else if ((evt.getKeyCode()) == KeyEvent.VK_ESCAPE) {
         returnFocus();
+        displayer.clearModel();
     }
 }//GEN-LAST:event_commandKeyPressed
 
@@ -224,7 +224,7 @@ private void commandKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_c
             });
         }
     }
-    
+
     private void returnFocus () {
         displayer.setVisible(false);
         if (caller != null) {
@@ -257,11 +257,11 @@ private void commandFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:even
             command.setText(NbBundle.getMessage(QuickSearchComboBar.class, "MSG_DiscoverabilityHint") + sc); //NOI18N
         } else {
             command.setForeground(origForeground);
-            command.setText("");        
+            command.setText("");
         }
     }
 
-    
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JTextArea command;
     private javax.swing.JLabel jLabel2;
@@ -277,28 +277,32 @@ private void commandFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:even
         super.requestFocus();
         command.requestFocus();
     }
-    
+
     JTextArea getCommand() {
         return command;
     }
-    
+
+    int getBottomLineY () {
+        return jPanel1.getY() + jPanel1.getHeight();
+    }
+
     static Color getShadowColor () {
         Color shadow = UIManager.getColor("controlShadow");
         return shadow != null ? shadow : Color.GRAY;
     }
-    
+
     static Color getTextBackground () {
         Color textB = UIManager.getColor("TextPane.background");
         return textB != null ? textB : Color.WHITE;
     }
-    
+
     static Color getResultBackground () {
         return getTextBackground();
     }
-    
+
     static Color getCategoryTextColor () {
         Color shadow = UIManager.getColor("textInactiveText");
         return shadow != null ? shadow : Color.DARK_GRAY;
     }
-    
+
 }
