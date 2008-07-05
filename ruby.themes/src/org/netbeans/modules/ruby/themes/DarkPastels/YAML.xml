@@ -26,7 +26,7 @@ your own identifying information:
 Contributor(s):
 
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
 Microsystems, Inc. All Rights Reserved.
 
 If you wish your version of this file to be governed by only the CDDL
@@ -47,9 +47,9 @@ made subject to such option by the copyright holder.
     <fontcolor default="keyword" name="mod-method">
         <font style="bold" />
     </fontcolor>
-    <fontcolor name="ruby-delimiter" foreColor="black" bgColor="ffD8EED2" default="default">
+    <fontcolor name="ruby-delimiter" default="default">
         <font style="bold"/>
     </fontcolor>
-    <fontcolor name="ruby" bgColor="ffD8EED2" default="default"/>
-    <fontcolor name="RUBYCOMMENT" bgColor="ffD8EED2" default="comment"/>
+    <fontcolor name="ruby" default="default"/>
+    <fontcolor name="RUBYCOMMENT" default="comment"/>
 </fontscolors>

@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,45 +31,35 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.ruby.rhtml.lexer;
+package org.netbeans.modules.languages.yaml;
 
-import org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.spi.lexer.Lexer;
 import org.netbeans.spi.lexer.LexerInput;
 import org.netbeans.spi.lexer.LexerRestartInfo;
 import org.netbeans.spi.lexer.TokenFactory;
 
-/**
- * Syntax class for RHTML tags, recognizing RHTML delimiters.
- *
- * @author Marek Fukala
- * @author Tor Norbye
- * 
- * @todo <%% should be treated as HTML (<%) -- ditto for %%>
- *
- * @version 1.00
- */
 
-public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
-    
+/**
+ *
+ * @author Tor Norbye
+ */
+public final class YamlLexer implements Lexer<YamlTokenId> {
     private static final int EOF = LexerInput.EOF;
-    
-    private LexerInput input;
-    
-    private TokenFactory<RhtmlTokenId> tokenFactory;
-    
-    public Object state() {
-        return state;
-    }
-    
+    private final LexerInput input;
+    private final TokenFactory<YamlTokenId> tokenFactory;
+
     //main internal lexer state
-    private int state = INIT;
-    
+    private int state = ISI_WHITESPACE;
+
     // Internal analyzer states
-    private static final int INIT                     = 0;  // initial lexer state = content language
+    private static final int ISI_WHITESPACE           = 0;  // initial lexer state = content language, no whitespace seen
     private static final int ISA_LT                   = 1; // after '<' char
     private static final int ISA_LT_PC                = 2; // after '<%' - comment or directive or scriptlet
     private static final int ISI_SCRIPTLET            = 3; // inside Ruby scriptlet
@@ -85,30 +69,35 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
     private static final int ISI_EXPR_SCRIPTLET       = 7; // inside Ruby expression scriptlet
     private static final int ISI_EXPR_SCRIPTLET_PC    = 8; // just after % in an expression scriptlet
     private static final int ISI_RUBY_LINE            = 9; // just after % in an %-line
-    
-    public RhtmlLexer(LexerRestartInfo<RhtmlTokenId> info) {
+    private static final int ISI_NONWHITESPACE        = 10; // after seeing non space characters on a line
+
+    /**
+     * A Lexer for ruby strings
+     * @param substituting If true, handle substitution rules for double quoted strings, otherwise
+     *    single quoted strings.
+     */
+    public YamlLexer(LexerRestartInfo<YamlTokenId> info) {
         this.input = info.input();
         this.tokenFactory = info.tokenFactory();
         if (info.state() == null) {
-            this.state = INIT;
+            this.state = ISI_WHITESPACE;
         } else {
             state = ((Integer) info.state()).intValue();
         }
     }
-    
-    private Token<RhtmlTokenId> token(RhtmlTokenId id) {
-        if(input.readLength() == 0) {
-            new Exception("Error - token length is zero!; state = " + state).printStackTrace();
-        }
-        Token<RhtmlTokenId> t = tokenFactory.createToken(id);
-        return t;
+
+    public Object state() {
+        return state;
     }
-    
-    public Token<RhtmlTokenId> nextToken() {
+
+    public Token<YamlTokenId> nextToken() {
+        // TODO - support embedded Ruby in <% %> tags.
+        // This is used in fixtures files from Rails for example; see
+        //   http://api.rubyonrails.com/classes/Fixtures.html
         int actChar;
         while (true) {
             actChar = input.read();
-            
+
             if (actChar == EOF) {
                 if(input.readLengthEOF() == 1) {
                     return null; //just EOL is read
@@ -119,16 +108,42 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                     break;
                 }
             }
-            
+
             switch (state) {
-                case INIT:
+                case ISI_NONWHITESPACE:
+                    if (actChar == '\n') {
+                        state = ISI_WHITESPACE;
+                        return token(YamlTokenId.TEXT);
+                    }
+                    // Fallthrough
+                    
+                case ISI_WHITESPACE:
                     switch (actChar) {
-//                        case '\n':
-//                            return token(RhtmlTokenId.EOL);
+                        case '#': {
+                            if (state == ISI_WHITESPACE) {
+                                // Comment
+                                if (input.readLength() > 1) {
+                                    input.backup(1);
+                                    return token(YamlTokenId.TEXT);
+                                }
+
+                                int ch = input.read();
+                                while (!(ch == EOF || ch == '\r' || ch == '\n')) {
+                                    ch = input.read();
+                                }
+                                //if (ch != EOF) {
+                                //    input.backup(1);
+                                //}
+                                state = ISI_WHITESPACE;
+                                return token(YamlTokenId.COMMENT);
+                            }
+                        }
+                        break;
+ 
                         case '<':
                             state = ISA_LT;
                             break;
-                            
+
                         case '%': {
                             int peek = input.read();
                             if (peek == '%') {
@@ -138,11 +153,11 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                             if (peek != LexerInput.EOF) {
                                 input.backup(1);
                             }
-                            
+
                             // See if we're in a line prefix
                             if (input.readLength() == 1) {
                                 state = ISI_RUBY_LINE;
-                                return token(RhtmlTokenId.DELIMITER);
+                                return token(YamlTokenId.DELIMITER);
                             }
                             CharSequence cs = input.readText();
                             // -2: skip the final %
@@ -152,41 +167,49 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                                     // We're in a new line: Finish this token as HTML.
                                     input.backup(1);
                                     // When we come back we'll just process the line as a delimiter
-                                    return token(RhtmlTokenId.HTML);
+                                    return token(YamlTokenId.TEXT);
                                 } else if (!Character.isWhitespace(c)) {
                                     // The % is not the beginning of a line
                                     break;
                                 }
                             }
                             break;
-                    }
+                        }
+                        case ' ':
+                            break;
+
+                        default:
+                            if (!Character.isWhitespace(actChar)) {
+                                state = ISI_NONWHITESPACE;
+                            }
+                            break;
                 }
                 break;
-                    
+
                 case ISA_LT:
                     switch (actChar) {
                         case '%':
                             state = ISA_LT_PC;
                             break;
                         default:
-                            state = INIT; //just content
+                            state = ISI_WHITESPACE; //just content
 //                            state = ISI_TAG_ERROR;
 //                            break;
                     }
                     break;
-                    
+
                 case ISA_LT_PC:
                     switch (actChar) {
-                        case '=': 
+                        case '=':
                             if(input.readLength() == 3) {
                                 // just <%! or <%= read
                                 state = ISI_EXPR_SCRIPTLET;
-                                return token(RhtmlTokenId.DELIMITER);
+                                return token(YamlTokenId.DELIMITER);
                             } else {
                                 // RHTML symbol, but we also have content language in the buffer
                                 input.backup(3); //backup <%=
-                                state = INIT;
-                                return token(RhtmlTokenId.HTML); //return CL token
+                                state = ISI_WHITESPACE;
+                                return token(YamlTokenId.TEXT); //return CL token
                             }
                         case '%': {
                             int peek = input.read();
@@ -197,64 +220,64 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                                 // Handle <%% == <%
                                 if(input.readLength() == 3) {
                                     // <%% is just an escape for <% in HTML...
-                                    state = INIT;
+                                    state = ISI_WHITESPACE;
                                     break;
                                 } else {
                                     // RHTML symbol, but we also have content language in the buffer
                                     input.backup(3); //backup <%@
-                                    state = INIT;
-                                    return token(RhtmlTokenId.HTML); //return CL token
+                                    state = ISI_WHITESPACE;
+                                    return token(YamlTokenId.TEXT); //return CL token
                                 }
                             } else if (input.readLength() == 3) {
                                 // We have <%%> - it's just a <% opener followed by a %> closer;
                                 // digest the open delimiter now
                                 input.backup(1);
                                 state = ISI_SCRIPTLET;
-                                return token(RhtmlTokenId.DELIMITER);
+                                return token(YamlTokenId.DELIMITER);
                             } else {
-                                state = INIT;
+                                state = ISI_WHITESPACE;
                                 input.backup(3);
-                                return token(RhtmlTokenId.HTML);
+                                return token(YamlTokenId.TEXT);
                             }
                         }
-                            
+
                         case '#':
                             if(input.readLength() == 3) {
                                 // just <%! or <%= read
                                 state = ISI_COMMENT_SCRIPTLET;
-                                return token(RhtmlTokenId.DELIMITER);
+                                return token(YamlTokenId.DELIMITER);
                             } else {
-                                //jsp symbol, but we also have content language in the buffer
+                                //ERB symbol, but we also have content language in the buffer
                                 input.backup(3); //backup <%! or <%=
-                                state = INIT;
-                                return token(RhtmlTokenId.HTML); //return CL token
+                                state = ISI_WHITESPACE;
+                                return token(YamlTokenId.TEXT); //return CL token
                             }
                         case '-':
                             if(input.readLength() == 3) {
                                 // just read <%-
                                 state = ISI_SCRIPTLET;
-                                return token(RhtmlTokenId.DELIMITER);
+                                return token(YamlTokenId.DELIMITER);
                             } else {
                                 // RHTML symbol, but we also have content language in the buffer
                                 input.backup(3); //backup <%-
-                                state = INIT;
-                                return token(RhtmlTokenId.HTML); //return CL token
+                                state = ISI_WHITESPACE;
+                                return token(YamlTokenId.TEXT); //return CL token
                             }
                         default:  // RHTML scriptlet delimiter '<%'
                             if(input.readLength() == 3) {
                                 // just <% + something != [=,#] read
                                 state = ISI_SCRIPTLET;
                                 input.backup(1); //backup the third character, it is a part of the Ruby scriptlet
-                                return token(RhtmlTokenId.DELIMITER);
+                                return token(YamlTokenId.DELIMITER);
                             } else {
                                 // RHTML symbol, but we also have content language in the buffer
                                 input.backup(3); //backup <%@
-                                state = INIT;
-                                return token(RhtmlTokenId.HTML); //return CL token
+                                state = ISI_WHITESPACE;
+                                return token(YamlTokenId.TEXT); //return CL token
                             }
                     }
                     break;
-                    
+
                 case ISI_COMMENT_SCRIPTLET:
                     switch(actChar) {
                         case '%':
@@ -262,8 +285,8 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                             break;
                     }
                     break;
-                    
-                    
+
+
                 case ISI_SCRIPTLET:
                     switch(actChar) {
                         case '%':
@@ -271,20 +294,20 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                             break;
                     }
                     break;
-                    
+
 
                 case ISI_SCRIPTLET_PC:
                     switch(actChar) {
                         case '>':
                             if(input.readLength() == 2) {
                                 //just the '%>' symbol read
-                                state = INIT;
-                                return token(RhtmlTokenId.DELIMITER);
+                                state = ISI_WHITESPACE;
+                                return token(YamlTokenId.DELIMITER);
                             } else {
                                 //return the scriptlet content
                                 input.backup(2); // backup '%>' we will read JUST them again
                                 state = ISI_SCRIPTLET;
-                                return token(RhtmlTokenId.RUBY);
+                                return token(YamlTokenId.RUBY);
                             }
                         default:
                             state = ISI_SCRIPTLET;
@@ -302,9 +325,9 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                     if (actChar == '\n') {
                         input.backup(1);
                     }
-                    state = INIT;
+                    state = ISI_WHITESPACE;
                     if (input.readLength() > 0) {
-                        return token(RhtmlTokenId.RUBY);
+                        return token(YamlTokenId.RUBY);
                     }
                     break;
 
@@ -315,39 +338,39 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                             break;
                     }
                     break;
-                    
+
 
                 case ISI_EXPR_SCRIPTLET_PC:
                     switch(actChar) {
                         case '>':
                             if(input.readLength() == 2) {
                                 //just the '%>' symbol read
-                                state = INIT;
-                                return token(RhtmlTokenId.DELIMITER);
+                                state = ISI_WHITESPACE;
+                                return token(YamlTokenId.DELIMITER);
                             } else {
                                 //return the scriptlet content
                                 input.backup(2); // backup '%>' we will read JUST them again
                                 state = ISI_EXPR_SCRIPTLET;
-                                return token(RhtmlTokenId.RUBY_EXPR);
+                                return token(YamlTokenId.RUBY_EXPR);
                             }
                         default:
                             state = ISI_EXPR_SCRIPTLET;
                             break;
                     }
                     break;
-                    
+
                 case ISI_COMMENT_SCRIPTLET_PC:
                     switch(actChar) {
                         case '>':
                             if(input.readLength() == 2) {
                                 //just the '%>' symbol read
-                                state = INIT;
-                                return token(RhtmlTokenId.DELIMITER);
+                                state = ISI_WHITESPACE;
+                                return token(YamlTokenId.DELIMITER);
                             } else {
                                 //return the scriptlet content
                                 input.backup(2); // backup '%>' we will read JUST them again
                                 state = ISI_COMMENT_SCRIPTLET;
-                                return token(RhtmlTokenId.RUBYCOMMENT);
+                                return token(YamlTokenId.RUBYCOMMENT);
                             }
                         default:
                             state = ISI_COMMENT_SCRIPTLET;
@@ -356,52 +379,56 @@ public final class RhtmlLexer implements Lexer<RhtmlTokenId> {
                     break;
             }
         }
-        
+
         // At this stage there's no more text in the scanned buffer.
         // Scanner first checks whether this is completely the last
         // available buffer.
-        
+
         switch(state) {
-            case INIT:
+            case ISI_NONWHITESPACE:
+            case ISI_WHITESPACE:
                 if (input.readLength() == 0) {
                     return null;
                 } else {
-                    return token(RhtmlTokenId.HTML);
+                    return token(YamlTokenId.TEXT);
                 }
             case ISA_LT:
-                state = INIT;
-                return token(RhtmlTokenId.DELIMITER);
+                state = ISI_WHITESPACE;
+                return token(YamlTokenId.DELIMITER);
             case ISA_LT_PC:
-                state = INIT;
-                return token(RhtmlTokenId.DELIMITER);
+                state = ISI_WHITESPACE;
+                return token(YamlTokenId.DELIMITER);
             case ISI_SCRIPTLET_PC:
-                state = INIT;
-                return token(RhtmlTokenId.DELIMITER);
+                state = ISI_WHITESPACE;
+                return token(YamlTokenId.DELIMITER);
             case ISI_SCRIPTLET:
-                state = INIT;
-                return token(RhtmlTokenId.RUBY);
+                state = ISI_WHITESPACE;
+                return token(YamlTokenId.RUBY);
             case ISI_EXPR_SCRIPTLET_PC:
-                state = INIT;
-                return token(RhtmlTokenId.DELIMITER);
+                state = ISI_WHITESPACE;
+                return token(YamlTokenId.DELIMITER);
             case ISI_EXPR_SCRIPTLET:
-                state = INIT;
-                return token(RhtmlTokenId.RUBY_EXPR);
+                state = ISI_WHITESPACE;
+                return token(YamlTokenId.RUBY_EXPR);
             case ISI_COMMENT_SCRIPTLET_PC:
-                state = INIT;
-                return token(RhtmlTokenId.DELIMITER);
+                state = ISI_WHITESPACE;
+                return token(YamlTokenId.DELIMITER);
             case ISI_COMMENT_SCRIPTLET:
-                state = INIT;
-                return token(RhtmlTokenId.RUBYCOMMENT);
-                
-                
+                state = ISI_WHITESPACE;
+                return token(YamlTokenId.RUBYCOMMENT);
+
+
             default:
                 System.out.println("RhtmlLexer - unhandled state : " + state);   // NOI18N
         }
-        
+
         return null;
-        
     }
-    
+
+    private Token<YamlTokenId> token(YamlTokenId id) {
+        return tokenFactory.createToken(id);
+    }
+
     public void release() {
     }
 }
