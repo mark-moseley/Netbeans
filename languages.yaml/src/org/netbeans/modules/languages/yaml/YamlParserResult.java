@@ -36,66 +36,47 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.languages.yaml;
 
-import org.netbeans.api.lexer.Language;
-import org.netbeans.modules.gsf.api.CodeCompletionHandler;
-import org.netbeans.modules.gsf.api.KeystrokeHandler;
-import org.netbeans.modules.gsf.api.Parser;
-import org.netbeans.modules.gsf.api.SemanticAnalyzer;
-import org.netbeans.modules.gsf.api.StructureScanner;
-import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
+import java.util.List;
+import org.jvyamlb.nodes.Node;
+import org.netbeans.modules.gsf.api.ParserFile;
+import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.gsf.api.StructureItem;
 
 /**
- * GSF Configuration for YAML
- *
+ * A result from Parsing YAML
+ * 
  * @author Tor Norbye
  */
-public class YamlLanguage extends DefaultLanguageConfig {
+public class YamlParserResult extends ParserResult {
 
-    @Override
-    public Language getLexerLanguage() {
-        return YamlTokenId.language();
+    private Node node;
+    private List<? extends StructureItem> items;
+
+    public YamlParserResult(Node node, YamlParser parser, ParserFile file) {
+        super(parser, file, YamlTokenId.YAML_MIME_TYPE);
+        this.node = node;
+    }
+
+    public Node getObject() {
+        return node;
     }
 
     @Override
-    public String getDisplayName() {
-        return "YAML";
+    public AstTreeNode getAst() {
+        return null;
     }
 
-    @Override
-    public String getLineCommentPrefix() {
-        return "#"; // NOI18N
+    public List<? extends StructureItem> getItems() {
+        if (items == null) {
+            items = new YamlScanner().scanStructure(this);
+        }
+
+        return items;
     }
 
-    @Override
-    public Parser getParser() {
-        return new YamlParser();
-    }
-
-    @Override
-    public boolean hasStructureScanner() {
-        return true;
-    }
-
-    @Override
-    public StructureScanner getStructureScanner() {
-        return new YamlScanner();
-    }
-
-    @Override
-    public SemanticAnalyzer getSemanticAnalyzer() {
-        return new YamlSemanticAnalyzer();
-    }
-
-    @Override
-    public KeystrokeHandler getKeystrokeHandler() {
-        return new YamlKeystrokeHandler();
-    }
-
-    @Override
-    public CodeCompletionHandler getCompletionHandler() {
-        return new YamlCompletion();
+    public void setItems(List<? extends StructureItem> items) {
+        this.items = items;
     }
 }
