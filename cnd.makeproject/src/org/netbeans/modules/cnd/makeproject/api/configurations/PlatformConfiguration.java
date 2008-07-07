@@ -39,55 +39,66 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb;
+package org.netbeans.modules.cnd.makeproject.api.configurations;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
-import org.openide.util.NbBundle;
-import org.netbeans.spi.debugger.SessionProvider;
-import org.netbeans.spi.debugger.ContextProvider;
-import org.netbeans.modules.cnd.makeproject.api.ProjectActionEvent;
+import org.netbeans.modules.cnd.api.remote.ServerList;
+import org.netbeans.modules.cnd.api.remote.ServerRecord;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
+import org.netbeans.modules.cnd.makeproject.configurations.ui.PlatformNodeProp;
+import org.openide.util.Lookup;
+import org.openide.util.RequestProcessor;
 
-public class GdbSessionProvider extends SessionProvider {
+public class PlatformConfiguration extends IntConfiguration implements PropertyChangeListener {
+    
+    private int old;
+    private PlatformNodeProp pnp;
 
-    private ContextProvider contextProvider;
-    private String sessionName = NbBundle.getMessage(GdbSessionProvider.class, "CTL_GDB_SESSION"); // NOI18N
-    private String locationName = NbBundle.getMessage(GdbSessionProvider.class, "CTL_GDB_SESSION"); // NOI18N
-    private String [] supportedLanguages = new String [] { "C++", "C", "Fortran" }; // NOI18N
-    private ProjectActionEvent projectActionEvent;
+    public PlatformConfiguration(int def, String[] names) {
+        super(null, def, names, null);
+        old = -1;
+        pnp = null;
+    }
+    
+    public void setPlatformNodeProp(PlatformNodeProp pnp) {
+        this.pnp = pnp;
+    }
 
-    public GdbSessionProvider(ContextProvider contextProvider) {
-        this.contextProvider = contextProvider;
-        projectActionEvent = (ProjectActionEvent) contextProvider.lookupFirst(null, ProjectActionEvent.class);
-    };
-
-    public String getSessionName () {
-        String sn = null;
-        if (projectActionEvent != null)
-            sn = projectActionEvent.getExecutable();
-        if (sn == null) return sessionName;
-        if (sn.length() > 8) {
-            // Name is too long - get base name
-            if (sn.lastIndexOf('/') >= 0) {
-                sn = sn.substring(sn.lastIndexOf('/') + 1);
+    public void propertyChange(PropertyChangeEvent evt) {
+        setValue(Platform.PLATFORM_NONE);
+        final PlatformConfiguration pconf = this;
+        final String key = evt.getNewValue().toString();
+        
+        if (key.equals(CompilerSetManager.LOCALHOST)) {
+            if (old != -1) {
+                setValue(old);
             }
+        } else {
+            old = getValue();
+            RequestProcessor.getDefault().post(new Runnable() {
+                public void run() {
+                    ServerList server = (ServerList) Lookup.getDefault().lookup(ServerList.class);
+                    if (server != null) {
+                        ServerRecord record = server.get(key);
+                        if (record != null) {
+                            pconf.setValue(record.getPlatform());
+                            if (pnp != null) {
+                                pnp.repaint();
+                            }
+                        }
+                    }
+                }
+            });
         }
-        if (sn.length() > 0) {
-            // Set session name
-            sessionName = sn; 
-        }
-        return sessionName;
-    }
-    
-    public String getLocationName() {
-        return CompilerSetManager.LOCALHOST;
-    }
-    
-    public String getTypeID() {
-        return GdbDebugger.SESSION_ID;
-    }
-    
-    public Object[] getServices() {
-        return supportedLanguages; 
     }
 
+    @Override
+    public Object clone() {
+	PlatformConfiguration clone = new PlatformConfiguration(getDefault(), getNames());
+	clone.setValue(getValue());
+	clone.setModified(getModified());
+	return clone;
+    }
 }
