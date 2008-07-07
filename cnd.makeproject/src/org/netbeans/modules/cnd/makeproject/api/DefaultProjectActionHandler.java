@@ -55,18 +55,24 @@ import javax.swing.ImageIcon;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
 import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.netbeans.modules.cnd.api.execution.ExecutionListener;
 import org.netbeans.modules.cnd.api.execution.NativeExecutor;
+import org.netbeans.modules.cnd.api.utils.CppUtils;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.api.utils.Path;
 import org.netbeans.modules.cnd.makeproject.MakeOptions;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platforms;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
 import org.netbeans.modules.cnd.makeproject.ui.SelectExecutablePanel;
-import org.netbeans.modules.cnd.settings.CppSettings;
+import org.netbeans.modules.cnd.makeproject.ui.utils.NativePathMap;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -141,10 +147,11 @@ public class DefaultProjectActionHandler implements ActionListener {
         private String tabNameSeq;
         int currentAction = 0;
         private ExecutorTask executorTask = null;
+        private NativeExecutor projectExecutor = null;
         private StopAction sa = null;
         private RerunAction ra = null;
         private ProgressHandle progressHandle = null;
-        private Object lock = new Object();
+        private final Object lock = new Object();
         
         private String getTabName(ProjectActionEvent[] paes) {
             String projectName = ProjectUtils.getInformation(paes[0].getProject()).getName();
@@ -162,14 +169,6 @@ public class DefaultProjectActionHandler implements ActionListener {
             return name;
         }
         
-        private String getTabName(ProjectActionEvent pae) {
-            String projectName = ProjectUtils.getInformation(pae.getProject()).getName();
-            String name = projectName + " ("; // NOI18N
-            name += pae.getActionName();
-            name += ")"; // NOI18N
-            return name;
-        }
-        
         private InputOutput getTab() {
             return ioTab;
         }
@@ -181,6 +180,17 @@ public class DefaultProjectActionHandler implements ActionListener {
                     return true;
                 }
             }, new AbstractAction() {
+                public void actionPerformed(ActionEvent e) {
+                    getTab().select();
+                }
+            });
+            handle.setInitialDelay(0);
+            return handle;
+        }
+        
+        private ProgressHandle createPogressHandleNoCancel() {
+            ProgressHandle handle = ProgressHandleFactory.createHandle(tabNameSeq,
+            new AbstractAction() {
                 public void actionPerformed(ActionEvent e) {
                     getTab().select();
                 }
@@ -277,14 +287,20 @@ public class DefaultProjectActionHandler implements ActionListener {
                     pae.getID() == ProjectActionEvent.DEBUG_LOAD_ONLY ||
                     pae.getID() == ProjectActionEvent.DEBUG_STEPINTO ||
                     pae.getID() == ProjectActionEvent.CUSTOM_ACTION) {
-                if (!checkExecutable(pae))
+                if (!checkExecutable(pae)) {
+                    progressHandle.finish();
                     return;
+                }
             }
             
             if ((pae.getID() == ProjectActionEvent.DEBUG ||
                     pae.getID() == ProjectActionEvent.DEBUG_LOAD_ONLY ||
                     pae.getID() == ProjectActionEvent.DEBUG_STEPINTO) &&
                     getCustomDebugActionHandlerProvider() != null) {
+                // See 130827
+                progressHandle.finish();
+                progressHandle = createPogressHandleNoCancel();
+                progressHandle.start();
                 CustomProjectActionHandler ah = getCustomDebugActionHandlerProvider().factoryCreate();
                 ah.addExecutionListener(this);
                 ah.execute(pae, getTab());
@@ -295,10 +311,30 @@ public class DefaultProjectActionHandler implements ActionListener {
                 String args = pae.getProfile().getArgsFlat();
                 String[] env = pae.getProfile().getEnvironment().getenv();
                 boolean showInput = pae.getID() == ProjectActionEvent.RUN;
+                String key = ((MakeConfiguration) pae.getConfiguration()).getDevelopmentHost().getDisplayName();
+                
+                if (key != null && !key.equals(CompilerSetManager.LOCALHOST)) {
+                    // Make sure the project root is visible remotely
+                    String basedir = pae.getProfile().getBaseDir();
+                    if (!NativePathMap.isRemote(key, basedir)) {
+                        DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                                NbBundle.getMessage(DefaultProjectActionHandler.class, "Err_CannotRunLocalProjectRemotely")));
+                        progressHandle.finish();
+                        return;
+                    }
+                    CompilerSetManager rcsm = CompilerSetManager.getDefault(key);
+                }
+                
+                MakeConfiguration conf = (MakeConfiguration) pae.getConfiguration();
+                //TODO: move to util class
+                boolean isWindows = conf.getPlatform().getValue() == Platform.PLATFORM_WINDOWS;
+                String separator = isWindows ? "\\" : "/";
+                String pathSeparator = isWindows ? ";" : ":";
                 
                 if (pae.getID() == ProjectActionEvent.RUN) {
                     int conType = pae.getProfile().getConsoleType().getValue();
-                    if (pae.getProfile().getTerminalType() == null || pae.getProfile().getTerminalPath() == null) {
+                    if (pae.getProfile().getTerminalType() == null || pae.getProfile().getTerminalPath() == null ||
+                            !conf.getDevelopmentHost().isLocalhost()) { //TODO: only output window for remote
                         String errmsg;
                         if (Utilities.isMac())
                             errmsg = getString("Err_NoTermFoundMacOSX");
@@ -338,29 +374,73 @@ public class DefaultProjectActionHandler implements ActionListener {
                             args = MessageFormat.format(pae.getProfile().getTerminalOptions(), rcfile, exe, args, args2);
                             exe = pae.getProfile().getTerminalPath();
                         }
+                        // See 130827
+                        progressHandle.finish();
+                        progressHandle = createPogressHandleNoCancel();
+                        progressHandle.start();
+                    }
+                    // Append compilerset base to run path. (IZ 120836)
+                    ArrayList<String> env1 = new ArrayList<String>();
+                    //String csname = ((MakeConfiguration) pae.getConfiguration()).getCompilerSet().getOption();
+                    CompilerSet cs = conf.getCompilerSet().getCompilerSet();
+                    if (cs != null) {
+                        String csdirs = cs.getDirectory();
+                        if (conf.getCompilerSet().getFlavor().equals(CompilerFlavor.MinGW.toString())) {
+                            // Also add msys to path. Thet's where sh, mkdir, ... are.
+                            String msysBase = CppUtils.getMSysBase();
+                            if (msysBase != null && msysBase.length() > 0) {
+                                csdirs = csdirs + pathSeparator + msysBase + separator + "bin"; // NOI18N
+                            }
+                        }
+                        boolean gotpath = false;
+                        String pathname = Path.getPathName(conf.getPlatform().getValue()) + '=';
+                        int i;
+                        for (i = 0; i < env.length; i++) {
+                            if (env[i].startsWith(pathname)) {
+                                env1.add(env[i] + pathSeparator + csdirs); // NOI18N
+                                gotpath = true;
+                            } else {
+                                env1.add(env[i]);
+                            }
+                        }
+                        if (!gotpath) {
+                            env1.add(pathname + Path.getPathAsString() + pathSeparator + csdirs);
+                        }
+                        env = env1.toArray(new String[env1.size()]);
                     }
                 } else { // Build or Clean
                     String[] env1 = new String[env.length + 1];
-                    String csname = ((MakeConfiguration) pae.getConfiguration()).getCompilerSet().getOption();
-                    String csdname = ((MakeConfiguration) pae.getConfiguration()).getCompilerSet().getName();
-                    String csdirs = CompilerSetManager.getDefault().getCompilerSet(csname, csdname).getDirectory();
+                    String csdirs = conf.getCompilerSet().getCompilerSet().getDirectory();
+                    if (conf.getCompilerSet().getFlavor().equals(CompilerFlavor.MinGW.toString())) {
+                        // Also add msys to path. Thet's where sh, mkdir, ... are.
+                        String msysBase = CppUtils.getMSysBase();
+                        if (msysBase != null && msysBase.length() > 0) {
+                            csdirs = csdirs + pathSeparator + msysBase + separator + "bin"; // NOI18N
+                        }
+                    }
                     boolean gotpath = false;
-                    String pathname = Path.getPathName() + '=';
+                    String pathname = Path.getPathName(conf.getPlatform().getValue()) + '=';
                     int i;
                     for (i = 0; i < env.length; i++) {
                         if (env[i].startsWith(pathname)) {
-                            env1[i] = pathname + csdirs + File.pathSeparator + env[i].substring(5); // NOI18N
+                            env1[i] = pathname + csdirs + pathSeparator + env[i].substring(5); // NOI18N
                             gotpath = true;
                         } else {
                             env1[i] = env[i];
                         }
                     }
                     if (!gotpath) {
-                        env1[i] = pathname + csdirs + File.pathSeparator + CppSettings.getDefault().getPath();
+                        //TODO: this if temp fixup, Path should become nonstatic
+                        // with an instance per host 
+                        String defaultPath = conf.getDevelopmentHost().isLocalhost() 
+                                ? Path.getPathAsString()
+                                : "/usr/bin";
+                        env1[i] = pathname + csdirs + pathSeparator + defaultPath;
                     }
                     env = env1;
                 }
-                NativeExecutor projectExecutor =  new NativeExecutor(
+                projectExecutor =  new NativeExecutor(
+                        key,
                         pae.getProfile().getRunDirectory(),
                         exe, args, env,
                         pae.getTabName(),
@@ -378,6 +458,10 @@ public class DefaultProjectActionHandler implements ActionListener {
                 } catch (java.io.IOException ioe) {
                 }
             } else if (pae.getID() == ProjectActionEvent.CUSTOM_ACTION) {
+                progressHandle.finish();
+                progressHandle = createPogressHandleNoCancel();
+                progressHandle.start();
+                customActionHandler.addExecutionListener(this);
                 customActionHandler.execute(pae, getTab());
             } else if (pae.getID() == ProjectActionEvent.DEBUG ||
                     pae.getID() == ProjectActionEvent.DEBUG_STEPINTO ||
@@ -390,6 +474,10 @@ public class DefaultProjectActionHandler implements ActionListener {
         
         public ExecutorTask getExecutorTask() {
             return executorTask;
+        }
+        
+        public NativeExecutor getNativeExecutor() {
+            return projectExecutor;
         }
         
         public void executionStarted() {
@@ -507,6 +595,7 @@ public class DefaultProjectActionHandler implements ActionListener {
                 return;
             setEnabled(false);
             if (handleEvents.getExecutorTask() != null) {
+                handleEvents.getNativeExecutor().stop();
                 handleEvents.getExecutorTask().stop();
             }
         }
