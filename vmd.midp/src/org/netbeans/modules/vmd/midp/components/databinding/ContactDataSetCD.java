@@ -41,37 +41,28 @@ package org.netbeans.modules.vmd.midp.components.databinding;
 import org.netbeans.modules.vmd.midp.components.*;
 import java.util.Arrays;
 import java.util.List;
+import org.netbeans.modules.vmd.api.codegen.CodeSetterPresenter;
 import org.netbeans.modules.vmd.api.model.ComponentDescriptor;
 import org.netbeans.modules.vmd.api.model.Presenter;
 import org.netbeans.modules.vmd.api.model.PropertyDescriptor;
-import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.api.model.TypeDescriptor;
 import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.api.model.VersionDescriptor;
-import org.netbeans.modules.vmd.midp.components.commands.CommandCD;
+import org.netbeans.modules.vmd.midp.codegen.MidpParameter;
+import org.netbeans.modules.vmd.midp.components.general.ClassCD;
 
 /**
  *
  * @author Karol Harezlak
  */
-public class DataSetConnectorCD extends ComponentDescriptor {
+public class ContactDataSetCD extends ComponentDescriptor {
 
-    public static final TypeID TYPEID = new TypeID(TypeID.Kind.COMPONENT, "#DataSetConnector"); //NOI18N
-
-    public static final String PROP_COMPONENT_ID = "referencedComponent"; //NOI18N
-    public static final String PROP_EXPRESSION_READ = "expressionRead"; //NOI18N
-    public static final String PROP_EXPRESSION_WRITE = "expressionWrite"; // NOI18N
-    public static final String PROP_UPDATE_COMMAND = "updateCommand"; //NOI18N
-    public static final String PROP_BINDED_PROPERTY = "property";//NOI18N
-    public static final String PROP_NEXT_COMMAND = "nextCommand"; //NOI18N
-    public static final String PROP_PREVIOUS_COMMAND = "previousCommand"; //NOI18N
-    //public static final String PROP_INDEX_NAME = "indexName"; //NOI18N //TODO Remove!!
-    public static final String PROP_INDEX = "index"; //NOI18N
-
+    public static final TypeID TYPEID = new TypeID(TypeID.Kind.COMPONENT, "org.netbeans.microedition.databinding.pim.ContactDataSet"); //NOI18N
     
+
     @Override
     public TypeDescriptor getTypeDescriptor() {
-        return new TypeDescriptor(null, TYPEID, true, true);
+        return new TypeDescriptor(IndexableDataAbstractSetCD.TYPEID, TYPEID, true, true);
     }
 
     @Override
@@ -79,22 +70,42 @@ public class DataSetConnectorCD extends ComponentDescriptor {
         return MidpVersionDescriptor.MIDP_2;
     }
 
+    @Override
     public List<PropertyDescriptor> getDeclaredPropertyDescriptors() {
-        return Arrays.asList(
-                new PropertyDescriptor(PROP_COMPONENT_ID, MidpTypes.TYPEID_LONG, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2),
-                new PropertyDescriptor(PROP_EXPRESSION_READ, MidpTypes.TYPEID_JAVA_LANG_STRING, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2),
-                new PropertyDescriptor(PROP_EXPRESSION_WRITE, MidpTypes.TYPEID_JAVA_LANG_STRING, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2),
-                new PropertyDescriptor(PROP_UPDATE_COMMAND, CommandCD.TYPEID, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2),
-                new PropertyDescriptor(PROP_BINDED_PROPERTY, MidpTypes.TYPEID_JAVA_LANG_STRING, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2),
-                new PropertyDescriptor(PROP_NEXT_COMMAND, CommandCD.TYPEID, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2),
-                new PropertyDescriptor(PROP_PREVIOUS_COMMAND, CommandCD.TYPEID, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2),
-                //new PropertyDescriptor(PROP_INDEX_NAME, MidpTypes.TYPEID_JAVA_LANG_STRING, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2),
-                new PropertyDescriptor(PROP_INDEX, IndexableDataSetIndexCD.TYPEID, PropertyValue.createNull(), true, false, MidpVersionable.MIDP_2) 
-        );
+        return null;
+    }
+    
+
+
+    private static Presenter createSetterPresenter() {
+        return new CodeSetterPresenter().addParameters(MidpParameter.create(ClassCD.PROP_INSTANCE_NAME));
     }
 
     @Override
     protected List<? extends Presenter> createPresenters() {
-        return null;
+        return Arrays.asList(
+            createSetterPresenter()
+        );
     }
+    
+    //Runtime parameters
+    public static final String NAME                 = "name";
+    public static final String ADDRESS              = "address";
+    public static final String EMAIL                = "email";
+    public static final String FORMATTED_NAME       = "formatted_name";
+    public static final String NICKNAME             = "nickname";
+    public static final String NOTE                 = "note";
+    public static final String ORGANIZATION         = "organization";
+    public static final String TELEPHONE            = "telephone";
+    public static final String TITLE                = "title";
+    public static final String UID                  = "uid";
+    public static final String URL                  = "url";
+    public static final String BIRTHDAY             = "birthday";
+    public static final String REVISION             = "revision";
+    public static final String PHOTO                = "photo";
+    public static final String PUBLIC_KEY           = "public_key";    
+    public static final String PHOTO_URL            = "photo_url";
+    public static final String PUBLIC_KEY_STRING    = "public_key_string";        
+    public static final String CLASS                = "class";
+    
 }
