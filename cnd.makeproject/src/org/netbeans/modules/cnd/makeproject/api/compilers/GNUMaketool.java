@@ -41,65 +41,19 @@
 
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
-import java.io.File;
-import java.util.List;
-import java.util.Vector;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
 import org.netbeans.modules.cnd.api.compilers.Tool;
-import org.openide.filesystems.FileUtil;
 
-public class BasicCompiler extends Tool {
-
-    /** Creates a new instance of GenericCompiler */
-    public BasicCompiler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        super(hkey, flavor, kind, name, displayName, path);
+public class GNUMaketool extends Tool {
+    
+    public GNUMaketool(String hkey, CompilerFlavor flavor, String name, String displayName, String path) { // GRP - FIXME
+        super(hkey, flavor, MakeTool, name, displayName, path); // NOI18N
     }
-
-    public String getDevelopmentModeOptions(int value) {
-        return "";
-    }
-
-    public String getWarningLevelOptions(int value) {
-        return "";
-    }
-
-    public String getSixtyfourBitsOption(int value) {
-        return "";
-    }
-
-    public String getStripOption(boolean value) {
-        return "";
-    }
-
-    public List getSystemPreprocessorSymbols() {
-        return new Vector();
-    }
-
-    public List getSystemIncludeDirectories() {
-        return new Vector();
-    }
-
-    /**
-     * @return true if settings were really replaced by new one
-     */
-    public boolean setSystemPreprocessorSymbols(List values) {
-        return false;
-    }
-
-    /**
-     * @return true if settings were really replaced by new one
-     */
-    public boolean setSystemIncludeDirectories(List values) {
-        return false;
-    }
-
-    protected void normalizePaths(List<String> paths) {
-        for (int i = 0; i < paths.size(); i++) {
-            paths.set(i, FileUtil.normalizeFile(new File(paths.get(i))).getAbsolutePath());
-        }
-    }
-
-    protected String normalizePath(String path) {
-        return FileUtil.normalizeFile(new File(path)).getAbsolutePath();
+    
+    @Override
+    public GNUMaketool createCopy() {
+        GNUMaketool copy = new GNUMaketool(getHostKey(), getFlavor(), "", getDisplayName(), getPath());
+        copy.setName(getName());
+        return copy;
     }
 }

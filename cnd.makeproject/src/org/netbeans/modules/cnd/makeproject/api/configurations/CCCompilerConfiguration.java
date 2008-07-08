@@ -85,7 +85,7 @@ public class CCCompilerConfiguration extends CCCCompilerConfiguration implements
         clone.setLanguageExt((IntConfiguration)getLanguageExt().clone());
         clone.setIncludeDirectories((VectorConfiguration)getIncludeDirectories().clone());
         clone.setInheritIncludes((BooleanConfiguration)getInheritIncludes().clone());
-        clone.setPreprocessorConfiguration((OptionsConfiguration)getPreprocessorConfiguration().clone());
+        clone.setPreprocessorConfiguration((VectorConfiguration)getPreprocessorConfiguration().clone());
         clone.setInheritPreprocessor((BooleanConfiguration)getInheritPreprocessor().clone());
         return clone;
     }
@@ -150,9 +150,9 @@ public class CCCompilerConfiguration extends CCCCompilerConfiguration implements
     }
     public String getPreprocessorOptions() {
         CCCompilerConfiguration master = (CCCompilerConfiguration)getMaster();
-        StringBuilder options = new StringBuilder(getPreprocessorConfiguration().getOptions("-D") + " "); // NOI18N
+        StringBuilder options = new StringBuilder(getPreprocessorConfiguration().getOption("-D") + " "); // NOI18N
         while (master != null && getInheritPreprocessor().getValue()) {
-            options.append(master.getPreprocessorConfiguration().getOptions("-D") + " "); // NOI18N
+            options.append(master.getPreprocessorConfiguration().getOption("-D") + " "); // NOI18N
             if (master.getInheritPreprocessor().getValue())
                 master = (CCCompilerConfiguration)master.getMaster();
             else
@@ -177,7 +177,7 @@ public class CCCompilerConfiguration extends CCCCompilerConfiguration implements
     // Sheet
     public Sheet getSheet(MakeConfiguration conf, Folder folder) {
         Sheet sheet = new Sheet();
-        CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(conf.getCompilerSet().getValue());
+        CompilerSet compilerSet = CompilerSetManager.getDefault(conf.getDevelopmentHost().getName()).getCompilerSet(conf.getCompilerSet().getValue());
         BasicCompiler ccCompiler = (BasicCompiler)compilerSet.getTool(Tool.CCCompiler);
         
         sheet.put(getSet());
@@ -196,29 +196,23 @@ public class CCCompilerConfiguration extends CCCCompilerConfiguration implements
             }
             if (getMaster() != null)
                 sheet.put(getInputSet());
+            
             Sheet.Set set4 = new Sheet.Set();
             set4.setName("Tool"); // NOI18N
             set4.setDisplayName(getString("ToolTxt1"));
             set4.setShortDescription(getString("ToolHint1"));
-            set4.put(new StringNodeProp(getTool(), ccCompiler.getName(), "Tool", getString("ToolTxt2"), getString("ToolHint2"))); // NOI18N
+            set4.put(new StringNodeProp(getTool(), ccCompiler.getName(), false, "Tool", getString("ToolTxt2"), getString("ToolHint2"))); // NOI18N
             sheet.put(set4);
+            
+            String[] texts = new String[] {getString("AdditionalOptionsTxt1"), getString("AdditionalOptionsHint"), getString("AdditionalOptionsTxt2"), getString("AllOptionsTxt")};
+            Sheet.Set set2 = new Sheet.Set();
+            set2.setName("CommandLine"); // NOI18N
+            set2.setDisplayName(getString("CommandLineTxt"));
+            set2.setShortDescription(getString("CommandLineHint"));
+            set2.put(new OptionsNodeProp(getCommandLineConfiguration(), null, this, ccCompiler, null, texts));
+            sheet.put(set2);
+        
         }
-        
-        return sheet;
-    }
-    
-    public Sheet getCommandLineSheet(Configuration conf) {
-        Sheet sheet = new Sheet();
-        String[] texts = new String[] {getString("AdditionalOptionsTxt1"), getString("AdditionalOptionsHint"), getString("AdditionalOptionsTxt2"), getString("AllOptionsTxt")};
-        CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(((MakeConfiguration)conf).getCompilerSet().getValue());
-        BasicCompiler ccCompiler = (BasicCompiler)compilerSet.getTool(Tool.CCCompiler);
-        
-        Sheet.Set set2 = new Sheet.Set();
-        set2.setName("CommandLine"); // NOI18N
-        set2.setDisplayName(getString("CommandLineTxt"));
-        set2.setShortDescription(getString("CommandLineHint"));
-        set2.put(new OptionsNodeProp(getCommandLineConfiguration(), null, this, ccCompiler, null, texts));
-        sheet.put(set2);
         
         return sheet;
     }
