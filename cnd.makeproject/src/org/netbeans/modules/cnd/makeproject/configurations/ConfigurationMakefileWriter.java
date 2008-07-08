@@ -66,7 +66,6 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakefileConfiguration;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
-import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
@@ -99,21 +98,29 @@ public class ConfigurationMakefileWriter {
     }
     
     private void writeMakefileImpl() {
+        String resource = "/org/netbeans/modules/cnd/makeproject/resources/MasterMakefile-impl.mk"; // NOI18N
         InputStream is = null;
         FileOutputStream os = null;
         try {
-            URL url = new URL("nbresloc:/org/netbeans/modules/cnd/makeproject/resources/MasterMakefile-impl.mk"); // NOI18N
+            URL url = new URL("nbresloc:" + resource); // NOI18N
             is = url.openStream();
-            String outputFileName = projectDescriptor.getBaseDir() + '/' + "nbproject" + '/' + MakeConfiguration.MAKEFILE_IMPL; // UNIX path // NOI18N
-            os = new FileOutputStream(outputFileName);
         } catch (Exception e) {
-            // FIXUP
+            is = MakeConfigurationDescriptor.class.getResourceAsStream(resource);
         }
+        
+        String outputFileName = projectDescriptor.getBaseDir() + '/' + "nbproject" + '/' + MakeConfiguration.MAKEFILE_IMPL; // UNIX path // NOI18N
+        try {
+            os = new FileOutputStream(outputFileName);
+        }
+        catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+        
         if (is == null || os == null) {
             // FIXUP: ERROR
             return;
         }
-        
+
         BufferedReader br = new BufferedReader(new InputStreamReader(is));
         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os));
         
@@ -175,7 +182,7 @@ public class ConfigurationMakefileWriter {
         CCCCompilerConfiguration cCompilerConfiguration = conf.getCCompilerConfiguration();
         CCCCompilerConfiguration ccCompilerConfiguration = conf.getCCCompilerConfiguration();
         FortranCompilerConfiguration fortranCompilerConfiguration = conf.getFortranCompilerConfiguration();
-        CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(conf.getCompilerSet().getValue()); // GRP - 
+        CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet(); 
         BasicCompiler cCompiler = (BasicCompiler)compilerSet.getTool(Tool.CCompiler);
         BasicCompiler ccCompiler = (BasicCompiler)compilerSet.getTool(Tool.CCCompiler);
         BasicCompiler fortranCompiler = (BasicCompiler)compilerSet.getTool(Tool.FortranCompiler);
@@ -203,7 +210,7 @@ public class ConfigurationMakefileWriter {
         }
         
         bw.write("#\n"); // NOI18N
-        bw.write("# Gererated Makefile - do not edit!\n"); // NOI18N
+        bw.write("# Generated Makefile - do not edit!\n"); // NOI18N
         bw.write("#\n"); // NOI18N
         bw.write("# Edit the Makefile in the project folder instead (../Makefile). Each target\n"); // NOI18N
         bw.write("# has a -pre and a -post target defined where you can add customized code.\n"); // NOI18N
@@ -333,7 +340,7 @@ public class ConfigurationMakefileWriter {
                 ItemConfiguration itemConfiguration = items[i].getItemConfiguration(conf); //ItemConfiguration)conf.getAuxObject(ItemConfiguration.getId(items[i].getPath()));
                 if (itemConfiguration.getExcluded().getValue())
                     continue;
-                CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(conf.getCompilerSet().getValue());
+                CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
                 file = IpeUtils.escapeOddCharacters(compilerSet.normalizeDriveLetter(items[i].getPath()));
                 command = ""; // NOI18N
                 comment = null;
@@ -462,7 +469,7 @@ public class ConfigurationMakefileWriter {
         if (conf.isCompileConfiguration()) {
             bw.write("\t${RM} -r " + MakeConfiguration.BUILD_FOLDER + '/' + conf.getName() + "\n"); // UNIX path // NOI18N
             bw.write("\t${RM} " + getOutput(conf) + "\n"); // NOI18N
-            if (CompilerSetManager.getDefault().getCompilerSet(conf.getCompilerSet().getValue()).isSunCompiler() &&
+            if (conf.getCompilerSet().getCompilerSet().isSunCompiler() &&
                     conf.hasCPPFiles(projectDescriptor))
 		bw.write("\t${CCADMIN} -clean" + "\n"); // NOI18N
             if (conf.hasFortranFiles(projectDescriptor))

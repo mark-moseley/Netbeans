@@ -42,7 +42,6 @@
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
@@ -99,7 +98,7 @@ public class LinkerConfiguration implements AllOptionsProvider {
     }
 
     // MakeConfiguration
-    public void setMakeConfiguration(MakeConfiguration MakeConfiguration) {
+    public void setMakeConfiguration(MakeConfiguration makeConfiguration) {
 	this.makeConfiguration = makeConfiguration;
     }
     public MakeConfiguration getMakeConfiguration() {
@@ -214,6 +213,7 @@ public class LinkerConfiguration implements AllOptionsProvider {
 	getTool().assign(conf.getTool());
     }
 
+    @Override
     public Object clone() {
 	LinkerConfiguration clone = new LinkerConfiguration(getMakeConfiguration());
 	// LinkerConfiguration
@@ -239,7 +239,7 @@ public class LinkerConfiguration implements AllOptionsProvider {
 
     public String getBasicOptions() {
 	String options = ""; // NOI18N 
-        CompilerSet cs = CompilerSetManager.getDefault().getCompilerSet(getMakeConfiguration().getCompilerSet().getValue());
+        CompilerSet cs = getMakeConfiguration().getCompilerSet().getCompilerSet();
 	if (getMakeConfiguration().getConfigurationType().getValue() == MakeConfiguration.TYPE_DYNAMIC_LIB ) {
             String libName = getOutputValue();
             int sep = libName.lastIndexOf('/');
@@ -296,8 +296,11 @@ public class LinkerConfiguration implements AllOptionsProvider {
     public String getLibraryItems() {
         String libPrefix = "-L"; // NOI18N
         String dynSearchPrefix = ""; // NOI18N
-        CompilerSet cs = CompilerSetManager.getDefault().getCompilerSet(getMakeConfiguration().getCompilerSet().getValue());
+        CompilerSet cs = getMakeConfiguration().getCompilerSet().getCompilerSet();
         if (cs.isSunCompiler()) {
+            dynSearchPrefix = "-R"; // NOI18N
+        }
+        else if (cs.isGnuCompiler() && (getMakeConfiguration().getPlatform().getValue() == Platform.PLATFORM_SOLARIS_INTEL || getMakeConfiguration().getPlatform().getValue() == Platform.PLATFORM_SOLARIS_SPARC)) {
             dynSearchPrefix = "-R"; // NOI18N
         } else if (cs.isGnuCompiler()) {
             dynSearchPrefix = "-Wl,-rpath "; // NOI18N
@@ -319,9 +322,9 @@ public class LinkerConfiguration implements AllOptionsProvider {
     }
 
     // Sheet
-    public Sheet getGeneralSheet(MakeConfigurationDescriptor configurationDescriptor, MakeConfiguration conf) {
+    public Sheet getGeneralSheet(Project project, MakeConfigurationDescriptor configurationDescriptor, MakeConfiguration conf) {
 	Sheet sheet = new Sheet();
-        CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(conf.getCompilerSet().getValue());
+        CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
         String linkDriver;
         if (conf.hasCPPFiles(configurationDescriptor)) {
             BasicCompiler ccCompiler = (BasicCompiler)compilerSet.getTool(Tool.CCCompiler);
@@ -366,6 +369,23 @@ public class LinkerConfiguration implements AllOptionsProvider {
 	set4.setShortDescription(getString("ToolHint1"));
 	set4.put(new StringNodeProp(getTool(), linkDriver, "Tool", getString("ToolTxt1"), getString("ToolHint1"))); // NOI18N
 	sheet.put(set4);
+        
+	texts = new String[] {getString("LibrariesTxt1"), getString("LibrariesHint"), getString("LibrariesTxt2"), getString("AllOptionsTxt2")};
+	set2 = new Sheet.Set();
+	set2.setName("Libraries"); // NOI18N
+	set2.setDisplayName(getString("LibrariesTxt1"));
+	set2.setShortDescription(getString("LibrariesHint"));
+	set2.put(new LibrariesNodeProp(getLibrariesConfiguration(), project, conf, getMakeConfiguration().getBaseDir(), texts));
+	sheet.put(set2);
+        
+	texts = new String[] {getString("AdditionalOptionsTxt1"), getString("AdditionalOptionsHint"), getString("AdditionalOptionsTxt2"), getString("AllOptionsTxt")}; // NOI18N
+	set2 = new Sheet.Set();
+	set2.setName("CommandLine"); // NOI18N
+	set2.setDisplayName(getString("CommandLineTxt"));
+	set2.setShortDescription(getString("CommandLineHint"));
+	set2.put(new OptionsNodeProp(getCommandLineConfiguration(), null, this, null, null, texts));
+	sheet.put(set2);
+        
 	return sheet;
     }
 
@@ -375,34 +395,6 @@ public class LinkerConfiguration implements AllOptionsProvider {
 	    options += additionalDependencies.getPreDefined();
 	    return CppUtils.reformatWhitespaces(options);
 	}
-    }
-
-    public Sheet getLibrariesSheet(Project project, MakeConfiguration conf) {
-	Sheet sheet = new Sheet();
-	String[] texts = new String[] {getString("LibrariesTxt1"), getString("LibrariesHint"), getString("LibrariesTxt2"), getString("AllOptionsTxt2")};
-
-	Sheet.Set set2 = new Sheet.Set();
-	set2.setName("Libraries"); // NOI18N
-	set2.setDisplayName(getString("LibrariesTxt1"));
-	set2.setShortDescription(getString("LibrariesHint"));
-	set2.put(new LibrariesNodeProp(getLibrariesConfiguration(), project, conf, getMakeConfiguration().getBaseDir(), texts));
-	sheet.put(set2);
-
-	return sheet;
-    }
-
-    public Sheet getCommandLineSheet() {
-	Sheet sheet = new Sheet();
-	String[] texts = new String[] {getString("AdditionalOptionsTxt1"), getString("AdditionalOptionsHint"), getString("AdditionalOptionsTxt2"), getString("AllOptionsTxt")}; // NOI18N
-
-	Sheet.Set set2 = new Sheet.Set();
-	set2.setName("CommandLine"); // NOI18N
-	set2.setDisplayName(getString("CommandLineTxt"));
-	set2.setShortDescription(getString("CommandLineHint"));
-	set2.put(new OptionsNodeProp(getCommandLineConfiguration(), null, this, null, null, texts));
-	sheet.put(set2);
-
-	return sheet;
     }
 
     private String getNameassignOption(boolean val) {
@@ -462,6 +454,7 @@ public class LinkerConfiguration implements AllOptionsProvider {
             super(stringConfiguration, def, txt1, txt2, txt3);
         }
         
+        @Override
         public void setValue(Object v) {
             if (IpeUtils.hasMakeSpecialCharacters((String)v)) {
                 DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(getString("SPECIAL_CHARATERS_ERROR"), NotifyDescriptor.ERROR_MESSAGE));
