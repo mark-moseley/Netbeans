@@ -26,7 +26,7 @@ your own identifying information:
 Contributor(s):
 
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
 Microsystems, Inc. All Rights Reserved.
 
 If you wish your version of this file to be governed by only the CDDL
@@ -40,18 +40,41 @@ However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
+<?xml-stylesheet type="text/xml" href="http://openide.netbeans.org/fs/filesystem.xsl"?>
+<!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
+<filesystem>
+    <folder name="Actions">
+        <folder name="Window">
+            <file name="org-netbeans-modules-clearcase-ui-status-OpenVersioningAction.instance"/>
+        </folder>
+    </folder>
+    <folder name="Menu">
+        <folder name="Window">
+            <folder name="Versioning">            
+                <file name="org-netbeans-modules-clearcase-ui-status-OpenVersioningAction.shadow">
+                    <attr name="originalFile" stringvalue="Actions/Window/org-netbeans-modules-clearcase-ui-status-OpenVersioningAction.instance"/>
+                    <attr name="position" intvalue="500"/>
+                </file>
+            </folder>
+        </folder>
+    </folder>
 
-<mode version="2.0">
-    <module name="org.netbeans.modules.uml.documentation" spec="1.0"/>
-    <name unique="documentation" />
-    <kind type="view" />
-    <state type="joined" />
-    <constraints>
-        <path orientation="vertical" number="20" weight="0.7" />
-        <path orientation="horizontal" number="60" weight="0.2" />
-        <path orientation="vertical" number="60" weight="0.5" />       
-    </constraints>
-    <bounds x="19200" y="210" width="240" height="117" />
-    <active-tc id="documentation" />
-    <empty-behavior permanent="true" />
-</mode>
+    <folder name="VersioningOptionsDialog">
+        <file name="Clearcase.instance">
+            <attr name="instanceClass" stringvalue="org.netbeans.modules.clearcase.options.ClearcaseOptions"/>
+        </file>
+    </folder>        
+
+    <folder name="Windows2">
+        <folder name="Components">
+            <file name="ClearcaseTopComponent.settings" url="ClearcaseTopComponentSettings.xml"/>
+        </folder>
+        <folder name="Modes">
+            <folder name="output">
+                <file name="ClearcaseTopComponent.wstcref" url="ClearcaseTopComponentWstcref.xml">
+                    <attr name="position" intvalue="1700"/>
+                </file>
+            </folder>
+        </folder>
+    </folder>
+</filesystem>
