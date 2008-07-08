@@ -81,6 +81,7 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -138,20 +139,42 @@ public class Installer extends ModuleInstall implements Runnable {
     static final String USER_CONFIGURATION = "UI_USER_CONFIGURATION";   // NOI18N
     private static UIHandler ui = new UIHandler(false);
     private static UIHandler handler = new UIHandler(true);
+    private static MetricsHandler metrics = new MetricsHandler();
     static final Logger LOG = Logger.getLogger(Installer.class.getName());
     public static final RequestProcessor RP = new RequestProcessor("UI Gestures"); // NOI18N
     public static final RequestProcessor RP_UI = new RequestProcessor("UI Gestures - Create Dialog"); // NOI18N
     public static RequestProcessor RP_OPT = null; 
     private static final Preferences prefs = NbPreferences.forModule(Installer.class);
     private static OutputStream logStream;
+    private static OutputStream logStreamMetrics;
     private static int logsSize;
     private static URL hintURL;
     private static Object[] selectedExcParams;
+    private static boolean logMetricsEnabled = false;
     
     private static Pattern ENCODING = Pattern.compile(
         "<meta.*http-equiv=['\"]Content-Type['\"]" +
         ".*content=.*charset=([A-Za-z0-9\\-]+)['\"]>", Pattern.CASE_INSENSITIVE
     ); // NOI18N
+    
+    static boolean preferencesWritable = false;
+    static {
+        // #131128 - suppress repetitive exceptions when config/Preferences/org/netbeans/modules/uihandler.properties
+        // is not writable for some reason
+        long checkTime = System.currentTimeMillis();
+        prefs.putLong("uihandler.preferences.writable.check", checkTime);  //NOI18N
+        try {
+            prefs.flush();
+            prefs.sync();
+            if(checkTime == prefs.getLong("uihandler.preferences.writable", 0)) {  //NOI18N
+                preferencesWritable = true;
+            }
+        } catch (BackingStoreException e) {
+            // immediatelly show dialog with exception (usually Access is denied)
+            NotifyDescriptor.Exception eDesc = new NotifyDescriptor.Exception(e);
+            DialogDisplayer.getDefault().notify(eDesc);
+        }
+    }
     
     @Override
     public void restored() {
@@ -163,6 +186,19 @@ public class Installer extends ModuleInstall implements Runnable {
         Logger all = Logger.getLogger("");
         all.addHandler(handler);
         logsSize = prefs.getInt("count", 0);
+        Object value = System.getProperty("nb.metrics.enabled");
+        if (value != null) {
+            if ("true".equals(value)) {
+                logMetricsEnabled = true;
+            }
+        }
+        if (logMetricsEnabled) {
+            //Handler for metrics
+            log = Logger.getLogger("org.netbeans.metrics"); // NOI18N
+            log.setUseParentHandlers(false);
+            log.setLevel(Level.FINEST);
+            log.addHandler(metrics);
+        }
         
         EarlyHandler.disable();
         
@@ -191,6 +227,9 @@ public class Installer extends ModuleInstall implements Runnable {
     @Override
     public final void close() {
         UIHandler.flushImmediatelly();
+        closeLogStream();
+        MetricsHandler.flushImmediatelly();
+        closeLogStreamMetrics();
     }
     
     public final void doClose() {
@@ -198,15 +237,22 @@ public class Installer extends ModuleInstall implements Runnable {
         log.removeHandler(ui);
         Logger all = Logger.getLogger(""); // NOI18N
         all.removeHandler(handler);
+        if (logMetricsEnabled) {
+            log = Logger.getLogger("org.netbeans.metrics"); // NOI18N
+            log.removeHandler(metrics);
+        }
         
         closeLogStream();
+        closeLogStreamMetrics();
     }
     
     static void writeOut(LogRecord r) {
         try {
             LogRecords.write(logStream(), r);
             if (logsSize >= UIHandler.MAX_LOGS) {
-                prefs.putInt("count", UIHandler.MAX_LOGS);
+                if(preferencesWritable) {
+                    prefs.putInt("count", UIHandler.MAX_LOGS);
+                }
                 closeLogStream();
                 if (isHintsMode()) {
                     class Auto implements Runnable {
@@ -221,10 +267,18 @@ public class Installer extends ModuleInstall implements Runnable {
                 logsSize = 0;
             } else {
                 logsSize++;
-                if (prefs.getInt("count", 0) < logsSize) {
+                if (prefs.getInt("count", 0) < logsSize && preferencesWritable) {
                     prefs.putInt("count", logsSize);
                 }
             }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    static void writeOutMetrics (LogRecord r) {
+        try {
+            LogRecords.write(logStreamMetrics(), r);
         } catch (IOException ex) {
             ex.printStackTrace();
         }
@@ -322,6 +376,19 @@ public class Installer extends ModuleInstall implements Runnable {
         File logFile = new File(new File(new File(userDir, "var"), "log"), "uigestures" + suffix);
         return logFile;
     }
+
+    private static File logFileMetrics (int revision) {
+        String ud = System.getProperty("netbeans.user"); // NOI18N
+        if (ud == null || "memory".equals(ud)) { // NOI18N
+            return null;
+        }
+
+        String suffix = revision == 0 ? "" : "." + revision;
+
+        File userDir = new File(ud); // NOI18N
+        File logFile = new File(new File(new File(userDir, "var"), "log"), "metrics" + suffix);
+        return logFile;
+    }
     
     private static OutputStream logStream() throws FileNotFoundException {
         synchronized (Installer.class) {
@@ -345,6 +412,29 @@ public class Installer extends ModuleInstall implements Runnable {
         
         return os;
     }
+
+    private static OutputStream logStreamMetrics () throws FileNotFoundException {
+        synchronized (Installer.class) {
+            if (logStreamMetrics != null) {
+                return logStreamMetrics;
+            }
+        }
+
+        OutputStream os;
+        File logFile = logFileMetrics(0);
+        if (logFile != null) {
+            logFile.getParentFile().mkdirs();
+            os = new BufferedOutputStream(new FileOutputStream(logFile, true));
+        } else {
+            os = new NullOutputStream();
+        }
+
+        synchronized (Installer.class) {
+            logStreamMetrics = os;
+        }
+
+        return os;
+    }
     
     private static void closeLogStream() {
         OutputStream os;
@@ -356,6 +446,23 @@ public class Installer extends ModuleInstall implements Runnable {
             return;
         }
         
+        try {
+            os.close();
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+    }
+
+    private static void closeLogStreamMetrics() {
+        OutputStream os;
+        synchronized (Installer.class) {
+            os = logStreamMetrics;
+            logStreamMetrics = null;
+        }
+        if (os == null) {
+            return;
+        }
+
         try {
             os.close();
         } catch (IOException ex) {
@@ -375,7 +482,9 @@ public class Installer extends ModuleInstall implements Runnable {
         }
         
         logsSize = 0;
-        prefs.putInt("count", 0);
+        if(preferencesWritable) {
+            prefs.putInt("count", 0);
+        }
         UIHandler.SUPPORT.firePropertyChange(null, null, null);
     }
     
@@ -429,7 +538,7 @@ public class Installer extends ModuleInstall implements Runnable {
             if (selectedExcParams[0] instanceof String){
                 message = (String)selectedExcParams[0];
             }
-            if (selectedExcParams[1] instanceof StringBuffer){
+            if (selectedExcParams[1] instanceof String){
                 firstLine = (String)selectedExcParams[1];
             }
         }
@@ -633,6 +742,7 @@ public class Installer extends ModuleInstall implements Runnable {
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=--------konec<>bloku");
         conn.setRequestProperty("Pragma", "no-cache");
         conn.setRequestProperty("Cache-control", "no-cache");
+        conn.setRequestProperty("User-Agent", "NetBeans");
         
         h.progress(NbBundle.getMessage(Installer.class, "MSG_UploadSending"), 60);
         LOG.log(Level.FINE, "uploadLogs, header sent"); // NOI18N
@@ -673,7 +783,9 @@ public class Installer extends ModuleInstall implements Runnable {
         LOG.log(Level.FINE, "uploadLogs, sending records"); // NOI18N
         for (LogRecord r : recs) {
             h.progress(cnt++);
-            LogRecords.write(data, r);
+            if (r != null) {
+                LogRecords.write(data, r);
+            }
         }
         data.write("</uigestures>\n".getBytes("utf-8")); // NOI18N
         LOG.log(Level.FINE, "uploadLogs, flushing"); // NOI18N
@@ -839,7 +951,7 @@ public class Installer extends ModuleInstall implements Runnable {
             }
             
             LOG.log(Level.FINE, "doShow, dialog has been created"); // NOI18N
-
+            boolean firstRound = true;
             for (;;) {
                 try {
                     if (url == null) {
@@ -848,6 +960,7 @@ public class Installer extends ModuleInstall implements Runnable {
                     
                     LOG.log(Level.FINE, "doShow, reading from = {0}", url);
                     URLConnection conn = url.openConnection();
+                    conn.setRequestProperty("User-Agent", "NetBeans");
                     conn.setConnectTimeout(5000);
                     File tmp = File.createTempFile("uigesture", ".html");
                     tmp.deleteOnExit();
@@ -879,7 +992,13 @@ public class Installer extends ModuleInstall implements Runnable {
                     catchConnectionProblem(ex);
                     continue;
                 } catch (IOException ex) {
-                    LOG.log(Level.WARNING, url.toExternalForm(), ex);
+                    if (firstRound){
+                        catchConnectionProblem(ex);
+                        firstRound = false;
+                        continue;
+                    }else{// preventing from deadlock while reading error page
+                        LOG.log(Level.WARNING, url.toExternalForm(), ex);
+                    }
                 }
                 LOG.log(Level.FINE, "doShow, assignInternalURL = {0}", url);
                 assignInternalURL(url);
@@ -960,42 +1079,47 @@ public class Installer extends ModuleInstall implements Runnable {
             boolean submit = Button.SUBMIT.isCommand(actionURL);
             if (Button.AUTO_SUBMIT.isCommand(e.getActionCommand())) {
                 submit = true;
-                prefs.putBoolean("autoSubmitWhenFull", true); // NOI18N
+                if(preferencesWritable) {
+                    prefs.putBoolean("autoSubmitWhenFull", true); // NOI18N
+                }
             }
             
             if (submit) { // NOI18N
-                if (isSubmiting.getAndSet(true)){
+                if (isSubmiting.getAndSet(true)) {
                     LOG.info("ALREADY SUBMITTING"); // NOI18N
                     return;
                 }
-                final List<LogRecord> recs = getLogs();
-                saveUserName();
-                LogRecord userData = getUserData(true);
-                recs.add(getThrownLog());//exception selected by user
-                recs.add(TimeToFailure.logFailure());
-                recs.add(userData);
-                if ((report)&&!(reportPanel.asAGuest())){
-                    try{
-                        if (!checkUserName()){
+                try {
+                    final List<LogRecord> recs = getLogs();
+                    saveUserName();
+                    LogRecord userData = getUserData(true);
+                    LogRecord thrownLog = getThrownLog();
+                    if (thrownLog != null) {
+                        recs.add(thrownLog);//exception selected by user
+                    }
+                    recs.add(TimeToFailure.logFailure());
+                    recs.add(userData);
+                    if ((report) && !(reportPanel.asAGuest())) {
+                        if (!checkUserName()) {
                             reportPanel.showWrongPassword();
-                            isSubmiting.set(false);
                             return;
                         }
-                    }catch(InterruptedException exc){
-                        LOG.log(Level.INFO, "PASSWORD CHECKING FAILED", exc);// NOI18N
-                    }finally{
-                        isSubmiting.set(false);
                     }
+                    LOG.fine("posting upload");// NOI18N
+                    RP.post(new Runnable() {
+
+                        public void run() {
+                            uploadAndPost(recs, universalResourceLocator[0]);
+                        }
+                    });
+                    okToExit = false;
+                    // this should close the descriptor
+                    doCloseDialog();
+                } catch (InterruptedException exc) {
+                    LOG.log(Level.INFO, "submitting data failed", exc);// NOI18N
+                } finally {
+                    isSubmiting.set(false);
                 }
-                RP.post(new Runnable() {
-                    public void run() {
-                        uploadAndPost(recs, universalResourceLocator[0]);
-                    }
-                });
-                okToExit = false;
-                // this should close the descriptor
-                doCloseDialog();
-                isSubmiting.set(false);
                 return;
             }
             
@@ -1070,6 +1194,7 @@ public class Installer extends ModuleInstall implements Runnable {
                     char[] array = new char[100];
                     URL url = new URL(NbBundle.getMessage(Installer.class, "CHECKING_SERVER_URL", login, passwd));
                     URLConnection connection = url.openConnection();
+                    connection.setRequestProperty("User-Agent", "NetBeans");
                     Reader reader = new InputStreamReader(connection.getInputStream());
                     int length = reader.read(array);
                     checkingResult = new Boolean(new String(array, 0, length));
@@ -1085,7 +1210,9 @@ public class Installer extends ModuleInstall implements Runnable {
         private void uploadAndPost(List<LogRecord> recs, URL u) {
             URL nextURL = null;
             
-            prefs.putInt("submitted", 1 + prefs.getInt("submitted", 0)); // NOI18N
+            if(preferencesWritable) {
+                prefs.putInt("submitted", 1 + prefs.getInt("submitted", 0)); // NOI18N
+            }
             
             try {
                 nextURL = uploadLogs(u, findIdentity(), Collections.<String,String>emptyMap(), recs);
@@ -1146,7 +1273,10 @@ public class Installer extends ModuleInstall implements Runnable {
         }
         
         private String getVM(){
-            return System.getProperty("java.vm.name", "unknown") + ", " + System.getProperty("java.vm.version", ""); // NOI18N
+            return System.getProperty("java.vm.name", "unknown") + ", " // NOI18N
+                 + System.getProperty("java.vm.version", "") + ", " // NOI18N
+                 + System.getProperty("java.runtime.name", "unknown") + ", " // NOI18N
+                 + System.getProperty("java.runtime.version", ""); // NOI18N
         }
         
     } // end of Submit
@@ -1164,7 +1294,7 @@ public class Installer extends ModuleInstall implements Runnable {
         return message;
     }
     
-    private static final class SubmitInteractive extends Submit 
+    static final class SubmitInteractive extends Submit 
     implements HyperlinkListener {
         private boolean connectDialog;
         private Dialog d;
@@ -1311,6 +1441,10 @@ public class Installer extends ModuleInstall implements Runnable {
                     LOG.log(Level.WARNING, "PASSWORD ENCRYPTION ERROR", exc);// NOI18N
                 } catch (IOException exc) {
                     LOG.log(Level.WARNING, "PASSWORD ENCRYPTION ERROR", exc);// NOI18N
+                }
+                List<String> buildInfo = BuildInfo.logBuildInfo();
+                if (buildInfo != null) {
+                    params.addAll(buildInfo);
                 }
             }
         }
