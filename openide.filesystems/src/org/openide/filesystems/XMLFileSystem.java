@@ -146,7 +146,10 @@ import org.xml.sax.helpers.DefaultHandler;
  * static Value methodName(Map<String,Object> attrs); // since 7.0
  * static Value methodName(Map<String,Object> attrs, String attrName); // since 7.0
  * </pre>
- * where <code>Value</code> can be any java type.
+ * where <code>Value</code> can be any java type. Since version 7.9 the Map
+ * attribute may also contain special values for keys <q>displayName</q> and
+ * <q>image</q> representing display name of the {@link FileObject} and its image
+ * respectively.
  *
  *
  * @author Radek Matous
@@ -616,6 +619,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
             if (!isFolder) {
                 throw new IllegalArgumentException("not a folder"); // NOI18N
             }
+            assert name != null && name.indexOf("/") == -1:(child.isFolder ? "<folder name=":"<file name=")+name+" ...";//NOI18N
 
             ResourceElem retVal = child;
             int idx = names.indexOf(name);
