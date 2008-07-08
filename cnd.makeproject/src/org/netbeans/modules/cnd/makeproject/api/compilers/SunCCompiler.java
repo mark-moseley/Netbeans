@@ -42,23 +42,15 @@
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.List;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BasicCompilerConfiguration;
-import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
-import org.openide.NotifyDescriptor;
-import org.openide.util.NbBundle;
 
-public class SunCCompiler extends CCCCompiler {
+public class SunCCompiler extends SunCCCCompiler {
     private static final String compilerStderrCommand = " -xdryrun -E"; // NOI18N
-    private PersistentList systemIncludeDirectoriesList = null;
-    private PersistentList systemPreprocessorSymbolsList = null;
-    private boolean saveOK = true;
     
     private static final String[] DEVELOPMENT_MODE_OPTIONS = {
         "",  // Fast Build // NOI18N
@@ -98,8 +90,15 @@ public class SunCCompiler extends CCCCompiler {
     };
     
     /** Creates a new instance of SunCCompiler */
-    public SunCCompiler(CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        super(flavor, kind, name, displayName, path);
+    public SunCCompiler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+        super(hkey, flavor, kind, name, displayName, path);
+    }
+    
+    @Override
+    public SunCCompiler createCopy() {
+        SunCCompiler copy = new SunCCompiler(getHostKey(), getFlavor(), getKind(), "", getDisplayName(), getPath());
+        copy.setName(getName());
+        return copy;
     }
     
     @Override
@@ -143,45 +142,6 @@ public class SunCCompiler extends CCCCompiler {
         return value ? "-s" : ""; // NOI18N
     }
     
-    @Override
-    public boolean setSystemIncludeDirectories(List values) {
-        assert values != null;
-        if (values.equals(systemIncludeDirectoriesList)) {
-            return false;
-        }
-        systemIncludeDirectoriesList = new PersistentList(values);
-        normalizePaths(systemIncludeDirectoriesList);
-        return true;
-    }
-    
-    @Override
-    public boolean setSystemPreprocessorSymbols(List values) {
-        assert values != null;
-        if (values.equals(systemPreprocessorSymbolsList)) {
-            return false;
-        }
-        systemPreprocessorSymbolsList = new PersistentList(values);
-        return true;
-    }
-    
-    @Override
-    public List getSystemPreprocessorSymbols() {
-        if (systemPreprocessorSymbolsList != null)
-            return systemPreprocessorSymbolsList;
-        
-        getSystemIncludesAndDefines();
-        return systemPreprocessorSymbolsList;
-    }
-    
-    @Override
-    public List getSystemIncludeDirectories() {
-        if (systemIncludeDirectoriesList != null)
-            return systemIncludeDirectoriesList;
-        
-        getSystemIncludesAndDefines();
-        return systemIncludeDirectoriesList;
-    }
-    
     // To be overridden
     @Override
     public String getMTLevelOptions(int value) {
@@ -201,52 +161,8 @@ public class SunCCompiler extends CCCCompiler {
     }
     
     @Override
-    public void saveSystemIncludesAndDefines() {
-        if (systemIncludeDirectoriesList != null && saveOK)
-            systemIncludeDirectoriesList.saveList(getUniqueID() + "systemIncludeDirectoriesList"); // NOI18N
-        if (systemPreprocessorSymbolsList != null && saveOK)
-            systemPreprocessorSymbolsList.saveList(getUniqueID() + "systemPreprocessorSymbolsList"); // NOI18N
-    }
-    
-    private void restoreSystemIncludesAndDefines() {
-        systemIncludeDirectoriesList = PersistentList.restoreList(getUniqueID() + "systemIncludeDirectoriesList"); // NOI18N
-        systemPreprocessorSymbolsList = PersistentList.restoreList(getUniqueID() + "systemPreprocessorSymbolsList"); // NOI18N
-    }
-    
-    private void getSystemIncludesAndDefines() {
-        restoreSystemIncludesAndDefines();
-        if (systemIncludeDirectoriesList == null || systemPreprocessorSymbolsList == null) {
-            getFreshSystemIncludesAndDefines();
-        }
-    }
-    
-    private void getFreshSystemIncludesAndDefines() {
-        systemIncludeDirectoriesList = new PersistentList();
-        systemPreprocessorSymbolsList = new PersistentList();
-        String path = getPath();
-        if (path == null || !new File(path).exists()) {
-            path = "cc"; // NOI18N
-        }
-        try {
-            getSystemIncludesAndDefines(path + compilerStderrCommand, false);
-            systemIncludeDirectoriesList.addUnique("/usr/include"); // NOI18N
-            saveOK = true;
-        } catch (IOException ioe) {
-            System.err.println("IOException " + ioe);
-            String errormsg = NbBundle.getMessage(getClass(), "CANTFINDCOMPILER", path); // NOI18N
-            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(errormsg, NotifyDescriptor.ERROR_MESSAGE));
-            saveOK = false;
-        }
-    }
-    
-    @Override
-    public void resetSystemIncludesAndDefines() {
-        getFreshSystemIncludesAndDefines();
-    }
-    
-    @Override
-    protected void parseCompilerOutput(InputStream is) {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+    protected void parseCompilerOutput(BufferedReader reader) {
+        
         try {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -270,7 +186,6 @@ public class SunCCompiler extends CCCCompiler {
             // Adding "__STDC__=0". It's missing from dryrun output
             systemPreprocessorSymbolsList.add("__STDC__=0"); // NOI18N
             
-            is.close();
             reader.close();
         } catch (IOException ioe) {
             ErrorManager.getDefault().notify(ErrorManager.WARNING, ioe); // FIXUP
@@ -285,5 +200,21 @@ public class SunCCompiler extends CCCCompiler {
         for (int i = 0; i < systemPreprocessorSymbolsList.size(); i++) {
             System.out.println("-D" + systemPreprocessorSymbolsList.get(i)); // NOI18N
         }
+    }
+    
+    
+    @Override
+    protected String getDefaultPath() {
+        return "cc"; // NOI18N
+    }
+    
+    @Override
+    protected String getCompilerStderrCommand() {
+        return compilerStderrCommand;
+    }
+
+    @Override
+    protected String getCompilerStderrCommand2() {
+        return null;
     }
 }
