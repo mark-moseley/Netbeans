@@ -103,13 +103,10 @@ public final class DBMetaDataFactory {
     private Logger mLogger = Logger.getLogger(DBMetaDataFactory.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
 
-    public DBMetaDataFactory(Connection conn) throws DBException {
-        if (conn == null) {
-            throw new NullPointerException("Connection can't be null.");
-        }
-        dbconn = conn;
+    public DBMetaDataFactory(Connection dbconn) throws DBException {
+        assert dbconn != null;
 
-        // get the metadata
+        this.dbconn = dbconn;
         try {
             dbmeta = dbconn.getMetaData();
             dbType = getDBType();
@@ -181,6 +178,23 @@ public final class DBMetaDataFactory {
         }
 
         return dbtype;
+    }
+
+    public Map<Integer, String> buildDBSpecificDatatypeMap() throws SQLException {
+        Map<Integer, String> typeInfoMap = new HashMap<Integer, String>();
+        ResultSet typeInfo = dbmeta.getTypeInfo();
+        String typeName = null;
+        Integer type = null;
+        int jdbcType = 0;
+        while (typeInfo.next()) {
+            typeName = typeInfo.getString("TYPE_NAME");
+            jdbcType  = typeInfo.getInt("DATA_TYPE");
+            type = new Integer(jdbcType);
+            if (!typeInfoMap.containsKey(type)){
+                typeInfoMap.put(type, typeName);
+            }
+        }
+        return typeInfoMap;
     }
 
     private DBPrimaryKey getPrimaryKeys(String tcatalog, String tschema, String tname) throws Exception {
@@ -268,6 +282,9 @@ public final class DBMetaDataFactory {
             }
 
             for (DBTable table : tables.values()) {
+                if(DataViewUtils.isNullString(table.getName())){
+                    continue;
+                }
                 checkPrimaryKeys(table);
                 checkForeignKeys(table);
             }
@@ -334,16 +351,6 @@ public final class DBMetaDataFactory {
            mLogger.errorNoloc(mLoc.t("LOGR012: {0}"),e);
             throw e;
         }
-    }
-
-    private int getDBTypeCode(String name) {
-        for (int i = 0; i < DBTYPES.length; i++) {
-            String dbName = DBTYPES[i];
-            if (dbName.equals(name)) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private String setToNullIfEmpty(String source) {
