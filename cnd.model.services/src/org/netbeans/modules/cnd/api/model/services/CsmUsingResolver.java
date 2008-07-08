@@ -94,6 +94,14 @@ public abstract class CsmUsingResolver {
     public abstract Collection<CsmDeclaration> findUsedDeclarations(CsmFile file, int offset, CsmProject onlyInProject);
     
     /**
+     * Finds all declarations visible in given namespace through "using" delcarations.
+     * 
+     * @param namespace  namespace of interest
+     * @return unmodifiable collection of declarations visible in given namespace through "using" declarations
+     */
+    public abstract Collection<CsmDeclaration> findUsedDeclarations(CsmNamespace namespace);
+    
+    /**
      * return all namespace visible for offsetable element, i.e.
      *  using namespace std;
      *  using namespace myNS;
@@ -104,6 +112,24 @@ public abstract class CsmUsingResolver {
      * @return sorted unmodifiable collection of namespaces visible for input offsetable element
      */
     public abstract Collection<CsmNamespace> findVisibleNamespaces(CsmFile file, int offset, CsmProject onlyInProject);
+
+    /**
+     * Finds all "using" directives in given namespace.
+     * 
+     * @param namespace  namespace of interest
+     * @return unmodifiable collection of "using" directives in given namespace
+     */
+    public abstract Collection<CsmUsingDirective> findUsingDirectives(CsmNamespace namespace);
+
+    /**
+     * Finds all namespaces visible in given namespace through "using" directives.
+     * 
+     * @param namespace  namespace of interest
+     * @return unmodifiable collection of namespaces visible in given namespace though "using" directives
+     */
+    public Collection<CsmNamespace> findVisibleNamespaces(CsmNamespace namespace) {
+        return extractNamespaces(findUsingDirectives(namespace));
+    }
 
     /**
      * return all namespace aliases visible for offsetable element, i.e.
@@ -152,9 +178,9 @@ public abstract class CsmUsingResolver {
                 out.put(name, ref);
             }
         }
-        return new ArrayList<CsmDeclaration>(out.values());        
+        return new ArrayList<CsmDeclaration>(out.values());
     }
-    
+
     //
     // Implementation of the default resolver
     //
@@ -164,6 +190,14 @@ public abstract class CsmUsingResolver {
 
         public Collection<CsmDeclaration> findUsedDeclarations(CsmFile file, int offset, CsmProject onlyInProject) {
             return Collections.<CsmDeclaration>emptyList();
+        }
+        
+        public Collection<CsmDeclaration> findUsedDeclarations(CsmNamespace namespace) {
+            return Collections.<CsmDeclaration>emptyList();
+        }
+
+        public Collection<CsmUsingDirective> findUsingDirectives(CsmNamespace namespace) {
+            return Collections.<CsmUsingDirective>emptyList();
         }
 
         public Collection<CsmNamespace> findVisibleNamespaces(CsmFile file, int offset, CsmProject onlyInProject) {
