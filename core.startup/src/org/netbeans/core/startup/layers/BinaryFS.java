@@ -48,7 +48,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
@@ -56,8 +55,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -71,7 +68,6 @@ import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.Stamps;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
@@ -79,6 +75,7 @@ import org.openide.filesystems.FileSystem;
 import org.openide.util.Enumerations;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 import org.openide.util.SharedClassObject;
 import org.openide.util.Union2;
 import org.openide.util.actions.SystemAction;
@@ -100,7 +97,7 @@ public class BinaryFS extends FileSystem {
      *     FS data
      */
 
-    static final byte[] MAGIC = "org.netbeans.core.projects.cache.BinaryV3".getBytes(); // NOI18N
+    static final byte[] MAGIC = "org.netbeans.core.projects.cache.BinaryV4".getBytes(); // NOI18N
 
     /** An empty array of SystemActions. */
     static final SystemAction[] NO_ACTIONS = new SystemAction[0];
@@ -130,6 +127,9 @@ public class BinaryFS extends FileSystem {
         } catch (PropertyVetoException ex) {
             throw (IOException)new IOException().initCause(ex);
         }
+        
+        LayerCacheManager.err.fine("Reading " + binaryFile + " buffer: " + buff.limit());
+        
         this.binaryFile = binaryFile;
 
         // verify the magic in header and expected image length
@@ -142,6 +142,7 @@ public class BinaryFS extends FileSystem {
         if (buff.limit() != storedLen) {
             throw new IOException("Corrupted image, correct length=" + storedLen); // NOI18N
         }
+        LayerCacheManager.err.log(Level.FINER, "Stored Len OK: {0}", storedLen);
 
 
         // fill the modifications array
@@ -154,7 +155,9 @@ public class BinaryFS extends FileSystem {
 
         // prepare the content buffer and root
         content = buff.slice().order(ByteOrder.LITTLE_ENDIAN);
+        LayerCacheManager.err.log(Level.FINER, "Reading root");
         root = new BFSFolder("", null, 0);
+        LayerCacheManager.err.log(Level.FINER, "Root ready: {0}", root);
     }
 
     /** Finds a file given its full resource path.
@@ -486,6 +489,9 @@ public class BinaryFS extends FileSystem {
 
                     case 12: // serialvalue
                         return decodeValue(value);
+                    case 13: // bundle value
+                        String[] arr = value.split("#", 2); // NOI18N
+                        return NbBundle.getBundle(arr[0]).getObject(arr[1]);
                     default:
                         throw new IllegalStateException("Bad index: " + index); // NOI18N
                 }
@@ -837,6 +843,9 @@ public class BinaryFS extends FileSystem {
                     childrenMap.put(nm, isFolder == 0 ?
                         new BFSFile(nm, this, off) :
                         new BFSFolder(nm, this, off));
+                }
+                if (LayerCacheManager.err.isLoggable(Level.FINEST)) {
+                    LayerCacheManager.err.log(Level.FINEST, "  children for " + getPath() + " are: " + childrenMap.keySet());
                 }
             }
         }
