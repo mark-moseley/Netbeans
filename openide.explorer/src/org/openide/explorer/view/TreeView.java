@@ -296,6 +296,8 @@ public abstract class TreeView extends JScrollPane {
         // Init of the editor
         tree.setCellEditor(new TreeViewCellEditor(tree));
         tree.setEditable(true);
+        tree.setRowHeight(16);
+        tree.setLargeModel(true);
 
         // set selection mode to DISCONTIGUOUS_TREE_SELECTION as default
         setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
@@ -842,21 +844,18 @@ public abstract class TreeView extends JScrollPane {
         showWaitCursor();
         RequestProcessor.getDefault().post(new Runnable() {
 
-                                               public void run() {
-                                                   try {
-                                                       node.getChildren().getNodes(true);
-                                                   }
-                                                   catch (Exception e) {
-                                                       // log a exception
-                                                       Logger.getLogger(TreeView.class.getName()).log(Level.WARNING,
-                                                                         null, e);
-                                                   }
-                                                   finally {
-                                                       // show normal cursor above all
-                                                       showNormalCursor();
-                                                   }
-                                               }
-                                           });
+            public void run() {
+                try {
+                    node.getChildren().getNodesCount(true);
+                } catch (Exception e) {
+                    // log a exception
+                    Logger.getLogger(TreeView.class.getName()).log(Level.WARNING, null, e);
+                } finally {
+                    // show normal cursor above all
+                    showNormalCursor();
+                }
+            }
+        });
     }
 
     /** Synchronize the selected nodes from the manager of this Explorer.
@@ -898,25 +897,19 @@ public abstract class TreeView extends JScrollPane {
     void createPopup(int xpos, int ypos) {
         // bugfix #23932, don't create if it's disabled
         if (isPopupAllowed()) {
-            Node[] arr = manager.getSelectedNodes();
+            Node[] selNodes = manager.getSelectedNodes();
 
-            if (arr.length == 0) {
-                // Should probably not happen when shown from right-click, but may well when from S-F10.
-                // Create popup menu for the root node, and make sure it is selected so that action context is correct.
-                arr = new Node[] { manager.getRootContext() };
-
-                try {
-                    manager.setSelectedNodes(arr);
-                } catch (PropertyVetoException e) {
-                    assert false : e; // not permitted to be thrown
+            if (selNodes.length > 0) {
+                Action[] actions = NodeOp.findActions(selNodes);
+                if (actions.length > 0) {
+                    createPopup(xpos, ypos, Utilities.actionsToPopup(actions, this));
+                }                
+            } else if (manager.getRootContext() != null) {
+                JPopupMenu popup = manager.getRootContext().getContextMenu();
+                if (popup != null) {
+                    createPopup(xpos, ypos, popup);
                 }
-            }
-
-            Action[] actions = NodeOp.findActions(arr);
-
-            if (actions.length > 0) {
-                createPopup(xpos, ypos, Utilities.actionsToPopup(actions, this));
-            }
+            }                
         }
     }
 
@@ -1063,7 +1056,7 @@ public abstract class TreeView extends JScrollPane {
         
         List<TreePath> remSel = null;
         for (VisualizerNode vn : removed) {
-            TreePath path = new TreePath(treeModel.getPathToRoot(vn));
+            TreePath path = new TreePath(vn.getPathToRoot());
 	    for(TreePath tp : selPaths) {
                 if (path.isDescendant(tp)) {
                     if (remSel == null) remSel = new ArrayList();
@@ -1096,6 +1089,8 @@ public abstract class TreeView extends JScrollPane {
         TreeWillExpandListener, TreeSelectionListener, Runnable {
         private RequestProcessor.Task scheduled;
         private TreePath[] readAccessPaths;
+        
+        HashSet<VisualizerChildren> visNodeChildren = new HashSet<VisualizerChildren>();
 
         TreePropertyListener() {
         }
@@ -1137,6 +1132,8 @@ public abstract class TreeView extends JScrollPane {
         }
 
         public synchronized void treeExpanded(TreeExpansionEvent ev) {
+            VisualizerNode vn = (VisualizerNode) ev.getPath().getLastPathComponent();
+            visNodeChildren.add(vn.getChildren());
             
             if (!tree.getScrollsOnExpand()) {
                 return;
@@ -1212,6 +1209,9 @@ public abstract class TreeView extends JScrollPane {
         }
 
         public synchronized void treeCollapsed(final TreeExpansionEvent ev) {
+            VisualizerNode vn = (VisualizerNode) ev.getPath().getLastPathComponent();
+            visNodeChildren.remove(vn.getChildren()); 
+
             showNormalCursor();
             class Request implements Runnable {
                 private TreePath path;
@@ -1358,9 +1358,9 @@ public abstract class TreeView extends JScrollPane {
             int selRow = tree.getRowForLocation(e.getX(), e.getY());
 
             if ((selRow == -1) && !isRootVisible()) {
-                // Use the invisible root node as a fake selection, and show its popup.
+                // clear selection
                 try {
-                    manager.setSelectedNodes(new Node[] { manager.getRootContext() });
+                    manager.setSelectedNodes(new Node[]{});
                 } catch (PropertyVetoException exc) {
                     assert false : exc; // not permitted to be thrown
                 }
