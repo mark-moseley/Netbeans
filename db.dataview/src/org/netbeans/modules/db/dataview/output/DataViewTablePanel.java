@@ -52,13 +52,15 @@ import javax.swing.table.TableModel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.JScrollPane;
-import net.java.hulp.i18n.Logger;
 import org.netbeans.modules.db.dataview.logger.Localizer;
 import org.netbeans.modules.db.dataview.meta.DBColumn;
 import org.netbeans.modules.db.dataview.meta.DBException;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+
 
 /**
  * Renders rows and columns of a given ResultSet via JTable.
@@ -78,7 +80,6 @@ class DataViewTablePanel extends JPanel {
     private TableModel model;
     private final List<Integer> columnWidthList;
     private static Logger mLogger = Logger.getLogger(DataViewTablePanel.class.getName());
-    private static transient final Localizer mLoc = Localizer.get();
 
     public DataViewTablePanel(DataView dataView, DataViewUI dataViewUI, DataViewActionHandler actionHandler) {
         this.tblMeta = dataView.getDataViewDBTable();
@@ -151,6 +152,7 @@ class DataViewTablePanel extends JPanel {
         SwingUtilities.invokeLater(run);
     }
 
+
     private void setHeader(JTable table, List<Integer> columnWidthList) {
         try {
             TableColumnModel cModel = table.getColumnModel();
@@ -160,7 +162,7 @@ class DataViewTablePanel extends JPanel {
             }
             table.getTableHeader().setColumnModel(cModel);
         } catch (Exception e) {
-            mLogger.infoNoloc(mLoc.t("LOGR011: Failed to set the size of the table headers"), e);
+            mLogger.log(Level.INFO,"Failed to set the size of the table headers"+ e);
         }
     }
 
@@ -178,13 +180,13 @@ class DataViewTablePanel extends JPanel {
                 colWidthList.add(colWidth);
             }
         } catch (Exception e) {
-            mLogger.infoNoloc(mLoc.t("LOGR011: Failed to set the size of the table headers"), e);
+            mLogger.log(Level.INFO,"Failed to set the size of the table headers"+ e);
         }
         return colWidthList;
     }
 
     private TableModel createModelFrom(List<Object[]> rows) {
-        DataViewTableModel dtm = new DataViewTableModel(rows);
+        DataViewTableModel dtm = new DataViewTableModel();
         DataViewTableSorter sorter = new DataViewTableSorter(dtm);
         sorter.setTableHeader(tableUI.getTableHeader());
         // Obtain display name
@@ -210,27 +212,12 @@ class DataViewTablePanel extends JPanel {
             for (Object colVal : (Vector) row) {
                 rowObj[i++] = colVal;
             }
+            rows.add(rowObj);
         }
         return rows;
     }
 
     class DataViewTableModel extends DefaultTableModel {
-
-        Class[] collumnClasses;
-
-        DataViewTableModel(List<Object[]> rows) {
-            super();
-            // TODO there should be a better way to do this
-            collumnClasses = new Class[tblMeta.getColumnCount()];
-            if (rows.size() > 0) {
-                Object[] row = rows.get(0);
-                for (int i = 0, I = row.length; i < I; i++) {
-                    if(row[i] != null) {
-                        collumnClasses[i] = row[i].getClass();
-                    }
-                }
-            }
-        }
 
         @Override
         public boolean isCellEditable(int row, int column) {
@@ -253,7 +240,7 @@ class DataViewTablePanel extends JPanel {
             }
 
             Object oldVal = getValueAt(row, col);
-            if (oldVal != null && oldVal.toString().equals(value ==  null ? "" : value.toString()) || (oldVal == null && value == null)) {
+            if (oldVal != null && oldVal.toString().equals(value == null ? "" : value.toString()) || (oldVal == null && value == null)) {
                 return;
             }
 
@@ -270,19 +257,10 @@ class DataViewTablePanel extends JPanel {
                 DialogDisplayer.getDefault().notify(nd);
             } catch (Exception ex) {
                 //ignore
-                mLogger.warnNoloc(mLoc.t("LOGR012: {0}", new DBException(ex).getMessage()));
+                mLogger.log(Level.WARNING,new DBException(ex).getMessage());
             }
             tableUI.revalidate();
             tableUI.repaint();
-        }
-
-        @Override
-        public Class getColumnClass(int columnIndex) {
-            if (collumnClasses[columnIndex] == null) {
-                return super.getColumnClass(columnIndex);
-            } else {
-                return collumnClasses[columnIndex];
-            }
         }
     }
 }
