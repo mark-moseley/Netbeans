@@ -66,6 +66,7 @@ import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Map;
@@ -168,7 +169,15 @@ public class Actions extends Object {
      * for this method by implementing method
      * {@link ButtonActionConnector#connect(JMenuItem, Action, boolean)} and
      * registering an instance of {@link ButtonActionConnector} in the
-     * default lookup.
+     * default lookup. 
+     * <p>
+     * Since version 7.1 the action can also provide properties
+     * "menuText" and "popupText" if one wants to use other text on the JMenuItem
+     * than the name
+     * of the action taken from Action.NAME. The popupText is checked only if the
+     * popup parameter is true and takes the biggest precedence. The menuText is
+     * tested everytime and takes precedence over standard <code>Action.NAME</code>
+     * 
      * @param item menu item
      * @param action action
      * @param popup create popup or menu item
@@ -371,7 +380,49 @@ public class Actions extends Object {
 
         return result;
     }
+    
+    //
+    // Factories 
+    //
 
+    
+    /** Creates new action which is always enabled. 
+     * This method can also be used from 
+     * <a href="@org-openide-modules@/org/openide/modules/doc-files/api.html#how-layer">XML Layer</a> 
+     * directly by following XML definition:
+     * <pre>
+     * &lt;file name="your-pkg-action-id.instance"&gt;
+     *   &lt;attr name="instanceCreate" methodvalue="org.openide.awt.Actions.alwaysEnabled"/&gt;
+     *   &lt;attr name="delegate" methodvalue="your.pkg.YourAction.factoryMethod"/&gt;
+     *   &lt;attr name="SystemFileSystem.icon" urlvalue="nbresloc://your/pkg/YourComponent.png"/&gt;
+     *   &lt;attr name="SystemFileSystem.localizingBundle" stringvalue="your.pkg.Bundle"/&gt;
+     *   &lt;attr name="noIconInMenu" boolvalue="false"/&gt;
+     * &lt;/file&gt;
+     * </pre>
+     *
+     * 
+     * @param delegate the task to perform when action is invoked
+     * @param displayName the name of the action
+     * @param iconBase the location to the actions icon
+     * @param noIconInMenu true if this icon shall not have an item in menu
+     * @since 7.3
+     */
+    public static Action alwaysEnabled(
+        ActionListener delegate, String displayName, String iconBase, boolean noIconInMenu
+    ) {
+        HashMap<String,Object> map = new HashMap<String,Object>();
+        map.put("delegate", delegate); // NOI18N
+        map.put("displayName", displayName); // NOI18N
+        map.put("iconBase", iconBase); // NOI18N
+        map.put("noIconInMenu", noIconInMenu); // NOI18N
+        return alwaysEnabled(map);
+    }
+    // for use from layers
+    static Action alwaysEnabled(Map map) {
+        return new AlwaysEnabledAction(map);
+    }
+
+    
     /** Extracts help from action.
      */
     private static HelpCtx findHelp(Action a) {
@@ -908,7 +959,16 @@ public class Actions extends Object {
             }
 
             if ((changedProperty == null) || changedProperty.equals(Action.NAME)) {
-                Object s = action.getValue(Action.NAME);
+                Object s = null;
+                if (popup) {
+                    s = action.getValue("popupText"); // NOI18N
+                }
+                if (s == null) {
+                    s = action.getValue("menuText"); // NOI18N
+                }
+                if (s == null) {
+                    s = action.getValue(Action.NAME);
+                }
 
                 if (s instanceof String) {
                     setMenuText(((JMenuItem) comp), (String) s, true);
