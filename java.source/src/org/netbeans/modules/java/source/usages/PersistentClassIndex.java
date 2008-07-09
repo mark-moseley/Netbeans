@@ -48,6 +48,7 @@ import java.net.URL;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 import javax.lang.model.element.ElementKind;
@@ -59,10 +60,8 @@ import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
-import static org.netbeans.modules.java.source.usages.ClassIndexImpl.UsageType.*;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.URLMapper;
-import org.openide.util.Exceptions;
 import org.openide.util.Exceptions;
 
 /**
@@ -164,6 +163,20 @@ public class PersistentClassIndex extends ClassIndexImpl {
         }
     }
     
+    public <T> void getDeclaredElements (final String ident, final ClassIndex.NameKind kind, final ResultConvertor<T> convertor, final Map<T,Set<String>> result) throws InterruptedException {
+        updateDirty();
+        try {
+            ClassIndexManager.getDefault().readLock(new ClassIndexManager.ExceptionAction<Void>() {
+                public Void run () throws IOException, InterruptedException {
+                    index.getDeclaredElements(ident, kind, convertor, result);
+                    return null;
+                }
+            });                    
+        } catch (IOException ioe) {
+            Exceptions.printStackTrace(ioe);
+        }
+    }
+    
     
     public void getPackageNames (final String prefix, final boolean directOnly, final Set<String> result) throws InterruptedException {
         try {
@@ -215,62 +228,34 @@ public class PersistentClassIndex extends ClassIndexImpl {
                 final long startTime = System.currentTimeMillis();
                 Iterator<FileObject> files = js.getFileObjects().iterator();
                 FileObject fo = files.hasNext() ? files.next() : null;
-                if (fo != null && fo.isValid()) {                    
-                    if (JavaSourceAccessor.INSTANCE.isDispatchThread()) {
-                        //Already under javac's lock
-                        try {
-                            ClassIndexManager.getDefault().writeLock(
-                                new ClassIndexManager.ExceptionAction<Void>() {
-                                    public Void run () throws IOException {
-                                        CompilationInfo compilationInfo = JavaSourceAccessor.INSTANCE.getCurrentCompilationInfo (js, JavaSource.Phase.RESOLVED);                                        
-                                        if (compilationInfo != null) {
-                                            //Not cancelled
-                                            final SourceAnalyser sa = getSourceAnalyser();
-                                            long st = System.currentTimeMillis();
-                                            sa.analyseUnitAndStore(compilationInfo.getCompilationUnit(), JavaSourceAccessor.INSTANCE.getJavacTask(compilationInfo),
-                                                ClasspathInfoAccessor.getINSTANCE().getFileManager(compilationInfo.getClasspathInfo()));
-                                            long et = System.currentTimeMillis();
+                if (fo != null && fo.isValid()) {                                        
+                    try {
+                        js.runUserActionTask(new Task<CompilationController>() {
+                            public void run (final CompilationController controller) {
+                                try {                            
+                                    ClassIndexManager.getDefault().writeLock(
+                                        new ClassIndexManager.ExceptionAction<Void>() {
+                                            public Void run () throws IOException {
+                                                controller.toPhase(Phase.RESOLVED);
+                                                final SourceAnalyser sa = getSourceAnalyser();
+                                                long st = System.currentTimeMillis();
+                                                sa.analyseUnitAndStore(controller.getCompilationUnit(), JavaSourceAccessor.getINSTANCE().getJavacTask(controller),
+                                                ClasspathInfoAccessor.getINSTANCE().getFileManager(controller.getClasspathInfo()));
+                                                long et = System.currentTimeMillis();
+                                                return null;
                                             }
-                                        return null;
-                                    }
-                            });                                        
-                        } catch (IOException ioe) {
-                            Exceptions.printStackTrace(ioe);
-                        }
-                        catch (InterruptedException e) {
-                            //Should never happen
-                            Exceptions.printStackTrace(e);
-                        }
-                    }
-                    else {
-                        try {
-                            js.runUserActionTask(new Task<CompilationController>() {
-                                public void run (final CompilationController controller) {
-                                    try {                            
-                                        ClassIndexManager.getDefault().writeLock(
-                                            new ClassIndexManager.ExceptionAction<Void>() {
-                                                public Void run () throws IOException {
-                                                    controller.toPhase(Phase.RESOLVED);
-                                                    final SourceAnalyser sa = getSourceAnalyser();
-                                                    long st = System.currentTimeMillis();
-                                                    sa.analyseUnitAndStore(controller.getCompilationUnit(), JavaSourceAccessor.INSTANCE.getJavacTask(controller),
-                                                    ClasspathInfoAccessor.getINSTANCE().getFileManager(controller.getClasspathInfo()));
-                                                    long et = System.currentTimeMillis();
-                                                    return null;
-                                                }
-                                        });
-                                    } catch (IOException ioe) {
-                                        Exceptions.printStackTrace(ioe);
-                                    }
-                                    catch (InterruptedException e) {
-                                        //Should never happen
-                                        Exceptions.printStackTrace(e);
-                                    }
+                                    });
+                                } catch (IOException ioe) {
+                                    Exceptions.printStackTrace(ioe);
                                 }
-                            }, true);
-                        } catch (IOException ioe) {
-                            Exceptions.printStackTrace(ioe);
-                        }
+                                catch (InterruptedException e) {
+                                    //Should never happen
+                                    Exceptions.printStackTrace(e);
+                                }
+                            }
+                        }, true);
+                    } catch (IOException ioe) {
+                        Exceptions.printStackTrace(ioe);
                     }
                 }
                 synchronized (this) {

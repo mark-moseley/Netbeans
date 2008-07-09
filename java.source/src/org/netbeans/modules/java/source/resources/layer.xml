@@ -2,7 +2,7 @@
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
-Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
 
 
 The contents of this file are subject to the terms of either the GNU
@@ -26,7 +26,7 @@ your own identifying information:
 Contributor(s):
 
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
 Microsystems, Inc. All Rights Reserved.
 
 If you wish your version of this file to be governed by only the CDDL
@@ -46,6 +46,12 @@ made subject to such option by the copyright holder.
   <folder name="Loaders">
     <folder name="text">
         <folder name="x-java">
+            <folder name="Factories">
+                <file name="org-netbeans-modules-java-JavaDataLoader.instance">
+                    <attr name="position" intvalue="99999"/>
+                </file>
+            </folder>
+            
             <folder name="Actions">
               <file name="OpenAction.instance">
                 <attr name="instanceClass" stringvalue="org.openide.actions.OpenAction"/>
@@ -115,6 +121,10 @@ made subject to such option by the copyright holder.
     </folder>
     <folder name="application">
         <folder name="x-class-file">
+            <folder name="Factories">
+                <file name="org-netbeans-modules-java-ClassDataLoader.instance"/>
+            </folder>
+            
             <folder name="Actions">
                 <file name="OpenAction.instance">
                     <attr name="instanceClass" stringvalue="org.openide.actions.OpenAction"/>
@@ -198,8 +208,37 @@ made subject to such option by the copyright holder.
                 <file name="Reformatter.instance">
                     <attr name="instanceClass" stringvalue="org.netbeans.modules.java.source.save.Reformatter$Factory"/>
                 </file>
+                <file name="JavacParser.instance">
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.java.source.parsing.JavacParserFactory"/>
+                </file>
+            </folder>
+        </folder>
+        <folder name="application">
+            <folder name="x-class-file">
+                <file name="ClassParser.instance">
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.java.source.parsing.ClassParserFactory"/>
+                </file>
             </folder>
         </folder>
     </folder>
                 
+    <folder name="Projects">
+        <folder name="org-netbeans-modules-java-j2seproject">
+            <folder name="Customizer">
+                <file name="CodeStyle.instance">
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.java.ui.CodeStyleCustomizerPanel$Factory"/>
+                    <attr name="position" intvalue="1000"/>
+                </file>
+            </folder>
+        </folder>
+        <folder name="org-netbeans-modules-ant-freefrom">
+            <folder name="Customizer">
+                <file name="CodeStyle.instance">
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.java.ui.CodeStyleCustomizerPanel$Factory"/>
+                    <attr name="position" intvalue="1000"/>
+                </file>
+            </folder>
+        </folder>
+    </folder>
+    
 </filesystem>
