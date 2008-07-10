@@ -71,9 +71,6 @@ public final class PreprocLexer extends CndLexer {
     private static final int INCLUDE_DIRECTIVE  = EXPRESSION + 1;
     private static final int OTHER              = INCLUDE_DIRECTIVE + 1;
     
-    private static final String WHITESPACE_CATEGORY = CppTokenId.WHITESPACE.primaryCategory();
-    private static final String COMMENT_CATEGORY = CppTokenId.LINE_COMMENT.primaryCategory();
-    
     private int state = INIT;
     private final Filter<CppTokenId> preprocFilter;
     private final Filter<CppTokenId> keywordsFilter;
@@ -82,9 +79,10 @@ public final class PreprocLexer extends CndLexer {
         super(info);
         this.preprocFilter = CndLexerUtilities.getPreprocFilter();
         @SuppressWarnings("unchecked")
-        Filter<CppTokenId> filter = (Filter<CppTokenId>) info.getAttributeValue("lexer-filter"); // NOI18N
+        Filter<CppTokenId> filter = (Filter<CppTokenId>) info.getAttributeValue(CndLexerUtilities.LEXER_FILTER);
         this.keywordsFilter = filter != null ? filter : defaultFilter;
-        fromState(info.state()); // last line in contstructor
+        Integer attrState = (Integer) info.getAttributeValue(CndLexerUtilities.PREPROC_LEXER_STATE);
+        fromState(info.state(), attrState); // last line in contstructor
     }
 
     @Override
@@ -92,8 +90,12 @@ public final class PreprocLexer extends CndLexer {
         return Integer.valueOf(state);
     }
     
-    private void fromState(Object state) {
-        this.state = state == null ? INIT : ((Integer)state).intValue();
+    private void fromState(Object state, Integer attrState) {
+        if (state == null) {
+            this.state = attrState == null ? INIT : attrState.intValue();
+        } else {
+            this.state = ((Integer)state).intValue();
+        }
     }
 
     @Override
@@ -174,8 +176,8 @@ public final class PreprocLexer extends CndLexer {
                 state = DIRECTIVE_NAME;
                 break;
             case DIRECTIVE_NAME:
-                if (!WHITESPACE_CATEGORY.equals(id.primaryCategory()) &&
-                           !COMMENT_CATEGORY.equals(id.primaryCategory())) {
+                if (!CppTokenId.WHITESPACE_CATEGORY.equals(id.primaryCategory()) &&
+                           !CppTokenId.COMMENT_CATEGORY.equals(id.primaryCategory())) {
                     switch (id) {
                         case PREPROCESSOR_IF:
                         case PREPROCESSOR_ELIF:
