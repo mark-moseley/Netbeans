@@ -89,6 +89,7 @@ import org.openide.nodes.PropertySupport;
 import org.openide.nodes.Sheet;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
+import org.openide.util.actions.SystemAction;
 import org.w3c.dom.Element;
 
 /**
@@ -96,7 +97,7 @@ import org.w3c.dom.Element;
  *
  * @author Martin Krauskopf
  */
-final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
+public final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
         implements Comparator<Node>, ExplorerManager.Provider, ChangeListener {
     private final ExplorerManager manager;
     private ModuleEntry[] platformModules;
@@ -178,7 +179,8 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
                     for (Node module : e.getChildren().getNodes()) {
                         if (module instanceof Enabled) {
                             Enabled m = (Enabled) module;
-                            if (!m.isEnabled()) {
+                            // don't add modules in disabled cluster to disabledModules
+                            if (!m.isEnabled() && e.isEnabled()) {
                                 disabledModules.add(m.getName());
                             }
                         }
@@ -368,7 +370,7 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
         Set<String> disabledModuleCNB = new HashSet<String>(Arrays.asList(getProperties().getDisabledModules()));
         Set<String> enabledClusters = new HashSet<String>(Arrays.asList(getProperties().getEnabledClusters()));
         
-        Map<File,Children> clusterToChildren = new HashMap<File,Children>();
+        Map<File,Enabled> clusterToNode = new HashMap<File,Enabled>();
         
         Children.SortedArray clusters = new Children.SortedArray();
         clusters.setComparator(this);
@@ -377,22 +379,21 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
         n.setDisplayName(getMessage("LBL_ModuleListClustersModules"));
         
         for (ModuleEntry platformModule : platformModules) {
-            Children clusterChildren = clusterToChildren.get(platformModule.getClusterDirectory());
-            if (clusterChildren == null) {
+            Enabled cluster = clusterToNode.get(platformModule.getClusterDirectory());
+            if (cluster == null) {
                 Children.SortedArray modules = new Children.SortedArray();
                 modules.setComparator(this);
-                clusterChildren = modules;
                 
                 String clusterName = platformModule.getClusterDirectory().getName();
-                Enabled cluster = new Enabled(modules, enabledClusters.contains(clusterName));
+                cluster = new Enabled(modules, enabledClusters.contains(clusterName));
                 cluster.setName(clusterName);
                 cluster.setIconBaseWithExtension(SuiteProject.SUITE_ICON_PATH);
-                clusterToChildren.put(platformModule.getClusterDirectory(), modules);
+                clusterToNode.put(platformModule.getClusterDirectory(), cluster);
                 n.getChildren().add(new Node[] { cluster });
             }
-            
             String cnb = platformModule.getCodeNameBase();
-            AbstractNode module = new Enabled(Children.LEAF, !disabledModuleCNB.contains(cnb));
+            
+            AbstractNode module = new Enabled(Children.LEAF, !disabledModuleCNB.contains(cnb) && cluster.isEnabled());
             module.setName(cnb);
             module.setDisplayName(platformModule.getLocalizedName());
             String desc = platformModule.getShortDescription();
@@ -409,7 +410,7 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
             module.setShortDescription(tooltip);
             module.setIconBaseWithExtension(NbModuleProject.NB_PROJECT_ICON_PATH);
             
-            clusterChildren.add(new Node[] { module });
+            cluster.getChildren().add(new Node[] { module });
         }
         
         return n;
@@ -423,7 +424,7 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
         return manager;
     }
     
-    private static final Set<String> DISABLED_PLATFORM_MODULES = new HashSet<String>();
+    public static final Set<String> DISABLED_PLATFORM_MODULES = new HashSet<String>();
     
     static {
         // Probably not needed for most platform apps, and won't even work under JNLP.
@@ -510,14 +511,26 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
         }
     }
     
+    // #70724: internally, cluster nodes have 3 states now
+    private enum EnabledState {
+        // module / all modules in cluster selected
+        ENABLED_FULL,
+        // only for clusters - some but not all modules are enabled
+        ENABLED_PARTIALLY,
+        // module / whole cluster disabled
+        DISABLED
+    }
+    
     final class Enabled extends AbstractNode {
-        private boolean enabled;
+//        private boolean enabled;
+        private EnabledState state;
         private Children standard;
         
         public Enabled(Children ch, boolean enabled) {
             super(ch);
             this.standard = ch;
-            this.enabled = enabled;
+            //this.enabled = enabled;
+            setEnabled(enabled);  // ??? 
             
             Sheet s = Sheet.createDefault();
             Sheet.Set ss = s.get(Sheet.PROPERTIES);
@@ -526,28 +539,64 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
         }
         
         public void setEnabled(boolean s) {
-            if (s == enabled) {
-                return;
-            }
-            enabled = s;
-            //refresh childern
-            for (Node nn : standard.getNodes()) {
-                if (nn instanceof Enabled) {
-                    Enabled en = (Enabled)nn;
-                    en.firePropertyChange(null, null, null);
-                }
-            }
-            //refresh parent
-            Node n = getParentNode();
-            if (n instanceof Enabled) {
-                Enabled en = (Enabled)n;
-                en.firePropertyChange(null, null, null);
-            }
-            updateDependencyWarnings();
+//            if (s == enabled) {
+//                return;
+//            }
+            setState(s ? EnabledState.ENABLED_FULL : EnabledState.DISABLED, true);
         }
         
         public boolean isEnabled() {
-            return enabled;
+            return state != EnabledState.DISABLED;
+        }
+        
+        public EnabledState getState() {
+            return state;
+        }
+
+        private void setState(EnabledState s, boolean propagate) {
+            if (s == state) {
+                return;
+            }
+            state = s;
+            if (propagate) {
+                //refresh children
+                EnabledState newChildState = 
+                        (s == EnabledState.ENABLED_PARTIALLY) ? null : s;
+                for (Node nn : standard.getNodes()) {
+                    if (nn instanceof Enabled) {
+                        Enabled en = (Enabled) nn;
+                        // #70724: checking/unchecking cluster node checks/unchecks all children
+                        if (newChildState != null) {
+                            en.setState(newChildState, false);
+                        }
+                        en.firePropertyChange(null, null, null);
+                    }
+                }
+                //refresh parent
+                Node n = getParentNode();
+                if (n instanceof Enabled) {
+                    Enabled en = (Enabled) n;
+                    assert s != EnabledState.ENABLED_PARTIALLY : "Module node should not be passed ENABLED_PARTIALLY state";
+                    boolean allEnabled = true;
+                    boolean allDisabled = false;
+                    for (Node nn : standard.getNodes()) {
+                        if (nn instanceof Enabled) {
+                            Enabled ch = (Enabled) nn;
+                            allEnabled &= ch.isEnabled();
+                            allDisabled |= ch.isEnabled();
+                        }
+                    }
+                    if (allEnabled)
+                        en.setState(EnabledState.ENABLED_FULL, false);
+                    else if (allDisabled)
+                        en.setState(EnabledState.DISABLED, false);
+                    else
+                        en.setState(EnabledState.ENABLED_PARTIALLY, false);
+                        
+                    en.firePropertyChange(null, null, null);
+                }
+                updateDependencyWarnings();
+            }
         }
     }
     
@@ -591,11 +640,11 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
         
         @Override
         public boolean canWrite() {
-            Node parent = node.getParentNode();
-            if (parent instanceof Enabled) {
-                // cluster node
-                return ((Enabled)parent).isEnabled();
-            }
+//            Node parent = node.getParentNode();
+//            if (parent instanceof Enabled) {
+//                // cluster node
+//                return ((Enabled)parent).isEnabled();
+//            }
             return true;
         }
         
@@ -618,6 +667,9 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
         platformValue.getAccessibleContext().setAccessibleDescription(getMessage("ACSD_PlatformValue"));
         javaPlatformCombo.getAccessibleContext().setAccessibleDescription(getMessage("ACSD_JavaPlatformCombo"));
         javaPlatformButton.getAccessibleContext().setAccessibleDescription(getMessage("ACSD_JavaPlatformButton"));
+        
+        javaPlatformLabel.getAccessibleContext().setAccessibleDescription(getMessage("ACSD_JavaPlatformLbl"));
+        platform.getAccessibleContext().setAccessibleDescription(getMessage("ACSD_PlatformLbl"));
     }
     
     // #65924: show warnings if some dependencies cannot be satisfied
@@ -701,6 +753,7 @@ final class SuiteCustomizerLibraries extends NbPropertyPanel.Suite
             // Cannot use ProjectXMLManager since we need to report also deps on nonexistent modules.
             Element dataE = project.getPrimaryConfigurationData();
             Element depsE = Util.findElement(dataE, "module-dependencies", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
+            assert depsE != null : "Malformed metadata in " + project;
             for (Element dep : Util.findSubElements(depsE)) {
                 Element run = Util.findElement(dep, "run-dependency", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
                 if (run == null) {
