@@ -36,30 +36,32 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
-package org.netbeans.modules.vmd.midpnb.components.svg.form;
+package org.netbeans.modules.vmd.midp.components.databinding;
 
 import java.util.Arrays;
+import org.netbeans.modules.vmd.midp.components.*;
 import java.util.List;
+import org.netbeans.modules.vmd.api.codegen.CodeSetterPresenter;
 import org.netbeans.modules.vmd.api.model.ComponentDescriptor;
 import org.netbeans.modules.vmd.api.model.Presenter;
 import org.netbeans.modules.vmd.api.model.PropertyDescriptor;
 import org.netbeans.modules.vmd.api.model.TypeDescriptor;
 import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.api.model.VersionDescriptor;
-import org.netbeans.modules.vmd.midp.components.MidpVersionDescriptor;
-import org.netbeans.modules.vmd.midpnb.codegen.MidpCustomCodePresenterSupport;
+import org.netbeans.modules.vmd.midp.codegen.MidpParameter;
+import org.netbeans.modules.vmd.midp.codegen.MidpSetter;
 
 /**
  *
- * @author avk
+ * @author Karol Harezlak
  */
-public class SVGSpinnerCD extends ComponentDescriptor{
+public class PIMDataSetCD extends ComponentDescriptor {
 
-    public static final TypeID TYPEID = new TypeID (TypeID.Kind.COMPONENT, "org.netbeans.microedition.svg.SVGSpinner"); // NOI18N
-
-    public TypeDescriptor getTypeDescriptor () {
-        return new TypeDescriptor (SVGComponentCD.TYPEID, TYPEID, true, false);
+    public static final TypeID TYPEID = new TypeID(TypeID.Kind.COMPONENT, "org.netbeans.microedition.databinding.pim.PIMDataSet"); //NOI18N
+    
+    @Override
+    public TypeDescriptor getTypeDescriptor() {
+        return new TypeDescriptor(DataSetAbstractCD.TYPEID, TYPEID, true, true);
     }
 
     @Override
@@ -69,16 +71,18 @@ public class SVGSpinnerCD extends ComponentDescriptor{
 
     @Override
     public List<PropertyDescriptor> getDeclaredPropertyDescriptors() {
-        return Arrays.asList (
-                );
+        return null;
+    }
+    
+     private static Presenter createSetterPresenter() {
+        return new CodeSetterPresenter().addParameters(MidpParameter.create()).addSetters(MidpSetter.createConstructor(TYPEID, MidpVersionable.MIDP));
     }
 
     @Override
-    protected List<? extends Presenter> createPresenters () {
+    protected List<? extends Presenter> createPresenters() {
         return Arrays.asList(
-                //code
-                MidpCustomCodePresenterSupport.createSVGComponentCodePresenter(TYPEID)
+            //code
+            createSetterPresenter()
         );
     }
-
 }

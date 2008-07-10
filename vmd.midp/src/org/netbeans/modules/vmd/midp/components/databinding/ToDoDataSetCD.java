@@ -36,30 +36,39 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.vmd.midp.components.databinding;
 
-package org.netbeans.modules.vmd.midpnb.components.svg.form;
-
+import org.netbeans.modules.vmd.midp.components.*;
 import java.util.Arrays;
 import java.util.List;
+import org.netbeans.modules.vmd.api.codegen.CodeSetterPresenter;
 import org.netbeans.modules.vmd.api.model.ComponentDescriptor;
 import org.netbeans.modules.vmd.api.model.Presenter;
 import org.netbeans.modules.vmd.api.model.PropertyDescriptor;
+import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.api.model.TypeDescriptor;
 import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.api.model.VersionDescriptor;
-import org.netbeans.modules.vmd.midp.components.MidpVersionDescriptor;
-import org.netbeans.modules.vmd.midpnb.codegen.MidpCustomCodePresenterSupport;
+import org.netbeans.modules.vmd.api.properties.DefaultPropertiesPresenter;
+import org.netbeans.modules.vmd.midp.codegen.MidpParameter;
+import org.netbeans.modules.vmd.midp.codegen.MidpSetter;
+import org.netbeans.modules.vmd.midp.propertyeditors.MidpPropertiesCategories;
+import org.netbeans.modules.vmd.midp.propertyeditors.PropertyEditorNumber;
+import org.openide.util.NbBundle;
 
 /**
  *
- * @author avk
+ * @author Karol Harezlak
  */
-public class SVGSpinnerCD extends ComponentDescriptor{
+public class ToDoDataSetCD extends ComponentDescriptor {
 
-    public static final TypeID TYPEID = new TypeID (TypeID.Kind.COMPONENT, "org.netbeans.microedition.svg.SVGSpinner"); // NOI18N
-
-    public TypeDescriptor getTypeDescriptor () {
-        return new TypeDescriptor (SVGComponentCD.TYPEID, TYPEID, true, false);
+    public static final TypeID TYPEID = new TypeID(TypeID.Kind.COMPONENT, "org.netbeans.microedition.databinding.pim.ToDoDataSet"); //NOI18N
+    
+    public static final String PROP_INDEX = "index"; //NOI18N
+    
+    @Override
+    public TypeDescriptor getTypeDescriptor() {
+        return new TypeDescriptor(DataSetAbstractCD.TYPEID, TYPEID, true, true);
     }
 
     @Override
@@ -69,16 +78,32 @@ public class SVGSpinnerCD extends ComponentDescriptor{
 
     @Override
     public List<PropertyDescriptor> getDeclaredPropertyDescriptors() {
-        return Arrays.asList (
-                );
-    }
-
-    @Override
-    protected List<? extends Presenter> createPresenters () {
         return Arrays.asList(
-                //code
-                MidpCustomCodePresenterSupport.createSVGComponentCodePresenter(TYPEID)
+            new PropertyDescriptor(PROP_INDEX, MidpTypes.TYPEID_INT, PropertyValue.createNull(), false, true, MidpVersionable.MIDP_2)
         );
     }
-
+    
+    private static Presenter createPropertiesPresenter() {
+        return new DefaultPropertiesPresenter()
+                .addPropertiesCategory(MidpPropertiesCategories.CATEGORY_PROPERTIES)
+                    .addProperty(NbBundle.getMessage(NameDataSetCD.class, "DISP_ToDoDataSet_Index"), //NOI18N
+                        PropertyEditorNumber.createIntegerInstance(true, NbBundle.getMessage(NameDataSetCD.class, "DISP_ToDoDataSet_Index")), PROP_INDEX); //NOI18N
+    }
+    
+    private static Presenter createSetterPresenter() {
+        return new CodeSetterPresenter()
+                .addParameters(MidpParameter.create(PROP_INDEX))
+                .addSetters(MidpSetter.createConstructor(TYPEID, MidpVersionable.MIDP).addParameters(PROP_INDEX)
+                );
+    }
+    
+    @Override
+    protected List<? extends Presenter> createPresenters() {
+        return Arrays.asList(  
+            //properties
+            createPropertiesPresenter(),
+            //code
+            createSetterPresenter()
+        );
+    }
 }

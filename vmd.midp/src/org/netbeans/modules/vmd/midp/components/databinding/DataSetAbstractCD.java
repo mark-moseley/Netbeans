@@ -36,30 +36,44 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.vmd.midp.components.databinding;
 
-package org.netbeans.modules.vmd.midpnb.components.svg.form;
-
+import org.netbeans.modules.vmd.midp.components.*;
 import java.util.Arrays;
 import java.util.List;
+import org.netbeans.modules.vmd.api.inspector.InspectorFolderComponentPresenter;
+import org.netbeans.modules.vmd.api.inspector.InspectorPositionPresenter;
 import org.netbeans.modules.vmd.api.model.ComponentDescriptor;
 import org.netbeans.modules.vmd.api.model.Presenter;
 import org.netbeans.modules.vmd.api.model.PropertyDescriptor;
+import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.api.model.TypeDescriptor;
 import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.api.model.VersionDescriptor;
-import org.netbeans.modules.vmd.midp.components.MidpVersionDescriptor;
-import org.netbeans.modules.vmd.midpnb.codegen.MidpCustomCodePresenterSupport;
+import org.netbeans.modules.vmd.midp.codegen.MidpCodePresenterSupport;
+import org.netbeans.modules.vmd.midp.components.categories.DatabindingCategoryCD;
+import org.netbeans.modules.vmd.midp.components.general.ClassCD;
+import org.netbeans.modules.vmd.midp.inspector.controllers.InspectorPositionControllerSupport;
+
 
 /**
  *
- * @author avk
+ * @author Karol Harezlak
  */
-public class SVGSpinnerCD extends ComponentDescriptor{
-
-    public static final TypeID TYPEID = new TypeID (TypeID.Kind.COMPONENT, "org.netbeans.microedition.svg.SVGSpinner"); // NOI18N
-
-    public TypeDescriptor getTypeDescriptor () {
-        return new TypeDescriptor (SVGComponentCD.TYPEID, TYPEID, true, false);
+public class DataSetAbstractCD extends ComponentDescriptor {
+    
+    public static final String ICON_PATH = "org/netbeans/modules/vmd/midp/resources/components/dataset_16.gif"; // NOI18N
+    public static final TypeID TYPEID = new TypeID(TypeID.Kind.COMPONENT, "#DataSetAbstract"); //NOI18N
+    
+    public static final String PROP_READ_ONLY = "readOnly"; //NOI18N
+    
+    static {
+        MidpTypes.registerIconResource(TYPEID, ICON_PATH);
+    }
+   
+    @Override
+    public TypeDescriptor getTypeDescriptor() {
+        return new TypeDescriptor(ClassCD.TYPEID, TYPEID, false, true);
     }
 
     @Override
@@ -69,16 +83,19 @@ public class SVGSpinnerCD extends ComponentDescriptor{
 
     @Override
     public List<PropertyDescriptor> getDeclaredPropertyDescriptors() {
-        return Arrays.asList (
-                );
-    }
-
-    @Override
-    protected List<? extends Presenter> createPresenters () {
         return Arrays.asList(
-                //code
-                MidpCustomCodePresenterSupport.createSVGComponentCodePresenter(TYPEID)
+            new PropertyDescriptor(PROP_READ_ONLY, MidpTypes.TYPEID_BOOLEAN, PropertyValue.createNull(), false, false, MidpVersionable.MIDP_2)
         );
     }
 
+    @Override
+    protected List<? extends Presenter> createPresenters() {
+        
+        return Arrays.asList(
+                // code
+                MidpCodePresenterSupport.createAddImportPresenter("org.netbeans.microedition.databinding.DataBinder"), //NOI18N
+                //inspector
+                new InspectorFolderComponentPresenter(true),
+                InspectorPositionPresenter.create(InspectorPositionControllerSupport.createHierarchical(DatabindingCategoryCD.TYPEID)));   
+    }
 }

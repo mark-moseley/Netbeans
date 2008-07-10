@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,59 +31,54 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.vmd.midpnb.codegen;
+package org.netbeans.modules.vmd.midp.components.databinding;
 
-import org.netbeans.modules.vmd.api.codegen.MultiGuardedSection;
-import org.netbeans.modules.vmd.api.codegen.Parameter;
-import org.netbeans.modules.vmd.api.model.DesignComponent;
+import org.netbeans.modules.vmd.midp.components.*;
+import java.util.Arrays;
+import java.util.List;
+import org.netbeans.modules.vmd.api.model.ComponentDescriptor;
+import org.netbeans.modules.vmd.api.model.Presenter;
+import org.netbeans.modules.vmd.api.model.PropertyDescriptor;
+import org.netbeans.modules.vmd.api.model.TypeDescriptor;
+import org.netbeans.modules.vmd.api.model.TypeID;
+import org.netbeans.modules.vmd.api.model.VersionDescriptor;
+import org.netbeans.modules.vmd.midp.codegen.MidpDataSetBodyCodePresenter;
 
 /**
  *
  * @author Karol Harezlak
  */
-public class SMSComposerCode {
+public class DataSetCD extends ComponentDescriptor {
+
+    public static final TypeID TYPEID = new TypeID(TypeID.Kind.COMPONENT, "org.netbeans.microedition.databinding.DataSet"); //NOI18N
     
-    public static final String PARAM_BGK_COLOR = "BGColor"; //NOI18N
-    
-    
-    /** Creates a new instance of SMSComposerCodeGen */
-    public SMSComposerCode() {
+
+    @Override
+    public TypeDescriptor getTypeDescriptor() {
+        return new TypeDescriptor(DataSetAbstractCD.TYPEID, TYPEID, true, true);
     }
-    
-    
-    public static Parameter createBackgroungColorParameter() {
-        return null;
+
+    @Override
+    public VersionDescriptor getVersionDescriptor() {
+        return MidpVersionDescriptor.MIDP_2;
     }
-    
-    
-    private static class BackgroungColorParameter implements Parameter {
+
+    @Override
+    public List<PropertyDescriptor> getDeclaredPropertyDescriptors() {
+      return null;
+    }
+
+    @Override
+    protected List<? extends Presenter> createPresenters() {
         
-        public String getParameterName() {
-            return PARAM_BGK_COLOR;
-        }
-
-        public int getParameterPriority() {
-            return -1;
-        }
-
-        public void generateParameterCode(DesignComponent component, MultiGuardedSection section, int index) {
-        }
-
-        public boolean isRequiredToBeSet(DesignComponent component) {
-            return true;
-        }
-
-        public int getCount(DesignComponent component) {
-            return 1;
-        }
-
-        public boolean isRequiredToBeSet(DesignComponent component, int index) {
-            return true;
-        }
-        
+        return Arrays.asList(
+                // code
+                MidpDataSetBodyCodePresenter.create("/org/netbeans/modules/vmd/midp/codegen/dataset_java.code") //NOI18N
+        );   
     }
-    
-    
 }
-

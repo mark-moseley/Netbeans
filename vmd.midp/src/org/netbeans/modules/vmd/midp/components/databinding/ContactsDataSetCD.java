@@ -36,30 +36,32 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.vmd.midp.components.databinding;
 
-package org.netbeans.modules.vmd.midpnb.components.svg.form;
-
+import org.netbeans.modules.vmd.midp.components.*;
 import java.util.Arrays;
 import java.util.List;
+import org.netbeans.modules.vmd.api.codegen.CodeSetterPresenter;
 import org.netbeans.modules.vmd.api.model.ComponentDescriptor;
 import org.netbeans.modules.vmd.api.model.Presenter;
 import org.netbeans.modules.vmd.api.model.PropertyDescriptor;
 import org.netbeans.modules.vmd.api.model.TypeDescriptor;
 import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.api.model.VersionDescriptor;
-import org.netbeans.modules.vmd.midp.components.MidpVersionDescriptor;
-import org.netbeans.modules.vmd.midpnb.codegen.MidpCustomCodePresenterSupport;
+import org.netbeans.modules.vmd.midp.codegen.MidpParameter;
+import org.netbeans.modules.vmd.midp.codegen.MidpSetter;
 
 /**
  *
- * @author avk
+ * @author Karol Harezlak
  */
-public class SVGSpinnerCD extends ComponentDescriptor{
+public class ContactsDataSetCD extends ComponentDescriptor {
 
-    public static final TypeID TYPEID = new TypeID (TypeID.Kind.COMPONENT, "org.netbeans.microedition.svg.SVGSpinner"); // NOI18N
+    public static final TypeID TYPEID = new TypeID(TypeID.Kind.COMPONENT, "org.netbeans.microedition.databinding.pim.ContactsDataSet"); //NOI18N
 
-    public TypeDescriptor getTypeDescriptor () {
-        return new TypeDescriptor (SVGComponentCD.TYPEID, TYPEID, true, false);
+    @Override
+    public TypeDescriptor getTypeDescriptor() {
+        return new TypeDescriptor(IndexableDataAbstractSetCD.TYPEID, TYPEID, true, true);
     }
 
     @Override
@@ -69,16 +71,39 @@ public class SVGSpinnerCD extends ComponentDescriptor{
 
     @Override
     public List<PropertyDescriptor> getDeclaredPropertyDescriptors() {
-        return Arrays.asList (
-                );
+        return null;
+    }
+    
+    private static Presenter createSetterPresenter() {
+        return new CodeSetterPresenter().addParameters(MidpParameter.create()).addSetters(MidpSetter.createConstructor(TYPEID, MidpVersionable.MIDP));
+
     }
 
     @Override
-    protected List<? extends Presenter> createPresenters () {
+    protected List<? extends Presenter> createPresenters() {
         return Arrays.asList(
-                //code
-                MidpCustomCodePresenterSupport.createSVGComponentCodePresenter(TYPEID)
+            createSetterPresenter()
         );
     }
-
+    
+    //Runtime parameters
+//    public static final String NAME                 = "name";
+//    public static final String ADDRESS              = "address";
+//    public static final String EMAIL                = "email";
+//    public static final String FORMATTED_NAME       = "formatted_name";
+//    public static final String NICKNAME             = "nickname";
+//    public static final String NOTE                 = "note";
+//    public static final String ORGANIZATION         = "organization";
+//    public static final String TELEPHONE            = "telephone";
+//    public static final String TITLE                = "title";
+//    public static final String UID                  = "uid";
+//    public static final String URL                  = "url";
+//    public static final String BIRTHDAY             = "birthday";
+//    public static final String REVISION             = "revision";
+//    public static final String PHOTO                = "photo";
+//    public static final String PUBLIC_KEY           = "public_key";    
+//    public static final String PHOTO_URL            = "photo_url";
+//    public static final String PUBLIC_KEY_STRING    = "public_key_string";        
+//    public static final String CLASS                = "class";
+    
 }
