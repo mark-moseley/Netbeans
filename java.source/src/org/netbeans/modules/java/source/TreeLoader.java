@@ -47,18 +47,25 @@ import com.sun.source.tree.Tree;
 import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.tools.javac.api.JavacTaskImpl;
-import com.sun.tools.javac.code.Kinds;
-import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
-import com.sun.tools.javac.code.Types;
-import com.sun.tools.javac.comp.TransTypes;
+import com.sun.tools.javac.comp.AttrContext;
+import com.sun.tools.javac.comp.Enter;
+import com.sun.tools.javac.comp.Env;
 import com.sun.tools.javac.model.LazyTreeLoader;
+import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCBlock;
+import com.sun.tools.javac.tree.JCTree.JCClassDecl;
+import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
+import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
+import com.sun.tools.javac.tree.TreeScanner;
 import com.sun.tools.javac.util.Context;
+import com.sun.tools.javac.util.CouplingAbort;
+import com.sun.tools.javac.util.List;
 import com.sun.tools.javac.util.Log;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.net.URL;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
@@ -71,7 +78,6 @@ import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.modules.java.source.parsing.FileObjects;
 import org.netbeans.modules.java.source.usages.ClasspathInfoAccessor;
 import org.netbeans.modules.java.source.usages.Index;
-import org.netbeans.modules.java.source.usages.SymbolDumper;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 
@@ -85,16 +91,18 @@ public class TreeLoader extends LazyTreeLoader {
         context.put(lazyTreeLoaderKey, new TreeLoader(context, cpInfo));
     }
     
+    public static TreeLoader instance (final Context ctx) {
+        final LazyTreeLoader tl = LazyTreeLoader.instance(ctx);
+        return (tl instanceof TreeLoader) ? (TreeLoader)tl : null;
+    }
+    
     private static final Logger LOGGER = Logger.getLogger(TreeLoader.class.getName());
+    public  static boolean DISABLE_CONFINEMENT_TEST = false; //Only for tests!
 
     private Context context;
     private ClasspathInfo cpInfo;
-    private final ThreadLocal<Map<ClassSymbol, StringBuilder>> couplingErrors = new  ThreadLocal<Map<ClassSymbol, StringBuilder>>();
-    private final ThreadLocal<Integer> recursiveDepth = new ThreadLocal<Integer>() {
-        protected Integer initialValue() {
-            return 0;
-        }
-    };
+    private Map<ClassSymbol, StringBuilder> couplingErrors;
+    private boolean partialReparse;
 
     private TreeLoader(Context context, ClasspathInfo cpInfo) {
         this.context = context;
@@ -102,8 +110,8 @@ public class TreeLoader extends LazyTreeLoader {
     }
     
     @Override
-    public boolean loadTreeFor(final ClassSymbol clazz) {
-        assert JavaSourceAccessor.INSTANCE.isJavaCompilerLocked();
+    public boolean loadTreeFor(final ClassSymbol clazz, boolean persist) {
+        assert DISABLE_CONFINEMENT_TEST || JavaSourceAccessor.getINSTANCE().isJavaCompilerLocked();
         
         if (clazz != null) {
             try {
@@ -112,28 +120,18 @@ public class TreeLoader extends LazyTreeLoader {
                 if (fo != null && jti != null) {
                     Log.instance(context).nerrors = 0;
                     JavaFileObject jfo = FileObjects.nbFileObject(fo, null);
+                    Map<ClassSymbol, StringBuilder> oldCouplingErrors = couplingErrors;
                     try {
-                        recursiveDepth.set(recursiveDepth.get() + 1);
-
-                        if (recursiveDepth.get() > 1) {
-                            Logger.getLogger(TreeLoader.class.getName()).log(Level.WARNING, "Recursive loadTreeFor", new Exception());
-                        }
-
-                        if (recursiveDepth.get() == 1) {
-                            couplingErrors.set(new HashMap<ClassSymbol, StringBuilder>());
-                        }
+                        couplingErrors = new HashMap<ClassSymbol, StringBuilder>();
                         jti.analyze(jti.enter(jti.parse(jfo)));
-                        dumpSymFile(clazz);
+                        if (persist)
+                            dumpSymFile(jti, clazz);
                         return true;
                     } finally {
-                        if (recursiveDepth.get() == 1) {
-                            for (Map.Entry<ClassSymbol, StringBuilder> e : couplingErrors.get().entrySet()) {
-                                logCouplingError(e.getKey(), e.getValue().toString());
-                            }
-                            couplingErrors.set(null);
+                        for (Map.Entry<ClassSymbol, StringBuilder> e : couplingErrors.entrySet()) {
+                            logCouplingError(e.getKey(), e.getValue().toString());
                         }
-                        
-                        recursiveDepth.set(recursiveDepth.get() - 1);
+                        couplingErrors = oldCouplingErrors;
                     }
                 }
             } catch (IOException ex) {
@@ -142,9 +140,20 @@ public class TreeLoader extends LazyTreeLoader {
         }
         return false;
     }
+    
+    public final void startPartialReparse () {
+        this.partialReparse = true;
+    }
+    
+    public final void endPartialReparse () {
+        this.partialReparse = false;
+    }
 
     @Override
     public void couplingError(ClassSymbol clazz, Tree t) {
+        if (this.partialReparse) {
+            throw new CouplingAbort(clazz.classfile, t);
+        }
         StringBuilder info = new StringBuilder("\n"); //NOI18N
         switch (t.getKind()) {
             case CLASS:
@@ -163,7 +172,6 @@ public class TreeLoader extends LazyTreeLoader {
                 info.append("TREE: <unknown>"); //NOI18N
                 break;
         }
-        Map<ClassSymbol, StringBuilder> couplingErrors = this.couplingErrors.get();
         if (clazz != null && couplingErrors != null) {
             StringBuilder sb = couplingErrors.get(clazz);            
             if (sb != null)
@@ -183,10 +191,44 @@ public class TreeLoader extends LazyTreeLoader {
         LOGGER.log(Level.WARNING, "Coupling error:\nclass file: {0}\nsource file: {1}{2}\n", new Object[] {cfURI, sfURI, info});
     }
 
-    private void dumpSymFile(ClassSymbol clazz) throws IOException {
-        PrintWriter writer = null;
+    private void dumpSymFile(JavacTaskImpl jti, ClassSymbol clazz) throws IOException {
+        Env<AttrContext> env = Enter.instance(context).getEnv(clazz);
+        if (env == null)
+            return;
+        new TreeScanner() {
+            @Override
+            public void visitMethodDef(JCMethodDecl tree) {
+                super.visitMethodDef(tree);
+                tree.body = null;
+            }
+            @Override
+            public void visitVarDef(JCVariableDecl tree) {
+                super.visitVarDef(tree);
+                tree.init = null;
+            }
+            @Override
+            public void visitClassDef(JCClassDecl tree) {
+                scan(tree.mods);
+                scan(tree.typarams);
+                scan(tree.extending);
+                scan(tree.implementing);
+                if (tree.defs != null) {
+                    List<JCTree> prev = null;
+                    for (List<JCTree> l = tree.defs; l.nonEmpty(); l = l.tail) {
+                        scan(l.head);
+                        if (l.head.getTag() == JCTree.BLOCK && ((JCBlock)l.head).isStatic()) {
+                            if (prev != null)
+                                prev.tail = l.tail;
+                            else
+                                tree.defs = l.tail;
+                        }
+                        prev = l;
+                    }
+                }
+            }
+        }.scan(env.toplevel);
+        JavaFileManager fm = ClasspathInfoAccessor.getINSTANCE().getFileManager(cpInfo);
         try {
-            JavaFileManager fm = ClasspathInfoAccessor.getINSTANCE().getFileManager(cpInfo);
             String binaryName = null;
             if (clazz.classfile != null) {
                 binaryName = fm.inferBinaryName(StandardLocation.PLATFORM_CLASS_PATH, clazz.classfile);
@@ -203,39 +245,10 @@ public class TreeLoader extends LazyTreeLoader {
             int index = surl.lastIndexOf(FileObjects.convertPackage2Folder(binaryName));
             assert index > 0;
             File classes = Index.getClassFolder(new URL(surl.substring(0, index)));
-            String pkg, name;
-            index = binaryName.lastIndexOf('.');
-            if (index < 0) {
-                pkg = null;
-                name = binaryName;
-            } else {
-                pkg = binaryName.substring(0, index);
-                assert binaryName.length() > index;
-                name = binaryName.substring(index + 1);
-            }
-            if (pkg != null) {
-                classes = new File(classes, pkg.replace('.', File.separatorChar));
-                if (!classes.exists())
-                    classes.mkdirs();
-            }
-            File outputFile = new File(classes, name + '.' + FileObjects.SIG);
-            if (outputFile.exists())
-                return ;//no point in dumping again already existing sig file
-            writer = new PrintWriter(outputFile, "UTF-8");
-            Symbol owner;
-            if (clazz.owner.kind == Kinds.PCK) {
-                owner = null;
-            }
-            else if (clazz.owner.kind == Kinds.VAR) {
-                owner = clazz.owner.owner;
-            }
-            else {
-                owner = clazz.owner;
-            }
-            SymbolDumper.dump(writer, Types.instance(context), TransTypes.instance(context), clazz, owner);
+            fm.handleOption("output-root", Collections.singletonList(classes.getPath()).iterator()); //NOI18N
+            jti.generate(Collections.singletonList(clazz));
         } finally {
-            if (writer != null)
-                writer.close();
+            fm.handleOption("output-root", Collections.singletonList("").iterator()); //NOI18N
         }
     }
 }
