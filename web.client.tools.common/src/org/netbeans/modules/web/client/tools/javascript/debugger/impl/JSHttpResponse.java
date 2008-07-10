@@ -47,46 +47,46 @@ import org.netbeans.modules.web.client.tools.javascript.debugger.api.JSHttpMessa
  *
  * @author jdeva
  */
-public class JSHttpRequest implements JSHttpMessage {
+public class JSHttpResponse implements JSHttpMessage {
 
     private final String id;
-    private final MethodType method;
     private final String timeStamp;
-    private final String urlParams;
     private final Map<String, String> headerData;
-    private final String postText;
+    private final String status;
     private final String url;
+    private final String mimeType;
 
-    public JSHttpRequest(HttpMessage message) {
+    public JSHttpResponse(HttpMessage message) {
+        assert message != null;
+
         id = message.getId();
         assert id != null;
-        method = JSFactory.getHttpMessageMethodType(message.getMethodType());
+        
         timeStamp = message.getTimeStamp();
+        assert timeStamp != null;
+        
         headerData = Collections.<String,String>unmodifiableMap(message.getHeader());
-        urlParams = message.getUrlParams();
-        postText = message.getChildValue("postText");
+        status = message.getChildValue("status");
+        mimeType = message.getChildValue("mimeType");
         url = message.getUrl();
+
     }
 
-    public String getPostText() {
-        return postText;
+    public String getUrl() {
+        return url;
     }
 
-
-    public String getUrlParams() {
-        return urlParams.toString();
-    }
-
-    public MethodType getMethod() {
-        return method;
-    }
 
     public final static Type getType() {
-        return Type.REQUEST;
+        return Type.RESPONSE;
     }
 
     public String getId() {
         return id;
+    }
+
+    public String getMimeType() {
+        return mimeType;
     }
 
     public Map<String,String> getHeader() {
@@ -95,17 +95,15 @@ public class JSHttpRequest implements JSHttpMessage {
     }
 
     public String getTimeStamp() {
+
         return timeStamp;
     }
 
-
-    public String getUrl() {
-        return url;
-    }
-
-    @Override
-    public String toString() {
-        return url;
+    /**
+     * @return the mimeType
+     */
+    public String getStatus() {
+        return status;
     }
 
 }

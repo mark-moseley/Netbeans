@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -36,76 +36,37 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.web.client.tools.javascript.debugger.impl;
+package org.netbeans.modules.web.client.tools.javascript.debugger.api;
 
-import java.util.Collections;
 import java.util.Map;
-import org.netbeans.modules.web.client.tools.common.dbgp.HttpMessage;
-import org.netbeans.modules.web.client.tools.javascript.debugger.api.JSHttpMessage;
 
 /**
  *
- * @author jdeva
+ * @author joelle, jdeva
  */
-public class JSHttpRequest implements JSHttpMessage {
+public interface JSHttpMessage extends JSDebuggerBase {
 
-    private final String id;
-    private final MethodType method;
-    private final String timeStamp;
-    private final String urlParams;
-    private final Map<String, String> headerData;
-    private final String postText;
-    private final String url;
+    public enum MethodType {
 
-    public JSHttpRequest(HttpMessage message) {
-        id = message.getId();
-        assert id != null;
-        method = JSFactory.getHttpMessageMethodType(message.getMethodType());
-        timeStamp = message.getTimeStamp();
-        headerData = Collections.<String,String>unmodifiableMap(message.getHeader());
-        urlParams = message.getUrlParams();
-        postText = message.getChildValue("postText");
-        url = message.getUrl();
+        GET, POST;
+
+        public String toString() {
+            return name().toUpperCase();
+        }
     }
 
-    public String getPostText() {
-        return postText;
+    public enum Type {
+
+        REQUEST, RESPONSE, PROGRESS;
+
+        @Override
+        public String toString() {
+            return name().toLowerCase();
+        }
     }
 
-
-    public String getUrlParams() {
-        return urlParams.toString();
-    }
-
-    public MethodType getMethod() {
-        return method;
-    }
-
-    public final static Type getType() {
-        return Type.REQUEST;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public Map<String,String> getHeader() {
-        //Joelle: You should return an Unmodifiable HashMap or a copy of it.
-        return headerData;
-    }
-
-    public String getTimeStamp() {
-        return timeStamp;
-    }
+    String getId();
 
 
-    public String getUrl() {
-        return url;
-    }
-
-    @Override
-    public String toString() {
-        return url;
-    }
-
+    String getTimeStamp();
 }
