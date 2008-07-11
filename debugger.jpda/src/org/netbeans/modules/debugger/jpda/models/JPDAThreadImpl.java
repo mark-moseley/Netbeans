@@ -53,32 +53,36 @@ import com.sun.jdi.ThreadGroupReference;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.VMDisconnectedException;
 
+import java.beans.Customizer;
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.beans.PropertyVetoException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.netbeans.api.debugger.jpda.CallStackFrame;
+import org.netbeans.api.debugger.jpda.JPDABreakpoint;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.JPDAThreadGroup;
+import org.netbeans.api.debugger.jpda.MonitorInfo;
 import org.netbeans.api.debugger.jpda.ObjectVariable;
+import org.netbeans.api.debugger.jpda.ThreadsCollector;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
 import org.netbeans.spi.debugger.jpda.EditorContext.Operation;
 import org.openide.ErrorManager;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
 
 /**
  * The implementation of JPDAThread.
  */
-public final class JPDAThreadImpl implements JPDAThread {
-    
-    /**
-     * Suspended property of the thread. Fired when isSuspended() changes.
-     */
-    public static final String PROP_SUSPENDED = "suspended";
+public final class JPDAThreadImpl implements JPDAThread, Customizer {
     
     private ThreadReference     threadReference;
     private JPDADebuggerImpl    debugger;
@@ -92,7 +96,11 @@ public final class JPDAThreadImpl implements JPDAThread {
     private CallStackFrame[]    cachedFrames;
     private int                 cachedFramesFrom = -1;
     private int                 cachedFramesTo = -1;
-    private Object              cachedFramesLock = new Object();
+    private final Object        cachedFramesLock = new Object();
+    private JPDABreakpoint      currentBreakpoint;
+    private PropertyChangeListener threadsResumeListener;
+    private final Object        threadsResumeListenerLock = new Object();
+    private String              threadName;
 
     public JPDAThreadImpl (
         ThreadReference     threadReference,
@@ -100,8 +108,25 @@ public final class JPDAThreadImpl implements JPDAThread {
     ) {
         this.threadReference = threadReference;
         this.debugger = debugger;
-        suspended = threadReference.isSuspended();
-        suspendCount = threadReference.suspendCount();
+        try {
+            suspended = threadReference.isSuspended();
+        } catch (IllegalThreadStateException itsex) {
+            suspended = false;
+        }
+        try {
+            suspendCount = threadReference.suspendCount();
+        } catch (IllegalThreadStateException itsex) {
+            suspendCount = 0;
+        }
+        try {
+            threadName = threadReference.name ();
+        } catch (IllegalThreadStateException ex) {
+            threadName = ""; // Thrown when thread has exited
+        } catch (ObjectCollectedException ex) {
+            threadName = "";
+        } catch (VMDisconnectedException ex) {
+            threadName = "";
+        }
     }
 
     /**
@@ -110,15 +135,7 @@ public final class JPDAThreadImpl implements JPDAThread {
      * @return name of thread.
      */
     public String getName () {
-        try {
-            return threadReference.name ();
-        } catch (IllegalThreadStateException ex) {
-            return ""; // Thrown when thread has exited
-        } catch (ObjectCollectedException ex) {
-            return "";
-        } catch (VMDisconnectedException ex) {
-            return "";
-        }
+        return threadName;
     }
     
     /**
@@ -194,6 +211,19 @@ public final class JPDAThreadImpl implements JPDAThread {
     
     public synchronized void holdLastOperations(boolean doHold) {
         doKeepLastOperations = doHold;
+    }
+
+    public synchronized JPDABreakpoint getCurrentBreakpoint() {
+        return currentBreakpoint;
+    }
+
+    public void setCurrentBreakpoint(JPDABreakpoint currentBreakpoint) {
+        JPDABreakpoint oldBreakpoint;
+        synchronized (this) {
+            oldBreakpoint = this.currentBreakpoint;
+            this.currentBreakpoint = currentBreakpoint;
+        }
+        pch.firePropertyChange(PROP_BREAKPOINT, oldBreakpoint, currentBreakpoint);
     }
 
 
@@ -330,8 +360,6 @@ public final class JPDAThreadImpl implements JPDAThread {
         return getCallStack (0, getStackDepth ());
     }
     
-    private Object lastBottomSF;
-    
     /**
      * Returns call stack for this thread on the given indexes.
      *
@@ -347,14 +375,37 @@ public final class JPDAThreadImpl implements JPDAThread {
      */
     public CallStackFrame[] getCallStack (int from, int to) 
     throws AbsentInformationException {
+        synchronized (threadsResumeListenerLock) {
+            if (threadsResumeListener == null) {
+                threadsResumeListener = new ThreadsResumeListener();
+                debugger.getThreadsCollector().addPropertyChangeListener(WeakListeners.propertyChange(threadsResumeListener, debugger.getThreadsCollector()));
+            }
+        }
         try {
             int max = threadReference.frameCount();
             from = Math.min(from, max);
             to = Math.min(to, max);
-            if (to - from > 1) {
+            CallStackFrame[] theCachedFrames = null;
+            if (to - from > 1) {  /*TODO: Frame caching cause problems with invalid frames. Some fix is necessary...
+             *  as a workaround, frames caching is disabled.*/
                 synchronized (cachedFramesLock) {
                     if (from == cachedFramesFrom && to == cachedFramesTo) {
                         return cachedFrames;
+                    }
+                    if (from >= cachedFramesFrom && to <= cachedFramesTo) {
+                        // TODO: Arrays.copyOfRange(cachedFrames, from - cachedFramesFrom, to);
+                        return copyOfRange(cachedFrames, from - cachedFramesFrom, to - cachedFramesFrom);
+                    }
+                    if (cachedFramesFrom >= 0 && cachedFramesTo > cachedFramesFrom) {
+                        int length = to - from;
+                        theCachedFrames = new CallStackFrame[length];
+                        for (int i = 0; i < length; i++) {
+                            if (i >= cachedFramesFrom && i < cachedFramesTo) {
+                                theCachedFrames[i] = cachedFrames[i - cachedFramesFrom];
+                            } else {
+                                theCachedFrames[i] = null;
+                            }
+                        }
                     }
                 }
             }
@@ -375,18 +426,22 @@ public final class JPDAThreadImpl implements JPDAThread {
             int n = l.size();
             CallStackFrame[] frames = new CallStackFrame[n];
             for (int i = 0; i < n; i++) {
-                frames[i] = new CallStackFrameImpl((StackFrame) l.get(i), from + i, debugger);
+                if (theCachedFrames != null && theCachedFrames[i] != null) {
+                    frames[i] = theCachedFrames[i];
+                } else {
+                    frames[i] = new CallStackFrameImpl(this, (StackFrame) l.get(i), from + i, debugger);
+                }
                 if (from == 0 && i == 0 && currentOperation != null) {
                     ((CallStackFrameImpl) frames[i]).setCurrentOperation(currentOperation);
                 }
             }
-            if (to - from > 1) {
+            //if (to - from > 1) {
                 synchronized (cachedFramesLock) {
                     cachedFrames = frames;
                     cachedFramesFrom = from;
                     cachedFramesTo = to;
                 }
-            }
+            //}
             return frames;
         } catch (IncompatibleThreadStateException ex) {
             AbsentInformationException aiex = new AbsentInformationException(ex.getLocalizedMessage());
@@ -406,6 +461,17 @@ public final class JPDAThreadImpl implements JPDAThread {
         }
     }
     
+    private static CallStackFrame[] copyOfRange(CallStackFrame[] original, int from, int to) {
+        // TODO: Use Arrays.copyOfRange(cachedFrames, from, to);
+        int newLength = to - from;
+        if (newLength < 0)
+            throw new IllegalArgumentException(from + " > " + to);
+        CallStackFrame[] copy = new CallStackFrame[newLength];
+        System.arraycopy(original, from, copy, 0,
+                         Math.min(original.length - from, newLength));
+        return copy;
+    }
+
     private void cleanCachedFrames() {
         synchronized (cachedFramesLock) {
             cachedFrames = null;
@@ -467,6 +533,7 @@ public final class JPDAThreadImpl implements JPDAThread {
                     threadReference.suspend ();
                     suspendedToFire = Boolean.TRUE;
                     suspendCount++;
+                    threadName = threadReference.name();
                 }
                 //System.err.println("suspend("+getName()+") suspended = true");
                 suspended = true;
@@ -496,6 +563,7 @@ public final class JPDAThreadImpl implements JPDAThread {
             waitUntilMethodInvokeDone();
             setReturnVariable(null); // Clear the return var on resume
             setCurrentOperation(null);
+            currentBreakpoint = null;
             if (!doKeepLastOperations) {
                 clearLastOperations();
             }
@@ -527,22 +595,26 @@ public final class JPDAThreadImpl implements JPDAThread {
     
     public void notifyToBeResumed() {
         //System.err.println("notifyToBeResumed("+getName()+")");
-        notifyToBeRunning(true, true);
+        PropertyChangeEvent evt = notifyToBeRunning(true, true);
+        if (evt != null) {
+            pch.firePropertyChange(evt);
+        }
     }
     
-    private void notifyToBeRunning(boolean clearVars, boolean resumed) {
+    private PropertyChangeEvent notifyToBeRunning(boolean clearVars, boolean resumed) {
         Boolean suspendedToFire = null;
         synchronized (this) {
             if (resumed) {
                 waitUntilMethodInvokeDone();
             }
             //System.err.println("notifyToBeRunning("+getName()+"), resumed = "+resumed+", suspendCount = "+suspendCount+", thread's suspendCount = "+threadReference.suspendCount());
-            if (resumed && (--suspendCount > 0)) return ;
+            if (resumed && (--suspendCount > 0)) return null;
             //System.err.println("  suspendCount = 0, var suspended = "+suspended);
             suspendCount = 0;
             if (clearVars) {
                 setCurrentOperation(null);
                 setReturnVariable(null); // Clear the return var on resume
+                currentBreakpoint = null;
                 if (!doKeepLastOperations) {
                     clearLastOperations();
                 }
@@ -556,9 +628,11 @@ public final class JPDAThreadImpl implements JPDAThread {
         }
         cleanCachedFrames();
         if (suspendedToFire != null) {
-            pch.firePropertyChange(PROP_SUSPENDED,
+            return new PropertyChangeEvent(this, PROP_SUSPENDED,
                     Boolean.valueOf(!suspendedToFire.booleanValue()),
                     suspendedToFire);
+        } else {
+            return null;
         }
     }
     
@@ -577,6 +651,7 @@ public final class JPDAThreadImpl implements JPDAThread {
                 //System.err.println("  setting suspended = true");
                 suspended = true;
                 suspendedToFire = Boolean.TRUE;
+                threadName = threadReference.name();
             }
         }
         if (suspendedToFire != null) {
@@ -590,6 +665,7 @@ public final class JPDAThreadImpl implements JPDAThread {
     private boolean methodInvokingDisabledUntilResumed;
     
     public void notifyMethodInvoking() throws PropertyVetoException {
+        PropertyChangeEvent evt;
         synchronized (this) {
             if (methodInvokingDisabledUntilResumed) {
                 throw new PropertyVetoException("disabled until resumed", null);
@@ -597,9 +673,15 @@ public final class JPDAThreadImpl implements JPDAThread {
             if (methodInvoking) {
                 throw new PropertyVetoException("Already invoking!", null);
             }
+            if (!isSuspended()) {
+                throw new PropertyVetoException("No current context", null);
+            }
             methodInvoking = true;
+            evt = notifyToBeRunning(false, false);
         }
-        notifyToBeRunning(false, false);
+        if (evt != null) {
+            pch.firePropertyChange(evt);
+        }
     }
     
     public void notifyMethodInvokeDone() {
@@ -687,7 +769,7 @@ public final class JPDAThreadImpl implements JPDAThread {
                              ", suspend count = "+threadReference.suspendCount()+
                              ", is at breakpoint = "+threadReference.isAtBreakpoint()+
                              ", internal suspend status = "+suspended;
-                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.WARNING, msg, e);
+                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.INFO, msg, e);
                 return null;
             } catch (com.sun.jdi.InternalException iex) {
                 String msg = "Thread '"+threadReference.name()+
@@ -696,12 +778,45 @@ public final class JPDAThreadImpl implements JPDAThread {
                              ", suspend count = "+threadReference.suspendCount()+
                              ", is at breakpoint = "+threadReference.isAtBreakpoint()+
                              ", internal suspend status = "+suspended;
-                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.WARNING, msg, iex);
+                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.INFO, msg, iex);
                 return null;
             }
         }
         if (or == null) return null;
-        return new ThisVariable (debugger, or, "");
+        return new ThisVariable (debugger, or, "" + or.uniqueID());
+    }
+    
+    public MonitorInfo getContendedMonitorAndOwner() {
+        ObjectVariable monitor = getContendedMonitor();
+        if (monitor == null) return null;
+        // Search for the owner:
+        MonitorInfo monitorInfo = null;
+        JPDAThread thread = null;
+        List<JPDAThread> threads = debugger.getThreadsCollector().getAllThreads();
+        for (JPDAThread t : threads) {
+            if (this == t) continue;
+            ObjectVariable[] ms = t.getOwnedMonitors();
+            for (ObjectVariable m : ms) {
+                if (monitor.equals(m)) {
+                    thread = t;
+                    List<MonitorInfo> mf = t.getOwnedMonitorsAndFrames();
+                    for (MonitorInfo mi : mf) {
+                        if (monitor.equals(mi.getMonitor())) {
+                            monitorInfo = mi;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+            if (thread != null) {
+                break;
+            }
+        }
+        if (monitorInfo != null) {
+            return monitorInfo;
+        }
+        return new MonitorInfoImpl(thread, null, monitor);
     }
     
     /**
@@ -741,7 +856,7 @@ public final class JPDAThreadImpl implements JPDAThread {
                              ", suspend count = "+threadReference.suspendCount()+
                              ", is at breakpoint = "+threadReference.isAtBreakpoint()+
                              ", internal suspend status = "+suspended;
-                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.WARNING, msg, e);
+                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.INFO, msg, e);
                 return new ObjectVariable [0];
             } catch (com.sun.jdi.InternalException iex) {
                 String msg = "Thread '"+threadReference.name()+
@@ -750,14 +865,15 @@ public final class JPDAThreadImpl implements JPDAThread {
                              ", suspend count = "+threadReference.suspendCount()+
                              ", is at breakpoint = "+threadReference.isAtBreakpoint()+
                              ", internal suspend status = "+suspended;
-                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.WARNING, msg, iex);
+                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.INFO, msg, iex);
                 return new ObjectVariable [0];
             }
         }
         int i, k = l.size ();
         ObjectVariable[] vs = new ObjectVariable [k];
         for (i = 0; i < k; i++) {
-            vs [i] = new ThisVariable (debugger, (ObjectReference) l.get (i), "");
+            ObjectReference var = (ObjectReference) l.get (i);
+            vs [i] = new ThisVariable (debugger, var, ""+var.uniqueID());
         }
         return vs;
     }
@@ -787,4 +903,99 @@ public final class JPDAThreadImpl implements JPDAThread {
                 Boolean.valueOf(!suspended), Boolean.valueOf(suspended));
     }
 
+    public void setObject(Object bean) {
+        throw new UnsupportedOperationException("Not supported, do not call. Implementing Customizer interface just because of add/remove PropertyChangeListener.");
+    }
+
+    public List<MonitorInfo> getOwnedMonitorsAndFrames() {
+        if (CallStackFrameImpl.IS_JDK_16) {
+            try {
+                java.lang.reflect.Method canGetMonitorFrameInfoMethod =
+                        threadReference.virtualMachine().getClass().getMethod("canGetMonitorFrameInfo"); // NOTICES
+                canGetMonitorFrameInfoMethod.setAccessible(true);
+                synchronized(this) {
+                    if (!isSuspended()) {
+                        return Collections.emptyList();
+                    }
+                    boolean canGetMonitorFrameInfo = (Boolean) canGetMonitorFrameInfoMethod.invoke(threadReference.virtualMachine());
+                    //boolean canGetMonitorFrameInfo = threadReference.virtualMachine().canGetMonitorFrameInfo();
+                    if (canGetMonitorFrameInfo) {
+                        java.lang.reflect.Method ownedMonitorsAndFramesMethod = threadReference.getClass().getMethod("ownedMonitorsAndFrames"); // NOI18N
+                        List monitorInfos = (List) ownedMonitorsAndFramesMethod.invoke(threadReference, new java.lang.Object[]{});
+                        if (monitorInfos.size() > 0) {
+                            List<MonitorInfo> mis = new ArrayList<MonitorInfo>(monitorInfos.size());
+                            for (Object monitorInfo : monitorInfos) {
+                                mis.add(createMonitorInfo(monitorInfo));
+                            }
+                            return Collections.unmodifiableList(mis);
+                        }
+                    }
+                }
+            } catch (IllegalAccessException ex) {
+                org.openide.ErrorManager.getDefault().notify(ex);
+            } catch (InvocationTargetException ex) {
+                String msg = "Thread '"+threadReference.name()+
+                             "': status = "+threadReference.status()+
+                             ", is suspended = "+threadReference.isSuspended()+
+                             ", suspend count = "+threadReference.suspendCount()+
+                             ", is at breakpoint = "+threadReference.isAtBreakpoint()+
+                             ", internal suspend status = "+suspended;
+                Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.INFO, msg, ex);
+            } catch (java.lang.NoSuchMethodException ex) {
+                org.openide.ErrorManager.getDefault().notify(ex);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 
+     * @param mi com.sun.jdi.MonitorInfo
+     * @return monitor info
+     */
+    private MonitorInfo createMonitorInfo(Object mi) {
+        //com.sun.jdi.MonitorInfo _mi = (com.sun.jdi.MonitorInfo) mi;
+        try {
+            java.lang.reflect.Method stackDepthMethod =
+                    mi.getClass().getMethod("stackDepth"); // NOTICES
+            int depth = (Integer) stackDepthMethod.invoke(mi);
+            //int depth = _mi.stackDepth();
+            CallStackFrame frame = null;
+            if (depth >= 0) {
+                try {
+                    CallStackFrame[] frames = getCallStack(depth, depth + 1);
+                    //frame = new CallStackFrameImpl(this, threadReference.frame(depth), depth, debugger);
+                    frame = frames[0];
+                //} catch (IncompatibleThreadStateException ex) {
+                } catch (AbsentInformationException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+            java.lang.reflect.Method monitorMethod =
+                    mi.getClass().getMethod("monitor"); // NOTICES
+            ObjectReference or = (ObjectReference) monitorMethod.invoke(mi);
+            //ObjectReference or = _mi.monitor();
+            ObjectVariable monitor = new ThisVariable (debugger, or, "" + or.uniqueID());
+            return new MonitorInfoImpl(this, frame, monitor);
+        } catch (IllegalAccessException ex) {
+            org.openide.ErrorManager.getDefault().notify(ex);
+        } catch (InvocationTargetException ex) {
+            org.openide.ErrorManager.getDefault().notify(ex);
+        } catch (java.lang.NoSuchMethodException ex) {
+            org.openide.ErrorManager.getDefault().notify(ex);
+        }
+        return null;
+    }
+    
+    
+    private class ThreadsResumeListener implements PropertyChangeListener {
+
+        public void propertyChange(PropertyChangeEvent evt) {
+            if (ThreadsCollector.PROP_THREAD_RESUMED.equals(evt.getPropertyName())) {
+                // When ANY thread is resumed, stack frames become invalid!
+                cleanCachedFrames();
+            }
+        }
+        
+    }
 }
