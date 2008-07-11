@@ -454,16 +454,16 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
             hierarchy = ch;
             hierarchy.attachTo(Node.this);
 
-            if (wasLeaf != (hierarchy == Children.LEAF)) {
-                fireOwnPropertyChange(PROP_LEAF, wasLeaf, hierarchy == Children.LEAF);
-            }
-
             if ((oldNodes != null) && !wasLeaf) {
                 fireSubNodesChange(false, oldNodes, oldNodes);
                 Node[] arr = hierarchy.getNodes();
                 if (arr.length > 0) {
                     fireSubNodesChange(true, arr, null);
                 }
+            }
+
+            if (wasLeaf != (hierarchy == Children.LEAF)) {
+                fireOwnPropertyChange(PROP_LEAF, wasLeaf, hierarchy == Children.LEAF);
             }
         }});
     }
@@ -1044,6 +1044,31 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
             }
         }
     }
+    
+    /** Fires that some indexes has been removed.
+     *
+     * @param indices removed indicies, 
+     */
+    final void fireSubNodesChangeIdx(boolean added, int[] idxs) {
+        NodeMemberEvent ev = null;
+
+        Object[] listeners = this.listeners.getListenerList();
+        // Process the listeners last to first, notifying
+        // those that are interested in this event
+        for (int i = listeners.length - 2; i >= 0; i -= 2) {
+            if (listeners[i] == NodeListener.class) {
+                // Lazily create the event:
+                if (ev == null) {
+                    ev = new NodeMemberEvent(this, added, idxs);
+                }
+                if (added) {
+                    ((NodeListener) listeners[i + 1]).childrenAdded(ev);
+                } else {
+                    ((NodeListener) listeners[i + 1]).childrenRemoved(ev);
+                }
+            }
+        }
+    }     
 
     /** Fires info about reordering of some children.
     *
