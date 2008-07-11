@@ -454,16 +454,16 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
             hierarchy = ch;
             hierarchy.attachTo(Node.this);
 
-            if (wasLeaf != (hierarchy == Children.LEAF)) {
-                fireOwnPropertyChange(PROP_LEAF, wasLeaf, hierarchy == Children.LEAF);
-            }
-
             if ((oldNodes != null) && !wasLeaf) {
-                fireSubNodesChange(false, oldNodes, oldNodes);
+                fireSubNodesChange(false, oldNodes, oldNodes, null);
                 Node[] arr = hierarchy.getNodes();
                 if (arr.length > 0) {
-                    fireSubNodesChange(true, arr, null);
+                    fireSubNodesChange(true, arr, null, null);
                 }
+            }
+
+            if (wasLeaf != (hierarchy == Children.LEAF)) {
+                fireOwnPropertyChange(PROP_LEAF, wasLeaf, hierarchy == Children.LEAF);
             }
         }});
     }
@@ -1022,7 +1022,7 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
     * @param from the array of nodes to take indices from.
     *   Can be null if one should find indices from current set of nodes
     */
-    final void fireSubNodesChange(boolean addAction, Node[] delta, Node[] from) {
+    final void fireSubNodesChange(boolean addAction, Node[] delta, Node[] from, NodeEvent.Snapshot snapshot) {
         NodeMemberEvent ev = null;
 
         Object[] listeners = this.listeners.getListenerList();
@@ -1034,6 +1034,7 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
                 // Lazily create the event:
                 if (ev == null) {
                     ev = new NodeMemberEvent(this, addAction, delta, from);
+                    ev.snapshot = snapshot;
                 }
 
                 if (addAction) {
@@ -1044,12 +1045,38 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
             }
         }
     }
+    
+    /** Fires that some indexes has been removed.
+     *
+     * @param indices removed indicies, 
+     */
+    final void fireSubNodesChangeIdx(boolean added, int[] idxs, NodeEvent.Snapshot snapshot) {
+        NodeMemberEvent ev = null;
+
+        Object[] listeners = this.listeners.getListenerList();
+        // Process the listeners last to first, notifying
+        // those that are interested in this event
+        for (int i = listeners.length - 2; i >= 0; i -= 2) {
+            if (listeners[i] == NodeListener.class) {
+                // Lazily create the event:
+                if (ev == null) {
+                    ev = new NodeMemberEvent(this, added, idxs);
+                    ev.snapshot = snapshot;
+                }
+                if (added) {
+                    ((NodeListener) listeners[i + 1]).childrenAdded(ev);
+                } else {
+                    ((NodeListener) listeners[i + 1]).childrenRemoved(ev);
+                }
+            }
+        }
+    }     
 
     /** Fires info about reordering of some children.
     *
     * @param indices array of integers describing the permutation
     */
-    final void fireReorderChange(int[] indices) {
+    final void fireReorderChange(int[] indices, NodeEvent.Snapshot snapshot) {
         NodeReorderEvent ev = null;
 
         Object[] listeners = this.listeners.getListenerList();
@@ -1061,6 +1088,7 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
                 // Lazily create the event:
                 if (ev == null) {
                     ev = new NodeReorderEvent(this, indices);
+                    ev.snapshot = snapshot;
                 }
 
                 ((NodeListener) listeners[i + 1]).childrenReordered(ev);
