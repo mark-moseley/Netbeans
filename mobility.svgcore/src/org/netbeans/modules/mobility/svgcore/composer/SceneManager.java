@@ -107,7 +107,7 @@ public final class SceneManager {
         if ( LOGGER.getLevel() == null) {
             LOGGER.setLevel( Level.WARNING);
         }
-        Logger.getLogger("global").log( Level.INFO, "mobility.svg.level=" + LOGGER.getLevel()); //NOI18N
+        //Logger.getLogger("global").log( Level.INFO, "mobility.svg.level=" + LOGGER.getLevel()); //NOI18N
         String str;
 
         str = LOGGER_NAME + ".logTime"; //NOI18N
@@ -211,6 +211,10 @@ public final class SceneManager {
         m_actionFactories.add( new TranslateActionFactory(this));
         m_actionFactories.add( new SkewActionFactory(this));
         m_actionFactories.add( new ScaleActionFactory(this));
+        /* XXX do not exist
+        m_actionFactories.add( new ScaleXActionFactory(this));
+        m_actionFactories.add( new ScaleYActionFactory(this));
+         */
         m_actionFactories.add( new RotateActionFactory(this));
         m_actionFactories.add( new DeleteActionFactory(this));
         m_actionFactories.add( new MoveToTopActionFactory(this));
