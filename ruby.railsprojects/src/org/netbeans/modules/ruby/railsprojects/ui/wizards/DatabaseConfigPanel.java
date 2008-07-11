@@ -34,36 +34,74 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.ruby.railsprojects.ui.wizards;
 
+import java.awt.Component;
+import javax.swing.event.ChangeListener;
 import org.netbeans.api.ruby.platform.RubyPlatform;
-import org.netbeans.api.ruby.platform.RubyPlatformManager;
 import org.openide.WizardDescriptor;
+import org.openide.WizardValidationException;
+import org.openide.util.ChangeSupport;
+import org.openide.util.HelpCtx;
 
-final class WizardUtil {
+/**
+ *
+ * @author Erno Mononen
+ */
+public class DatabaseConfigPanel implements
+        WizardDescriptor.Panel, WizardDescriptor.ValidatingPanel, WizardDescriptor.FinishablePanel {
 
-    private WizardUtil() {
+    private WizardDescriptor wizardDescriptor;
+    private DatabaseConfigPanelVisual component;
+    private final ChangeSupport changeSupport = new ChangeSupport(this);
+
+    public Component getComponent() {
+        if (component == null) {
+            component = new DatabaseConfigPanelVisual();
+        }
+        return component;
+
     }
 
-    static RubyPlatform platformFor(WizardDescriptor wizardDescriptor) {
-        RubyPlatform platform = (RubyPlatform) wizardDescriptor.getProperty("platform");
-        if (platform == null) {
-            platform = RubyPlatformManager.getDefaultPlatform();
-        }
-        return platform;
+    public HelpCtx getHelp() {
+        return new HelpCtx(DatabaseConfigPanel.class);
     }
 
-    static boolean checkWarbler(WizardDescriptor wizardDescriptor) {
-        Boolean needWarbler = (Boolean) wizardDescriptor.getProperty(NewRailsProjectWizardIterator.WAR_SUPPORT);
-        if (needWarbler == null || !needWarbler) {
-            return true;
+    public void readSettings(Object settings) {
+        wizardDescriptor = ((WizardDescriptor) settings);
+        component.read(wizardDescriptor);
+        Object substitute = component.getClientProperty("NewProjectWizard_Title"); // NOI18N
+        if (substitute != null) {
+            ((WizardDescriptor) settings).putProperty("NewProjectWizard_Title", substitute); // NOI18N
         }
-        RubyPlatform platform = platformFor(wizardDescriptor);
-        if (platform != null && platform.getGemManager() != null) {
-            return platform.getGemManager().isGemInstalled("warbler"); //NOI18N
-        }
+
+    }
+
+    public void storeSettings(Object settings) {
+        component.store((WizardDescriptor) settings);
+        ((WizardDescriptor) settings).putProperty("NewProjectWizard_Title", null); // NOI18N
+    }
+
+    public boolean isValid() {
         return true;
+    }
+
+    public void addChangeListener(ChangeListener l) {
+        changeSupport.addChangeListener(l);
+    }
+
+    public void removeChangeListener(ChangeListener l) {
+        changeSupport.removeChangeListener(l);
+    }
+
+    public void validate() throws WizardValidationException {
+    }
+
+    public boolean isFinishPanel() {
+        RubyPlatform platform = (RubyPlatform) wizardDescriptor.getProperty("platform");
+        return RailsInstallationValidator.getRailsInstallation(platform).isValid()
+                && WizardUtil.checkWarbler(wizardDescriptor);
     }
 }
