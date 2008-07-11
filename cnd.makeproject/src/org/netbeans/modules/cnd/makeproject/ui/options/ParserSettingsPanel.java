@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.ui.options;
 
 import java.awt.event.ActionEvent;
@@ -47,17 +46,23 @@ import org.netbeans.modules.cnd.makeproject.api.compilers.CCCCompiler;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import javax.swing.JPanel;
+import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.remote.ServerList;
 import org.netbeans.modules.cnd.makeproject.NativeProjectProvider;
+import org.netbeans.modules.cnd.ui.options.IsChangedListener;
 import org.netbeans.modules.cnd.ui.options.ToolsPanel;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 
-public class ParserSettingsPanel extends JPanel implements ChangeListener, ActionListener {
+public class ParserSettingsPanel extends JPanel implements ChangeListener, ActionListener, IsChangedListener {
 
     private HashMap predefinedPanels = new HashMap();
     private boolean updating = false;
@@ -71,6 +76,10 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
         setName("TAB_CodeAssistanceTab"); // NOI18N
         initComponents();
 
+        if ("Windows".equals(UIManager.getLookAndFeel().getID())) { //NOI18N
+            setOpaque(false);
+        }
+
         //infoTextArea.setBackground(collectionPanel.getBackground());
         //setPreferredSize(new java.awt.Dimension(600, 700));
         // Accessible Description
@@ -81,6 +90,7 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
             // This gets called from commitValidation and tp is null - its not a run-time problem
             // because the "real" way we create this a ToolsPanel exists. But not the commitValidation way!
             tp.addCompilerSetChangeListener(this);
+            tp.addIsChangedListener(this);
         }
     }
 
@@ -90,24 +100,60 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
         }
     }
 
+    private static class CompilerSetPresenter {
+
+        public CompilerSet cs;
+        public String displayName;
+
+        public CompilerSetPresenter(CompilerSet cs, String displayName) {
+            this.cs = cs;
+            this.displayName = displayName;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
+
     private void updateCompilerCollections(CompilerSet cs) {
         compilerCollectionComboBox.removeAllItems();
-        for (CompilerSet cs2 : tp.getCompilerSetManager().getCompilerSets()) {
+
+        CompilerSetPresenter toSelect = null;
+        List<CompilerSetPresenter> allCS = new ArrayList<CompilerSetPresenter>();
+        ServerList serverList = (ServerList) Lookup.getDefault().lookup(ServerList.class);
+        if (serverList != null) {
+            for (String serverName : serverList.getServerNames()) {
+                for (CompilerSet cs1 : CompilerSetManager.getDefault(serverName).getCompilerSets()) {
+                    CompilerSetPresenter csp = new CompilerSetPresenter(cs1, serverName + " : " + cs1.getName()); //NOI18N
+                    if (cs == cs1) {
+                        toSelect = csp;
+                    }
+                    allCS.add(csp);
+                }
+            }
+        } else {
+            // TODO: just localhost ones
+        }
+
+        for (CompilerSetPresenter cs2 : allCS) {
             compilerCollectionComboBox.addItem(cs2);
         }
 
-        if (cs == null) {
-            cs = tp.getCompilerSetManager().getCompilerSet(0);
+        if (toSelect == null) {
+            if (compilerCollectionComboBox.getItemCount() > 0) {
+                compilerCollectionComboBox.setSelectedIndex(0);
+            }
         }
-        if (cs != null) {
-            compilerCollectionComboBox.setSelectedItem(cs);
+        else {
+            compilerCollectionComboBox.setSelectedItem(toSelect);
         }
         updateTabs();
     }
 
     private void updateTabs() {
         tabbedPane.removeAll();
-        CompilerSet compilerCollection = (CompilerSet) compilerCollectionComboBox.getSelectedItem();
+        CompilerSet compilerCollection = ((CompilerSetPresenter) compilerCollectionComboBox.getSelectedItem()).cs;
         if (compilerCollection == null) {
             return;
         }
@@ -122,14 +168,22 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
             toolSet.add(cppCompiler);
         }
         for (Tool tool : toolSet) {
-            PredefinedPanel predefinedPanel = (PredefinedPanel) predefinedPanels.get(tool.getPath());
+            PredefinedPanel predefinedPanel = (PredefinedPanel) predefinedPanels.get(compilerCollection.getName() + tool.getPath());
             if (predefinedPanel == null) {
                 predefinedPanel = new PredefinedPanel((CCCCompiler) tool, this);
-                predefinedPanels.put(tool.getPath(), predefinedPanel);
-                modified = true;
+                predefinedPanels.put(compilerCollection.getName() + tool.getPath(), predefinedPanel);
+            //modified = true; // See 126368
             }
             tabbedPane.addTab(tool.getDisplayName(), predefinedPanel);
         }
+    }
+
+    public void setModified(boolean val) {
+        modified = val;
+    }
+
+    public boolean isModified() {
+        return modified;
     }
 
     public void fireFilesPropertiesChanged() {
@@ -138,7 +192,7 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
         }
         Project[] openProjects = OpenProjects.getDefault().getOpenProjects();
         for (int i = 0; i < openProjects.length; i++) {
-            NativeProjectProvider npv = (NativeProjectProvider) openProjects[i].getLookup().lookup(NativeProjectProvider.class );
+            NativeProjectProvider npv = (NativeProjectProvider) openProjects[i].getLookup().lookup(NativeProjectProvider.class);
             if (npv != null) {
                 npv.fireFilesPropertiesChanged();
             }
@@ -169,6 +223,8 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
         tabPanel = new javax.swing.JPanel();
         tabbedPane = new javax.swing.JTabbedPane();
 
+        collectionPanel.setOpaque(false);
+
         compilerCollectionLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("COMPILER_COLLECTION_MN").charAt(0));
         compilerCollectionLabel.setLabelFor(compilerCollectionComboBox);
         java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle"); // NOI18N
@@ -181,7 +237,7 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
             .add(collectionPanelLayout.createSequentialGroup()
                 .add(compilerCollectionLabel)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(compilerCollectionComboBox, 0, 246, Short.MAX_VALUE)
+                .add(compilerCollectionComboBox, 0, 310, Short.MAX_VALUE)
                 .addContainerGap())
         );
         collectionPanelLayout.setVerticalGroup(
@@ -190,6 +246,10 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
                 .add(compilerCollectionLabel)
                 .add(compilerCollectionComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
         );
+
+        scrollPane.setOpaque(false);
+
+        tabPanel.setOpaque(false);
 
         org.jdesktop.layout.GroupLayout tabPanelLayout = new org.jdesktop.layout.GroupLayout(tabPanel);
         tabPanel.setLayout(tabPanelLayout);
@@ -222,7 +282,7 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
                 .add(collectionPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(265, Short.MAX_VALUE))
+                .addContainerGap(272, Short.MAX_VALUE))
             .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                 .add(layout.createSequentialGroup()
                     .add(36, 36, 36)
@@ -238,7 +298,6 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
     private javax.swing.JPanel tabPanel;
     private javax.swing.JTabbedPane tabbedPane;
     // End of variables declaration//GEN-END:variables
-
     private static String getString(String s) {
         return NbBundle.getMessage(ParserSettingsPanel.class, s);
     }
@@ -283,7 +342,7 @@ public class ParserSettingsPanel extends JPanel implements ChangeListener, Actio
         return isDataValid;
     }
 
-    boolean isChanged() {
+    public boolean isChanged() {
         boolean isChanged = false;
         PredefinedPanel[] viewedPanels = getPredefinedPanels();
         for (int i = 0; i < viewedPanels.length; i++) {
