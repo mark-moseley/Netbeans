@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
@@ -42,47 +42,36 @@ made subject to such option by the copyright holder.
 -->
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
 <filesystem>
-    <folder name="Templates">
-        <folder name="Project">
-            <folder name="Web">
-                <file name="webfreeform.xml">
-                    <attr name="position" intvalue="300"/>
-                    <attr name="template" boolvalue="true"/>
-                    <attr name="instantiatingIterator" newvalue="org.netbeans.modules.web.freeform.ui.NewWebFreeformProjectWizardIterator"/>
-                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.web.freeform.resources.Bundle"/>
-                    <!-- XXX: icon used from ant/freeform -->
-                    <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/ant/freeform/resources/freeform-project.png"/>
-                    <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/web/freeform/resources/freeform-project-web.html"/>
-                </file>
-            </folder>
-
+    <folder name="Menu">
+        <folder name="Tools">
+            <file name="VariablesCustomizerAction.instance">
+                <attr name="instanceClass" stringvalue="org.netbeans.modules.project.ant.VariablesCustomizerAction"/>
+                <attr name="position" intvalue="475"/>
+            </file>
         </folder>
     </folder>
-    <folder name="Projects">
-        <folder name="org-netbeans-modules-ant-freeform">
-            <folder name="Lookup">
-                <file name="org-netbeans-modules-web-freeform-LookupProviderImpl.instance">
-                    <attr name="position" intvalue="300"/>
-                </file>
-                <file name="org-netbeans-modules-web-freeform-FolderTemplateLookupProviderImpl.instance">
-                    <attr name="position" intvalue="500"/>
+    <folder name="Plugins">
+        <folder name="XML">
+            <folder name="UserCatalogs">
+                <file name="org-netbeans-modules-project-ant-ProjectXMLCatalogReader.instance">
+                    <attr name="instanceOf" stringvalue="org.netbeans.modules.xml.catalog.spi.CatalogReader"/>
                 </file>
             </folder>
-            <folder name="Customizer">
-                <file name="org-netbeans-modules-web-freeform-ui-WebLocationsCategoryProvider.instance">
-                    <attr name="position" intvalue="300"/>
-                </file>
-                
-                <file name="org-netbeans-modules-web-freeform-ui-WebClasspathCategoryProvider.instance">
-                    <attr name="position" intvalue="500"/>
-                </file>
-                </folder>
         </folder>
     </folder>
     <folder name="ProjectXMLCatalog">
-        <folder name="freeform-project-web">
-            <file name="1.xsd" url="freeform-project-web.xsd"/>
-            <file name="2.xsd" url="freeform-project-web-2.xsd"/>
+        <folder name="ant-project-libraries">
+            <file name="1.xsd" url="../ant-project-libraries-1.xsd"/>
+        </folder>
+        <folder name="ant-project-references">
+            <file name="1.xsd" url="../ant-project-references.xsd"/>
+            <file name="2.xsd" url="../ant-project-references2.xsd"/>
+        </folder>
+        <folder name="project">
+            <file name="1.xsd" url="../project.xsd"/>
+        </folder>
+        <folder name="project-private">
+            <file name="1.xsd" url="../project-private.xsd"/>
         </folder>
     </folder>
 </filesystem>
