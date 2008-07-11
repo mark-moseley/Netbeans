@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.core.filesystems;
+package org.netbeans.modules.openide.filesystems.declmime;
 
 import java.io.*;
 import java.util.logging.Level;
@@ -118,12 +118,14 @@ abstract class DefaultParser  extends DefaultHandler {
             parser.setErrorHandler(this);
             parser.setContentHandler(this);
 
-//            try {
-//                // do not read DTD
-//                parser.setFeature("http://xml.org/sax/features/external-parameter-entities", false);  //NOI18N
-//            } catch (SAXException ignore) {
-//                // parsing may be slower :-(
-//            }
+            
+            try {
+                // ignore wrong encoding, for example
+                parser.setFeature("http://apache.org/xml/features/continue-after-fatal-error", 
+                        true);  //NOI18N
+            } catch (SAXException ignore) {
+                // parsing may be slower :-(
+            }
 
             InputSource in = new InputSource();                
             is = fo.getInputStream();
