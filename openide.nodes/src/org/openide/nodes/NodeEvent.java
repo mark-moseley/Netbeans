@@ -60,4 +60,29 @@ public class NodeEvent extends java.util.EventObject {
     public final Node getNode() {
         return (Node) getSource();
     }
+
+    /** Provides information about the number of nodes available during the
+     * time the event was emited.
+     * @return the number of nodes
+     * @since 7.6
+     */
+    public final int getNodeCount() {
+        return snapshot != null ? snapshot.getNodeCount() : 0;
+    }
+
+    /** Provides access to the nodes at the time when the event was emitted.
+     *
+     * @param index
+     * @return the node at given index or null if the node is not known
+     * @since 7.6
+     */
+    public final Node getNodeAt(int index) {
+        return snapshot != null ? snapshot.getNodeAt(index) : null;
+    }
+
+    interface Snapshot {
+        public Node getNodeAt(int index);
+        public int getNodeCount();
+    }
+    Snapshot snapshot;
 }
