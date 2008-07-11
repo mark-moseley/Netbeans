@@ -38,27 +38,28 @@
  */
 package org.netbeans.modules.php.project.ui.wizards;
 
-import java.awt.Component;
+import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.JButton;
-import javax.swing.JTextField;
-import javax.swing.event.DocumentEvent;
-import org.jdesktop.layout.GroupLayout;
-import org.jdesktop.layout.LayoutStyle;
+import javax.swing.JPanel;
+import javax.swing.event.ChangeEvent;
 import org.netbeans.modules.php.project.connections.ConfigManager;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JTextField;
+import javax.swing.MutableComboBoxModel;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentListener;
-import org.netbeans.api.options.OptionsDisplayer;
-import org.netbeans.modules.php.project.api.PhpOptions;
+import org.jdesktop.layout.GroupLayout;
+import org.jdesktop.layout.LayoutStyle;
+import org.netbeans.modules.php.project.ui.CopyFilesVisual;
+import org.netbeans.modules.php.project.ui.LocalServer;
 import org.netbeans.modules.php.project.ui.SourcesFolderProvider;
 import org.netbeans.modules.php.project.ui.Utils;
 import org.netbeans.modules.php.project.ui.customizer.PhpProjectProperties;
 import org.netbeans.modules.php.project.ui.customizer.PhpProjectProperties.RunAsType;
 import org.netbeans.modules.php.project.ui.customizer.RunAsPanel;
-import org.netbeans.modules.php.project.ui.options.PHPOptionsCategory;
 import org.openide.awt.Mnemonics;
 import org.openide.util.ChangeSupport;
 import org.openide.util.NbBundle;
@@ -66,34 +67,38 @@ import org.openide.util.NbBundle;
 /**
  * @author  Radek Matous, Tomas Mysik
  */
-public class RunAsScript extends RunAsPanel.InsidePanel {
-    private static final long serialVersionUID = -5593481225914071L;
-    private final String displayName;
+public class RunAsLocalWeb extends RunAsPanel.InsidePanel {
+    private static final long serialVersionUID = -53487456454387871L;
     final ChangeSupport changeSupport = new ChangeSupport(this);
     private final JLabel[] labels;
     private final JTextField[] textFields;
     private final String[] propertyNames;
+    private final String displayName;
     private final SourcesFolderProvider sourcesFolderProvider;
+    private final CopyFilesVisual copyFilesVisual;
 
-    public RunAsScript(ConfigManager manager, SourcesFolderProvider sourcesFolderProvider) {
-        this(manager, sourcesFolderProvider, NbBundle.getMessage(RunAsScript.class, "LBL_ConfigScript"));
+    public RunAsLocalWeb(ConfigManager manager, SourcesFolderProvider sourcesFolderProvider) {
+        this(manager, sourcesFolderProvider, NbBundle.getMessage(RunAsLocalWeb.class, "LBL_ConfigLocalWeb"));
     }
 
-    private RunAsScript(ConfigManager manager, SourcesFolderProvider sourcesFolderProvider, String displayName) {
+    private RunAsLocalWeb(ConfigManager manager, SourcesFolderProvider sourcesFolderProvider, String displayName) {
         super(manager);
         this.displayName = displayName;
         this.sourcesFolderProvider = sourcesFolderProvider;
-
         initComponents();
+        copyFilesVisual = new CopyFilesVisual(sourcesFolderProvider);
+        copyFilesPanel.add(BorderLayout.NORTH, copyFilesVisual);
 
-        addListeners();
         labels = new JLabel[] {
+            urlLabel,
             indexFileLabel,
         };
         textFields = new JTextField[] {
+            urlTextField,
             indexFileTextField,
         };
         propertyNames = new String[] {
+            RunConfigurationPanel.URL,
             RunConfigurationPanel.INDEX_FILE,
         };
         assert labels.length == textFields.length && labels.length == propertyNames.length;
@@ -101,20 +106,8 @@ public class RunAsScript extends RunAsPanel.InsidePanel {
             DocumentListener dl = new FieldUpdater(propertyNames[i], labels[i], textFields[i]);
             textFields[i].getDocument().addDocumentListener(dl);
         }
-    }
-
-    private void addListeners() {
-        interpreterTextField.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) {
-                processUpdate();
-            }
-            public void removeUpdate(DocumentEvent e) {
-                processUpdate();
-            }
-            public void changedUpdate(DocumentEvent e) {
-                processUpdate();
-            }
-            private void processUpdate() {
+        copyFilesVisual.addChangeListener(new ChangeListener() {
+            public void stateChanged(ChangeEvent e) {
                 changeSupport.fireChange();
             }
         });
@@ -125,13 +118,14 @@ public class RunAsScript extends RunAsPanel.InsidePanel {
         });
     }
 
-    public void loadPhpInterpreter() {
-        interpreterTextField.setText(PhpOptions.getInstance().getPhpInterpreter());
+    @Override
+    protected boolean isDefault() {
+        return true;
     }
 
     @Override
     protected RunAsType getRunAsType() {
-        return PhpProjectProperties.RunAsType.SCRIPT;
+        return PhpProjectProperties.RunAsType.LOCAL;
     }
 
     @Override
@@ -150,18 +144,21 @@ public class RunAsScript extends RunAsPanel.InsidePanel {
     }
 
     protected void loadFields() {
-        loadPhpInterpreter();
+        for (int i = 0; i < textFields.length; i++) {
+            textFields[i].setText(getValue(propertyNames[i]));
+        }
     }
 
     protected void validateFields() {
-        // nothing needed in this panel
+        // validation is done in RunConfigurationPanel
+        changeSupport.fireChange();
     }
 
-    public void addRunAsScriptListener(ChangeListener listener) {
+    public void addRunAsLocalWebListener(ChangeListener listener) {
         changeSupport.addChangeListener(listener);
     }
 
-    public void removeRunAsScriptListener(ChangeListener listener) {
+    public void removeRunAsLocalWebListener(ChangeListener listener) {
         changeSupport.removeChangeListener(listener);
     }
 
@@ -172,8 +169,40 @@ public class RunAsScript extends RunAsPanel.InsidePanel {
         }
 
         protected final String getDefaultValue() {
-            return RunAsScript.this.getDefaultValue(getPropName());
+            return RunAsLocalWeb.this.getDefaultValue(getPropName());
         }
+    }
+
+    public String getUrl() {
+        return urlTextField.getText().trim();
+    }
+
+    public void setUrl(String url) {
+        urlTextField.setText(url);
+    }
+
+    public boolean isCopyFiles() {
+        return copyFilesVisual.isCopyFiles();
+    }
+
+    public void setCopyFiles(boolean copyFiles) {
+        copyFilesVisual.setCopyFiles(copyFiles);
+    }
+
+    public LocalServer getLocalServer() {
+        return copyFilesVisual.getLocalServer();
+    }
+
+    public MutableComboBoxModel getLocalServerModel() {
+        return copyFilesVisual.getLocalServerModel();
+    }
+
+    public void setLocalServerModel(MutableComboBoxModel localServers) {
+        copyFilesVisual.setLocalServerModel(localServers);
+    }
+
+    public void selectLocalServer(LocalServer localServer) {
+        copyFilesVisual.selectLocalServer(localServer);
     }
 
     public String getIndexFile() {
@@ -199,40 +228,32 @@ public class RunAsScript extends RunAsPanel.InsidePanel {
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
-        interpreterLabel = new JLabel();
-        interpreterTextField = new JTextField();
+        urlLabel = new JLabel();
+        urlTextField = new JTextField();
         runAsLabel = new JLabel();
         runAsCombo = new JComboBox();
-        configureButton = new JButton();
         indexFileLabel = new JLabel();
         indexFileTextField = new JTextField();
         indexFileBrowseButton = new JButton();
+        copyFilesPanel = new JPanel();
 
-        interpreterLabel.setLabelFor(interpreterTextField);
+        urlLabel.setLabelFor(urlTextField);
 
-        Mnemonics.setLocalizedText(interpreterLabel, NbBundle.getMessage(RunAsScript.class, "LBL_PhpInterpreter")); // NOI18N
-        interpreterTextField.setEditable(false);
-
+        Mnemonics.setLocalizedText(urlLabel, NbBundle.getMessage(RunAsLocalWeb.class, "LBL_ProjectUrl")); // NOI18N
         runAsLabel.setLabelFor(runAsCombo);
 
-        Mnemonics.setLocalizedText(runAsLabel, NbBundle.getMessage(RunAsScript.class, "LBL_RunAs"));
-        Mnemonics.setLocalizedText(configureButton, NbBundle.getMessage(RunAsScript.class, "LBL_Configure"));
-        configureButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent evt) {
-                configureButtonActionPerformed(evt);
-            }
-        });
 
-        indexFileLabel.setLabelFor(indexFileTextField);
-
-        Mnemonics.setLocalizedText(indexFileLabel, NbBundle.getMessage(RunAsScript.class, "LBL_IndexFile")); // NOI18N
+        Mnemonics.setLocalizedText(runAsLabel, NbBundle.getMessage(RunAsLocalWeb.class, "LBL_RunAs")); // NOI18N
+        Mnemonics.setLocalizedText(indexFileLabel, NbBundle.getMessage(RunAsLocalWeb.class, "LBL_IndexFile"));
         indexFileTextField.setEditable(false);
-        Mnemonics.setLocalizedText(indexFileBrowseButton, NbBundle.getMessage(RunAsScript.class, "LBL_BrowseIndex"));
+        Mnemonics.setLocalizedText(indexFileBrowseButton, NbBundle.getMessage(RunAsLocalWeb.class, "LBL_BrowseIndex"));
         indexFileBrowseButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent evt) {
                 indexFileBrowseButtonActionPerformed(evt);
             }
         });
+
+        copyFilesPanel.setLayout(new BorderLayout());
 
         GroupLayout layout = new GroupLayout(this);
         this.setLayout(layout);
@@ -241,27 +262,24 @@ public class RunAsScript extends RunAsPanel.InsidePanel {
             .add(layout.createSequentialGroup()
                 .add(runAsLabel)
                 .addContainerGap())
-            .add(layout.createSequentialGroup()
-                .add(layout.createParallelGroup(GroupLayout.LEADING)
-                    .add(interpreterLabel)
-                    .add(indexFileLabel))
-                .addPreferredGap(LayoutStyle.RELATED)
-                .add(layout.createParallelGroup(GroupLayout.LEADING)
-                    .add(GroupLayout.TRAILING, runAsCombo, 0, 222, Short.MAX_VALUE)
-                    .add(GroupLayout.TRAILING, layout.createSequentialGroup()
-                        .add(layout.createParallelGroup(GroupLayout.TRAILING)
-                            .add(indexFileTextField, GroupLayout.DEFAULT_SIZE, 111, Short.MAX_VALUE)
-                            .add(interpreterTextField, GroupLayout.DEFAULT_SIZE, 111, Short.MAX_VALUE))
+            .add(GroupLayout.TRAILING, layout.createSequentialGroup()
+                .add(layout.createParallelGroup(GroupLayout.TRAILING)
+                    .add(GroupLayout.LEADING, copyFilesPanel, GroupLayout.DEFAULT_SIZE, 305, Short.MAX_VALUE)
+                    .add(GroupLayout.LEADING, layout.createSequentialGroup()
+                        .add(layout.createParallelGroup(GroupLayout.LEADING)
+                            .add(urlLabel)
+                            .add(indexFileLabel))
                         .addPreferredGap(LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(GroupLayout.LEADING)
-                            .add(GroupLayout.TRAILING, configureButton)
-                            .add(GroupLayout.TRAILING, indexFileBrowseButton))))
+                            .add(GroupLayout.TRAILING, runAsCombo, 0, 220, Short.MAX_VALUE)
+                            .add(urlTextField, GroupLayout.DEFAULT_SIZE, 220, Short.MAX_VALUE)
+                            .add(layout.createSequentialGroup()
+                                .add(indexFileTextField, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
+                                .addPreferredGap(LayoutStyle.RELATED)
+                                .add(indexFileBrowseButton)))))
                 .add(0, 0, 0))
         
         );
-
-        layout.linkSize(new Component[] {configureButton, indexFileBrowseButton}, GroupLayout.HORIZONTAL);
-
         layout.setVerticalGroup(
             layout.createParallelGroup(GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
@@ -270,38 +288,32 @@ public class RunAsScript extends RunAsPanel.InsidePanel {
                     .add(runAsCombo, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
                 .add(18, 18, 18)
                 .add(layout.createParallelGroup(GroupLayout.BASELINE)
-                    .add(interpreterLabel)
-                    .add(interpreterTextField, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-                    .add(configureButton))
+                    .add(urlLabel)
+                    .add(urlTextField, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(GroupLayout.BASELINE)
                     .add(indexFileLabel)
-                    .add(indexFileBrowseButton)
-                    .add(indexFileTextField, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)))
+                    .add(indexFileTextField, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+                    .add(indexFileBrowseButton))
+                .add(18, 18, 18)
+                .add(copyFilesPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         
         );
     }// </editor-fold>//GEN-END:initComponents
-
-    private void configureButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_configureButtonActionPerformed
-        OptionsDisplayer.getDefault().open(PHPOptionsCategory.PATH_IN_LAYER);
-    }//GEN-LAST:event_configureButtonActionPerformed
 
     private void indexFileBrowseButtonActionPerformed(ActionEvent evt) {//GEN-FIRST:event_indexFileBrowseButtonActionPerformed
         Utils.browseFolderFile(sourcesFolderProvider.getSourcesFolder(), indexFileTextField);
     }//GEN-LAST:event_indexFileBrowseButtonActionPerformed
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private JButton configureButton;
+    private JPanel copyFilesPanel;
     private JButton indexFileBrowseButton;
     private JLabel indexFileLabel;
     private JTextField indexFileTextField;
-    private JLabel interpreterLabel;
-    private JTextField interpreterTextField;
     private JComboBox runAsCombo;
     private JLabel runAsLabel;
+    private JLabel urlLabel;
+    private JTextField urlTextField;
     // End of variables declaration//GEN-END:variables
-
-    public String getPhpInterpreter() {
-        return interpreterTextField.getText().trim();
-    }
 }
