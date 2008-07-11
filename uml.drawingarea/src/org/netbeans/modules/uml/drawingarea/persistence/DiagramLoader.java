@@ -50,8 +50,6 @@ import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Stack;
-import javax.swing.BorderFactory;
-import javax.swing.border.BevelBorder;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -70,7 +68,6 @@ import org.netbeans.modules.uml.core.metamodel.dynamics.IMessage;
 import org.netbeans.modules.uml.core.metamodel.structure.IProject;
 import org.netbeans.modules.uml.core.support.umlutils.ElementLocator;
 import org.netbeans.modules.uml.core.support.umlutils.IElementLocator;
-import org.netbeans.modules.uml.drawingarea.SQDDiagramTopComponent;
 import org.netbeans.modules.uml.drawingarea.UIDiagram;
 import org.netbeans.modules.uml.drawingarea.UMLDiagramTopComponent;
 import org.netbeans.modules.uml.drawingarea.actions.ActionProvider;
@@ -78,7 +75,6 @@ import org.netbeans.modules.uml.drawingarea.actions.AfterValidationExecutor;
 import org.netbeans.modules.uml.drawingarea.actions.SQDMessageConnectProvider;
 import org.netbeans.modules.uml.drawingarea.engines.DiagramEngine;
 import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramEdgeReader;
-import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeReader;
 import org.netbeans.modules.uml.drawingarea.persistence.api.GraphNodeReader;
 import org.netbeans.modules.uml.drawingarea.persistence.data.ConnectorInfo;
 import org.netbeans.modules.uml.drawingarea.persistence.data.EdgeInfo;
@@ -86,7 +82,6 @@ import org.netbeans.modules.uml.drawingarea.persistence.data.NodeInfo;
 import org.netbeans.modules.uml.drawingarea.persistence.readers.GraphNodeReaderFactory;
 import org.netbeans.modules.uml.drawingarea.support.ProxyPresentationElement;
 import org.netbeans.modules.uml.drawingarea.ui.addins.diagramcreator.SQDDiagramEngineExtension;
-import org.netbeans.modules.uml.drawingarea.ui.trackbar.JTrackBar;
 import org.netbeans.modules.uml.drawingarea.util.Util;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
 import org.netbeans.modules.uml.drawingarea.view.UMLEdgeWidget;
@@ -251,6 +246,8 @@ class DiagramLoader
         {
             //Push an obj as soon as you begin a graph node
             graphNodeReaderStack.push(null);
+            prevModelElt.push(null);
+            prevGraphNodePEID.push(null);
             processGraphNode();
             return;
         }
@@ -588,6 +585,8 @@ class DiagramLoader
                             //store it until you come across anchorage
                             if (scene.findWidget(nodeInfo.getPresentationElement()) != null)
                             {
+                                prevModelElt.pop(); //remove null
+                                prevGraphNodePEID.pop(); //remove null
                                 prevModelElt.push(nodeInfo.getMEID()); //stored for anchorage ref
                                 prevGraphNodePEID.push(nodeInfo.getPEID()); // stored for anchorage ref
                             }
@@ -628,6 +627,9 @@ class DiagramLoader
 
     private void endGraphNode()
     {
+        prevModelElt.pop();
+        prevGraphNodePEID.pop();
+        
         GraphNodeReader gnR = graphNodeReaderStack.pop();
         if (gnR != null)
             gnR.finalizeReader();
@@ -703,10 +705,10 @@ class DiagramLoader
                         {
                             //we have reached the end of anchors list     
                             //pop both stacks if they have been used above
-                            if (connDet != null && connDet.getNodeMEID().trim().length() > 0) {
-                                prevModelElt.pop();
-                                prevGraphNodePEID.pop();
-                            }
+//                            if (connDet != null && connDet.getNodeMEID().trim().length() > 0) {
+//                                prevModelElt.pop();
+//                                prevGraphNodePEID.pop();
+//                            }
                             return;
                         }
                     }
@@ -754,7 +756,7 @@ class DiagramLoader
                             NodeInfo.NodeLabel nLabel = new NodeInfo.NodeLabel();
                             nLabel.setLabel(typeInfo);
                             nLabel.setPosition(position);
-                            nLabel.setSize(size);               
+                            nLabel.setSize(size);    
                             nLabel.setPEID(peid);
                             if (parentNodeInfo != null)
                             {                                
