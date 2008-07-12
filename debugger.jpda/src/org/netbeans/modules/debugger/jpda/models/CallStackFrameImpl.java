@@ -48,11 +48,13 @@ import com.sun.jdi.InternalException;
 import com.sun.jdi.NativeMethodException;
 import com.sun.jdi.ObjectReference;
 import com.sun.jdi.PrimitiveValue;
+import com.sun.jdi.ReferenceType;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.Value;
 
+import com.sun.jdi.request.EventRequest;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,10 +64,12 @@ import org.netbeans.api.debugger.Session;
 import org.netbeans.api.debugger.jpda.CallStackFrame;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.LocalVariable;
+import org.netbeans.api.debugger.jpda.MonitorInfo;
 import org.netbeans.api.debugger.jpda.This;
 import org.netbeans.modules.debugger.jpda.EditorContextBridge;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
 import org.netbeans.modules.debugger.jpda.util.Executor;
+import org.netbeans.modules.debugger.jpda.util.Operator;
 import org.netbeans.spi.debugger.jpda.EditorContext.MethodArgument;
 import org.netbeans.spi.debugger.jpda.EditorContext.Operation;
 import org.openide.ErrorManager;
@@ -76,7 +80,7 @@ import org.openide.ErrorManager;
 */
 public class CallStackFrameImpl implements CallStackFrame {
     
-    private static final boolean IS_JDK_16 = !System.getProperty("java.version").startsWith("1.5"); // NOI18N
+    static final boolean IS_JDK_16 = !System.getProperty("java.version").startsWith("1.5"); // NOI18N
     static final boolean IS_JDK_160_02 = IS_JDK_16 && !System.getProperty("java.version").equals("1.6.0") &&
                                                       !System.getProperty("java.version").equals("1.6.0_01");
     
@@ -85,9 +89,11 @@ public class CallStackFrameImpl implements CallStackFrame {
     private JPDADebuggerImpl    debugger;
     //private AST                 ast;
     private Operation           currentOperation;
+    private EqualsInfo          equalsInfo;
     private boolean             valid;
     
     public CallStackFrameImpl (
+        JPDAThreadImpl      thread,
         StackFrame          sf,
         int                 depth,
         JPDADebuggerImpl    debugger
@@ -95,6 +101,7 @@ public class CallStackFrameImpl implements CallStackFrame {
         this.sf = sf;
         this.depth = depth;
         this.debugger = debugger;
+        equalsInfo = new EqualsInfo(debugger, sf, depth);
         this.valid = true; // suppose we're valid when we're new
     }
 
@@ -255,12 +262,12 @@ public class CallStackFrameImpl implements CallStackFrame {
                 if (local instanceof Local) {
                     Local localImpl = (Local) local;
                     localImpl.setFrame(this);
-                    localImpl.setInnerValue(v);
+                    //localImpl.setInnerValue(v);
                     localImpl.setClassName(className);
                 } else {
                     ObjectLocalVariable localImpl = (ObjectLocalVariable) local;
                     localImpl.setFrame(this);
-                    localImpl.setInnerValue(v);
+                    //localImpl.setInnerValue(v);
                     localImpl.setClassName(className);
                 }
                 locals[i] = local;
@@ -272,6 +279,42 @@ public class CallStackFrameImpl implements CallStackFrame {
             throw new AbsentInformationException ("thread is running");
         } catch (VMDisconnectedException ex) {
             return new LocalVariable [0];
+        }
+    }
+    
+    /**
+     * Returns local variable.
+     * @param name The name of the variable
+     * @return local variable
+     */
+    org.netbeans.api.debugger.jpda.LocalVariable getLocalVariable(String name) 
+    throws AbsentInformationException {
+        try {
+            String className = getStackFrame ().location ().declaringType ().name ();
+            com.sun.jdi.LocalVariable lv = getStackFrame ().visibleVariableByName(name);
+            if (lv == null) {
+                return null;
+            }
+            Value v = getStackFrame ().getValue (lv);
+            LocalVariable local = (LocalVariable) debugger.getLocalVariable(lv, v);
+            if (local instanceof Local) {
+                Local localImpl = (Local) local;
+                localImpl.setFrame(this);
+                localImpl.setInnerValue(v);
+                localImpl.setClassName(className);
+            } else {
+                ObjectLocalVariable localImpl = (ObjectLocalVariable) local;
+                localImpl.setFrame(this);
+                localImpl.setInnerValue(v);
+                localImpl.setClassName(className);
+            }
+            return local;
+        } catch (NativeMethodException ex) {
+            throw new AbsentInformationException ("native method");
+        } catch (InvalidStackFrameException ex) {
+            throw new AbsentInformationException ("thread is running");
+        } catch (VMDisconnectedException ex) {
+            return null;
         }
     }
     
@@ -318,8 +361,8 @@ public class CallStackFrameImpl implements CallStackFrame {
                 step.addCountFilter(1);
                 step.setSuspendPolicy(com.sun.jdi.request.StepRequest.SUSPEND_EVENT_THREAD);
                 step.enable();
-                step.putProperty("silent", Boolean.TRUE);
-                final boolean[] stepDone = new boolean[] { false };
+                step.putProperty(Operator.SILENT_EVENT_PROPERTY, Boolean.TRUE);
+                final Boolean[] stepDone = new Boolean[] { null };
                 debugger.getOperator().register(step, new Executor() {
                     public boolean exec(com.sun.jdi.event.Event event) {
                         synchronized (stepDone) {
@@ -328,13 +371,23 @@ public class CallStackFrameImpl implements CallStackFrame {
                         }
                         return false;
                     }
+
+                    public void removed(EventRequest eventRequest) {
+                        synchronized (stepDone) {
+                            stepDone[0] = false;
+                            stepDone.notify();
+                        }
+                    }
                 });
                 tr.resume();
                 synchronized (stepDone) {
-                    if (!stepDone[0]) {
+                    if (stepDone[0] == null) {
                         try {
                             stepDone.wait();
                         } catch (InterruptedException iex) {}
+                    }
+                    if (Boolean.FALSE.equals(stepDone[0])) {
+                        return null; // Step was canceled
                     }
                 }
                 StackFrame sf = null;
@@ -347,6 +400,7 @@ public class CallStackFrameImpl implements CallStackFrame {
                     return null;
                 } finally {
                     vm.eventRequestManager().deleteEventRequest(step);
+                    debugger.getOperator().unregister(step);
                     try {
                         if (sf != null) {
                             tr.popFrames(sf);
@@ -531,26 +585,73 @@ public class CallStackFrameImpl implements CallStackFrame {
     }
 
     public boolean equals (Object o) {
-        try {
-            return  (o instanceof CallStackFrameImpl) &&
-                    (sf.equals (((CallStackFrameImpl) o).sf));
-        } catch (InvalidStackFrameException isfex) {
-            return sf == ((CallStackFrameImpl) o).sf;
+        if (!(o instanceof CallStackFrameImpl)) {
+            return false;
         }
+        CallStackFrameImpl frame = (CallStackFrameImpl) o;
+        return equalsInfo.equals(frame.equalsInfo);
     }
     
-    private Integer hashCode;
-    
     public synchronized int hashCode () {
-        if (hashCode == null) {
-            try {
-                hashCode = new Integer(sf.hashCode());
-            } catch (InvalidStackFrameException isfex) {
-                valid = false;
-                hashCode = new Integer(super.hashCode());
+        return equalsInfo.hashCode();
+    }
+
+    public List<MonitorInfo> getOwnedMonitors() {
+        List<MonitorInfo> threadMonitors;
+        try {
+            threadMonitors = getThread().getOwnedMonitorsAndFrames();
+        } catch (InvalidStackFrameException itsex) {
+            threadMonitors = Collections.emptyList();
+        }
+        if (threadMonitors.size() == 0) {
+            return threadMonitors;
+        }
+        List<MonitorInfo> frameMonitors = new ArrayList<MonitorInfo>();
+        for (MonitorInfo mi : threadMonitors) {
+            if (this.equals(mi.getFrame())) {
+                frameMonitors.add(mi);
             }
         }
-        return hashCode.intValue();
+        return Collections.unmodifiableList(frameMonitors);
+    }
+    
+    private final static class EqualsInfo {
+        
+        private JPDAThread thread;
+        private int depth;
+        private ReferenceType locationType;
+        private String locationMethodName;
+        private String locationMethodSignature;
+        private long locationCodeIndex;
+        
+        public EqualsInfo(JPDADebuggerImpl debugger, StackFrame sf, int depth) {
+            thread = debugger.getThread(sf.thread());
+            this.depth = depth;
+            locationType = sf.location().declaringType();
+            locationMethodName = sf.location().method().name();
+            locationMethodSignature = sf.location().method().signature();
+            locationCodeIndex = sf.location().codeIndex();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof EqualsInfo)) {
+                return false;
+            }
+            EqualsInfo ei = (EqualsInfo) obj;
+            return thread == ei.thread &&
+                   depth == ei.depth &&
+                   locationType.equals(ei.locationType) &&
+                   locationMethodName.equals(ei.locationMethodName) &&
+                   locationMethodSignature.equals(ei.locationMethodSignature) &&
+                   locationCodeIndex == ei.locationCodeIndex;
+        }
+
+        @Override
+        public int hashCode() {
+            return (thread.hashCode() << 8 + depth + locationType.hashCode() << 4 + locationCodeIndex);
+        }
+        
     }
 }
 
