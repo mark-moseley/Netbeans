@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.palette.ui;
 
-import java.awt.Component;
 import java.awt.dnd.Autoscroll;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
@@ -101,7 +100,7 @@ class CategoryButton extends JCheckBox implements Autoscroll {
         setFont( getFont().deriveFont( Font.BOLD ) );
         setMargin(new Insets(0, 3, 0, 3));
         setFocusPainted( false );
-        
+
         setSelected( false );
 
         setHorizontalAlignment( SwingConstants.LEFT );
@@ -189,6 +188,8 @@ class CategoryButton extends JCheckBox implements Autoscroll {
     
     void setExpanded( boolean expand ) {
         setSelected( expand );
+        if( descriptor.isOpened() == expand )
+            return;
         descriptor.setOpened( expand );
         descriptor.getPalettePanel().computeHeights( expand ? CategoryButton.this.category : null );
         requestFocus ();
@@ -197,13 +198,12 @@ class CategoryButton extends JCheckBox implements Autoscroll {
     /** Safe getter for autoscroll support. */
     AutoscrollSupport getSupport() {
         if( null == support ) {
-            support = new AutoscrollSupport( getParent().getParent() );
+            support = new AutoscrollSupport( PalettePanel.getDefault() );
         }
 
         return support;
     }
 
-    @Override
     public Color getBackground() {
         if( isFocusOwner() ) {
             if( isAqua )
@@ -218,7 +218,6 @@ class CategoryButton extends JCheckBox implements Autoscroll {
         }
     }
 
-    @Override
     public Color getForeground() {
         if( isFocusOwner() ) {
             if( isAqua )
@@ -227,17 +226,6 @@ class CategoryButton extends JCheckBox implements Autoscroll {
         } else {
             return super.getForeground();
         }
-    }
-
-    @Override
-    protected void paintComponent(Graphics g) {
-        if( isAqua ) {
-            //#124759 - for some reason Mac Leopard asks for background color only once
-            //so we need to force background repaint here
-            g.setColor( getBackground() );
-            g.fillRect( 0, 0, getWidth(), getHeight() );
-        }
-        super.paintComponent(g);
     }
     
     private class MoveFocusAction extends AbstractAction {

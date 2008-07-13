@@ -129,8 +129,8 @@ public class PalettePanel extends JPanel implements Scrollable {
         }
         return scrollPane;
     }
-    
-    private CategoryDescriptor getCategoryDescriptor( Category category ) {
+
+    CategoryDescriptor getCategoryDescriptor( Category category ) {
         for( int i=0; i<descriptors.length; i++ ) {
             CategoryDescriptor descriptor = descriptors[i];
             if( descriptor.getCategory () == category )
@@ -345,6 +345,7 @@ public class PalettePanel extends JPanel implements Scrollable {
             model = newModel;
             settings = newSettings;
             controller = newController;
+            selectedCategory = null;
             if( model != null ) {
                 model.addModelListener( getModelListener() );
             }
