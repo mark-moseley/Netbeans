@@ -50,6 +50,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.netbeans.modules.cnd.api.model.CsmInheritance;
+import org.netbeans.modules.cnd.api.model.CsmTemplateParameter;
 import org.netbeans.modules.cnd.api.model.CsmType;
 import org.netbeans.modules.cnd.api.model.CsmVisibility;
 import org.netbeans.modules.cnd.api.model.deep.CsmCompoundStatement;
@@ -70,7 +71,12 @@ import org.netbeans.modules.cnd.modelimpl.csm.deep.EmptyCompoundStatementImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.deep.ExpressionBase;
 import org.netbeans.modules.cnd.modelimpl.csm.deep.LazyCompoundStatementImpl;
 import org.netbeans.modules.cnd.apt.utils.APTSerializeUtils;
+import org.netbeans.modules.cnd.modelimpl.csm.NestedType;
+import org.netbeans.modules.cnd.modelimpl.csm.TemplateDescriptor;
+import org.netbeans.modules.cnd.modelimpl.csm.TemplateParameterImpl;
+import org.netbeans.modules.cnd.modelimpl.csm.TemplateParameterTypeImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.deep.CompoundStatementImpl;
+import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 import org.netbeans.modules.cnd.repository.support.AbstractObjectFactory;
 
 /**
@@ -166,21 +172,38 @@ public class PersistentUtils {
         }
         return arr;
     }   
+
+    private static final int UTF_LIMIT = 65535;
     
-    public static void writeUTF(CharSequence st, DataOutput aStream) throws IOException
-    {
-        if (st != null) {
-            aStream.writeBoolean(true);
-            aStream.writeUTF(st.toString());
+    public static void writeUTF(CharSequence st, DataOutput aStream) throws IOException {
+        if  (st != null) {
+            // write extent count
+            aStream.writeShort(st.length() / UTF_LIMIT + ((st.length() % UTF_LIMIT == 0) ? 0 : 1));
+            // write extents
+            for (int start = 0; start < st.length(); start += UTF_LIMIT) {
+                CharSequence extent = st.subSequence(start, Math.min(start + UTF_LIMIT, st.length()));
+                aStream.writeUTF(extent.toString());
+            }
         } else {
-            aStream.writeBoolean(false);
+            aStream.writeShort(0);
         }
     }
     
-    public static String readUTF(DataInput aStream) throws IOException
-    {
-        return aStream.readBoolean() ? aStream.readUTF() : null;
+    public static String readUTF(DataInput aStream) throws IOException {
+        short cnt = aStream.readShort();
+        if (cnt==0) {
+            return null;
+        } else if (cnt == 1) {
+            return aStream.readUTF();
+        } else { // cnt > 1
+            StringBuilder sb = new StringBuilder(cnt*UTF_LIMIT);
+            for (int i = 0; i < cnt; i++) {
+                sb.append(aStream.readUTF());
+            }
+            return sb.toString();
+        }
     }
+
     ////////////////////////////////////////////////////////////////////////////
     // support CsmExpression
 
@@ -275,10 +298,18 @@ public class PersistentUtils {
         case TYPE_IMPL:
             obj = new TypeImpl(stream);
             break;
+
+        case NESTED_TYPE:
+            obj = new NestedType(stream);
+            break;
 	    
         case TYPE_FUN_PTR_IMPL:
             obj = new TypeFunPtrImpl(stream);
-            break;        
+            break;
+            
+        case TEMPLATE_PARAM_TYPE:
+            obj = new TemplateParameterTypeImpl(stream);
+            break;
             
         default:
             throw new IllegalArgumentException("unknown type handler" + handler);  //NOI18N
@@ -291,15 +322,44 @@ public class PersistentUtils {
             stream.writeInt(AbstractObjectFactory.NULL_POINTER);
         } else if (type instanceof NoType) {
             stream.writeInt(NO_TYPE);
-        } else if (type instanceof TypeFunPtrImpl) {
-            stream.writeInt(TYPE_FUN_PTR_IMPL);
-            ((TypeFunPtrImpl)type).write(stream);
         } else if (type instanceof TypeImpl) {
-            stream.writeInt(TYPE_IMPL);
-            ((TypeImpl)type).write(stream);
+            if (type instanceof TypeFunPtrImpl) {
+                stream.writeInt(TYPE_FUN_PTR_IMPL);
+                ((TypeFunPtrImpl)type).write(stream);
+            } else if (type instanceof NestedType) {
+                stream.writeInt(NESTED_TYPE);
+                ((NestedType)type).write(stream);
+            } else {
+                stream.writeInt(TYPE_IMPL);
+                ((TypeImpl)type).write(stream);
+            }
+        } else if (type instanceof TemplateParameterTypeImpl) {
+            stream.writeInt(TEMPLATE_PARAM_TYPE);
+            ((TemplateParameterTypeImpl)type).write(stream);
         } else {
             throw new IllegalArgumentException("instance of unknown class " + type.getClass().getName());  //NOI18N
         }       
+    }
+    
+    public static <T extends Collection<CsmType>> void readTypes(T collection, DataInput input) throws IOException {
+        int collSize = input.readInt();
+        assert collSize >= 0;
+        for (int i = 0; i < collSize; ++i) {
+            CsmType type = readType(input);
+            assert type != null;
+            collection.add(type);
+        }
+    }
+    
+    public static void writeTypes(Collection<? extends CsmType> types, DataOutput output) throws IOException {
+        assert types != null;
+        int collSize = types.size();
+        output.writeInt(collSize);
+
+        for (CsmType elem: types) {
+            assert elem != null;
+            writeType(elem, output);
+        }
     }
     
     ////////////////////////////////////////////////////////////////////////////
@@ -337,7 +397,72 @@ public class PersistentUtils {
         for (CsmInheritance elem: inhs) {
             assert elem != null;
             writeInheritance(elem, output);
-        }            
+        }
+    }
+    
+    ////////////////////////////////////////////////////////////////////////////
+    // support template parameters
+    
+    public static void writeTemplateParameter(CsmTemplateParameter param, DataOutput output) throws IOException {
+        assert param != null;
+        if (param instanceof TemplateParameterImpl) {
+            ((TemplateParameterImpl)param).write(output);            
+        } else {
+            throw new IllegalArgumentException("instance of unknown TemplateParameterImpl " + param);  //NOI18N
+        }
+    }
+    
+    public static CsmTemplateParameter readTemplateParameter(DataInput input) throws IOException {
+        CsmTemplateParameter param = new TemplateParameterImpl(input);
+        return param;
+    }
+    
+    public static List<CsmTemplateParameter> readTemplateParameters(DataInput input) throws IOException {
+        int collSize = input.readInt();
+        if (collSize == AbstractObjectFactory.NULL_POINTER) {
+            return null;
+        }
+        List<CsmTemplateParameter> res = new ArrayList<CsmTemplateParameter>();
+        assert collSize >= 0;
+        for (int i = 0; i < collSize; ++i) {
+            CsmTemplateParameter param = readTemplateParameter(input);
+            assert param != null;
+            res.add(param);
+        }
+        return res;
+    }
+    
+    public static void writeTemplateParameters(Collection<CsmTemplateParameter> params, DataOutput output) throws IOException {
+        if (params == null) {
+            output.writeInt(AbstractObjectFactory.NULL_POINTER);
+        } else {
+            int collSize = params.size();
+            output.writeInt(collSize);
+
+            for (CsmTemplateParameter param: params) {
+                assert param != null;
+                writeTemplateParameter(param, output);
+            }
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // support Template Descriptors
+    public static TemplateDescriptor readTemplateDescriptor(DataInput input) throws IOException {
+        List<CsmTemplateParameter> readTemplateParameters = PersistentUtils.readTemplateParameters(input);
+        if (readTemplateParameters == null) {
+            return null;
+        }
+        CharSequence string = NameCache.getManager().getString(input.readUTF());
+        return new TemplateDescriptor(readTemplateParameters, string);
+    }
+
+    public static void writeTemplateDescriptor(TemplateDescriptor templateDescriptor, DataOutput output) throws IOException {
+        if (templateDescriptor == null) {
+            output.writeInt(AbstractObjectFactory.NULL_POINTER);
+        } else {
+            templateDescriptor.write(output);
+        }
     }
     
     ////////////////////////////////////////////////////////////////////////////
@@ -481,10 +606,12 @@ public class PersistentUtils {
     // types
     private static final int NO_TYPE                = FILE_BUFFER_FILE + 1;
     private static final int TYPE_IMPL              = NO_TYPE + 1;
-    private static final int TYPE_FUN_PTR_IMPL	    = TYPE_IMPL + 1;
+    private static final int NESTED_TYPE         = TYPE_IMPL + 1;
+    private static final int TYPE_FUN_PTR_IMPL	    = NESTED_TYPE + 1;
+    private static final int TEMPLATE_PARAM_TYPE    = TYPE_FUN_PTR_IMPL + 1;
     
     // state 
-    private static final int PREPROC_STATE_STATE_IMPL = TYPE_IMPL + 1;
+    private static final int PREPROC_STATE_STATE_IMPL = TEMPLATE_PARAM_TYPE + 1;
     
     // compound statements
     private static final int LAZY_COMPOUND_STATEMENT_IMPL = PREPROC_STATE_STATE_IMPL + 1;
