@@ -103,7 +103,7 @@ import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 
-public class RSSFeed extends JPanel implements Constants, PropertyChangeListener {
+public class RSSFeed extends BackgroundPanel implements Constants, PropertyChangeListener {
     
     private String url;
     
@@ -148,7 +148,6 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
         this.url = url;
         this.showProxyButton = showProxyButton;
         setBorder(null);
-        setOpaque(false);
 
         add( buildContentLoadingLabel(), BorderLayout.CENTER );
         
@@ -208,6 +207,7 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
      */
     protected InputSource findInputSource( URL u ) throws IOException {
         HttpURLConnection httpCon = (HttpURLConnection) u.openConnection();
+        httpCon.setUseCaches( true );
         httpCon.setRequestProperty( "Accept-Encoding", "gzip, deflate" );     // NOI18N
 
         Preferences prefs = NbPreferences.forModule( RSSFeed.class );
@@ -343,8 +343,9 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
             } catch( Exception e ) {
                 if( isContentCached()) {
                     try {
+                        isCached = false;
                         NbPreferences.forModule( RSSFeed.class ).remove( url2path( new URL(url))) ;
-                        run();
+                        reload();
                         return;
                     } catch( MalformedURLException mE ) {
                         //ignore
@@ -373,7 +374,7 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
                     new Insets(0,TEXT_INSETS_LEFT+5,2,TEXT_INSETS_RIGHT),0,0 ) );
         }
 
-        WebLink linkButton = new WebLink( item.title, item.link, true );
+        WebLink linkButton = new WebLink( stripHtml(item.title), item.link, true );
         linkButton.getAccessibleContext().setAccessibleName( 
                 BundleSupport.getAccessibilityName( "WebLink", item.title ) ); //NOI18N
         linkButton.getAccessibleContext().setAccessibleDescription( 
@@ -458,14 +459,18 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
     }
     
     private String trimHtml( String htmlSnippet ) {
-        String res = htmlSnippet.replaceAll( "<[^>]*>", "" ); // NOI18N // NOI18N
-        res = res.replaceAll( "&nbsp;", " " ); // NOI18N // NOI18N
-        res = res.trim();
+        String res = stripHtml(htmlSnippet);
         int maxLen = getMaxDecsriptionLength();
         if( maxLen > 0 && res.length() > maxLen ) {
             res = res.substring( 0, maxLen ) + "..."; // NOI18N
         }
         return res;
+    }
+    
+    private String stripHtml( String htmlSnippet ) {
+        String res = htmlSnippet.replaceAll( "<[^>]*>", "" ); // NOI18N // NOI18N
+        res = res.replaceAll( "&nbsp;", " " ); // NOI18N // NOI18N
+        return res.trim();
     }
     
     protected int getMaxDecsriptionLength() {
