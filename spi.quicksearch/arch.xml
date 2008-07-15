@@ -23,7 +23,7 @@ Microsystems, Inc. All Rights Reserved.
 
 <api-answers
   question-version="1.29"
-  author="ivan@netbeans.org"
+  author="dsimonek@netbeans.org"
 >
 
   &api-questions;
@@ -46,13 +46,41 @@ Microsystems, Inc. All Rights Reserved.
         </question>
 -->
  <answer id="arch-overall">
-  <p>
-  This library primarily provides a JComponent class, Term, which can
-  route user keyboard input to a client and display output from a
-  client, possibly interpreting and processing the output as ANSI 
-  escape sequences.
-  </p>
- </answer>
+    <p>  
+    Quick Search API in infrastrcuture which enables module clients to plug into
+    Quick Search UI and provide results of search that end user performed in UI.
+    Quick Search UI is represented by a small text field in toolbar area on right
+    hand side, with asociated popup window to show search results.
+    </p>
+
+    <p>
+    Clients that want to extend Quick Search capabilities and provide data to search in
+    are expected to implement <api group="java" name="SearchProvider" category="official" type="export" url="@TOP@/org/netbeans/spi/quicksearch/SearchProvider.html" />
+    SPI.</p>
+    
+    <p>SearchProvider implementations are registered through module's xml layer file,
+    as explained in <a href="@TOP@/org/netbeans/spi/quicksearch/SearchProvider.html">SearchProvider SPI</a>
+    javadoc and detailed <a href="@org-openide-util@/org/openide/util/doc-files/api.html#instances">Instantiation rules</a>.
+    </p>
+    
+    <p>Main task of SearchProvider implementations is to evaluate input 
+<api group="java" name="SearchRequest" category="official" type="export" url="@TOP@/org/netbeans/spi/quicksearch/SearchRequest.html" />,
+        perform search in its data model and feed <api group="java" name="SearchResponse" category="official" type="export" url="@TOP@/org/netbeans/spi/quicksearch/SearchResponse.html" />
+        response object by results apropriate for given request.
+    </p>
+ <api type="export" group="property" name="quicksearch.web.site" category="devel">
+     Resource name from org.netbeans.modules.quicksearch.web.Bundle where it is 
+     possible to specify website to restrict the web search to. When set to e.g.
+     NetBeans.org then the web search provider will search for given text in web pages
+     from NetBeans.org site only.
+</api>
+ <api type="export" group="property" name="quicksearch.web.url_patterns" category="devel">
+     Resource name from org.netbeans.modules.quicksearch.web.Bundle where it is 
+     possible to specify a comma separated list of regular expressions that the search results URLs 
+     must contain. When set to e.g. ".*docs/myapp.*,.*tutorials/myapp.*" then all the search
+     results will have either "docs/myapp" or "tutorials/myapp" anywhere in the URL.
+</api>
+</answer>
 
 
 
@@ -70,37 +98,9 @@ Microsystems, Inc. All Rights Reserved.
         </question>
 -->
  <answer id="arch-quality">
-  <p/>
-  Term can potentially be tested in two ways:
-  <ul>
-	  <li>
-	  Against an external interactive application like vi, emacs, more,
-	  various shells, man, dbx, gdb (or any application which uses
-	  readline), mc (midnight commander), rogue/hack and so on.
-	  <p>
-	  The primary impediment to testing of Term is that for realistic
-	  interaction it requires JNI-based pty support.
-	  </p>
-	  <p>
-	  Proprietary code exists for such a pty library as well as a standalone
-	  "TermApp" which are used to hand-test against some of the above
-	  applications.
-	  </p>
-	  </li>
-
-	  <li>
-	  Using unit tests which can reset the "state" of the terminal,
-	  issue an output, or a call sequence and verify that the resulting
-	  state is the correct one.
-	  <p>
-	  No such unit tests are available at the moment.
-	  </p>
-	  </li>
-  </ul>
-  Since NB is considering incorporating JNA (Java Native Access) a non-JNI
-  based library for accessing pty's becomes feasible in which case TermApp
-  can make it into this module.
-  
+  <p>
+        There are unit tests in test package.
+  </p>
  </answer>
 
 
@@ -118,7 +118,9 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="arch-time">
   <p>
-   XXX no answer for arch-time
+    Design two weeks, implementation of API and basic content providers about 4-5 weeks,
+    stabilization three weeks, all estimates in manwork. Initial version should
+    be available in release 6.5 M1, full version in release 6.5.
   </p>
  </answer>
 
@@ -141,29 +143,234 @@ Microsystems, Inc. All Rights Reserved.
         </question>
 -->
  <answer id="arch-usecases">
+  <p>
+      
+   <usecase id="newProvider" name="How To Add New Quick Search Provider" >
+      In order to plug in a new Quick Search provider and new category of results,
+      module writers need to complete following steps:
 
-   <ul>
-	   <li>
-	   Term was used as the basic building block of the output window
-	   used by NB 3.X.
-           </li>
-	   <li>
-	   Term is used, in conjunction with a JNI library implementing 
-	   unix pty access, by the SunStudio IDE to provide interactive
-	   access to dbx as well as the program being debugged by dbx.
-	   <br/>
-	   Similarly Term was used in SunStudio11 to provide interactive
-	   access to a native program being run.
-           </li>
-	   <li>
-	   Term can be used, in conjunction with JNI support, as an 
-	   in-NB shell or remote access window. 
-	   <br/>
-	   The source code contains a sample, under demosrc/telnet,
-	   of a simple telnet client.
-           </li>
-   </ul>
+      <h5>1. Implement <a href="@TOP@/org/netbeans/spi/quicksearch/SearchProvider.html">SearchProvider</a></h5>
+        <ul>
+            <li>Implement body of <b><code>SearchProvider.evaluate</code></b> method
+            like suggested in its <a href="@TOP@/org/netbeans/spi/quicksearch/SearchProvider.html">javadoc</a>.
+            </li>
+        </ul>
+      
+      <h5>2. Register SearchProvider implementation in xml layer</h5>
+            Register your SearchProvider implementation in your module's xml layer file under
+            main <b>"/QuickSearch"</b> folder. Registration xml syntax is following:
+            
+            <pre>
+              &lt;folder name="QuickSearch"&gt;
+                  &lt;folder name="Category1_ID"&gt;
+                      &lt;attr name="position" intvalue="300"/&gt;
+                      &lt;file name="org-netbeans-module1-package1-Provider1Impl.instance"/&gt;
+                  &lt;/folder&gt;
+                  &lt;folder name="Category2_ID"&gt;
+                      &lt;!--Attribute for localization - provide localized display name of category!--&gt;
+                      &lt;attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.yourmodule.YourBundle"/>
+                      &lt;!--Attribute for command prefix - used to narrow search to this category only!--&gt;
+                      &lt;attr name="command" stringvalue="p"/>
+                      &lt;!--Attribute for category ordering!--&gt;
+                      &lt;attr name="position" intvalue="200"/&gt;
+                      &lt;!--Note that multiple providers can contribute to one category!--&gt;
+                      &lt;file name="org-netbeans-module2-package2-Provider2Impl.instance"/&gt;
+                      &lt;file name="org-netbeans-module2-package3-Provider3Impl.instance"/&gt;
+                  &lt;/folder&gt;
+              &lt;/folder&gt;
+            </pre>
+            
+            <b>Syntax explanation:</b>
+            <ul>
+                <li>Subfolders of "QuickSearch" define search result categories and their order.</li>
+                <li>Providers can share category by putting themselves under same subfolder.</li>
+                <li>Ordering of categories is done through NetBeans standard FileSystem API ordering 
+                "position" attribute</li>
+                <li>Display name of category folder uses NetBeans standard FileSystem API
+                "SystemFileSystem.localizingBundle" attribute.</li>
+                <li>"command" attribute defines command prefix for category, which is used
+                to narrow Quick Search to only one category. Provide short prefix, ideally
+                containing one or two prefix, that will serve as command to narrow search
+                only this category. In above syntax example, if
+                user types 'p' and space key and then text, only "Category2_ID" category
+                will be searched.</li>
+                <li>If several providers share one category, then only one provider needs to
+                specify above attributes. Note however that if your provider shares
+                category with provider from different module, you should have dependency
+                on module which actually define those attributes. Dependency assures
+                there will always be category "description" for category that you are
+                sharing.</li>
+            </ul>
+        
+   </usecase> 
+   
+   <usecase id="shareCategory" name="How To Share Category Of Results" >
+       <p>Quick Search UI shows search results divided into visually separeted sections,
+       called categories. Several <code>SearchProvider</code> implementations may decide to display
+       their results in one shared category of results in Quick Search UI.</p>
+       
+       <p>In order to share category, module writers have to agree on shared
+          category and its properties, especially its name.
+          It means that all providers (possibly in different NetBeans modules)
+          need to be registered under the same folder, as shown below:</p>
+       
+       <h5>Provider 1</h5>   
+            Provider 1 is category "owner", which defines properties of <code>SharedCategory</code> such as 
+            display name, position and command prefix.
+            <pre>
+              &lt;folder name="QuickSearch"&gt;
+                  &lt;folder name="SharedCategory"&gt;
+                      &lt;attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.yourmodule.YourBundle"/>
+                      &lt;attr name="command" stringvalue="p"/>
+                      &lt;attr name="position" intvalue="200"/&gt;
+                      &lt;file name="org-netbeans-module1-package1-Provider1Impl.instance"&gt;
+                          &lt;attr name="position" intvalue="300"/&gt;
+                      &lt;/file&gt;                          
+                  &lt;/folder&gt;
+              &lt;/folder&gt;
+            </pre>
 
+       <h5>Provider 2</h5>   
+            Other providers from other modules are sharing category with Provider 1.
+            Provider 2 does not define properties of <code>SharedCategory</code>,
+            as they were already defined by Provider 1.
+            Note that module dependency on the module of Provider 1 is needed
+            to ensure that <code>SharedCategory</code> is fully defined.
+            <pre>
+              &lt;folder name="QuickSearch"&gt;
+                  &lt;folder name="SharedCategory"&gt;
+                      &lt;file name="org-netbeans-module2-package2-Provider2Impl.instance"/&gt;
+                          &lt;attr name="position" intvalue="200"/&gt;
+                      &lt;/file&gt;                          
+                  &lt;/folder&gt;
+              &lt;/folder&gt;
+            </pre>
+
+       <h5>Provider 3</h5>   
+            The same rules apply like for Provider 2. Note that position attribute
+            can be used to control position of provider's results in shared category.
+            Results from provider with lowest position will go first and so on.
+            <pre>
+              &lt;folder name="QuickSearch"&gt;
+                  &lt;folder name="SharedCategory"&gt;
+                      &lt;file name="org-netbeans-module2-package3-Provider3Impl.instance"/&gt;
+                          &lt;attr name="position" intvalue="100"/&gt;
+                      &lt;/file&gt;                          
+                  &lt;/folder&gt;
+              &lt;/folder&gt;
+            </pre>
+   </usecase>
+
+   <usecase id="categoryOrder" name="How To Define and Modify Order of Categories" >
+        Order of categories of results can be set by using "position" attribute
+        of category xml folder definition. Following example will result in 
+        <code>FirstCategory</code> to be first, and <code>SecongCategory</code> to be second :),
+        which means that <code>FirstCategory</code> and its results will be
+        displayed above <code>Secondcategory</code> in QuickSearch results window.
+
+            <pre>
+              &lt;folder name="QuickSearch"&gt;
+                  &lt;folder name="SecondCategory"&gt;
+                      &lt;attr name="position" intvalue="300"/&gt;
+                      ...
+                  &lt;/folder&gt;
+                  &lt;folder name="FirstCategory"&gt;
+                      &lt;attr name="position" intvalue="200"/&gt;
+                      ...
+                  &lt;/folder&gt;
+             &lt;/folder&gt;
+            </pre>
+   </usecase>
+   
+   <usecase id="hideProvider" name="How To Hide Recent Searches Results and Others" >
+        "Recent Searches" provider is contained directly in <code>spi.quicksearch</code>
+        module, so its functionality is automatically always available by default.
+        However, if your module wants to disable "Recent Searches" or any other
+        category, follow the steps below:
+        
+        <h5>Define module dependency</h5>
+            Your module have to depend on module where provider you want to disable
+            is contained. In case of "Recent Searches" provider, it's <code>spi,quicksearch</code>,
+            on which you probably already depend.
+
+        <h5>Disable provider using "_hidden"</h5>
+            For example, to disable "Recent Searches" provider, write into your layer:
+            
+            <pre>
+              &lt;folder name="QuickSearch"&gt;
+                  &lt;folder name="Recent_hidden"&gt;
+                  &lt;/folder&gt;
+              &lt;/folder&gt;
+           </pre>
+           
+           "Recent" is a name of category for "Recent Searches" provider and by appending
+           "_hidden" suffix you are telling system to "hide" it. This technique
+           can be used also to disable invidual search providers.
+    </usecase>
+    
+   <usecase id="usageInPlatform" name="How To Use Quick Search in Platform Application" >
+        Quick Search UI is disabled by default in application built on top of
+        NetBeans platform. To enable Quick Search feature in your application,
+        complete following steps:
+        
+        <h5>1. Write XML layer registration</h5>
+            Add the following lines to XML layer of some of your modules in your
+            application suite:
+        
+        <pre>
+        &lt;folder name="Toolbars"&gt;
+            &lt;folder name="QuickSearch"&gt;
+            &lt;attr name="SystemFileSystem.localizingBundle" stringvalue="com.myapp.mymodule.MyBundle"/>
+                &lt;file name="org-netbeans-modules-quicksearch-QuickSearchAction.shadow"&gt;
+                    &lt;attr name="originalFile" stringvalue="Actions/Edit/org-netbeans-modules-quicksearch-QuickSearchAction.instance"/&gt;
+                &lt;/file&gt;
+            &lt;/folder&gt;
+        &lt;/folder&gt;
+        </pre>
+        
+        <h5>2. Localize Toolbar Name</h5>
+             Replace <code>com.myapp.mymodule.MyBundle</code> in the xml registration
+             above with path to your properties file, in which you'll define
+             localized name of Quick Search toolbar:
+             <pre>
+                Toolbars/QuickSearch=Quick Search
+             </pre>
+        
+        <p>By default, providers for searching in actions and recent searches
+        will be enabled. Web search provider is disabled by default, see use case
+        below for info how to turn it on.</p>
+   </usecase>
+
+   <usecase id="searchWebProvider" name="How To Add a Default Web Search Provider" >
+       There is a default implementation of web search provider which uses Google
+       to search for the given text on the web. Simply add the following lines to your XML layer 
+       to enable this search provider in your application:
+        <pre>
+          &lt;folder name="QuickSearch"&gt;
+              &lt;folder name="WebSearch"&gt;
+                  &lt;!--Attribute for localization - provide localized display name of category!--&gt;
+                  &lt;attr name="SystemFileSystem.localizingBundle" stringvalue="com.myapp.mymodule.MyBundle"/>
+                  &lt;!--Attribute for command prefix - used to narrow search to this category only!--&gt;
+                  &lt;attr name="command" stringvalue="g"/>
+                  &lt;!--Attribute for category ordering!--&gt;
+                  &lt;attr name="position" intvalue="200"/&gt;
+                  &lt;!--Note that multiple providers can contribute to one category!--&gt;
+                  &lt;file name="org-netbeans-modules-quicksearch-web-WebQuickSearchProviderImpl.instance"/&gt;
+              &lt;/folder&gt;
+          &lt;/folder&gt;
+        </pre>
+        You can also add branding for <code>org.netbeans.modules.quicksearch.web</code> Bundle to restrict 
+        the search to a particular site only:
+        <pre>
+            quicksearch.web.site=mywebsite.com
+        </pre>
+        And you can also restrict the search to some parts your website only:
+        <pre>
+            quicksearch.web.url_patterns=mywebsite.com/docs,mywebsite.com/files/tutorials
+        </pre>
+   </usecase>
+   
+  </p>
  </answer>
 
 
@@ -178,33 +385,15 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="arch-what">
-    <p>
-    The Terminal Emulator is a library used to display process output. It is
-    designed to operate in a variety of modes, up to and including full
-    emulation of an ANSI character terminal, similar to <code>xterm</code>
-    and so on. NetBeans 3.X used it to implement the Output Window,
-    where it mostly acted as a "dumb terminal" for use in capturing output
-    from compilers and programs run by the user. It features hyperlinks which
-    may be used for e.g. compiler error messages. In more advanced modes it
-    can even be used to run e.g. VI or Emacs, display margin glyphs, and so
-    on.
-    </p>
+ <answer id="arch-what">
+  <p>
+    QuickSearch API and its implementations provides way for end user to learn
+    system earlier and easier and also to find various things in the system more
+    quickly, conveniently and in standard way.
+    Main project page is on nb wiki, http://wiki.netbeans.org/QuickSearch
+  </p>
+ </answer>
 
-	 <!--
-	 url="@TOP@/org/netbeans/lib/terminalemulator/doc-files/func_spec.html"
-	 -->
-    <!--
-    url relative to ../lib.terminalemulator/build
-    -->
-
-    <api name="TerminalEmulatorAPI"
-         type="export"
-	 category="devel"
-	 url="org/netbeans/lib/terminalemulator/doc-files/func_spec.html"
-	 group="java"/>
-
-    </answer>
 
 
 <!--
@@ -236,7 +425,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="compat-deprecation">
   <p>
-   N/A.
+    QuickSearch API is new API, so no deprecations for now.
   </p>
  </answer>
 
@@ -252,13 +441,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="compat-i18n">
-    <p>
-        The terminal emulator does not display any particular strings or icons
-        except what is sent to it. Double-width display of oriental characters
-        (e.g. Japanese) is supported.
-    </p>
-    </answer>
+ <answer id="compat-i18n">
+  <p>
+    Yes.
+  </p>
+ </answer>
 
 
 
@@ -268,23 +455,13 @@ Microsystems, Inc. All Rights Reserved.
             implementation exact or does it deviate somehow?
         </question>
 -->
-    <answer id="compat-standards">
-        <p>
-	The emulator has full compliance with the generic "dumb" terminal type.
-	It has good but not 100% compliance with the general ANSI term specification
-	given by ISO/IEC 6429:1992(E) / ANSI X3.64-1979.
-	It has some functionality on top of ANSI which is modeled on
-	the Solaris <code>dtterm</code>, but is not a full emulation of that
-	termcap.
-	Subprocesses expecting <code>xterm</code> or <code>vt220</code>
-	emulation should generally work as well.
-        </p>
-        <p>
-	The library package provides some API documentation for use by
-	embedding applications. A subset of this API is used by the NetBeans
-	<code>core-output.jar</code> module to implement the Output Window.
-        </p>
-    </answer>
+ <answer id="compat-standards">
+  <p>
+   Infrastructure module offers SPI for content provider implementors and
+   implements Request-Response pattern for communication between API side
+   and client module side.
+  </p>
+ </answer>
 
 
 
@@ -302,11 +479,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="compat-version">
-    <p>
-        N/A; no persisted settings.
-    </p>
-    </answer>
+ <answer id="compat-version">
+  <p>
+    Yes, module can coexist, as no settings are persistent now.
+  </p>
+ </answer>
 
 
 
@@ -320,11 +497,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="dep-jre">
-    <p>
-        1.3.
-    </p>
-    </answer>
+ <answer id="dep-jre">
+  <p>
+    JRE 1.5 and higher is needed, as Java 1.5 language constructs are used.
+  </p>
+ </answer>
 
 
 
@@ -333,11 +510,11 @@ Microsystems, Inc. All Rights Reserved.
             Do you require the JDK or is the JRE enough?
         </question>
 -->
-    <answer id="dep-jrejdk">
-    <p>
-        JRE.
-    </p>
-    </answer>
+ <answer id="dep-jrejdk">
+  <p>
+    JRE is enough.
+  </p>
+ </answer>
 
 
 
@@ -362,12 +539,9 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="dep-nb">
-    <p>
-        None, it is a standalone library that could be used in other
-        applications.
-    </p>
-    </answer>
+ <answer id="dep-nb">
+  <defaultanswer generate='here' />
+ </answer>
 
 
 
@@ -389,11 +563,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="dep-non-nb">
-    <p>
-        None.
-    </p>
-    </answer>
+ <answer id="dep-non-nb">
+  <p>
+    No external dependencies.
+  </p>
+ </answer>
 
 
 
@@ -417,16 +591,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="dep-platform">
-    <p>
-    Should be platform-independent, as it is just a Swing component. Expects
-    that CRNL translations have been taken care of; pluggable line discipline
-    handlers support this. If used as a full screen-oriented terminal
-    emulator, it would need to be attached to code that would handle PTYs,
-    signals, etc. This would probably need to be JNI, but no such code is
-    included as part of the library itself.
-    </p>
-    </answer>
+ <answer id="dep-platform">
+  <p>
+    Works on all platforms, no OS dependency.
+  </p>
+ </answer>
 
 
 
@@ -448,7 +617,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="deploy-dependencies">
   <p>
-   nothing
+    Nothing, regular depencency is enough.
   </p>
  </answer>
 
@@ -474,11 +643,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="deploy-jar">
-    <p>
-        Just a JAR.
-    </p>
-    </answer>
+ <answer id="deploy-jar">
+  <p>
+    One module JAR, no extras.
+  </p>
+ </answer>
 
 
 
@@ -490,11 +659,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="deploy-nbm">
-    <p>
-        Yes.
-    </p>
-    </answer>
+ <answer id="deploy-nbm">
+  <p>
+    Yes, can be deployed via UC.
+  </p>
+ </answer>
 
 
 
@@ -511,11 +680,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="deploy-packages">
-    <p>
-        No, there is only one package and it contains public API classes.
-    </p>
-    </answer>
+ <answer id="deploy-packages">
+  <p>
+    API package is intentionally public, rest is not public.
+  </p>
+ </answer>
 
 
 
@@ -529,11 +698,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="deploy-shared">
-    <p>
-        Either.
-    </p>
-    </answer>
+ <answer id="deploy-shared">
+  <p>
+    Module can be installed anywhere.
+  </p>
+ </answer>
 
 
 
@@ -551,7 +720,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="exec-ant-tasks">
   <p>
-   No.
+    No ant tasks.
   </p>
  </answer>
 
@@ -565,11 +734,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="exec-classloader">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="exec-classloader">
+  <p>
+    No own class loader.
+  </p>
+ </answer>
 
 
 
@@ -588,11 +757,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="exec-component">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="exec-component">
+  <p>
+    No properties.
+  </p>
+ </answer>
 
 
 
@@ -610,7 +779,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="exec-introspection">
   <p>
-  Yes, but only with own classes.
+   No.
   </p>
  </answer>
 
@@ -626,11 +795,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="exec-privateaccess">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="exec-privateaccess">
+  <p>
+    No.
+  </p>
+ </answer>
 
 
 
@@ -646,9 +815,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="exec-process">
   <p>
-  No.
-  However, Term is designed to handle ANSI escape sequences put out
-  by various processes.
+    No external process.
   </p>
  </answer>
 
@@ -674,11 +841,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="exec-property">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="exec-property">
+  <p>
+    No properties, I plan to use Logger and UI gesture collector in future.
+  </p>
+ </answer>
 
 
 
@@ -692,12 +859,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="exec-reflection">
-    <p>
-        No.
-	It does use reflection to execute it's own code
-    </p>
-    </answer>
+ <answer id="exec-reflection">
+  <p>
+    No Java Reflection.
+  </p>
+ </answer>
 
 
 
@@ -727,10 +893,9 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="exec-threading">
   <p>
-  Term requires that all calls against it be performed on the AWT EventQ thread.
-  </p>
-  <p>
-  All callbacks from Term are performed on the AWT EventQ thread.
+    Content providers are called outside EQ thread to not block system UI, 
+    RequestProcessor is used. Module's internal data model of provider's results
+    is synchronized to be able to work both with providers and UI code.
   </p>
  </answer>
 
@@ -747,11 +912,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="format-clipboard">
-    <p>
-        Plain Unicode text.
-    </p>
-    </answer>
+ <answer id="format-clipboard">
+  <p>
+    No direct clipboard access, just Swing controls are used that communicate with clipboard.
+  </p>
+ </answer>
 
 
 
@@ -765,11 +930,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="format-dnd">
-    <p>
-        N/A
-    </p>
-    </answer>
+ <answer id="format-dnd">
+  <p>
+    No direcr DnD, same as for clipboard.
+  </p>
+ </answer>
 
 
 
@@ -796,11 +961,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="format-types">
-    <p>
-        N/A
-    </p>
-    </answer>
+ <answer id="format-types">
+  <p>
+    No file IO.
+  </p>
+ </answer>
 
 
 
@@ -828,11 +993,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="lookup-lookup">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="lookup-lookup">
+  <p>
+    No lookup usage.
+  </p>
+ </answer>
 
 
 
@@ -845,11 +1010,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="lookup-register">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="lookup-register">
+  <p>
+        No lookup registration.
+  </p>
+ </answer>
 
 
 
@@ -862,11 +1027,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="lookup-remove">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="lookup-remove">
+  <p>
+    No.
+  </p>
+ </answer>
 
 
 
@@ -875,11 +1040,11 @@ Microsystems, Inc. All Rights Reserved.
             Does your module run any code on exit?
         </question>
 -->
-    <answer id="perf-exit">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="perf-exit">
+  <p>
+    No.
+  </p>
+ </answer>
 
 
 
@@ -889,11 +1054,11 @@ Microsystems, Inc. All Rights Reserved.
             GUI controls such as combo boxes, lists, trees, or text areas?
         </question>
 -->
-    <answer id="perf-huge_dialogs">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="perf-huge_dialogs">
+  <p>
+    No huge dialogs.
+  </p>
+ </answer>
 
 
 
@@ -916,16 +1081,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="perf-limit">
-    <p>
-    No. There is a history buffer with a fixed number of lines, so output
-    exceeding this buffer size will continue to be displayed while earlier
-    lines are discarded, keeping a fixed update speed for new output, subject
-    to garbage collection etc. There will be a modest hiccup in display if
-    more than 2<sup>32</sup> lines of text are displayed, estimated to occur
-    after several days running at full throttle.
-    </p>
-    </answer>
+ <answer id="perf-limit">
+  <p>
+    No practical limit.
+  </p>
+ </answer>
 
 
 
@@ -935,15 +1095,12 @@ Microsystems, Inc. All Rights Reserved.
             with a relation to the number of windows, etc.
         </question>
 -->
-    <answer id="perf-mem">
-    <p>
-    The visible screen and the scrollback buffer are kept in memory; each
-    line is stored as a character array, so given an average of twenty
-    characters per line, with a default history size of 10000, and including
-    some overhead for character attribute storage etc., we can estimate a
-    standing memory consumption after heavy usage of around one megabyte.
-    </p>
-    </answer>
+ <answer id="perf-mem">
+  <p>
+    Small memory consumption, only up to a few results items per provider,
+    so say several KBs of data, cleared after each search.
+  </p>
+ </answer>
 
 
 
@@ -961,11 +1118,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="perf-menus">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="perf-menus">
+  <p>
+    No dynamic context menus.
+  </p>
+ </answer>
 
 
 
@@ -985,11 +1142,12 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="perf-progress">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="perf-progress">
+  <p>
+    Yes, providers can run their search for a long time. See threading anwer for
+    implemented solution.
+  </p>
+ </answer>
 
 
 
@@ -1004,11 +1162,12 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="perf-scale">
-    <p>
-        Only the size of the history buffer is relevant (to memory consumption).
-    </p>
-    </answer>
+ <answer id="perf-scale">
+  <p>
+    Number and speed of individual content providers. See threading anwer for
+    implemented solution.
+  </p>
+ </answer>
 
 
 
@@ -1024,7 +1183,9 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="perf-spi">
   <p>
-   XXX no answer for perf-spi
+    Code from SPI clients runs in isolated thread and Request-Response API pattern
+    is implemented to enable clients to compute results iteratively and stop
+    whenever desirable.
   </p>
  </answer>
 
@@ -1035,11 +1196,11 @@ Microsystems, Inc. All Rights Reserved.
             Does your module run any code on startup?
         </question>
 -->
-    <answer id="perf-startup">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="perf-startup">
+  <p>
+   No.
+  </p>
+ </answer>
 
 
 
@@ -1049,11 +1210,11 @@ Microsystems, Inc. All Rights Reserved.
             even when the system is otherwise idle (no user interaction)?
         </question>
 -->
-    <answer id="perf-wakeup">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="perf-wakeup">
+  <p>
+   No.
+  </p>
+ </answer>
 
 
 
@@ -1070,11 +1231,11 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="resources-file">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="resources-file">
+  <p>
+    No.
+  </p>
+ </answer>
 
 
 
@@ -1093,11 +1254,13 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="resources-layer">
-    <p>
-        No.
-    </p>
-    </answer>
+ <answer id="resources-layer">
+  <p>
+    Yes, Quick Search UI is plugged into NB window system through xml layer.
+    Moreover, Quick Search API defines layer structure for its clients, 
+    explained in use cases reply.
+  </p>
+ </answer>
 
 
 
@@ -1114,9 +1277,9 @@ Microsystems, Inc. All Rights Reserved.
             </hint>
         </question>
 -->
-    <answer id="resources-mask">
+ <answer id="resources-mask">
   <p>
-  No
+    No.
   </p>
  </answer>
 
@@ -1141,7 +1304,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="resources-preferences">
   <p>
-  No
+    No preferences API for now.
   </p>
  </answer>
 
@@ -1161,7 +1324,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="resources-read">
   <p>
-  No.
+    Yes, properly described in use-cases section.
   </p>
  </answer>
 
@@ -1179,7 +1342,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="security-grant">
   <p>
-  No.
+   No.
   </p>
  </answer>
 
@@ -1196,7 +1359,7 @@ Microsystems, Inc. All Rights Reserved.
 -->
  <answer id="security-policy">
   <p>
-  No.
+   No.
   </p>
  </answer>
 

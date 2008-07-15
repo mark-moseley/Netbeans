@@ -1,53 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+The contents of this file are subject to the terms of the Common Development
+and Distribution License (the License). You may not use this file except in
+compliance with the License.
 
-Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+You can obtain a copy of the License at http://www.netbeans.org/cddl.html
+or http://www.netbeans.org/cddl.txt.
 
-
-The contents of this file are subject to the terms of either the GNU
-General Public License Version 2 only ("GPL") or the Common
-Development and Distribution License("CDDL") (collectively, the
-"License"). You may not use this file except in compliance with the
-License. You can obtain a copy of the License at
-http://www.netbeans.org/cddl-gplv2.html
-or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
-specific language governing permissions and limitations under the
-License.  When distributing the software, include this License Header
-Notice in each file and include the License file at
-nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
-particular file as subject to the "Classpath" exception as provided
-by Sun in the GPL Version 2 section of the License file that
-accompanied this code. If applicable, add the following below the
-License Header, with the fields enclosed by brackets [] replaced by
-your own identifying information:
+When distributing Covered Code, include this CDDL Header Notice in each file
+and include the License file at http://www.netbeans.org/cddl.txt.
+If applicable, add the following below the CDDL Header, with the fields
+enclosed by brackets [] replaced by your own identifying information:
 "Portions Copyrighted [year] [name of copyright owner]"
 
-Contributor(s):
-
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
 Microsystems, Inc. All Rights Reserved.
-
-If you wish your version of this file to be governed by only the CDDL
-or only the GPL Version 2, indicate your decision by adding
-"[Contributor] elects to include this software in this distribution
-under the [CDDL or GPL Version 2] license." If you do not indicate a
-single choice of license, a recipient has the option to distribute
-your version of this file under either the CDDL, the GPL Version 2 or
-to extend the choice of license to its licensees as provided above.
-However, if you add GPL Version 2 code and therefore, elected the GPL
-Version 2 license, then the option applies only if the new code is
-made subject to such option by the copyright holder.
 -->
 <!DOCTYPE api-answers PUBLIC "-//NetBeans//DTD Arch Answers//EN" "../nbbuild/antsrc/org/netbeans/nbbuild/Arch.dtd" [
   <!ENTITY api-questions SYSTEM "../nbbuild/antsrc/org/netbeans/nbbuild/Arch-api-questions.xml">
 ]>
-
 <api-answers
-  question-version="1.25"
-  module="JMX module"
-  author="JMX team"
+  question-version="1.29"
+  author="rcruz@netbeans.org"
 >
 
   &api-questions;
@@ -55,24 +30,58 @@ made subject to such option by the copyright holder.
 
 <!--
         <question id="arch-overall" when="init">
-            Describe the overall architecture.
+            Describe the overall architecture. 
             <hint>
-            What will be API for
+            What will be API for 
             <a href="http://openide.netbeans.org/tutorial/api-design.html#design.apiandspi">
                 clients and what support API</a>? 
             What parts will be pluggable?
             How will plug-ins be registered? Please use <code>&lt;api type="export"/&gt;</code>
-            to describe your general APIs.
-            If possible please provide 
-            simple diagrams. 
+            to describe your general APIs and specify their
+            <a href="http://openide.netbeans.org/tutorial/api-design.html#category-private">
+            stability categories</a>.
+            If possible please provide simple diagrams.
             </hint>
         </question>
 -->
- <answer id="arch-overall">
-  <p>
-   Test XXX no answer for arch-overall
-  </p>
- </answer>
+    <answer id="arch-overall">
+        <p>
+   The Web Service Project API describes the contract between a Netbeans project and a web service stack tooling 
+   implementation aimed at providing a uniform way to discover web service providers and consumers in a project.
+        </p>
+        <p>
+            WebServiceDataProvider is the main SPI for providing  web service data, namely the web service 
+            providers and consumers in the project. Implementations of this interface will be registered in the project's lookup.
+        </p>
+        <p>
+            When a client does a project lookup for WebServiceDataProvider the instance that is returned            
+            will contain the merged result (service providers, service consumers) of all WebServiceDataProviders that are in the 
+            project. This is made possible by the LookupMergerSupport class which merges all instances of WebServiceDataProvider
+            in the project. Using a static method in LookupMergerSupport, the provider of WebServiceDataProvider can create an 
+            instance of org.netbeans.spi.project.LookupMerger and register it in the project's lookup.
+        </p>
+        <p>
+            Information about web service providers and consumers are provided through the WebServiceImplementation and 
+            ServiceDescriptorImplementation SPIs. Each WebServiceImplementation is associated with a ServiceDescriptionImplementation.
+            WebServiceImplementation contains data about the nature of the service such as its type or the node that it represents.
+            ServiceDescriptionImplementation contains data about the location of descriptor file (for example, WSDL) that describes the service.
+            A WebServiceDataProvider implementation can use a factory, WebServiceFactory, to
+            instantiate WebService and ServiceDescriptor objects that wraps the WebServiceImplementation and ServiceDescriptor
+            implementations, respectively. When called, WebService and ServiceDescriptor delegates to their respective implementations.
+        </p>
+        <p>
+            Clients of this API will use  WebServiceData  to obtain an implementation of a WebServiceDataProvider using a static method,
+            passing in  the Project that needs to be introspected.  Clients can then query for web service producers and consumers using
+            the WebServiceData object, which delegates to the WebServiceDataProvider.
+        </p>
+        <api 
+        name="Web_Service_Project_API"
+        type="export"
+        category="friend"
+        group="java"
+        url="http://wiki.netbeans.org/WebServicesProjectApi">
+        </api>
+    </answer>
 
 
 
@@ -84,15 +93,16 @@ made subject to such option by the copyright holder.
             <hint>
             What kind of testing do
             you want to use? How much functionality, in which areas,
-            should be covered by the tests? 
+            should be covered by the tests? How you find out that your
+            project was successful?
             </hint>
         </question>
 -->
- <answer id="arch-quality">
-  <p>
-   XXX no answer for arch-quality
-  </p>
- </answer>
+    <answer id="arch-quality">
+        <p>
+   Unit tests will be created for this API set covering the SPI and the API portions
+        </p>
+    </answer>
 
 
 
@@ -107,11 +117,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="arch-time">
-  <p>
-   XXX no answer for arch-time
-  </p>
- </answer>
+    <answer id="arch-time">
+        <p>
+   3 weeks
+        </p>
+    </answer>
 
 
 
@@ -131,11 +141,32 @@ made subject to such option by the copyright holder.
             to use the module?
         </question>
 -->
- <answer id="arch-usecases">
-  <p>
-   XXX no answer for arch-usecases
-  </p>
- </answer>
+    <answer id="arch-usecases">
+        <p>
+   The Web Service API provides a simple way for discovering web service providers and consumers in a project, irrespective of the
+   web service stack behind these providers and consumers. Thus, modules that need to discover web service providers and consumers are
+   the clients of this API. For example, currently,  the BPEL, Composite Application and Mobility can use this API to find out what
+   service providers and consumers are in a project, what type of services these are, or may want to obtain the descriptor for that
+   web service.
+        </p>
+        <p>
+   A typical use case example will be a BPEL module that wants to discover all SOAP-based web services in a project and in the
+   process, obtain its descriptor (WSDL in this case). Currently there are three SOAP stacks that are supported in Netbeans: JAXWS,
+   JAXRPC and Axis. BPEL may not care what particular SOAP stack a service is implemented in. Let us consider a project that has web services that
+   contain multiple services, each implemented in a different SOAP stack, and also has REST web services. BPEL will use the WebServiceData API
+   to discover all services in the project, filter out the non-SOAP webservices then obtain the ServiceDescriptor (WSDL) for it to generate
+   a partner link.
+        </p>
+        <p>
+            Another hypothetical use case is the Composite Application module that wants to display the nodes of all web services of various
+            stripes (SOAP, REST, Semantic, etc.) in order to include those services in the composite app. Again, this module will use WebServiceData
+            to introspect the project, get the WebService node and display it in their editor.
+        </p>
+        <p>
+            Still another use case is a module that wants to render a visualization of all the service providers and consumers in the project, and possibly,
+            to visualize the relationships among these providers and consumers.
+        </p>
+    </answer>
 
 
 
@@ -149,11 +180,48 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="arch-what">
-  <p>
-   XXX no answer for arch-what
-  </p>
- </answer>
+    <answer id="arch-what">
+        <p>
+   Netbeans supports a number of web service stacks, JAXWS, JAXRPC, Axis, JAXRS, and possibly more in the future. Currently, the modules that implement these
+   stack have different ways by which services and clients can be discovered in the project. This API is a uniform way of providing, in a   
+   simple way, the discovery of web service providers and consumers for all these stacks and possibly future ones.
+        </p>
+    </answer>
+
+
+
+<!--
+        <question id="arch-where" when="impl">
+            Where one can find sources for your module?
+            <hint>
+                Please provide link to the Hg web client at
+                http://hg.netbeans.org/
+                or just use tag defaultanswer generate='here'
+            </hint>
+        </question>
+-->
+    <answer id="arch-where">
+        <defaultanswer generate='here' />
+    </answer>
+
+
+
+<!--
+        <question id="compat-deprecation" when="init">
+            How the introduction of your project influences functionality
+            provided by previous version of the product?
+            <hint>
+            If you are planning to deprecate/remove/change any existing APIs,
+            list them here accompanied with the reason explaining why you
+            are doing so.
+            </hint>
+        </question>
+-->
+    <answer id="compat-deprecation">
+        <p>
+   None
+        </p>
+    </answer>
 
 
 
@@ -162,16 +230,16 @@ made subject to such option by the copyright holder.
             Is your module correctly internationalized?
             <hint>
             Correct internationalization means that it obeys instructions 
-            at <a href="http://www.netbeans.org/download/dev/javadoc/OpenAPIs/org/openide/doc-files/i18n-branding.html">
+            at <a href="http://www.netbeans.org/download/dev/javadoc/org-openide-modules/org/openide/modules/doc-files/i18n-branding.html">
             NetBeans I18N pages</a>.
             </hint>
         </question>
 -->
- <answer id="compat-i18n">
-  <p>
-   XXX no answer for compat-i18n
-  </p>
- </answer>
+    <answer id="compat-i18n">
+        <p>
+   Not applicable
+        </p>
+    </answer>
 
 
 
@@ -181,11 +249,11 @@ made subject to such option by the copyright holder.
             implementation exact or does it deviate somehow?
         </question>
 -->
- <answer id="compat-standards">
-  <p>
-   XXX no answer for compat-standards
-  </p>
- </answer>
+    <answer id="compat-standards">
+        <p>
+  No
+        </p>
+    </answer>
 
 
 
@@ -203,11 +271,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="compat-version">
-  <p>
-   XXX no answer for compat-version
-  </p>
- </answer>
+    <answer id="compat-version">
+        <p>
+   Yes. The main API class is a final class (not interface) that can be extended easily.
+        </p>
+    </answer>
 
 
 
@@ -221,11 +289,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="dep-jre">
-  <p>
-   XXX no answer for dep-jre
-  </p>
- </answer>
+    <answer id="dep-jre">
+        <p>
+   1.5 or later
+        </p>
+    </answer>
 
 
 
@@ -234,11 +302,11 @@ made subject to such option by the copyright holder.
             Do you require the JDK or is the JRE enough?
         </question>
 -->
- <answer id="dep-jrejdk">
-  <p>
-   XXX no answer for dep-jrejdk
-  </p>
- </answer>
+    <answer id="dep-jrejdk">
+        <p>
+   JRE is enough
+        </p>
+    </answer>
 
 
 
@@ -246,16 +314,26 @@ made subject to such option by the copyright holder.
         <question id="dep-nb" when="init">
             What other NetBeans projects and modules does this one depend on?
             <hint>
-            If you want, describe such projects as imported APIs using
-            the <code>&lt;api name="identification" type="import or export" category="stable" url="where is the description" /&gt;</code>
+            Depending on other NetBeans projects influnces the ability of
+            users of your work to customize their own branded version of
+            NetBeans by enabling and disabling some modules. Too
+            much dependencies restrict this kind of customization. If that
+            is your case, then you may want to split your functionality into
+            pieces of autoload, eager and regular modules which can be
+            enabled independently. Usually the answer to this question
+            is generated from your <code>project.xml</code> file, but
+            if it is not guessed correctly, you can suppress it by
+            specifying &lt;defaultanswer generate="none"/&gt; and
+            write here your own. Please describe such projects as imported APIs using
+            the <code>&lt;api name="identification" type="import or export" category="stable" url="where is the description" /&gt;</code>.
+            By doing this information gets listed in the summary page of your
+            javadoc.
             </hint>
         </question>
 -->
- <answer id="dep-nb">
-  <p>
-   XXX no answer for dep-nb
-  </p>
- </answer>
+    <answer id="dep-nb">
+        Nodes and Project API
+    </answer>
 
 
 
@@ -264,18 +342,24 @@ made subject to such option by the copyright holder.
             What other projects outside NetBeans does this one depend on?
             
             <hint>
-            Some non-NetBeans projects are packaged as NetBeans modules
+            Depending on 3rd party libraries is always problematic,
+            especially if they are not open source, as that complicates
+            the licensing scheme of NetBeans. Please enumerate your
+            external dependencies here, so it is correctly understood since
+            the begining what are the legal implications of your project.
+            Also please note that
+            some non-NetBeans projects are packaged as NetBeans modules
             (see <a href="http://libs.netbeans.org/">libraries</a>) and
             it is preferred to use this approach when more modules may
-            depend on such third-party library.
+            depend and share such third-party libraries.
             </hint>
         </question>
 -->
- <answer id="dep-non-nb">
-  <p>
-   XXX no answer for dep-non-nb
-  </p>
- </answer>
+    <answer id="dep-non-nb">
+        <p>
+   None
+        </p>
+    </answer>
 
 
 
@@ -284,35 +368,50 @@ made subject to such option by the copyright holder.
             On which platforms does your module run? Does it run in the same
             way on each?
             <hint>
-            If your module is using JNI or deals with special differences of
-            OSes like filesystems, etc. please describe here what they are.
+            If you plan any dependency on OS or any usage of native code,
+            please describe why you are doing so and describe how you envision
+            to enforce the portability of your code.
+            Please note that there is a support for <a href="http://www.netbeans.org/download/dev/javadoc/org-openide-modules/org/openide/modules/doc-files/api.html#how-os-specific">OS conditionally
+            enabled modules</a> which together with autoload/eager modules
+            can allow you to enable to provide the best OS aware support
+            on certain OSes while providing compatibility bridge on the not
+            supported ones.
+            Also please list the supported
+            OSes/HW platforms and mentioned the lovest version of JDK required
+            for your project to run on. Also state whether JRE is enough or
+            you really need JDK.
             </hint>
         </question>
 -->
- <answer id="dep-platform">
-  <p>
-   XXX no answer for dep-platform
-  </p>
- </answer>
+    <answer id="dep-platform">
+        <p>
+   All platforms and will run the same on each platform.
+        </p>
+    </answer>
 
 
 
 <!--
         <question id="deploy-dependencies" when="final">
-            What do other modules need to do to declare a dependency on this one?
+            What do other modules need to do to declare a dependency on this one,
+            in addition to or instead of the normal module dependency declaration
+            (e.g. tokens to require)?
             <hint>
                 Provide a sample of the actual lines you would add to a module manifest
-                to declare a dependency, for example using OpenIDE-Module-Module-Dependencies
-                or OpenIDE-Module-Requires. You may use the magic token @SPECIFICATION-VERSION@
-                to represent the current specification version of the module.
+                to declare a dependency, for example OpenIDE-Module-Requires: some.token.
+                If other modules should not depend on this module, or should just use a
+                simple regular module dependency, you can just answer "nothing". If you
+                intentionally expose a semistable API to clients using implementation
+                dependencies, you should mention that here (but there is no need to give
+                an example of usage).
             </hint>
         </question>
 -->
- <answer id="deploy-dependencies">
-  <p>
-   XXX no answer for deploy-dependencies
-  </p>
- </answer>
+    <answer id="deploy-dependencies">
+        <p>
+   None.
+        </p>
+    </answer>
 
 
 
@@ -336,11 +435,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="deploy-jar">
-  <p>
-   XXX no answer for deploy-jar
-  </p>
- </answer>
+    <answer id="deploy-jar">
+        <p>
+            No other files.
+        </p>
+    </answer>
 
 
 
@@ -352,11 +451,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="deploy-nbm">
-  <p>
-   XXX no answer for deploy-nbm
-  </p>
- </answer>
+    <answer id="deploy-nbm">
+        <p>
+   Yes.
+        </p>
+    </answer>
 
 
 
@@ -366,23 +465,18 @@ made subject to such option by the copyright holder.
             public?
             
             <hint>
-            NetBeans module system allows restriction of access rights to
-            public classes of your module from other modules. This prevents
-            unwanted dependencies of others on your code and should be used
-            whenever possible (<a href="http://www.netbeans.org/download/javadoc/OpenAPIs/org/openide/doc-files/upgrade.html#3.4-public-packages">
-            public packages
-            </a>). If you do not restrict access to your classes you are
-            making it too easy for other people to misuse your implementation
-            details, that is why you should have good reason for not 
-            restricting package access.
+            By default NetBeans build harness treats all packages are private.
+            If you export some of them - either as public or friend packages,
+            you should have a reason. If the reason is described elsewhere
+            in this document, you can ignore this question.
             </hint>
         </question>
 -->
- <answer id="deploy-packages">
-  <p>
-   XXX no answer for deploy-packages
-  </p>
- </answer>
+    <answer id="deploy-packages">
+        <p>
+   Yes
+        </p>
+    </answer>
 
 
 
@@ -396,11 +490,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="deploy-shared">
-  <p>
-   XXX no answer for deploy-shared
-  </p>
- </answer>
+    <answer id="deploy-shared">
+        <p>
+   Anywhere
+        </p>
+    </answer>
 
 
 
@@ -416,11 +510,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-ant-tasks">
-  <p>
-   XXX no answer for exec-ant-tasks
-  </p>
- </answer>
+    <answer id="exec-ant-tasks">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -432,11 +526,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-classloader">
-  <p>
-   XXX no answer for exec-classloader
-  </p>
- </answer>
+    <answer id="exec-classloader">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -455,11 +549,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-component">
-  <p>
-   XXX no answer for exec-component
-  </p>
- </answer>
+    <answer id="exec-component">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -475,11 +569,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-introspection">
-  <p>
-   XXX no answer for exec-introspection
-  </p>
- </answer>
+    <answer id="exec-introspection">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -493,11 +587,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-privateaccess">
-  <p>
-   XXX no answer for exec-privateaccess
-  </p>
- </answer>
+    <answer id="exec-privateaccess">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -511,11 +605,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-process">
-  <p>
-   XXX no answer for exec-process
-  </p>
- </answer>
+    <answer id="exec-process">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -523,7 +617,9 @@ made subject to such option by the copyright holder.
         <question id="exec-property" when="impl">
             Is execution of your code influenced by any environment or
             Java system (<code>System.getProperty</code>) property?
-            
+            On a similar note, is there something interesting that you
+            pass to <code>java.util.logging.Logger</code>? Or do you observe
+            what others log?
             <hint>
             If there is a property that can change the behavior of your 
             code, somebody will likely use it. You should describe what it does 
@@ -537,11 +633,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-property">
-  <p>
-   XXX no answer for exec-property
-  </p>
- </answer>
+    <answer id="exec-property">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -555,19 +651,23 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-reflection">
-  <p>
-   XXX no answer for exec-reflection
-  </p>
- </answer>
+    <answer id="exec-reflection">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
 <!--
-        <question id="exec-threading" when="impl">
-            What threading models, if any, does your module adhere to?
+        <question id="exec-threading" when="init">
+            What threading models, if any, does your module adhere to? How the
+            project behaves with respect to threading?
             <hint>
-                If your module calls foreign APIs which have a specific threading model,
+                Is your API threadsafe? Can it be accessed from any threads or
+                just from some dedicated ones? Any special relation to AWT and
+                its Event Dispatch thread? Also
+                if your module calls foreign APIs which have a specific threading model,
                 indicate how you comply with the requirements for multithreaded access
                 (synchronization, mutexes, etc.) applicable to those APIs.
                 If your module defines any APIs, or has complex internal structures
@@ -583,11 +683,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="exec-threading">
-  <p>
-   XXX no answer for exec-threading
-  </p>
- </answer>
+    <answer id="exec-threading">
+        <p>
+   The API is thread safe.
+        </p>
+    </answer>
 
 
 
@@ -602,11 +702,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="format-clipboard">
-  <p>
-   XXX no answer for format-clipboard
-  </p>
- </answer>
+    <answer id="format-clipboard">
+        <p>
+   None
+        </p>
+    </answer>
 
 
 
@@ -620,11 +720,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="format-dnd">
-  <p>
-   XXX no answer for format-dnd
-  </p>
- </answer>
+    <answer id="format-dnd">
+        <p>
+   None
+        </p>
+    </answer>
 
 
 
@@ -651,11 +751,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="format-types">
-  <p>
-   XXX no answer for format-types
-  </p>
- </answer>
+    <answer id="format-types">
+        <p>
+   None
+        </p>
+    </answer>
 
 
 
@@ -665,18 +765,29 @@ made subject to such option by the copyright holder.
             or any similar technology to find any components to communicate with? Which ones?
             
             <hint>
-            Please describe the interfaces you are searching for, where 
+            NetBeans is build around a generic registry of services called
+            lookup. It is preferable to use it for registration and discovery
+            if possible. See
+            <a href="http://www.netbeans.org/download/dev/javadoc/org-openide-util/org/openide/util/lookup/doc-files/index.html">
+            The Solution to Comunication Between Components
+            </a>. If you do not plan to use lookup and insist usage
+            of other solution, then please describe why it is not working for
+            you.
+            <br/>
+            When filling the final version of your arch document, please
+            describe the interfaces you are searching for, where 
             are defined, whether you are searching for just one or more of them,
             if the order is important, etc. Also classify the stability of such
-            API contract. For that use &lt;api group=&amp;lookup&amp; /&gt; tag.
+            API contract. Use &lt;api group=&amp;lookup&amp; /&gt; tag, so
+            your information gets listed in the summary page of your javadoc.
             </hint>
         </question>
 -->
- <answer id="lookup-lookup">
-  <p>
-   XXX no answer for lookup-lookup
-  </p>
- </answer>
+    <answer id="lookup-lookup">
+        <p>
+   WebServiceDataProviders are registered in the project lookup.
+        </p>
+    </answer>
 
 
 
@@ -689,11 +800,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="lookup-register">
-  <p>
-   XXX no answer for lookup-register
-  </p>
- </answer>
+    <answer id="lookup-register">
+        <p>
+  No
+        </p>
+    </answer>
 
 
 
@@ -706,11 +817,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="lookup-remove">
-  <p>
-   XXX no answer for lookup-remove
-  </p>
- </answer>
+    <answer id="lookup-remove">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -719,11 +830,11 @@ made subject to such option by the copyright holder.
             Does your module run any code on exit?
         </question>
 -->
- <answer id="perf-exit">
-  <p>
-   XXX no answer for perf-exit
-  </p>
- </answer>
+    <answer id="perf-exit">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -733,11 +844,11 @@ made subject to such option by the copyright holder.
             GUI controls such as combo boxes, lists, trees, or text areas?
         </question>
 -->
- <answer id="perf-huge_dialogs">
-  <p>
-   XXX no answer for perf-huge_dialogs
-  </p>
- </answer>
+    <answer id="perf-huge_dialogs">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -745,13 +856,26 @@ made subject to such option by the copyright holder.
         <question id="perf-limit" when="init">
             Are there any hard-coded or practical limits in the number or size of
             elements your code can handle?
+            <hint>
+                Most of algorithms have increasing memory and speed complexity
+                with respect to size of data they operate on. What is the critical
+                part of your project that can be seen as a bottleneck with
+                respect to speed or required memory? What are the practical
+                sizes of data you tested your project with? What is your estimate
+                of potential size of data that would cause visible performance
+                problems? Is there some kind of check to detect such situation
+                and prevent "hard" crashes - for example the CloneableEditorSupport
+                checks for size of a file to be opened in editor
+                and if it is larger than 1Mb it shows a dialog giving the
+                user the right to decide - e.g. to cancel or commit suicide.
+            </hint>
         </question>
 -->
- <answer id="perf-limit">
-  <p>
-   XXX no answer for perf-limit
-  </p>
- </answer>
+    <answer id="perf-limit">
+        <p>
+   Not aware of any limits.
+        </p>
+    </answer>
 
 
 
@@ -761,11 +885,11 @@ made subject to such option by the copyright holder.
             with a relation to the number of windows, etc.
         </question>
 -->
- <answer id="perf-mem">
-  <p>
-   XXX no answer for perf-mem
-  </p>
- </answer>
+    <answer id="perf-mem">
+        <p>
+   Minimal
+        </p>
+    </answer>
 
 
 
@@ -783,11 +907,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="perf-menus">
-  <p>
-   XXX no answer for perf-menus
-  </p>
- </answer>
+    <answer id="perf-menus">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -807,11 +931,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="perf-progress">
-  <p>
-   XXX no answer for perf-progress
-  </p>
- </answer>
+    <answer id="perf-progress">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -826,11 +950,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="perf-scale">
-  <p>
-   XXX no answer for perf-scale
-  </p>
- </answer>
+    <answer id="perf-scale">
+        <p>
+   Possibly, the number of web services in the project.
+        </p>
+    </answer>
 
 
 
@@ -844,11 +968,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="perf-spi">
-  <p>
-   XXX no answer for perf-spi
-  </p>
- </answer>
+    <answer id="perf-spi">
+        <p>
+   Not applicable
+        </p>
+    </answer>
 
 
 
@@ -857,11 +981,11 @@ made subject to such option by the copyright holder.
             Does your module run any code on startup?
         </question>
 -->
- <answer id="perf-startup">
-  <p>
-   XXX no answer for perf-startup
-  </p>
- </answer>
+    <answer id="perf-startup">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -871,11 +995,11 @@ made subject to such option by the copyright holder.
             even when the system is otherwise idle (no user interaction)?
         </question>
 -->
- <answer id="perf-wakeup">
-  <p>
-   XXX no answer for perf-wakeup
-  </p>
- </answer>
+    <answer id="perf-wakeup">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -892,11 +1016,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="resources-file">
-  <p>
-   XXX no answer for resources-file
-  </p>
- </answer>
+    <answer id="resources-file">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -915,11 +1039,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="resources-layer">
-  <p>
-   XXX no answer for resources-layer
-  </p>
- </answer>
+    <answer id="resources-layer">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -936,11 +1060,36 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="resources-mask">
-  <p>
-   XXX no answer for resources-mask
-  </p>
- </answer>
+    <answer id="resources-mask">
+        <p>
+   No
+        </p>
+    </answer>
+
+
+
+<!--
+        <question id="resources-preferences" when="final">
+            Does your module uses preferences via Preferences API? Does your module use NbPreferences or
+            or regular JDK Preferences ? Does it read, write or both ? 
+            Does it share preferences with other modules ? If so, then why ?
+            <hint>
+                You may use
+                    &lt;api type="export" group="preferences"
+                    name="preference node name" category="private"&gt;
+                    description of individual keys, where it is used, what it
+                    influences, whether the module reads/write it, etc.
+                    &lt;/api&gt;
+                Due to XML ID restrictions, rather than /org/netbeans/modules/foo give the "name" as org.netbeans.modules.foo.
+                Note that if you use NbPreferences this name will then be the same as the code name base of the module.
+            </hint>
+        </question>
+-->
+    <answer id="resources-preferences">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -956,11 +1105,11 @@ made subject to such option by the copyright holder.
             </hint>
         </question>
 -->
- <answer id="resources-read">
-  <p>
-   XXX no answer for resources-read
-  </p>
- </answer>
+    <answer id="resources-read">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -974,11 +1123,11 @@ made subject to such option by the copyright holder.
             calling AccessController.doPrivileged().</hint>
         </question>
 -->
- <answer id="security-grant">
-  <p>
-   XXX no answer for security-grant
-  </p>
- </answer>
+    <answer id="security-grant">
+        <p>
+   No
+        </p>
+    </answer>
 
 
 
@@ -991,10 +1140,9 @@ made subject to such option by the copyright holder.
             with NetBeans. Which permissions need to be granted to which domains?</hint>
         </question>
 -->
- <answer id="security-policy">
-  <p>
-   XXX no answer for security-policy
-  </p>
- </answer>
-
+    <answer id="security-policy">
+        <p>
+   No
+        </p>
+    </answer>
 </api-answers>
