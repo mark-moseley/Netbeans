@@ -285,6 +285,8 @@ public class RetoucheUtils {
     }
 
     public static boolean isElementInOpenProject(FileObject f) {
+        if (f==null)
+            return false;
         Project p = FileOwnerQuery.getOwner(f);
         Project[] opened = OpenProjects.getDefault().getOpenProjects();
         for (int i = 0; i<opened.length; i++) {
@@ -319,9 +321,12 @@ public class RetoucheUtils {
     public static boolean isFileInOpenProject(FileObject file) {
         assert file != null;
         Project p = FileOwnerQuery.getOwner(file);
+        if (p == null) {
+            return false;
+        }
         Project[] opened = OpenProjects.getDefault().getOpenProjects();
         for (int i = 0; i<opened.length; i++) {
-            if (p==opened[i])
+            if (p.equals(opened[i]))
                 return true;
         }
         return false;
@@ -580,10 +585,16 @@ public class RetoucheUtils {
         Set<URL> dependentRoots = new HashSet();
         for (FileObject fo: files) {
             Project p = null;
-            if (fo!=null)
-                p=FileOwnerQuery.getOwner(fo);
-            if (p!=null) {
-                URL sourceRoot = URLMapper.findURL(ClassPath.getClassPath(fo, ClassPath.SOURCE).findOwnerRoot(fo), URLMapper.INTERNAL);
+            FileObject ownerRoot = null;
+            if (fo != null) {
+                p = FileOwnerQuery.getOwner(fo);
+                ClassPath cp = ClassPath.getClassPath(fo, ClassPath.SOURCE);
+                if (cp!=null) {
+                    ownerRoot = cp.findOwnerRoot(fo);
+                }
+            }
+            if (p != null && ownerRoot != null) {
+                URL sourceRoot = URLMapper.findURL(ownerRoot, URLMapper.INTERNAL);
                 if (dependencies) {
                     dependentRoots.addAll(SourceUtils.getDependentRoots(sourceRoot));
                 } else {
@@ -603,11 +614,13 @@ public class RetoucheUtils {
         
         if (backSource) {
             for (FileObject file : files) {
-                ClassPath source = ClassPath.getClassPath(file, ClassPath.COMPILE);
-                for (Entry root : source.entries()) {
-                    Result r = SourceForBinaryQuery.findSourceRoots(root.getURL());
-                    for (FileObject root2:r.getRoots()) {
-                        dependentRoots.add(URLMapper.findURL(root2, URLMapper.INTERNAL));
+                if (file!=null) {
+                    ClassPath source = ClassPath.getClassPath(file, ClassPath.COMPILE);
+                    for (Entry root : source.entries()) {
+                        Result r = SourceForBinaryQuery.findSourceRoots(root.getURL());
+                        for (FileObject root2 : r.getRoots()) {
+                            dependentRoots.add(URLMapper.findURL(root2, URLMapper.INTERNAL));
+                        }
                     }
                 }
             }
@@ -910,7 +923,8 @@ public class RetoucheUtils {
             DialogDescriptor dd = new DialogDescriptor(label, actionName, true, new Object[]{getString("LBL_CancelAction", new Object[]{actionName})}, null, 0, null, listener);
             waitDialog = DialogDisplayer.getDefault().createDialog(dd);
             waitDialog.pack();
-            waitTask = RequestProcessor.getDefault().post(ap);
+            //100ms is workaround for 127536
+            waitTask = RequestProcessor.getDefault().post(ap, 100);
             waitDialog.setVisible(true);
             waitTask = null;
             waitDialog = null;
@@ -955,8 +969,10 @@ public class RetoucheUtils {
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
                     if (!cancel) {
-                        if (waitDialog!=null)
+                        if (waitDialog != null) {
                             waitDialog.setVisible(false);
+                            waitDialog.dispose();
+                        }
                         action.run();
                     }
                 }
@@ -971,6 +987,7 @@ public class RetoucheUtils {
             if (waitDialog != null) {
                 cancel = true;
                 waitDialog.setVisible(false);
+                waitDialog.dispose();
             }
         }
     }
