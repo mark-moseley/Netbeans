@@ -37,46 +37,47 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.metadata.model.api;
+package org.netbeans.modules.db.metadata.model.test.api;
 
-import java.util.Collection;
-import org.netbeans.modules.db.metadata.model.spi.TableImplementation;
+import java.util.concurrent.locks.ReentrantLock;
+import org.netbeans.modules.db.metadata.model.MetadataAccessor;
+import org.netbeans.modules.db.metadata.model.MetadataModelImplementation;
+import org.netbeans.modules.db.metadata.model.api.Action;
+import org.netbeans.modules.db.metadata.model.api.Metadata;
+import org.netbeans.modules.db.metadata.model.api.MetadataException;
+import org.netbeans.modules.db.metadata.model.api.MetadataModel;
+import org.netbeans.modules.db.metadata.model.api.MetadataModelException;
 
 /**
  *
  * @author Andrei Badea
  */
-public class Table extends MetadataObject {
+public class MetadataModelTestUtilities {
 
-    private final TableImplementation impl;
+    private MetadataModelTestUtilities() {}
 
-    Table(TableImplementation impl) {
-        this.impl = impl;
+    public static MetadataModel createSimpleMetadataModel(Metadata metadata) {
+        return MetadataAccessor.getDefault().createMetadataModel(new SimpleMetadataModel(metadata));
     }
 
-    public String getName() {
-        return impl.getName();
-    }
+    private static final class SimpleMetadataModel implements MetadataModelImplementation {
 
-    /**
-     * @return the columns.
-     * @throws MetadataException.
-     */
-    public Collection<Column> getColumns() {
-        return impl.getColumns();
-    }
+        private final ReentrantLock lock = new ReentrantLock();
+        private final Metadata metadata;
 
-    /**
-     * @param name a column name.
-     * @return a column named {@code name} or null.
-     * @throws MetadataException.
-     */
-    public Column getColumn(String name) {
-        return impl.getColumn(name);
-    }
+        public SimpleMetadataModel(Metadata metadata) {
+            this.metadata = metadata;
+        }
 
-    @Override
-    public String toString() {
-        return "Table[name='" + getName() + "']"; // NOI18N
+        public void runReadAction(Action<Metadata> action) throws MetadataModelException {
+            lock.lock();
+            try {
+                action.run(metadata);
+            } catch (MetadataException e) {
+                throw new MetadataModelException(e);
+            } finally {
+                lock.unlock();
+            }
+        }
     }
 }

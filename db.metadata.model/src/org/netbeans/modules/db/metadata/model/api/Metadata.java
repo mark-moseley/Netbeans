@@ -40,43 +40,85 @@
 package org.netbeans.modules.db.metadata.model.api;
 
 import java.util.Collection;
+import org.netbeans.modules.db.metadata.model.MetadataAccessor;
+import org.netbeans.modules.db.metadata.model.MetadataModelImplementation;
+import org.netbeans.modules.db.metadata.model.spi.CatalogImplementation;
+import org.netbeans.modules.db.metadata.model.spi.ColumnImplementation;
+import org.netbeans.modules.db.metadata.model.spi.MetadataImplementation;
+import org.netbeans.modules.db.metadata.model.spi.SchemaImplementation;
 import org.netbeans.modules.db.metadata.model.spi.TableImplementation;
 
 /**
  *
  * @author Andrei Badea
  */
-public class Table extends MetadataObject {
+public class Metadata {
 
-    private final TableImplementation impl;
+    private final MetadataImplementation impl;
 
-    Table(TableImplementation impl) {
+    static {
+        MetadataAccessor.setDefault(new MetadataAccessorImpl());
+    }
+
+    Metadata(MetadataImplementation impl) {
         this.impl = impl;
     }
 
-    public String getName() {
-        return impl.getName();
+    /**
+     * @return the default catalog.
+     * @throws MetadataException.
+     */
+    public Catalog getDefaultCatalog() {
+        return impl.getDefaultCatalog();
     }
 
     /**
-     * @return the columns.
+     * @return the catalogs.
      * @throws MetadataException.
      */
-    public Collection<Column> getColumns() {
-        return impl.getColumns();
+    public Collection<Catalog> getCatalogs() {
+        return impl.getCatalogs();
     }
 
     /**
-     * @param name a column name.
-     * @return a column named {@code name} or null.
+     * @param name a catalog name.
+     * @return a catalog named {@code name} or null.
      * @throws MetadataException.
      */
-    public Column getColumn(String name) {
-        return impl.getColumn(name);
+    public Catalog getCatalog(String name) {
+        return impl.getCatalog(name);
     }
 
-    @Override
-    public String toString() {
-        return "Table[name='" + getName() + "']"; // NOI18N
+    private static final class MetadataAccessorImpl extends MetadataAccessor {
+
+        @Override
+        public MetadataModel createMetadataModel(MetadataModelImplementation impl) {
+            return new MetadataModel(impl);
+        }
+
+        @Override
+        public Metadata createMetadata(MetadataImplementation impl) {
+            return new Metadata(impl);
+        }
+
+        @Override
+        public Catalog createCatalog(CatalogImplementation impl) {
+            return new Catalog(impl);
+        }
+
+        @Override
+        public Schema createSchema(SchemaImplementation impl) {
+            return new Schema(impl);
+        }
+
+        @Override
+        public Table createTable(TableImplementation impl) {
+            return new Table(impl);
+        }
+
+        @Override
+        public Column createColumn(ColumnImplementation impl) {
+            return new Column(impl);
+        }
     }
 }

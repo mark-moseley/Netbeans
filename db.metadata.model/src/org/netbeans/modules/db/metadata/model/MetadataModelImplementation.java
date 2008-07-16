@@ -37,46 +37,17 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.metadata.model.api;
+package org.netbeans.modules.db.metadata.model;
 
-import java.util.Collection;
-import org.netbeans.modules.db.metadata.model.spi.TableImplementation;
+import org.netbeans.modules.db.metadata.model.api.Action;
+import org.netbeans.modules.db.metadata.model.api.Metadata;
+import org.netbeans.modules.db.metadata.model.api.MetadataModelException;
 
 /**
  *
  * @author Andrei Badea
  */
-public class Table extends MetadataObject {
+public interface MetadataModelImplementation {
 
-    private final TableImplementation impl;
-
-    Table(TableImplementation impl) {
-        this.impl = impl;
-    }
-
-    public String getName() {
-        return impl.getName();
-    }
-
-    /**
-     * @return the columns.
-     * @throws MetadataException.
-     */
-    public Collection<Column> getColumns() {
-        return impl.getColumns();
-    }
-
-    /**
-     * @param name a column name.
-     * @return a column named {@code name} or null.
-     * @throws MetadataException.
-     */
-    public Column getColumn(String name) {
-        return impl.getColumn(name);
-    }
-
-    @Override
-    public String toString() {
-        return "Table[name='" + getName() + "']"; // NOI18N
-    }
+    void runReadAction(Action<Metadata> action) throws MetadataModelException;
 }

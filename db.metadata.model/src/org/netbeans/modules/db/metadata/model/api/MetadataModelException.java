@@ -39,44 +39,25 @@
 
 package org.netbeans.modules.db.metadata.model.api;
 
-import java.util.Collection;
-import org.netbeans.modules.db.metadata.model.spi.TableImplementation;
-
 /**
+ * A checked exception thrown by the metadata model.
  *
  * @author Andrei Badea
  */
-public class Table extends MetadataObject {
+public class MetadataModelException extends Exception {
 
-    private final TableImplementation impl;
-
-    Table(TableImplementation impl) {
-        this.impl = impl;
+    public MetadataModelException() {
     }
 
-    public String getName() {
-        return impl.getName();
+    public MetadataModelException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    /**
-     * @return the columns.
-     * @throws MetadataException.
-     */
-    public Collection<Column> getColumns() {
-        return impl.getColumns();
+    public MetadataModelException(String message) {
+        super(message);
     }
 
-    /**
-     * @param name a column name.
-     * @return a column named {@code name} or null.
-     * @throws MetadataException.
-     */
-    public Column getColumn(String name) {
-        return impl.getColumn(name);
-    }
-
-    @Override
-    public String toString() {
-        return "Table[name='" + getName() + "']"; // NOI18N
+    public MetadataModelException(Throwable cause) {
+        super(cause);
     }
 }

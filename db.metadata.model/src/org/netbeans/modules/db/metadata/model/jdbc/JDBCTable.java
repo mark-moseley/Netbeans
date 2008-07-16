@@ -46,75 +46,50 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.netbeans.modules.db.metadata.model.MetadataUtilities;
+import org.netbeans.modules.db.metadata.model.api.Column;
 import org.netbeans.modules.db.metadata.model.api.MetadataException;
-import org.netbeans.modules.db.metadata.model.api.Table;
 import org.netbeans.modules.db.metadata.model.spi.MetadataFactory;
-import org.netbeans.modules.db.metadata.model.spi.SchemaImplementation;
+import org.netbeans.modules.db.metadata.model.spi.TableImplementation;
 
 /**
  *
  * @author Andrei Badea
  */
-public class JDBCSchema implements SchemaImplementation {
+public class JDBCTable implements TableImplementation {
 
-    private final JDBCCatalog catalog;
+    private final JDBCSchema schema;
     private final String name;
-    private final boolean _default;
-    private final boolean synthetic;
 
-    private Map<String, Table> tables;
+    private Map<String, Column> columns;
 
-    public JDBCSchema(JDBCCatalog catalog, String name) {
-        this(catalog, name, false, false);
-    }
-
-    public JDBCSchema(JDBCCatalog catalog, String name, boolean synthetic) {
-        this(catalog, name, true, synthetic);
-    }
-
-    private JDBCSchema(JDBCCatalog catalog, String name, boolean _default, boolean synthetic) {
-        this.catalog = catalog;
+    public JDBCTable(JDBCSchema schema, String name) {
+        this.schema = schema;
         this.name = name;
-        this._default = _default;
-        this.synthetic = synthetic;
-    }
-
-    public boolean isDefault() {
-        return _default;
-    }
-
-    public boolean isSynthetic() {
-        return synthetic;
     }
 
     public String getName() {
         return name;
     }
 
-    public Collection<Table> getTables() {
-        return initTables().values();
+    public Collection<Column> getColumns() {
+        return initColumns().values();
     }
 
-    public Table getTable(String name) {
-        return MetadataUtilities.find(name, initTables());
+    public Column getColumn(String name) {
+        return MetadataUtilities.find(name, initColumns());
     }
 
-    @Override
-    public String toString() {
-        return "Schema[name='" + name + "']"; // NOI18N
-    }
-
-    private Map<String, Table> initTables() {
-        if (tables != null) {
-            return tables;
+    private Map<String, Column> initColumns() {
+        if (columns != null) {
+            return columns;
         }
-        Map<String, Table> newTables = new LinkedHashMap<String, Table>();
+        Map<String, Column> newColumns = new LinkedHashMap<String, Column>();
         try {
-            ResultSet rs = catalog.getMetadata().getDmd().getTables(catalog.getName(), name, "%", new String[] { "TABLE" }); // NOI18N
+            ResultSet rs = schema.getCatalog().getMetadata().getDmd().getColumns(schema.getCatalog().getName(), schema.getName(), name, "%"); // NOI18N
             try {
                 while (rs.next()) {
-                    String tableName = rs.getString("TABLE_NAME"); // NOI18N
-                    newTables.put(tableName, MetadataFactory.createTable(new JDBCTable(this, tableName)));
+                    String columnName = rs.getString("COLUMN_NAME"); // NOI18N
+                    newColumns.put(columnName, MetadataFactory.createColumn(new JDBCColumn(columnName)));
                 }
             } finally {
                 rs.close();
@@ -122,11 +97,7 @@ public class JDBCSchema implements SchemaImplementation {
         } catch (SQLException e) {
             throw new MetadataException(e);
         }
-        tables = Collections.unmodifiableMap(newTables);
-        return tables;
-    }
-
-    public JDBCCatalog getCatalog() {
-        return catalog;
+        columns = Collections.unmodifiableMap(newColumns);
+        return columns;
     }
 }

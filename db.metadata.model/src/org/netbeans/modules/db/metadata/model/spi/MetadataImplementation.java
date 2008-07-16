@@ -37,46 +37,20 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.metadata.model.api;
+package org.netbeans.modules.db.metadata.model.spi;
 
 import java.util.Collection;
-import org.netbeans.modules.db.metadata.model.spi.TableImplementation;
+import org.netbeans.modules.db.metadata.model.api.Catalog;
 
 /**
  *
  * @author Andrei Badea
  */
-public class Table extends MetadataObject {
+public interface MetadataImplementation {
 
-    private final TableImplementation impl;
+    public Catalog getDefaultCatalog();
 
-    Table(TableImplementation impl) {
-        this.impl = impl;
-    }
+    public Collection<Catalog> getCatalogs();
 
-    public String getName() {
-        return impl.getName();
-    }
-
-    /**
-     * @return the columns.
-     * @throws MetadataException.
-     */
-    public Collection<Column> getColumns() {
-        return impl.getColumns();
-    }
-
-    /**
-     * @param name a column name.
-     * @return a column named {@code name} or null.
-     * @throws MetadataException.
-     */
-    public Column getColumn(String name) {
-        return impl.getColumn(name);
-    }
-
-    @Override
-    public String toString() {
-        return "Table[name='" + getName() + "']"; // NOI18N
-    }
+    public Catalog getCatalog(String name);
 }

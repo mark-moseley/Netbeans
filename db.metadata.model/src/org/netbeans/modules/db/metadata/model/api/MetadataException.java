@@ -39,44 +39,31 @@
 
 package org.netbeans.modules.db.metadata.model.api;
 
-import java.util.Collection;
-import org.netbeans.modules.db.metadata.model.spi.TableImplementation;
-
 /**
+ * An unchecked exception thrown by the metadata classes ({@link Metadata} and the
+ * classes it aggregates.
+ *
+ * <p>{@code MetadataException}s thrown inside a metadata model
+ * read action need not be handled by clients. Such unhandled exceptions
+ * will be rethrown from {@link MetadataModel#runReadAction} as
+ * {@link MetadataModelException}s.
  *
  * @author Andrei Badea
  */
-public class Table extends MetadataObject {
+public class MetadataException extends RuntimeException {
 
-    private final TableImplementation impl;
-
-    Table(TableImplementation impl) {
-        this.impl = impl;
+    public MetadataException() {
     }
 
-    public String getName() {
-        return impl.getName();
+    public MetadataException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    /**
-     * @return the columns.
-     * @throws MetadataException.
-     */
-    public Collection<Column> getColumns() {
-        return impl.getColumns();
+    public MetadataException(String message) {
+        super(message);
     }
 
-    /**
-     * @param name a column name.
-     * @return a column named {@code name} or null.
-     * @throws MetadataException.
-     */
-    public Column getColumn(String name) {
-        return impl.getColumn(name);
-    }
-
-    @Override
-    public String toString() {
-        return "Table[name='" + getName() + "']"; // NOI18N
+    public MetadataException(Throwable cause) {
+        super(cause);
     }
 }
