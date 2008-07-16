@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -41,6 +41,7 @@
 package org.netbeans.modules.print.api.test;
 
 import javax.swing.Action;
+import javax.swing.JComponent;
 import junit.framework.TestCase;
 import org.netbeans.modules.print.api.PrintManager;
 
@@ -50,27 +51,23 @@ import org.netbeans.modules.print.api.PrintManager;
  */
 public class PrintManagerTest extends TestCase {
 
-  public void testMnanager() {
-    PrintManager manager = PrintManager.getDefault();
-    assertTrue("Print Manager can't be null", manager != null);
+  public void testPrintAction() {
+    Action action = getPrintAction();
+    assertTrue("Print action can't be null", action != null);
   }
 
-  public void testPrintPreviewAction() {
-    PrintManager manager = PrintManager.getDefault();
-    Action action = manager.getPrintPreviewAction();
-    assertTrue("Print preview action can't be null", action != null);
-  }
-
-  public void testPrintPreviewActionProperties() {
-    PrintManager manager = PrintManager.getDefault();
-    Action action = manager.getPrintPreviewAction();
-
+  public void testPrintActionProperties() {
+    Action action = getPrintAction();
     checkProperty(action, Action.SHORT_DESCRIPTION);
     checkProperty(action, Action.SHORT_DESCRIPTION);
     checkProperty(action, Action.SMALL_ICON);
   }
 
+  private Action getPrintAction() {
+    return PrintManager.printAction((JComponent) null);
+  }
+
   private void checkProperty(Action action, String property) {
-    assertTrue("Print preview action." + property + " can't be null", action.getValue(property) != null);
+    assertTrue("Print action." + property + " can't be null", action.getValue(property) != null);
   }
 }

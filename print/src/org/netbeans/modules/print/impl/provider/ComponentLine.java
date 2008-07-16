@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -48,13 +48,13 @@ import java.awt.font.TextLayout;
 
 import java.text.AttributedCharacterIterator;
 import java.text.CharacterIterator;
-import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import org.openide.text.AttributedCharacters;
 
 import org.netbeans.modules.print.impl.util.Option;
-import static org.netbeans.modules.print.impl.util.UI.*;
+import static org.netbeans.modules.print.impl.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -62,17 +62,11 @@ import static org.netbeans.modules.print.impl.util.UI.*;
  */
 final class ComponentLine {
 
-  ComponentLine(
-    AttributedCharacterIterator it,
-    Font defaultFont,
-    Color defaultColor)
-  {
+  ComponentLine(AttributedCharacterIterator it, Font defaultFont, Color defaultColor) {
     for (char c = it.first(); c != CharacterIterator.DONE; c = it.next()) {
       Font font = (Font) it.getAttribute(TextAttribute.FONT);
       Color color = (Color) it.getAttribute(TextAttribute.FOREGROUND);
-      mySymbols.add(new Symbol(c,
-        createFont(font, defaultFont),
-        createColor(color, defaultColor)));
+      mySymbols.add(new Symbol(c, createFont(font, defaultFont), createColor(color, defaultColor)));
     }
     checkSpaces(defaultFont, defaultColor);
   }
@@ -148,7 +142,7 @@ final class ComponentLine {
   }
 
   ComponentLine substring(int index1, int index2) {
-    List<Symbol> list = new ArrayList<Symbol>();
+    List<Symbol> list = new LinkedList<Symbol>();
 
     for (int i=index1; i < index2; i++) {
       list.add(mySymbols.get(i));
@@ -179,8 +173,7 @@ final class ComponentLine {
       offset = 0;
     }
 //out(this + " " + getOffset());
-    return (int) Math.ceil(
-      getTextLayout().getBounds().getMaxX() - offset);
+    return (int) Math.ceil(getTextLayout().getBounds().getMaxX() - offset);
   }
 
   int getOffset() {
@@ -204,11 +197,7 @@ final class ComponentLine {
     AttributedCharacters characters = new AttributedCharacters();
 
     for (int i=0; i < length(); i++) {
-      characters.append(
-        mySymbols.get(i).getChar(),
-        mySymbols.get(i).getFont(),
-        mySymbols.get(i).getColor()
-      );
+      characters.append(mySymbols.get(i).getChar(), mySymbols.get(i).getFont(), mySymbols.get(i).getColor());
     }
     return characters.iterator();
   }
@@ -223,8 +212,7 @@ final class ComponentLine {
   }
 
   @Override
-  public String toString()
-  {
+  public String toString() {
     StringBuffer buffer = new StringBuffer();
 
     for (int i=0; i < length(); i++) {
@@ -265,19 +253,12 @@ final class ComponentLine {
     }
 
     @Override
-    public String toString()
-    {
-      return "'" + // NOI18N
-        myChar + "' " + // NOI18N
-        getString(myFont) + " " + // NOI18N
-        getString(myColor);
+    public String toString() {
+      return "'" + myChar + "' " + getString(myFont) + " " + getString(myColor); // NOI18N
     }
 
     private String getString(Color color) {
-      return "(" + // NOI18N
-        color.getRed() + ", " + // NOI18N
-        color.getGreen() + ", " + // NOI18N
-        color.getBlue() + ")"; // NOI18N
+      return "(" + color.getRed() + ", " + color.getGreen() + ", " + color.getBlue() + ")"; // NOI18N
     }
 
     private String getString(Font font) {
@@ -292,10 +273,7 @@ final class ComponentLine {
       else {
         style += " plain"; // NOI18N
       }
-      return "[" + // NOI18N
-         font.getName() + ", " + // NOI18N
-         style + ", " + // NOI18N
-         font.getSize() + "]"; // NOI18N
+      return "[" + font.getName() + ", " + style + ", " + font.getSize() + "]"; // NOI18N
     }
 
     private char myChar;
@@ -306,5 +284,5 @@ final class ComponentLine {
   private Font myFont;
   private Color myColor;
   private TextLayout myTextLayout;
-  private List<Symbol> mySymbols = new ArrayList<Symbol>();
+  private List<Symbol> mySymbols = new LinkedList<Symbol>();
 }

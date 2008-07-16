@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -40,10 +40,8 @@
  */
 package org.netbeans.modules.print.impl.provider;
 
-import java.awt.Dimension;
 import java.awt.Rectangle;
-
-import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Date;
 
@@ -59,10 +57,13 @@ import org.netbeans.modules.print.impl.util.Percent;
  */
 public class ComponentProvider implements PrintProvider {
 
-  public ComponentProvider(JComponent component, String name, Date modified) {
+  public ComponentProvider(List<JComponent> components, String name, Date lastModified) {
     myName = name;
-    myComponent = component;
-    myLastModifiedDate = modified;
+    myLastModified = lastModified;
+
+    if (components != null) {
+      myComponent = new ComponentPanel(components);
+    }
   }
 
   protected JComponent getComponent() {
@@ -70,29 +71,16 @@ public class ComponentProvider implements PrintProvider {
   }
 
   public PrintPage [][] getPages(int pageWidth, int pageHeight, double pageZoom) {
-    List<ComponentPage> pages = new ArrayList<ComponentPage>();
+    List<ComponentPage> pages = new LinkedList<ComponentPage>();
     JComponent component = getComponent();
 
     if (component == null) {
-      return null;
+      return new PrintPage [0][0];
     }
     int componentWidth = component.getWidth();
     int componentHeight = component.getHeight();
 
-    Object object = component.getClientProperty(Dimension.class);
-
-    if (object instanceof Dimension) {
-      Dimension dimension = (Dimension) object;
-
-      if (dimension.width > 0) {
-        componentWidth = dimension.width;
-      }
-      if (dimension.height > 0) {
-        componentHeight = dimension.height;
-      }
-    }
-    double zoom =
-      getZoom(pageZoom, pageWidth, pageHeight, componentWidth, componentHeight);
+    double zoom = getZoom(pageZoom, pageWidth, pageHeight, componentWidth, componentHeight);
 
     componentWidth = (int) Math.floor(componentWidth * zoom);
     componentHeight = (int) Math.floor(componentHeight * zoom);
@@ -122,7 +110,7 @@ public class ComponentProvider implements PrintProvider {
         ));
       }
     }
-    PrintPage [][] printPages = new PrintPage [row] [column];
+    PrintPage [][] printPages = new PrintPage [row][column];
 
     for (ComponentPage page : pages) {
       printPages [page.getRow()] [page.getColumn()] = page;
@@ -130,17 +118,14 @@ public class ComponentProvider implements PrintProvider {
     return printPages;
   }
 
-  private double getZoom(
-    double zoom,
-    int pageWidth,
-    int pageHeight,
-    int componentWidth,
-    int componentHeight)
-  {
+  private double getZoom(double zoom, int pageWidth, int pageHeight, int componentWidth, int componentHeight) {
     double factor = Percent.getZoomFactor(zoom, -1.0);
 
     if (0 < factor) {
       return factor;
+    }
+    if (Percent.isZoomPage(zoom)) {
+      factor = 0.0;
     }
     int zoomWidth = Percent.getZoomWidth(zoom, -1);
     int zoomHeight = Percent.getZoomHeight(zoom, -1);
@@ -171,11 +156,11 @@ public class ComponentProvider implements PrintProvider {
     return myName;
   }
 
-  public Date getLastModifiedDate() {
-    return myLastModifiedDate;
+  public Date lastModified() {
+    return myLastModified;
   }
 
   private String myName;
+  private Date myLastModified;
   private JComponent myComponent;
-  private Date myLastModifiedDate;
 }

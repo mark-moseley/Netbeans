@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -46,13 +46,13 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 
 import java.text.AttributedCharacterIterator;
-import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import javax.swing.JComponent;
 
 import org.netbeans.modules.print.impl.util.Option;
-import static org.netbeans.modules.print.impl.util.UI.*;
+import static org.netbeans.modules.print.impl.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
@@ -80,15 +80,14 @@ final class ComponentDocument extends JComponent {
     myTextFont = Option.getDefault().getTextFont();
     myBackgroundColor = Option.getDefault().getBackgroundColor();
     myLineSpacing = Option.getDefault().getLineSpacing();
-    myLines = new ArrayList<ComponentLine>();
+    myLines = new LinkedList<ComponentLine>();
   }
 
   private void prepare(String text) {
     LineTokenizer stk = new LineTokenizer(text);
 
     while (stk.hasMoreTokens()) {
-      ComponentLine line = new ComponentLine(
-        trimEnded(stk.nextToken()), myTextFont, myTextColor);
+      ComponentLine line = new ComponentLine(trimEnded(stk.nextToken()), myTextFont, myTextColor);
 //out();
 //out(line.getWidth() + " '" + line + "'");
 //line.show();
@@ -98,8 +97,7 @@ final class ComponentDocument extends JComponent {
 
   private void prepare(AttributedCharacterIterator [] iterators) {
     for(AttributedCharacterIterator iterator : iterators) {
-      ComponentLine line =
-        new ComponentLine(iterator, myTextFont, myTextColor);
+      ComponentLine line = new ComponentLine(iterator, myTextFont, myTextColor);
 //out();
 //out(line.getWidth() + " '" + line + "'");
 //line.show();
@@ -177,7 +175,7 @@ final class ComponentDocument extends JComponent {
   private void prepareWrapLines() {
     myWidth = Option.getDefault().getPageWidth();
 //out("Width: " + myWidth);
-    List<ComponentLine> lines = new ArrayList<ComponentLine>();
+    List<ComponentLine> lines = new LinkedList<ComponentLine>();
 
     for (ComponentLine line : myLines) {
 //out("  see: " + line.getWidth() + " " + line);
@@ -309,20 +307,17 @@ final class ComponentDocument extends JComponent {
   }
 
   @Override
-  public int getWidth()
-  {
+  public int getWidth() {
     return myWidth;
   }
 
   @Override
-  public int getHeight()
-  {
+  public int getHeight() {
     return myHeight;
   }
  
   @Override
-  protected void paintComponent(Graphics graphics)
-  {
+  protected void paintComponent(Graphics graphics) {
     Graphics2D g = Option.getDefault().getGraphics(graphics);
 
     g.setColor(myBackgroundColor);

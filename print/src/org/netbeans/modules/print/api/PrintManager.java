@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -41,30 +41,129 @@
 package org.netbeans.modules.print.api;
 
 import javax.swing.Action;
+import javax.swing.JComponent;
+import org.netbeans.modules.print.spi.PrintProvider;
 
 /**
+ * <p class="nonnormative">
+ * The Print Manager is powerful functionality to preview and
+ * send data out to printer. Print action from <code>File</code>
+ * menu (<code>Ctrl+Alt+Shift+P</code> shortcut) invokes the Print Preview
+ * dialog. The Print Preview dialog provides page layout, the set of options
+ * including font, color, header, footer, printer settings such as paper size
+ * and orientation, number of copies, margins, collation and system properties.</p>
+ *
+ * There are several ways to enable printing for a custom data:<p>
+ *
+ * If the data is a Swing component which extends {@linkplain javax.swing.JComponent}
+ * and shown in a {@link org.openide.windows.TopComponent}, the key
+ * {@linkplain #PRINT_PRINTABLE} with value <code>"Boolean.TRUE"</code>
+ * in the component must be set as a client property, see example:
+ *
+ * <blockquote><pre>
+ * public class CustomComponent extends javax.swing.JComponent {
+ *   public CustomComponent() {
+ *     ...
+ *     putClientProperty("print.printable", Boolean.TRUE); // NOI18N
+ *   }
+ *   ...
+ * }</pre></blockquote>
+ *
+ * The key {@linkplain #PRINT_NAME} is used to specify the name of the component
+ * which will be printed in the header/footer:
+ *
+ * <blockquote><pre>
+ * putClientProperty("print.name", &lt;name&gt;); // NOI18N</pre></blockquote>
+ *
+ * If the key is not set at all, the display name of the top
+ * component is used by default. The content of the header/footer
+ * can be adjusted in the Print Options dialog.<p>
+ *
+ * If the custom data is presented by several components, all of them can
+ * be enabled for print preview. The key {@linkplain #PRINT_WEIGHT} is used for
+ * this purpose, all visible and printable components are sorted by weight
+ * and shown in the Print Preview dialog from the left to right:
+ *
+ * <blockquote><pre>
+ * putClientProperty("print.weight", &lt;weight&gt;); // NOI18N</pre></blockquote>
+ *
+ * If the custom data is presented by another classes, a provider
+ * {@linkplain org.netbeans.modules.print.spi.PrintProvider} should be implemented
+ * and put in the lookup of the top component where the custom data lives.
+ *
+ * @see org.netbeans.modules.print.spi.PrintProvider
+ *
  * @author Vladimir Yaroslavskiy
  * @version 2005.12.12
  */
 public final class PrintManager {
 
+  /**
+   * This key indicates the name of the component being printed.
+   * By default, the name is shown in the left part of the header.
+   */
+  public static final String PRINT_NAME = "print.name"; // NOI18N
+
+  /**
+   * This key indicates the weight of the component being printed.
+   * The value of the key must be Integer. All visible and printable
+   * components are sorted by weight and shown in the Print Preview
+   * dialog from the left to right.
+   */
+  public static final String PRINT_WEIGHT = "print.weight"; // NOI18N
+
+  /**
+   * This key indicates whether the component is printable. To be printable
+   * the value Boolean.TRUE must be set as a client property of the component.
+   */
+  public static final String PRINT_PRINTABLE = "print.printable"; // NOI18N
+
+  /**
+   * Creates a new instance of <code>PrintManager</code>.
+   */
   private PrintManager() {}
 
   /**
-   * Returns Print Preview instance.
-   * @return Print Preview instance
+   * Returns Print action. See example how to put
+   * the Print action on custom Swing tool bar:
+   *
+   * <blockquote><pre>
+   * JToolBar toolbar = new JToolBar();
+   * ...
+   * // print
+   * toolbar.addSeparator();
+   * toolbar.add(PrintManager.printAction());
+   * ...</pre></blockquote>
+   *
+   * How does Print Manager decide what to print?<p>
+   *
+   * At first, the manager searches {@linkplain org.netbeans.modules.print.spi.PrintProvider}
+   * in the lookup of the active top component {@link org.openide.windows.TopComponent}.
+   * If a print provider is found, it is used by the print manager for print preview.
+   * Otherwise, it tries to obtain printable components (marked as {@linkplain #PRINT_PRINTABLE})
+   * among the descendants of the active top component. All found printable components
+   * are passed into the Print Preview dialog.<p>
+   * 
+   * If there are no printable components, printable data are retrieved from the selected
+   * nodes {@link org.openide.nodes.Node} of the active top component: the manager
+   * searches {@linkplain org.netbeans.modules.print.spi.PrintProvider} in the lookups
+   * of the nodes. All pages {@linkplain org.netbeans.modules.print.spi.PrintPage},
+   * taken from found providers, are displayed in the preview dialog.<p>
+   * 
+   * If nodes don't have print providers in lookups, the manager gets the cookie
+   * {@link org.openide.cookies.EditorCookie} from the {@link org.openide.loaders.DataObject}
+   * of the nodes. The {@linkplain javax.swing.text.StyledDocument} documents, returned by
+   * the editor cookies, contain printing information (text, font, color). This information
+   * is shown in the print preview. So, any textual documents (java sources, html, xml, plain
+   * text etc.) are printable by default.
+   * 
+   * @return Print action
    */
-  public static PrintManager getDefault() {
-    return DEFAULT;
+  public static Action printAction(PrintProvider [] providers) {
+    return new org.netbeans.modules.print.impl.action.PrintAction(providers);
   }
 
-  /**
-   * Returns Print Preview action.
-   * @return Print Preview action
-   */
-  public Action getPrintPreviewAction() {
-    return org.netbeans.modules.print.impl.action.PrintPreviewAction.DEFAULT;
+  public static Action printAction(JComponent component) {
+    return new org.netbeans.modules.print.impl.action.PrintAction(component);
   }
-
-  private static final PrintManager DEFAULT = new PrintManager();
 }
