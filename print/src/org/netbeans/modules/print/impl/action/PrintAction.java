@@ -38,32 +38,21 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.print.api.test;
+package org.netbeans.modules.print.impl.action;
 
 import javax.swing.Action;
-import junit.framework.TestCase;
-import org.netbeans.modules.print.api.PrintManager;
+import static org.netbeans.modules.print.impl.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
- * @version 2008.01.17
+ * @version 2006.04.24
  */
-public class PrintManagerTest extends TestCase {
+public final class PrintAction extends PrintMenu {
 
-  public void testPrintAction() {
-    Action action = PrintManager.printAction();
-    assertTrue("Print action can't be null", action != null);
+  public PrintAction() {
+    super(null, "TLT_Print_Action", "print"); // NOI18N
+    setEnabled(true);
   }
 
-  public void testPrintActionProperties() {
-    Action action = PrintManager.printAction();
-
-    checkProperty(action, Action.SHORT_DESCRIPTION);
-    checkProperty(action, Action.SHORT_DESCRIPTION);
-    checkProperty(action, Action.SMALL_ICON);
-  }
-
-  private void checkProperty(Action action, String property) {
-    assertTrue("Print action." + property + " can't be null", action.getValue(property) != null);
-  }
+  public static final Action DEFAULT = new PrintAction();
 }
