@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.palette.ui;
 
-import java.awt.Component;
 import java.awt.dnd.Autoscroll;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
@@ -101,7 +100,7 @@ class CategoryButton extends JCheckBox implements Autoscroll {
         setFont( getFont().deriveFont( Font.BOLD ) );
         setMargin(new Insets(0, 3, 0, 3));
         setFocusPainted( false );
-        
+
         setSelected( false );
 
         setHorizontalAlignment( SwingConstants.LEFT );
@@ -162,6 +161,12 @@ class CategoryButton extends JCheckBox implements Autoscroll {
         setToolTipText( category.getShortDescription() );
         getAccessibleContext().setAccessibleName( category.getDisplayName() );
         getAccessibleContext().setAccessibleDescription( category.getShortDescription() );
+        if( isAqua ) {
+            setContentAreaFilled(true);
+            setOpaque(true);
+            setBackground( new Color(0,0,0) );
+            setForeground( new Color(255,255,255) );
+        }
     }
     
     Category getCategory() {
@@ -189,6 +194,8 @@ class CategoryButton extends JCheckBox implements Autoscroll {
     
     void setExpanded( boolean expand ) {
         setSelected( expand );
+        if( descriptor.isOpened() == expand )
+            return;
         descriptor.setOpened( expand );
         descriptor.getPalettePanel().computeHeights( expand ? CategoryButton.this.category : null );
         requestFocus ();
@@ -197,7 +204,7 @@ class CategoryButton extends JCheckBox implements Autoscroll {
     /** Safe getter for autoscroll support. */
     AutoscrollSupport getSupport() {
         if( null == support ) {
-            support = new AutoscrollSupport( getParent().getParent() );
+            support = new AutoscrollSupport( PalettePanel.getDefault() );
         }
 
         return support;
@@ -225,19 +232,24 @@ class CategoryButton extends JCheckBox implements Autoscroll {
                 return UIManager.getColor( "Table.selectionForeground" ); //NOI18N
             return UIManager.getColor( "PropSheet.selectedSetForeground" ); //NOI18N
         } else {
+            if( isAqua ) {
+                Color res = UIManager.getColor("PropSheet.setForeground"); //NOI18N
+
+                if (res == null) {
+                    res = UIManager.getColor("Table.foreground"); //NOI18N
+
+                    if (res == null) {
+                        res = UIManager.getColor("textText");
+
+                        if (res == null) {
+                            res = Color.BLACK;
+                        }
+                    }
+                }
+                return res;
+            }
             return super.getForeground();
         }
-    }
-
-    @Override
-    protected void paintComponent(Graphics g) {
-        if( isAqua ) {
-            //#124759 - for some reason Mac Leopard asks for background color only once
-            //so we need to force background repaint here
-            g.setColor( getBackground() );
-            g.fillRect( 0, 0, getWidth(), getHeight() );
-        }
-        super.paintComponent(g);
     }
     
     private class MoveFocusAction extends AbstractAction {
