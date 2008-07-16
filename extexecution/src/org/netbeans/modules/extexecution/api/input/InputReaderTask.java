@@ -44,6 +44,7 @@ package org.netbeans.modules.extexecution.api.input;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.openide.util.Cancellable;
 import org.openide.util.Parameters;
 
 /**
@@ -54,7 +55,13 @@ import org.openide.util.Parameters;
  * Task is responsive to interruption. InputReader is closed on finish (includes
  * both cases throwing an exception and interruption).
  * <p>
+ * The {@link #run()} method can be executed just once.
+ * <p>
  * Task is <i>not finished</i> implicitly by reaching the end of the reader.
+ * The caller has to finish it either by interruption or explicit cancellation.
+ * Cancellation is preferred in situations where the interruption could make
+ * cleanup operations on {@link InputProcessor} impossible to happen.
+ *
  * <div class="nonnormative">
  * <p>
  * Sample usage - reading standard output of the process (throwing the data away):
@@ -84,7 +91,7 @@ import org.openide.util.Parameters;
  *
  * @author Petr Hejl
  */
-public final class InputReaderTask implements Runnable {
+public final class InputReaderTask implements Runnable, Cancellable {
 
     private static final Logger LOGGER = Logger.getLogger(InputReaderTask.class.getName());
 
@@ -94,53 +101,73 @@ public final class InputReaderTask implements Runnable {
 
     private final InputProcessor inputProcessor;
 
-    private InputReaderTask(InputReader inputReader) {
-        this(inputReader, null);
-    }
+    private final boolean draining;
 
-    private InputReaderTask(InputReader inputReader,
-            InputProcessor inputProcessor) {
+    private boolean cancelled;
 
-        Parameters.notNull("inputReader", inputReader);
+    private boolean running;
 
+    private InputReaderTask(InputReader inputReader, InputProcessor inputProcessor, boolean draining) {
         this.inputReader = inputReader;
         this.inputProcessor = inputProcessor;
-    }
-
-    /**
-     * Creates the new task. The task will read the data from reader
-     * throwing them away.
-     *
-     * @param reader data producer
-     * @return task handling the read process
-     */
-    public static InputReaderTask newTask(InputReader reader) {
-        return new InputReaderTask(reader);
+        this.draining = draining;
     }
 
     /**
      * Creates the new task. The task will read the data from reader processing
-     * them through processor (if any).
+     * them through processor (if any) until interrupted or cancelled.
+     * <p>
+     * <i>{@link InputReader} must be non blocking.</i>
      *
      * @param reader data producer
      * @param processor processor consuming the data, may be <code>null</code>
      * @return task handling the read process
      */
     public static InputReaderTask newTask(InputReader reader, InputProcessor processor) {
-        return new InputReaderTask(reader, processor);
+        Parameters.notNull("reader", reader);
+
+        return new InputReaderTask(reader, processor, false);
+    }
+
+    /**
+     * Creates the new task. The task will read the data from reader processing
+     * them through processor (if any). When interrupted or cancelled task will
+     * try to read all the remaining <i>available</i> data before exiting.
+     * <p>
+     * <i>{@link InputReader} must be non blocking.</i>
+     *
+     * @param reader data producer
+     * @param processor processor consuming the data, may be <code>null</code>
+     * @return task handling the read process
+     */
+    public static InputReaderTask newDrainingTask(InputReader reader, InputProcessor processor) {
+        Parameters.notNull("reader", reader);
+
+        return new InputReaderTask(reader, processor, true);
     }
 
     /**
      * Task repeatedly reads the data from the InputReader, passing the content
      * to InputProcessor (if any).
+     * <p>
+     * It is not allowed to invoke run multiple times.
      */
     public void run() {
+        synchronized (this) {
+            if (running) {
+                throw new IllegalStateException("Already running task");
+            }
+            running = true;
+        }
+
         boolean interrupted = false;
         try {
             while (true) {
-                if (Thread.interrupted()) {
-                    interrupted = true;
-                    break;
+                synchronized (this) {
+                    if (Thread.currentThread().isInterrupted() || cancelled) {
+                        interrupted = Thread.interrupted();
+                        break;
+                    }
                 }
 
                 inputReader.readInput(inputProcessor);
@@ -154,14 +181,30 @@ public final class InputReaderTask implements Runnable {
                 }
             }
 
-            inputReader.readInput(inputProcessor);
-        } catch (Exception ex) {
-            if (!interrupted && !Thread.currentThread().isInterrupted()) {
-                LOGGER.log(Level.FINE, null, ex);
+            synchronized (this) {
+                if (Thread.currentThread().isInterrupted() || cancelled) {
+                    interrupted = Thread.interrupted();
+                }
             }
+        } catch (Exception ex) {
+            LOGGER.log(Level.FINE, null, ex);
         } finally {
+            // drain the rest
+            if (draining) {
+                try {
+                    while (inputReader.readInput(inputProcessor) > 0) {
+                        LOGGER.log(Level.FINE, "Draining the rest of the reader");
+                    }
+                } catch (IOException ex) {
+                    LOGGER.log(Level.FINE, null, ex);
+                }
+            }
+
             // perform cleanup
             try {
+                if (inputProcessor != null) {
+                    inputProcessor.close();
+                }
                 inputReader.close();
             } catch (IOException ex) {
                 LOGGER.log(Level.INFO, null, ex);
@@ -173,4 +216,19 @@ public final class InputReaderTask implements Runnable {
         }
     }
 
+    /**
+     * Cancels the task. If the task is not running or task is already cancelled
+     * this is noop.
+     *
+     * @return <code>true</code> if the task was successfully cancelled
+     */
+    public boolean cancel() {
+        synchronized (this) {
+            if (cancelled) {
+                return false;
+            }
+            cancelled = true;
+            return true;
+        }
+    }
 }
