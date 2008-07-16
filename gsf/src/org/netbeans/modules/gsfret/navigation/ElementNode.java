@@ -49,16 +49,14 @@ import java.util.List;
 import java.util.Set;
 import javax.swing.Action;
 import javax.swing.Icon;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementHandle;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Modifier;
-import org.netbeans.api.gsf.StructureItem;
-import org.netbeans.api.gsf.StructureItem;
+import org.netbeans.modules.gsf.GsfHtmlFormatter;
+import org.netbeans.modules.gsf.api.ElementHandle;
+import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.modules.gsf.api.Modifier;
+import org.netbeans.modules.gsf.api.StructureItem;
 import org.netbeans.modules.gsfret.navigation.actions.OpenAction;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.AbstractNode;
-import org.openide.nodes.Children;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.util.Utilities;
@@ -90,6 +88,7 @@ public class ElementNode extends AbstractNode {
     private StructureItem description;
     private ClassMemberPanelUI ui;
     private FileObject fileObject; // For the root description
+    private static NavigatorFormatter FORMATTER = new NavigatorFormatter();
            
     /** Creates a new instance of TreeNode */
     public ElementNode( StructureItem description, ClassMemberPanelUI ui, FileObject fileObject) {
@@ -103,6 +102,9 @@ public class ElementNode extends AbstractNode {
     
     @Override
     public Image getIcon(int type) {
+        if (description.getCustomIcon() != null) {
+            return Utilities.icon2Image(description.getCustomIcon());
+        }
         Icon icon = Icons.getElementIcon(description.getKind(), description.getModifiers());
         if (icon != null) {
             return Utilities.icon2Image(icon);
@@ -123,7 +125,8 @@ public class ElementNode extends AbstractNode {
             
     @Override
     public String getHtmlDisplayName() {
-        return description.getHtml();
+        FORMATTER.reset();
+        return description.getHtml(FORMATTER);
     }
     
     @Override
@@ -154,7 +157,7 @@ public class ElementNode extends AbstractNode {
     private synchronized Action getOpenAction() {
         if ( openAction == null ) {
             FileObject fo = ui.getFileObject();
-            openAction = new OpenAction(description.getElementHandle(), fo);
+            openAction = new OpenAction(description.getElementHandle(), fo, description.getPosition());
         }
         return openAction;
     }
@@ -237,9 +240,13 @@ public class ElementNode extends AbstractNode {
                         
         StructureItem oldDescription = description; // Remember old description        
         description = newDescription; // set new descrioption to the new node
-        if ( oldDescription.getHtml() != null && !oldDescription.getHtml().equals(description.getHtml())) {
+        FORMATTER.reset();
+        String oldHtml = oldDescription.getHtml(FORMATTER);
+        FORMATTER.reset();
+        String descHtml = description.getHtml(FORMATTER);
+        if ( oldHtml != null && !oldHtml.equals(descHtml)) {
             // Different headers => we need to fire displayname change
-            fireDisplayNameChange(oldDescription.getHtml(), description.getHtml());
+            fireDisplayNameChange(oldHtml, descHtml);
         }
         if( oldDescription.getModifiers() != null &&  !oldDescription.getModifiers().equals(newDescription.getModifiers())) {
             fireIconChange();
@@ -289,7 +296,7 @@ public class ElementNode extends AbstractNode {
         //FileObject fileObject; // For the root description
         
         String name;
-        ElementHandle<? extends Element> elementHandle;
+        ElementHandle elementHandle;
         ElementKind kind;
         Set<Modifier> modifiers;        
         List<Description> subs; 
@@ -366,7 +373,7 @@ public class ElementNode extends AbstractNode {
                         return k2i(d1.getKind()) - k2i(d2.getKind());
                     } 
                     
-                    return d1.getName().compareTo(d2.getName());
+                    return d1.getSortText().compareTo(d2.getSortText());
                 }
                 else {
                     return d1.getPosition() == d2.getPosition() ? 0 : d1.getPosition() < d2.getPosition() ? -1 : 1;
@@ -419,8 +426,12 @@ public class ElementNode extends AbstractNode {
         public java.lang.String getDisplayName() {
             return "Please Wait...";
         }
-        
     }
     
-    
+    private static class NavigatorFormatter extends GsfHtmlFormatter {
+        @Override
+        public void name(ElementKind kind, boolean start) {
+            // No special formatting for names
+        }
+    }
 }
