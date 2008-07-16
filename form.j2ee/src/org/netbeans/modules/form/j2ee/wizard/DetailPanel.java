@@ -52,6 +52,7 @@ import javax.swing.event.*;
 import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.modules.form.j2ee.J2EEUtils;
 import org.openide.WizardDescriptor;
+import org.openide.awt.Mnemonics;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -76,6 +77,9 @@ public class DetailPanel implements WizardDescriptor.Panel {
     private ImageIcon fieldsIcon;
     /** Image with the preview of the table layout. */
     private ImageIcon tableIcon;
+    
+    /** For acessing info/error label */
+    private WizardDescriptor wizardDesc;
 
     /**
      * Initializes GUI of this panel.
@@ -145,8 +149,8 @@ public class DetailPanel implements WizardDescriptor.Panel {
         if (empty) {
             fieldsChoice.setSelected(true);
             tableCombo.setEnabled(false);
-            availableLabel.setText(NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailableFields")); // NOI18N
-            includeLabel.setText(NbBundle.getMessage(DetailPanel.class, "LBL_DetailFieldsToInclude")); // NOI18N
+            Mnemonics.setLocalizedText(availableLabel, NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailableFields")); // NOI18N
+            Mnemonics.setLocalizedText(includeLabel, NbBundle.getMessage(DetailPanel.class, "LBL_DetailFieldsToInclude")); // NOI18N
             previewLabel.setIcon(fieldsIcon);
         }
         tableChoice.setEnabled(!empty);
@@ -196,32 +200,35 @@ public class DetailPanel implements WizardDescriptor.Panel {
 
         masterPanel.setName(org.openide.util.NbBundle.getMessage(DetailPanel.class, "TITLE_DetailPanel")); // NOI18N
 
-        availableLabel.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailableFields")); // NOI18N
+        availableLabel.setLabelFor(availableList);
+        org.openide.awt.Mnemonics.setLocalizedText(availableLabel, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailableFields")); // NOI18N
 
         availableList.addListSelectionListener(formListener);
         availablePane.setViewportView(availableList);
+        availableList.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailable_ACSD")); // NOI18N
 
-        addAllButton.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAddAll")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(addAllButton, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAddAll")); // NOI18N
         addAllButton.setEnabled(false);
         addAllButton.addActionListener(formListener);
 
-        addButton.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAdd")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(addButton, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAdd")); // NOI18N
         addButton.setEnabled(false);
         addButton.addActionListener(formListener);
 
-        removeButton.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailRemove")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(removeButton, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailRemove")); // NOI18N
         removeButton.setEnabled(false);
         removeButton.addActionListener(formListener);
 
-        removeAllButton.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailRemoveAll")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(removeAllButton, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailRemoveAll")); // NOI18N
         removeAllButton.setEnabled(false);
         removeAllButton.addActionListener(formListener);
 
         includeList.addListSelectionListener(formListener);
         includePane.setViewportView(includeList);
+        includeList.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailToInclude_ACSD")); // NOI18N
 
         upButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/form/j2ee/resources/up.gif")));
-        upButton.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailUp")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(upButton, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailUp")); // NOI18N
         upButton.setEnabled(false);
         upButton.setHorizontalAlignment(javax.swing.SwingConstants.LEADING);
         if (!Utilities.isMac()) {
@@ -230,7 +237,7 @@ public class DetailPanel implements WizardDescriptor.Panel {
         upButton.addActionListener(formListener);
 
         downButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/form/j2ee/resources/down.gif")));
-        downButton.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailDown")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(downButton, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailDown")); // NOI18N
         downButton.setEnabled(false);
         downButton.setHorizontalAlignment(javax.swing.SwingConstants.LEADING);
         if (!Utilities.isMac()) {
@@ -238,19 +245,20 @@ public class DetailPanel implements WizardDescriptor.Panel {
         }
         downButton.addActionListener(formListener);
 
-        includeLabel.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailFieldsToInclude")); // NOI18N
+        includeLabel.setLabelFor(includeList);
+        org.openide.awt.Mnemonics.setLocalizedText(includeLabel, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailFieldsToInclude")); // NOI18N
 
-        detailLabel.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailType")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(detailLabel, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailType")); // NOI18N
 
         buttonGroup.add(fieldsChoice);
         fieldsChoice.setSelected(true);
-        fieldsChoice.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailTextfields")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(fieldsChoice, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailTextfields")); // NOI18N
         fieldsChoice.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         fieldsChoice.setMargin(new java.awt.Insets(0, 0, 0, 0));
         fieldsChoice.addActionListener(formListener);
 
         buttonGroup.add(tableChoice);
-        tableChoice.setText(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailTable")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(tableChoice, org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailTable")); // NOI18N
         tableChoice.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         tableChoice.setMargin(new java.awt.Insets(0, 0, 0, 0));
         tableChoice.addActionListener(formListener);
@@ -342,6 +350,19 @@ public class DetailPanel implements WizardDescriptor.Panel {
                     .add(availablePane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 147, Short.MAX_VALUE))
                 .addContainerGap())
         );
+
+        addAllButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAddAll_ACSD")); // NOI18N
+        addButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailAdd_ACSD")); // NOI18N
+        removeButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailRemove_ACSD")); // NOI18N
+        removeAllButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailRemoveAll_ACSD")); // NOI18N
+        upButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailUp_ACSD")); // NOI18N
+        downButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailDown_ACSD")); // NOI18N
+        fieldsChoice.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailTextfields_ACSD")); // NOI18N
+        tableChoice.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailTable_ACSD")); // NOI18N
+        tableCombo.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailTable_ACSN")); // NOI18N
+        tableCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "LBL_DetailTable_ACSD")); // NOI18N
+
+        masterPanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(DetailPanel.class, "TITLE_DetailPanel")); // NOI18N
     }
 
     // Code for dispatching events from components to event handlers.
@@ -397,8 +418,8 @@ public class DetailPanel implements WizardDescriptor.Panel {
         boolean selected = tableChoice.isSelected();
         tableCombo.setEnabled(selected);
         if (selected) {
-            availableLabel.setText(NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailableColumns")); // NOI18N
-            includeLabel.setText(NbBundle.getMessage(DetailPanel.class, "LBL_DetailColumnsToInclude")); // NOI18N
+            Mnemonics.setLocalizedText(availableLabel, NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailableColumns")); // NOI18N
+            Mnemonics.setLocalizedText(includeLabel, NbBundle.getMessage(DetailPanel.class, "LBL_DetailColumnsToInclude")); // NOI18N
             ForeignKey key = getForeignKey();
             fillLists(key.isValid() ? getForeignKey().getFKTable() : null);
             previewLabel.setIcon(tableIcon);
@@ -408,8 +429,8 @@ public class DetailPanel implements WizardDescriptor.Panel {
     private void fieldsChoiceActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_fieldsChoiceActionPerformed
         if (fieldsChoice.isSelected()) {
             tableCombo.setEnabled(false);
-            availableLabel.setText(NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailableFields")); // NOI18N
-            includeLabel.setText(NbBundle.getMessage(DetailPanel.class, "LBL_DetailFieldsToInclude")); // NOI18N
+            Mnemonics.setLocalizedText(availableLabel, NbBundle.getMessage(DetailPanel.class, "LBL_DetailAvailableFields")); // NOI18N
+            Mnemonics.setLocalizedText(includeLabel, NbBundle.getMessage(DetailPanel.class, "LBL_DetailFieldsToInclude")); // NOI18N
             fillLists(masterTable);
             previewLabel.setIcon(fieldsIcon);
         }
@@ -433,18 +454,24 @@ public class DetailPanel implements WizardDescriptor.Panel {
 
     private void removeAllButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_removeAllButtonActionPerformed
         moveListItems(includeList, availableList, false);
+        showMsg("MSG_AtLeastOneColumnIncluded"); // NOI18N
     }//GEN-LAST:event_removeAllButtonActionPerformed
 
     private void removeButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_removeButtonActionPerformed
         moveListItems(includeList, availableList, true);
+        if (includeList.getModel().getSize() == 0) {
+            showMsg("MSG_AtLeastOneColumnIncluded"); // NOI18N
+        }
     }//GEN-LAST:event_removeButtonActionPerformed
 
     private void addButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addButtonActionPerformed
         moveListItems(availableList, includeList, true);
+        hideMsg();
     }//GEN-LAST:event_addButtonActionPerformed
 
     private void addAllButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addAllButtonActionPerformed
         moveListItems(availableList, includeList, false);
+        hideMsg();
     }//GEN-LAST:event_addAllButtonActionPerformed
 
     private void includeListValueChanged(javax.swing.event.ListSelectionEvent evt) {//GEN-FIRST:event_includeListValueChanged
@@ -468,6 +495,7 @@ public class DetailPanel implements WizardDescriptor.Panel {
     }//GEN-LAST:event_availableListValueChanged
 
     private void fillLists(String tableName) {
+        hideMsg();
         Connection con = connection.getJDBCConnection();
         try {
             DefaultListModel model = (DefaultListModel)availableList.getModel();
@@ -610,6 +638,7 @@ public class DetailPanel implements WizardDescriptor.Panel {
     private boolean defaultPreselect = true;
     public void readSettings(Object settings) {
         WizardDescriptor wizard = (WizardDescriptor) settings;
+        wizardDesc = wizard;
         connection = (DatabaseConnection)wizard.getProperty("connection"); // NOI18N
         masterTable = (String)wizard.getProperty("master"); // NOI18N
         masterColumns = (List)wizard.getProperty("masterColumns"); // NOI18N
@@ -639,6 +668,12 @@ public class DetailPanel implements WizardDescriptor.Panel {
         if (!defaultPreselect) {
             preSelectColumns(detailColumns);
             defaultPreselect = true;
+        }
+        
+        if (this.includeList.getModel().getSize() == 0) {
+            showMsg("MSG_AtLeastOneColumnIncluded"); // NOI18N
+        } else {
+            hideMsg();
         }
     }
 
@@ -812,6 +847,23 @@ public class DetailPanel implements WizardDescriptor.Panel {
                 setEnabled(key.isValid());
             }
             return this;
+        }
+    }
+    
+    /** Hides info/warning/error wizard label */
+    private void hideMsg() {
+        showMsg(null);
+    }
+ 
+    /** Sets info/warning/error wizard label */
+    private void showMsg(String msg) {
+        // TODO: add something like MsgLevel param (MsgLevel.Info, MsgLevel.Warning, etc...) 
+        // Waiting for fixed issue 137737
+        if (wizardDesc != null) {
+            wizardDesc.putProperty(
+                    "WizardPanel_errorMessage", // NOI18N
+                    (msg != null) ? NbBundle.getMessage(getClass(), msg) : null
+                    );
         }
     }
     
