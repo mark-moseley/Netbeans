@@ -47,6 +47,7 @@ import javax.swing.tree.TreeNode;
 import org.netbeans.junit.NbTestCase;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
+import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
 
 /** VisualizerNode tests, mostly based on reported bugs.
@@ -88,5 +89,59 @@ public class VisualizerNodeTest extends NbTestCase {
         TreeNode tm = Visualizer.findVisualizer(m);
         
         assertEquals("Index is 1", 1, ta.getIndex(tm));
+    }
+    
+    public void testIconsAreShared() {
+        AbstractNode a1 = new AbstractNode(Children.LEAF);
+        VisualizerNode v1 = VisualizerNode.getVisualizer(null, a1);
+        Icon icon1 = v1.getIcon(false, false);
+        
+        AbstractNode a2 = new AbstractNode(Children.LEAF);
+        VisualizerNode v2 = VisualizerNode.getVisualizer(null, a2);
+        Icon icon2 = v2.getIcon(false, false);
+        
+        assertSame("Icon instances should be same", icon1, icon2);
+    }
+    
+    public void testLazyVisGet() throws Exception {
+        LazyChildren lch = new LazyChildren();
+        AbstractNode a = new AbstractNode(lch);
+        
+        TreeNode ta = Visualizer.findVisualizer(a);
+        
+        assertEquals("Child check", "c", ta.getChildAt(2).toString());
+        assertEquals("Counter should be 1", 1, lch.cnt);
+    }
+    
+    public void testLazyFilterGet() throws Exception {
+        LazyChildren lch = new LazyChildren();
+        AbstractNode a = new AbstractNode(lch);
+        FilterNode fnode = new FilterNode(a);
+        
+        TreeNode ta = Visualizer.findVisualizer(fnode);
+        
+        assertEquals("Child check", "c", ta.getChildAt(2).toString());
+        assertEquals("Counter should be 1", 1, lch.cnt);
+
+        VisualizerNode vn = (VisualizerNode)ta.getChildAt(2);
+        String msg = ((VisualizerNode)ta).getChildren().dumpIndexes(vn);
+        if (msg.indexOf("'c'") == -1) {
+            fail("Missing note about visualizer node 'c': " + msg);
+        }
+    }
+    
+    static class LazyChildren extends Children.Keys<String> {
+        public LazyChildren() {
+            super(true);
+            setKeys(new String[] {"a", "b", "c"});
+        }
+        int cnt;
+        @Override
+        protected Node[] createNodes(String key) {
+            AbstractNode node = new AbstractNode(LEAF);
+            node.setName(key);
+            cnt++;
+            return new Node[] {node};
+        }
     }
 }
