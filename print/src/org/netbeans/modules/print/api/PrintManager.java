@@ -11,9 +11,9 @@
  * http://www.netbeans.org/cddl-gplv2.html
  * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
  * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
+ * License. When distributing the software, include this License Header
  * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * nbbuild/licenses/CDDL-GPL-2-CP. Sun designates this
  * particular file as subject to the "Classpath" exception as provided
  * by Sun in the GPL Version 2 section of the License file that
  * accompanied this code. If applicable, add the following below the
@@ -40,31 +40,140 @@
  */
 package org.netbeans.modules.print.api;
 
+import java.awt.Container;
 import javax.swing.Action;
+import javax.swing.JComponent;
+import javax.swing.text.StyledDocument;
+
+import org.openide.cookies.EditorCookie;
+import org.openide.loaders.DataObject;
+import org.openide.nodes.Node;
+import org.openide.windows.TopComponent;
+import org.netbeans.modules.print.spi.PrintPage;
+import org.netbeans.modules.print.spi.PrintProvider;
 
 /**
+ * <p class="nonnormative">
+ * The Print Manager is powerful functionality to preview and
+ * send data out to printer. Print action from <code>File</code>
+ * menu (<code>Ctrl+Alt+Shift+P</code> shortcut) invokes the Print Preview
+ * dialog. The Print Preview dialog provides page layout, the set of options
+ * including font, color, header, footer, printer settings such as paper size
+ * and orientation, number of copies, margins, collation and system properties.</p>
+ *
+ * There are several ways to enable printing for a custom data:<p>
+ *
+ * If the data is a Swing component which extends {@linkplain JComponent}
+ * and shown in a {@link TopComponent}, the key {@linkplain #PRINT_PRINTABLE}
+ * with value <code>"Boolean.TRUE"</code> in the component must be set as a
+ * client property. See example:
+ *
+ * <blockquote><pre>
+ * public class CustomComponent extends javax.swing.JComponent {
+ *   public CustomComponent() {
+ *     ...
+ *     putClientProperty("print.printable", Boolean.TRUE); // NOI18N
+ *   }
+ *   ...
+ * }</pre></blockquote>
+ *
+ * The key {@linkplain #PRINT_NAME} is used to specify the name of the component
+ * which will be printed in the header/footer:
+ *
+ * <blockquote><pre>
+ * putClientProperty("print.name", &lt;name&gt;); // NOI18N</pre></blockquote>
+ *
+ * If the key is not set at all, the display name of the top
+ * component is used by default. The content of the header/footer
+ * can be adjusted in the Print Options dialog.<p>
+ *
+ * If the custom data is presented by several components, all of them can
+ * be enabled for print preview. The key {@linkplain #PRINT_WEIGHT} is used for
+ * this purpose, all visible and printable components are sorted by weight
+ * and shown in the Print Preview dialog from the left to right:
+ *
+ * <blockquote><pre>
+ * putClientProperty("print.weight", &lt;weight&gt;); // NOI18N</pre></blockquote>
+ *
+ * How to put the Print action on custom Swing tool bar:
+ *
+ * <blockquote><pre>
+ * public class CustomComponent extends JComponent {
+ *   ...
+ *   JToolBar toolbar = new JToolBar();
+ *   // print
+ *   toolbar.addSeparator();
+ *   toolbar.add(PrintManager.printAction(this));
+ *   ...
+ * }</pre></blockquote>
+ *
+ * How does <code>Print</code> action from the main menu decide what to print?<p>
+ *
+ * At first, {@linkplain #PRINT_PRINTABLE printable} components are obtained among
+ * the {@linkplain Container#getComponents descendants} of the active top component.
+ * All found printable components are passed into the Print Preview dialog.
+ * If there are no printable components, printable data are retrieved from the 
+ * {@linkplain TopComponent#getActivatedNodes selected nodes} of the active top
+ * component. The Print manager gets {@link EditorCookie} from the {@link DataObject}
+ * of the {@link Node}s. The {@link StyledDocument}s returned by the editor cookies,
+ * contain printing information (text, font, color). This information is shown in the
+ * print preview. So, any textual documents (Java/C++/Php/etc. sources, html, xml,
+ * plain text etc.) are printable by default.
+ *
  * @author Vladimir Yaroslavskiy
  * @version 2005.12.12
  */
 public final class PrintManager {
 
+  /**
+   * This key indicates the name of the component being printed.
+   * By default, the name is shown in the left part of the header.
+   */
+  public static final String PRINT_NAME = "print.name"; // NOI18N
+
+  /**
+   * This key indicates the weight of the component being printed.
+   * The value of the key must be Integer. All visible and printable
+   * components are sorted by weight and shown in the Print Preview
+   * dialog from the left to right.
+   */
+  public static final String PRINT_WEIGHT = "print.weight"; // NOI18N
+
+  /**
+   * This key indicates whether the component is printable. To be printable
+   * the value Boolean.TRUE must be set as a client property of the component.
+   */
+  public static final String PRINT_PRINTABLE = "print.printable"; // NOI18N
+
+  /**
+   * Creates a new instance of <code>PrintManager</code>.
+   */
   private PrintManager() {}
 
   /**
-   * Returns Print Preview instance.
-   * @return Print Preview instance
+   * Returns the Print action for a component.
+   * All {@linkplain #PRINT_PRINTABLE printable} components are obtained among
+   * the {@linkplain Container#getComponents descendants} of the given component.
+   * All found printable components are passed into the Print Preview dialog.
+   *
+   * @param component is the component being printed
+   * @return the Print action
+   * @see PrintProvider
    */
-  public static PrintManager getDefault() {
-    return DEFAULT;
+  public static Action printAction(JComponent component) {
+    return new org.netbeans.modules.print.impl.action.PrintAction(component);
   }
 
   /**
-   * Returns Print Preview action.
-   * @return Print Preview action
+   * Returns the Print action for given {@linkplain PrintProvider print providers}.
+   * All {@link PrintPage}s returned by the providers are shown in
+   * the Print Preview dialog.
+   *
+   * @param providers is the array of print providers
+   * @return the Print action
+   * @see PrintProvider
    */
-  public Action getPrintPreviewAction() {
-    return org.netbeans.modules.print.impl.action.PrintPreviewAction.DEFAULT;
+  public static Action printAction(PrintProvider [] providers) {
+    return new org.netbeans.modules.print.impl.action.PrintAction(providers);
   }
-
-  private static final PrintManager DEFAULT = new PrintManager();
 }
