@@ -52,6 +52,7 @@ import java.nio.channels.FileChannel;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import javax.swing.JComboBox;
 import junit.framework.AssertionFailedError;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
@@ -68,11 +69,15 @@ import org.netbeans.jellytools.nodes.ProjectRootNode;
 import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.JButtonOperator;
+import org.netbeans.jemmy.operators.JComboBoxOperator;
+import org.netbeans.jemmy.operators.JDialogOperator;
+import org.netbeans.jemmy.operators.JLabelOperator;
 import org.netbeans.jemmy.operators.JTabbedPaneOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.ide.ProjectSupport;
 
 /**
  *
@@ -199,7 +204,7 @@ public class Utils {
         Node node = new ProjectRootNode(tree, projectName);
         node.performPopupAction(Bundle.getStringTrimmed("org.netbeans.modules.j2ee.earproject.ui.Bundle", "LBL_DeployAction_Name"));
         MainWindowOperator.getDefault().getTimeouts().setTimeout("Waiter.WaitingTime", 600000);
-        MainWindowOperator.getDefault().waitStatusText(Bundle.getString("org.apache.tools.ant.module.run.Bundle", "FMT_finished_target_status", new String[] {(projectNameInStatus?projectName:"build.xml")+" (run-deploy)"}));
+        MainWindowOperator.getDefault().waitStatusText(Bundle.getString("org.apache.tools.ant.module.run.Bundle", "FMT_finished_target_status", new String[] {(projectNameInStatus?projectName:"build.xml")+" (run-deploy)."}));
         if (url != null)
             return Utils.loadFromURL(url);
         return null;
@@ -253,25 +258,27 @@ public class Utils {
     }
     
     public static void buildProject(String projectName) {
-        Node node = new ProjectsTabOperator().getProjectRootNode(projectName);
-        node.performPopupAction(Bundle.getStringTrimmed(
-                "org.netbeans.modules.j2ee.earproject.ui.Bundle", "LBL_BuildAction_Name"));
+        ProjectsTabOperator pto = ProjectsTabOperator.invoke();
+        Node node = pto.getProjectRootNode(projectName);
+//        node.performPopupAction(Bundle.getStringTrimmed(
+//                "org.netbeans.modules.j2ee.earproject.ui.Bundle", "LBL_RebuildAction_Name"));
+        node.performPopupAction("Clean and Build");
         MainWindowOperator.getDefault().getTimeouts().setTimeout("Waiter.WaitingTime", 300000);
         MainWindowOperator.getDefault().waitStatusText(Bundle.getString(
                 "org.apache.tools.ant.module.run.Bundle", "FMT_finished_target_status",
-                new String[] {projectName.replace(' ', '_') + " (dist)"}));
+                new String[] {projectName.replace(' ', '_') + " (clean,dist)"}));
         new EventTool().waitNoEvent(2500);
     }
     
     public static void cleanProject(String projectName) {
         Action cleanAction = new Action(null, Bundle.getStringTrimmed(
-                "org.netbeans.modules.j2ee.earproject.ui.Bundle", "LBL_CleanAction_Name"));
+                "org.netbeans.modules.j2ee.earproject.ui.Bundle", "LBL_RebuildAction_Name"));
         cleanAction.setComparator(new Operator.DefaultStringComparator(true, true));
         cleanAction.perform(new ProjectsTabOperator().getProjectRootNode(projectName));
         MainWindowOperator.getDefault().getTimeouts().setTimeout("Waiter.WaitingTime", 300000);
         MainWindowOperator.getDefault().waitStatusText(Bundle.getString(
                 "org.apache.tools.ant.module.run.Bundle", "FMT_finished_target_status",
-                new String[] {projectName.replace(' ', '_') + " (clean)"}));
+                new String[] {projectName.replace(' ', '_') + " (clean,dist)"}));
         new EventTool().waitNoEvent(2500);
     }
     
@@ -331,5 +338,33 @@ public class Utils {
     
     public static void openOutputTab() {
         new ActionNoBlock("Window|Output", null).performMenu();
+    }
+    
+    public static boolean checkMissingServer(String projectName) {
+        // check missing target server dialog is shown    
+        // "Open Project"
+        String openProjectTitle = Bundle.getString("org.netbeans.modules.j2ee.common.ui.Bundle", "MSG_Broken_Server_Title");
+        boolean needToSetServer = false;
+        if(JDialogOperator.findJDialog(openProjectTitle, true, true) != null) {
+            new NbDialogOperator(openProjectTitle).close();
+            needToSetServer = true;
+        }
+        // open project properties
+        ProjectsTabOperator.invoke().getProjectRootNode(projectName).properties();
+        // "Project Properties"
+        String projectPropertiesTitle = Bundle.getStringTrimmed("org.netbeans.modules.web.project.ui.customizer.Bundle", "LBL_Customizer_Title");
+        NbDialogOperator propertiesDialogOper = new NbDialogOperator(projectPropertiesTitle);
+        // select "Run" category
+        new Node(new JTreeOperator(propertiesDialogOper), "Run").select();
+        if(needToSetServer) {
+            // set default server
+            JComboBox comboBox = (JComboBox) new JLabelOperator(propertiesDialogOper, "Server").getLabelFor();
+            new JComboBoxOperator(comboBox).setSelectedIndex(0);
+        }
+        // confirm properties dialog
+        propertiesDialogOper.ok();
+        // if setting default server, it scans server jars; otherwise it continues immediatelly
+        ProjectSupport.waitScanFinished();
+        return needToSetServer;
     }
 }
