@@ -291,7 +291,10 @@ public abstract class DocumentBox extends ContainerBox {
             ErrorManager.getDefault().notify(e);
             e.printStackTrace();
             layoutValid = false;
-            pane.repaint();
+            // XXX #126314 Possible NPE.
+            if (pane != null) {
+                pane.repaint();
+            }
 
             return;
         }
@@ -733,6 +736,12 @@ public abstract class DocumentBox extends ContainerBox {
             }
         }
 
+        // XXX #126648 There are issues when inserting into the line, rather redo the layout completelly.
+        if (prevBox != null && prevBox.isInlineBox() && nextBox != null && nextBox.isInlineBox()) {
+            redoLayout(true);
+            return;
+        }
+        
         try {
             parentBox.addNode(cc, node, null, prevBox, nextBox);
         } catch (Throwable ex) { // want to catch assertions too
@@ -873,7 +882,7 @@ public abstract class DocumentBox extends ContainerBox {
                 // dynamically within them).
 //                while ((element != null) &&
 //                        (CssLookup.getValue(element, XhtmlCss.DISPLAY_INDEX) != CssValueConstants.TABLE_VALUE)) {
-                while (element != null && parent != null
+                while (element != null && parent instanceof Element
                 && !CssProvider.getValueService().isTableValue(CssProvider.getEngineService().getComputedValueForElement(element, XhtmlCss.DISPLAY_INDEX))) {
                     element = (Element)parent;
                     parent = element.getParentNode();
