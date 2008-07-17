@@ -40,46 +40,7 @@ However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
-<project name="db" default="netbeans" basedir=".">
-
+<project basedir="." default="netbeans" name="db.metadata.model">
+    <description>Builds, tests, and runs the project org.netbeans.modules.db.metadata.model</description>
     <import file="../nbbuild/templates/projectized.xml"/>
-
-    <target name="init" depends="projectized.init">
-        <condition property="nbjdk.bootclasspath.available">
-            <isset property="nbjdk.bootclasspath"/>
-        </condition>
-        <available property="have-jdbc-40" classname="java.sql.RowIdLifetime" classpath="${nbjdk.bootclasspath}" ignoresystemclasses="${nbjdk.bootclasspath.available}"/>
-    </target>
-
-    <target name="compile-lib" depends="init,fake-jdbc-40">
-        <mkdir dir="build/lib-classes" />
-        <javac srcdir="libsrc" destdir="build/lib-classes" deprecation="${build.compiler.deprecation}" debug="${build.compiler.debug}" source="1.4">
-            <classpath>
-                <pathelement path="${lib.cp}"/>
-            </classpath>
-        </javac>
-        <copy todir="build/lib-classes">
-            <fileset dir="libsrc" excludes="${jar-excludes}" />
-        </copy>
-    </target>
-
-    <target name="fake-jdbc-40" unless="have-jdbc-40">
-        <mkdir dir="${fake-jdbc-40.src}/java/sql"/>
-        <echo file="${fake-jdbc-40.src}/java/sql/RowIdLifetime.java">
-            package java.sql;
-
-            public class RowIdLifetime {}
-        </echo>
-        <mkdir dir="${fake-jdbc-40.build}"/>
-        <javac srcdir="${fake-jdbc-40.src}" destdir="${fake-jdbc-40.build}"/>
-    </target>
-
-    <target name="jar-lib" depends="compile-lib">
-        <mkdir dir="${cluster}/modules/ext" />
-        <jar jarfile="${cluster}/modules/ext/ddl.jar" compress="false">
-            <fileset dir="build/lib-classes" />
-        </jar>
-    </target>
-
-    <target name="compile" depends="jar-lib, projectized-common.compile" />
 </project>
