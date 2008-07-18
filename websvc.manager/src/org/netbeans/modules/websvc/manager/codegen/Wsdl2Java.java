@@ -65,6 +65,7 @@ import java.net.ProxySelector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.modules.websvc.manager.util.ManagerUtil;
+import org.netbeans.modules.websvc.saas.util.WsdlUtil;
 import org.openide.util.NbBundle;
 
 
@@ -80,6 +81,7 @@ public class Wsdl2Java {
     private static final String USER_FILE_PROP = "user.properties.file";
     private static final String JAXWS_ENDORSED_DIR = "jaxws.endorsed.dir";
     private static final String WSDL_NAME_PROP = "serviceName";
+    private static final String WSDL_DIRNAME_PROP = "serviceDirName";
     private static final String WSDL_FILE_NAME_PROP = "wsdlFileName";
     private static final String PACKAGE_NAME = "packageName";
     
@@ -90,7 +92,8 @@ public class Wsdl2Java {
     private static final String CATALOG = "catalog.file";
     
     // TODO generate this dynamically instead of using a hardcoded value
-    private static final String ENDORSED_REF = "modules/ext/jaxws21/api/jaxws-api.jar";
+    private static final String JAXB_ENDORSED_REF = "modules/ext/jaxb/jaxb-api.jar";
+    private static final String JAXWS_ENDORSED_REF = "modules/ext/jaxws21/api/jaxws-api.jar";
     
     private final String userDir = System.getProperty("netbeans.user");
     
@@ -112,19 +115,22 @@ public class Wsdl2Java {
     public boolean createProxyJars() {
         try {
             boolean jaxRPCAvailable = ManagerUtil.isJAXRPCAvailable();
-            String wsdlFileName = webServiceData.getURL();
+            String wsdlUrl = webServiceData.getOriginalWsdlUrl();  //should use oringinal remote wsdl url
+            String serviceDirName = WsdlUtil.getServiceDirName(webServiceData.getOriginalWsdlUrl());
             String serviceName = webServiceData.getName();
             String packageName = webServiceData.getPackageName();
             properties.put(WEBSVC_HOME_PROP, WebServiceManager.WEBSVC_HOME);
             // INFO - This build properties file contains the classpath information
             // about all the library reference in the IDE
             properties.put(USER_FILE_PROP, userDir+"/build.properties");
+            properties.put(WSDL_DIRNAME_PROP, serviceDirName);
             properties.put(WSDL_NAME_PROP, serviceName);
-            properties.put(WSDL_FILE_NAME_PROP, wsdlFileName);
+            properties.put(WSDL_FILE_NAME_PROP, wsdlUrl);
             properties.put(PACKAGE_NAME, packageName == null ? "" : packageName);
             
-            File endorsedDir = InstalledFileLocator.getDefault().locate(ENDORSED_REF, null, true).getParentFile();
-            properties.put(JAXWS_ENDORSED_DIR, endorsedDir.getAbsolutePath());
+            File jaxbEndorsedDir = InstalledFileLocator.getDefault().locate(JAXB_ENDORSED_REF, null, true).getParentFile();
+            File jaxwsEndorsedDir = InstalledFileLocator.getDefault().locate(JAXWS_ENDORSED_REF, null, true).getParentFile();
+            properties.put(JAXWS_ENDORSED_DIR, jaxbEndorsedDir.getAbsolutePath()+":"+jaxwsEndorsedDir.getAbsolutePath());
             
             // set the catalog file for wsimport
             properties.put(CATALOG, catalogFile.getAbsolutePath());
@@ -177,10 +183,10 @@ public class Wsdl2Java {
             }
             
             if (webServiceData.isJaxRpcEnabled()) {
-                webServiceData.setJaxRpcDescriptorPath(serviceName + "/jaxrpc/" + serviceName + ".xml");
+                webServiceData.setJaxRpcDescriptorPath(serviceDirName + "/jaxrpc/" + serviceName + ".xml");
             }
             if (webServiceData.isJaxWsEnabled()) {
-                webServiceData.setJaxWsDescriptorPath(serviceName + "/jaxws/" + serviceName + ".xml");
+                webServiceData.setJaxWsDescriptorPath(serviceDirName + "/jaxws/" + serviceName + ".xml");
             }
             
             return jaxWsCreated || jaxRpcCreated;
