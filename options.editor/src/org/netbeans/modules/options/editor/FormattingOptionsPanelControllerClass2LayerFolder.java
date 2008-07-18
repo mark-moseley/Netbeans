@@ -38,69 +38,29 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.java.ui;
+package org.netbeans.modules.options.editor;
 
-import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeSupport;
-import javax.swing.JComponent;
+
+import org.netbeans.spi.editor.mimelookup.Class2LayerFolder;
+import org.netbeans.spi.editor.mimelookup.InstanceProvider;
 import org.netbeans.spi.options.OptionsPanelController;
-import org.openide.util.HelpCtx;
-import org.openide.util.Lookup;
 
-final class FormatingOptionsPanelController extends OptionsPanelController {
-    
-    FormatingOptionsPanel panel;
-    
-    private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
-    private boolean changed;
-                    
-    public void update() {
-        changed = false;
-	panel.load();
+/**
+ *
+ * @author Dusan Balek
+ */
+public class FormattingOptionsPanelControllerClass2LayerFolder implements Class2LayerFolder {
+
+    public Class getClazz() {
+        return OptionsPanelController.class;
     }
-    
-    public void applyChanges() {
-	panel.store();
+
+    public String getLayerFolderName() {
+        return "OptionsDialog/Formatting"; // NOI18N
     }
-    
-    public void cancel() {
-	panel.cancel();
-    }
-    
-    public boolean isValid() {
-        return true; // XXXX
-	// return getPanel().valid(); 
-    }
-    
-    public boolean isChanged() {
-	return changed;
-    }
-    
-    public HelpCtx getHelpCtx() {
-	return new HelpCtx("netbeans.optionsDialog.java.formatting");
-    }
-    
-    public synchronized JComponent getComponent(Lookup masterLookup) {
-        if ( panel == null ) {
-            panel = new FormatingOptionsPanel(this);
-        }
-        return panel;
-    }
-    
-    public void addPropertyChangeListener(PropertyChangeListener l) {
-	pcs.addPropertyChangeListener(l);
-    }
-    
-    public void removePropertyChangeListener(PropertyChangeListener l) {
-	pcs.removePropertyChangeListener(l);
-    }
-        
-    void changed() {
-	if (!changed) {
-	    changed = true;
-	    pcs.firePropertyChange(OptionsPanelController.PROP_CHANGED, false, true);
-	}
-	pcs.firePropertyChange(OptionsPanelController.PROP_VALID, null, null);
+
+    public InstanceProvider getInstanceProvider() {
+        return null;
     }
     
 }
