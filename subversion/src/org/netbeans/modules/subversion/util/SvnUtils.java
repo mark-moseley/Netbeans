@@ -42,7 +42,6 @@
 package org.netbeans.modules.subversion.util;
 
 import org.netbeans.modules.subversion.client.SvnClient;
-import org.openide.*;
 import org.openide.nodes.Node;
 import org.openide.windows.TopComponent;
 import org.openide.util.Lookup;
@@ -59,29 +58,50 @@ import java.text.ParseException;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import org.netbeans.modules.subversion.SubversionVCS;
+import org.netbeans.modules.subversion.SvnFileNode;
 import org.netbeans.modules.subversion.SvnModuleConfig;
 import org.netbeans.modules.subversion.client.PropertiesClient;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
 import org.netbeans.modules.subversion.options.AnnotationExpression;
+import org.netbeans.modules.subversion.ui.diff.Setup;
 import org.netbeans.modules.versioning.spi.VCSContext;
+import org.netbeans.modules.versioning.spi.VersioningSupport;
 import org.netbeans.modules.versioning.util.Utils;
 import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 import org.tigris.subversion.svnclientadapter.*;
 import org.tigris.subversion.svnclientadapter.utils.SVNUrlUtils;
 
 /**
  * Subversion-specific utilities.
- * TODO: PETR Move generic methods to versioncontrol module
  *
  * @author Maros Sandor
  */
 public class SvnUtils {
+
+    public static final String SVN_ADMIN_DIR;
+    public static final String SVN_ENTRIES_DIR;
+    private static final Pattern metadataPattern;
     
-    private static final Pattern metadataPattern = Pattern.compile(".*\\" + File.separatorChar + "(\\.|_)svn(\\" + File.separatorChar + ".*|$)");
+    static {
+        if (Utilities.isWindows()) {
+            String env = System.getenv("SVN_ASP_DOT_NET_HACK");
+            if (env != null) { 
+                SVN_ADMIN_DIR = "_svn";
+            } else {
+                SVN_ADMIN_DIR = ".svn";
+            }
+        } else {
+            SVN_ADMIN_DIR = ".svn";
+        }
+        SVN_ENTRIES_DIR = SVN_ADMIN_DIR + "/entries";
+        metadataPattern = Pattern.compile(".*\\" + File.separatorChar + SVN_ADMIN_DIR + "(\\" + File.separatorChar + ".*|$)");
+    }
     
     private static final FileFilter svnFileFilter = new FileFilter() {
         public boolean accept(File pathname) {
-            if (Subversion.getInstance().isAdministrative(pathname)) return false;
+            if (isAdministrative(pathname)) return false;
             return SharabilityQuery.getSharability(pathname) != SharabilityQuery.NOT_SHARABLE;
         }
     };
@@ -161,14 +181,7 @@ public class SvnUtils {
             for (int j = 0; j < sourceGroups.length; j++) {
                 SourceGroup sourceGroup = sourceGroups[j];
                 File f = FileUtil.toFile(sourceGroup.getRootFolder());
-                //if (f != null) { XXX fallback if experimntal should not work
-//                    File probe = new File (f, ".svn");
-//                    File probe2 = new File (f, "_svn");
-//                    if (probe.isDirectory() || probe2.isDirectory()) {
-//                        return true;
-//                    }
-//                }
-                if ((cache.getStatus(f).getStatus() & FileInformation.STATUS_MANAGED) != 0) return true; // XXX experimental
+                if ((cache.getStatus(f).getStatus() & FileInformation.STATUS_MANAGED) != 0) return true; 
             }
         }
         return false;
@@ -195,7 +208,7 @@ public class SvnUtils {
             Set<File> projectFiles = new HashSet<File>(rootChildren.length);
             for (int i = 0; i < rootChildren.length; i++) {
                 FileObject rootChildFo = rootChildren[i];
-                if (Subversion.getInstance().isAdministrative(rootChildFo.getNameExt())) continue;
+                if (isAdministrative(rootChildFo.getNameExt())) continue;
                 File child = FileUtil.toFile(rootChildFo);
                 if (sourceGroup.contains(rootChildFo)) {
                     // TODO: #60516 deep scan is required here but not performed due to performace reasons
@@ -256,6 +269,39 @@ public class SvnUtils {
     }
     
     /**
+     * Evaluates if the given file is a svn administrative folder - [.svn|_svn]
+     * @param file
+     * @return true if the given file is a svn administrative folder, otherwise false
+     */
+    public static boolean isAdministrative(File file) {
+        String name = file.getName();
+        boolean administrative = isAdministrative(name);
+        return ( administrative && !file.exists() ) || 
+               ( administrative && file.exists() && file.isDirectory() ); // lets suppose it's administrative if file doesnt exist
+    }  
+
+    /**
+     * Evaluates if the given fileName is a svn administrative folder name - [.svn|_svn]
+     * @param fileName
+     * @return true if the given fileName is a svn administrative folder name, otherwise false
+     */
+    public static boolean isAdministrative(String fileName) {        
+        return fileName.equals(SVN_ADMIN_DIR); // NOI18N
+    }
+    
+    /**
+     * Tests whether a file or directory should receive the STATUS_NOTVERSIONED_NOTMANAGED status. 
+     * All files and folders that have a parent with either .svn/entries or _svn/entries file are 
+     * considered versioned.
+     * 
+     * @param file a file or directory
+     * @return false if the file should receive the STATUS_NOTVERSIONED_NOTMANAGED status, true otherwise
+     */ 
+    public static boolean isManaged(File file) {
+        return VersioningSupport.getOwner(file) instanceof SubversionVCS && !isPartOfSubversionMetadata(file);
+    }
+    
+    /**
      * Computes previous revision or <code>null</code>
      * for initial.
      *
@@ -280,7 +326,7 @@ public class SvnUtils {
         List<String> path = new ArrayList<String>();
         SVNUrl repositoryURL = null;
         boolean fileIsManaged = false;
-        while (Subversion.getInstance().isManaged(file)) {
+        while (isManaged(file)) {
             fileIsManaged = true;
                     
             ISVNInfo info = null;
@@ -318,7 +364,7 @@ public class SvnUtils {
             file = file.getParentFile();
             
         }
-        if(repositoryURL == null & fileIsManaged) {
+        if(repositoryURL == null && fileIsManaged) {
             // The file is managed but we haven't found the repository URL in it's metadata - 
             // this looks like the WC was created with a client < 1.3.0. I wouldn't mind for myself and
             // get the URL from the server, it's just that it could be quite a performance killer.
@@ -327,75 +373,6 @@ public class SvnUtils {
             throw new SVNClientException(NbBundle.getMessage(SvnUtils.class, "MSG_too_old_WC"));
         }                
         return repositoryPath;
-    }
-    
-    /**
-     * Compute relative path to repository root.
-     * For not yet versioned files guess the URL
-     * from parent context.
-     *
-     * <p>I/O intensive avoid calling it frnm AWT.
-     *
-     * @return the repository url or null for unknown
-     * XXX we need this until we get a local implementation for client.getInfoFromWorkingCopy(file);
-     */
-    public static String getRelativePath(SVNUrl repositoryURL, File file) throws SVNClientException {
-        String repositoryPath = null;
-        
-        SvnClient client;
-        try {
-            client = Subversion.getInstance().getClient(false);
-        } catch (SVNClientException ex) {                 
-            SvnClientExceptionHandler.notifyException(ex, false, false);            
-            return null;
-        }
-        
-        List<String> path = new ArrayList<String>();
-        boolean fileIsManaged = false;
-        while (Subversion.getInstance().isManaged(file)) {
-            fileIsManaged = true;
-            
-            ISVNStatus status = null;
-            try {                
-                status = client.getSingleStatus(file);
-            } catch (SVNClientException ex) {
-                if (SvnClientExceptionHandler.isUnversionedResource(ex.getMessage()) == false) {                    
-                    SvnClientExceptionHandler.notifyException(ex, false, false);
-                }
-            }
-            
-            if (status != null && status.getUrl() != null) {
-                SVNUrl fileURL = status.getUrl();
-                
-                if (fileURL != null && repositoryURL !=  null) {
-                    fileURL = decode(fileURL);
-                    String fileLink = fileURL.toString();
-                    String repositoryLink = repositoryURL.toString();
-                    repositoryPath = fileLink.substring(repositoryLink.length());
-                    
-                    Iterator it = path.iterator();
-                    StringBuffer sb = new StringBuffer();
-                    while (it.hasNext()) {
-                        String segment = (String) it.next();
-                        sb.append("/"); // NOI18N
-                        sb.append(segment);
-                    }
-                    repositoryPath += sb.toString();
-                    break;
-                }
-            }
-            
-            path.add(0, file.getName());
-            file = file.getParentFile();
-            
-        }
-        if(repositoryURL == null & fileIsManaged) {
-            // The file is managed but we haven't found the repository URL in it's metadata - 
-            // this looks like the WC was created with a client < 1.3.0. I wouldn't mind for myself and
-            // get the URL from the server, it's just that it could be quite a performance killer.
-            throw new SVNClientException(NbBundle.getMessage(SvnUtils.class, "MSG_too_old_WC"));
-        }                   
-        return repositoryPath.startsWith("/") ? repositoryPath.substring(1) : repositoryPath;
     }
     
     /**
@@ -418,7 +395,7 @@ public class SvnUtils {
         
         SVNUrl repositoryURL = null;
         boolean fileIsManaged = false;
-        while (Subversion.getInstance().isManaged(file)) {
+        while (isManaged(file)) {
             fileIsManaged = true;
             ISVNInfo info = null;
             try {                
@@ -429,23 +406,24 @@ public class SvnUtils {
                 }
             }
             
-            if (info != null && info.getUrl() != null) {
+            if (info != null) {
                 repositoryURL = decode(info.getRepository());
                 if (repositoryURL != null) {
                     break;
                 }
             }
             
-            // path.add(0, file.getName());
             file = file.getParentFile();
             
         }
-        if(repositoryURL == null & fileIsManaged) {
+        if(repositoryURL == null && fileIsManaged) {
             // The file is managed but we haven't found the repository URL in it's metadata - 
             // this looks like the WC was created with a client < 1.3.0. I wouldn't mind for myself and
             // get the URL from the server, it's just that it could be quite a performance killer.
             throw new SVNClientException(NbBundle.getMessage(SvnUtils.class, "MSG_too_old_WC"));
-        }                   
+        } else {
+            Subversion.LOG.log(Level.WARNING, "no repository url found for managed fiel {0}", new Object[] {file});
+        }
         return repositoryURL;
     }
     
@@ -470,7 +448,7 @@ public class SvnUtils {
             return null;
         }
         boolean fileIsManaged = false;
-        while (Subversion.getInstance().isManaged(file)) {
+        while (isManaged(file)) {
             fileIsManaged = true;
             
             try {
@@ -511,7 +489,7 @@ public class SvnUtils {
             file = file.getParentFile();
             
         }
-        if(fileURL == null & fileIsManaged) {
+        if(fileURL == null && fileIsManaged) {
             // The file is managed but we haven't found the URL in it's metadata - 
             // this looks like the WC was created with a client < 1.3.0. I wouldn't mind for myself and
             // get the URL from the server, it's just that it could be quite a performance killer.
@@ -548,6 +526,7 @@ public class SvnUtils {
                 do  {
                     byteList.add((byte) Integer.parseInt(s.substring(i + 1, i + 3), 16));                     
                     i += 3;    
+                    if (i >= s.length()) break;
                     c = s.charAt(i);
                 } while(isEncodedByte(c, s, i));
                 
@@ -796,29 +775,6 @@ public class SvnUtils {
         refreshParents(folder.getParentFile());
         Subversion.getInstance().getStatusCache().refresh(folder, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
     }
-
-    /**
-     * Refreshes the status for the given file and all its children
-     * 
-     * @param file
-     */
-    public static void refreshRecursively(File file) {    
-        FileStatusCache cache = Subversion.getInstance().getStatusCache();
-        cache.refresh(file, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
-        File[] files = file.listFiles();
-        if(files != null) {        
-            for (int i = 0; i < files.length; i++) {
-                if(!(SvnUtils.isPartOfSubversionMetadata(files[i]) || 
-                     Subversion.getInstance().isAdministrative(files[i]))) 
-                {
-                    cache.refresh(files[i], FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
-                    if(files[i].isDirectory()) {                
-                        refreshRecursively(files[i]);                
-                    }                    
-                }
-            }        
-        }        
-    }
     
     /**
      * Rips an eventual username off - e.g. user@svn.host.org
@@ -954,4 +910,60 @@ public class SvnUtils {
         
         return true;        
     }    
+    
+    public static List<File> listRecursively(File root) {            
+        List<File> ret = new ArrayList<File>();
+        if(root == null) {
+            return ret;
+        }
+        ret.add(root);
+        File[] files = root.listFiles();
+        if(files != null) {        
+            for (File file : files) {                
+                if(!(isPartOfSubversionMetadata(file) || isAdministrative(file))) {                    
+                    if(file.isDirectory()) {                
+                        ret.addAll(listRecursively(file));                
+                    } else {
+                        ret.add(file);
+                    }               
+                }
+            }        
+        }        
+        return ret;
+    }    
+    
+    public static SvnFileNode [] getNodes(Context context, int includeStatus) {
+        File [] files = Subversion.getInstance().getStatusCache().listFiles(context, includeStatus);
+        SvnFileNode [] nodes = new SvnFileNode[files.length];
+        for (int i = 0; i < files.length; i++) {
+            nodes[i] = new SvnFileNode(files[i]);
+        }
+        return nodes;
+    }
+    
+    public static SVNRevision toSvnRevision(String revision) {
+        SVNRevision svnrevision;
+        if (Setup.REVISION_HEAD.equals(revision)) {
+            svnrevision = SVNRevision.HEAD;
+        } else {
+            svnrevision = new SVNRevision.Number(Long.parseLong(revision));
+        }
+        return svnrevision;
+    }
+
+    // XXX JAVAHL
+    public static ISVNLogMessage[] getLogMessages(ISVNClientAdapter client, SVNUrl rootUrl, String[] paths, SVNRevision fromRevision, SVNRevision toRevision, boolean stopOnCopy, boolean fetchChangePath) throws SVNClientException {
+        Set<Long> alreadyHere = new HashSet<Long>();
+        List<ISVNLogMessage> ret = new ArrayList<ISVNLogMessage>();
+        for (String path : paths) {
+            ISVNLogMessage[] logs = client.getLogMessages(rootUrl.appendPath(path), null, fromRevision, toRevision, stopOnCopy, fetchChangePath, 0);
+            for (ISVNLogMessage log : logs) {
+                if(!alreadyHere.contains(log.getRevision().getNumber())) {
+                    ret.add(log);
+                    alreadyHere.add(log.getRevision().getNumber());
+                }
+            }
+        }
+        return ret.toArray(new ISVNLogMessage[ret.size()]);
+    }
 }
