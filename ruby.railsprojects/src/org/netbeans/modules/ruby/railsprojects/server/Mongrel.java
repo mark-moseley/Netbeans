@@ -48,7 +48,6 @@ import java.util.regex.Pattern;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.ruby.platform.RubyPlatform;
-import org.netbeans.modules.ruby.platform.gems.GemInfo;
 import org.netbeans.spi.server.ServerInstanceImplementation;
 import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
@@ -56,42 +55,28 @@ import org.openide.util.NbBundle;
 import org.openide.util.Parameters;
 
 /**
- * This class represents a GlassFish V3 gem installation.
+ * This class represents a Mongrel (gem) installation.
  * 
- * @author Peter Williams
  * @author Erno Mononen
  */
-class GlassFishGem implements RubyServer, ServerInstanceImplementation {
+class Mongrel implements RubyServer, ServerInstanceImplementation {
 
-    static final String GEM_NAME = "glassfish";
+    static final String GEM_NAME = "mongrel";
     /**
-     * The pattern for recognizing when an instance of GlassFish has started.
+     * The pattern for recognizing when an instance of Mongrel has started.
      */
-    private static final Pattern PATTERN = Pattern.compile("\\bINFO: Glassfish v3 started.+", Pattern.DOTALL);
-    
+    private static final Pattern PATTERN = Pattern.compile("\\bMongrel.+available at.+", Pattern.DOTALL);
     private final List<RailsApplication> applications = new ArrayList<RailsApplication>();
     private final RubyPlatform platform;
     private final String version;
-    private final String location;
     private final ChangeSupport changeSupport = new ChangeSupport(this);
     
     private Node node;
 
-    GlassFishGem(RubyPlatform platform, GemInfo gemInfo) {
+    Mongrel(RubyPlatform platform, String version) {
         Parameters.notNull("platform", platform); //NOI18N
         this.platform = platform;
-        this.version = gemInfo.getVersion();
-        this.location = getGemFolder(gemInfo.getSpecFile());
-    }
-
-    private String getGemFolder(File specFile) {
-        String gemFolderName = specFile.getName();
-        if(gemFolderName.endsWith(".gemspec")) {
-            gemFolderName = gemFolderName.substring(0, gemFolderName.length() - 8);
-        }
-        
-        return new File(specFile.getParentFile().getParentFile(),
-                "gems" + File.separatorChar + gemFolderName).getAbsolutePath();
+        this.version = version;
     }
 
     private Node getNode() {
@@ -103,11 +88,11 @@ class GlassFishGem implements RubyServer, ServerInstanceImplementation {
     
     // RubyServer  methods
     public String getNodeName() {
-        return NbBundle.getMessage(GlassFishGem.class, "LBL_ServerNodeName", getDisplayName(), platform.getLabel());
+        return NbBundle.getMessage(Mongrel.class, "LBL_ServerNodeName", getDisplayName(), platform.getLabel());
     }
-    
+
     public String getLocation() {
-        return location;
+        return null;
     }
 
     public String getStartupParam() {
@@ -115,11 +100,11 @@ class GlassFishGem implements RubyServer, ServerInstanceImplementation {
     }
 
     public String getScriptPrefix() {
-        return "-S";
+        return null;
     }
 
     public String getServerPath() {
-        return "glassfish_rails";
+        return "script" + File.separator + "server";
     }
 
     public boolean isStartupMsg(String outputLine) {
@@ -184,11 +169,11 @@ class GlassFishGem implements RubyServer, ServerInstanceImplementation {
 
     // RubyInstance methods 
     public String getServerUri() {
-        return "GLASSFISH";
+        return "MONGREL";
     }
 
     public String getDisplayName() {
-        return NbBundle.getMessage(GlassFishGem.class, "LBL_GlassFish", version);
+        return NbBundle.getMessage(Mongrel.class, "LBL_Mongrel", version);
     }
 
     public ServerState getServerState() {
@@ -236,14 +221,11 @@ class GlassFishGem implements RubyServer, ServerInstanceImplementation {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final GlassFishGem other = (GlassFishGem) obj;
+        final Mongrel other = (Mongrel) obj;
         if (this.platform != other.platform && (this.platform == null || !this.platform.equals(other.platform))) {
             return false;
         }
         if (this.version != other.version && (this.version == null || !this.version.equals(other.version))) {
-            return false;
-        }
-        if (this.location != other.location && (this.location == null || !this.location.equals(other.location))) {
             return false;
         }
         return true;
