@@ -159,7 +159,7 @@ made subject to such option by the copyright holder.
             <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
             <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/java/project/resources/Main.html"/>
             <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.java.project.Bundle"/>
-            <attr name="SystemFileSystem.icon" urlvalue="nbresloc:org/netbeans/modules/java/resources/main-class.gif"/>
+            <attr name="SystemFileSystem.icon" urlvalue="nbresloc:org/netbeans/modules/java/resources/main-class.png"/>
         </file>
         <file name="Empty.java" url="resources/Empty.template">
             <attr name="instantiatingIterator" methodvalue="org.netbeans.spi.java.project.support.ui.templates.JavaTemplates.createJavaTemplateIterator"/>
@@ -220,6 +220,15 @@ made subject to such option by the copyright holder.
         <file name="org-netbeans-modules-java-project-ChangePackageViewTypeAction.instance">
             <attr name="position" intvalue="1600"/>
         </file>
+    </folder>
+    
+    <folder name="Menu">
+        <folder name="BuildProject">
+            <file name="org-netbeans-modules-project-ui-JavadocProject.shadow">
+                <attr name="originalFile" stringvalue="Actions/Project/org-netbeans-modules-project-ui-JavadocProject.instance"/>
+                <attr name="position" intvalue="600"/>
+            </file>
+        </folder>
     </folder>
     
 </filesystem>
