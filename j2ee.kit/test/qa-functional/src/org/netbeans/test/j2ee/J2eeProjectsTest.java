@@ -45,14 +45,13 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
-import junit.framework.TestSuite;
+import junit.framework.Test;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
-import org.netbeans.jellytools.JellyTestCase;
+import org.netbeans.jellytools.modules.j2ee.J2eeTestCase;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
 import org.netbeans.modules.j2ee.earproject.EarProject;
-import org.netbeans.modules.j2ee.earproject.EarProjectType;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.EarProjectProperties;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
@@ -70,10 +69,10 @@ import org.netbeans.test.j2ee.lib.RequiredFiles;
  * @author jungi
  * @see <a href="http://qa.netbeans.org/modules/j2ee/promo-f/testspec/j2ee-wizards-testspec.html">J2EE Wizards Test Specification</a>
  */
-public class J2eeProjectsTest extends JellyTestCase {
+public class J2eeProjectsTest extends J2eeTestCase {
     
     private Reporter reporter;
-    private static final File projectsHome = new File(System.getProperty("xtest.sketchpad"));
+    private static final File projectsHome = new File(System.getProperty("nbjunit.workdir"));
     
     /**
      * Creates a new instance of J2eeProjectsTest
@@ -82,7 +81,14 @@ public class J2eeProjectsTest extends JellyTestCase {
         super(name);
     }
     
-    
+        public static Test suite() {
+        NbModuleSuite.Configuration conf = NbModuleSuite.createConfiguration(J2eeProjectsTest.class);
+        conf = addServerTests(Server.GLASSFISH, conf,"testCreateEjbProject","testCreateWebProject",
+                "testCreateEmptyJ2eeProject","testAddModulesToJ2eeProject");
+        conf = conf.enableModules(".*").clusters(".*");
+        return NbModuleSuite.create(conf);
+    }
+
     @Override
     public void setUp() throws Exception {
         super.setUp();
@@ -165,11 +171,10 @@ public class J2eeProjectsTest extends JellyTestCase {
             earPrj = (EarProject) pm.findProject(FileUtil.toFileObject(new File(projectsHome, "J2eePrj").getCanonicalFile()));
             warPrj = pm.findProject(FileUtil.toFileObject(new File(projectsHome, "WebModule").getCanonicalFile()));
             ejbPrj = pm.findProject(FileUtil.toFileObject(new File(projectsHome, "EJBModule").getCanonicalFile()));
-            AntProjectHelper h = earPrj.getUpdateHelper().getAntProjectHelper();
+            AntProjectHelper h = earPrj.getAntProjectHelper();
             AuxiliaryConfiguration aux = h.createAuxiliaryConfiguration();
             ReferenceHelper refHelper = new ReferenceHelper(h, aux, h.getStandardPropertyEvaluator());
-            EarProjectProperties epp = new EarProjectProperties(earPrj, refHelper, new EarProjectType());
-            epp.addJ2eeSubprojects(new Project[] {warPrj, ejbPrj});
+            EarProjectProperties.addJ2eeSubprojects(earPrj, new Project[] {warPrj, ejbPrj});
         } catch (IOException ioe) {
             ioe.printStackTrace(reporter.getLogStream());
             fail("IOEx while adding modules to EAR project.");
@@ -189,15 +194,6 @@ public class J2eeProjectsTest extends JellyTestCase {
         reporter.ref("Real: " + l);
         Set s = getDifference(rf, l);
         assertTrue("Files: " + s + " are new in project: " + p.toString() , s.isEmpty());
-    }
-    
-    public static TestSuite suite() {
-        TestSuite suite = new NbTestSuite();
-        suite.addTest(new J2eeProjectsTest("testCreateEjbProject"));
-        suite.addTest(new J2eeProjectsTest("testCreateWebProject"));
-        suite.addTest(new J2eeProjectsTest("testCreateEmptyJ2eeProject"));
-        suite.addTest(new J2eeProjectsTest("testAddModulesToJ2eeProject"));
-        return suite;
     }
     
     private Set getDifference(Set s1, Set s2) {
