@@ -36,10 +36,12 @@ import org.w3c.dom.Node;
  */
 public class PLinksNodeModel implements NodeModel, Constants {
     
+    // When changed, update also mf-layer.xml, where are the properties duplicated because of Actions.alwaysEnabled()
     public static final String ICONS_ROOT = 
             "org/netbeans/modules/bpel/debugger/ui/" + // NOI18N
             "resources/image/plinks/"; // NOI18N
     
+    // When changed, update also mf-layer.xml, where are the properties duplicated because of Actions.alwaysEnabled()
     public static final String PARTNER_LINK_ICON =
             ICONS_ROOT + "PARTNER_LINK"; // NOI18N
     
@@ -77,8 +79,14 @@ public class PLinksNodeModel implements NodeModel, Constants {
         
         if (object == TreeModel.ROOT) {
             return NbBundle.getMessage(
-                PLinksNodeModel.class, 
-                "CTL_Column_Name"); // NOI18N
+                    PLinksNodeModel.class, 
+                    "CTL_Column_Name"); // NOI18N
+        }
+        
+        if (object instanceof PLinksTreeModel.Dummy) {
+            return NbBundle.getMessage(
+                    PLinksNodeModel.class, 
+                    "CTL_Empty_Model"); // NOI18N
         }
         
         if (object instanceof PartnerLinkWrapper) {
@@ -130,6 +138,10 @@ public class PLinksNodeModel implements NodeModel, Constants {
         
         if (object == TreeModel.ROOT) {
             return ""; // NOI18N
+        }
+        
+        if (object instanceof PLinksTreeModel.Dummy) {
+            return null;
         }
         
         if (object instanceof PartnerLinkWrapper) {
