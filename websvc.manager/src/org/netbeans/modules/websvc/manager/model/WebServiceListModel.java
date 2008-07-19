@@ -54,7 +54,7 @@ import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.websvc.manager.WebServiceManager;
 import org.netbeans.modules.websvc.manager.WebServicePersistenceManager;
-import org.netbeans.modules.websvc.manager.ui.AddWebServiceDlg;
+import org.netbeans.modules.websvc.saas.util.WsdlUtil;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileAttributeEvent;
@@ -291,26 +291,40 @@ public class WebServiceListModel {
     }
     
     public WebServiceData findWebServiceData(String wsdlUrl, String serviceName, boolean strict) {
-        WebServiceData target = null;
+        // RESOLVE: Look up only by wsdlUrl since we don't know the serviceName
+        // until the data is loaded.  In the future, we should implement
+        // look up by wsdlUrl and the group name.  For now, we will assume that
+        // each service is uniquely identitied by its url.
         for (WebServiceData wsd : getWebServiceSet()) {
             if (wsdlUrl.equals(wsd.getOriginalWsdl())) {
-                target = wsd;
-            }
-            if (serviceName.equals(wsd.getName())) {
                 return wsd;
             }
         }
-
-        if (! strict && target != null) {
-            WebServiceData clone = new WebServiceData(target);
-            clone.setName(serviceName);
-            return clone;
-        }
+        
+//        WebServiceData target = null;
+//        for (WebServiceData wsd : getWebServiceSet()) {
+//            if (wsdlUrl.equals(wsd.getOriginalWsdl())) {
+//                target = wsd;
+//            }
+//            if (serviceName.equals(wsd.getName())) {
+//                return wsd;
+//            }
+//        }
+//
+//        if (! strict && target != null) {
+//                WebServiceData clone = new WebServiceData(target);
+//                clone.setName(serviceName);
+//                return clone;
+//        }
         
         return null;
     }
     
     public WebServiceData getWebServiceData(String wsdlUrl, String serviceName) {
+        return getWebServiceData(wsdlUrl, serviceName, true);
+    }
+    
+    public WebServiceData getWebServiceData(String wsdlUrl, String serviceName, boolean synchronous) {
         final WebServiceData target = findWebServiceData(wsdlUrl, serviceName, false);
         if (target != null && ! target.isReady()) {
             Runnable run = new Runnable() {
@@ -322,7 +336,9 @@ public class WebServiceListModel {
             }
             }};
             Task t = WebServiceManager.getInstance().getRequestProcessor().post(run);
-            t.waitFinished();
+            if (synchronous) {
+                t.waitFinished();
+            }
         }
         return target;
     }
@@ -344,7 +360,13 @@ public class WebServiceListModel {
         if (!initialized) {
             initialized = true;
             WebServicePersistenceManager manager = new WebServicePersistenceManager();
-            manager.load();
+            if (! WsdlUtil.hasProcessedImport()) {
+                manager.setImported(false);
+                manager.load();
+                WsdlUtil.markImportProcessed();
+            } else {
+                manager.load();
+            }
             
             // TODO doesn't do anything useful yet
             partnerServiceListener = new RestFolderListener();
@@ -395,14 +417,18 @@ public class WebServiceListModel {
         return initialized;
     }
     
-    public void addWebService(final String wsdl, final String packageName, final String groupId) {
+    public WebServiceData addWebService(final String wsdl, final String packageName, final String groupId) {
+        final WebServiceData wsData = new WebServiceData(wsdl, groupId);
+        wsData.setPackageName(packageName);
+        wsData.setResolved(false);
+
         // Run the add W/S asynchronously
         Runnable addWsRunnable = new Runnable() {
             public void run() {
                 boolean addError = false;
                 Exception exc = null;
                 try {
-                    WebServiceManager.getInstance().addWebService(wsdl, packageName, groupId);
+                    WebServiceManager.getInstance().addWebService(wsData, true);
                 } catch (IOException ex) {
                     addError = true;
                     exc = ex;
@@ -413,14 +439,14 @@ public class WebServiceListModel {
                     SwingUtilities.invokeLater(new Runnable() {
                         public void run() {
                             if (exception instanceof FileNotFoundException) {
-                                String errorMessage = NbBundle.getMessage(AddWebServiceDlg.class, "INVALID_URL");
+                                String errorMessage = NbBundle.getMessage(WebServiceListModel.class, "INVALID_URL");
                                 NotifyDescriptor d = new NotifyDescriptor.Message(errorMessage);
                                 DialogDisplayer.getDefault().notify(d);
                             } else {
                                 String cause = (exception != null) ? exception.getLocalizedMessage() : null;
                                 String excString = (exception != null) ? exception.getClass().getName() + " - " + cause : null;
 
-                                String errorMessage = NbBundle.getMessage(AddWebServiceDlg.class, "WS_ADD_ERROR") + "\n\n" + excString; // NOI18N
+                                String errorMessage = NbBundle.getMessage(WebServiceListModel.class, "WS_ADD_ERROR") + "\n\n" + excString; // NOI18N
                                 NotifyDescriptor d = new NotifyDescriptor.Message(errorMessage);
                                 DialogDisplayer.getDefault().notify(d);
                             }
@@ -429,9 +455,8 @@ public class WebServiceListModel {
                 }
             }
         };
-        
         WebServiceManager.getInstance().getRequestProcessor().post(addWsRunnable);
-        
+        return wsData;
     }
 
     private static final class RestFolderListener implements FileChangeListener {
