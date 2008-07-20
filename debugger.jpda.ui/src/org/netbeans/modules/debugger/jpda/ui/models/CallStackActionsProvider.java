@@ -108,6 +108,11 @@ public class CallStackActionsProvider implements NodeActionsProvider {
         
     private final Action COPY_TO_CLBD_ACTION = new AbstractAction (
         NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_CallstackAction_Copy2CLBD_Label")) {
+        @Override
+        public boolean isEnabled () {
+            JPDAThread t = debugger.getCurrentThread();
+            return t != null && t.isSuspended();
+        }
         public void actionPerformed (ActionEvent e) {
             stackToCLBD ();
         }
@@ -139,8 +144,7 @@ public class CallStackActionsProvider implements NodeActionsProvider {
 
     public CallStackActionsProvider (ContextProvider lookupProvider) {
         this.lookupProvider = lookupProvider;
-        debugger = (JPDADebugger) lookupProvider.
-            lookupFirst (null, JPDADebugger.class);
+        debugger = lookupProvider.lookupFirst(null, JPDADebugger.class);
     }
     
     public Action[] getActions (Object node) throws UnknownTypeException {
@@ -193,6 +197,7 @@ public class CallStackActionsProvider implements NodeActionsProvider {
     
     private void stackToCLBD() {
         JPDAThread t = debugger.getCurrentThread();
+        if (t == null) return ;
         StringBuffer frameStr = new StringBuffer(50);
         CallStackFrame[] stack;
         try {
@@ -234,7 +239,7 @@ public class CallStackActionsProvider implements NodeActionsProvider {
     }
     
     private static Clipboard getClipboard() {
-        Clipboard clipboard = (Clipboard) org.openide.util.Lookup.getDefault().lookup(Clipboard.class);
+        Clipboard clipboard = org.openide.util.Lookup.getDefault().lookup(Clipboard.class);
         if (clipboard == null) {
             clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
         }
@@ -249,9 +254,7 @@ public class CallStackActionsProvider implements NodeActionsProvider {
                 public void run () {
                     String language = DebuggerManager.getDebuggerManager ().
                         getCurrentSession ().getCurrentLanguage ();
-                    SourcePath sp = (SourcePath) DebuggerManager.
-                        getDebuggerManager ().getCurrentEngine ().lookupFirst 
-                        (null, SourcePath.class);
+                    SourcePath sp = DebuggerManager.getDebuggerManager().getCurrentEngine().lookupFirst(null, SourcePath.class);
                     sp.showSource (frame, language);
                 }
             });
