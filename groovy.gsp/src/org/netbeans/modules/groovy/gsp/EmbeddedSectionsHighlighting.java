@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby.rhtml;
+package org.netbeans.modules.groovy.gsp;
 
 import java.awt.Color;
 import java.util.NoSuchElementException;
@@ -55,14 +55,14 @@ import org.netbeans.api.editor.settings.FontColorSettings;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenHierarchyEvent;
 import org.netbeans.api.lexer.TokenHierarchyListener;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
-import org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId;
+import org.netbeans.modules.groovy.gsp.lexer.api.GspTokenId;
 import org.netbeans.spi.editor.highlighting.HighlightsLayer;
 import org.netbeans.spi.editor.highlighting.HighlightsLayerFactory;
+import org.netbeans.spi.editor.highlighting.HighlightsSequence;
 import org.netbeans.spi.editor.highlighting.HighlightsSequence;
 import org.netbeans.spi.editor.highlighting.ZOrder;
 import org.netbeans.spi.editor.highlighting.support.AbstractHighlightsContainer;
@@ -79,7 +79,7 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
     private static final Logger LOG = Logger.getLogger(EmbeddedSectionsHighlighting.class.getName());
     
     private final Document document;
-    private final AttributeSet rubyBackground;
+    private final AttributeSet groovyBackground;
     private TokenHierarchy<? extends Document> hierarchy = null;
     private long version = 0;
 
@@ -91,19 +91,19 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
         String mimeType = (String) document.getProperty("mimeType"); //NOI18N
         FontColorSettings fcs = MimeLookup.getLookup(mimeType).lookup(FontColorSettings.class);
         if (fcs != null) {
-            Color jsBC = getColoring(fcs, RhtmlTokenId.RUBY.primaryCategory());
+            Color jsBC = getColoring(fcs, GspTokenId.GROOVY.primaryCategory());
             if (jsBC != null) {
                  attribs = AttributesUtilities.createImmutable(
                     StyleConstants.Background, jsBC, 
                     ATTR_EXTENDS_EOL, Boolean.TRUE);
             }
         }
-        rubyBackground = attribs;
+        groovyBackground = attribs;
     }
 
     public HighlightsSequence getHighlights(int startOffset, int endOffset) {
         synchronized (this) {
-            if (rubyBackground != null) {
+            if (groovyBackground != null) {
                 if (hierarchy == null) {
                     hierarchy = TokenHierarchy.get(document);
                     if (hierarchy != null) {
@@ -182,10 +182,10 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
 
                     int delimiterSize = 0;
                     while (sequence.moveNext() && sequence.offset() < endOffset) {
-                        if (sequence.token().id() == RhtmlTokenId.DELIMITER) {
+                        if (sequence.token().id() == GspTokenId.DELIMITER) {
                             // opening delimiters can have different lenght
                             delimiterSize = sequence.token().length();
-                        } else if (RhtmlTokenId.isRuby(sequence.token().id())) {
+                        } else if (GspTokenId.isGroovy((sequence.token().id()))) {
                             sectionStart = sequence.offset();
                             sectionEnd = sequence.offset() + sequence.token().length();
 
@@ -265,7 +265,7 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
                     throw new NoSuchElementException();
                 } else {
                     assert sequence != null : "Sequence not initialized, call moveNext() first."; //NOI18N
-                    return rubyBackground;
+                    return groovyBackground;
                 }
             }
         }
@@ -278,8 +278,8 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
     public static final class Factory implements HighlightsLayerFactory {
         public HighlightsLayer[] createLayers(Context context) {
             return new HighlightsLayer[]{ HighlightsLayer.create(
-                "rhtml-embedded-ruby-scriplets-highlighting-layer", //NOI18N
-                ZOrder.BOTTOM_RACK.forPosition(100), 
+                "gsp-embedded-groovy-scriplets-highlighting-layer", //NOI18N
+                ZOrder.SYNTAX_RACK.forPosition(110), 
                 true, 
                 new EmbeddedSectionsHighlighting(context.getDocument())
             )};
