@@ -83,18 +83,7 @@ public class UMLProjectModule extends ModuleInstall
     {
         
     }
-    
-    ////////////////////////////////////////////////////////////////////////////
-    // ModuleInstall Methods
-    
-    /**
-     * Loads the UML application and the initializes the Application Designer
-     * product.
-     */
-    public void restored()
-    {
-	lightInit();
-    }
+        
 
     private static void lightInit() 
     {
@@ -115,7 +104,8 @@ public class UMLProjectModule extends ModuleInstall
 			{
                 
 			    DispatchHelper helper = new DispatchHelper();
-			    helper.registerDrawingAreaEvents(mModel.getDrawingAreaListener());
+                            // TODO: meteora
+//			    helper.registerDrawingAreaEvents(mModel.getDrawingAreaListener());
 			}
 //         });
             
@@ -130,7 +120,8 @@ public class UMLProjectModule extends ModuleInstall
 		    else
 		    {
 			DispatchHelper helper = new DispatchHelper();
-			helper.registerDrawingAreaEvents(mModel.getDrawingAreaListener());
+                        // TODO: meteora
+//			helper.registerDrawingAreaEvents(mModel.getDrawingAreaListener());
 		    }      
 		    lightInitialized = true;
 		}
