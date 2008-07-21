@@ -73,7 +73,6 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
 
     private ConnectionGeneratorPanel() {
         initComponents();
-        errorLabel.setForeground(UIUtils.getErrorForeground());
     }
 
     private void initialize(DialogDescriptor descriptor) {
@@ -108,7 +107,7 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
     }
 
     private void setErrorMessage(String message) {
-        errorLabel.setText(message != null ? message : " "); // NOI18N
+        errorLabel.setText(message);
         descriptor.setValid(message == null);
     }
 
@@ -123,7 +122,7 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
 
         dbconnLabel = new javax.swing.JLabel();
         dbconnComboBox = new javax.swing.JComboBox();
-        errorLabel = new javax.swing.JLabel();
+        errorLabel = new ErrorLabel();
 
         org.openide.awt.Mnemonics.setLocalizedText(dbconnLabel, org.openide.util.NbBundle.getMessage(ConnectionGeneratorPanel.class, "ConnectionGeneratorPanel.dbconnLabel.text")); // NOI18N
 
@@ -142,15 +141,10 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(layout.createSequentialGroup()
-                        .add(dbconnLabel)
-                        .addContainerGap(177, Short.MAX_VALUE))
-                    .add(layout.createSequentialGroup()
-                        .add(dbconnComboBox, 0, 301, Short.MAX_VALUE)
-                        .addContainerGap())
-                    .add(layout.createSequentialGroup()
-                        .add(errorLabel)
-                        .addContainerGap(305, Short.MAX_VALUE))))
+                    .add(dbconnLabel)
+                    .add(dbconnComboBox, 0, 518, Short.MAX_VALUE)
+                    .add(errorLabel))
+                .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -159,10 +153,13 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
                 .add(dbconnLabel)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(dbconnComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 17, Short.MAX_VALUE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .add(errorLabel)
                 .addContainerGap())
         );
+
+        dbconnComboBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ConnectionGeneratorPanel.class, "ConnectionGeneratorPanel.dbconnComboBox.AccessibleContext.accessibleName")); // NOI18N
+        dbconnComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ConnectionGeneratorPanel.class, "ConnectionGeneratorPanel.dbconnComboBox.AccessibleContext.accessibleDescription")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
 private void dbconnComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_dbconnComboBoxActionPerformed
