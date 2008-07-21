@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -62,7 +62,7 @@ import static java.nio.charset.CoderResult.UNDERFLOW;
  *
  * @author  Marian Petras
  */
-final class PropertiesEncoding extends FileEncodingQueryImplementation {
+public final class PropertiesEncoding extends FileEncodingQueryImplementation {
     
     /*
      * TO DO:
@@ -86,14 +86,20 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
     Charset getEncoding() {
         return encoding;
     }
+
+    public static CharsetDecoder createDecoder(Charset charset, long fileSize) {
+        return new PropCharsetDecoder(charset, fileSize);
+    }
     
     /**
      *
      */
-    static final class PropCharset extends Charset {
+    public static final class PropCharset extends Charset {
+
+        public static final String NAME = "resource_bundle_charset";    //NOI18N
         
         PropCharset() {
-            super("resource_bundle_charset", null);                     //NOI18N
+            super(NAME, null);
         }
 
         public boolean contains(Charset charset) {
@@ -372,6 +378,13 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         
         private static final int inBufSize = 8192;
         private static final int outBufSize = inBufSize;
+
+        /** */
+        private static final int SIZE_UNKNOWN = -1;
+        /** size of the input file, or {@link #SIZE_UNKNOWN} if unknown */
+        private long inputSize;
+        /** number of input bytes decoded so far */
+        private int bytesDecoded = 0;
         
         private final byte[] inBuf = new byte[inBufSize];
         private final char[] outBuf = new char[outBufSize];
@@ -390,7 +403,12 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         private char[] unicodeValueChars = new char[4];
         
         PropCharsetDecoder(Charset charset) {
+            this(charset, SIZE_UNKNOWN);
+        }
+        
+        PropCharsetDecoder(Charset charset, long inputSize) {
             super(charset, avgCharsPerByte, maxCharsPerByte);
+            this.inputSize = inputSize;
         }
         
         {
@@ -401,6 +419,9 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         protected void implReset() {
             log.finer("");
             log.finer("implReset() called");
+
+            inputSize = SIZE_UNKNOWN;
+            bytesDecoded = 0;
             
             inBufPos = 0;
             outBufPos = 0;
@@ -430,20 +451,22 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
                 for (;;) {
                     readIn(in);
                     for (;;) {
-                        CoderResult coderResult = decodeBuf();
-                        if (coderResult != null) {
-                            return coderResult;
-                        }
+                        bytesDecoded += decodeBuf();
+
+                        // assert: if (bytesDecoded == inputSize) then (emptyIn)
+                        assert (bytesDecoded != inputSize) || emptyIn;
+
                         if (emptyInBuf && !emptyIn) {
                             continue readInLoop;
-                        } else if (emptyIn && hasPendingCharacters()) {
+                        } else if (emptyIn && hasPendingCharacters()
+                                   && ((inputSize == SIZE_UNKNOWN) || (bytesDecoded >= inputSize))) {
                             handlePendingCharacters();
                         }
                         flushOutBuf(out);
                         if (fullOut) {
                             log.finest(" - returning OVERFLOW");
                             return OVERFLOW;
-                        } else if (emptyInBuf && emptyIn && !hasPendingCharacters()) {
+                        } else if (emptyInBuf && emptyIn) {
                             log.finest(" - returning UNDERFLOW");
                             return UNDERFLOW;
                         }
@@ -560,15 +583,16 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         
         /**
          * Encodes as many chars from the internal input buffer as possible.
+         * 
+         * @return  number of bytes decoded
          */
-        private CoderResult decodeBuf() {
+        private int decodeBuf() {
             log.finer("decoding inBuf, writing to outBuf");
             if (emptyInBuf) {
                 log.finer(" - inBuf is empty - nothing to decode");
-                return null;
+                return 0;
             }
             
-            CoderResult result = null;
             int decodingInBufPos = 0;
             log.finest(" - decoding bytes:");
             log.finest("     - initial state: " + state);
@@ -606,7 +630,7 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
             }
             inBufPos = remainder;
             emptyInBuf = (inBufPos == 0);
-            return result;
+            return decodingInBufPos;
         }
         
         /**

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -59,6 +59,7 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -68,6 +69,7 @@ import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import static java.util.logging.Level.FINER;
 import static java.util.logging.Level.FINEST;
@@ -96,14 +98,19 @@ final class MatchingObject implements PropertyChangeListener {
      * (usually a {@code DataObject})
      */
     final Object object;
+    /**
+     * charset used for full-text search of the object.
+     * It is {@code null} if the object was not full-text searched.
+     */
+    private final Charset charset;
     
     /**
      * holds information on whether the {@code object} is selected
      * to be replaced or not.
-     * Unless {@link #selectedMatches} is non-{@code null}, this field's
+     * Unless {@link #matchesSelection} is non-{@code null}, this field's
      * value also applies to the object's subnodes (if any).
      * 
-     * @see  #selectedMatches
+     * @see  #matchesSelection
      */
     private boolean selected = true;
     /**
@@ -121,7 +128,9 @@ final class MatchingObject implements PropertyChangeListener {
      * 
      * @see  #selected
      */
-    private boolean[] selectedMatches;
+    private boolean[] matchesSelection;
+    /** holds number of selected (checked) matches */
+    private int selectedMatchesCount;
     /**
      * flag that indicates that the tree was not notified of this
      * {@code MatchingObject}'s children's selection change and that
@@ -146,10 +155,12 @@ final class MatchingObject implements PropertyChangeListener {
      * 
      * @param  object  found object returned by the {@code SearchGroup}
      *                 (usually a {@code DataObject}) - must not be {@code null}
+     * @param  charset  charset used for full-text search of the object,
+     *                  or {@code null} if the object was not full-text searched
      * @exception  java.lang.IllegalArgumentException
      *             if the passed {@code object} is {@code null}
      */
-    MatchingObject(ResultModel resultModel, Object object) {
+    MatchingObject(ResultModel resultModel, Object object, Charset charset) {
         if (resultModel == null) {
             throw new IllegalArgumentException("resultModel = null");   //NOI18N
         }
@@ -159,6 +170,7 @@ final class MatchingObject implements PropertyChangeListener {
         
         this.resultModel = resultModel;
         this.object = object;
+        this.charset = charset;
         
         FileObject fileObject = getFileObject();
         file = FileUtil.toFile(fileObject);
@@ -219,7 +231,7 @@ final class MatchingObject implements PropertyChangeListener {
         }
         
         this.selected = selected;
-        selectedMatches = null;
+        matchesSelection = null;
     }
     
     /**
@@ -231,7 +243,7 @@ final class MatchingObject implements PropertyChangeListener {
     /**
      */
     boolean isUniformSelection() {
-        return selectedMatches == null;
+        return matchesSelection == null;
     }
     
     /**
@@ -243,13 +255,13 @@ final class MatchingObject implements PropertyChangeListener {
      *                       unselected
      */
     Boolean checkSubnodesSelection() {
-        if (selectedMatches == null) {
+        if (matchesSelection == null) {
             return Boolean.valueOf(selected);
         }
         
-        final boolean firstMatchSelection = selectedMatches[0];
-        for (int i = 1; i < selectedMatches.length; i++) {
-            if (selectedMatches[i] != firstMatchSelection) {
+        final boolean firstMatchSelection = matchesSelection[0];
+        for (int i = 1; i < matchesSelection.length; i++) {
+            if (matchesSelection[i] != firstMatchSelection) {
                 return null;
             }
         }
@@ -257,39 +269,58 @@ final class MatchingObject implements PropertyChangeListener {
     }
     
     /**
+     * 
+     * @return  {@code true} if the subnode's selection change caused change
+     *          of this object's node's selection, {@code false} otherwise
      */
-    void toggleSubnodeSelection(ResultModel resultModel, int index) {
-        if (selectedMatches == null) {
-            selectedMatches = new boolean[resultModel.getDetailsCount(this)];
-            Arrays.fill(selectedMatches, this.selected);
-        }
-        selectedMatches[index] = !selectedMatches[index];
-    }
-    
-    /**
-     */
-    void setSubnodeSelected(int index,
-                            boolean selected,
-                            ResultModel resultModel) {
-        if (selectedMatches == null) {
-            if (selected == this.selected) {
-                return;
+    boolean toggleSubnodeSelection(ResultModel resultModel, int index) {
+        /* uniform selection */
+        if (matchesSelection == null) {
+            int detailsCount = resultModel.getDetailsCount(this);
+            if (detailsCount == 1) {
+                selected = !selected;
+                return true;
+            } else {
+                matchesSelection = new boolean[detailsCount];
+                Arrays.fill(matchesSelection, selected);
+                matchesSelection[index] = !selected;
+
+                boolean wasSelected = selected;
+                selectedMatchesCount = wasSelected ? detailsCount - 1 : 1;
+                selected = true;
+                return (selected != wasSelected);
             }
-            selectedMatches = new boolean[resultModel.getDetailsCount(this)];
-            Arrays.fill(selectedMatches, this.selected);
         }
-        
-        assert (index >= 0) && (index < selectedMatches.length);
-        selectedMatches[index] = selected;
+
+        /* some subnodes selected, some unselected */
+        assert selected;
+        assert (selectedMatchesCount > 0)
+               && (selectedMatchesCount < matchesSelection.length);
+        boolean wasSubnodeSelected = matchesSelection[index];
+        if (wasSubnodeSelected) {
+            if (--selectedMatchesCount == 0) {
+                matchesSelection = null;
+                selected = false;
+                return true;
+            }
+        } else {
+            if (++selectedMatchesCount == matchesSelection.length) {
+                matchesSelection = null;
+                return false;
+            }
+        }
+
+        matchesSelection[index] = !wasSubnodeSelected;
+        return false;
     }
     
     /**
      */
     boolean isSubnodeSelected(int index) {
-        assert (selectedMatches == null)
-               || ((index >= 0) && (index < selectedMatches.length));
-        return (selectedMatches == null) ? selected
-                                         : selectedMatches[index];
+        assert (matchesSelection == null)
+               || ((index >= 0) && (index < matchesSelection.length));
+        return (matchesSelection == null) ? selected
+                                         : matchesSelection[index];
     }
     
     @Override
@@ -427,9 +458,9 @@ final class MatchingObject implements PropertyChangeListener {
         StringBuilder ret = null;
         
         ByteBuffer buf = getByteBuffer();
+        CharsetDecoder decoder = getDecoder();
         if (buf != null) {
-            Charset charset = BasicSearchCriteria.getCharset(getFileObject());
-            CharBuffer cbuf = decodeByteBuffer(buf, charset);
+            CharBuffer cbuf = decodeByteBuffer(buf, decoder);
             String terminator
                     = System.getProperty("line.separator");         //NOI18N
 
@@ -472,6 +503,25 @@ final class MatchingObject implements PropertyChangeListener {
         }
         buffer.rewind();
         return buffer;
+    }
+
+    private CharsetDecoder getDecoder() {
+        Collection<? extends FileObjectDecoderProvider> decoderProviders
+               = Lookup.getDefault().lookupAll(FileObjectDecoderProvider.class);
+        CharsetDecoder decoder = null;
+        if (!decoderProviders.isEmpty()) {
+            final FileObject fileObj = getFileObject();
+            for (FileObjectDecoderProvider decoderProvider : decoderProviders) {
+                if ((decoder = decoderProvider.getDecoderFor(charset, fileObj)) != null) {
+                    break;
+                }
+            }
+        }
+        if (decoder == null) {
+            decoder = charset.newDecoder();
+        }
+        return decoder.onMalformedInput(CodingErrorAction.REPLACE)
+                      .onUnmappableCharacter(CodingErrorAction.REPLACE);
     }
     
     /**
@@ -726,7 +776,7 @@ final class MatchingObject implements PropertyChangeListener {
             try {
                 writer = new OutputStreamWriter(
                         fileObject.getOutputStream(fileLock),
-                        BasicSearchCriteria.getCharset(fileObject));
+                        charset);
                 writer.write(text.toString());
             } finally {
                 if (writer != null) {
@@ -754,12 +804,8 @@ final class MatchingObject implements PropertyChangeListener {
      * @see  <a href="http://www.netbeans.org/issues/show_bug.cgi?id=103067">NetBeans bug #103067</a>
      */
     private CharBuffer decodeByteBuffer(final ByteBuffer in,
-                                        final Charset charset)
+                                        final CharsetDecoder decoder)
             throws CharacterCodingException {
-        
-        final CharsetDecoder decoder = charset.newDecoder()
-                                       .onMalformedInput(CodingErrorAction.REPLACE)
-                                       .onUnmappableCharacter(CodingErrorAction.REPLACE);
         
 	int remaining = in.remaining();
         if (remaining == 0) {
