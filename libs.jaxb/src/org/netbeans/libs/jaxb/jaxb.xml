@@ -44,9 +44,9 @@ made subject to such option by the copyright holder.
 
 <!DOCTYPE library PUBLIC "-//NetBeans//DTD Library Declaration 1.0//EN" "http://www.netbeans.org/dtds/library-declaration-1_0.dtd">
 <library version="1.0">
-    <name>jaxws21</name>
+    <name>jaxb</name>
     <type>j2se</type>
-    <localizing-bundle>org/netbeans/modules/websvc/jaxws21/Bundle</localizing-bundle>
+    <localizing-bundle>org/netbeans/libs/jaxb/Bundle</localizing-bundle>
     <volume>
         <type>classpath</type>
         <resource>jar:nbinst:///modules/ext/jaxb/activation.jar!/</resource>
@@ -54,23 +54,5 @@ made subject to such option by the copyright holder.
         <resource>jar:nbinst:///modules/ext/jaxb/jaxb-impl.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxb/jaxb-xjc.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxb/api/jsr173_api.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/FastInfoset.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/http.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/api/jaxws-api.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/jaxws-rt.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/jaxws-tools.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/api/jsr181-api.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/api/jsr250-api.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/mimepull.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/resolver.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/api/saaj-api.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/saaj-impl.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/sjsxp.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/stax-ex.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/streambuffer.jar!/</resource>
-    </volume>
-    <volume>
-        <type>javadoc</type>
-        <resource>jar:nbinst:///docs/jaxws-2_1-api-doc.zip!/</resource>
     </volume>
 </library>
