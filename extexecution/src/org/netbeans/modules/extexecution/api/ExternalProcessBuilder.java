@@ -46,52 +46,109 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.prefs.Preferences;
+import org.openide.util.NbPreferences;
 import org.openide.util.Parameters;
 import org.openide.util.Utilities;
 
 /**
+ * Utility class to make the external process creation easier.
+ * <p>
+ * Builder handle command, working directory, <code>PATH</code> variable and HTTP proxy.
+ * <p>
+ * This class is <i>not thread safe</i>.
  *
  * @author Petr Hejl
+ * @see #create()
  */
 public final class ExternalProcessBuilder {
 
+    // FIXME: get rid of those proxy constants as soon as some NB Proxy API is available
+    private static final String USE_PROXY_AUTHENTICATION = "useProxyAuthentication"; // NOI18N
+
+    private static final String PROXY_AUTHENTICATION_USERNAME = "proxyAuthenticationUsername"; // NOI18N
+
+    private static final String PROXY_AUTHENTICATION_PASSWORD = "proxyAuthenticationPassword"; // NOI18N
+
     private final String command;
 
-    private File pwd;
+    private File workingDirectory;
 
-    private boolean javaHomeToPath;
-
-    private boolean pwdToPath;
+    private boolean redirectErrorStream;
 
     private final List<String> arguments = new ArrayList<String>();
 
     private final List<File> paths = new ArrayList<File>();
 
-    private final List<String> javaHomeProperties = new ArrayList<String>();
-
     private final Map<String, String> envVariables = new HashMap<String, String>();
 
-    public ExternalProcessBuilder(String command) {
-        this.command = command;
+    /**
+     * Creates the new builder that will create the process by running
+     * given executable. Arguments must not be part of the string.
+     *
+     * @param executable executable to run
+     */
+    public ExternalProcessBuilder(String executable) {
+        this.command = executable;
     }
 
-    public ExternalProcessBuilder pwd(File pwd) {
-        Parameters.notNull("pwd", pwd);
+    /**
+     * Sets this builder's working directory. Process subsequently created
+     * by {@link #create()} method will be executed with this directory
+     * as current working dir.
+     * <p>
+     * Note that each process has always working directory even when not
+     * configured explicitly (the value of <code>user.dir</code> property).
+     *
+     * @param workingDirectory working directory
+     * @return this process builder
+     */
+    public ExternalProcessBuilder workingDirectory(File workingDirectory) {
+        Parameters.notNull("workingDirectory", workingDirectory);
 
-        this.pwd = pwd;
+        this.workingDirectory = workingDirectory;
         return this;
     }
 
-    public ExternalProcessBuilder javaHomeToPath(boolean javaHomeToPath) {
-        this.javaHomeToPath = javaHomeToPath;
+    /**
+     * Configures whether the error stream of created process should be
+     * redirected to standard output.
+     * <p>
+     * If passed value is <code>true</code> error stream will be redirected
+     * to standard output.
+     *
+     * @param redirectErrorStream if <code>true</code> error stream will be
+     *             redirected to standard output
+     * @return this process builder
+     */
+    public ExternalProcessBuilder redirectErrorStream(boolean redirectErrorStream) {
+        this.redirectErrorStream = redirectErrorStream;
         return this;
     }
 
-    public ExternalProcessBuilder pwdToPath(boolean pwdTopath) {
-        this.pwdToPath = pwdTopath;
+    /**
+     * Configures the additional path to add to the <code>PATH</code> variable.
+     * <p>
+     * In the group of paths added by this call the last added path will
+     * be the first one in the <code>PATH</code> variable.
+     *
+     * @param path path to add to <code>PATH</code> variable
+     * @return this process builder
+     */
+    public ExternalProcessBuilder prependPath(File path) {
+        Parameters.notNull("path", path);
+
+        paths.add(path);
         return this;
     }
 
+    /**
+     * Configures the additional argument for the command. Arguments are added
+     * in the same order in which they are added.
+     *
+     * @param argument command argument to add
+     * @return this process builder
+     */
     public ExternalProcessBuilder addArgument(String argument) {
         Parameters.notNull("arg", argument);
 
@@ -99,13 +156,14 @@ public final class ExternalProcessBuilder {
         return this;
     }
 
-    public ExternalProcessBuilder addPath(File path) {
-        Parameters.notNull("path", path);
-
-        paths.add(path);
-        return this;
-    }
-
+    /**
+     * Configures the additional environment variable for the command.
+     *
+     * @param name name of the variable
+     * @param value value of the variable
+     * @return this process builder
+     * @see #create()
+     */
     public ExternalProcessBuilder addEnvironmentVariable(String name, String value) {
         Parameters.notNull("name", name);
         Parameters.notNull("value", value);
@@ -114,18 +172,33 @@ public final class ExternalProcessBuilder {
         return this;
     }
 
-    public ExternalProcessBuilder addJavaHomeProperty(String javaHomeProperty) {
-        Parameters.notNull("javaHomeProperty", javaHomeProperty);
-
-        javaHomeProperties.add(javaHomeProperty);
-        return this;
-    }
-
+    /**
+     * Creates the new {@link Process} based on the properties configured
+     * in this builder.
+     * <p>
+     * Process is created by executing the command with configured arguments.
+     * If custom working directory is specified it is used otherwise value
+     * of system property <code>user.dir</code> is used as working dir.
+     * <p>
+     * Environment variables are prepared in following way:
+     * <ol>
+     *   <li>Get table of system environment variables.
+     *   <li>Put all environment variables configured by
+     * {@link #addEnvironmentVariable(java.lang.String, java.lang.String)}.
+     * This rewrites system variables if conflict occurs.
+     *   <li>Get <code>PATH</code> variable and append all paths added
+     * by {@link #addPath(java.io.File)}. The order of paths in <code>PATH</code>
+     * variable is reversed to order of addition (the last added is the first
+     * one in <code>PATH</code>). Original content of <code>PATH</code> follows
+     * the added content.
+     *   <li>HTTP proxy settings are configured (http.proxyHost and http.proxyPort
+     * variables).
+     * </ol>
+     * @return the new {@link Process} based on the properties configured
+     *             in this builder
+     */
     public Process create() throws IOException {
         List<String> commandL = new ArrayList<String>();
-//        if (!descriptor.rebuildCmd) {
-//            commandL.add(cmd.getPath());
-//        }
 
         commandL.add(command);
 
@@ -142,27 +215,22 @@ public final class ExternalProcessBuilder {
             }
         }
         ProcessBuilder pb = new ProcessBuilder(command);
-        if (pwd != null) {
-            pb.directory(pwd);
+        if (workingDirectory != null) {
+            pb.directory(workingDirectory);
         }
 
         Map<String, String> pbEnv = pb.environment();
         Map<String, String> env = buildEnvironment(pbEnv);
         pbEnv.putAll(env);
-//        if (descriptor.addBinPath) {
-//            Map<String, String> env = pb.environment();
-//            setupProcessEnvironment(env);
-//        }
-        Util.adjustProxy(pb);
+        adjustProxy(pb);
+        pb.redirectErrorStream(redirectErrorStream);
         return pb.start();
     }
 
-    private List<String> buildArguments() {
-        return new ArrayList<String>(arguments);
-    }
-
-    private Map<String, String> buildEnvironment(Map<String, String> original) {
+    // package level for unit testing
+    Map<String, String> buildEnvironment(Map<String, String> original) {
         Map<String, String> ret = new HashMap<String, String>(original);
+        ret.putAll(envVariables);
 
         // Find PATH environment variable - on Windows it can be some other
         // case and we should use whatever it has.
@@ -180,6 +248,7 @@ public final class ExternalProcessBuilder {
             }
         }
 
+        // TODO use StringBuilder
         String currentPath = ret.get(pathName);
 
         if (currentPath == null) {
@@ -187,39 +256,70 @@ public final class ExternalProcessBuilder {
         }
 
         for (File path : paths) {
-            currentPath = path.getAbsolutePath().replace(" ", "\\ "); // NOI18N
-        }
-
-        if (pwdToPath) {
-            currentPath = pwd.getAbsolutePath().replace(" ", "\\ ") // NOI18N
+            currentPath = path.getAbsolutePath().replace(" ", "\\ ") //NOI18N
                     + File.pathSeparator + currentPath;
         }
 
-        if (javaHomeToPath) {
-            String javaHome = null;
-            for (String property : javaHomeProperties) {
-                javaHome = System.getProperty(property);
-                if (javaHome != null) {
-                    break;
-                }
-            }
-
-            if (javaHome == null) {
-                javaHome = System.getProperty("java.home"); // NOI18N
-            }
-
-            if (javaHome != null) {
-                javaHome = javaHome + File.separator + "bin"; // NOI18N
-                if (!Utilities.isWindows()) {
-                    javaHome = javaHome.replace(" ", "\\ "); // NOI18N
-                }
-                currentPath = currentPath + File.pathSeparator + javaHome;
-            }
+        if (!"".equals(currentPath.trim())) {
+            ret.put(pathName, currentPath);
         }
-
-        ret.put(pathName, currentPath);
-        ret.putAll(envVariables);
         return ret;
     }
 
+    private List<String> buildArguments() {
+        return new ArrayList<String>(arguments);
+    }
+
+    private void adjustProxy(ProcessBuilder pb) {
+        String proxy = getNetBeansHttpProxy();
+        if (proxy != null) {
+            Map<String, String> env = pb.environment();
+            if ((env.get("HTTP_PROXY") == null) && (env.get("http_proxy") == null)) { // NOI18N
+                env.put("HTTP_PROXY", proxy); // NOI18N
+                env.put("http_proxy", proxy); // NOI18N
+            }
+            // PENDING - what if proxy was null so the user has TURNED off
+            // proxies while there is still an environment variable set - should
+            // we honor their environment, or honor their NetBeans proxy
+            // settings (e.g. unset HTTP_PROXY in the environment before
+            // launching plugin?
+        }
+    }
+
+    /**
+     * FIXME: get rid of the whole method as soon as some NB Proxy API is
+     * available.
+     */
+    private static String getNetBeansHttpProxy() {
+        // FIXME use ProxySelector
+
+        String host = System.getProperty("http.proxyHost"); // NOI18N
+
+        if (host == null) {
+            return null;
+        }
+
+        String portHttp = System.getProperty("http.proxyPort"); // NOI18N
+        int port;
+
+        try {
+            port = Integer.parseInt(portHttp);
+        } catch (NumberFormatException e) {
+            port = 8080;
+        }
+
+        Preferences prefs = NbPreferences.root().node("org/netbeans/core"); // NOI18N
+        boolean useAuth = prefs.getBoolean(USE_PROXY_AUTHENTICATION, false);
+        String auth = "";
+        if (useAuth) {
+            auth = prefs.get(PROXY_AUTHENTICATION_USERNAME, "") + ":" + prefs.get(PROXY_AUTHENTICATION_PASSWORD, "") + '@'; // NOI18N
+        }
+
+        // Gem requires "http://" in front of the port name if it's not already there
+        if (host.indexOf(':') == -1) {
+            host = "http://" + auth + host; // NOI18N
+        }
+
+        return host + ":" + port; // NOI18N
+    }
 }
