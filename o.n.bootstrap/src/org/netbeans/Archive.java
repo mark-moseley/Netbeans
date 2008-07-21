@@ -119,6 +119,10 @@ class Archive implements Stamps.Updater {
         gathering = true;
     }
 
+    final boolean isActive() {
+        return active;
+    }
+
     /**
      * Sweep through the master buffer and remember all the entries
      */
@@ -177,7 +181,7 @@ class Archive implements Stamps.Updater {
             e = getEntry(source, name);
             if (e == null && gathering) {
                 String srcId = source.getIdentifier();
-                String key = srcId + "!/" + name;
+                String key = srcId + name;
 
                 synchronized(gatheringLock) {
                     if (!knownSources.containsKey(srcId)) knownSources.put(srcId, source);
@@ -226,8 +230,9 @@ class Archive implements Stamps.Updater {
         // no need to really synchronize on this collection, gathering flag
         // is already cleared
         for (String s:requests.keySet()) {
-            String[] parts = s.split("!/");
+            String[] parts = s.split("(?<=!/)");
             JarSource src = knownSources.get(parts[0]);
+            assert src != null : "Could not find " + s + " in " + knownSources;
             byte[] data = src.resource(parts[1]);
             Integer srcId = sources.get(parts[0]);
             if (srcId == null) {
