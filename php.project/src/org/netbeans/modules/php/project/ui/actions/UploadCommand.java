@@ -56,14 +56,14 @@ import org.openide.util.NbBundle;
 import org.openide.windows.InputOutput;
 
 /**
- * Download files from remote connection.
+ * Upload files to remote connection.
  * @author Tomas Mysik
  */
-public class DownloadCommand extends Command implements Displayable {
-    public static final String ID = "download"; // NOI18N
-    public static final String DISPLAY_NAME = NbBundle.getMessage(DownloadCommand.class, "LBL_DownloadCommand");
+public class UploadCommand extends Command implements Displayable {
+    public static final String ID = "upload"; // NOI18N
+    public static final String DISPLAY_NAME = NbBundle.getMessage(UploadCommand.class, "LBL_UploadCommand");
 
-    public DownloadCommand(PhpProject project) {
+    public UploadCommand(PhpProject project) {
         super(project);
     }
 
@@ -74,7 +74,7 @@ public class DownloadCommand extends Command implements Displayable {
 
     @Override
     public void invokeAction(Lookup context) throws IllegalArgumentException {
-        // XXX CHECK use visibility query!!!
+        // XXX CHECK use of visibility query!!!
 
         FileObject[] selectedFiles = CommandUtils.filesForSelectedNodes();
         assert selectedFiles.length > 0 : "At least one node must be selected for Upload action";
@@ -85,24 +85,24 @@ public class DownloadCommand extends Command implements Displayable {
 
         InputOutput ftpLog = getFtpLog();
         RemoteClient remoteClient = getRemoteClient(ftpLog);
-        String progressTitle = NbBundle.getMessage(UploadCommand.class, "MSG_DownloadingFiles", getProject().getName());
+        String progressTitle = NbBundle.getMessage(UploadCommand.class, "MSG_UploadingFiles", getProject().getName());
         ProgressHandle progressHandle = ProgressHandleFactory.createHandle(progressTitle, remoteClient);
         try {
             progressHandle.start();
-            Set<TransferFile> forDownload = remoteClient.prepareDownload(sources[0], selectedFiles);
+            Set<TransferFile> forUpload = remoteClient.prepareUpload(sources[0], selectedFiles);
 
-            forDownload = TransferFilter.showDownloadDialog(forDownload);
-            if (forDownload.size() == 0) {
+            forUpload = TransferFilter.showUploadDialog(forUpload);
+            if (forUpload.size() == 0) {
                 return;
             }
 
-            if (forDownload.size() > 0) {
+            if (forUpload.size() > 0) {
                 progressHandle.finish();
                 progressHandle = ProgressHandleFactory.createHandle(progressTitle, remoteClient);
                 progressHandle.start();
-                remoteClient.download(sources[0], forDownload);
+                remoteClient.upload(sources[0], forUpload);
                 StatusDisplayer.getDefault().setStatusText(
-                        NbBundle.getMessage(UploadCommand.class, "MSG_DownloadFinished", getProject().getName()));
+                        NbBundle.getMessage(UploadCommand.class, "MSG_UploadFinished", getProject().getName()));
             }
         } catch (RemoteException ex) {
             Exceptions.printStackTrace(ex);
