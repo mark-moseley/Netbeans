@@ -44,6 +44,7 @@ package org.netbeans.modules.xml.wizard;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import org.netbeans.modules.xml.lib.Util;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
@@ -141,12 +142,12 @@ public class ExternalReferenceDataNode extends FilterNode {
         if (canSelect()) {
             set.put(createProperty(PROP_SELECTED, Boolean.TYPE, this,
                     "isSelected", "setSelected"));
-            Node.Property prop = createProperty(PROP_PREFIX, String.class,
-                    this, "getPrefix", "setPrefix");
+       //     Node.Property prop = createProperty(PROP_PREFIX, String.class,
+           //         this, "getPrefix", "setPrefix");
             // Suppress the [...] button because it is not needed.
-            prop.setValue("suppressCustomEditor", Boolean.TRUE);
-            set.put(prop);
-        } else {
+        //    prop.setValue("suppressCustomEditor", Boolean.TRUE);
+        //    set.put(prop);
+        } /*else {
             // Do not include this property so the checkbox is not shown.
             //set.put(createProperty(PROP_SELECTED, Boolean.TYPE, this,
             //        "isSelected", null));
@@ -155,7 +156,7 @@ public class ExternalReferenceDataNode extends FilterNode {
             // Suppress the [...] button because it is not needed.
             prop.setValue("suppressCustomEditor", Boolean.TRUE);
             set.put(prop);
-        }
+        }*/
         return sheet;
     }
 
