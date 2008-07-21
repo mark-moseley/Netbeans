@@ -40,8 +40,8 @@
  */
 package org.openide.explorer.view;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.openide.ErrorManager;
+import org.openide.explorer.view.NodeRenderer;
 import org.openide.nodes.Children;
 import org.openide.nodes.Index;
 import org.openide.nodes.Node;
@@ -56,38 +56,34 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.geom.Line2D;
 import java.awt.geom.Line2D.Double;
-import java.util.ArrayList;
 
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
 import java.util.TreeSet;
 
-import javax.swing.JTree;
+import javax.swing.JTable;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.tree.TreeCellEditor;
 import javax.swing.tree.TreePath;
 
-/** Implementation of drop support for asociated Tree View.
+
+/** Implementation of drop support for asociated OutlineView.
 *
-* @author Dafe Simonek, Jiri Rechtacek
+* @author Dafe Simonek, Jiri Rechtacek, David Strupl
 */
-final class TreeViewDropSupport implements DropTargetListener, Runnable {
+final class OutlineViewDropSupport implements DropTargetListener, Runnable {
     final static protected int FUSSY_POINTING = 3;
     final static private int DELAY_TIME_FOR_EXPAND = 1000;
     final static private int SHIFT_DOWN = -1;
-    final static private int SHIFT_RIGHT = 10;
-    final static private int SHIFT_LEFT = 15;
-
-    // Attributes
+    final static private int SHIFT_RIGHT = 0;//10;
+    final static private int SHIFT_LEFT = 0;//15;
 
     /** true if support is active, false otherwise */
     boolean active = false;
     boolean dropTargetPopupAllowed;
 
-    /** Drop target asociated with the tree */
+    /** Drop target asociated with the table */
     DropTarget dropTarget;
 
     /** Node area which we were during
@@ -95,7 +91,6 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
     Rectangle lastNodeArea;
     private int upperNodeIdx = -1;
     private int lowerNodeIdx = -1;
-    private int dropIndex = -1;
 
     /** Swing Timer for expand node's parent with delay time. */
     Timer timer;
@@ -104,20 +99,16 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
     DropGlassPane dropPane;
     private int pointAt = DragDropUtilities.NODE_CENTRAL;
 
-    // Associations
-
     /** View manager. */
-    protected TreeView view;
+    protected OutlineView view;
 
     /** The component we are supporting with drop support */
-    protected JTree tree;
-
-    // Operations
+    protected JTable table;
 
     /** Creates new TreeViewDropSupport */
-    public TreeViewDropSupport(TreeView view, JTree tree, boolean dropTargetPopupAllowed) {
+    public OutlineViewDropSupport(OutlineView view, JTable table, boolean dropTargetPopupAllowed) {
         this.view = view;
-        this.tree = tree;
+        this.table = table;
         this.dropTargetPopupAllowed = dropTargetPopupAllowed;
     }
 
@@ -131,16 +122,16 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
 
     /** User is starting to drag over us */
     public void dragEnter(DropTargetDragEvent dtde) {
+        log("dragEnter " + dtde); // NOI18N
         checkStoredGlassPane();
 
-        dropIndex = -1;
-        
         // set a status and cursor of dnd action
         doDragOver(dtde);
     }
 
     /** User drags over us */
     public void dragOver(DropTargetDragEvent dtde) {
+        log("dragOver " + dtde); // NOI18N
         // bugfix #34483; jdk1.4.1 on w2k could calls dragOver() before dragEnter()
         // (jkdbug fixed in 1.4.2)
         // this check make dragOver/Enter more robust
@@ -153,37 +144,37 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
     private void checkStoredGlassPane() {
         // remember current glass pane to set back at end of dragging over this compoment
         if (!DropGlassPane.isOriginalPaneStored()) {
-            Component comp = tree.getRootPane().getGlassPane();
-            DropGlassPane.setOriginalPane(tree, comp, comp.isVisible());
+            Component comp = table.getRootPane().getGlassPane();
+            DropGlassPane.setOriginalPane(table, comp, comp.isVisible());
 
             // set glass pane for paint selection line
-            dropPane = DropGlassPane.getDefault(tree);
-            tree.getRootPane().setGlassPane(dropPane);
+            dropPane = DropGlassPane.getDefault(table);
+            table.getRootPane().setGlassPane(dropPane);
             dropPane.revalidate();
             dropPane.setVisible(true);
+            log("dropPane was set"); // NOI18N
         }
     }
 
     /** Process events dragEnter or dragOver. */
     private void doDragOver(DropTargetDragEvent dtde) {
-        ExplorerDnDManager.getDefault().setMaybeExternalDragAndDrop( true );
-
         int dropAction = dtde.getDropAction();
         int allowedDropActions = view.getAllowedDropActions();
-        
         dropAction = ExplorerDnDManager.getDefault().getAdjustedDropAction(
                 dropAction, allowedDropActions);
 
         // 1. test if I'm over any node
-        TreePath tp = getTreePath(dtde, dropAction);
-        Node dropNode;
-        
-        // 2. find node for drop
         Point p = dtde.getLocation();
-        if (tp == null) {
+        int row = view.getOutline().rowAtPoint(p);
+        int column = view.getOutline().columnAtPoint(p);
+        log("doDragOver row == " + row + " column == " + column); // NOI18N
+        // 2. find node for drop
+        Node dropNode = null;
+        
+        if (row == -1) {
             // #64469: Can't drop into empty explorer area
             dropNode = view.manager.getRootContext ();
-            if (canDrop(dropNode, dropAction, dtde.getTransferable())) {
+            if (canDrop(dropNode, dropAction)) {
                 // ok, root accept
                 dtde.acceptDrag(dropAction);
             } else {
@@ -193,20 +184,19 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
         } else {
             dropNode = getNodeForDrop(p);
         }
+        log("doDragOver dropNode == " + dropNode); // NOI18N
 
         // if I haven't any node for drop then reject drop
         if (dropNode == null) {
-            dropIndex = -1;
             dtde.rejectDrag();
             removeDropLine();
 
             return;
         }
 
-        Rectangle nodeArea = tree.getPathBounds(tp);
+        Rectangle nodeArea = table.getCellRect(row, column, false);
+        log("nodeArea == " + nodeArea); // NOI18N
         int endPointX = nodeArea.x + nodeArea.width;
-        int row = tree.getRowForPath(tp);
-
         if (nodeArea != null) {
             pointAt = DragDropUtilities.NODE_CENTRAL;
 
@@ -215,41 +205,28 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
                 if (row != 0) {
                     // point above node
                     pointAt = DragDropUtilities.NODE_UP;
-
-                    TreePath upPath = tree.getPathForRow(row - 1);
-
-                    if ((upPath != null) && !upPath.equals(tp)) {
-                        endPointX = Math.max(
-                                nodeArea.x + nodeArea.width,
-                                tree.getPathBounds(upPath).x + tree.getPathBounds(upPath).width
-                            );
-                    }
-
                     // drop candidate is parent
                     if (dropNode.getParentNode() != null) {
+                        log("dropNode is parent 1"); // NOI18N
                         dropNode = dropNode.getParentNode();
-                        tp = null;
                     }
                 }
             } else if (p.y >= ((nodeArea.y + nodeArea.height) - FUSSY_POINTING)) {
                 // exclude expanded folder
-                if (!view.isExpanded(dropNode)) {
+                TreePath tp = view.getOutline().getLayoutCache().getPathForRow(
+                        view.getOutline().convertRowIndexToModel(row));
+                log("tp == " + tp); //NOI18N
+                if (!view.getOutline().getLayoutCache().isExpanded(tp)) {
+                    log("tree path is not expanded"); // NOI18N
                     // point bellow node
                     pointAt = DragDropUtilities.NODE_DOWN;
 
-                    TreePath downPath = tree.getPathForRow(row + 1);
-
-                    if ((downPath != null) && !downPath.equals(tp)) {
-                        endPointX = Math.max(
-                                nodeArea.x + nodeArea.width,
-                                tree.getPathBounds(downPath).x + tree.getPathBounds(downPath).width
-                            );
-                    }
-
+                    TreePath downPath = view.getOutline().getLayoutCache().getPathForRow(
+                        view.getOutline().convertRowIndexToModel(row+1));
                     // drop candidate is parent
                     if (dropNode.getParentNode() != null) {
+                        log("dropNode is parent 2"); // NOI18N
                         dropNode = dropNode.getParentNode();
-                        tp = null;
                     }
                 }
             }
@@ -259,7 +236,7 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
 
         // 2.b. check index cookie
         Index indexCookie = (Index) dropNode.getCookie(Index.class);
-
+        log("indexCookie == " + indexCookie); // NOI18N
         if (indexCookie != null) {
             if (pointAt == DragDropUtilities.NODE_UP) {
                 lowerNodeIdx = indexCookie.indexOf(getNodeForDrop(p));
@@ -268,15 +245,15 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
                 upperNodeIdx = indexCookie.indexOf(getNodeForDrop(p));
                 lowerNodeIdx = upperNodeIdx + 1;
             }
-            dropIndex = lowerNodeIdx;
         }
-        if( dropNode == getNodeForDrop(p) )
-            dropIndex = -1;
 
         // 3. expand with a delay
+        final TreePath path = view.getOutline().getLayoutCache().getPathForRow(
+                view.getOutline().convertRowIndexToModel(row));
+        boolean expanded = view.getOutline().getLayoutCache().isExpanded(path);
         if (
-            ((timer == null) || !timer.isRunning()) && (dropNode != null) && !dropNode.isLeaf() &&
-                !view.isExpanded(dropNode)
+            ((timer == null) || !timer.isRunning()) && (dropNode != null) && !dropNode.isLeaf() 
+            && !expanded
         ) {
             // ok, let's expand in a while
             // node is candidate for expand
@@ -290,7 +267,8 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
                     DELAY_TIME_FOR_EXPAND,
                     new ActionListener() {
                         final public void actionPerformed(ActionEvent e) {
-                            view.expandNode(cn);
+                            log("should expand " + path); // NOI18N
+                            view.getOutline().expandPath(path);
                         }
                     }
                 );
@@ -330,41 +308,27 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
                     );
                 nodeArea = (Rectangle) nodeArea.createUnion(lineArea);
             }
-
-            // the parent node won't be selected
-
-            /*// select parent and enlarge paint area
-            if (tp.getParentPath ()!=null) {
-                tp = tp.getParentPath ();
-            }
-            nodeArea = (Rectangle)nodeArea.createUnion (tree.getPathBounds (tp));*/
         }
 
         // back normal view w/o any selecetion nor line
         if ((lastNodeArea != null) && (!lastNodeArea.equals(nodeArea))) {
-            NodeRenderer.dragExit();
             repaint(lastNodeArea);
         }
 
         // paint new state
         if (!nodeArea.equals(lastNodeArea)) {
-            if (tp != null) {
-                NodeRenderer.dragEnter(tp.getLastPathComponent());
-            }
-
             repaint(nodeArea);
             lastNodeArea = nodeArea;
             removeTimer();
         }
 
         // 5. show to cursor belong to state
-        if (canDrop(dropNode, dropAction, dtde.getTransferable())) {
+        if (canDrop(dropNode, dropAction)) {
             // ok, can accept
             dtde.acceptDrag(dropAction);
         } else {
             // can only reorder?
-            Node[] draggedNodes = ExplorerDnDManager.getDefault().getDraggedNodes();
-            if( null != draggedNodes && canReorderWhenMoving(dropNode, draggedNodes) ) {
+            if (canReorder(dropNode, ExplorerDnDManager.getDefault().getDraggedNodes())) {
                 // ok, can accept only reoder
                 dtde.acceptDrag(dropAction);
             } else {
@@ -377,7 +341,7 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
      * because some parts was not repainted correctly.
      * @param Rectangle r rectangle which will be repainted.*/
     private void repaint(Rectangle r) {
-        tree.repaint(r.x - 5, r.y - 5, r.width + 10, r.height + 10);
+        table.repaint(r.x - 5, r.y - 5, r.width + 10, r.height + 10);
     }
 
     /** Converts line's bounds by the bounds of the root pane. Drop glass pane
@@ -388,8 +352,8 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
         int x2 = (int) line.getX2();
         int y1 = (int) line.getY1();
         int y2 = (int) line.getY2();
-        Point p1 = SwingUtilities.convertPoint(tree, x1, y1, tree.getRootPane());
-        Point p2 = SwingUtilities.convertPoint(tree, x2, y2, tree.getRootPane());
+        Point p1 = SwingUtilities.convertPoint(table, x1, y1, table.getRootPane());
+        Point p2 = SwingUtilities.convertPoint(table, x2, y2, table.getRootPane());
         line.setLine(p1, p2);
         dropPane.setDropLine(line);
     }
@@ -411,21 +375,19 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
     public void dropActionChanged(DropTargetDragEvent dtde) {
         // check if the nodes are willing to do selected action
         Node[] nodes = ExplorerDnDManager.getDefault().getDraggedNodes();
-        if( null != nodes ) {
-            int dropAction = ExplorerDnDManager.getDefault().getAdjustedDropAction(
-                    dtde.getDropAction(), view.getAllowedDropActions()
-                );
+        int dropAction = ExplorerDnDManager.getDefault().getAdjustedDropAction(
+                dtde.getDropAction(), view.getAllowedDropActions()
+            );
 
-            for (int i = 0; i < nodes.length; i++) {
-                if (
-                    ((view.getAllowedDropActions() & dropAction) == 0) ||
-                        !DragDropUtilities.checkNodeForAction(nodes[i], dropAction)
-                ) {
-                    // this action is not supported
-                    dtde.rejectDrag();
+        for (int i = 0; i < nodes.length; i++) {
+            if (
+                ((view.getAllowedDropActions() & dropAction) == 0) ||
+                    !DragDropUtilities.checkNodeForAction(nodes[i], dropAction)
+            ) {
+                // this action is not supported
+                dtde.rejectDrag();
 
-                    return;
-                }
+                return;
             }
         }
 
@@ -434,19 +396,13 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
 
     /** User exits the dragging */
     public void dragExit(DropTargetEvent dte) {
-        dropIndex = -1;
-        
-        ExplorerDnDManager.getDefault().setMaybeExternalDragAndDrop( false );
         stopDragging();
     }
 
     private void removeDropLine() {
-        if( null != dropPane ) {
-            dropPane.setDropLine(null);
-        }
+        dropPane.setDropLine(null);
 
         if (lastNodeArea != null) {
-            NodeRenderer.dragExit();
             repaint(lastNodeArea);
             lastNodeArea = null;
         }
@@ -464,30 +420,18 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
 
     /** Get a node on given point or null if there none*/
     private Node getNodeForDrop(Point p) {
-        if (p != null) {
-            TreePath tp = tree.getPathForLocation(p.x, p.y);
-            if( null == tp ) {
-                //make the drop area a bit bigger at the end of the tree
-                tp = tree.getPathForLocation(p.x, p.y-tree.getRowHeight()/2);
-            }
-
-            if (tp != null) {
-                return DragDropUtilities.secureFindNode(tp.getLastPathComponent());
-            }
-        }
-
-        return null;
-    }
-
-    private boolean canReorderWhenMoving(Node folder, Node[] dragNodes) {
-        if ((ExplorerDnDManager.getDefault().getNodeAllowedActions() & DnDConstants.ACTION_MOVE) == 0) {
-            return false;
-        }
-        return canReorder( folder, dragNodes );
+        int row = view.getOutline().rowAtPoint(p);
+        return view.getNodeFromRow(row);
     }
 
     private boolean canReorder(Node folder, Node[] dragNodes) {
-        if ((folder == null) || (dragNodes.length == 0)) {
+        if ((ExplorerDnDManager.getDefault().getNodeAllowedActions() & DnDConstants.ACTION_MOVE) == 0) {
+            log("canReorder returning false 1");
+            return false;
+        }
+
+        if ((folder == null) || (dragNodes == null) || (dragNodes.length == 0)) {
+            log("canReorder returning false 2");
             return false;
         }
 
@@ -495,6 +439,7 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
         Index ic = (Index) folder.getCookie(Index.class);
 
         if (ic == null) {
+            log("canReorder returning false 3");
             return false;
         }
 
@@ -503,24 +448,28 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
         for (int i = 0; i < dragNodes.length; i++) {
             // bugfix #23988, check if dragNodes[i] isn't null
             if (dragNodes[i] == null) {
+                log("canReorder returning false 4");
                 return false;
             }
 
             if (dragNodes[i].getParentNode() == null) {
+                log("canReorder returning false 5");
                 return false;
             }
 
             if (!dragNodes[i].getParentNode().equals(folder)) {
+                log("canReorder returning false 6");
                 return false;
             }
         }
-
+        log("canReorder returning true");
         return true;
     }
 
     private void performReorder(final Node folder, Node[] dragNodes, int lNode, int uNode) {
         try {
             Index indexCookie = (Index) folder.getCookie(Index.class);
+            log("performReorder indexCookie == " + indexCookie);
 
             if (indexCookie != null) {
                 int[] perm = new int[indexCookie.getNodesCount()];
@@ -584,7 +533,7 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
             }
         } catch (Exception e) {
             // Pending: add annotation or remove try/catch block
-            Logger.getLogger(TreeViewDropSupport.class.getName()).log(Level.WARNING, null, e);
+            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
         }
     }
 
@@ -616,7 +565,8 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
     /** Can node recieve given drop action? */
 
     // XXX canditate for more general support
-    private boolean canDrop(Node n, int dropAction, Transferable dndEventTransferable) {
+    private boolean canDrop(Node n, int dropAction) {
+        log("canDrop " + n); // NOI18N
         if (n == null) {
             return false;
         }
@@ -631,11 +581,13 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
         if ((DnDConstants.ACTION_MOVE & dropAction) != 0) {
             Node[] nodes = ExplorerDnDManager.getDefault().getDraggedNodes();
 
-            if (nodes != null) {
-                for (int i = 0; i < nodes.length; i++) {
-                    if (n.equals(nodes[i].getParentNode())) {
-                        return false;
-                    }
+            if (nodes == null) {
+                return false;
+            }
+
+            for (int i = 0; i < nodes.length; i++) {
+                if (n.equals(nodes[i].getParentNode())) {
+                    return false;
                 }
             }
         }
@@ -643,16 +595,13 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
         Transferable trans = ExplorerDnDManager.getDefault().getDraggedTransferable(
                 (DnDConstants.ACTION_MOVE & dropAction) != 0
             );
-
+        log("transferable == " + trans); // NOI18N
         if (trans == null) {
-            trans = dndEventTransferable;
-            if( null == trans ) {
-                return false;
-            }
+            return false;
         }
 
         // get paste types for given transferred transferable
-        PasteType pt = DragDropUtilities.getDropType(n, trans, dropAction, dropIndex);
+        PasteType pt = null;//TODO DragDropUtilities.getDropType(n, trans, dropAction);
 
         return (pt != null);
     }
@@ -663,10 +612,12 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
     public void drop(DropTargetDropEvent dtde) {
         boolean dropResult = true;
         try {
+            log("drop");
             stopDragging();
 
             // find node for the drop perform
             Node dropNode = getNodeForDrop(dtde.getLocation());
+            log("drop dropNode == " + dropNode);
 
             // #64469: Can't drop into empty explorer area
             if (dropNode == null) {
@@ -680,22 +631,21 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
                     dtde.getDropAction(), view.getAllowedDropActions()
                 );
 
-            ExplorerDnDManager.getDefault().setMaybeExternalDragAndDrop( false );
-
-            // finally perform the drop
-            dtde.acceptDrop(dropAction);
-
-            if (!canDrop(dropNode, dropAction, dtde.getTransferable())) {
-                if( null != dragNodes && canReorderWhenMoving(dropNode, dragNodes)) {
+            if (!canDrop(dropNode, dropAction)) {
+                if (canReorder(dropNode, dragNodes)) {
                     performReorder(dropNode, dragNodes, lowerNodeIdx, upperNodeIdx);
+                    dtde.acceptDrop(dropAction);
                 } else {
-                    dropResult = false;
+                    dtde.rejectDrop();
                 }
 
                 return;
             }
 
-            if (DnDConstants.ACTION_LINK == dropAction && null != dragNodes) {
+            // finally perform the drop
+            dtde.acceptDrop(dropAction);
+
+            if (DnDConstants.ACTION_LINK == dropAction) {
                 // construct all paste types
                 PasteType[] ptCut = new PasteType[] {  };
 
@@ -716,27 +666,34 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
                         );
                 }
 
-                TreeSet<PasteType> setPasteTypes = new TreeSet<PasteType>(
-                        new Comparator<PasteType>() {
-                            public int compare(PasteType obj1, PasteType obj2) {
-                                return obj1.getName().compareTo(obj2.getName());
+                TreeSet setPasteTypes = new TreeSet(
+                        new Comparator() {
+                            public int compare(Object obj1, Object obj2) {
+                                // have to fix: the different actions can have same name!!!
 
+                                int res = ((PasteType)obj1).getName ().compareTo (((PasteType)obj2).getName ());
+                                log("res1: "+res); // NOI18N
+                                if (res == 0) {
+                                    res = System.identityHashCode(obj1)-System.identityHashCode(obj2);
+                                }
+                                log("res2: "+res); // NOI18N
+                                return res;
                             }
                         }
                     );
 
                 for (int i = 0; i < ptCut.length; i++) {
-                    //System.out.println(ptCut[i].getName()+", "+System.identityHashCode(ptCut[i]));
+                    log(ptCut[i].getName()+", "+System.identityHashCode(ptCut[i]));
                     setPasteTypes.add(ptCut[i]);
                 }
 
                 for (int i = 0; i < ptCopy.length; i++) {
-                    //System.out.println(ptCopy[i].getName()+", "+System.identityHashCode(ptCopy[i]));
+                    log(ptCopy[i].getName()+", "+System.identityHashCode(ptCopy[i]));
                     setPasteTypes.add(ptCopy[i]);
                 }
 
                 DragDropUtilities.createDropFinishPopup(setPasteTypes).show(
-                    tree, Math.max(dtde.getLocation().x - 5, 0), Math.max(dtde.getLocation().y - 5, 0)
+                    table, Math.max(dtde.getLocation().x - 5, 0), Math.max(dtde.getLocation().y - 5, 0)
                 );
 
                 // reorder have to be perform
@@ -755,63 +712,27 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
                         }
                     );
                 }
-            } else if( dropAction != DnDConstants.ACTION_LINK ) {
+            } else {
                 // get correct paste type
-                Transferable t = ExplorerDnDManager.getDefault().getDraggedTransferable( (DnDConstants.ACTION_MOVE & dropAction) != 0 );
-                if( null == t ) {
-                    t = dtde.getTransferable();
-                }
-                PasteType pt = DragDropUtilities.getDropType( dropNode, t, dropAction, dropIndex );
-
-                //remember the Nodes before the drop
-                final Node[] preNodes = dropNode.getChildren().getNodes( true );
-                final Node parentNode = dropNode;
+                PasteType pt = DragDropUtilities.getDropType(
+                        dropNode,
+                        ExplorerDnDManager.getDefault().getDraggedTransferable(
+                            (DnDConstants.ACTION_MOVE & dropAction) != 0
+                        ), dropAction, -1 //TODO dropIndex!
+                    );
 
                 Node[] diffNodes = DragDropUtilities.performPaste(pt, dropNode);
-
                 ExplorerDnDManager.getDefault().setDraggedNodes(diffNodes);
 
-                //postpone the potential re-order so that the drop Node has enough 
-                //time to re-create its children
-                SwingUtilities.invokeLater( new Runnable() {
-                    public void run() {
-                        Node[] diffNodes = getDiffNodes( parentNode, preNodes );
-                        if( canReorder( parentNode, diffNodes ) ) {
-                            performReorder( parentNode, diffNodes, lowerNodeIdx, upperNodeIdx );
-                        }
-                    }
-                });
-            }
-
-            TreeCellEditor tce = tree.getCellEditor();
-
-            if (tce instanceof TreeViewCellEditor) {
-                ((TreeViewCellEditor) tce).setDnDActive(false);
+                // check canReorder or optionally perform it
+                if (canReorder(dropNode, diffNodes)) {
+                    performReorder(dropNode, diffNodes, lowerNodeIdx, upperNodeIdx);
+                }
             }
         } finally {
             // finished
-            dtde.dropComplete( dropResult );
+            dtde.dropComplete(dropResult);
         }
-    }
-
-    private Node[] getDiffNodes( Node parent, Node[] childrenBefore ) {
-        Node[] childrenCurrent = parent.getChildren().getNodes(true);
-
-        // calculate new nodes
-        List<Node> pre = Arrays.asList(childrenBefore);
-        List<Node> post = Arrays.asList(childrenCurrent);
-        Iterator<Node> it = post.iterator();
-        List<Node> diff = new ArrayList<Node>();
-
-        while (it.hasNext()) {
-            Node n = it.next();
-
-            if (!pre.contains(n)) {
-                diff.add(n);
-            }
-        }
-
-        return diff.toArray(new Node[diff.size()]);
     }
 
     /** Activates or deactivates Drag support on asociated JTree
@@ -840,30 +761,32 @@ final class TreeViewDropSupport implements DropTargetListener, Runnable {
         DragDropUtilities.dropNotSuccesfull();
     }
 
-    /** @return The tree path to the node the cursor is above now or
-    * null if no such node currently exists or if conditions were not
-    * satisfied to continue with DnD operation.
-    */
-    TreePath getTreePath(DropTargetDragEvent dtde, int dropAction) {
-        // check location
-        Point location = dtde.getLocation();
-        TreePath tp = tree.getPathForLocation(location.x, location.y);
-        if( null == tp ) {
-            //make the drop area a bit bigger at the end of the tree
-            tp = tree.getPathForLocation(location.x, location.y-tree.getRowHeight()/2);
-        }
-
-        return ((tp != null) && (DragDropUtilities.secureFindNode(tp.getLastPathComponent()) != null)) ? tp : null;
-    }
-
     /** Safe accessor to the drop target which is asociated
-    * with the tree */
+    * with the table */
     DropTarget getDropTarget() {
         if (dropTarget == null) {
-            dropTarget = new DropTarget(tree, view.getAllowedDropActions(), this, false);
+            dropTarget = new DropTarget(table, view.getAllowedDropActions(), this, false);
         }
 
         return dropTarget;
     }
+    
+    //
+    // Logging:
+    //
+    
+    /** Using the NetBeans error manager for logging. */
+    private static ErrorManager err = ErrorManager.getDefault().getInstance(
+            OutlineViewDropSupport.class.getName());
+    /** Settable from the system property */
+    private static boolean LOGABLE = err.isLoggable(ErrorManager.INFORMATIONAL);
+    /**
+     * Logs the string only if logging is turned on.
+     */
+    private static void log(String s) {
+        if (LOGABLE) {
+            err.log(s);
+        }
+    }
+
 }
- /* end class TreeViewDropSupport */
