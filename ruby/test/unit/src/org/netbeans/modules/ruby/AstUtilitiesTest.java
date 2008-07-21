@@ -48,7 +48,7 @@ import java.util.Set;
 import org.jruby.ast.DefnNode;
 import org.jruby.ast.IterNode;
 import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
+import org.jruby.ast.NodeType;
 import org.jruby.ast.types.INameNode;
 import org.openide.filesystems.FileObject;
 
@@ -90,7 +90,7 @@ public class AstUtilitiesTest extends RubyTestBase {
         Node root = getRootNode("testfiles/ape.rb");
         Node node = AstUtilities.findBySignature(root, "Ape#@dialogs");
         assertNotNull(node);
-        assertEquals(node.nodeId, NodeTypes.INSTASGNNODE);
+        assertEquals(node.nodeId, NodeType.INSTASGNNODE);
         assertEquals("@dialogs", ((INameNode)node).getName());
     }
 
@@ -98,7 +98,7 @@ public class AstUtilitiesTest extends RubyTestBase {
         Node root = getRootNode("testfiles/ape.rb");
         Node node = AstUtilities.findBySignature(root, "Ape#@@debugging");
         assertNotNull(node);
-        assertEquals(node.nodeId, NodeTypes.CLASSVARASGNNODE);
+        assertEquals(node.nodeId, NodeType.CLASSVARASGNNODE);
         assertEquals("@@debugging", ((INameNode)node).getName());
     }
 
@@ -146,11 +146,32 @@ public class AstUtilitiesTest extends RubyTestBase {
         method = AstUtilities.getMethodName(fileObject, offset);
         assertEquals("report_html", method);
     }
+
+    public void testGetTestName() {
+        String testFile = "testfiles/new_test.rb";
+        FileObject fileObject = getTestFile(testFile);
+        String text = readFile(fileObject);
+        
+        int offset = 0;
+        String test = null;
+        
+        offset = text.indexOf("something should happen to me okay?");
+        test = AstUtilities.getTestName(fileObject, offset);
+        assertEquals("test_something_should_happen_to_me_okay?", test);
+
+        offset = text.indexOf("something else should happen to me okay?");
+        test = AstUtilities.getTestName(fileObject, offset);
+        assertEquals("test_something_else_should_happen_to_me_okay?", test);
+
+        offset = text.indexOf("test \"something ");
+        test = AstUtilities.getTestName(fileObject, offset);
+        assertEquals("test_something_should_happen_to_me_okay?", test);
+    }
     
     public void testAddNodesByType() {
         Node root = getRootNode("testfiles/unused.rb");
         List<Node> result = new ArrayList<Node>();
-        AstUtilities.addNodesByType(root, new int[] { NodeTypes.ITERNODE }, result);
+        AstUtilities.addNodesByType(root, new NodeType[] { NodeType.ITERNODE }, result);
         assertEquals(1, result.size());
         assertTrue(result.get(0) instanceof IterNode);
     }
@@ -158,7 +179,7 @@ public class AstUtilitiesTest extends RubyTestBase {
     public void testAddNodesByType2() {
         Node root = getRootNode("testfiles/top_level.rb");
         List<Node> result = new ArrayList<Node>();
-        AstUtilities.addNodesByType(root, new int[] { NodeTypes.DEFNNODE }, result);
+        AstUtilities.addNodesByType(root, new NodeType[] { NodeType.DEFNNODE }, result);
         assertEquals(2, result.size());
         assertTrue(result.get(0) instanceof DefnNode);
     }
