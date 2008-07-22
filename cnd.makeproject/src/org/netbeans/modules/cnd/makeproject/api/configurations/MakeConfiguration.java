@@ -99,7 +99,6 @@ public class MakeConfiguration extends Configuration {
     private PackagingConfiguration packagingConfiguration;
     private RequiredProjectsConfiguration requiredProjectsConfiguration;
     private boolean languagesDirty = true;
-    private PlatformInfo platformInfo;
 
     // Constructors
     public MakeConfiguration(MakeConfigurationDescriptor makeConfigurationDescriptor, String name, int configurationTypeValue) {
@@ -186,11 +185,9 @@ public class MakeConfiguration extends Configuration {
     }
 
     public PlatformInfo getPlatformInfo() {
-        if (platformInfo == null) {
-            platformInfo = new PlatformInfo(getDevelopmentHost().getName(), getPlatform().getValue());
-        }
+        PlatformInfo platformInfo = PlatformInfo.getDefault(getDevelopmentHost().getName());
+        assert platformInfo.getPlatform() == getPlatform().getValue();
         return platformInfo;
-        
     }
     
     public DevelopmentHostConfiguration getDevelopmentHost() {
@@ -199,16 +196,17 @@ public class MakeConfiguration extends Configuration {
 
     public void setDevelopmentHost(DevelopmentHostConfiguration developmentHost) {
         this.developmentHost = developmentHost;
-        platformInfo = null;
     }
 
     public PlatformConfiguration getPlatform() {
+//        if (platform.getValue() == -1 && developmentHost.getName().equals("sg155630@eaglet-sr") ) { //TODO: till platform setup bug will be fixed
+//            return new PlatformConfiguration(PlatformTypes.PLATFORM_SOLARIS_INTEL, platform.getNames());
+//        }
         return platform;
     }
 
     public void setPlatform(PlatformConfiguration platform) {
         this.platform = platform;
-        platformInfo = null;
     }
     
     public boolean isApplicationConfiguration() {
