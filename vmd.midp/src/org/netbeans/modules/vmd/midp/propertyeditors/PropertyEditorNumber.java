@@ -74,12 +74,21 @@ public class PropertyEditorNumber extends PropertyEditorUserCode implements Prop
     private CustomEditor customEditor;
     private JRadioButton radioButton;
     private String label;
+    private boolean positiveNumersOnly;
 
     private PropertyEditorNumber(boolean useSpinner, String label, String userCodeLabel) {
         super(userCodeLabel);
         this.label = label;
         initComponents(useSpinner);
 
+        initElements(Collections.<PropertyEditorElement>singleton(this));
+    }
+
+    private PropertyEditorNumber(boolean useSpinner, String label, String userCodeLabel, boolean positiveNumbersOnly) {
+        super(userCodeLabel);
+        this.label = label;
+        initComponents(useSpinner);
+        this.positiveNumersOnly = positiveNumbersOnly;
         initElements(Collections.<PropertyEditorElement>singleton(this));
     }
 
@@ -91,6 +100,16 @@ public class PropertyEditorNumber extends PropertyEditorUserCode implements Prop
      */
     public static final PropertyEditorNumber createIntegerInstance(boolean useSpinner, String label) {
         return new PropertyEditorNumber(useSpinner, label, NbBundle.getMessage(PropertyEditorNumber.class, "LBL_INTEGER_UCLABEL")); // NOI18N
+    }
+
+    /**
+     * Creates instance of property editor for positive integer type
+     *
+     * @param label localized label with mnemonics for radio button
+     * @return propertyEditor
+     */
+    public static final PropertyEditorNumber createPositiveIntegerInstance(boolean useSpinner, String label) {
+        return new PropertyEditorNumber(useSpinner, label, NbBundle.getMessage(PropertyEditorNumber.class, "LBL_INTEGER_UCLABEL"), true); // NOI18N
     }
 
     /**
@@ -270,6 +289,12 @@ public class PropertyEditorNumber extends PropertyEditorUserCode implements Prop
     private void initComponents(boolean useSpinner) {
         radioButton = new JRadioButton();
         Mnemonics.setLocalizedText(radioButton, label);
+        
+        radioButton.getAccessibleContext().setAccessibleName( 
+                radioButton.getText());
+        radioButton.getAccessibleContext().setAccessibleDescription( 
+                radioButton.getText());
+        
         customEditor = new CustomEditor(useSpinner);
     }
 
@@ -323,6 +348,9 @@ public class PropertyEditorNumber extends PropertyEditorUserCode implements Prop
                     intValue = Integer.parseInt(text);
                 }
             } catch (NumberFormatException e) {
+            }
+            if (positiveNumersOnly && intValue < 0) {
+                intValue = 0;
             }
             super.setValue(MidpTypes.createIntegerValue(intValue));
         }
@@ -430,6 +458,11 @@ public class PropertyEditorNumber extends PropertyEditorUserCode implements Prop
             this.useSpinner = useSpinner;
             radioButton.addFocusListener(this);
             initComponents();
+            
+            getAccessibleContext().setAccessibleName( 
+                    radioButton.getAccessibleContext().getAccessibleName());
+            getAccessibleContext().setAccessibleDescription(
+                    radioButton.getAccessibleContext().getAccessibleDescription());
         }
 
         private void initComponents() {
@@ -439,11 +472,21 @@ public class PropertyEditorNumber extends PropertyEditorUserCode implements Prop
                 spinner.getModel().addChangeListener(this);
                 spinner.addFocusListener(this);
                 add(spinner, BorderLayout.CENTER);
+                
+                spinner.getAccessibleContext().setAccessibleName( 
+                        radioButton.getAccessibleContext().getAccessibleName());
+                spinner.getAccessibleContext().setAccessibleDescription( 
+                        radioButton.getAccessibleContext().getAccessibleDescription());
             } else {
                 textField = new JTextField();
                 textField.getDocument().addDocumentListener(this);
                 textField.addFocusListener(this);
                 add(textField, BorderLayout.CENTER);
+                
+                textField.getAccessibleContext().setAccessibleName( 
+                        radioButton.getAccessibleContext().getAccessibleName());
+                textField.getAccessibleContext().setAccessibleDescription( 
+                        radioButton.getAccessibleContext().getAccessibleDescription());
             }
         }
 
@@ -474,15 +517,30 @@ public class PropertyEditorNumber extends PropertyEditorUserCode implements Prop
         private void checkNumberStatus() {
             if (!isTextCorrect(getText())) {
                 displayWarning(NON_DIGITS_TEXT);
-            } else {
-                clearErrorStatus();
+                return;
+            }
+            if (positiveNumersOnly) {
+                try {
+                    int number = Integer.valueOf(textField.getText());
+                    if (number < 0) {
+                        displayWarning(NbBundle.getMessage(PropertyEditorPreferredSize.class, "MSG_POSITIVE_CHARS")); //NOI18N
+                    } else {
+                        clearErrorStatus();
+                    }
+                } catch (NumberFormatException ex) {
+                    displayWarning(PropertyEditorNumber.NON_DIGITS_TEXT);
+                }
             }
         }
 
         public void focusGained(FocusEvent e) {
-            if (e.getSource() == radioButton  ||  e.getSource() == textField  ||  e.getSource() == spinner) {
+            if (e.getSource() == textField || e.getSource() == spinner) {
+                radioButton.setSelected(true);
                 checkNumberStatus();
             }
+        //if (e.getSource() == radioButton ) {
+        //    checkNumberStatus();
+        //}
         }
 
         public void focusLost(FocusEvent e) {
