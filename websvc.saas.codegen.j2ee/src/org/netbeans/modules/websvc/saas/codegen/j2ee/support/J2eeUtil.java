@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.saas.codegen.java.support;
+package org.netbeans.modules.websvc.saas.codegen.j2ee.support;
 
 import com.sun.source.tree.ClassTree;
 import java.awt.Component;
@@ -47,7 +47,6 @@ import java.awt.Container;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
-import java.lang.reflect.Constructor;
 import javax.swing.JComponent;
 import java.util.Vector;
 import java.util.Iterator;
@@ -56,13 +55,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
 import org.openide.util.Utilities;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import javax.lang.model.element.Modifier;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -72,22 +70,24 @@ import java.util.HashSet;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
-import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.transform.stream.StreamSource;
-import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.java.project.classpath.ProjectClassPathModifier;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.ModificationResult;
 import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.project.libraries.Library;
-import org.netbeans.api.project.libraries.LibraryManager;
+import org.netbeans.modules.j2ee.dd.api.common.NameAlreadyUsedException;
+import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
+import org.netbeans.modules.j2ee.dd.api.web.Listener;
+import org.netbeans.modules.j2ee.dd.api.web.Servlet;
+import org.netbeans.modules.j2ee.dd.api.web.ServletMapping;
+import org.netbeans.modules.j2ee.dd.api.web.WebApp;
+import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.modules.websvc.saas.codegen.Constants;
 import org.netbeans.modules.websvc.saas.codegen.Constants.MimeType;
 import org.netbeans.modules.websvc.saas.codegen.Constants.SaasAuthenticationType;
@@ -105,35 +105,30 @@ import org.netbeans.modules.websvc.saas.codegen.model.SaasBean.SignedUrlAuthenti
 import org.netbeans.modules.websvc.saas.codegen.model.RestClientSaasBean;
 import org.netbeans.modules.websvc.saas.util.SaasUtil;
 import org.openide.DialogDisplayer;
-import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
 import org.openide.cookies.EditorCookie;
-import org.openide.cookies.LineCookie;
-import org.openide.cookies.SaveCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
-import org.openide.text.Line;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.websvc.saas.codegen.Constants.DropFileType;
 import org.netbeans.modules.websvc.saas.codegen.Constants.HttpMethodType;
+import org.netbeans.modules.websvc.saas.codegen.java.support.AbstractTask;
+import org.netbeans.modules.websvc.saas.codegen.java.support.JavaSourceHelper;
+import org.netbeans.modules.websvc.saas.codegen.java.support.JavaUtil;
+import org.netbeans.modules.websvc.saas.codegen.java.support.LibrariesHelper;
 import org.netbeans.modules.websvc.saas.codegen.model.SaasBean;
-import org.netbeans.modules.websvc.saas.codegen.model.SaasBean.HttpBasicAuthentication;
 import org.netbeans.modules.websvc.saas.codegen.model.SaasBean.SaasAuthentication.UseGenerator;
 import org.netbeans.modules.websvc.saas.codegen.model.SaasBean.SaasAuthentication.UseGenerator.Token;
-import org.netbeans.modules.websvc.saas.codegen.model.SaasBean.SaasAuthentication.UseTemplates;
-import org.netbeans.modules.websvc.saas.codegen.model.SaasBean.SaasAuthentication.UseTemplates.Template;
 import org.netbeans.modules.websvc.saas.codegen.model.SaasBean.Time;
 import org.netbeans.modules.websvc.saas.codegen.ui.CodeSetupPanel;
 import org.netbeans.modules.websvc.saas.codegen.util.Inflector;
-import org.netbeans.modules.websvc.saas.codegen.util.Util;
 import org.netbeans.modules.websvc.saas.model.wadl.Application;
 import org.netbeans.modules.websvc.saas.model.wadl.Resource;
-import org.netbeans.modules.websvc.saas.codegen.java.support.LibrariesHelper;
 import org.openide.WizardDescriptor;
 import org.openide.loaders.DataObjectNotFoundException;
 
@@ -144,28 +139,19 @@ import org.openide.loaders.DataObjectNotFoundException;
  * since that's the package used for sharing all the utility classes.
  * 
  */
-public class JavaUtil extends Util {
+public class J2eeUtil {
 
+    public static final String TYPE_DOC_ROOT = "doc_root"; //NOI18N
+    public static final String AT = "@"; //NOI18N
+    public static final String APATH = AT + Constants.PATH_ANNOTATION;      //NOI18N
+    public static final String AGET = AT + Constants.GET_ANNOTATION;      //NOI18N
+    public static final String APOST = AT + Constants.POST_ANNOTATION;      //NOI18N
+    public static final String APUT = AT + Constants.PUT_ANNOTATION;      //NOI18N
+    public static final String ADELETE = AT + Constants.DELETE_ANNOTATION;      //NOI18N
+    public static final String SCANNING_IN_PROGRESS = "ScanningInProgress";//NOI18N
     private static final String BUILD_XML_PATH = "build.xml"; // NOI18N
-    private static final String JAXB_LIB = "jaxb";     //NOI18N
-    
-    public static final Modifier[] PUBLIC = new Modifier[] { Modifier.PUBLIC };
-    
-    public static final Modifier[] PRIVATE = new Modifier[] { Modifier.PRIVATE };
-    
-    public static final Modifier[] PROTECTED = new Modifier[] { Modifier.PROTECTED };
-    
-    public static final Modifier[] PRIVATE_STATIC = new Modifier[] {
-        Modifier.PRIVATE, Modifier.STATIC };
-    
-    public static final Modifier[] PUBLIC_STATIC = new Modifier[] {
-        Modifier.PUBLIC, Modifier.STATIC
-    };
-   
-    public static final Modifier[] PUBLIC_STATIC_FINAL = new Modifier[] {
-        Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL
-    };
-    
+    private static final String JAXB_LIB = "jaxb21";     //NOI18N
+
     /*
      * Check if the primary file of d is a REST Resource
      */
@@ -344,18 +330,18 @@ public class JavaUtil extends Util {
      * Returns the SourceGroup of the passesd project which contains the
      * fully-qualified class name.
      */
-    public static SourceGroup getClassSourceGroup(Project project, String fqClassName) {
-        String classFile = fqClassName.replace('.', '/') + "." + Constants.JAVA_EXT; // NOI18N
-        SourceGroup[] sourceGroups = SourceGroupSupport.getJavaSourceGroups(project);
-
-        for (SourceGroup sourceGroup : sourceGroups) {
-            FileObject classFO = sourceGroup.getRootFolder().getFileObject(classFile);
-            if (classFO != null) {
-                return sourceGroup;
-            }
-        }
-        return null;
-    }
+//    public static SourceGroup getClassSourceGroup(Project project, String fqClassName) {
+//        String classFile = fqClassName.replace('.', '/') + "." + Constants.JAVA_EXT; // NOI18N
+//        SourceGroup[] sourceGroups = SourceGroupSupport.getJavaSourceGroups(project);
+//
+//        for (SourceGroup sourceGroup : sourceGroups) {
+//            FileObject classFO = sourceGroup.getRootFolder().getFileObject(classFile);
+//            if (classFO != null) {
+//                return sourceGroup;
+//            }
+//        }
+//        return null;
+//    }
     static final String WIZARD_PANEL_CONTENT_DATA = WizardDescriptor.PROP_CONTENT_DATA; // NOI18N
     static final String WIZARD_PANEL_CONTENT_SELECTED_INDEX = WizardDescriptor.PROP_CONTENT_SELECTED_INDEX; //NOI18N;
 
@@ -442,65 +428,65 @@ public class JavaUtil extends Util {
         return types;
     }
 
-    public static SourceGroup[] getSourceGroups(Project project) {
-        SourceGroup[] sourceGroups = null;
-
-        Sources sources = ProjectUtils.getSources(project);
-        SourceGroup[] docRoot = sources.getSourceGroups(TYPE_DOC_ROOT);
-        SourceGroup[] srcRoots = SourceGroupSupport.getJavaSourceGroups(project);
-
-        if (docRoot != null && srcRoots != null) {
-            sourceGroups = new SourceGroup[docRoot.length + srcRoots.length];
-            System.arraycopy(docRoot, 0, sourceGroups, 0, docRoot.length);
-            System.arraycopy(srcRoots, 0, sourceGroups, docRoot.length, srcRoots.length);
-        }
-
-        if (sourceGroups == null || sourceGroups.length == 0) {
-            sourceGroups = sources.getSourceGroups(Sources.TYPE_GENERIC);
-        }
-        return sourceGroups;
-    }
+//    public static SourceGroup[] getSourceGroups(Project project) {
+//        SourceGroup[] sourceGroups = null;
+//
+//        Sources sources = ProjectUtils.getSources(project);
+//        SourceGroup[] docRoot = sources.getSourceGroups(TYPE_DOC_ROOT);
+//        SourceGroup[] srcRoots = SourceGroupSupport.getJavaSourceGroups(project);
+//
+//        if (docRoot != null && srcRoots != null) {
+//            sourceGroups = new SourceGroup[docRoot.length + srcRoots.length];
+//            System.arraycopy(docRoot, 0, sourceGroups, 0, docRoot.length);
+//            System.arraycopy(srcRoots, 0, sourceGroups, docRoot.length, srcRoots.length);
+//        }
+//
+//        if (sourceGroups == null || sourceGroups.length == 0) {
+//            sourceGroups = sources.getSourceGroups(Sources.TYPE_GENERIC);
+//        }
+//        return sourceGroups;
+//    }
     private static Map<String, Class> primitiveTypes;
     private static Map<String, Class> primitiveClassTypes;
     
     private static HashSet<String> keywords;
 
-    public static Class getType(Project project, String typeName) {
-        List<ClassPath> classPaths = SourceGroupSupport.gerClassPath(project);
-        
-        //hack for PHP
-        if(classPaths.size() == 0){
-            try {
-                Class ret = getPrimitiveClassType(typeName);
-                if(ret != null){
-                    return ret;
-                }
-                return Class.forName(typeName);
-            } catch (ClassNotFoundException ex) {
-                return java.lang.Object.class;
-            }
-        }
-
-        for (ClassPath cp : classPaths) {
-            try {
-                Class ret = JavaUtil.getPrimitiveType(typeName);
-                if (ret != null) {
-                    return ret;
-                }
-                ClassLoader cl = cp.getClassLoader(true);
-                ret = getGenericRawType(typeName, cl);
-                if (ret != null) {
-                    return ret;
-                }
-                if (cl != null) {
-                    return cl.loadClass(typeName);
-                }
-            } catch (ClassNotFoundException ex) {
-                //Logger.global.log(Level.INFO, ex.getLocalizedMessage(), ex);
-            }
-        }
-        return null;
-    }
+//    public static Class getType(Project project, String typeName) {
+//        List<ClassPath> classPaths = SourceGroupSupport.gerClassPath(project);
+//        
+//        //hack for PHP
+//        if(classPaths.size() == 0){
+//            try {
+//                Class ret = getPrimitiveClassType(typeName);
+//                if(ret != null){
+//                    return ret;
+//                }
+//                return Class.forName(typeName);
+//            } catch (ClassNotFoundException ex) {
+//                return java.lang.Object.class;
+//            }
+//        }
+//
+//        for (ClassPath cp : classPaths) {
+//            try {
+//                Class ret = Util.getPrimitiveType(typeName);
+//                if (ret != null) {
+//                    return ret;
+//                }
+//                ClassLoader cl = cp.getClassLoader(true);
+//                ret = getGenericRawType(typeName, cl);
+//                if (ret != null) {
+//                    return ret;
+//                }
+//                if (cl != null) {
+//                    return cl.loadClass(typeName);
+//                }
+//            } catch (ClassNotFoundException ex) {
+//                //Logger.global.log(Level.INFO, ex.getLocalizedMessage(), ex);
+//            }
+//        }
+//        return null;
+//    }
     
     
     public static Class getPrimitiveClassType(String type) {
@@ -650,50 +636,50 @@ public class JavaUtil extends Util {
         return sortedKeys;
     }
 
-    public static void showMethod(FileObject source, String methodName) throws IOException {
-        try {
-            DataObject dataObj = DataObject.find(source);
-            if (!isJava(dataObj)) {
-                return;
-            }
-            JavaSource javaSource = JavaSource.forFileObject(source);
-
-            // Force a save to make sure to make sure the line position in
-            // the editor is in sync with the java source.
-            SaveCookie sc = (SaveCookie) dataObj.getCookie(SaveCookie.class);
-
-            if (sc != null) {
-                sc.save();
-            }
-
-            LineCookie lc = (LineCookie) dataObj.getCookie(LineCookie.class);
-
-            if (lc != null) {
-                JavaUtil.checkScanning(false);
-                final long[] position = JavaSourceHelper.getPosition(javaSource, methodName);
-                final Line line = lc.getLineSet().getOriginal((int) position[0]);
-
-                SwingUtilities.invokeLater(new Runnable() {
-
-                    public void run() {
-                        line.show(Line.SHOW_SHOW, (int) position[1]);
-                    }
-                });
-            }
-        } catch (Exception de) {
-            if (de instanceof IOException && de.getMessage().equals(JavaUtil.SCANNING_IN_PROGRESS)) {
-                throw new IOException(JavaUtil.SCANNING_IN_PROGRESS);
-            } else {
-                de.printStackTrace();
-                ErrorManager.getDefault().log(ErrorManager.INFORMATIONAL, de.toString());
-            }
-        }
-    }
+//    public static void showMethod(FileObject source, String methodName) throws IOException {
+//        try {
+//            DataObject dataObj = DataObject.find(source);
+//            if (!isJava(dataObj)) {
+//                return;
+//            }
+//            JavaSource javaSource = JavaSource.forFileObject(source);
+//
+//            // Force a save to make sure to make sure the line position in
+//            // the editor is in sync with the java source.
+//            SaveCookie sc = (SaveCookie) dataObj.getCookie(SaveCookie.class);
+//
+//            if (sc != null) {
+//                sc.save();
+//            }
+//
+//            LineCookie lc = (LineCookie) dataObj.getCookie(LineCookie.class);
+//
+//            if (lc != null) {
+//                Util.checkScanning(false);
+//                final long[] position = JavaSourceHelper.getPosition(javaSource, methodName);
+//                final Line line = lc.getLineSet().getOriginal((int) position[0]);
+//
+//                SwingUtilities.invokeLater(new Runnable() {
+//
+//                    public void run() {
+//                        line.show(Line.SHOW_SHOW, (int) position[1]);
+//                    }
+//                });
+//            }
+//        } catch (Exception de) {
+//            if (de instanceof IOException && de.getMessage().equals(Util.SCANNING_IN_PROGRESS)) {
+//                throw new IOException(Util.SCANNING_IN_PROGRESS);
+//            } else {
+//                de.printStackTrace();
+//                ErrorManager.getDefault().log(ErrorManager.INFORMATIONAL, de.toString());
+//            }
+//        }
+//    }
 
     public static Method getValueOfMethod(Class type) {
         try {
             Method method = type.getDeclaredMethod("valueOf", String.class);
-            if (method == null || !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+            if (method == null || !Modifier.isStatic(method.getModifiers())) {
                 return null;
             }
             return method;
@@ -781,10 +767,6 @@ public class JavaUtil extends Util {
     }
 
     public static String normailizeName(final String name) {
-        //String normalized = name;
-        //normalized = normalized.replaceAll("\\p{Punct}", "_");
-        //normalized = normalized.replaceAll("\\p{Space}", "_");
-        //return normalized;
         return SaasUtil.toValidJavaName(name);
     }
 
@@ -806,7 +788,7 @@ public class JavaUtil extends Util {
     }
 
     public static void checkScanning() throws IOException {
-        if (JavaUtil.isScanningInProgress(true)) {
+        if (isScanningInProgress(true)) {
             throw new IOException(SCANNING_IN_PROGRESS);
         }
     }
@@ -989,7 +971,7 @@ public class JavaUtil extends Util {
                     }
                     if (params != null &&
                             params.size() > 0) {
-                        queryParamsCode = JavaUtil.getHeaderOrParameterDefinition(params, Constants.QUERY_PARAMS, false);
+                        queryParamsCode = J2eeUtil.getHeaderOrParameterDefinition(params, Constants.QUERY_PARAMS, false);
                     }
                 }
             }
@@ -1109,7 +1091,7 @@ public class JavaUtil extends Util {
         String part = getHeaderOrParameterDefinitionPart(params, evaluate);
         if (httpMethod == HttpMethodType.PUT ||
                 httpMethod == HttpMethodType.POST) {
-            if (!JavaUtil.isContains(params, new ParameterInfo(Constants.CONTENT_TYPE, String.class))) {
+            if (!J2eeUtil.isContains(params, new ParameterInfo(Constants.CONTENT_TYPE, String.class))) {
                 part += ", {\"" + Constants.CONTENT_TYPE + "\", " + getVariableName(Constants.CONTENT_TYPE) + "}";
             }
         }
@@ -1172,7 +1154,7 @@ public class JavaUtil extends Util {
     public static String getParameterName(ParameterInfo param,
             boolean camelize, boolean normalize, boolean trimBraces) {
         String name = param.getName();
-        if (JavaUtil.isKeyword(name)) {
+        if (J2eeUtil.isKeyword(name)) {
             name += "Param";
         }
 
@@ -1185,7 +1167,7 @@ public class JavaUtil extends Util {
     public static String getParameterName(String name,
             boolean camelize, boolean normalize) {
         if (normalize) {
-            name = JavaUtil.normailizeName(name);
+            name = J2eeUtil.normailizeName(name);
         }
         if (camelize) {
             name = Inflector.getInstance().camelize(name, true);
@@ -1204,12 +1186,12 @@ public class JavaUtil extends Util {
             varName = varName.substring(0, varName.length() - 1);
         }
         if (normalize) {
-            varName = JavaUtil.normailizeName(varName);
+            varName = J2eeUtil.normailizeName(varName);
         }
         if (camelize) {
             varName = Inflector.getInstance().camelize(varName, true);
         }
-        if (JavaUtil.isKeyword(varName)) {
+        if (J2eeUtil.isKeyword(varName)) {
             varName += "Param";
         }
         return varName;
@@ -1255,120 +1237,27 @@ public class JavaUtil extends Util {
             JavaSource callbackJS, FileObject callbackFile,
             final String[] parameters, final Object[] paramTypes, boolean isUseTemplates,
             DropFileType dropFileType) throws IOException {
-        createSessionKeyAuthorizationClassesForWeb(bean, project, groupName, 
+        FileObject[] loginFiles = new FileObject[1];
+        JavaSource[] loginJavaSources = new JavaSource[0];
+        FileObject[] callbackFiles = new FileObject[1];
+        JavaSource[] callbackJavaSources = new JavaSource[0];
+        JavaUtil.createSessionKeyAuthorizationClassesForWeb(bean, project, groupName,
                 saasServicePackageName, targetFolder, 
-                new JavaSource[]{loginJS}, new FileObject[]{loginFile}, 
-                new JavaSource[]{callbackJS}, new FileObject[]{callbackFile}, 
+                loginJavaSources, loginFiles,
+                callbackJavaSources, callbackFiles, 
                 parameters, paramTypes, isUseTemplates, false, dropFileType);
-    }
-    
-    public static void createSessionKeyAuthorizationClassesForWeb(
-            SaasBean bean, Project project,
-            String groupName, String saasServicePackageName, FileObject targetFolder,
-            JavaSource[] loginJS, FileObject[] loginFile,
-            JavaSource[] callbackJS, FileObject[] callbackFile,
-            final String[] parameters, final Object[] paramTypes, boolean isUseTemplates,
-            boolean skipWebDescEntry, DropFileType dropFileType) throws IOException {
-        SaasAuthenticationType authType = bean.getAuthenticationType();
-        if (authType == SaasAuthenticationType.SESSION_KEY ||
-                authType == SaasAuthenticationType.HTTP_BASIC) {
-            if (!isUseTemplates) {
-                String fileId = JavaUtil.upperFirstChar(Constants.LOGIN);// NoI18n
-                String methodName = "processRequest";// NoI18n
-                String authFileName = groupName + fileId;
-                loginJS[0] = JavaSourceHelper.createJavaSource(
-                        SaasClientCodeGenerator.TEMPLATES_SAAS + authType.getClassIdentifier() + fileId + "." + Constants.JAVA_EXT,
-                        targetFolder, saasServicePackageName, authFileName);// NOI18n
-                Set<FileObject> files = new HashSet<FileObject>(loginJS[0].getFileObjects());
-                if (files != null && files.size() > 0) {
-                    loginFile[0] = files.iterator().next();
-                }
 
-                if (!JavaSourceHelper.isContainsMethod(loginJS[0], methodName, parameters, paramTypes)) {
-                    addServletMethod(bean, groupName, methodName, loginJS[0],
-                            parameters, paramTypes,
-                            "{ \n" + getServletLoginBody(bean, groupName) + "\n }");
-                }
-
-                fileId = JavaUtil.upperFirstChar(Constants.CALLBACK);// NOI18n
-                authFileName = groupName + fileId;
-                callbackJS[0] = JavaSourceHelper.createJavaSource(
-                        SaasClientCodeGenerator.TEMPLATES_SAAS + authType.getClassIdentifier() + fileId + "." + Constants.JAVA_EXT,
-                        targetFolder, saasServicePackageName, authFileName);// NOI18n
-                files = new HashSet<FileObject>(callbackJS[0].getFileObjects());
-                if (files != null && files.size() > 0) {
-                    callbackFile[0] = files.iterator().next();
-                }
-
-                if (!JavaSourceHelper.isContainsMethod(callbackJS[0], methodName, parameters, paramTypes)) {
-                    addServletMethod(bean, groupName, methodName, callbackJS[0],
-                            parameters, paramTypes,
-                            "{ \n" + getServletCallbackBody(bean, groupName) + "\n }");
-                }
-            } else {
-                UseTemplates useTemplates = null;
-                if (bean.getAuthentication() instanceof SessionKeyAuthentication) {
-                    SessionKeyAuthentication sessionKey = (SessionKeyAuthentication) bean.getAuthentication();
-                    useTemplates = sessionKey.getUseTemplates();
-                } else if (bean.getAuthentication() instanceof HttpBasicAuthentication) {
-                    HttpBasicAuthentication httpBasic = (HttpBasicAuthentication) bean.getAuthentication();
-                    useTemplates = httpBasic.getUseTemplates();
-                }
-                if (useTemplates != null) {
-                    String dropType = dropFileType.prefix();
-                    for (Template template : useTemplates.getTemplates()) {
-                        if(!template.getDropTypeList().contains(dropType))
-                            continue;           
-                        String id = template.getId();
-                        String type = template.getType() == null ? "" : template.getType();
-                        String templateUrl = template.getUrl();
-                        if (templateUrl == null || templateUrl.trim().equals("")) {
-                            throw new IOException("Authentication template is empty.");
-                        }
-                        //FIXME - Hack
-                        if(templateUrl.contains("Desktop"))
-                            continue;
-                        String fileName = null;
-//                        if (type.equals(Constants.LOGIN)) {
-                        if (templateUrl.contains("Login")) {
-                            fileName = bean.getSaasName() + JavaUtil.upperFirstChar(Constants.LOGIN);
-//                        } else if (type.equals(Constants.CALLBACK)) {
-                        } else if (templateUrl.contains("Callback")) {
-                            fileName = bean.getSaasName() + JavaUtil.upperFirstChar(Constants.CALLBACK);
-                        } else if (templateUrl.contains("Authenticator")) {
-//                        } else if (type.equals(Constants.AUTH)) {
-                            continue;
-                        }
-                        FileObject fObj = null;
-                        if (templateUrl.endsWith("." + Constants.JAVA_EXT)) {
-                            JavaSource source = JavaSourceHelper.createJavaSource(templateUrl, targetFolder,
-                                    bean.getSaasServicePackageName(), fileName);
-                            Set<FileObject> files = new HashSet<FileObject>(source.getFileObjects());
-                            if (files != null && files.size() > 0) {
-                                fObj = files.iterator().next();
-                            }
-                        } else {
-                            if (fileName != null) {
-                                fObj = targetFolder.getFileObject(fileName);
-                                if (fObj == null) {
-                                    DataObject d = JavaUtil.createDataObjectFromTemplate(templateUrl, targetFolder,
-                                            fileName);
-                                    if (d != null) {
-                                        fObj = d.getPrimaryFile();
-                                    }
-                                }
-                            }
-                        }
-                        if (fObj != null) {
-                            if (templateUrl.contains("Login")) {
-                                loginFile[0] = fObj;
-                            } else if (templateUrl.contains("Callback")) {
-                                callbackFile[0] = fObj;
-                            }
-                        }
-                    }
-                }
-            }
+        //Make entry into web.xml for login and callback servlets
+        if (loginFiles[0] != null && callbackFiles[0] != null) {
+            loginFile = loginFiles[0];
+            callbackFile = callbackFiles[0];
+            Map<String, String> filesMap = new HashMap<String, String>();
+            filesMap.put(loginFile.getName(), saasServicePackageName + "." + loginFile.getName());
+            filesMap.put(callbackFile.getName(), saasServicePackageName + "." + callbackFile.getName());
+            addAuthorizationClassesToWebDescriptor(project, filesMap);
+        } else {
+            Logger.getLogger(J2eeUtil.class.getName()).log(Level.INFO, "Cannot add login and callback servlets" +
+                    "to web descriptor");
         }
     }
 
@@ -1384,7 +1273,7 @@ public class JavaUtil extends Util {
             String tokenName = "authToken";
             String tokenId = "auth_token";
             if (token != null) {
-                tokenName = JavaUtil.getTokenName(useGenerator);
+                tokenName = J2eeUtil.getTokenName(useGenerator);
                 tokenId = token.getId() != null ? token.getId() : tokenId;
             }
             methodBody += "        response.setContentType(\"text/html;charset=UTF-8\");\n";
@@ -1408,7 +1297,7 @@ public class JavaUtil extends Util {
             methodBody += "                String apiKey = " + groupName +
                     Constants.SERVICE_AUTHENTICATOR + ".get" +
                     apiKeyName.substring(0, 1).toUpperCase() + apiKeyName.substring(1) + "();\n";
-            methodBody += "                String loginUrl = \"<a href=" + JavaUtil.getTokenPromptUrl(token, url) + ">" + groupName + " Login</a>\";\n";
+            methodBody += "                String loginUrl = \"<a href=" + J2eeUtil.getTokenPromptUrl(token, url) + ">" + groupName + " Login</a>\";\n";
             methodBody += "                out.println(loginUrl);\n";
             methodBody += "            }\n";
             methodBody += "            out.println(\"</body>\");\n";
@@ -1431,10 +1320,10 @@ public class JavaUtil extends Util {
         if (useGenerator != null) {
             Token token = useGenerator.getToken();
             if (token != null) {
-                tokenName = JavaUtil.getTokenName(useGenerator);
+                tokenName = J2eeUtil.getTokenName(useGenerator);
                 tokenId = token.getId() != null ? token.getId() : tokenId;
             }
-            String name = JavaUtil.getParameterName(sessionKey.getSessionKeyName(), true, true);
+            String name = J2eeUtil.getParameterName(sessionKey.getSessionKeyName(), true, true);
             methodBody += "        response.setContentType(\"text/html;charset=UTF-8\");\n";
             methodBody += "        PrintWriter out = response.getWriter();\n";
             methodBody += "        try {\n";
@@ -1443,7 +1332,7 @@ public class JavaUtil extends Util {
             methodBody += "            session.setAttribute(\"" + groupName + "_" + tokenId + "\", " + tokenName + ");\n";
 
             methodBody += "            " + groupName + Constants.SERVICE_AUTHENTICATOR + ".login(" + getLoginArgumentsForWeb() + ");\n";
-            methodBody += "            String " + sessionKeyName + " = " + groupName + Constants.SERVICE_AUTHENTICATOR + "." + JavaUtil.getSessionKeyMethodName(name) + "();\n";
+            methodBody += "            String " + sessionKeyName + " = " + groupName + Constants.SERVICE_AUTHENTICATOR + "." + J2eeUtil.getSessionKeyMethodName(name) + "();\n";
 
             methodBody += "            out.println(\"<html>\");\n";
             methodBody += "            out.println(\"<head>\");\n";
@@ -1540,7 +1429,7 @@ public class JavaUtil extends Util {
             public void run(WorkingCopy copy) throws IOException {
                 copy.toPhase(JavaSource.Phase.RESOLVED);
 
-                javax.lang.model.element.Modifier[] modifiers = PROTECTED;
+                javax.lang.model.element.Modifier[] modifiers = JavaUtil.PROTECTED;
 
                 String type = Constants.VOID;
 
@@ -1576,6 +1465,79 @@ public class JavaUtil extends Util {
         return null;
     }
 
+    public static void addAuthorizationClassesToWebDescriptor(Project p,
+            Map<String, String> filesMap) throws IOException {
+        for (Map.Entry e : filesMap.entrySet()) {
+            String name = (String) e.getKey();
+            String qName = (String) e.getValue();
+            addServiceEntriesToDD(p, name, qName);
+        }
+    }
+
+    /**
+     * This is to support non-JSR 109 containers. In this case, a regular jaxws web service
+     * is created and the deployment descriptor is updated with the jaxws-ri servlet and
+     * listener.
+     */
+    public static void addServiceEntriesToDD(Project p, String servletName,
+            String servletClassName) {
+        WebApp webApp = getWebApp(p);
+        if (webApp != null) {
+            Servlet servlet = null;
+            Listener listener = null;
+            try {
+                servlet = (Servlet) webApp.addBean("Servlet", new String[]{"ServletName", "ServletClass"},
+                        new Object[]{servletName, servletClassName}, "ServletName");
+                servlet.setLoadOnStartup(new java.math.BigInteger("1"));
+                ServletMapping servletMapping = (ServletMapping) webApp.addBean("ServletMapping", new String[]{"ServletName", "UrlPattern"},
+                        new Object[]{servletName, "/" + servletName}, "ServletName");
+                // This also saves server specific configuration, if necessary.
+                webApp.write(getDeploymentDescriptor(p));
+            } catch (ClassNotFoundException exc) {
+                Logger.getLogger("global").log(Level.INFO, exc.getLocalizedMessage());
+            } catch (NameAlreadyUsedException exc) {
+                Logger.getLogger("global").log(Level.INFO, exc.getLocalizedMessage());
+            } catch (IOException exc) {
+                Logger.getLogger("global").log(Level.INFO, exc.getLocalizedMessage());
+            }
+        }
+    }
+
+    public static FileObject getDeploymentDescriptor(Project p) {
+        FileObject webInfFo = getWebInf(p);
+        if (webInfFo == null) {
+            if (isProjectOpened(p)) {
+                DialogDisplayer.getDefault().notify(
+                        new NotifyDescriptor.Message(NbBundle.getMessage(
+                            CodeSetupPanel.class, "MSG_WebInfCorrupted",
+                            new Object[] {p.getProjectDirectory().getPath()}), // NOI18N
+                            NotifyDescriptor.ERROR_MESSAGE));
+            }
+            return null;
+        }
+        return getWebInf(p).getFileObject("web.xml");//NoI18n
+    }
+
+    public static FileObject getWebInf(Project p) {
+        WebModule webModule = WebModule.getWebModule(p.getProjectDirectory());
+        if (webModule != null) {
+            return webModule.getWebInf();
+        }
+        return null;
+    }
+
+    public static WebApp getWebApp(Project p) {
+        try {
+            FileObject deploymentDescriptor = getDeploymentDescriptor(p);
+            if (deploymentDescriptor != null) {
+                return DDProvider.getDefault().getDDRoot(deploymentDescriptor);
+            }
+        } catch (java.io.IOException e) {
+            Logger.getLogger("global").log(Level.INFO, e.getLocalizedMessage());
+        }
+        return null;
+    }
+
     public static boolean isProjectOpened(Project p) {
         // XXX workaround: OpenProjects.getDefault() can be null
         // when called from ProjectOpenedHook.projectOpened() upon IDE startup
@@ -1600,19 +1562,6 @@ public class JavaUtil extends Util {
                         "Cannot create JAXB classes, since project|bean is null.");
             }
             LibrariesHelper.addClientJars(p, target, ((RestClientSaasBean) bean).getMethod().getSaas());
-        }
-    }
-
-    public static void addJaxbLib(Project p) throws IOException {
-        if (isJDK5()) {
-            //Add JAXB libs if not available (if using JDK1.5)
-            Library library = LibraryManager.getDefault().getLibrary(JAXB_LIB);
-            SourceGroup[] sgs = ProjectUtils.getSources(p).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
-            if (sgs == null || sgs.length < 1) {
-                throw new IOException("Project has no Java sources"); //NOI18N
-            }
-            FileObject sourceRoot = sgs[0].getRootFolder();
-            ProjectClassPathModifier.addLibraries(new Library[]{library}, sourceRoot, ClassPath.COMPILE);
         }
     }
 
@@ -1669,11 +1618,11 @@ public class JavaUtil extends Util {
         String commentStr = "//";
         if (canGenerateJaxb) {
             if (!isPrimitive(typeName)) {
-                String resultClass = pkg + "." + JavaUtil.camelize(typeName, false);
+                String resultClass = pkg + "." + J2eeUtil.camelize(typeName, false);
                 methodBody += indent + resultClass + " resultObj = " +
                     "result.getDataAsObject(" + resultClass + ".class);\n";
             } else {
-                String resultClass = JavaUtil.camelize(typeName, false);
+                String resultClass = J2eeUtil.camelize(typeName, false);
                 methodBody += indent + resultClass + " resultObj = " +
                     "result.getDataAsObject(" + resultClass + ".class, " + "\"" + pkg + "\");\n";
             }
@@ -1699,7 +1648,7 @@ public class JavaUtil extends Util {
                 ClassTree initial = JavaSourceHelper.getTopLevelClassTree(copy);
                 ClassTree modifiedTree = JavaSourceHelper.addField(copy,
                         initial,
-                        PRIVATE,
+                        JavaUtil.PRIVATE,
                         annotations, annotationAttrs,
                         getParameterName(p, true, true, true),
                         p.getTypeName(),
@@ -1773,7 +1722,7 @@ public class JavaUtil extends Util {
             List<ParameterInfo> signParams, List<ParameterInfo> filterParams) {
         String paramStr = "";
         for (ParameterInfo p : signParams) {
-            String[] pIds = JavaUtil.getParamIds(p, bean.getSaasName(),
+            String[] pIds = J2eeUtil.getParamIds(p, bean.getSaasName(),
                     bean.isDropTargetWeb());
             if (pIds != null) {//process special case
                 paramStr += "        String " + getVariableName(pIds[0]) + " = " + pIds[1] + ";\n";
@@ -1871,7 +1820,7 @@ public class JavaUtil extends Util {
 
         if (httpMethod == HttpMethodType.PUT || httpMethod == HttpMethodType.POST) {
 
-            ParameterInfo contentTypeParam = JavaUtil.findParameter(bean.getInputParameters(), Constants.CONTENT_TYPE);
+            ParameterInfo contentTypeParam = J2eeUtil.findParameter(bean.getInputParameters(), Constants.CONTENT_TYPE);
             Class contentType = InputStream.class;
 
             if (contentTypeParam != null) {
@@ -1895,6 +1844,7 @@ public class JavaUtil extends Util {
 
     public static Document getDocument(FileObject f) throws IOException {
         try {
+//            JavaSource src = JavaSource.forFileObject(f);
             DataObject d = DataObject.find(f);
             EditorCookie ec = d.getCookie(EditorCookie.class);
             Document doc = ec.openDocument();
