@@ -43,18 +43,16 @@ package org.netbeans.modules.java.j2seplatform.libraries;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.event.MouseEvent;
 import java.beans.Customizer;
 import java.io.File;
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Collection;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -64,13 +62,13 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.filechooser.FileFilter;
 import org.netbeans.api.project.ant.FileChooser;
+import org.netbeans.spi.java.project.support.JavadocAndSourceRootDetection;
+import org.netbeans.spi.project.libraries.LibraryCustomizerContext;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
-import org.openide.NotifyDescriptor.Message;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
@@ -87,6 +85,7 @@ public class J2SEVolumeCustomizer extends javax.swing.JPanel implements Customiz
     private LibraryImplementation impl;
     private LibraryStorageArea area;
     private VolumeContentModel model;
+    private Boolean allowRelativePaths = null;
 
     /** Creates new form J2SEVolumeCustomizer */
     J2SEVolumeCustomizer (String volumeType) {
@@ -329,13 +328,17 @@ public class J2SEVolumeCustomizer extends javax.swing.JPanel implements Customiz
     }//GEN-LAST:event_removeResource
 
     private void addResource(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addResource
-        // TODO add your handling code here:
         File baseFolder = null;
-        if (area != null) {
+        File libFolder = null;
+        if (allowRelativePaths != null && allowRelativePaths.booleanValue()) {
             baseFolder = new File(URI.create(area.getLocation().toExternalForm())).getParentFile();
+            libFolder = new File(baseFolder, impl.getName());
         }
-        FileChooser chooser = new FileChooser(baseFolder, baseFolder);
+        FileChooser chooser = new FileChooser(baseFolder, libFolder);
         FileUtil.preventFileChooserSymlinkTraversal(chooser, null);
+        // for now variable based paths are disabled in library definition
+        // can be revisit if it is needed
+        chooser.setFileHidingEnabled(false);
         chooser.setAcceptAllFileFilterUsed(false);
         if (this.volumeType.equals(J2SELibraryTypeProvider.VOLUME_TYPE_CLASSPATH)) {
             chooser.setMultiSelectionEnabled (true);
@@ -347,6 +350,7 @@ public class J2SEVolumeCustomizer extends javax.swing.JPanel implements Customiz
             chooser.setApproveButtonMnemonic(NbBundle.getMessage(J2SEVolumeCustomizer.class,"MNE_SelectCP").charAt(0));
         }
         else if (this.volumeType.equals(J2SELibraryTypeProvider.VOLUME_TYPE_JAVADOC)) {
+            chooser.setMultiSelectionEnabled (true);
             chooser.setDialogTitle(NbBundle.getMessage(J2SEVolumeCustomizer.class,"TXT_OpenJavadoc"));
             chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
             chooser.setFileFilter (new SimpleFileFilter(NbBundle.getMessage(
@@ -371,11 +375,13 @@ public class J2SEVolumeCustomizer extends javax.swing.JPanel implements Customiz
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             try {
                 lastFolder = chooser.getCurrentDirectory();
-                addFiles (chooser.getFiles(), area != null ? area.getLocation() : null);
+                addFiles (chooser.getSelectedPaths(), area != null ? area.getLocation() : null, this.volumeType);
             } catch (MalformedURLException mue) {
-                ErrorManager.getDefault().notify(mue);
+                Exceptions.printStackTrace(mue);
+            } catch (URISyntaxException ue) {
+                Exceptions.printStackTrace(ue);
             } catch (IOException ex) {
-                ErrorManager.getDefault().notify(ex);
+                Exceptions.printStackTrace(ex);
             }
         }
     }//GEN-LAST:event_addResource
@@ -402,47 +408,50 @@ public class J2SEVolumeCustomizer extends javax.swing.JPanel implements Customiz
 //    }
 
 
-    private void addFiles (File[] files, URL libraryLocation) throws MalformedURLException {
+    private void addFiles (String[] fileNames, URL libraryLocation, String volume) throws MalformedURLException, URISyntaxException {
         int firstIndex = this.model.getSize();
-        for (int i = 0; i < files.length; i++) {
-            File f = files[i];
-            //XXX: JFileChooser workaround (JDK bug #5075580), double click on folder returns wrong file
-            // E.g. for /foo/src it returns /foo/src/src
-            // Try to convert it back by removing last invalid name component
-            if (!f.exists()) {
-                File parent = f.getParentFile();
-                if (parent != null && f.getName().equals(parent.getName()) && parent.exists()) {
-                    f = parent;
+        for (int i = 0; i < fileNames.length; i++) {
+            File f = new File(fileNames[i]);
+            URI uri = LibrariesSupport.convertFilePathToURI(fileNames[i]);
+            if (allowRelativePaths != null && allowRelativePaths.booleanValue()) {
+                File realFile = f;
+                if (!f.isAbsolute()) {
+                    assert area != null;
+                    if (area != null) {
+                        realFile = FileUtil.normalizeFile(new File(
+                            new File(URI.create(area.getLocation().toExternalForm())).getParentFile(), f.getPath()));
+                    }
                 }
-            }
-            URL url = LibrariesSupport.convertFileToURL(f);
-            File realFile = f;
-            if (!f.isAbsolute()) {
-                assert area != null;
-                if (area != null) {
-                    realFile = FileUtil.normalizeFile(new File(
-                        new File(URI.create(area.getLocation().toExternalForm())).getParentFile(), f.getPath()));
+                String jarPath = checkFile(realFile, volume);
+                if (FileUtil.isArchiveFile(realFile.toURI().toURL())) {
+                    uri = LibrariesSupport.getArchiveRoot(uri);
+                    if (jarPath != null) {
+                        assert uri.toString().endsWith("!/") : uri.toString(); //NOI18N
+                        uri = URI.create(uri.toString() + encodePath(jarPath));
+                    }
+                } else if (!uri.toString().endsWith("/")){ //NOI18N
+                    try {
+                        uri = new URI(uri.toString()+"/"); //NOI18N
+                    } catch (URISyntaxException ex) {
+                        throw new AssertionError(ex);
+                    }
                 }
-            }
-            if (FileUtil.isArchiveFile(realFile.toURI().toURL())) {
-                url = FileUtil.getArchiveRoot(url);
-            }
-            else if (!url.toExternalForm().endsWith("/")){
-                try {
-                    url = new URL (url.toExternalForm()+"/");
-                } catch (MalformedURLException mue) {
-                    ErrorManager.getDefault().notify(mue);
+                model.addResource(uri);
+            } else {
+                assert f.isAbsolute() : f.getPath();
+                String jarPath = checkFile(f, volume);
+                URL url = FileUtil.normalizeFile(f).toURI().toURL();
+                if (FileUtil.isArchiveFile(url)) {
+                    url = FileUtil.getArchiveRoot(url);
+                    if (jarPath != null) {
+                        assert url.toExternalForm().endsWith("!/") : url.toString(); //NOI18N
+                        url = new URL(url.toString() + encodePath(jarPath));
+                    }
+                } else if (!url.toExternalForm().endsWith("/")){ //NOI18N
+                    url = new URL(url.toExternalForm()+"/"); //NOI18N
                 }
+                model.addResource(url);
             }
-            if (this.volumeType.equals(J2SELibraryTypeProvider.VOLUME_TYPE_JAVADOC)
-                && !JavadocForBinaryQueryLibraryImpl.isValidLibraryJavadocRoot (
-                LibrariesSupport.resolveLibraryEntryURL(libraryLocation, url))) {
-                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
-                    NbBundle.getMessage(J2SEVolumeCustomizer.class,"TXT_InvalidJavadocRoot", f.getPath()),
-                    NotifyDescriptor.ERROR_MESSAGE));
-                continue;
-            }
-            this.model.addResource(url);
         }        
         int lastIndex = this.model.getSize()-1;
         if (firstIndex<=lastIndex) {
@@ -458,23 +467,56 @@ public class J2SEVolumeCustomizer extends javax.swing.JPanel implements Customiz
             }
         }
     }
-    
-    public void setObject(Object bean) {
-        if (bean instanceof LibraryStorageArea) {
-            this.area = (LibraryStorageArea)bean;
-        } else {
-            this.area = null;
-        }
-        if (bean instanceof LibraryImplementation) {
-            this.impl = (LibraryImplementation) bean;
-            this.model = new VolumeContentModel(this.impl, this.area, this.volumeType);
-            this.content.setModel(model);
-            if (this.model.getSize()>0) {
-                this.content.setSelectedIndex(0);
+
+    static String encodePath(String path) throws URISyntaxException {
+        return new URI(null, null, path, null).getRawPath();
+    }
+
+    private String checkFile(File f, String volume) {
+        FileObject fo = FileUtil.toFileObject(f);
+        if (volume.equals(J2SELibraryTypeProvider.VOLUME_TYPE_JAVADOC)) {
+            if (fo != null) {
+                if (fo.isData()) {
+                    fo = FileUtil.getArchiveRoot(fo);
+                }
+                FileObject root = JavadocAndSourceRootDetection.findJavadocRoot(fo);
+                if (root == null) {
+                    DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                        NbBundle.getMessage(J2SEVolumeCustomizer.class,"TXT_InvalidJavadocRoot", f.getPath()), //NOI18N
+                        NotifyDescriptor.ERROR_MESSAGE));
+                    return null;
+                } else {
+                    return FileUtil.getRelativePath(fo, root)+File.separatorChar;
+                }
+            }
+        } else if (volume.equals(J2SELibraryTypeProvider.VOLUME_TYPE_SRC)) {
+            if (fo != null) {
+                if (fo.isData()) {
+                    fo = FileUtil.getArchiveRoot(fo);
+                }
+                FileObject root = JavadocAndSourceRootDetection.findSourcesRoot(fo);
+                if (root == null) {
+                    // TODO: warn user that no source root was found
+                    return null;
+                } else {
+                    assert FileUtil.isParentOf(fo, root) : fo.toString()+" is not parent of "+root; // NOI18N
+                    return FileUtil.getRelativePath(fo, root)+File.separatorChar;
+                }
             }
         }
-        else {
-            throw new IllegalArgumentException();
+        return null;
+    }
+    
+    public void setObject(Object bean) {
+        assert bean instanceof LibraryCustomizerContext : bean.getClass();
+        LibraryCustomizerContext context = (LibraryCustomizerContext)bean;
+        area = context.getLibraryStorageArea();
+        impl = context.getLibraryImplementation();
+        allowRelativePaths = Boolean.valueOf(context.getLibraryImplementation2() != null);
+        model = new VolumeContentModel(impl, area, volumeType);
+        content.setModel(model);
+        if (model.getSize()>0) {
+            content.setSelectedIndex(0);
         }
     }        
     
@@ -528,27 +570,42 @@ public class J2SEVolumeCustomizer extends javax.swing.JPanel implements Customiz
             Color color = null;
             String toolTip = null;
             
-            if (value instanceof URL) {
-                URL url = (URL) value;                
-                if ("jar".equals(url.getProtocol())) {   //NOI18N
-                    url = FileUtil.getArchiveFile (url);
+            URI uri = null;
+            if (value instanceof URI) {
+                uri = (URI)value;
+            } else if (value instanceof URL) {
+                try {
+                    uri = ((URL) value).toURI();
+                } catch (URISyntaxException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+            if (uri != null) {
+                if (uri.toString().contains("!/")) {   //NOI18N
+                    uri = LibrariesSupport.getArchiveFile(uri);
                 }
                 boolean broken = false;
                 VolumeContentModel model = (VolumeContentModel)list.getModel();
                 LibraryStorageArea area = model.getArea();
-                FileObject fo = LibrariesSupport.resolveLibraryEntryFileObject(area != null ? area.getLocation() : null, url);
+                FileObject fo = LibrariesSupport.resolveLibraryEntryFileObject(area != null ? area.getLocation() : null, uri);
                 if (fo == null) {
                     broken = true;
-                    if ("file".equals(url.getProtocol())) { //NOI18N
-                        displayName = LibrariesSupport.convertURLToFile(url).getPath();
+                    if ("file".equals(uri.getScheme())) { //NOI18N
+                        displayName = LibrariesSupport.convertURIToFilePath(uri);
+                        if (displayName.startsWith("${")) { // NOI18N
+                            // if URL starts with an Ant property name assume it is OK.
+                            // url cannot be resolved because customizer does not have necessary context.
+                            // for example in case of hand written library entry ${MAVEN_REPO}/struts/struts.jar
+                            broken = false;
+                        }
                     } else {
-                        displayName = url.toExternalForm();
+                        displayName = uri.toString();
                     }
                 } else {
-                    if (LibrariesSupport.isAbsoluteURL(url)) {
+                    if (uri.isAbsolute()) {
                         displayName = FileUtil.getFileDisplayName(fo);
                     } else {
-                        displayName = LibrariesSupport.convertURLToFile(url).getPath();
+                        displayName = LibrariesSupport.convertURIToFilePath(uri);
                         toolTip = FileUtil.getFileDisplayName(fo);
                     }
                 }

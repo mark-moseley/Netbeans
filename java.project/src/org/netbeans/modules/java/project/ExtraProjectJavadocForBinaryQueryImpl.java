@@ -45,13 +45,17 @@ import java.net.MalformedURLException;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery;
 import org.netbeans.spi.project.support.ant.*;
 import java.io.File;
-import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
 import org.netbeans.spi.java.queries.JavadocForBinaryQueryImplementation;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.openide.filesystems.FileUtil;
@@ -69,17 +73,22 @@ public final class ExtraProjectJavadocForBinaryQueryImpl extends ProjectOpenedHo
     
     private final AntProjectHelper helper;
     private final PropertyEvaluator evaluator;
-    private Map<URL,ExtraResult>  cache = new HashMap<URL,ExtraResult>();
+    private final Map<URL,ExtraResult>  cache = new HashMap<URL,ExtraResult>();
     private PropertyChangeListener listener;
-    private Map<URL, URI> mappings = new HashMap<URL, URI>();
+    private Map<URL, URL> mappings = new HashMap<URL, URL>();
+    private final Object MAPPINGS_LOCK = new Object();
+    private Project project;
+    
 
-    public ExtraProjectJavadocForBinaryQueryImpl(AntProjectHelper helper, PropertyEvaluator evaluator) {
+    public ExtraProjectJavadocForBinaryQueryImpl(Project prj, AntProjectHelper helper, PropertyEvaluator evaluator) {
         this.helper = helper;
         this.evaluator = evaluator;
+        project = prj;
+        
         listener = new PropertyChangeListener() {
             public void propertyChange(PropertyChangeEvent evt) {
                 if (evt.getPropertyName() == null || evt.getPropertyName().startsWith(JAVADOC_START)) {
-                    mappings = getExtraSources();
+                    checkAndRegisterExtraJavadoc(getExtraSources());
                     Collection<ExtraResult> results = null;
                     synchronized (cache) {
                         results = new ArrayList<ExtraResult>(cache.values());
@@ -116,45 +125,108 @@ public final class ExtraProjectJavadocForBinaryQueryImpl extends ProjectOpenedHo
     
     @Override
     protected void projectOpened() {
-        mappings = getExtraSources();
+        checkAndRegisterExtraJavadoc(getExtraSources());
         evaluator.addPropertyChangeListener(listener);
     }
 
     @Override
-    protected void projectClosed()
-    {
-        mappings = new HashMap<URL, URI>();
+    protected void projectClosed() {
+        checkAndRegisterExtraJavadoc(new HashMap<URL, URL>());
         evaluator.removePropertyChangeListener(listener);
     }
     
 
-    Map<URL, URI> getExtraSources() {
-        Map<URL, URI> result = new HashMap<URL, URI>();
+    private Map<URL, URL> getExtraSources() {
+        Map<URL, URL> result = new HashMap<URL, URL>();
         Map<String, String> props = evaluator.getProperties();
         for (Map.Entry<String, String> entry : props.entrySet()) {
             if (entry.getKey().startsWith(REF_START)) {
                 String val = entry.getKey().substring(REF_START.length());
                 String sourceKey = JAVADOC_START + val;
-                String source = props.get(sourceKey);
-                try {
-                    File bin = PropertyUtils.resolveFile(FileUtil.toFile(helper.getProjectDirectory()), entry.getValue());
-                    URL binURL = bin.toURI().toURL();
-                    if (FileUtil.isArchiveFile(binURL)) {
-                        binURL = FileUtil.getArchiveRoot(binURL);
+                String source[] = stripJARPath(props.get(sourceKey));
+                File bin = PropertyUtils.resolveFile(FileUtil.toFile(helper.getProjectDirectory()), entry.getValue());
+                URL binURL = FileUtil.urlForArchiveOrDir(bin);
+                if (source[0] != null && binURL != null) {
+                    File src = PropertyUtils.resolveFile(FileUtil.toFile(helper.getProjectDirectory()), source[0]);
+                    // #138349 - ignore non existing paths or entries with undefined IDE variables
+                    if (src.exists()) {
+                        try {
+                            URL url = src.toURI().toURL();
+                            if (FileUtil.isArchiveFile(url)) {
+                                url = FileUtil.getArchiveRoot(url);
+                            }
+                            if (source[1] != null) {
+                                assert url.toExternalForm().endsWith("!/") : url.toExternalForm();
+                                url = new URL(url.toExternalForm()+source[1]);
+                            }
+                            result.put(binURL, url);
+                        } catch (MalformedURLException ex) {
+                            ex.printStackTrace();
+                        }
                     }
-                    if (source != null) {
-                        File src = PropertyUtils.resolveFile(FileUtil.toFile(helper.getProjectDirectory()), source);
-                        result.put(binURL, src.toURI());
-                    } else {
-                        result.put(binURL, null);
-                    }
-                } catch (MalformedURLException ex) {
-                    Exceptions.printStackTrace(ex);
                 }
             }
         }
         return result;
     }
+
+    static String[] stripJARPath(String value) {
+        if (value == null) {
+            return new String[]{null, null};
+        }
+        int index = value.indexOf("!/");
+        if (index == -1) {
+            return new String[]{value, null};
+        } else {
+            return new String[]{value.substring(0, index), value.substring(index+2)};
+        }
+    }
+    
+    private void checkAndRegisterExtraJavadoc(Map<URL, URL> newvalues) {
+        Set<URL> removed;
+        Set<URL> added;
+        synchronized (MAPPINGS_LOCK) {
+            removed = new HashSet<URL>(mappings.keySet());
+            removed.removeAll(newvalues.keySet());
+            added = new HashSet<URL>(newvalues.keySet());
+            added.removeAll(mappings.keySet());
+            mappings = newvalues;
+        }
+                //TODO removing/adding the mapping can cause lost javadoc/source for other open projects..
+                //the mappings should be probably static, or there should be a way to trigger recalculations 
+                //in other ant projects from here
+        
+        for (URL rem : removed) {
+            synchronized (cache) {
+                ExtraResult res = cache.remove(rem);
+                if (res != null) {
+                    res.fire();
+                }
+            }
+            try {
+                URL jaradd = FileUtil.getArchiveFile(rem);
+                if (jaradd != null) {
+                    rem = jaradd;
+                }
+                FileOwnerQuery.markExternalOwner(rem.toURI(), null, FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
+            } catch (URISyntaxException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+        for (URL add : added) {
+            try {
+                URL jaradd = FileUtil.getArchiveFile(add);
+                if (jaradd != null) {
+                    add = jaradd;
+                }
+                FileOwnerQuery.markExternalOwner(add.toURI(), project, FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
+            } catch (URISyntaxException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+        
+    }
+        
     
     private class ExtraResult implements JavadocForBinaryQuery.Result {
         private URL binaryroot;
@@ -166,19 +238,9 @@ public final class ExtraProjectJavadocForBinaryQueryImpl extends ProjectOpenedHo
         }
 
         public URL[] getRoots() {
-            URI source = mappings.get(binaryroot);
+            URL source = mappings.get(binaryroot);
             if (source != null) {
-                try
-                {
-                    URL url = source.toURL();
-                    if (FileUtil.isArchiveFile(url)) {
-                        url = FileUtil.getArchiveRoot(url);
-                    }
-                    return new URL[] { url };
-                } catch ( MalformedURLException ex )
-                {
-                    Exceptions.printStackTrace( ex );
-                }
+                return new URL[] { source };
             }
             return new URL[0];
         }

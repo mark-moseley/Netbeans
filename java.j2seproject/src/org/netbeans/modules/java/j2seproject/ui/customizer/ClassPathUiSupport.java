@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.java.j2seproject.ui.customizer;
 
-import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -131,10 +130,7 @@ public class ClassPathUiSupport {
                           && selectionModel.getMinSelectionIndex() != -1;
         if (can) {
             ClassPathSupport.Item item = (ClassPathSupport.Item) listModel.get(selectionModel.getMinSelectionIndex());
-            can =  item.getType() == ClassPathSupport.Item.TYPE_JAR || item.getType() == ClassPathSupport.Item.TYPE_LIBRARY;
-            if (item.isBroken()) {
-                can = false;
-            }
+            can = item.canEdit();
         }
         return can;
     }
@@ -143,13 +139,13 @@ public class ClassPathUiSupport {
         ClassPathSupport.Item item = (ClassPathSupport.Item) listModel.getElementAt(selectedIndices[0]);
         if (item.getType() == ClassPathSupport.Item.TYPE_JAR) {
             EditJarSupport.Item eji = new EditJarSupport.Item();
-            eji.setJarFile(item.getFile());
-            eji.setSourceFile(item.getSourceFile());
-            eji.setJavadocFile(item.getJavadocFile());
+            eji.setJarFile(item.getVariableBasedProperty() != null ? item.getVariableBasedProperty() : item.getFilePath());
+            eji.setSourceFile(item.getSourceFilePath());
+            eji.setJavadocFile(item.getJavadocFilePath());
             eji = EditJarSupport.showEditDialog(helper, eji);
             if (eji != null) {
-                item.setJavadocFile(eji.getJavadocFile());
-                item.setSourceFile(eji.getSourceFile());
+                item.setJavadocFilePath(eji.getJavadocFile());
+                item.setSourceFilePath(eji.getSourceFile());
             }
         }
         if (item.getType() == ClassPathSupport.Item.TYPE_LIBRARY) {
@@ -241,13 +237,13 @@ public class ClassPathUiSupport {
         return indexes;        
     }
 
-    public static int[] addJarFiles( DefaultListModel listModel, int[] indices, File files[] ) {
+    public static int[] addJarFiles( DefaultListModel listModel, int[] indices, String[] files, String[] variables) {
         
         int lastIndex = indices == null || indices.length == 0 ? listModel.getSize() - 1 : indices[indices.length - 1];
         int[] indexes = new int[files.length];
         for( int i = 0, delta = 0; i+delta < files.length; ) {            
             int current = lastIndex + 1 + i;
-            ClassPathSupport.Item item = ClassPathSupport.Item.create( files[i+delta], null );
+            ClassPathSupport.Item item = ClassPathSupport.Item.create( files[i+delta], null, variables != null ? variables[i+delta] : null);
             if ( !listModel.contains( item ) ) {
                 listModel.add( current, item );
                 indexes[delta + i] = current;
