@@ -130,7 +130,7 @@ public class TomcatModuleConfiguration implements ModuleConfiguration, ContextRo
         }
         if (contextDataObject == null) {
             try {
-                contextDataObject = DataObject.find(FileUtil.toFileObject(contextXml));
+                contextDataObject = DataObject.find(FileUtil.toFileObject(FileUtil.normalizeFile(contextXml)));
                 contextDataObject.addPropertyChangeListener(this);
             } catch(DataObjectNotFoundException donfe) {
                 LOGGER.log(Level.FINE, null, donfe);
@@ -403,6 +403,9 @@ public class TomcatModuleConfiguration implements ModuleConfiguration, ContextRo
             newContext.setLoggerPrefix(computeLoggerPrefix(path));
             newContext.setLoggerSuffix(".log");    // NOI18N
             newContext.setLoggerTimestamp("true"); // NOI18N
+        } else {
+            // tomcat 5.5 and 6.0
+            newContext.setAntiJARLocking("true"); // NOI18N
         }
         return newContext;
     }
@@ -496,16 +499,20 @@ public class TomcatModuleConfiguration implements ModuleConfiguration, ContextRo
     }
     
     private void writefile(final File file) throws ConfigurationException {
+        assert file != null : "File to write can't be null"; // NOI18N
+        assert file.getParentFile() != null : "File parent folder can't be null"; // NOI18N
+
         try {
-            FileObject cfolder = FileUtil.toFileObject(file.getParentFile());
+            FileObject cfolder = FileUtil.toFileObject(FileUtil.normalizeFile(file.getParentFile()));
             if (cfolder == null) {
-                File parentFile = file.getParentFile();
                 try {
-                    cfolder = FileUtil.toFileObject(parentFile.getParentFile()).createFolder(parentFile.getName());
-                } catch (IOException ioe) {
-                    throw new ConfigurationException(NbBundle.getMessage(TomcatModuleConfiguration.class, "MSG_FailedToCreateConfigFolder", parentFile.getAbsolutePath()));
+                    cfolder = FileUtil.createFolder(FileUtil.normalizeFile(file.getParentFile()));
+                } catch (IOException ex) {
+                    throw new ConfigurationException(NbBundle.getMessage(TomcatModuleConfiguration.class,
+                            "MSG_FailedToCreateConfigFolder", file.getParentFile().getAbsolutePath()));
                 }
             }
+
             final FileObject folder = cfolder;
             final ConfigurationException anonClassException[] = new ConfigurationException[]{null};
             FileSystem fs = folder.getFileSystem();
