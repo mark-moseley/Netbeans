@@ -46,6 +46,7 @@ import org.openide.filesystems.*;
 import org.openide.filesystems.FileSystem; // override java.io.FileSystem
 import org.openide.loaders.*;
 import org.openide.cookies.*;
+import java.util.logging.Level;
 import org.openide.modules.ModuleInfo;
 import org.openide.util.*;
 import java.io.*;
@@ -68,6 +69,11 @@ public class SerialDataConvertorTest extends NbTestCase {
     /** Creates new DataFolderTest */
     public SerialDataConvertorTest(String name) {
         super (name);
+    }
+
+    @Override
+    protected Level logLevel() {
+        return Level.FINE;
     }
     
     /** Setups variables.
@@ -573,6 +579,26 @@ public class SerialDataConvertorTest extends NbTestCase {
         DataObject ido = DataObject.find(valid);
         InstanceCookie ic = (InstanceCookie) ido.getCookie(InstanceCookie.class);
         assertNull("There shouldn't be provided InstanceCookie for disabled module", ic);        
+    }
+
+    /** If class name is mapped to an empty string in META-INF.netbeans/translate.names,
+     * InstanceCookie should not be created and instanceOf should return false. */
+    public void testRemovedClass137240() throws DataObjectNotFoundException {
+        FileObject RemovedClassFO = lfs.findResource("/Settings/org-netbeans-modules-settings-convertors-FooSettingRemovedClass.settings");
+        assertNotNull(RemovedClassFO);
+        DataObject ido = DataObject.find(RemovedClassFO);
+        InstanceCookie ic = ido.getCookie(InstanceCookie.class);
+        assertNull("InstanceCookie issued for removed class.", ic);
+        FileObject unknownSerialFO = lfs.findResource("/Settings/org-netbeans-modules-settings-convertors-FooSettingRemovedClassSerial.settings");
+        assertNotNull(unknownSerialFO);
+        ido = DataObject.find(unknownSerialFO);
+        InstanceCookie icSerial = ido.getCookie(InstanceCookie.class);
+        assertNull("InstanceCookie issued for removed class.", icSerial);
+        FileObject unknownInstanceOfFO = lfs.findResource("/Settings/org-netbeans-modules-settings-convertors-FooSettingRemovedClassInstanceOf.settings");
+        assertNotNull(unknownInstanceOfFO);
+        ido = DataObject.find(unknownInstanceOfFO);
+        InstanceCookie.Of icOf = ido.getCookie(InstanceCookie.Of.class);
+        assertFalse("instanceOf should not return true for removed class.", icOf.instanceOf(RemovedClass.class));
     }
 
     public void testDeleteOfUnrecognizedSettingsFile () throws Exception {
