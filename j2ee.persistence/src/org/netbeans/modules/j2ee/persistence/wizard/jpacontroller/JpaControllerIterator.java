@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.web.jsf.wizards;
+package org.netbeans.modules.j2ee.persistence.wizard.jpacontroller;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -51,17 +51,14 @@ import java.util.logging.Logger;
 import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeListener;
-import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.java.project.classpath.ProjectClassPathModifier;
 import org.netbeans.api.progress.aggregate.AggregateProgressFactory;
 import org.netbeans.api.progress.aggregate.AggregateProgressHandle;
+import org.netbeans.api.progress.aggregate.ProgressContributor;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
-import org.netbeans.api.project.libraries.Library;
-import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.modules.j2ee.core.api.support.java.GenerationUtils;
 import org.netbeans.modules.j2ee.core.api.support.wizard.DelegatingWizardDescriptorPanel;
 import org.netbeans.modules.j2ee.core.api.support.wizard.Wizards;
@@ -69,7 +66,6 @@ import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Persistenc
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
 import org.netbeans.modules.j2ee.persistence.wizard.PersistenceClientEntitySelection;
-import org.netbeans.modules.j2ee.persistence.wizard.jpacontroller.JpaControllerUtil;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
@@ -78,36 +74,28 @@ import org.openide.loaders.DataFolder;
 import org.openide.loaders.TemplateWizard;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
-import org.netbeans.api.progress.aggregate.ProgressContributor;
 import org.netbeans.modules.j2ee.persistence.wizard.fromdb.ProgressPanel;
-import org.netbeans.modules.j2ee.persistence.wizard.jpacontroller.JpaControllerIterator;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.util.RequestProcessor;
-
 /**
  *
  * @author Pavel Buzek
  */
-public class PersistenceClientIterator implements TemplateWizard.Iterator {
+public class JpaControllerIterator implements TemplateWizard.Iterator {
     
     private int index;
     private transient WizardDescriptor.Panel[] panels;
-
-    private static final String[] UTIL_CLASS_NAMES = {"JsfCrudELResolver", "JsfUtil", "PagingInfo"};
-    static final String UTIL_FOLDER_NAME = "util"; //NOI18N
+    private static final String[] EXCEPTION_CLASS_NAMES = {"IllegalOrphanException", "NonexistentEntityException", "PreexistingEntityException", "RollbackFailureException"};
+    public static final String EXCEPTION_FOLDER_NAME = "exceptions"; //NOI18N
+    private static String RESOURCE_FOLDER = "org/netbeans/modules/j2ee/persistence/wizard/jpacontroller/resources/"; //NOI18N
     
     public Set instantiate(TemplateWizard wizard) throws IOException
     {
         final List<String> entities = (List<String>) wizard.getProperty(WizardProperties.ENTITY_CLASS);
-        final String jsfFolder = (String) wizard.getProperty(WizardProperties.JSF_FOLDER);
         final Project project = Templates.getProject(wizard);
-        final FileObject targetFolder = Templates.getTargetFolder(wizard);
-        final FileObject jpaControllerPackageFileObject = (FileObject)wizard.getProperty(WizardProperties.JPA_CLASSES_PACKAGE_FILE_OBJECT);
-        final String jpaControllerPkg = (String) wizard.getProperty(WizardProperties.JPA_CLASSES_PACKAGE);
-        final String controllerPkg = (String) wizard.getProperty(WizardProperties.JSF_CLASSES_PACKAGE);
-        Boolean ajaxifyBoolean = (Boolean) wizard.getProperty(WizardProperties.AJAXIFY_JSF_CRUD);
-        final boolean ajaxify = ajaxifyBoolean == null ? false : ajaxifyBoolean.booleanValue();
+        final FileObject jpaControllerPackageFileObject = Templates.getTargetFolder(wizard);
+        final String jpaControllerPackage = (String) wizard.getProperty(WizardProperties.JPA_CONTROLLER_PACKAGE);
         
         PersistenceUnit persistenceUnit = 
                 (PersistenceUnit) wizard.getProperty(org.netbeans.modules.j2ee.persistence.wizard.WizardProperties.PERSISTENCE_UNIT);
@@ -121,9 +109,7 @@ public class PersistenceClientIterator implements TemplateWizard.Iterator {
             }
         }
         
-        final JpaControllerUtil.EmbeddedPkSupport embeddedPkSupport = new JpaControllerUtil.EmbeddedPkSupport();
-        
-        final String title = "Generating JSF Pages and Classes";
+        final String title = "Generating JPA Controllers and Related Classes";
         final ProgressContributor progressContributor = AggregateProgressFactory.createProgressContributor(title);
         final AggregateProgressHandle handle = 
                 AggregateProgressFactory.createHandle(title, new ProgressContributor[]{progressContributor}, null, null);
@@ -135,12 +121,9 @@ public class PersistenceClientIterator implements TemplateWizard.Iterator {
             public void run() {
                 try {
                     handle.start();
-                    int jpaProgressStepCount = JpaControllerIterator.getProgressStepCount(entities.size());
-                    int progressStepCount = jpaProgressStepCount + getProgressStepCount(ajaxify);
-                    progressStepCount += (JSFClientGenerator.PROGRESS_STEP_COUNT * entities.size());
-                    progressContributor.start(progressStepCount);
-                    JpaControllerIterator.generateJpaControllers(progressContributor, progressPanel, entities, project, jpaControllerPkg, jpaControllerPackageFileObject, embeddedPkSupport, false);
-                    generateJsfControllers(progressContributor, progressPanel, targetFolder, controllerPkg, jpaControllerPkg, entities, ajaxify, project, jsfFolder, jpaControllerPackageFileObject, embeddedPkSupport, jpaProgressStepCount);
+                    int progressStepCount = getProgressStepCount(entities.size());
+                    progressContributor.start(progressStepCount); 
+                    generateJpaControllers(progressContributor, progressPanel, entities, project, jpaControllerPackage, jpaControllerPackageFileObject, null, true);
                     progressContributor.progress(progressStepCount);
                 } catch (IOException ioe) {
                     Logger.getLogger("global").log(Level.INFO, null, ioe);
@@ -184,39 +167,36 @@ public class PersistenceClientIterator implements TemplateWizard.Iterator {
             }
         });
         
-        return Collections.singleton(DataFolder.findFolder(targetFolder));
+        return Collections.singleton(DataFolder.findFolder(jpaControllerPackageFileObject));
     }
     
-    private static int getProgressStepCount(boolean ajaxify) {
-        int count = UTIL_CLASS_NAMES.length + 2;
-        if (ajaxify) {
-            count++;
-        }
-        return count;
+    public static int getProgressStepCount(int entityCount) {
+        return EXCEPTION_CLASS_NAMES.length + entityCount + 2;
     }
     
-    private static void generateJsfControllers(ProgressContributor progressContributor, final ProgressPanel progressPanel, FileObject targetFolder, String controllerPkg, String jpaControllerPkg, List<String> entities, boolean ajaxify, Project project, String jsfFolder, FileObject jpaControllerPackageFileObject, JpaControllerUtil.EmbeddedPkSupport embeddedPkSupport, int progressIndex) throws IOException {
-        String progressMsg = "Preparing to generate JSF utility classes";
+    public static FileObject[] generateJpaControllers(ProgressContributor progressContributor, ProgressPanel progressPanel, List<String> entities, Project project, String jpaControllerPackage, FileObject jpaControllerPackageFileObject, JpaControllerUtil.EmbeddedPkSupport embeddedPkSupport, boolean evenIfExists) throws IOException {
+        int progressIndex = 0;
+        String progressMsg = "Preparing to generate JPA controller exception classes";
         progressContributor.progress(progressMsg, progressIndex++);
-        progressPanel.setText(progressMsg);     
-        
-        //copy util classes
-        FileObject utilFolder = targetFolder.getFileObject(UTIL_FOLDER_NAME);
-        if (utilFolder == null) {
-            utilFolder = FileUtil.createFolder(targetFolder, UTIL_FOLDER_NAME);
+        progressPanel.setText(progressMsg);        
+
+        FileObject exceptionFolder = jpaControllerPackageFileObject.getFileObject(EXCEPTION_FOLDER_NAME);
+        if (exceptionFolder == null) {
+            exceptionFolder = FileUtil.createFolder(jpaControllerPackageFileObject, EXCEPTION_FOLDER_NAME);
         }
-        String utilPackage = controllerPkg == null || controllerPkg.length() == 0 ? UTIL_FOLDER_NAME : controllerPkg + "." + UTIL_FOLDER_NAME;
-        for (int i = 0; i < UTIL_CLASS_NAMES.length; i++){
-            if (utilFolder.getFileObject(UTIL_CLASS_NAMES[i], "java") == null) {
-                progressMsg = "Generating " + UTIL_CLASS_NAMES[i];
+
+        String exceptionPackage = jpaControllerPackage == null || jpaControllerPackage.length() == 0 ? EXCEPTION_FOLDER_NAME : jpaControllerPackage + "." + EXCEPTION_FOLDER_NAME;
+
+        for (int i = 0; i < EXCEPTION_CLASS_NAMES.length; i++){
+            if (exceptionFolder.getFileObject(EXCEPTION_CLASS_NAMES[i], "java") == null) {
+                progressMsg = "Generating " + EXCEPTION_CLASS_NAMES[i];
                 progressContributor.progress(progressMsg, progressIndex++);
                 progressPanel.setText(progressMsg);
-                String content = JpaControllerUtil.readResource(PersistenceClientIterator.class.getClassLoader().getResourceAsStream(JSFClientGenerator.RESOURCE_FOLDER + UTIL_CLASS_NAMES[i] + ".java.txt"), "UTF-8"); //NOI18N
-                content = content.replaceAll("__PACKAGE__", utilPackage);
-                FileObject target = FileUtil.createData(utilFolder, UTIL_CLASS_NAMES[i] + ".java");//NOI18N
+                String content = JpaControllerUtil.readResource(JpaControllerUtil.class.getClassLoader().getResourceAsStream(RESOURCE_FOLDER + EXCEPTION_CLASS_NAMES[i] + ".java.txt"), "UTF-8"); //NOI18N
+                content = content.replaceAll("__PACKAGE__", exceptionPackage);
+                FileObject target = FileUtil.createData(exceptionFolder, EXCEPTION_CLASS_NAMES[i] + ".java");//NOI18N
                 //Charset encoding = project.getLookup().lookup(FileEncodingQueryImplementation.class).getEncoding(target);
                 //fixme(mbohm): use project encoding instead of UTF-8
-                //...probably delegate that to JpaControllerUtil because needed in both PersistenceClientIterator and JpaControllerIterator
                 JpaControllerUtil.createFile(target, content, "UTF-8");  //NOI18N
             }
             else {
@@ -224,57 +204,51 @@ public class PersistenceClientIterator implements TemplateWizard.Iterator {
             }
         }
         
-        progressMsg = "Preparing to generate JSF controllers and converters";
+        progressMsg = "Preparing to generate JPA controllers";
         progressContributor.progress(progressMsg, progressIndex++);
-        progressPanel.setText(progressMsg);  
-        
-        int[] nameAttemptIndices = new int[entities.size()];
+        progressPanel.setText(progressMsg);
+
+        int[] nameAttemptIndices = null;
+        if (evenIfExists) {
+            nameAttemptIndices = new int[entities.size()];
+        }
         FileObject[] controllerFileObjects = new FileObject[entities.size()];
-        FileObject[] converterFileObjects = new FileObject[entities.size()];
         for (int i = 0; i < controllerFileObjects.length; i++) {
             String entityClass = entities.get(i);
             String simpleClassName = JpaControllerUtil.simpleClassName(entityClass);
-            String simpleControllerNameBase = simpleClassName + "Controller"; //NOI18N
+            String simpleControllerNameBase = simpleClassName + "JpaController"; //NOI18N
             String simpleControllerName = simpleControllerNameBase;
-            while (targetFolder.getFileObject(simpleControllerName, "java") != null && nameAttemptIndices[i] < 1000) {
-                simpleControllerName = simpleControllerNameBase + ++nameAttemptIndices[i];
+            if (evenIfExists) {
+                while (jpaControllerPackageFileObject.getFileObject(simpleControllerName, "java") != null && nameAttemptIndices[i] < 1000) {
+                    simpleControllerName = simpleControllerNameBase + ++nameAttemptIndices[i];
+                }
             }
-            String simpleConverterName = simpleClassName + "Converter" + (nameAttemptIndices[i] == 0 ? "" : nameAttemptIndices[i]);
-            int converterNameAttemptIndex = 1;
-            while (targetFolder.getFileObject(simpleConverterName, "java") != null && converterNameAttemptIndex < 1000) {
-                simpleConverterName += "_" + converterNameAttemptIndex++;
+            if (jpaControllerPackageFileObject.getFileObject(simpleControllerName, "java") == null) {
+                controllerFileObjects[i] = GenerationUtils.createClass(jpaControllerPackageFileObject, simpleControllerName, null);
             }
-            controllerFileObjects[i] = GenerationUtils.createClass(targetFolder, simpleControllerName, null);
-            converterFileObjects[i] = GenerationUtils.createClass(targetFolder, simpleConverterName, null);
         }
-        
-        if (ajaxify) {
-            progressMsg = "Adding Ajax library";
-            progressContributor.progress(progressMsg, progressIndex++);
-            progressPanel.setText(progressMsg); 
-            Library[] libraries = { LibraryManager.getDefault().getLibrary("jsf-extensions") };
-            ProjectClassPathModifier.addLibraries(libraries, getSourceRoot(project), ClassPath.COMPILE);
+
+        if (embeddedPkSupport == null) {
+            embeddedPkSupport = new JpaControllerUtil.EmbeddedPkSupport();
         }
-        
+
         for (int i = 0; i < controllerFileObjects.length; i++) {
+
+            if (controllerFileObjects[i] == null) {
+                progressContributor.progress(progressIndex++);
+                continue;
+            }
             String entityClass = entities.get(i);
-            String simpleClassName = JpaControllerUtil.simpleClassName(entityClass);
-            String firstLower = simpleClassName.substring(0, 1).toLowerCase() + simpleClassName.substring(1);
-            if (nameAttemptIndices[i] > 0) {
-                firstLower += nameAttemptIndices[i];
-            }
-            if (jsfFolder.endsWith("/")) {
-                jsfFolder = jsfFolder.substring(0, jsfFolder.length() - 1);
-            }
-            if (jsfFolder.startsWith("/")) {
-                jsfFolder = jsfFolder.substring(1);
-            }
-            String controller = ((controllerPkg == null || controllerPkg.length() == 0) ? "" : controllerPkg + ".") + controllerFileObjects[i].getName();
-            String simpleJpaControllerName = simpleClassName + "JpaController"; //NOI18N
-            FileObject jpaControllerFileObject = jpaControllerPackageFileObject.getFileObject(simpleJpaControllerName, "java");
-            JSFClientGenerator.generateJSFPages(progressContributor, progressPanel, project, entityClass, jsfFolder, firstLower, controllerPkg, controller, targetFolder, controllerFileObjects[i], embeddedPkSupport, entities, ajaxify, jpaControllerPkg, jpaControllerFileObject, converterFileObjects[i], progressIndex);
-            progressIndex += JSFClientGenerator.PROGRESS_STEP_COUNT;
+            String controller = ((jpaControllerPackage == null || jpaControllerPackage.length() == 0) ? "" : jpaControllerPackage + ".") + controllerFileObjects[i].getName();
+
+            progressMsg = "Generating " + controllerFileObjects[i].getName();
+            progressContributor.progress(progressMsg, progressIndex++);
+            progressPanel.setText(progressMsg);
+
+            JpaControllerGenerator.generateJpaController(project, entityClass, controller, exceptionPackage, jpaControllerPackageFileObject, controllerFileObjects[i], embeddedPkSupport);
         }
+
+        return controllerFileObjects;
     }
 
     /**
@@ -316,18 +290,19 @@ public class PersistenceClientIterator implements TemplateWizard.Iterator {
         SourceGroup[] sourceGroups = ProjectUtils.getSources(project).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
         
         WizardDescriptor.Panel secondPanel = new ValidationPanel(
-                new PersistenceClientEntitySelection(NbBundle.getMessage(PersistenceClientIterator.class, "LBL_EntityClasses"),
+                new PersistenceClientEntitySelection(NbBundle.getMessage(JpaControllerIterator.class, "LBL_EntityClasses"),
                         new HelpCtx("framework_jsf_fromentity"), wizard)); // NOI18N
-        WizardDescriptor.Panel thirdPanel = new PersistenceClientSetupPanel(project, wizard);
+        WizardDescriptor.Panel thirdPanel = new JpaControllerSetupPanel(project, wizard);
 //        WizardDescriptor.Panel javaPanel = JavaTemplates.createPackageChooser(project, sourceGroups, secondPanel);
 //        panels = new WizardDescriptor.Panel[] { javaPanel };
         panels = new WizardDescriptor.Panel[] { secondPanel, thirdPanel };
         String names[] = new String[] {
-            NbBundle.getMessage(PersistenceClientIterator.class, "LBL_EntityClasses"),
-            NbBundle.getMessage(PersistenceClientIterator.class, "LBL_JSFPagesAndClasses")
+            NbBundle.getMessage(JpaControllerIterator.class, "LBL_EntityClasses"),
+            NbBundle.getMessage(JpaControllerIterator.class, "LBL_JpaControllerClasses")
+        
         };
         wizard.putProperty("NewFileWizard_Title", 
-            NbBundle.getMessage(PersistenceClientIterator.class, "Templates/Persistence/JsfFromDB"));
+            NbBundle.getMessage(JpaControllerIterator.class, "Templates/Persistence/JpaControllersFromEntities"));
         Wizards.mergeSteps(wizard, panels, names);
     }
 
@@ -358,7 +333,7 @@ public class PersistenceClientIterator implements TemplateWizard.Iterator {
     }
 
     public String name() {
-        return NbBundle.getMessage (PersistenceClientIterator.class, "LBL_WizardTitle_FromEntity");
+        return NbBundle.getMessage (JpaControllerIterator.class, "LBL_WizardTitle_FromEntity");
     }
 
     public boolean hasNext() {
@@ -395,18 +370,18 @@ public class PersistenceClientIterator implements TemplateWizard.Iterator {
             super(delegate);
         }
         
-        public boolean isValid() {
-            Project project = getProject();
-            WizardDescriptor wizardDescriptor = getWizardDescriptor();
-            
-            // check that this project has a valid target server
-            if (!org.netbeans.modules.j2ee.common.Util.isValidServerInstance(project)) {
-                wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE,
-                        NbBundle.getMessage(PersistenceClientIterator.class, "ERR_MissingServer")); // NOI18N
-                return false;
-            }
-
-            return super.isValid();
-        }
+//        public boolean isValid() {
+//            Project project = getProject();
+//            WizardDescriptor wizardDescriptor = getWizardDescriptor();
+//            
+////            // check that this project has a valid target server
+////            if (!org.netbeans.modules.j2ee.common.Util.isValidServerInstance(project)) {
+////                wizardDescriptor.putProperty("WizardPanel_errorMessage",
+////                        NbBundle.getMessage(JpaControllerIterator.class, "ERR_MissingServer")); // NOI18N
+////                return false;
+////            }
+//
+//            return super.isValid();
+//        }
     }
 }
