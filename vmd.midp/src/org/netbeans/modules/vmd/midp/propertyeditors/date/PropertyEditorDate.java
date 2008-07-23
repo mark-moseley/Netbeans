@@ -46,7 +46,10 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.text.DateFormat;
 import java.text.ParseException;
+import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import javax.swing.JComponent;
@@ -59,7 +62,10 @@ import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.api.properties.DesignPropertyEditor;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
+import org.netbeans.modules.vmd.midp.components.databinding.MidpDatabindingSupport;
 import org.netbeans.modules.vmd.midp.components.items.DateFieldCD;
+import org.netbeans.modules.vmd.midp.propertyeditors.DatabindingElement;
+import org.netbeans.modules.vmd.midp.propertyeditors.DatabindingElementUI;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorElement;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorUserCode;
 import org.openide.awt.Mnemonics;
@@ -81,21 +87,40 @@ public final class PropertyEditorDate extends PropertyEditorUserCode implements 
     
     private CustomEditor customEditor;
     private JRadioButton radioButton;
+    private DatabindingElement databindingElement;
+    
 
-    private PropertyEditorDate() {
+    private PropertyEditorDate(boolean databinding) {
         super(NbBundle.getMessage(PropertyEditorDate.class, "LBL_DATE_UCLABEL")); // NOI18N
         initComponents();
-
-        initElements(Collections.<PropertyEditorElement>singleton(this));
+        
+        if (databinding) {
+            Collection<PropertyEditorElement> elements = new ArrayList<PropertyEditorElement>(2);
+            databindingElement = new DatabindingElement(this);
+            elements.add(this);
+            elements.add(databindingElement);
+            initElements(elements);
+        } else {
+            initElements(Collections.<PropertyEditorElement>singleton(this));
+        }
     }
 
     public static final DesignPropertyEditor createInstance() {
-        return new PropertyEditorDate();
+        return new PropertyEditorDate(false);
+    }
+    
+    public static final DesignPropertyEditor createInstanceWithDatabinding() {
+        return new PropertyEditorDate(true);
     }
 
     private void initComponents() {
         radioButton = new JRadioButton();
         Mnemonics.setLocalizedText(radioButton, NbBundle.getMessage(PropertyEditorDate.class, "LBL_DATE_STR")); // NOI18N
+        
+        radioButton.getAccessibleContext().setAccessibleName( 
+                NbBundle.getMessage(PropertyEditorDate.class, "ACSN_Date"));  // NOI18N
+        radioButton.getAccessibleContext().setAccessibleDescription( 
+                NbBundle.getMessage(PropertyEditorDate.class, "ACSD_Date"));  // NOI18N
         customEditor = new CustomEditor();
     }
 
@@ -121,6 +146,10 @@ public final class PropertyEditorDate extends PropertyEditorUserCode implements 
         if (superText != null) {
             return superText;
         }
+        String databinding = MidpDatabindingSupport.getDatabaindingAsText(component.get(), getPropertyNames().get(0));
+        if (databinding != null) {
+            return databinding;
+        }
         return getValueAsText((PropertyValue) super.getValue());
     }
 
@@ -132,9 +161,24 @@ public final class PropertyEditorDate extends PropertyEditorUserCode implements 
         return null;
     }
 
+    @Override
+    public Boolean canEditAsText() {
+        if (MidpDatabindingSupport.getDatabaindingAsText(component.get(), getPropertyNames().get(0)) != null) {
+            return false;
+        }
+        return super.canEditAsText();
+    }
+    
+    
     public void updateState(PropertyValue value) {
+        final DesignComponent c = component.get();
+        if (databindingElement != null) {
+            databindingElement.updateDesignComponent(c);
+        }
         if (isCurrentValueANull() || value == null) {
             customEditor.setText(null);
+        } else if (MidpDatabindingSupport.getDatabaindingAsText(component.get(), getPropertyNames().get(0)) != null) {
+           ((DatabindingElementUI) databindingElement.getCustomEditorComponent()).updateComponent(c);
         } else {
             customEditor.setText(getValueAsText(value));
         }
@@ -155,6 +199,13 @@ public final class PropertyEditorDate extends PropertyEditorUserCode implements 
         super.customEditorOKButtonPressed();
         if (radioButton.isSelected()) {
             saveValue(customEditor.getText());
+        }
+        
+        final DesignComponent _component = component.get();
+        if (databindingElement != null && databindingElement.getRadioButton().isSelected()) {
+            ((DatabindingElementUI) databindingElement.getCustomEditorComponent()).saveToModel(_component);
+        } else if (databindingElement != null) {
+            ((DatabindingElementUI) databindingElement.getCustomEditorComponent()).resetValuesInModel(_component);
         }
     }
 
@@ -204,6 +255,14 @@ public final class PropertyEditorDate extends PropertyEditorUserCode implements 
         private void initComponents() {
             setLayout(new BorderLayout());
             textField = new JTextField();
+            
+            textField.getAccessibleContext().setAccessibleName( 
+                    NbBundle.getMessage(PropertyEditorDate.class, 
+                            "ACSN_DateField"));                     // NOI18N
+            textField.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorDate.class, 
+                             "ACSD_DateField"));                    // NOI18N
+            
             textField.getDocument().addDocumentListener(this);
             textField.addFocusListener(this);
             add(textField, BorderLayout.CENTER);
@@ -220,11 +279,25 @@ public final class PropertyEditorDate extends PropertyEditorUserCode implements 
         public void checkDateStatus() {
             int inputMode = getInputMode();
             try {
-                getFormatter(inputMode).parse(textField.getText());
+                parseDate(inputMode, textField.getText());
                 clearErrorStatus();
             } catch (ParseException e) {
                 displayWarning(getMessage(inputMode));
             }
+        }
+        
+        private Date parseDate(int inputMode, String dateAsString) throws ParseException{
+            Date result = null;
+            DateFormat format = getFormatter(inputMode);
+            format.setLenient(false);
+            // do parsing
+            ParsePosition pp = new ParsePosition(0);
+            result = format.parse(dateAsString, pp);
+
+            if (result == null || pp.getIndex() != dateAsString.length()) {
+                throw new ParseException(null, pp.getIndex()); // NOI10N
+            }
+            return result;
         }
 
         private String getMessage(int inputMode) {
