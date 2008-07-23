@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,33 +31,20 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
+ * 
  * Contributor(s):
- *
+ * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.codegen.ui;
+package org.netbeans.modules.uml.drawingarea.widgets;
 
-import java.awt.Color;
-import javax.swing.UIManager;
+import java.awt.Font;
 
 /**
  *
- * @author Andrei Badea
+ * @author sp153251
  */
-public class UIUtils {
-
-    private UIUtils() {
-    }
-
-    public static Color getErrorForeground() {
-        // copied from WizardDescriptor
-        Color nbErrorForeground = UIManager.getColor("nb.errorForeground"); //NOI18N
-        if (nbErrorForeground == null) {
-            //nbErrorForeground = new Color(89, 79, 191); // RGB suggested by Bruce in #28466
-            nbErrorForeground = new Color(255, 0, 0); // RGB suggested by jdinga in #65358
-        }
-        return nbErrorForeground;
-    }
+public interface NameFontHandler {
+    public void setNameFont(Font font);
 }
