@@ -38,64 +38,80 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.gsf.api;
 
-package org.netbeans.modules.gsfret.navigation.actions;
-
+import java.io.IOException;
+import java.util.Collection;
+import java.util.List;
+import javax.swing.text.Document;
+import org.netbeans.modules.gsf.api.annotations.CheckForNull;
+import org.netbeans.modules.gsf.api.annotations.NonNull;
 import org.openide.filesystems.FileObject;
-import org.openide.util.*;
-import javax.swing.*;
-import java.awt.event.*;
-import org.netbeans.modules.gsf.api.DataLoadersBridge;
-import org.netbeans.modules.gsf.api.ElementHandle;
-import org.netbeans.napi.gsfret.source.Source;
-import org.netbeans.napi.gsfret.source.UiUtils;
+
 
 /**
- * This file is originally from Retouche, the Java Support 
- * infrastructure in NetBeans. I have modified the file as little
- * as possible to make merging Retouche fixes back as simple as
- * possible. 
- * <p>
+ * Assorted information about the Source.
  *
- * An action that opens editor and jumps to the element given in constructor.
- * Similar to editor's go to declaration action.
+ * @todo Pass around a context object here that is managed by the client.
+ *  This would let all the multiple clients of a particular compilation result
+ *  share some work, such as computing the position stack for a caret offset,
+ *  and so on. (Each client checks if it's initialized, and if not, perform
+ *  work and store it in the context.)
  *
- * @author tim, Dafe Simonek
+ * @author Petr Hrebejk, Tomas Zezula, Tor Norbye
  */
-public final class OpenAction extends AbstractAction {
-    
-    private ElementHandle elementHandle;   
-    private FileObject fileObject;
-    private long start;
-      
-    public OpenAction(ElementHandle elementHandle, FileObject fileObject, long start) {
-        this.elementHandle = elementHandle;
-        this.fileObject = fileObject;
-        this.start = start;
-        putValue ( Action.NAME, NbBundle.getMessage ( OpenAction.class, "LBL_Goto" ) ); //NOI18N
+public abstract class CompilationInfo {
+    private FileObject fo;
+    private Document doc;
+
+    public CompilationInfo(@NonNull final FileObject fo) throws IOException {
+        this.fo = fo;
     }
+
+    /** 
+     * Get all embedded results for a given mime type for this compilation info
+     */
+    @NonNull
+    public abstract Collection<? extends ParserResult> getEmbeddedResults(@NonNull String mimeType);
     
-    public void actionPerformed (ActionEvent ev) {
-        if (fileObject != null && elementHandle == null) {
-            UiUtils.open(fileObject, (int)start);
-            return;
-        }
-        ElementHandle handle = elementHandle;
-        FileObject primaryFile = DataLoadersBridge.getDefault().getPrimaryFile(fileObject);
+    /**
+     * Get the embedded result of the given mime type that applies to the given offset
+     */
+    @CheckForNull
+    public abstract ParserResult getEmbeddedResult(@NonNull String mimeType, int offset);
 
-        if ((primaryFile != null) && (handle != null)) {
-            Source js =
-                    Source.forFileObject(primaryFile);
+    /**
+     * Returns the content of the file.
+     *
+     * @return String the java source
+     */
+    @NonNull
+    public abstract String getText();
+    
+    /**
+     * Returns the index associated with this file
+     */
+    @CheckForNull
+    public abstract Index getIndex(@NonNull String mimeType);
 
-            if (js != null) {
-                UiUtils.open(js, handle);
+    @NonNull
+    public FileObject getFileObject() {
+        return fo;
+    }
+
+    @CheckForNull
+    public Document getDocument() {
+        if (doc == null) {
+            if (this.fo == null) {
+                return null;
             }
+
+            doc = DataLoadersBridge.getDefault().getDocument(fo);
         }
+        
+        return doc;
     }
 
-    public boolean isEnabled () {
-          return true;
-    }
-
-    
+    @NonNull
+    public abstract List<Error> getErrors();
 }

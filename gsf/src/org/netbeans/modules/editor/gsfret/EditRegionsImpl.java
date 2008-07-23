@@ -27,29 +27,17 @@
  */
 package org.netbeans.modules.editor.gsfret;
 
-import java.util.HashSet;
-import java.util.Set;
 import javax.swing.SwingUtilities;
-import javax.swing.text.Document;
-import org.netbeans.api.gsf.EditRegions;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.modules.editor.highlights.spi.Highlight;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
+import org.netbeans.modules.gsf.api.EditRegions;
 import java.util.Set;
 import javax.swing.JEditorPane;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
-import org.netbeans.api.gsf.ColoringAttributes;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.modules.editor.highlights.spi.Highlight;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.modules.gsf.Language;
 import org.netbeans.modules.gsf.LanguageRegistry;
-import org.openide.cookies.EditorCookie;
+import org.netbeans.modules.gsf.api.DataLoadersBridge;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Exceptions;
 
 
@@ -78,22 +66,7 @@ public class EditRegionsImpl extends EditRegions {
         }
 
         // Update caret listener
-        DataObject dobj;
-
-        try {
-            dobj = DataObject.find(fo);
-        }
-        catch (DataObjectNotFoundException ex){
-            return;
-        }
-
-        EditorCookie editorCookie = dobj.getCookie(EditorCookie.class);
-
-        if (editorCookie == null) {
-            return;
-        }
-
-        JEditorPane[] panes = editorCookie.getOpenedPanes();
+        JEditorPane[] panes = DataLoadersBridge.getDefault().getOpenedPanes(fo);
 
         if ((panes == null) || (panes.length == 0)) {
             return;
@@ -109,19 +82,7 @@ public class EditRegionsImpl extends EditRegions {
         }
 
         if ((regions != null) && (regions.size() > 0)) {
-            Set<Highlight> changePoints = new HashSet<Highlight>(regions.size() * 2);
-
-            for (OffsetRange range : regions) {
-                //ColoringAttributes colors = highlights.get(range);
-                Collection<ColoringAttributes> c = Collections.singletonList(ColoringAttributes.LOCAL_VARIABLE);
-                Highlight h = org.netbeans.modules.gsfret.editor.semantic.Utilities.createHighlight(language, doc, range.getStart(), range.getEnd(), c, null);
-
-                if (h != null) {
-                    changePoints.add(h);
-                }
-            }
-
-            InstantRenamePerformer.performInstantRename(pane, changePoints, caretOffset);
+            InstantRenamePerformer.performInstantRename(pane, regions, caretOffset);
         }
     }
 }
