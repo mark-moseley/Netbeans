@@ -66,6 +66,22 @@ import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.test.xml.schema.lib.SchemaMultiView;
 import org.netbeans.test.xml.schema.lib.util.Helpers;
 
+import org.netbeans.junit.NbModuleSuite;
+import junit.framework.Test;
+
+import java.util.zip.ZipFile;
+import java.util.zip.ZipEntry;
+import java.util.Enumeration;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.FileOutputStream;
+import java.io.File;
+import java.io.IOException;
+
+import org.netbeans.junit.NbTestCase;
+import java.util.Properties;
+import org.netbeans.junit.RandomlyFails;
+
 /**
  *
  * @author ca@netbeans.org
@@ -74,29 +90,86 @@ import org.netbeans.test.xml.schema.lib.util.Helpers;
 public class AcceptanceTestCase extends JellyTestCase {
     
     static final String [] m_aTestMethods = {
-        "createNewSchema",
+                "createNewSchema",
                 "createSchemaComponents",
-                "customizeSchema",
-                "checkSourceCRC",
-                "refactorComplexType",
-                "applyDesignPattern"
+                "customizeSchema"
+                //"checkSourceCRC",
+                //"refactorComplexType",
+                //"applyDesignPattern"
     };
     
     static final String TEST_SCHEMA_NAME = "testSchema";
     static final String SCHEMA_EXTENSION = ".xsd";
-    
+
+    private static boolean bUnzipped = false;
+
     public AcceptanceTestCase(String arg0) {
         super(arg0);
     }
-    
-    public static TestSuite suite() {
-        TestSuite testSuite = new TestSuite(AcceptanceTestCase.class.getName());
-        
-        for (String strMethodName : m_aTestMethods) {
-            testSuite.addTest(new AcceptanceTestCase(strMethodName));
+
+    public static Test suite( )
+    {
+      return NbModuleSuite.create(
+          NbModuleSuite.createConfiguration( AcceptanceTestCase.class ).addTest(
+              "createNewSchema",
+              "createSchemaComponents"
+              //"customizeSchema",
+              //"checkSourceCRC",
+              //"refactorComplexType",
+              //"applyDesignPattern"
+           )
+           .enableModules( ".*" )
+           .clusters( ".*" )
+           //.gui( true )
+        );
+    }
+
+    public void setUp( )
+    {
+      if( !bUnzipped )
+      {
+      try
+      {
+        String sBase = getDataDir( ).getPath( ) + File.separator;//System.getProperty( "nbjunit.workdir" ) + File.separator + ".." + File.separator + "data" + File.separator;
+        System.out.println( "Unzipping projects.zip into \"" + sBase + "\"..." );
+        // Extract zip data
+        ZipFile zf = new ZipFile( sBase + "projects.zip" );
+        Enumeration<? extends ZipEntry> ent = zf.entries( );
+        while( ent.hasMoreElements( ) )
+        {
+          ZipEntry e = ent.nextElement( );
+          String name = e.getName( );
+          if( e.isDirectory( ) )
+          {
+            ( new File( sBase + name ) ).mkdirs( );
+          }
+          else
+          {
+            InputStream is = zf.getInputStream( e );
+            //File f = new File( name );
+            //System.out.println( "-->" + f.getPath( ) );
+            OutputStream os = new FileOutputStream( sBase + name );
+            int r;
+            byte[] b = new byte[ 1024 ];
+            while( -1 != ( r = is.read( b ) ) )
+              os.write( b, 0, r );
+            is.close( );
+            os.flush( );
+            os.close( );
+          }
         }
-        
-        return testSuite;
+        zf.close( );
+
+        // Open project
+        openDataProjects( "XSDTestProject" );
+
+        bUnzipped = true;
+      }
+      catch( IOException ex )
+      {
+        System.out.println( "ERROR: Unzipping projects.zip failed: " + ex.getMessage( ) );
+      }
+      }
     }
     
     public void createNewSchema() {
@@ -205,7 +278,7 @@ public class AcceptanceTestCase extends JellyTestCase {
     public void checkSourceCRC() {
         startTest();
         
-        final long goldenCRC32 = 2295334600L;
+        final long goldenCRC32 = 3610664692L;
         
         SchemaMultiView opMultiView = new SchemaMultiView(TEST_SCHEMA_NAME);
         opMultiView.switchToSource();
@@ -215,7 +288,7 @@ public class AcceptanceTestCase extends JellyTestCase {
         
         opMultiView.switchToSchema();
         
-        strText = strText.replaceAll("[  [\t\f\r]]", "");
+        strText = strText.replaceAll("[ \t\f\r]", "");
         Helpers.writeJemmyLog("{" + strText + "}");
         
         CRC32 crc32 = new CRC32();
@@ -223,12 +296,12 @@ public class AcceptanceTestCase extends JellyTestCase {
         long checkSum = crc32.getValue();
         Helpers.writeJemmyLog("CRC32=" + checkSum);
         if ( checkSum != goldenCRC32) {
-            fail("Schema source check sum doesn't match golden value");
+            fail("Schema source check sum doesn't match golden value. Required: " + goldenCRC32 + ", calculated: " + checkSum );
         }
         
         endTest();
     }
-    
+
     public void refactorComplexType() {
         startTest();
         
@@ -254,6 +327,8 @@ public class AcceptanceTestCase extends JellyTestCase {
         Helpers.waitNoEvent();
         
         JListOperator opList2 = opMultiView.getColumnListOperator(2);
+        if( null == opList2 )
+          failInvalidSchema( );
         opList2.selectItem("CT1");
         
         opMultiView.switchToSource();
