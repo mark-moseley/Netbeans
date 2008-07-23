@@ -278,7 +278,7 @@ public class GdbUtils {
             }
             key = info.substring(tstart, i - 1);
             if ((ch = info.charAt(i++)) == '{') {
-                tend = findMatchingCurly(info, i) - 1;
+                tend = findMatchingCurly(info, i);
             } else if (ch == '"') {
                 tend = findEndOfString(info, i);
             } else if (ch == '[') {
@@ -290,7 +290,7 @@ public class GdbUtils {
             // put the value in the map and prepare for the next property
             value = info.substring(i, tend);
             if (Utilities.isWindows() && value.startsWith("/cygdrive/")) { // NOI18N
-                value = value.charAt(10) + ":" + value.substring(11); // NOI18N
+                value = value.toUpperCase().charAt(10) + ":" + value.substring(11); // NOI18N
             }
             if (key.equals("fullname") || key.equals("file")) { // NOI18N
                 value = gdbToUserEncoding(value); // possibly convert multi-byte fields
@@ -401,6 +401,26 @@ public class GdbUtils {
             idx++;
         }
         
+        return list;
+    }
+
+    /*
+     * Create a list from the list of values:
+     * {addr="0x00001390",data=["0x00","0x01"]},
+     * {addr="0x00001392",data=["0x02","0x03"]},
+     * {addr="0x00001394",data=["0x04","0x05"]}
+     */
+    public static List<String> createListOfValues(String info) {
+        List<String> list = new ArrayList<String>();
+        int start = info.indexOf("{"); // NOI18N
+        while (start != -1) {
+            int end = findMatchingCurly(info, start);
+            if (end == -1) {
+                break;
+            }
+            list.add(info.substring(start+1, end));
+            start = info.indexOf("{", end); // NOI18N
+        }
         return list;
     }
     
@@ -838,5 +858,10 @@ public class GdbUtils {
             }
         }
         return -1;
+    }
+    
+    public static String threadId() {
+        Thread cur = Thread.currentThread();
+        return cur.getName() + ':' + Long.toString(cur.getId());
     }
 }
