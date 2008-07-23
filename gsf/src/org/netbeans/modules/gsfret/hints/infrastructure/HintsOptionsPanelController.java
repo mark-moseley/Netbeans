@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.java.hints.options;
+package org.netbeans.modules.gsfret.hints.infrastructure;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
@@ -47,13 +47,16 @@ import org.netbeans.spi.options.OptionsPanelController;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 
-public final class HintsOptionsPanelController extends OptionsPanelController {
-    
+final class HintsOptionsPanelController extends OptionsPanelController {
+    private GsfHintsManager manager;
     private HintsPanel panel;
-    
     private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
     private boolean changed;
                     
+    HintsOptionsPanelController(GsfHintsManager manager) {
+        this.manager = manager;
+    }
+
     public void update() {
         if (panel != null) {
             panel.update();
@@ -81,12 +84,12 @@ public final class HintsOptionsPanelController extends OptionsPanelController {
     }
     
     public HelpCtx getHelpCtx() {
-	return new HelpCtx("netbeans.optionsDialog.java.hints");
+	return null; // new HelpCtx("...ID") if you have a help set
     }
     
     public synchronized JComponent getComponent(Lookup masterLookup) {
         if ( panel == null ) {
-            panel = new HintsPanel();
+            panel = new HintsPanel(manager.getHintsTreeModel(), manager);
         }
         return panel;
     }
