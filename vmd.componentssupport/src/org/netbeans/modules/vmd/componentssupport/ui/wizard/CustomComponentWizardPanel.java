@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,11 +39,10 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.j2me.cdc.project.ui.wizards;
+package org.netbeans.modules.vmd.componentssupport.ui.wizard;
 
 import java.awt.Component;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeEvent;
@@ -51,101 +50,90 @@ import javax.swing.event.ChangeListener;
 import org.openide.WizardDescriptor;
 import org.openide.WizardValidationException;
 import org.openide.util.HelpCtx;
+import org.openide.util.NbBundle;
 
 /**
  * Panel just asking for basic info.
- * @author Jesse Glick
  */
-final public class PanelConfigureProject implements WizardDescriptor.Panel, WizardDescriptor.ValidatingPanel, WizardDescriptor.FinishablePanel {
-    
+public class CustomComponentWizardPanel implements WizardDescriptor.Panel,
+        WizardDescriptor.ValidatingPanel 
+{
+
     private WizardDescriptor wizardDescriptor;
-    private int type;
-    private PanelConfigureProjectVisual component;
-    private String preferredName;
-    
-    /** Create the wizard panel descriptor. */
-    public PanelConfigureProject( int type ) {
-        this(type, null);
-    }
-    
-    public PanelConfigureProject( int type, String preferredName) {
-        this.type = type;
-        this.preferredName = preferredName;
+    private CustomComponentVisualPanel component;
+
+    public CustomComponentWizardPanel() {
     }
 
     public Component getComponent() {
         if (component == null) {
-            component = new PanelConfigureProjectVisual(this, this.type, preferredName);
+            component = new CustomComponentVisualPanel(this);
+            component.setName(
+                    NbBundle.getMessage(CustomComponentWizardPanel.class, 
+                    CustomComponentWizardIterator.STEP_BASIC_PARAMS));
         }
         return component;
     }
-    
+
     public HelpCtx getHelp() {
-        
-        switch ( type ) {
-            case NewCDCProjectWizardIterator.TYPE_APP:
-                return new HelpCtx( "cdc.panelConfigureProject_APP" ); // NOI18N
-            case NewCDCProjectWizardIterator.TYPE_LIB:
-                return new HelpCtx( "cdc.panelConfigureProject_LIB" ); // NOI18N
-            case NewCDCProjectWizardIterator.TYPE_EXT:
-                return new HelpCtx( "cdc.panelConfigureProject_EXT" ); // NOI18N
-            case NewCDCProjectWizardIterator.TYPE_SAMPLE:
-                return new HelpCtx( "cdc.panelConfigureProject_SAMPLE" ); // NOI18N
-        }        
-        return new HelpCtx( PanelConfigureProject.class );
+        return new HelpCtx(CustomComponentWizardPanel.class);
     }
-    
+
     public boolean isValid() {
-        getComponent();
-        return component.valid( wizardDescriptor );
+        return myValid;
     }
     
-    private final Set<ChangeListener> listeners = new HashSet<ChangeListener>(1);
+    protected void setValid(boolean nueValid) {
+        if (nueValid != myValid) {
+            myValid = nueValid;
+            fireChangeEvent();
+        }
+    }
+
     public final void addChangeListener(ChangeListener l) {
-        synchronized (listeners) {
-            listeners.add(l);
+        synchronized (myListeners) {
+            myListeners.add(l);
         }
     }
+
     public final void removeChangeListener(ChangeListener l) {
-        synchronized (listeners) {
-            listeners.remove(l);
+        synchronized (myListeners) {
+            myListeners.remove(l);
         }
     }
+
     protected final void fireChangeEvent() {
-        Iterator<ChangeListener> it;
-        synchronized (listeners) {
-            it = new HashSet<ChangeListener>(listeners).iterator();
+        Set<ChangeListener> ls;
+        synchronized (myListeners) {
+            ls = new HashSet<ChangeListener>(myListeners);
         }
         ChangeEvent ev = new ChangeEvent(this);
-        while (it.hasNext()) {
-            it.next().stateChanged(ev);
+        for (ChangeListener l : ls) {
+            l.stateChanged(ev);
         }
     }
-    
+
     public void readSettings(Object settings) {
-        wizardDescriptor = (WizardDescriptor)settings;        
-        component.read (wizardDescriptor);
-        
-        // XXX hack, TemplateWizard in final setTemplateImpl() forces new wizard's title
-        // this name is used in NewProjectWizard to modify the title
+        wizardDescriptor = (WizardDescriptor) settings;
+        getComponent();
+        component.read(wizardDescriptor);
         Object substitute = ((JComponent)component).getClientProperty ("NewProjectWizard_Title"); // NOI18N
         if (substitute != null) {
             wizardDescriptor.putProperty ("NewProjectWizard_Title", substitute); // NOI18N
-        }
+        }                    
     }
-    
+
     public void storeSettings(Object settings) {
-        WizardDescriptor d = (WizardDescriptor)settings;
+        WizardDescriptor d = (WizardDescriptor) settings;
         component.store(d);
     }
 
-    public boolean isFinishPanel() {
-        return false;
+    public void validate() throws WizardValidationException {
+        getComponent();
+        component.validate(wizardDescriptor);
     }
     
-    public void validate () throws WizardValidationException {
-        getComponent ();
-        component.validate (wizardDescriptor);
-    }
-
+    private final Set<ChangeListener> myListeners 
+        = new HashSet<ChangeListener>(1); // or can use ChangeSupport in NB 6.0
+    private boolean myValid = true;
 }
