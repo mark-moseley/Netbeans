@@ -39,24 +39,23 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby.hints;
+package org.netbeans.modules.javascript.hints;
 
-import java.util.HashSet;
-import java.util.Set;
-import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
+import org.netbeans.modules.javascript.hints.infrastructure.JsAstRule;
 
 /**
  *
  * @author Tor Norbye
  */
-public class AttributeIsLocalTest extends HintTestBase {
-    
-    public AttributeIsLocalTest(String testName) {
+public class UnicodeConvertTest extends HintTestBase {
+    public UnicodeConvertTest(String testName) {
         super(testName);
     }
+    
+// var x = "x↔y"
 
-    private RubyAstRule createRule() {
-        return new AttributeIsLocal();
+    private JsAstRule createRule() {
+        return new UnicodeConvert();
     }
 
     public void testRegistered() throws Exception {
@@ -64,50 +63,10 @@ public class AttributeIsLocalTest extends HintTestBase {
     }
     
     public void testHint1() throws Exception {
-        checkHints(this, createRule(), "testfiles/localattributes.rb", null);
+        findHints(this, createRule(), "testfiles/unicode.js", null, null);
     }
 
-    public void testHint2() throws Exception {
-        checkHints(this, createRule(), "testfiles/localattributes2.rb", null);
-    }
-    
-    public void testNoPositives() throws Exception {
-        try {
-            parseErrorsOk = true;
-            Set<String> exceptions = new HashSet<String>();
-            
-            // Known exceptions
-            exceptions.add("options.rb");
-            exceptions.add("platform.rb");
-            exceptions.add("game.rb");
-            exceptions.add("routing.rb");
-            exceptions.add("mime_type.rb");
-            exceptions.add("datatypes.rb");
-            exceptions.add("qname.rb");
-            exceptions.add("cookie.rb");
-            exceptions.add("attribute.rb");
-            exceptions.add("element.rb");
-            exceptions.add("mimemessage.rb");
-            exceptions.add("logger.rb");
-            exceptions.add("extservm.rb");
-            exceptions.add("base.rb");
-            exceptions.add("httputils.rb");
-            exceptions.add("baseData.rb");
-            exceptions.add("form_helper.rb");
-            exceptions.add("url_helper_test.rb");
-            exceptions.add("migration.rb");
-            exceptions.add("route_set.rb");
-            exceptions.add("template_finder.rb");
-        
-            assertNoJRubyMatches(createRule(), exceptions);
-            
-        } finally {
-            parseErrorsOk = false;
-        }
-    }
-
-    public void testApplyFix() throws Exception {
-        String caretLine = "b^ar = value";
-        applyHint(this, createRule(),"testfiles/localattributes.rb", caretLine, "self.bar");
+    public void testFix1() throws Exception {
+        applyHint(this, createRule(), "testfiles/unicode.js", "x = \"x^", "Change");
     }
 }

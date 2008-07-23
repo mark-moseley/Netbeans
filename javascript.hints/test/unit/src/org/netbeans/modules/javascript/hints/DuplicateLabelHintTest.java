@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,36 +31,39 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- */
-
-package org.netbeans.modules.ruby.hints;
-
-import java.util.List;
-import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
-import org.openide.filesystems.FileObject;
-
-/**
  *
- * @author Tor Norbye
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-public class UnsafeIdentifierCharsTest extends HintTestBase {
+
+package org.netbeans.modules.javascript.hints;
+
+import org.netbeans.modules.javascript.hints.infrastructure.JsAstRule;
+
+public class DuplicateLabelHintTest extends HintTestBase {
     
-    public UnsafeIdentifierCharsTest(String testName) {
+    public DuplicateLabelHintTest(String testName) {
         super(testName);
-    }
-    
-    private RubyAstRule createRule() {
-        return new UnsafeIdentifierChars();
+    }            
+
+    private JsAstRule createRule() {
+        return new DuplicateLabelHint();
     }
 
     public void testRegistered() throws Exception {
         ensureRegistered(createRule());
     }
-
-    public void testUnsafeChars() throws Exception {
-        List<FileObject> files = getBigSourceFiles();
-        for (FileObject f : files) {
-            findHints(this, createRule(), f, null);
-        }
+    public void testHint1() throws Exception {
+        checkHints(this, createRule(), "testfiles/duplicatelabels.js", null);
     }
+
+    public void testLabels() throws Exception {
+        checkHints(this, createRule(), "testfiles/prototype.js", null);
+    }
+
+    public void testLabels2() throws Exception {
+        checkHints(this, createRule(), "testfiles/returns.js", null);
+    }
+
 }

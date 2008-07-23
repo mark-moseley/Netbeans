@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,6 +31,10 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.ruby.hints;
@@ -49,65 +47,47 @@ import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
  *
  * @author Tor Norbye
  */
-public class AttributeIsLocalTest extends HintTestBase {
+public class HashListConvertTest extends HintTestBase  {
     
-    public AttributeIsLocalTest(String testName) {
+    public HashListConvertTest(String testName) {
         super(testName);
-    }
+    }            
 
     private RubyAstRule createRule() {
-        return new AttributeIsLocal();
+        return new HashListConvert();
     }
 
     public void testRegistered() throws Exception {
         ensureRegistered(createRule());
     }
-    
-    public void testHint1() throws Exception {
-        checkHints(this, createRule(), "testfiles/localattributes.rb", null);
+
+    public void testHints1() throws Exception {
+        checkHints(this, createRule(), "testfiles/hashlist.rb", null);
     }
 
-    public void testHint2() throws Exception {
-        checkHints(this, createRule(), "testfiles/localattributes2.rb", null);
+    public void testFix1() throws Exception {
+        applyHint(this, createRule(), "testfiles/hashlist.rb",
+                "x = { \"a\",^ ", "Convert hash");
     }
-    
+
+    public void testFix2() throws Exception {
+        applyHint(this, createRule(), "testfiles/httpstatus.rb",
+                "100,^ 'Continue',", "Convert hash");
+    }
+
     public void testNoPositives() throws Exception {
         try {
             parseErrorsOk = true;
             Set<String> exceptions = new HashSet<String>();
             
             // Known exceptions
-            exceptions.add("options.rb");
-            exceptions.add("platform.rb");
-            exceptions.add("game.rb");
-            exceptions.add("routing.rb");
-            exceptions.add("mime_type.rb");
-            exceptions.add("datatypes.rb");
-            exceptions.add("qname.rb");
-            exceptions.add("cookie.rb");
-            exceptions.add("attribute.rb");
-            exceptions.add("element.rb");
-            exceptions.add("mimemessage.rb");
-            exceptions.add("logger.rb");
-            exceptions.add("extservm.rb");
-            exceptions.add("base.rb");
-            exceptions.add("httputils.rb");
-            exceptions.add("baseData.rb");
-            exceptions.add("form_helper.rb");
-            exceptions.add("url_helper_test.rb");
-            exceptions.add("migration.rb");
-            exceptions.add("route_set.rb");
-            exceptions.add("template_finder.rb");
+            exceptions.add("format.rb");
+            exceptions.add("httpstatus.rb");
         
             assertNoJRubyMatches(createRule(), exceptions);
             
         } finally {
             parseErrorsOk = false;
         }
-    }
-
-    public void testApplyFix() throws Exception {
-        String caretLine = "b^ar = value";
-        applyHint(this, createRule(),"testfiles/localattributes.rb", caretLine, "self.bar");
     }
 }
