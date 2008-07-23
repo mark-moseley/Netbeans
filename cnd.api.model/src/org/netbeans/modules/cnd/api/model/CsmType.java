@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.cnd.api.model;
 
+import java.util.List;
+
 /**
  * Represents type
  *
@@ -63,6 +65,11 @@ public interface CsmType extends CsmOffsetable {
     
     /** gets classifier this type references to */
     CsmClassifier getClassifier();
+    
+    CharSequence getClassifierText();
+    
+    boolean isInstantiation();
+    List<CsmType> getInstantiationParams();
     
     /** array depth, i.e. 2 for "int[][]", 1 for "int[]", 0 for "int" */
     int getArrayDepth();
@@ -89,6 +96,21 @@ public interface CsmType extends CsmOffsetable {
      */
     boolean isBuiltInBased(boolean resolveTypeChain);
     
+    /**
+     * Checks whether the type is based on a template parameter.
+     * (typedef chains should be resolved)
+     * For example, 3 types below are all template-based
+     * <code>
+     * template<class T> class TypedefTemplateClassPar {
+     *     typedef T traits_type;
+     *     typedef typename traits_type::char_type value_type;
+     *     value_type v;
+     *     //...
+     * };
+     * </code>
+     * @return
+     */
+    boolean isTemplateBased();
     /**
      * Returns a canonical representation of this type.
      * This canonical representation is used to form signatures
