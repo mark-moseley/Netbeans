@@ -185,7 +185,7 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
             } else {
                 if (!classNameEnc.equals(getName(newFile))) continue;
             }
-            if (className.equals(InstanceDataObject.Ser.getClassName(newFile))) {
+            if (className.equals(InstanceDataObject.Ser.getClassName(newFile, null))) {
                 return newFile;
             }
         }
@@ -584,6 +584,38 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
         return supe;
     }
 
+    @Override
+    void checkCookieSet(Class<?> clazz) {
+        if (getPrimaryFile().hasExt(XML_EXT)) {
+            // #24683 fix: do not return any cookie until the .settings file is written
+            // successfully; PROP_COOKIE is fired when cookies are available.
+            String filename = getPrimaryFile().getPath();
+            if (createdIDOs.contains(filename)) return;
+
+            Object res = getCookieFromEP(clazz);
+            if (res != null) {
+//                getCookieSet().assign(clazz, res);
+            }
+        }
+    }
+    
+    private Lookup lkp;
+    private static Object INIT_LOOKUP = new Object();
+    @Override
+    public Lookup getLookup() {
+        synchronized(INIT_LOOKUP) {
+            if (lkp != null) {
+                return lkp;
+            }
+            if (getPrimaryFile().hasExt(XML_EXT)) {
+                lkp = new ProxyLookup(getCookieSet().getLookup(), getCookiesLookup());
+            } else {
+                lkp = getCookieSet().getLookup();
+            }
+            return lkp;
+        }
+    }
+
     private Lookup.Result cookieResult = null;
     private Lookup.Result nodeResult = null;
     private Lookup cookiesLkp = null;
@@ -621,7 +653,7 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
         
         return cookiesLkp;        
     }
-
+    
     private void initNodeResult() {
         if (nodeResult != null && nodeLsnr != null) {
             nodeResult.removeLookupListener(nodeLsnr);
@@ -1108,11 +1140,11 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
             if (!fo.hasExt (INSTANCE)) {
                 return super.instanceName ();
             }
-            return getClassName(fo);
+            return getClassName(fo, this);
         }
 
         /** get class name from specified file object*/
-        private static String getClassName(FileObject fo) {
+        private static String getClassName(FileObject fo, Ser ser) {
             // first of all try "instanceClass" property of the primary file
             Object attr = fo.getAttribute (EA_INSTANCE_CLASS);
             if (attr instanceof String) {
@@ -1120,10 +1152,22 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
             } else if (attr != null) {
                 err.warning(
                     "instanceClass was a " + attr.getClass().getName()); // NOI18N
+                attr = null;
             }
 
-            attr = fo.getAttribute (EA_INSTANCE_CREATE);
+            if (fo.hasExt (INSTANCE)) {
+                attr = fo.getAttribute (EA_INSTANCE_CREATE);
+            }
             if (attr != null) {
+                // note we actually created instance, so let's remember it
+                // to prevent multiple creation
+                if (ser != null) {
+                    ser.saveTime = fo.lastModified ().getTime ();
+                    if (ser.saveTime < System.currentTimeMillis ()) {
+                        ser.saveTime = System.currentTimeMillis ();
+                    }
+                    ser.bean = new SoftReference<Object>(attr);
+                }
                 return attr.getClass().getName();
             }
 
