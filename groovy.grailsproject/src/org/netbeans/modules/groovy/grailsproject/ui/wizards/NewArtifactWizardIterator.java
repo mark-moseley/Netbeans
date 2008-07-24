@@ -34,6 +34,7 @@ import java.text.MessageFormat;
 import java.util.HashSet;
 import java.util.Set;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.extexecution.api.input.InputProcessor;
 import org.openide.WizardDescriptor;
 import javax.swing.JComponent;
 import org.openide.util.NbBundle;
@@ -44,8 +45,11 @@ import java.util.logging.Logger;
 import java.util.logging.Level;
 import org.netbeans.api.progress.ProgressHandle;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import org.netbeans.api.project.ProjectInformation;
-import org.netbeans.modules.extexecution.api.ExecutionDescriptorBuilder;
+import org.netbeans.modules.extexecution.api.ExecutionDescriptor.InputProcessorFactory;
+import org.netbeans.modules.extexecution.api.ExecutionDescriptor;
 import org.netbeans.modules.extexecution.api.ExecutionService;
 import org.netbeans.modules.extexecution.api.input.InputProcessors;
 import org.netbeans.modules.groovy.grails.api.ExecutionSupport;
@@ -54,7 +58,7 @@ import org.netbeans.modules.groovy.grails.api.GrailsRuntime;
 import org.netbeans.modules.groovy.grailsproject.GrailsProject;
 import org.netbeans.modules.groovy.grailsproject.SourceCategory;
 import org.netbeans.modules.groovy.grailsproject.actions.RefreshProjectRunnable;
-import org.openide.util.Task;
+import org.openide.util.Exceptions;
 
 
 /**
@@ -112,7 +116,7 @@ public class NewArtifactWizardIterator implements  WizardDescriptor.Instantiatin
         this.artifactName = artifactName;
     } 
        
-   public Set instantiate(ProgressHandle handle) throws IOException {
+   public Set instantiate(final ProgressHandle handle) throws IOException {
             Set<FileObject> resultSet = new HashSet<FileObject>();
             
             serverRunning = true;
@@ -125,14 +129,25 @@ public class NewArtifactWizardIterator implements  WizardDescriptor.Instantiatin
                 Callable<Process> callable = ExecutionSupport.getInstance().createSimpleCommand(
                         serverCommand, GrailsProjectConfig.forProject(project), pls.getDomainClassName());
 
-                ExecutionDescriptorBuilder builder = new ExecutionDescriptorBuilder();
-                builder.frontWindow(true).inputVisible(true);
-                builder.outProcessor(InputProcessors.bridge(new ProgressSnooper(handle, 100, 2)));
-                builder.postExecution(new RefreshProjectRunnable(project));
+                ExecutionDescriptor descriptor = new ExecutionDescriptor()
+                        .frontWindow(true).inputVisible(true);
+                descriptor = descriptor.outProcessorFactory(new InputProcessorFactory() {
+                    public InputProcessor newInputProcessor() {
+                        return InputProcessors.bridge(new ProgressSnooper(handle, 100, 2));
+                    }
+                });
+                descriptor = descriptor.postExecution(new RefreshProjectRunnable(project));
 
-                ExecutionService service = ExecutionService.newService(callable, builder.create(), displayName);
-                Task task = service.run();
-                task.waitFinished();
+                ExecutionService service = ExecutionService.newService(callable, descriptor, displayName);
+                Future<Integer> future = service.run();
+                try {
+                    // TODO handle return value
+                    future.get();
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException ex) {
+                    Exceptions.printStackTrace(ex.getCause());
+                }
             } finally {
                 handle.progress(100);
             }
@@ -167,7 +182,7 @@ public class NewArtifactWizardIterator implements  WizardDescriptor.Instantiatin
     
     public void initialize(WizardDescriptor wizard) {      
         if(!GrailsRuntime.getInstance().isConfigured()) {
-            wizard.putProperty("WizardPanel_errorMessage", 
+            wizard.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, 
                     NbBundle.getMessage(NewArtifactWizardIterator.class, 
                     "NewGrailsProjectWizardIterator.NoGrailsServerConfigured"));
             serverConfigured = false;
@@ -181,8 +196,8 @@ public class NewArtifactWizardIterator implements  WizardDescriptor.Instantiatin
         
         if (c instanceof JComponent) { // assume Swing components
             JComponent jc = (JComponent)c;
-            jc.putClientProperty("WizardPanel_contentSelectedIndex", Integer.valueOf(1)); // NOI18N
-            jc.putClientProperty("WizardPanel_contentData", new String[] { wizardTitle }  ); // NOI18N
+            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, Integer.valueOf(1)); // NOI18N
+            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, new String[] { wizardTitle }  ); // NOI18N
             }
         
     }
