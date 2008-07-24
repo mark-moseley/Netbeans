@@ -67,6 +67,7 @@ public class CompletionQuery extends AsyncCompletionQuery {
     /**
      *
      */
+    @Override
     protected void prepareQuery(JTextComponent component) {
         this.component = component;
     }
@@ -75,13 +76,19 @@ public class CompletionQuery extends AsyncCompletionQuery {
      *
      */
     protected void query(CompletionResultSet resultSet,
-            Document doc, int caretOffset) {                
+            Document doc, int caretOffset) {
+        
+        XMLSyntaxSupport support = ((XMLSyntaxSupport)((BaseDocument)doc).getSyntaxSupport());
+        if(support.noCompletion(component) || !CompletionUtil.canProvideCompletion((BaseDocument)doc)) {
+            resultSet.finish();
+            return;
+        }
+        
         List<CompletionResultItem> items = getCompletionItems(doc, caretOffset);
         if(items != null) resultSet.addAllItems(items);
         resultSet.finish();
     }
-    
-    
+        
     /**
      * This method is needed for unit testing purposes.
      */
@@ -93,7 +100,7 @@ public class CompletionQuery extends AsyncCompletionQuery {
         context = new CompletionContextImpl(primaryFile, support, caretOffset);
         
         //Step 2: Accumulate all models and initialize the context
-        if(!context.initModels() || !context.initContext()) {
+        if(!context.initContext() || !context.initModels() ) {
             return null;
         }
                 
@@ -103,12 +110,16 @@ public class CompletionQuery extends AsyncCompletionQuery {
                 completionItems = CompletionUtil.getElements(context);
                 break;
                 
+            case COMPLETION_TYPE_ELEMENT_VALUE:
+                completionItems = CompletionUtil.getElementValues(context);
+                break;            
+                
             case COMPLETION_TYPE_ATTRIBUTE:
                 completionItems = CompletionUtil.getAttributes(context);
                 break;
             
-            case COMPLETION_TYPE_VALUE:
-                completionItems = CompletionUtil.getElementValues(context);
+            case COMPLETION_TYPE_ATTRIBUTE_VALUE:
+                completionItems = CompletionUtil.getAttributeValues(context);
                 break;            
             
             case COMPLETION_TYPE_ENTITY:
