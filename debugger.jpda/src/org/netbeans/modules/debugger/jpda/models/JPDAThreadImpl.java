@@ -114,8 +114,6 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
     private int                 cachedFramesTo = -1;
     private final Object        cachedFramesLock = new Object();
     private JPDABreakpoint      currentBreakpoint;
-    private PropertyChangeListener threadsResumeListener;
-    private final Object        threadsResumeListenerLock = new Object();
     private String              threadName;
     private final Object        lockerThreadsLock = new Object();
     //private Map<JPDAThread, Variable> lockerThreads;
@@ -132,12 +130,12 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
         this.debugger = debugger;
         try {
             suspended = threadReference.isSuspended();
-        } catch (IllegalThreadStateException itsex) {
-            suspended = false;
-        }
-        try {
             suspendCount = threadReference.suspendCount();
         } catch (IllegalThreadStateException itsex) {
+            suspended = false;
+            suspendCount = 0;
+        } catch (ObjectCollectedException ex) {
+            suspended = false;
             suspendCount = 0;
         }
         try {
@@ -397,12 +395,6 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
      */
     public CallStackFrame[] getCallStack (int from, int to) 
     throws AbsentInformationException {
-        synchronized (threadsResumeListenerLock) {
-            if (threadsResumeListener == null) {
-                threadsResumeListener = new ThreadsResumeListener();
-                debugger.getThreadsCollector().addPropertyChangeListener(WeakListeners.propertyChange(threadsResumeListener, debugger.getThreadsCollector()));
-            }
-        }
         try {
             int max = threadReference.frameCount();
             from = Math.min(from, max);
@@ -1006,6 +998,8 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
                 Logger.getLogger(JPDAThreadImpl.class.getName()).log(Level.INFO, msg, ex);
             } catch (java.lang.NoSuchMethodException ex) {
                 org.openide.ErrorManager.getDefault().notify(ex);
+            } catch (IllegalThreadStateException ex) {
+                // Thrown when thread has exited
             }
         }
         return Collections.emptyList();
@@ -1246,16 +1240,12 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
         }
     }
 
-    private class ThreadsResumeListener implements PropertyChangeListener {
-
-        public void propertyChange(PropertyChangeEvent evt) {
-            if (ThreadsCollector.PROP_THREAD_RESUMED.equals(evt.getPropertyName())) {
-                // When ANY thread is resumed, stack frames become invalid!
-                cleanCachedFrames();
-            }
-        }
-        
+    @Override
+    public String toString() {
+        return "'"+getName()+"' ("+Integer.toHexString(System.identityHashCode(this))+") from DBG("+Integer.toHexString(debugger.hashCode())+")";
     }
+
+
 
     private static class ThreadListDelegate extends AbstractList<JPDAThread> {
 
