@@ -65,24 +65,24 @@ import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 
-/** * Transport Security Profile definition
+/**
+ * Transport Security Profile definition
  *
  * @author Martin Grebac
  */
-public class EndorsingCertificateProfile extends ProfileBase 
-        implements SecureConversationFeature,ClientDefaultsFeature,ServiceDefaultsFeature  {
-    private static final String CERTS_DIR = "certs";
+public class STSIssuedSupportingTokenProfile extends ProfileBase 
+        implements SecureConversationFeature,ClientDefaultsFeature,ServiceDefaultsFeature {
     
     public int getId() {
-        return 60;
+        return 120;
     }
 
     public String getDisplayName() {
-        return ComboConstants.PROF_ENDORSCERT;
+        return ComboConstants.PROF_STSISSUEDSUPPORTING;
     }
 
     public String getDescription() {
-        return ComboConstants.PROF_ENDORSCERT_INFO;
+        return ComboConstants.PROF_STSISSUEDSUPPORTING_INFO;
     }
     
     /**
@@ -99,7 +99,7 @@ public class EndorsingCertificateProfile extends ProfileBase
         
         model.addUndoableEditListener(undoCounter);
 
-        JPanel profConfigPanel = new EndorsingCertificate(component, this);
+        JPanel profConfigPanel = new STSIssuedSupportingToken(component, this);
         DialogDescriptor dlgDesc = new DialogDescriptor(profConfigPanel, getDisplayName());
         Dialog dlg = DialogDisplayer.getDefault().createDialog(dlgDesc);
 
@@ -117,36 +117,24 @@ public class EndorsingCertificateProfile extends ProfileBase
 
     public void setServiceDefaults(WSDLComponent component, Project p) {
         ProprietarySecurityPolicyModelHelper.clearValidators(component);
+//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
 //        if (Util.isTomcat(p)) {
-            String storeLoc = Util.getStoreLocation(p, false, false);
-            ProprietarySecurityPolicyModelHelper.setStoreLocation(component, storeLoc, false, false);
+            String kstoreLoc = Util.getStoreLocation(p, false, false);
+            ProprietarySecurityPolicyModelHelper.setStoreLocation(component, kstoreLoc, false, false);
             ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, false, false);
-            ProprietarySecurityPolicyModelHelper.setStorePassword(component, Util.getDefaultPassword(p), false, false);
+            ProprietarySecurityPolicyModelHelper.setStorePassword(component, KeystorePanel.DEFAULT_PASSWORD, false, false);
 //        }
-        ProprietarySecurityPolicyModelHelper.setKeyStoreAlias(component,ProfilesModelHelper.XWS_SECURITY_SERVER, false);
+        ProprietarySecurityPolicyModelHelper.setKeyStoreAlias(component, ProfilesModelHelper.XWS_SECURITY_SERVER, false);
     }
-    
-    public void setClientDefaults(WSDLComponent component, WSDLComponent c, Project p) {
+
+    public void setClientDefaults(WSDLComponent component, WSDLComponent securityBinding, Project p) {
+        ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, true);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, true);
-        ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);        
-//        if (Util.isTomcat(p)) {
-            String kstoreLoc = Util.getStoreLocation(p, false, true);
-            ProprietarySecurityPolicyModelHelper.setStoreLocation(component, kstoreLoc, false, true);
-            ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, false, true);
-            ProprietarySecurityPolicyModelHelper.setStorePassword(component, Util.getDefaultPassword(p), false, true);
-
-            String tstoreLoc = Util.getStoreLocation(p, true, true);
-            ProprietarySecurityPolicyModelHelper.setStoreLocation(component, tstoreLoc, true, true);
-            ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, true, true);
-            ProprietarySecurityPolicyModelHelper.setStorePassword(component, Util.getDefaultPassword(p), true, true);
-//        }
-        ProprietarySecurityPolicyModelHelper.setKeyStoreAlias(component,ProfilesModelHelper.XWS_SECURITY_CLIENT, true);
-        ProprietarySecurityPolicyModelHelper.setTrustPeerAlias(component,ProfilesModelHelper.XWS_SECURITY_SERVER, true);
     }
- 
+    
     public boolean isServiceDefaultSetupUsed(WSDLComponent component, Project p) {
         if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String keyAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
@@ -161,37 +149,19 @@ public class EndorsingCertificateProfile extends ProfileBase
                         return true;
                 }
             }
-      }
+        }
         return false;
     }
 
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
         if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
-        String keyAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
-        String trustAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, true);
-        String trustLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, true);
-        String keyLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, false);
-        String keyPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, false);
-        String trustPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, true);
-        if (ProfilesModelHelper.XWS_SECURITY_CLIENT.equals(keyAlias) &&
-            ProfilesModelHelper.XWS_SECURITY_SERVER.equals(trustAlias)) {
-                String defPassword = Util.getDefaultPassword(p);
-                String defKeyLocation = Util.getStoreLocation(p, false, true);
-                String defTrustLocation = Util.getStoreLocation(p, true, true);
-                if ((defPassword != null) && (defKeyLocation != null) && (defTrustLocation != null)) {
-                    if ((defPassword.equals(keyPasswd)) && defPassword.equals(trustPasswd) &&
-                        (defKeyLocation.equals(keyLoc)) && (defTrustLocation.equals(trustLoc))) {
-                            return true;
-                    }
-                }
-        }
         return false;
     }
-
+    
     public boolean isSecureConversation(WSDLComponent component) {
         WSDLComponent topSecBinding = SecurityPolicyModelHelper.getSecurityBindingTypeElement(component);
         WSDLComponent protTokenKind = SecurityTokensModelHelper.getTokenElement(topSecBinding, ProtectionToken.class);
-        WSDLComponent protToken = SecurityTokensModelHelper.getTokenTypeElement(protTokenKind);
+        WSDLComponent protToken = SecurityTokensModelHelper.getTokenTypeElement(protTokenKind);        
         return (protToken instanceof SecureConversationToken);
     }
 
