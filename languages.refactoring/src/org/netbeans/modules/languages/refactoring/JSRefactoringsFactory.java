@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.languages.features.refactoring;
+package org.netbeans.modules.languages.refactoring;
 
 import java.io.IOException;
 import java.text.MessageFormat;
@@ -55,10 +55,9 @@ import org.netbeans.api.languages.ASTPath;
 import org.netbeans.api.languages.database.DatabaseContext;
 import org.netbeans.api.languages.database.DatabaseDefinition;
 import org.netbeans.api.languages.database.DatabaseItem;
+import org.netbeans.api.languages.database.DatabaseManager;
 import org.netbeans.api.languages.database.DatabaseUsage;
 import org.netbeans.modules.editor.NbEditorUtilities;
-import org.netbeans.modules.languages.features.DatabaseManager;
-import org.netbeans.modules.languages.features.DatabaseManager;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.api.RenameRefactoring;
@@ -274,9 +273,9 @@ public class JSRefactoringsFactory implements RefactoringPluginFactory {
         
         public Problem checkParameters() {
             String newName = refactoring.getNewName();
-            String oldName = item instanceof DatabaseDefinition ?
-                ((DatabaseDefinition) item).getName() :
-                ((DatabaseUsage) item).getName();
+            DatabaseDefinition def = item instanceof DatabaseDefinition ?
+                (DatabaseDefinition) item : ((DatabaseUsage)item).getDefinition();
+            String oldName = def.getName();
             if (newName.equals(oldName)) {
                 return new Problem(true, getString("LBL_NameNotChanged"));
             }
@@ -292,6 +291,28 @@ public class JSRefactoringsFactory implements RefactoringPluginFactory {
                     );
                     return new Problem(true, msg);
                 }
+            }
+            Lookup lookup = refactoring.getRefactoringSource();
+            ASTPath path = (ASTPath)lookup.lookup(ASTPath.class);
+            document = (StyledDocument)lookup.lookup(StyledDocument.class);
+            dataObject = NbEditorUtilities.getDataObject(document);
+            DatabaseContext rootCtx = DatabaseManager.getRoot((ASTNode) path.getRoot());
+            DatabaseContext dbCtx = rootCtx.getClosestContext(def.getOffset());
+            DatabaseDefinition origDef = dbCtx != null ? dbCtx.getDefinition(newName, dbCtx.getOffset()) : null;
+            if (origDef != null) {
+                String itemKind = origDef.getType();
+                String itemKindName = getString("LBL_Field");
+                if ("parameter".equals(itemKind)) {
+                    itemKindName = getString("LBL_Parameter");
+                } else if ("method".equals(itemKind)) {
+                    itemKindName = getString("LBL_Method");
+                } else if ("local".equals(itemKind)) {
+                    itemKindName = getString("LBL_Variable");
+                }
+                String msg = new MessageFormat(NbBundle.getMessage(RenameRefactoringUI.class, "LBL_NameAlreadyUsed")).format (
+                    new Object[] {itemKindName, newName}
+                );
+                return new Problem(false, msg);
             }
             return null;
         }
