@@ -8,18 +8,13 @@
 package ${package};
 
 </#if>
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.UriInfo;
-
 /**
- * REST Web Service
+ * ${name} Service
  *
  * @author ${user}
  */
 
 public class ${name} {
-    @Context
-    private UriInfo context;
 
     /** Creates a new instance of ${name} */
     public ${name}() {

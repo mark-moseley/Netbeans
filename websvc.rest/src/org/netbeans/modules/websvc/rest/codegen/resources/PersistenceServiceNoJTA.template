@@ -11,7 +11,9 @@ package ${package};
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.persistence.EntityManager;
-import javax.transaction.UserTransaction;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
+import javax.persistence.EntityTransaction;
 
 /**
  * Utility class for dealing with persistence.
@@ -20,25 +22,31 @@ import javax.transaction.UserTransaction;
  */
 public class PersistenceService {
     private static String DEFAULT_PU = "RESTDBApp5PU";
-  
+    
+    private static EntityManagerFactory pmf;
+    
+    static {
+        try {
+            pmf = (EntityManagerFactory) new InitialContext().lookup("java:comp/env/persistence/" + DEFAULT_PU);
+        } catch (NamingException ex) {
+            pmf = Persistence.createEntityManagerFactory(DEFAULT_PU);
+        }  
+    }
+    
     private static ThreadLocal<PersistenceService> instance = new ThreadLocal<PersistenceService>() {
         @Override
         protected PersistenceService initialValue() {
             return new PersistenceService();
         }
     };
-    
+   
     private EntityManager em;
 
-    private UserTransaction utx;
+    private EntityTransaction utx;
     
     private PersistenceService() { 
-        try {
-            this.em = (EntityManager) new InitialContext().lookup("java:comp/env/persistence/" + DEFAULT_PU);
-            this.utx = (UserTransaction) new InitialContext().lookup("java:comp/UserTransaction");
-        } catch (NamingException ex) {
-            throw new RuntimeException(ex);
-        }
+        this.em = pmf.createEntityManager();
+        this.utx = em.getTransaction();
     }
 
     /**
@@ -50,11 +58,10 @@ public class PersistenceService {
         return instance.get();
     }
     
-
     private static void removeInstance() {
         instance.remove();
     }
-
+    
     /**
      * Returns an instance of EntityManager.
      *
@@ -70,7 +77,6 @@ public class PersistenceService {
     public void beginTx() {
         try {
             utx.begin();
-            em.joinTransaction();
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
@@ -102,6 +108,10 @@ public class PersistenceService {
      * Closes this instance.
      */
     public void close() {
+        if (em != null && em.isOpen()) {
+            em.close();
+        }
+        
         removeInstance();
     }
 }
