@@ -190,6 +190,10 @@ table.components_table .left_border {
     border-left:        1px solid #D5D5D5;
 }
 
+table.components_table .right_border {
+    border-right:       1px solid #D5D5D5;
+}
+
 table.components_table .bottom_border {
     border-bottom:      1px solid #D5D5D5;
 }
@@ -283,4 +287,8 @@ table.components_table .title {
      padding: 4px 5px 10px 10px;
      margin-right: 25px;
      background-color:#E6F6FE;
+}
+
+.download_tab_active {
+     color: #999999;
 }
