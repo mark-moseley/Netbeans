@@ -1,4 +1,4 @@
-    /*
+/*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
@@ -37,66 +37,94 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.metadata.model.jdbc.mssql;
+package org.netbeans.modules.db.metadata.model.jdbc.oracle;
 
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.modules.db.metadata.model.MetadataUtilities;
 import org.netbeans.modules.db.metadata.model.api.MetadataException;
-import org.netbeans.modules.db.metadata.model.api.Schema;
+import org.netbeans.modules.db.metadata.model.api.Table;
 import org.netbeans.modules.db.metadata.model.jdbc.JDBCCatalog;
+import org.netbeans.modules.db.metadata.model.jdbc.JDBCSchema;
 import org.netbeans.modules.db.metadata.model.spi.MetadataFactory;
 
 /**
  *
  * @author Andrei Badea
  */
-public class MSSQLCatalog extends JDBCCatalog {
+public class OracleSchema extends JDBCSchema {
 
-    private static final Logger LOGGER = Logger.getLogger(MSSQLCatalog.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(OracleSchema.class.getName());
 
-    public MSSQLCatalog(MSSQLMetadata metadata, String name, boolean _default, String defaultSchemaName) {
-        super(metadata, name, _default, defaultSchemaName);
+    public OracleSchema(JDBCCatalog catalog, String name, boolean _default, boolean synthetic) {
+        super(catalog, name, _default, synthetic);
     }
 
     @Override
     public String toString() {
-        return "MSSQLCatalog[name='" + getName() + "']"; // NOI18N
+        return "OracleSchema[name='" + name + "',default=" + _default + ",synthetic=" + synthetic + "]"; // NOI18N
     }
 
     @Override
-    protected void createSchemas() {
-        Map<String, Schema> newSchemas = new LinkedHashMap<String, Schema>();
+    protected void createTables() {
+        LOGGER.log(Level.FINE, "Initializing tables in {0}", this);
+        Map<String, Table> newTables = new LinkedHashMap<String, Table>();
         try {
-            ResultSet rs = getMetadata().getDmd().getSchemas();
+            DatabaseMetaData dmd = catalog.getMetadata().getDmd();
+            Set<String> recycleBinTables = getRecycleBinTables(dmd);
+            ResultSet rs = dmd.getTables(catalog.getName(), name, "%", new String[] { "TABLE" }); // NOI18N
             try {
                 while (rs.next()) {
-                    String schemaName = rs.getString("TABLE_SCHEM"); // NOI18N
-                    // #141598: the MS SQL 2005 and jTDS drivers return null for the catalog name, and they
-                    // only return the schemas in the default catalog.
-                    LOGGER.log(Level.FINE, "Read schema ''{0}''", schemaName);
-                    if (defaultSchemaName != null && MetadataUtilities.equals(schemaName, defaultSchemaName)) {
-                        defaultSchema = MetadataFactory.createSchema(createSchema(defaultSchemaName, true, false));
-                        newSchemas.put(defaultSchema.getName(), defaultSchema);
-                        LOGGER.log(Level.FINE, "Created default schema {0}", defaultSchema);
+                    String tableName = rs.getString("TABLE_NAME"); // NOI18N
+                    if (!recycleBinTables.contains(tableName)) {
+                        Table table = MetadataFactory.createTable(createTable(tableName));
+                        newTables.put(tableName, table);
+                        LOGGER.log(Level.FINE, "Created table {0}", table);
                     } else {
-                        Schema schema = MetadataFactory.createSchema(createSchema(schemaName, false, false));
-                        newSchemas.put(schemaName, schema);
-                        LOGGER.log(Level.FINE, "Created schema {0}", schema);
+                        LOGGER.log(Level.FINE, "Ignoring recycle bin table ''{0}''", tableName);
                     }
                 }
             } finally {
                 rs.close();
             }
-            // Schemas always supported, so no need to try to create a fallback default schema.
         } catch (SQLException e) {
             throw new MetadataException(e);
         }
-        schemas = Collections.unmodifiableMap(newSchemas);
+        tables = Collections.unmodifiableMap(newTables);
+    }
+
+    private Set<String> getRecycleBinTables(DatabaseMetaData dmd) {
+        try {
+            if (dmd.getDatabaseMajorVersion() < 10) {
+                return Collections.emptySet();
+            }
+            Set<String> result = new HashSet<String>();
+            Statement stmt = dmd.getConnection().createStatement();
+            try {
+                ResultSet rs = stmt.executeQuery("SELECT OBJECT_NAME FROM RECYCLEBIN WHERE TYPE = 'TABLE'"); // NOI18N
+                try {
+                    while (rs.next()) {
+                        result.add(rs.getString("OBJECT_NAME")); // NOI18N
+                    }
+                } finally {
+                    rs.close();
+                }
+            } finally {
+                stmt.close();
+            }
+            return result;
+        } catch (SQLException e) {
+            LOGGER.log(Level.INFO, "Error while analyzing the recycle bin", e);
+            return Collections.emptySet();
+        }
     }
 }
