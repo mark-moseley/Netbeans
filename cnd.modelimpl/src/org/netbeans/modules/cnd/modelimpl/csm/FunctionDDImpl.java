@@ -43,7 +43,6 @@ package org.netbeans.modules.cnd.modelimpl.csm;
 
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.deep.CsmCompoundStatement;
-import java.util.List;
 import antlr.collections.AST;
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -51,6 +50,7 @@ import java.io.IOException;
 import java.util.Collection;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
+import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 
 /**
  * Implements both CsmFunction and CsmFunctionDefinition -
@@ -61,10 +61,16 @@ public class FunctionDDImpl<T> extends FunctionImpl<T> implements CsmFunctionDef
     
     private final CsmCompoundStatement body;
 
-    public FunctionDDImpl(AST ast, CsmFile file, CsmScope scope) {
+    public FunctionDDImpl(AST ast, CsmFile file, CsmScope scope) throws AstRendererException {
         super(ast, file, scope, false);
         body = AstRenderer.findCompoundStatement(ast, getContainingFile(), this);
-        assert body != null : "null body in function definition, line " + getStartPosition().getLine() + ":" + file.getAbsolutePath();
+        boolean assertionCondition = body != null;
+        if (!assertionCondition) {
+            RepositoryUtils.hang(this);
+            throw new AstRendererException((FileImpl)file, getStartOffset(),
+                    "Null body in function definition."); // NOI18N
+            //assert assertionCondition : "null body in function definition, line " + getStartPosition().getLine() + ":" + file.getAbsolutePath();
+        }
         registerInProject();
     }
 
@@ -74,6 +80,15 @@ public class FunctionDDImpl<T> extends FunctionImpl<T> implements CsmFunctionDef
     }
 
     public CsmFunction getDeclaration() {
+        if( isCStyleStatic() ) {
+            CharSequence name = getName();
+            for( CsmFunction fun : ((FileImpl) getContainingFile()).getStaticFunctionDeclarations() ) {
+                if( name.equals(fun.getName()) ) {
+                    return fun;
+                }
+            }
+            return this;
+        }
         String uname = Utils.getCsmDeclarationKindkey(CsmDeclaration.Kind.FUNCTION) + UNIQUE_NAME_SEPARATOR + getUniqueNameWithoutPrefix();
         CsmProject prj = getContainingFile().getProject();
         CsmDeclaration decl = findDeclaration(prj, uname);
@@ -88,7 +103,11 @@ public class FunctionDDImpl<T> extends FunctionImpl<T> implements CsmFunctionDef
         }
         return this;
     }
-    
+
+    public boolean isPureDefinition() {
+        return false;
+    }
+
     private CsmFunction findDeclaration(CsmProject prj, String uname){
         CsmDeclaration decl = prj.findDeclaration(uname);
         if( decl != null && decl.getKind() == CsmDeclaration.Kind.FUNCTION ) {
