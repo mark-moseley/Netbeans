@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,6 +41,9 @@
 
 package org.netbeans.modules.properties;
 
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
+import java.net.URL;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -53,10 +56,16 @@ import java.nio.charset.CoderResult;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.spi.queries.FileEncodingQueryImplementation;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import static java.lang.Math.min;
 import static java.nio.charset.CoderResult.OVERFLOW;
 import static java.nio.charset.CoderResult.UNDERFLOW;
+import org.openide.filesystems.FileRenameEvent;
+import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.URLMapper;
 
 /**
  *
@@ -72,40 +81,96 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
      * - allow decoding of supplementary characters (?)
      */
     
-    private final Charset encoding;
-    
-    /** Creates a new instance of PropertiesEncoding */
-    public PropertiesEncoding() {
-        encoding = new PropCharset();
-    }
-    
     public Charset getEncoding(FileObject file) {
-        return encoding;
-    }
-    
-    Charset getEncoding() {
-        return encoding;
+        assert !file.isValid() || file.isData();
+        try {
+            return new PropCharset(file);
+        } catch (FileStateInvalidException ex) {
+            return null;
+        }
     }
     
     /**
      *
      */
-    static final class PropCharset extends Charset {
+    static final class PropCharset extends Charset implements FileChangeListener {
+
+        private final Reference<FileObject> fileRef;
+        private URL fileURL;
         
-        PropCharset() {
+        PropCharset(FileObject file) throws FileStateInvalidException {
             super("resource_bundle_charset", null);                     //NOI18N
+            fileRef = new WeakReference<FileObject>(file);
+            file.addFileChangeListener(this);
+            updateURL(file);
+        }
+
+        private PropCharset() {
+            super("resource_bundle_charset", null);                     //NOI18N
+            fileRef = null;
         }
 
         public boolean contains(Charset charset) {
             return true;
         }
 
-        public PropCharsetEncoder newEncoder() {
+        public CharsetEncoder newEncoder() {
             return new PropCharsetEncoder(this);
         }
         
-        public PropCharsetDecoder newDecoder() {
-            return new PropCharsetDecoder(this);
+        public CharsetDecoder newDecoder() {
+            long fileSize = (fileRef != null) ? getFileSize() : -1;
+            return (fileSize > 0l) ? new PropCharsetDecoder(this, fileSize)
+                                   : new PropCharsetDecoder(this);
+        }
+
+        private long getFileSize() {
+            FileObject file = getFile();
+            return ((file != null) && file.isValid()) ? file.getSize() : 0l;
+        }
+
+        private FileObject getFile() {
+            FileObject fileObj = fileRef.get();
+
+            URL url;
+            synchronized (this) {
+                url = fileURL;
+            }
+
+            if ((fileObj == null) && (url != null)) {
+                fileObj = URLMapper.findFileObject(url);
+            }
+            return fileObj;
+        }
+
+        public void fileRenamed(FileRenameEvent fe) {
+            updateURL(fe.getFile());
+        }
+
+        public void fileChanged(FileEvent fe) {
+            updateURL(fe.getFile());
+        }
+
+        private synchronized void updateURL(FileObject file) {
+            try {
+                fileURL = file.getURL();
+            } catch (FileStateInvalidException ex) {
+                fileURL = null;
+            }
+        }
+
+        public void fileDeleted(FileEvent fe) { }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) { }
+
+        public void fileDataCreated(FileEvent fe) {
+            /* this should be never called on plain files (non-directories) */
+            assert false;
+        }
+
+        public void fileFolderCreated(FileEvent fe) {
+            /* this should be never called on plain files (non-directories) */
+            assert false;
         }
 
     }
@@ -133,6 +198,10 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         
         PropCharsetEncoder(Charset charset) {
             super(charset, avgEncodedTokenLen, maxEncodedTokenLen);
+        }
+
+        PropCharsetEncoder() {
+            super(new PropCharset(), avgEncodedTokenLen, maxEncodedTokenLen);
         }
         
         {
@@ -372,6 +441,13 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         
         private static final int inBufSize = 8192;
         private static final int outBufSize = inBufSize;
+
+        /** */
+        private static final int SIZE_UNKNOWN = -1;
+        /** size of the input file, or {@link #SIZE_UNKNOWN} if unknown */
+        private long inputSize;
+        /** number of input bytes decoded so far */
+        private int bytesDecoded = 0;
         
         private final byte[] inBuf = new byte[inBufSize];
         private final char[] outBuf = new char[outBufSize];
@@ -390,7 +466,12 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         private char[] unicodeValueChars = new char[4];
         
         PropCharsetDecoder(Charset charset) {
+            this(charset, SIZE_UNKNOWN);
+        }
+        
+        PropCharsetDecoder(Charset charset, long inputSize) {
             super(charset, avgCharsPerByte, maxCharsPerByte);
+            this.inputSize = inputSize;
         }
         
         {
@@ -401,6 +482,9 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         protected void implReset() {
             log.finer("");
             log.finer("implReset() called");
+
+            inputSize = SIZE_UNKNOWN;
+            bytesDecoded = 0;
             
             inBufPos = 0;
             outBufPos = 0;
@@ -430,20 +514,22 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
                 for (;;) {
                     readIn(in);
                     for (;;) {
-                        CoderResult coderResult = decodeBuf();
-                        if (coderResult != null) {
-                            return coderResult;
-                        }
+                        bytesDecoded += decodeBuf();
+
+                        // assert: if (bytesDecoded == inputSize) then (emptyIn)
+                        assert (bytesDecoded != inputSize) || emptyIn;
+
                         if (emptyInBuf && !emptyIn) {
                             continue readInLoop;
-                        } else if (emptyIn && hasPendingCharacters()) {
+                        } else if (emptyIn && hasPendingCharacters()
+                                   && ((inputSize == SIZE_UNKNOWN) || (bytesDecoded >= inputSize))) {
                             handlePendingCharacters();
                         }
                         flushOutBuf(out);
                         if (fullOut) {
                             log.finest(" - returning OVERFLOW");
                             return OVERFLOW;
-                        } else if (emptyInBuf && emptyIn && !hasPendingCharacters()) {
+                        } else if (emptyInBuf && emptyIn) {
                             log.finest(" - returning UNDERFLOW");
                             return UNDERFLOW;
                         }
@@ -560,15 +646,16 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
         
         /**
          * Encodes as many chars from the internal input buffer as possible.
+         * 
+         * @return  number of bytes decoded
          */
-        private CoderResult decodeBuf() {
+        private int decodeBuf() {
             log.finer("decoding inBuf, writing to outBuf");
             if (emptyInBuf) {
                 log.finer(" - inBuf is empty - nothing to decode");
-                return null;
+                return 0;
             }
             
-            CoderResult result = null;
             int decodingInBufPos = 0;
             log.finest(" - decoding bytes:");
             log.finest("     - initial state: " + state);
@@ -606,7 +693,7 @@ final class PropertiesEncoding extends FileEncodingQueryImplementation {
             }
             inBufPos = remainder;
             emptyInBuf = (inBufPos == 0);
-            return result;
+            return decodingInBufPos;
         }
         
         /**
