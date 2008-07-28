@@ -34,7 +34,7 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.nbbuild.extlibs;
@@ -48,13 +48,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Task;
-import org.apache.tools.ant.taskdefs.ExecTask;
+import org.netbeans.nbbuild.HgExec;
 
 /**
  * Registers external.py as a Mercurial encode/decode hook, if appropriate.
@@ -84,8 +86,11 @@ public class RegisterExternalHook extends Task {
             log(root + " is not a Mercurial repository", Project.MSG_VERBOSE);
             return;
         }
+        List<String> hgExecutable = HgExec.hgExecutable();
         try {
-            Process p = new ProcessBuilder("hg", "showconfig").start();
+            List<String> commandAndArgs = new ArrayList<String>(hgExecutable);
+            commandAndArgs.add("showconfig");
+            Process p = new ProcessBuilder(commandAndArgs).directory(root).start();
             BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
             String line;
             while ((line = r.readLine()) != null) {
@@ -135,7 +140,7 @@ public class RegisterExternalHook extends Task {
                 }
                 if (Pattern.compile("(?m)^external *=").matcher(config).find()) {
                     log("Hook already registered in " + hgrc + " in wrong location, correcting...", Project.MSG_WARN);
-                    config = config.replaceFirst("(?m)^external *=.*$", "external = " + hook);
+                    config = config.replaceFirst("(?m)^external *=.*$", "external = " + hook.toString().replaceAll("\\\\", "\\\\\\\\"));
                 } else {
                     log("Registering hook in " + hgrc);
                     String nl = System.getProperty("line.separator");
@@ -152,6 +157,7 @@ public class RegisterExternalHook extends Task {
                     }
                     config += "[decode]" + nl + BINARIES + " = download: http://hg.netbeans.org/binaries/" + nl;
                 }
+                // XXX should also register hooks.pretxncommit.crlf=python:hgext.win32text.forbidcrlf (for Hg 1.0+ only)
                 OutputStream os = new FileOutputStream(hgrc);
                 try {
                     os.write(config.getBytes());
@@ -163,7 +169,10 @@ public class RegisterExternalHook extends Task {
             }
             try {
                 log("Looking for external binaries in " + repo + " which need to be checked out again using decoder");
-                Process p = new ProcessBuilder("hg", "locate", BINARIES).directory(repo).start();
+                List<String> commandAndArgs = new ArrayList<String>(hgExecutable);
+                commandAndArgs.add("locate");
+                commandAndArgs.add(BINARIES);
+                Process p = new ProcessBuilder(commandAndArgs).directory(repo).start();
                 BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
                 boolean doCheckout = false;
                 String binary;
@@ -195,10 +204,10 @@ public class RegisterExternalHook extends Task {
                 if (doCheckout) {
                     log("Will check out external binaries fresh");
                     log("(This could take a while as binaries are downloaded into your cache.)");
-                    ExecTask x = (ExecTask) getProject().createTask("exec");
+                    HgExec x = new HgExec();
                     x.setProject(getProject());
-                    x.setExecutable("hg");
                     x.createArg().setValue("checkout");
+                    x.createArg().setValue(".");
                     x.setDir(repo);
                     x.setFailonerror(true);
                     x.init();
@@ -245,7 +254,7 @@ begin
 <title>Uploaded #{name}</title>
 </head>
 <body>
-<p>Uploaded. Add to your manifest:</p>
+<p>Uploaded as:</p>
 <pre>#{sha1} #{name}</pre>
 </body>
 </html>
