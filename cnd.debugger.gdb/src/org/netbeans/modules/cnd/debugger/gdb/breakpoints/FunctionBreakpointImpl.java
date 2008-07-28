@@ -51,41 +51,14 @@ import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
  */
 public class FunctionBreakpointImpl extends BreakpointImpl {
     
-    private FunctionBreakpoint  breakpoint;
-    private FunctionBreakpoint  latestBreakpoint = null;
-    private String              functionName;
-    private BreakpointsReader   reader;
-    
-    
     public FunctionBreakpointImpl(FunctionBreakpoint breakpoint, BreakpointsReader reader,
             GdbDebugger debugger, Session session) {
         super(breakpoint, reader, debugger, session);
-        this.reader = reader;
-        this.breakpoint = breakpoint;
-        functionName = breakpoint.getFunctionName();
         set();
     }
-    
-    protected void setRequests() {
-        if (getDebugger().getState().equals(GdbDebugger.STATE_RUNNING)) {
-            getDebugger().setSilentStop();
-        }
-        if (getState().equals(BPSTATE_UNVALIDATED)) {
-            setState(BPSTATE_VALIDATION_PENDING);
-            functionName = breakpoint.getFunctionName();
-            int token = getDebugger().getGdbProxy().break_insert(functionName);
-            getDebugger().addPendingBreakpoint(token, this);
-        } else {
-            if (getState().equals(BPSTATE_DELETION_PENDING)) {
-                getDebugger().getGdbProxy().break_delete(getBreakpointNumber());
-	    } else if (getState().equals(BPSTATE_VALIDATED)) {
-                if (breakpoint.isEnabled()) {
-                    getDebugger().getGdbProxy().break_enable(getBreakpointNumber());
-                } else {
-                    getDebugger().getGdbProxy().break_disable(getBreakpointNumber());
-                }
-            }
-        }
+
+    @Override
+    protected String getBreakpointCommand() {
+        return ((FunctionBreakpoint)getBreakpoint()).getFunctionName();
     }
 }
-
