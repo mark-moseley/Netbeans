@@ -47,16 +47,22 @@ import java.io.File;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
+import org.netbeans.modules.cnd.api.remote.InteractiveCommandProvider;
+import org.netbeans.modules.cnd.api.utils.Path;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.modules.cnd.settings.CppSettings;
+import org.netbeans.modules.cnd.debugger.gdb.utils.CommandBuffer;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
+import org.openide.util.Lookup;
 
 /**
  * Class GdbProxyEngine implements the communication with gdb (low level)
@@ -78,6 +84,9 @@ public class GdbProxyEngine {
     private int nextToken = MIN_TOKEN;
     private int currentToken = MIN_TOKEN;
     private boolean active;
+    private InteractiveCommandProvider provider = null;
+    private RequestProcessor.Task gdbReader = null;
+    private boolean timerOn = Boolean.getBoolean("gdb.proxy.timer"); // NOI18N
     
     private Logger log = Logger.getLogger("gdb.gdbproxy.logger"); // NOI18N
     
@@ -89,10 +98,11 @@ public class GdbProxyEngine {
      * @param workingDirectory - a directory where the debugger should run
      * @param stepIntoProject - a flag to stop at first source line
      */
-    public GdbProxyEngine(GdbDebugger debugger, GdbProxy gdbProxy, List debuggerCommand,
-                    String[] debuggerEnvironment, String workingDirectory, String termpath) throws IOException {
+    public GdbProxyEngine(GdbDebugger debugger, GdbProxy gdbProxy, List<String> debuggerCommand,
+                    String[] debuggerEnvironment, String workingDirectory, String termpath,
+                    String cspath) throws IOException {
         
-        if (Utilities.isUnix() && termpath != null) {
+        if (debugger.getPlatform() != PlatformTypes.PLATFORM_WINDOWS && termpath != null) {
             ExternalTerminal eterm = new ExternalTerminal(debugger, termpath, debuggerEnvironment);
             String tty = eterm.getTty();
             if (tty != null) {
@@ -104,7 +114,6 @@ public class GdbProxyEngine {
         this.gdbProxy = gdbProxy;
         tokenList = new LinkedList<CommandInfo>();
         active = true;
-        ProcessBuilder pb = new ProcessBuilder(debuggerCommand);
         
         getLogger().logMessage("Debugger Command: " + debuggerCommand); // NOI18N
         getLogger().logMessage("Env[" + debuggerEnvironment.length + "]: " + // NOI18N
@@ -112,42 +121,40 @@ public class GdbProxyEngine {
         getLogger().logMessage("workingDirectory: " + workingDirectory); // NOI18N
         getLogger().logMessage("================================================"); // NOI18N
         
+        if (debugger.getHostKey().equals(CompilerSetManager.LOCALHOST)) {
+            localDebugger(debuggerCommand, debuggerEnvironment, workingDirectory, cspath);
+        } else {
+            remoteDebugger(debugger, debuggerCommand, debuggerEnvironment, workingDirectory, cspath);
+        }
+    }
+    
+    private void localDebugger(List<String> debuggerCommand, String[] debuggerEnvironment, String workingDirectory, String cspath) throws IOException {
+        ProcessBuilder pb = new ProcessBuilder(debuggerCommand);
         Map<String, String> env = pb.environment();
         Process proc = null;
         
+        String pathname = Path.getPathName();
         for (String var : debuggerEnvironment) {
             String key, value;
             int idx = var.indexOf('=');
             if (idx != -1) {
                 key = var.substring(0, idx);
                 value = var.substring(idx + 1);
-                env.put(key, value);
+                if (key.equals(pathname)) {
+                    env.put(key, value + File.pathSeparator + cspath);
+                } else {
+                    env.put(key, value);
+                }
             }
         }
-        env.put("PATH", CppSettings.getDefault().getPath()); // NOI18N
+        if (!env.containsKey(pathname)) {
+            env.put(pathname, Path.getPathAsString() + File.pathSeparator + cspath); // NOI18N
+        }
         pb.directory(new File(workingDirectory));
         pb.redirectErrorStream(true);
         
         proc = pb.start(); // Let IOException be handled in GdbdebuggerImpl.startDebugging()...
-        
-        final BufferedReader fromGdb = new BufferedReader(new InputStreamReader(proc.getInputStream()));
-        new RequestProcessor("GdbReaderRP").post(new Runnable() { // NOI18N
-            public void run() {
-                String line;
-                
-                try {
-                    while ((line = fromGdb.readLine()) != null) {
-                        line = line.trim();
-                        if (line.length() > 0) {
-                            processMessage(line);
-                        }
-                    }
-                } catch (IOException ioe) {
-                }
-            }
-        });
-        toGdb = new PrintStream(proc.getOutputStream(), true);
-        
+        toGdb = gdbReader(proc.getInputStream(), proc.getOutputStream());
         final Process waitProc = proc;
         final GdbDebugger gdi = debugger;
         new RequestProcessor("GdbReaperThread").post(new Runnable() { // NOI18N
@@ -168,6 +175,59 @@ public class GdbProxyEngine {
         });
     }
     
+    private void remoteDebugger(GdbDebugger debugger, List<String> debuggerCommand, String[] debuggerEnvironment, String workingDirectory, String cspath) {
+        StringBuilder sb = new StringBuilder();
+        
+        for (String arg : debuggerCommand) {
+            sb.append(arg);
+            sb.append(' ');
+        }
+        
+        provider = (InteractiveCommandProvider) Lookup.getDefault().lookup(InteractiveCommandProvider.class);
+        if (provider != null && provider.run(debugger.getHostKey(), sb.toString(), null)) {
+            try {
+                toGdb = gdbReader(provider.getInputStream(), provider.getOutputStream());
+            } catch (IOException ioe) {
+            }
+        }
+    }
+    
+    private PrintStream gdbReader(InputStream is, OutputStream os) {
+        final BufferedReader fromGdb = new BufferedReader(new InputStreamReader(is));
+        PrintStream togdb = new PrintStream(os, true);
+
+        gdbReader = new RequestProcessor("GdbReaderRP").post(new Runnable() { // NOI18N
+            public void run() {
+                String line;
+
+                try {
+                    while ((line = fromGdb.readLine()) != null) {
+                        line = line.trim();
+                        if (line.length() > 0) {
+                            processMessage(line);
+                        }
+                    }
+                } catch (IOException ioe) {
+                } finally {
+                    if (provider != null) {
+                        provider.disconnect();
+                        provider = null;
+                    }
+                }
+            }
+        });
+        return togdb;
+    }
+    
+    public void finish() {
+        if (provider != null) {
+            provider.disconnect();
+        }
+        if (gdbReader != null) {
+            gdbReader.cancel();
+        }
+    }
+    
     private int nextToken() {
         return nextToken++;
     }
@@ -177,13 +237,26 @@ public class GdbProxyEngine {
      *
      * @param cmd - a command to be sent to the debugger
      */
-    int sendCommand(String cmd) {
-        return sendCommand(cmd, false);
+    public int sendCommand(String cmd) {
+        return sendCommand(null, cmd, false);
     }
     
-    int sendCommand(String cmd, boolean consoleCommand) {
+    public int sendCommand(CommandBuffer cb, String cmd) {
+        return sendCommand(cb, cmd, false);
+    }
+    
+    public int sendCommand(CommandBuffer cb, String cmd, boolean consoleCommand) {
         if (active) {
+            String time;
+            if (timerOn) {
+                time = Long.toString(System.currentTimeMillis()) + ':';
+            } else {
+                time = "";
+            }
             int token = nextToken();
+            if (cb != null) {
+                cb.setID(token);
+            }
             if (consoleCommand) {
                 token += 10000;
             } else if (cmd.charAt(0) != '-') {
@@ -192,7 +265,7 @@ public class GdbProxyEngine {
             StringBuilder fullcmd = new StringBuilder(String.valueOf(token));
             fullcmd.append(cmd);
             fullcmd.append('\n');
-            gdbProxy.getLogger().logMessage(fullcmd.toString());
+            gdbProxy.getLogger().logMessage(time + fullcmd.toString());
             toGdb.print(fullcmd.toString());
             return token;
         } else {
@@ -200,8 +273,8 @@ public class GdbProxyEngine {
         }
     }
     
-    int sendConsoleCommand(String cmd) {
-        return sendCommand(cmd, true);
+    public int sendConsoleCommand(String cmd) {
+        return sendCommand(null, cmd, true);
     }
     
     void stopSending() {
@@ -214,6 +287,12 @@ public class GdbProxyEngine {
      * @return null if the reply is not recognized, otherwise return reply
      */
     private void processMessage(String msg) {
+        String time;
+        if (timerOn) {
+            time = Long.toString(System.currentTimeMillis()) + ':';
+        } else {
+            time = "";
+        }
         if (msg.equals("(gdb)")) { // NOI18N
             return; // skip prompts
         }
@@ -221,12 +300,12 @@ public class GdbProxyEngine {
         if (token < 0) {
             token = getCurrentToken(msg);
             if (token != -1) {
-                gdbProxy.getLogger().logMessage(token + msg);
+                gdbProxy.getLogger().logMessage(time + token + msg);
             } else {
-                gdbProxy.getLogger().logMessage(msg);
+                gdbProxy.getLogger().logMessage(time + msg);
             }
         } else {
-            gdbProxy.getLogger().logMessage(msg);
+            gdbProxy.getLogger().logMessage(time + msg);
         }
         msg = stripToken(msg);
         if (msg.length() == 0) {
@@ -236,7 +315,7 @@ public class GdbProxyEngine {
         
         switch (msg.charAt(0)) {
             case '^': // result-record
-                if (token == currentToken && msg.equals("^done")) {
+                if (token == currentToken && msg.equals("^done")) { // NOI18N
                     currentToken = -1;
                 }
                 debugger.resultRecord(token, msg);
@@ -263,7 +342,7 @@ public class GdbProxyEngine {
                 break;
                 
             case '&': // log-stream-output
-                debugger.logStreamOutput(token, msg);
+                debugger.logStreamOutput(msg);
                 break;
                 
             default:
@@ -329,15 +408,16 @@ public class GdbProxyEngine {
                 break;
             }
         }
-        return msg.substring(i);
+        char ch = i < msg.length() ? msg.charAt(i) : 0;
+        if ((ch == '^' || ch == '*' || ch == '+' || ch == '=') && ch != 0) {
+            return msg.substring(i);
+        } else {
+            return msg;
+        }
     }
     
     private GdbLogger getLogger() {
         return gdbProxy.getLogger();
-    }
-    
-    class TokenList extends LinkedList {
-        
     }
     
     private static class CommandInfo {
