@@ -65,9 +65,11 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IConfigManager;
 import org.netbeans.modules.uml.reporting.dataobjects.DataObjectFactory;
 import org.netbeans.modules.uml.reporting.dataobjects.ElementDataObject;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPackage;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.UMLXMLManip;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagram;
+import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagramKind;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IProxyDiagram;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IAssociationEnd;
 import org.netbeans.modules.uml.core.metamodel.structure.IProject;
@@ -301,8 +303,15 @@ public class ReportTask extends Thread implements Cancellable
                 IProxyDiagram pProxyDiagram = pTreeDiag.getDiagram();
                 if (pProxyDiagram != null)
                 {
-                    // process diagrams at last
-                    diagrams.add(pTreeDiag);
+                    // temp filter out unsupported diagrams
+                    int kind = pProxyDiagram.getDiagramKind();
+                    if (kind != IDiagramKind.DK_COLLABORATION_DIAGRAM &&
+                        kind != IDiagramKind.DK_COMPONENT_DIAGRAM &&
+                        kind != IDiagramKind.DK_DEPLOYMENT_DIAGRAM)
+                    {
+                        // process diagrams at last
+                        diagrams.add(pTreeDiag);
+                    }
                 }
             }
         }
@@ -317,11 +326,16 @@ public class ReportTask extends Thread implements Cancellable
     
     public void processChildren(ITreeItem pItem)
     {
-        if (pItem != null && !elements.containsKey(pItem.getData().getModelElement().getXMIID()))
-            elements.put(pItem.getData().getModelElement().getXMIID(), pItem);
-        
-        if (pItem != null)
+        if (pItem != null && pItem.getData() != null)
         {
+            if (pItem.getData().getModelElement() != null) 
+            {
+                String id = pItem.getData().getModelElement().getXMIID();
+                if (id != null && !elements.containsKey(id))
+                {
+                    elements.put(id, pItem);
+                }
+            }
             // ask the ProjectTreeBuilder for the children of this tree item
             ITreeItem[] pTreeItems = m_Builder.retrieveChildItemsSorted(pItem);
             
@@ -439,7 +453,8 @@ public class ReportTask extends Thread implements Cancellable
     public static IDiagram loadDiagram(String filename)
     {
         IDiagram diagram = ProductHelper.getProductDiagramManager().openDiagram(filename, false, null);
-        opened.add(diagram.getFilename());
+        if (diagram != null)
+            opened.add(diagram.getFilename());
         return diagram;
     }
     
