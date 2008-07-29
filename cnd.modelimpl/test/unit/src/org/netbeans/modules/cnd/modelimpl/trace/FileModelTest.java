@@ -53,7 +53,7 @@ public class FileModelTest extends TraceModelTestBase {
 
     @Override
     protected void setUp() throws Exception {
-	System.setProperty("parser.report.errors", "true");
+    System.setProperty("parser.report.errors", "true");
         System.setProperty("antlr.exceptions.hideExpectedTokens", "true");
         super.setUp();
     }
@@ -373,6 +373,30 @@ public class FileModelTest extends TraceModelTestBase {
         // IZ 138325 : IDE highlights 'typedef R (T::*F);' line as wrong
         performTest("typedef_pointer_to_static_member.cc"); // NOI18N
     }
+
+    public void testEmptyArrayInitializer() throws Exception {
+        // IZ 140082 : parser fails on "int empty[] = {}"
+        performTest("empty_array_initializer.cc"); // NOI18N
+    }
+
+    public void testTemplatePointerToMethod() throws Exception {
+        // IZ 140559 : parser fails on code from boost
+        performTest("template_pointer_to_method.cc"); // NOI18N
+    }
+
+    public void testResolverNs_1() throws Exception {
+        // IZ 140704 A constant in namespace is highlighted as an unresolved id
+        performTest("resolver_ns_general.cc"); // NOI18N
+    }
+
+    public void testResolverNs_2() throws Exception {
+        // IZ 140704 A constant in namespace is highlighted as an unresolved id
+        performTest("resolver_ns_using_declaration.cc"); // NOI18N
+    }
+
+    public void testResolverUsingDeclarationInClass() throws Exception {
+        performTest("resolver_using_declaration_in_class.cc"); // NOI18N
+    }
     
     /////////////////////////////////////////////////////////////////////
     // FAILS
@@ -396,6 +420,12 @@ public class FileModelTest extends TraceModelTestBase {
 	
 	public void testTemplateInnerClassDtorDefinition() throws Exception {
 	    performTest("template_inner_class_dtor_definition.cc"); // NOI18N
+	}
+
+	public void testTwoBranches() throws Exception {
+            // iz #142110 For a header file, that is included with different
+            // preprocessor states, code model should include the most complete data
+	    performTest("branches_1.cc"); // NOI18N
 	}
                
         @Override
