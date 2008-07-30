@@ -72,7 +72,6 @@ import org.netbeans.modules.j2ee.sun.api.ResourceConfiguratorInterface;
 import org.netbeans.modules.j2ee.sun.dd.api.DDProvider;
 import org.netbeans.modules.j2ee.sun.dd.api.serverresources.AdminObjectResource;
 import org.netbeans.modules.j2ee.sun.dd.api.serverresources.ConnectorConnectionPool;
-import org.netbeans.modules.j2ee.sun.dd.api.serverresources.ConnectorResource;
 import org.netbeans.modules.j2ee.sun.dd.api.serverresources.Resources;
 import org.netbeans.modules.j2ee.sun.dd.api.serverresources.JdbcResource;
 import org.netbeans.modules.j2ee.sun.dd.api.serverresources.ConnectorResource;
@@ -462,11 +461,14 @@ public class ResourceConfigurator implements ResourceConfiguratorInterface {
         }else{
             servName.setValue(hostName);
         }
-        
+        jdbcConnectionPool.addPropertyElement(servName);
         String portNumber = getUrlPortNo(workingUrl);
-        PropertyElement portno = jdbcConnectionPool.newPropertyElement();
-        portno.setName(WizardConstants.__PortNumber);
-        portno.setValue(portNumber);
+        if (! portNumber.equals("")) { //NOI18N
+            PropertyElement portno = jdbcConnectionPool.newPropertyElement();
+            portno.setName(WizardConstants.__PortNumber);
+            portno.setValue(portNumber);
+            jdbcConnectionPool.addPropertyElement(portno);
+        }
         if(Arrays.asList(WizardConstants.VendorsDBNameProp).contains(vendorName)) {  //NOI18N
             PropertyElement dbName = jdbcConnectionPool.newPropertyElement();
             String databaseName = "";
@@ -483,8 +485,7 @@ public class ResourceConfigurator implements ResourceConfiguratorInterface {
             dbName.setValue(databaseName);
             jdbcConnectionPool.addPropertyElement(dbName);
         }
-        jdbcConnectionPool.addPropertyElement(servName);
-        jdbcConnectionPool.addPropertyElement(portno);
+        
         return jdbcConnectionPool;
     }
     
@@ -910,6 +911,7 @@ public class ResourceConfigurator implements ResourceConfiguratorInterface {
                 if(connectionPoolBean != null){
                     PropertyElement[] props = connectionPoolBean.getPropertyElement();
                     String dsClass = connectionPoolBean.getDatasourceClassname();
+                    String resType = connectionPoolBean.getResType();
                     HashMap properties = new HashMap();
                     for (int j = 0; j < props.length; j++) {
                         Object val = props[j].getValue();
@@ -953,10 +955,10 @@ public class ResourceConfigurator implements ResourceConfiguratorInterface {
                                 if(portNo != null  && portNo.length() > 0) {
                                     url = url + ":" + portNo; //NOI18N
                                 }    
-                                url = url + "/" + dbName ; //NOI8N
+                                url = url + "/" + dbName ; //NOI18N
                             }
                         }else if(url.equals("")) { //NOI18N
-                            String urlPrefix = DatabaseUtils.getUrlPrefix(dsClass);
+                            String urlPrefix = DatabaseUtils.getUrlPrefix(dsClass, resType);
                             String vName = getDatabaseVendorName(urlPrefix, null);
                             if(serverName != null){
                                 if(vName.equals("sybase2")){ //NOI18N
@@ -973,7 +975,7 @@ public class ResourceConfigurator implements ResourceConfiguratorInterface {
                             }else if(Arrays.asList(WizardConstants.Reqd_DBName).contains(vName)) {
                                 url = url + ";databaseName=" + dbName; //NOI18N
                             }else if(Arrays.asList(WizardConstants.VendorsDBNameProp).contains(vName)) {
-                                url = url + "/" + dbName ; //NOI8N
+                                url = url + "/" + dbName ; //NOI18N
                             }    
                         }    
                     }
@@ -1197,8 +1199,10 @@ public class ResourceConfigurator implements ResourceConfiguratorInterface {
                 FileInputStream in = new FileInputStream(resourceFile);
                 resourceGraph = DDProvider.getDefault().getResourcesGraph(in);
             }
+        } catch (RuntimeException ex) {
+            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
         } catch (Exception ex) {
-            ErrorManager.getDefault().notify(ex);
+            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
         }
         return resourceGraph;
     }
