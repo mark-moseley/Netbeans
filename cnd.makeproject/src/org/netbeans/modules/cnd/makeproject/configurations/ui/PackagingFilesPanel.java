@@ -43,9 +43,11 @@ package org.netbeans.modules.cnd.makeproject.configurations.ui;
 import java.awt.Color;
 import java.awt.Component;
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.Vector;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
@@ -58,76 +60,219 @@ import javax.swing.table.TableCellRenderer;
 import org.netbeans.modules.cnd.api.utils.FileChooser;
 import org.netbeans.modules.cnd.makeproject.ui.utils.ListEditorPanel;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.loaders.CoreElfObject;
+import org.netbeans.modules.cnd.loaders.ExeObject;
+import org.netbeans.modules.cnd.loaders.OrphanedElfObject;
+import org.netbeans.modules.cnd.loaders.ShellDataObject;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.packaging.FileElement;
 import org.netbeans.modules.cnd.makeproject.packaging.FileElement.FileType;
 import org.netbeans.modules.cnd.makeproject.ui.utils.PathPanel;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.loaders.DataObject;
+import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.NbBundle;
 
 public class PackagingFilesPanel extends ListEditorPanel {
+
     private String baseDir;
     private JTable targetList;
     private MyTableCellRenderer myTableCellRenderer = new MyTableCellRenderer();
+    private JButton addButton;
+    private JButton addFileOrDirectoryButton;
+    private JButton addFilesButton;
+    private PackagingFilesOuterPanel packagingFilesOuterPanel;
 
     public PackagingFilesPanel(List<FileElement> fileList, String baseDir) {
-        super(fileList.toArray());
+        super(fileList.toArray(), new JButton[]{new JButton(), new JButton(), new JButton()});
         this.baseDir = baseDir;
-        
+        this.addButton = extraButtons[0];
+        this.addFileOrDirectoryButton = extraButtons[1];
+        this.addFilesButton = extraButtons[2];
+
+        addButton.setText("Add [Empty]");
+        addButton.addActionListener(new AddButtonAction());
+        addFileOrDirectoryButton.setText("Add File or Diretory");
+        addFileOrDirectoryButton.addActionListener(new AddFileOrDirectoryButtonAction());
+        addFilesButton.setText("Add Files from Directory");
+        addFilesButton.addActionListener(new AddFilesButtonAction());
+
         getEditButton().setVisible(false);
         getDefaultButton().setVisible(false);
     }
     
-    @Override
-    public Object addAction() {
-	String seed = null;
-	if (FileChooser.getCurrectChooserFile() != null) {
-	    seed = FileChooser.getCurrectChooserFile().getPath();
-	}
-	if (seed == null) {
-	    seed = baseDir;
-	}
-	FileChooser fileChooser = new FileChooser("File", "Select", FileChooser.FILES_AND_DIRECTORIES, null, seed, false);
-	PathPanel pathPanel = new PathPanel();
-	fileChooser.setAccessory(pathPanel);
-	fileChooser.setMultiSelectionEnabled(true);
-	int ret = fileChooser.showOpenDialog(null); // FIXUP
-	if (ret == FileChooser.CANCEL_OPTION)
-	    return null;
+    public void setOuterPanel(PackagingFilesOuterPanel packagingFilesOuterPanel) {
+        this.packagingFilesOuterPanel = packagingFilesOuterPanel;
+    }
 
-	File[] files = fileChooser.getSelectedFiles();
-	for (int i = 0; i < files.length; i++) {
-	    String itemPath;
-	    if (PathPanel.getMode() == PathPanel.REL_OR_ABS)
-		itemPath = IpeUtils.toAbsoluteOrRelativePath(baseDir, files[i].getPath());
-	    else if (PathPanel.getMode() == PathPanel.REL)
-		itemPath = IpeUtils.toRelativePath(baseDir, files[i].getPath());
-	    else
-		itemPath = files[i].getPath();
-	    itemPath = FilePathAdaptor.mapToRemote(itemPath);
-	    itemPath = FilePathAdaptor.normalize(itemPath);
-            
-            addObjectAction(new FileElement(files[i].isDirectory() ? FileType.DIRECTORY : FileType.FILE, itemPath, files[i].getName())); // FIXUP: softlink
-	}
-        
-        return null;
+    class AddButtonAction implements java.awt.event.ActionListener {
+        public void actionPerformed(java.awt.event.ActionEvent evt) {
+            addObjectAction(new FileElement(FileType.UNKNOWN, "", "")); // FIXUP
+        }
+    }
+
+    class AddFileOrDirectoryButtonAction implements java.awt.event.ActionListener {
+        public void actionPerformed(java.awt.event.ActionEvent evt) {
+            String seed = null;
+            if (FileChooser.getCurrectChooserFile() != null) {
+                seed = FileChooser.getCurrectChooserFile().getPath();
+            }
+            if (seed == null) {
+                seed = baseDir;
+            }
+            FileChooser fileChooser = new FileChooser("File", "Select", FileChooser.FILES_AND_DIRECTORIES, null, seed, false);
+            PathPanel pathPanel = new PathPanel();
+            fileChooser.setAccessory(pathPanel);
+            fileChooser.setMultiSelectionEnabled(true);
+            int ret = fileChooser.showOpenDialog(null); // FIXUP
+            if (ret == FileChooser.CANCEL_OPTION) {
+                return;
+            }
+            File[] files = fileChooser.getSelectedFiles();
+            for (int i = 0; i < files.length; i++) {
+                String itemPath;
+                if (PathPanel.getMode() == PathPanel.REL_OR_ABS) {
+                    itemPath = IpeUtils.toAbsoluteOrRelativePath(baseDir, files[i].getPath());
+                } else if (PathPanel.getMode() == PathPanel.REL) {
+                    itemPath = IpeUtils.toRelativePath(baseDir, files[i].getPath());
+                } else {
+                    itemPath = files[i].getPath();
+                }
+                itemPath = FilePathAdaptor.mapToRemote(itemPath);
+                itemPath = FilePathAdaptor.normalize(itemPath);
+                if (files[i].isDirectory()) {
+                    addObjectAction(new FileElement(
+                            FileType.DIRECTORY,
+                            "", // NOI18N
+                            files[i].getName(),
+                            packagingFilesOuterPanel.getDirPermTextField().getText(),
+                            packagingFilesOuterPanel.getOwnerTextField().getText(),
+                            packagingFilesOuterPanel.getGroupTextField().getText()
+                    )); // FIXUP: softlink
+                }
+                else {
+                    // Regular file
+                    String perm;
+                    if (isExecutable(files[i])) {
+                        perm = packagingFilesOuterPanel.getDirPermTextField().getText();
+                    }
+                    else {
+                        perm = packagingFilesOuterPanel.getFilePermTextField().getText();
+                    }
+                    addObjectAction(new FileElement(
+                            FileType.FILE,
+                            itemPath,
+                            files[i].getName(),
+                            perm,
+                            packagingFilesOuterPanel.getOwnerTextField().getText(),
+                            packagingFilesOuterPanel.getGroupTextField().getText()
+                    ));
+                }
+            }
+        }
     }
     
+    private boolean isExecutable(File file) {
+        FileObject fo = null;
+        
+        if (file.getName().endsWith(".exe")) {
+            return true;
+        }
+        
+        try {
+            fo = FileUtil.toFileObject(file.getCanonicalFile());
+        } catch (IOException e) {
+            return false;
+        }
+        
+        DataObject dataObject = null;
+        try {
+            dataObject = DataObject.find(fo);
+        } catch (DataObjectNotFoundException e) {
+            return false;
+        }
+        if (dataObject instanceof ExeObject || dataObject instanceof ShellDataObject) {
+            if (dataObject instanceof OrphanedElfObject || dataObject instanceof CoreElfObject) {
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+    
+    class AddFilesButtonAction implements java.awt.event.ActionListener {
+        public void actionPerformed(java.awt.event.ActionEvent evt) {
+            String seed = null;
+            if (FileChooser.getCurrectChooserFile() != null) {
+                seed = FileChooser.getCurrectChooserFile().getPath();
+            }
+            if (seed == null) {
+                seed = baseDir;
+            }
+            FileChooser fileChooser = new FileChooser("File", "Select", FileChooser.DIRECTORIES_ONLY, null, seed, false);
+            PathPanel pathPanel = new PathPanel();
+            fileChooser.setAccessory(pathPanel);
+            fileChooser.setMultiSelectionEnabled(false);
+            int ret = fileChooser.showOpenDialog(null); // FIXUP
+            if (ret == FileChooser.CANCEL_OPTION) {
+                return;
+            }
+            File dir = fileChooser.getSelectedFile();
+            addFilesFromDirectory(dir, dir);
+        }
+        
+        private void addFilesFromDirectory(File origDir, File dir) {
+            File[] files = dir.listFiles();
+            for (int i = 0; i < files.length; i++) {
+                if (files[i].isDirectory()) {
+                    addFilesFromDirectory(origDir, files[i]);
+                }
+                else {
+                    String path;
+                    if (PathPanel.getMode() == PathPanel.REL_OR_ABS) {
+                        path = IpeUtils.toAbsoluteOrRelativePath(baseDir, files[i].getPath());
+                    } else if (PathPanel.getMode() == PathPanel.REL) {
+                        path = IpeUtils.toRelativePath(baseDir, files[i].getPath());
+                    } else {
+                        path = files[i].getPath();
+                    }
+                    path = FilePathAdaptor.mapToRemote(path);
+                    path = FilePathAdaptor.normalize(path);
+                    String toFile = IpeUtils.toRelativePath(origDir.getParentFile().getAbsolutePath(), files[i].getPath());
+                    toFile = FilePathAdaptor.mapToRemote(toFile);
+                    toFile = FilePathAdaptor.normalize(toFile);
+                    String perm;
+                    if (files[i].getName().endsWith(".exe") || files[i].isDirectory() || isExecutable(files[i])) {
+                        perm = packagingFilesOuterPanel.getDirPermTextField().getText();
+                    }
+                    else {
+                        perm = packagingFilesOuterPanel.getFilePermTextField().getText();
+                    }
+                    addObjectAction(new FileElement(
+                            FileType.FILE,
+                            path,
+                            toFile,
+                            perm,
+                            packagingFilesOuterPanel.getOwnerTextField().getText(),
+                            packagingFilesOuterPanel.getGroupTextField().getText()
+                    )); // FIXUP: softlink
+                }
+            }
+        }
+    }
+
     @Override
     public Object copyAction(Object o) {
-        FileElement elem = (FileElement)o;
+        FileElement elem = (FileElement) o;
         return new FileElement(elem.getType(), new String(elem.getFrom()), new String(elem.getTo()));
     }
-    
-    @Override
-    public String getAddButtonText() {
-        return "Add";
-    }
-    
+
     @Override
     public String getCopyButtonText() {
         return "Duplicate";
     }
-    
+
     @Override
     public String getListLabelText() {
         return "Files:";
@@ -153,12 +298,18 @@ public class PackagingFilesPanel extends ListEditorPanel {
     protected void setData(Vector data) {
         getTargetList().setModel(new MyTableModel());
         // Set column sizes
-	getTargetList().getColumnModel().getColumn(0).setPreferredWidth(40);
-	getTargetList().getColumnModel().getColumn(0).setMaxWidth(40);
-//	//getTargetList().getColumnModel().getColumn(1).setResizable(true);
-//	getTargetList().getColumnModel().getColumn(2).setPreferredWidth(40);
-//	getTargetList().getColumnModel().getColumn(2).setMaxWidth(40);
-//	getTargetList().getColumnModel().getColumn(2).setResizable(false);
+        getTargetList().getColumnModel().getColumn(0).setPreferredWidth(40);
+        getTargetList().getColumnModel().getColumn(0).setMaxWidth(40);
+        if (getTargetList().getColumnModel().getColumnCount() >= 4) {
+            getTargetList().getColumnModel().getColumn(3).setPreferredWidth(50);
+            getTargetList().getColumnModel().getColumn(3).setMaxWidth(50);
+        }
+        if (getTargetList().getColumnModel().getColumnCount() >= 6) {
+            getTargetList().getColumnModel().getColumn(4).setPreferredWidth(50);
+            getTargetList().getColumnModel().getColumn(4).setMaxWidth(50);
+            getTargetList().getColumnModel().getColumn(5).setPreferredWidth(50);
+            getTargetList().getColumnModel().getColumn(5).setMaxWidth(50);
+        }
         //
         getTargetList().getSelectionModel().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         getTargetList().getSelectionModel().addListSelectionListener(new TargetSelectionListener());
@@ -220,9 +371,7 @@ public class PackagingFilesPanel extends ListEditorPanel {
         @Override
         public TableCellRenderer getCellRenderer(int row, int column) {
             return myTableCellRenderer;
-        }
-        
-        //        @Override
+        }        //        @Override
 //	public TableCellEditor getCellEditor(int row, int col) {
 //	    //TableColumn col = getTargetList().getColumnModel().getColumn(1);
 //	    if (col == 0) {
@@ -264,17 +413,26 @@ public class PackagingFilesPanel extends ListEditorPanel {
         public Component getTableCellRendererComponent(JTable table, Object color, boolean isSelected, boolean hasFocus, int row, int col) {
             JLabel label = (JLabel) super.getTableCellRendererComponent(table, color, isSelected, hasFocus, row, col);
             FileElement elem = (FileElement) listData.elementAt(row);
+            File file = new File(IpeUtils.toAbsolutePath(baseDir, elem.getFrom()));
+//            if (!file.exists() || elem.getFrom().length() == 0) {
+//                elem.setType(FileType.UNKNOWN);
+//            }
+//            else if (file.isDirectory()) {
+//                elem.setType(FileType.DIRECTORY);
+//            }
+//            else {
+//                elem.setType(FileType.FILE);
+//            }
             if (col == 0) {
                 if (elem.getType() == FileType.DIRECTORY) {
                     label.setText("dir"); // NOI18N
-                }
-                else if (elem.getType() == FileType.FILE) {
+                } else if (elem.getType() == FileType.FILE) {
                     label.setText("file"); // NOI18N
-                }
-                else if (elem.getType() == FileType.SOFTLINK) {
+                } else if (elem.getType() == FileType.SOFTLINK) {
                     label.setText("link"); // NOI18N
-                }
-                else {
+                } else if (elem.getType() == FileType.UNKNOWN) {
+                    label.setText(""); // NOI18N
+                } else {
                     assert false;
                     label.setText(""); // NOI18N
                 }
@@ -282,22 +440,29 @@ public class PackagingFilesPanel extends ListEditorPanel {
                 if (!isSelected) {
                     label = new JLabel();
                 }
-                File file = new File(IpeUtils.toAbsolutePath(baseDir, elem.getFrom()));
                 label.setToolTipText(file.getAbsolutePath());
                 if (!isSelected && !file.exists()) {
                     label.setForeground(Color.RED);
                 }
                 label.setText(elem.getFrom());
-            } else {
-                label.setText(elem.getTo());
             }
+//            else {
+//                label.setText(elem.getTo());
+//            }
             return label;
         }
+    }
+    
+    /*
+     * Can be overridden to show fewer colums
+     */
+    public int getActualColumnCount() {
+        return 6;
     }
 
     class MyTableModel extends DefaultTableModel {
 
-        private String[] columnNames = {"Type", "From", "To"}; // FIXUP
+        private String[] columnNames = {"Type", "File", "Package File or Directry Path", "Permission", "Owner", "Group"}; // FIXUP
 
         @Override
         public String getColumnName(int col) {
@@ -306,7 +471,7 @@ public class PackagingFilesPanel extends ListEditorPanel {
 
         @Override
         public int getColumnCount() {
-            return 3;
+            return getActualColumnCount();
         }
 
         @Override
@@ -320,10 +485,21 @@ public class PackagingFilesPanel extends ListEditorPanel {
             FileElement elem = (FileElement) listData.elementAt(row);
             if (col == 0) {
                 return elem.getType();
-            } if (col == 1) {
+            }
+            if (col == 1) {
                 return elem.getFrom();
-            } if (col == 2) {
+            }
+            if (col == 2) {
                 return elem.getTo();
+            }
+            if (col == 3) {
+                return elem.getPermission();
+            }
+            if (col == 4) {
+                return elem.getOwner();
+            }
+            if (col == 5) {
+                return elem.getGroup();
             }
             assert false;
             return null;
@@ -333,13 +509,9 @@ public class PackagingFilesPanel extends ListEditorPanel {
         public boolean isCellEditable(int row, int col) {
             if (col == 0) {
                 return false;
-            } else if (col == 1) {
-                return true;
-            } else if (col == 2) {
+            } else {
                 return true;
             }
-            assert false;
-            return false;
         }
 
         @Override
@@ -347,16 +519,33 @@ public class PackagingFilesPanel extends ListEditorPanel {
             FileElement elem = (FileElement) listData.elementAt(row);
             if (col == 0) {
                 ; // Nothing
-            }
-            else if (col == 1) {
-                elem.setFrom((String)value);
-                
+            } else if (col == 1) {
+                elem.setFrom((String) value);
+
                 fireTableCellUpdated(row, 0);
                 fireTableCellUpdated(row, 1);
                 fireTableCellUpdated(row, 2);
             } else if (col == 2) {
-                elem.setTo((String)value);
-                
+                elem.setTo((String) value);
+
+                fireTableCellUpdated(row, 0);
+                fireTableCellUpdated(row, 1);
+                fireTableCellUpdated(row, 2);
+            } else if (col == 3) {
+                elem.setPermission((String) value);
+
+                fireTableCellUpdated(row, 0);
+                fireTableCellUpdated(row, 1);
+                fireTableCellUpdated(row, 2);
+            } else if (col == 4) {
+                elem.setOwner((String) value);
+
+                fireTableCellUpdated(row, 0);
+                fireTableCellUpdated(row, 1);
+                fireTableCellUpdated(row, 2);
+            } else if (col == 5) {
+                elem.setGroup((String) value);
+
                 fireTableCellUpdated(row, 0);
                 fireTableCellUpdated(row, 1);
                 fireTableCellUpdated(row, 2);
