@@ -62,7 +62,7 @@ import org.openide.util.datatransfer.ExTransferable;
 public class PaletteSupport {
 
     public static final String MASHUP_DATA_FLAVOR = DataFlavor.javaJVMLocalObjectMimeType;
-    private static PaletteController controller;
+    private PaletteController controller;
     private static IGraphView graphView;
 
     public PaletteSupport() {
@@ -72,7 +72,7 @@ public class PaletteSupport {
      *
      * @return
      */
-    public static PaletteController createPalette(final ETLCollaborationTopPanel etlPanel) throws IOException {
+    public PaletteController createPalette(final ETLCollaborationTopPanel etlPanel) throws IOException {
         controller = PaletteFactory.createPalette("ETLOperators", new ETLAction(), null, new ETLDnDHandler());
         controller.addPropertyChangeListener(new PropertyChangeListener() {
 
@@ -103,7 +103,7 @@ public class PaletteSupport {
          * @return
          */
         public Action[] getImportActions() {
-            return null;
+           return new Action[0];
         }
 
         /**
@@ -111,7 +111,7 @@ public class PaletteSupport {
          * @return
          */
         public Action[] getCustomPaletteActions() {
-            return null;
+            return new Action[0];
         }
 
         /**
@@ -120,7 +120,7 @@ public class PaletteSupport {
          * @return
          */
         public Action[] getCustomCategoryActions(Lookup lookup) {
-            return null;
+            return new Action[0];
         }
 
         /**
@@ -129,7 +129,7 @@ public class PaletteSupport {
          * @return
          */
         public Action[] getCustomItemActions(Lookup lookup) {
-            return null;
+            return new Action[0];
         }
 
         /**
@@ -154,6 +154,11 @@ public class PaletteSupport {
                 graphView.setXMLInfo(opXmlInfo);
             }
         }
+
+        public static String getSHORT_DESCRIPTION() {
+            return SHORT_DESCRIPTION;
+        }
+
 
         public Object getValue(String key) {
             throw new UnsupportedOperationException("Not supported yet.");
