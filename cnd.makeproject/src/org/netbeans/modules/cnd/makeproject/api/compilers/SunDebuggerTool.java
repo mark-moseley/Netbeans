@@ -42,23 +42,25 @@
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
-import org.netbeans.modules.cnd.api.compilers.ToolchainManager.CompilerDescriptor;
+import org.netbeans.modules.cnd.api.compilers.Tool;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager.DebuggerDescriptor;
 
-public class GNUFortranCompiler extends BasicCompiler {
-    /** Creates a new instance of GNUCCompiler */
-    public GNUFortranCompiler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        super(hkey, flavor, kind, name, displayName, path); // NOI18N
+public class SunDebuggerTool extends Tool {
+    
+    public SunDebuggerTool(String hkey, CompilerFlavor flavor, String name, String displayName, String path) { // GRP - FIXME
+        super(hkey, flavor, DebuggerTool, name, displayName, path); // NOI18N
     }
     
     @Override
-    public GNUFortranCompiler createCopy() {
-        GNUFortranCompiler copy = new GNUFortranCompiler(getHostKey(), getFlavor(), getKind(), "", getDisplayName(), getPath());
+    public SunDebuggerTool createCopy() {
+        SunDebuggerTool copy = new SunDebuggerTool(getHostKey(), getFlavor(), "", getDisplayName(), getPath());
         copy.setName(getName());
         return copy;
     }
-    
+
     @Override
-    public CompilerDescriptor getDescriptor() {
-        return getFlavor().getToolchainDescriptor().getFortran();
+    public DebuggerDescriptor getDescriptor() {
+        return getFlavor().getToolchainDescriptor().getDebugger();
     }
+
 }
