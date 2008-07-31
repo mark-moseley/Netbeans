@@ -154,7 +154,6 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
         keepRatio.setSelected(true);
         org.openide.awt.Mnemonics.setLocalizedText(keepRatio, org.openide.util.NbBundle.getBundle(SVGImageRasterizerPanel.class).getString("LBL_AnimationKeepRatio")); // NOI18N
         keepRatio.setToolTipText("Images for other configurations are transformed using screen ratio.");
-        keepRatio.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         keepRatio.setMargin(new java.awt.Insets(0, 0, 0, 0));
         keepRatio.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -180,7 +179,7 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                     .add(sizePanelLayout.createSequentialGroup()
                         .add(12, 12, 12)
                         .add(keepRatio)))
-                .addContainerGap(91, Short.MAX_VALUE))
+                .addContainerGap(131, Short.MAX_VALUE))
         );
         sizePanelLayout.setVerticalGroup(
             sizePanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -196,9 +195,16 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .add(keepRatio))
         );
 
-        spinnerWidth.getAccessibleContext().setAccessibleName("Image width");
-        spinnerHeight.getAccessibleContext().setAccessibleName("Image height");
-        keepRatio.getAccessibleContext().setAccessibleDescription("");
+        jLabel11.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_sizePanel_name")); // NOI18N
+        jLabel11.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_sizePanel_description")); // NOI18N
+        spinnerWidth.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jSpinner_name")); // NOI18N
+        spinnerWidth.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jSpinner_descriprion")); // NOI18N
+        jLabel12.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_panelHeight_name")); // NOI18N
+        jLabel12.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_panelHeight_description")); // NOI18N
+        spinnerHeight.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_spinnerHeight_name")); // NOI18N
+        spinnerHeight.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_spinnerHeight_description")); // NOI18N
+        keepRatio.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_keepRation_name")); // NOI18N
+        keepRatio.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_keepRation_name")); // NOI18N
 
         optionsPanel.setBorder(javax.swing.BorderFactory.createTitledBorder(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_ImageOptions"))); // NOI18N
 
@@ -215,7 +221,6 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
         jPanel1.setLayout(new java.awt.GridBagLayout());
 
         org.openide.awt.Mnemonics.setLocalizedText(progressiveCheckBox, org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_OptionsProgressive")); // NOI18N
-        progressiveCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         progressiveCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         compressionLabel.setLabelFor(compressionLevelCombo);
@@ -225,7 +230,6 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
         org.openide.awt.Mnemonics.setLocalizedText(compressionQualityLabel, org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_OptionsRate")); // NOI18N
 
         org.openide.awt.Mnemonics.setLocalizedText(transparentCheckBox, org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_OptionsTransparent")); // NOI18N
-        transparentCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         transparentCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         transparentCheckBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -251,24 +255,24 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .add(optionsPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(245, 245, 245)
-                        .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 43, Short.MAX_VALUE))
+                        .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 37, Short.MAX_VALUE))
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(transparentCheckBox)
-                        .addContainerGap(102, Short.MAX_VALUE))
+                        .addContainerGap(145, Short.MAX_VALUE))
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(compressionLabel)
-                        .addContainerGap(76, Short.MAX_VALUE))
+                        .addContainerGap(130, Short.MAX_VALUE))
                     .add(optionsPanelLayout.createSequentialGroup()
                         .add(optionsPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING, false)
                             .add(org.jdesktop.layout.GroupLayout.LEADING, reductionCombo, 0, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                             .add(org.jdesktop.layout.GroupLayout.LEADING, reductionLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                        .addContainerGap(54, Short.MAX_VALUE))
+                        .addContainerGap(110, Short.MAX_VALUE))
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, optionsPanelLayout.createSequentialGroup()
                         .add(optionsPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
                             .add(org.jdesktop.layout.GroupLayout.LEADING, optionsPanelLayout.createSequentialGroup()
                                 .add(jLabel2)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
-                                .add(formatComboBox, 0, 87, Short.MAX_VALUE))
+                                .add(formatComboBox, 0, 97, Short.MAX_VALUE))
                             .add(org.jdesktop.layout.GroupLayout.LEADING, progressiveCheckBox)
                             .add(optionsPanelLayout.createSequentialGroup()
                                 .add(compressionLevelCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 93, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
@@ -292,7 +296,7 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .add(optionsPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(jPanel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                     .add(reductionLabel))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 27, Short.MAX_VALUE)
                 .add(reductionCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
                 .add(compressionLabel)
@@ -304,16 +308,26 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .addContainerGap())
         );
 
-        formatComboBox.getAccessibleContext().setAccessibleName("Image format");
-        formatComboBox.getAccessibleContext().setAccessibleDescription("Image format");
-        progressiveCheckBox.getAccessibleContext().setAccessibleDescription("Progressive display");
-        compressionLevelCombo.getAccessibleContext().setAccessibleName("Compression level");
-        compressionLevelCombo.getAccessibleContext().setAccessibleDescription("Compression level");
-        transparentCheckBox.getAccessibleContext().setAccessibleDescription("Transparent background");
-        compressionQualitySpinner.getAccessibleContext().setAccessibleName("Compression quality");
-        reductionLabel.getAccessibleContext().setAccessibleName("Color reduction method:");
-        reductionLabel.getAccessibleContext().setAccessibleDescription("Color reduction method");
-        reductionCombo.getAccessibleContext().setAccessibleName("Color reduction method");
+        jLabel2.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jLabel2_name")); // NOI18N
+        jLabel2.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jLabel2_descritpion")); // NOI18N
+        formatComboBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_formatComboBox_name")); // NOI18N
+        formatComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jLabel2_descritpion")); // NOI18N
+        progressiveCheckBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_progressiveCheckBox_name")); // NOI18N
+        progressiveCheckBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_progressiveCheckBox_description")); // NOI18N
+        compressionLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_compressionLabel_name")); // NOI18N
+        compressionLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_compressionLabel_description")); // NOI18N
+        compressionLevelCombo.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_compressionLevelCombo_name")); // NOI18N
+        compressionLevelCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_compressionLevelCombo_description")); // NOI18N
+        compressionQualityLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_compressionQuailityLabel_name")); // NOI18N
+        compressionQualityLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_compressionQuailityLabel_description")); // NOI18N
+        transparentCheckBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_transpartenCheckBox_name")); // NOI18N
+        transparentCheckBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_transpartenCheckBox_description")); // NOI18N
+        compressionQualitySpinner.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_compressionQuailitySpinner_name")); // NOI18N
+        compressionQualitySpinner.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_compressionQuailitySpinner_description")); // NOI18N
+        reductionLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_reductionLabel_name")); // NOI18N
+        reductionLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_reductionLabel_descritpion")); // NOI18N
+        reductionCombo.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_reductionCombo_name")); // NOI18N
+        reductionCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_reductionCombo_description")); // NOI18N
 
         timeLinePanel.setBorder(javax.swing.BorderFactory.createTitledBorder(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_AnimationFrameTime"))); // NOI18N
 
@@ -331,7 +345,7 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                         .add(startTimeLabel)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(currentTimeSpinner, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 56, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                    .add(animationSlider, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 181, Short.MAX_VALUE))
+                    .add(animationSlider, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 216, Short.MAX_VALUE))
                 .addContainerGap())
         );
         timeLinePanelLayout.setVerticalGroup(
@@ -344,20 +358,22 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .add(animationSlider, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
         );
 
-        animationSlider.getAccessibleContext().setAccessibleName("Current time selector");
-        animationSlider.getAccessibleContext().setAccessibleDescription("Current time selector");
+        currentTimeSpinner.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_currentTimeSpinner_name")); // NOI18N
+        currentTimeSpinner.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_currentTimeSpinner_description")); // NOI18N
+        startTimeLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_startTimeLabel_name")); // NOI18N
+        startTimeLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_stopTimeLabel_description")); // NOI18N
+        animationSlider.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_animationSlider_name")); // NOI18N
+        animationSlider.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_animationSlider_description")); // NOI18N
 
         exportPanel.setBorder(javax.swing.BorderFactory.createTitledBorder(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_ExportLabel"))); // NOI18N
 
         buttonGroup1.add(radioExportCurrent);
         radioExportCurrent.setSelected(true);
         org.openide.awt.Mnemonics.setLocalizedText(radioExportCurrent, org.openide.util.NbBundle.getBundle(SVGImageRasterizerPanel.class).getString("LBL_AnimationOnlyActiveConfiguration")); // NOI18N
-        radioExportCurrent.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         radioExportCurrent.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         buttonGroup1.add(radioExportAll);
         org.openide.awt.Mnemonics.setLocalizedText(radioExportAll, org.openide.util.NbBundle.getBundle(SVGImageRasterizerPanel.class).getString("LBL_AnimationAllConfigurations")); // NOI18N
-        radioExportAll.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         radioExportAll.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         org.jdesktop.layout.GroupLayout exportPanelLayout = new org.jdesktop.layout.GroupLayout(exportPanel);
@@ -369,7 +385,7 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .add(exportPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(radioExportCurrent)
                     .add(radioExportAll))
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap(69, Short.MAX_VALUE))
         );
         exportPanelLayout.setVerticalGroup(
             exportPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -379,6 +395,11 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .add(radioExportAll))
         );
 
+        radioExportCurrent.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_radioExportCurrent_name")); // NOI18N
+        radioExportCurrent.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_radioExportCurrent_description")); // NOI18N
+        radioExportAll.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_radioExportAll_name")); // NOI18N
+        radioExportAll.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_radioExportAll_description")); // NOI18N
+
         jPanel3.setBorder(javax.swing.BorderFactory.createTitledBorder(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_PreviewTitle"))); // NOI18N
 
         imageHolder.setBorder(javax.swing.BorderFactory.createEtchedBorder());
@@ -386,13 +407,13 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
         jPanel4.setBorder(javax.swing.BorderFactory.createEtchedBorder());
 
         previewFormatLabel.setLabelFor(previewFormatText);
-        previewFormatLabel.setText(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_PreviewFormat")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(previewFormatLabel, org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_PreviewFormat")); // NOI18N
 
         previewSizeLabel.setLabelFor(previewSizeText);
-        previewSizeLabel.setText(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_PreviewSize")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(previewSizeLabel, org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_PreviewSize")); // NOI18N
 
         previewFileLabel.setLabelFor(previewFileText);
-        previewFileLabel.setText(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_PreviewFile")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(previewFileLabel, org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "LBL_PreviewFile")); // NOI18N
 
         previewFormatText.setEditable(false);
         previewFormatText.setText("JPEG");
@@ -416,7 +437,7 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
                 .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(previewSizeText, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 82, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                    .add(previewFileText, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 251, Short.MAX_VALUE)
+                    .add(previewFileText, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 285, Short.MAX_VALUE)
                     .add(previewFormatText, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 64, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .addContainerGap())
         );
@@ -438,9 +459,18 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
-        previewFormatText.getAccessibleContext().setAccessibleDescription("File format");
-        previewSizeText.getAccessibleContext().setAccessibleDescription("File size");
-        previewFileText.getAccessibleContext().setAccessibleDescription("File location");
+        previewFormatLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewFormatlabel_name")); // NOI18N
+        previewFormatLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewFormatlabel_description")); // NOI18N
+        previewSizeLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewSizelabel_name")); // NOI18N
+        previewSizeLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewSizelabel_description")); // NOI18N
+        previewFileLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewFileLabel_name")); // NOI18N
+        previewFileLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewFileLabel_description")); // NOI18N
+        previewFormatText.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewFormatlabel_name")); // NOI18N
+        previewFormatText.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewFormatlabel_description")); // NOI18N
+        previewSizeText.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewSizelabel_name")); // NOI18N
+        previewSizeText.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewSizelabel_description")); // NOI18N
+        previewFileText.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewFileLabel_name")); // NOI18N
+        previewFileText.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_previewFileLabel_description")); // NOI18N
 
         org.jdesktop.layout.GroupLayout jPanel3Layout = new org.jdesktop.layout.GroupLayout(jPanel3);
         jPanel3.setLayout(jPanel3Layout);
@@ -449,7 +479,7 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
             .add(jPanel3Layout.createSequentialGroup()
                 .addContainerGap()
                 .add(jPanel3Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, imageHolder, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 332, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, imageHolder, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 353, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, jPanel4, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addContainerGap())
         );
@@ -461,6 +491,9 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                 .add(jPanel4, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap())
         );
+
+        jPanel4.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jPanel4_name")); // NOI18N
+        jPanel4.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jPanel4_description")); // NOI18N
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -474,7 +507,7 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                     .add(sizePanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .add(timeLinePanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .add(exportPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .add(optionsPanel, 0, 221, Short.MAX_VALUE))
+                    .add(optionsPanel, 0, 248, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -486,13 +519,27 @@ public final class SVGImageRasterizerPanel extends SVGRasterizerPanel {
                     .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
                         .add(sizePanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(optionsPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 233, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .add(optionsPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(timeLinePanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(exportPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
         );
+
+        sizePanel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_sizePanel_name")); // NOI18N
+        sizePanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_sizePanel_description")); // NOI18N
+        optionsPanel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_optionsPanel_name")); // NOI18N
+        optionsPanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_optionsPanel_description")); // NOI18N
+        timeLinePanel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_timeLinePanel_name")); // NOI18N
+        timeLinePanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_timeLinePanel_description")); // NOI18N
+        exportPanel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_exportPanel_name")); // NOI18N
+        exportPanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_exportPanel_description")); // NOI18N
+        jPanel3.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jPanel3_name")); // NOI18N
+        jPanel3.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jPanel3_description")); // NOI18N
+
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jPanel_name")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SVGImageRasterizerPanel.class, "A11Y_jPanel_description")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
 private void colorReductionChanged(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_colorReductionChanged
@@ -588,6 +635,10 @@ private void formatComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
         return true;
     }
         
+    protected String getPreviewFileName(){
+        return previewFileText.getText();
+    }
+    
     protected void updateImage(JComponent source, boolean isOutputChanged) {
         final JLabel label = new JLabel( "Updating image...");
         label.setHorizontalAlignment(SwingConstants.CENTER);
@@ -647,5 +698,3 @@ private void formatComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
         });
     }
 }
-    
-    
