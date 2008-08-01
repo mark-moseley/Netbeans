@@ -51,7 +51,7 @@ public final class SQLIdentifiers {
      *   to be quoted and what the quote string should be.
      */
     public static Quoter createQuoter(DatabaseMetaData dbmd) {
-        return new Quoter(dbmd);
+        return new DatabaseMetaDataQuoter(dbmd);
     }
 
     
@@ -60,9 +60,29 @@ public final class SQLIdentifiers {
      * 
      * This class is immutable and thus thread-safe
      */
-    public static class Quoter {
+    public static abstract class Quoter {
+
+        final String quoteString;
+
+        Quoter(String quoteString) {
+            this.quoteString = quoteString;
+        }
+
+        public abstract String quoteIfNeeded(String identifier);
+
+        boolean alreadyQuoted(String identifier) {
+            return (identifier.startsWith(quoteString) && identifier.endsWith(quoteString));
+        }
+
+        String doQuote(String identifier) {
+            return quoteString + identifier + quoteString;
+        }
+    }
+
+    private static class DatabaseMetaDataQuoter extends Quoter {
+
         private static final Logger LOGGER = 
-            Logger.getLogger(Quoter.class.getName());
+            Logger.getLogger(DatabaseMetaDataQuoter.class.getName());
 
         // Rules for what happens to the casing of a character in an identifier
         // when it is not quoted
@@ -71,12 +91,11 @@ public final class SQLIdentifiers {
         private static final int MC_RULE = 2; // mixed case remains mixed case
 
         private final String            extraNameChars;
-        private final String            quoteString;
         private final int               caseRule;
 
-        private Quoter(DatabaseMetaData dbmd) {
+        private DatabaseMetaDataQuoter(DatabaseMetaData dbmd) {
+            super(getQuoteString(dbmd));
             extraNameChars  = getExtraNameChars(dbmd);
-            quoteString     = getQuoteString(dbmd);
             caseRule        = getCaseRule(dbmd);
         }
         
@@ -108,7 +127,7 @@ public final class SQLIdentifiers {
             Parameters.notNull("identifier", identifier);
             
             if ( needToQuote(identifier) ) {
-                return quoteString + identifier + quoteString;
+                return doQuote(identifier);
             }
 
             return identifier;
@@ -121,8 +140,7 @@ public final class SQLIdentifiers {
             assert identifier != null;
             
             // No need to quote if it's already quoted
-            if ( identifier.startsWith(quoteString) &&
-                 identifier.endsWith(quoteString)) {
+            if ( alreadyQuoted(identifier) ) {
                 return false;
             }
             
@@ -145,7 +163,7 @@ public final class SQLIdentifiers {
 
             return false;
         }
-        
+
         private boolean charNeedsQuoting(char ch, boolean isFirstChar) {
             if ( isUpperCase(ch) || isLowerCase(ch) ) {
                 return false;
