@@ -97,7 +97,7 @@ public class SQDElementsTests extends UMLTestCase {
     private final static String DELETE_DLG = "Delete";
     public final static String YES_BTN = "Yes";
     public final String NO_BTN = "No";
-    private final String PROJECT_PATH = System.getProperty("xtest.workdir");   
+    private final String PROJECT_PATH = System.getProperty("nbjunit.workdir");   
     /********************************************************/
     
     
@@ -146,7 +146,7 @@ public class SQDElementsTests extends UMLTestCase {
         lastTestCase=getCurrentTestMethodName();
         org.netbeans.test.umllib.util.Utils.makeScreenShotCustom("startTest");
         final String LINE_NAME = "SQDLine"; 
-        final String PATH_TO_CLASS = "Model|"+LINE_NAME;
+        final String PATH_TO_CLASS = PKG_PATH + "|" + LINE_NAME;
         final String DIAGRAM_NAME = "testCreateLifelinePalette";
             util.addDiagram(DIAGRAM_NAME, PKG_PATH);
             org.netbeans.test.umllib.util.Utils.makeScreenShotCustom("afterDiagramCreate");
