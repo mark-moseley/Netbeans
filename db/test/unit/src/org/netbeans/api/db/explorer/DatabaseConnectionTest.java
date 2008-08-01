@@ -41,14 +41,15 @@
 
 package org.netbeans.api.db.explorer;
 
-import org.netbeans.modules.db.test.TestBase;
+import org.netbeans.modules.db.explorer.ConnectionList;
 import org.netbeans.modules.db.test.Util;
+import org.netbeans.modules.db.util.DBTestBase;
 
 /**
  *
  * @author Andrei Badea
  */
-public class DatabaseConnectionTest extends TestBase {
+public class DatabaseConnectionTest extends DBTestBase {
     
     protected void setUp() throws Exception {
         super.setUp();
@@ -60,24 +61,67 @@ public class DatabaseConnectionTest extends TestBase {
     }
     
     public void testConnectionsRemovedWhenFilesDeleted() throws Exception{
-        JDBCDriver driver = JDBCDriverManager.getDefault().getDrivers("sun.jdbc.odbc.JdbcOdbcDriver")[0];
+        Util.deleteConnectionFiles();
+        Util.deleteDriverFiles();
+
+        JDBCDriver driver = Util.createDummyDriver();
+        assertEquals(1, JDBCDriverManager.getDefault().getDrivers().length);
+
         DatabaseConnection dbconn = DatabaseConnection.create(driver, "database", "user", "schema", "password", true);
         ConnectionManager.getDefault().addConnection(dbconn);
         
         assertTrue(ConnectionManager.getDefault().getConnections().length > 0);
         
         Util.deleteConnectionFiles();
+
+        // In the real world users won't go about deleting files under a running NB,
+        // and if they do, it's reasonable to assume that NB should continue to hold
+        // instances in its cache.  Here we flush the cache to validate that everything's
+        // gone.
+        ConnectionList.getDefault().refreshCache();
         
         assertTrue(ConnectionManager.getDefault().getConnections().length == 0);
     }
 
     public void testSameDatabaseConnectionReturned() throws Exception {
+        Util.deleteConnectionFiles();
+        Util.deleteDriverFiles();
         assertEquals(0, ConnectionManager.getDefault().getConnections().length);
         
-        JDBCDriver driver = JDBCDriverManager.getDefault().getDrivers("sun.jdbc.odbc.JdbcOdbcDriver")[0];
+        JDBCDriver driver = Util.createDummyDriver();
+        assertEquals(1, JDBCDriverManager.getDefault().getDrivers().length);
+
         DatabaseConnection dbconn = DatabaseConnection.create(driver, "database", "user", "schema", "password", true);
         ConnectionManager.getDefault().addConnection(dbconn);
+        assertTrue(ConnectionManager.getDefault().getConnections().length == 1);
         
         assertEquals(dbconn, ConnectionManager.getDefault().getConnections()[0]);
     }
+
+    public void testSyncConnection() throws Exception {
+        DatabaseConnection dbconn = getDatabaseConnection();
+        ConnectionManager.getDefault().connect(dbconn);
+        assertTrue(dbconn.getJDBCConnection() != null);
+        assertFalse(dbconn.getJDBCConnection().isClosed());
+    }
+
+    public void testDeleteConnection() throws Exception {
+        Util.deleteConnectionFiles();
+        Util.deleteDriverFiles();
+        
+        assertEquals(0, ConnectionManager.getDefault().getConnections().length);
+        assertEquals(0, JDBCDriverManager.getDefault().getDrivers().length);
+        
+        JDBCDriver driver = Util.createDummyDriver();
+        
+        DatabaseConnection dbconn = DatabaseConnection.create(
+                    driver, "jdbc:bar:localhost", 
+                    "user", "schema", "password", true);
+        ConnectionManager.getDefault().addConnection(dbconn);
+        
+        assertEquals(1, ConnectionManager.getDefault().getConnections().length);
+        
+        ConnectionManager.getDefault().removeConnection(dbconn);
+        assertEquals(0, ConnectionManager.getDefault().getConnections().length);
+    }    
 }
