@@ -41,7 +41,7 @@
 
 package org.netbeans.modules.gsfret.navigation;
 
-import org.netbeans.api.gsf.CancellableTask;
+import org.netbeans.modules.gsf.api.CancellableTask;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.openide.filesystems.FileObject;
 
@@ -74,7 +74,7 @@ public class CaretListeningTask implements CancellableTask<CompilationInfo> {
         
         int offset = CaretListeningFactory.getLastPosition(fileObject);
         if (offset != -1) {
-            ClassMemberPanel.getInstance().selectElement(offset);
+            ClassMemberPanel.getInstance().selectElement(compilationInfo, offset);
         }
     }
 

@@ -41,7 +41,7 @@
 
 package org.netbeans.modules.gsfret.navigation;
 
-import org.netbeans.api.gsf.CancellableTask;
+import org.netbeans.modules.gsf.api.CancellableTask;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.napi.gsfret.source.Phase;
 import org.netbeans.napi.gsfret.source.Source.Priority;
@@ -51,7 +51,7 @@ import org.openide.filesystems.FileObject;
 public class CaretListeningFactory extends CaretAwareSourceTaskFactory {
     
     public CaretListeningFactory() {
-        super(Phase.RESOLVED, Priority.LOW);
+        super(Phase.RESOLVED, Priority.MIN);
     }
 
     public CancellableTask<CompilationInfo> createTask(FileObject fileObject) {

@@ -42,7 +42,11 @@
 package org.netbeans.modules.gsfret.navigation;
 
 import javax.swing.JComponent;
+import org.netbeans.modules.gsf.Language;
+import org.netbeans.modules.gsf.LanguageRegistry;
+import org.netbeans.modules.gsf.api.CompilationInfo;
 import org.netbeans.spi.navigator.NavigatorPanel;
+import org.openide.filesystems.FileObject;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 
@@ -59,22 +63,28 @@ public class ClassMemberPanel implements NavigatorPanel {
 
     private ClassMemberPanelUI component;
 
-    private static ClassMemberPanel INSTANCE;
+    private static ClassMemberPanel INSTANCE;   //Always accessed in event dispatch thread
     
     public ClassMemberPanel() {
-        this.INSTANCE = this;
     }
 
     public void panelActivated(Lookup context) {
         assert context != null;
+        INSTANCE = this;
         // System.out.println("Panel Activated");
-        ClassMemberNavigatorSourceFactory.getInstance().setLookup(context, getClassMemberPanelUI());
+        FileObject fileObject = context.lookup(FileObject.class);
+        Language language = null;
+        if (fileObject != null) {
+            language = LanguageRegistry.getInstance().getLanguageByMimeType(fileObject.getMIMEType());
+        }
+        ClassMemberNavigatorSourceFactory.getInstance().setLookup(context, getClassMemberPanelUI(language));
         getClassMemberPanelUI().showWaitNode();
     }
 
     public void panelDeactivated() {
         getClassMemberPanelUI().showWaitNode(); // To clear the ui
         ClassMemberNavigatorSourceFactory.getInstance().setLookup(Lookup.EMPTY, null);
+        INSTANCE = null;
     }
 
     public Lookup getLookup() {
@@ -93,15 +103,19 @@ public class ClassMemberPanel implements NavigatorPanel {
         return getClassMemberPanelUI();
     }
 
-    public void selectElement(int offset) {
-        getClassMemberPanelUI().selectElementNode(offset);
+    public void selectElement(CompilationInfo info, int offset) {
+        getClassMemberPanelUI().selectElementNode(info, offset);
     }
     
-    private synchronized ClassMemberPanelUI getClassMemberPanelUI() {
+    private synchronized ClassMemberPanelUI getClassMemberPanelUI(Language language) {
         if (this.component == null) {
-            this.component = new ClassMemberPanelUI();
+            this.component = new ClassMemberPanelUI(language);
         }
         return this.component;
+    }
+
+    private ClassMemberPanelUI getClassMemberPanelUI() {
+        return getClassMemberPanelUI(null);
     }
     
     public static ClassMemberPanel getInstance() {
