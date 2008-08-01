@@ -78,11 +78,9 @@ public class VersioningMainMenu extends AbstractAction implements DynamicMenuCon
         final VCSContext ctx = VCSContext.forNodes(TopComponent.getRegistry().getActivatedNodes());
         List<VersioningSystem> systems = Arrays.asList(VersioningManager.getInstance().getVersioningSystems());
         VersioningSystem [] vs = VersioningManager.getInstance().getOwners(ctx);
-        VersioningSystem ownerVS = null;
 
         if (vs.length == 1) {
             if (vs[0].getVCSAnnotator() != null) {
-                ownerVS = vs[0];
                 List<JComponent> systemItems = actionsToItems(vs[0].getVCSAnnotator().getActions(ctx, VCSAnnotator.ActionDestination.MainMenu));
                 items.addAll(systemItems);
             }
@@ -94,11 +92,7 @@ public class VersioningMainMenu extends AbstractAction implements DynamicMenuCon
             items.add(Utils.createJSeparator());
         }
         
-        Collections.sort(systems, new Comparator<VersioningSystem>() {
-            public int compare(VersioningSystem a, VersioningSystem b) {
-                return Utils.getDisplayName(a).compareTo(Utils.getDisplayName(b));
-            }
-        });
+        Collections.sort(systems, new ByDisplayNameComparator());
 
         VersioningSystem localHistory = null;
         for (final VersioningSystem system : systems) {
@@ -106,9 +100,6 @@ public class VersioningMainMenu extends AbstractAction implements DynamicMenuCon
                 localHistory = system;
             } else {
                 JMenu menu = createVersioningSystemMenu(system, ctx);
-                if (system == ownerVS) {
-                    menu.setEnabled(false);
-                }
                 items.add(menu);
             }
         }
@@ -165,5 +156,11 @@ public class VersioningMainMenu extends AbstractAction implements DynamicMenuCon
             }
         }
         return items;
+    }
+
+    static final class ByDisplayNameComparator implements Comparator<VersioningSystem> {
+        public int compare(VersioningSystem a, VersioningSystem b) {
+            return Utils.getDisplayName(a).compareTo(Utils.getDisplayName(b));
+        }
     }
 }
