@@ -41,6 +41,7 @@
 
 package org.openide.modules;
 
+import org.openide.util.Exceptions;
 import org.openide.util.SharedClassObject;
 
 /**
@@ -74,7 +75,7 @@ public class ModuleInstall extends SharedClassObject {
      * wrong with the module (missing ad-hoc dependency, missing
      * license key, etc.) then <code>IllegalStateException</code>
      * may be thrown to prevent it from being loaded (preferably
-     * with a localized annotation). The default implementation
+     * with a {@linkplain Exceptions#attachLocalizedMessage localized annotation}). The default implementation
      * does nothing. The module cannot assume much about when this
      * method will be called; specifically it cannot rely on layers
      * or manifest sections to be ready, nor for the module's classloader
@@ -141,8 +142,12 @@ public class ModuleInstall extends SharedClassObject {
     }
 
     /**
-     * Called when the module is uninstalled (from a running NetBeans instance).
+     * Called when the module is disabled or uninstalled (from a running NetBeans instance).
      * Should remove whatever functionality that it had registered.
+     * @deprecated In practice there is no way to ensure that this method will really be called.
+     *             The module might simply be deleted or disabled while the IDE is not running.
+     *             <span class="nonnormative">(In fact this is always the case in NetBeans 6.0;
+     *             the Plugin Manager only uninstalls or disables modules between restarts.)</span>
     */
     public void uninstalled() {
     }
@@ -162,6 +167,7 @@ public class ModuleInstall extends SharedClassObject {
     public void close() {
     }
 
+    @Override
     protected boolean clearSharedData() {
         return false;
     }
