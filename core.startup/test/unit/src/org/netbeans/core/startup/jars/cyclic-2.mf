@@ -1,4 +1,0 @@
-OpenIDE-Module: org.bar.cyclic
-OpenIDE-Module-Module-Dependencies: org.foo.cyclic
-OpenIDE-Module-Build-Version: this_line_is_here_due_to_yarda
-

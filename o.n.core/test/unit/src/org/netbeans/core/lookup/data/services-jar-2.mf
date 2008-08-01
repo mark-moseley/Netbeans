@@ -1,5 +1,0 @@
-Manifest-Version: 1.0
-OpenIDE-Module: org.bar
-OpenIDE-Module-Name: Impl #2
-OpenIDE-Module-Module-Dependencies: org.foo
-

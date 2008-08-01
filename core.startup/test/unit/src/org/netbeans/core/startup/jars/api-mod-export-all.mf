@@ -1,5 +1,0 @@
-Manifest-Version: 1.0
-OpenIDE-Module: org.netbeans.modules.foo
-OpenIDE-Module-Specification-Version: 1.0
-OpenIDE-Module-Implementation-Version: today
-

@@ -1,4 +1,0 @@
-Manifest-Version: 1.0
-OpenIDE-Module: usesapiimpldepforfriends
-OpenIDE-Module-Module-Dependencies: org.netbeans.modules.foo = today
-
