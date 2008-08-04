@@ -45,6 +45,7 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -148,11 +149,11 @@ public class TiledLayer extends Layer implements ImageResourceListener {
 	 * Assigns a tile index to multiple positions.
 	 */
 	public void setTileAtPositions(int tileIndex, Set positions) {
-		for (Iterator it = positions.iterator(); it.hasNext();) {
-			Position pos = (Position) it.next();
-			this.updateIndexGrid(tileIndex, pos.getRow(), pos.getCol());
-		}
-		this.fireTilesChanged(positions);
+            Position[] copy = (Position[]) positions.toArray(new Position[positions.size()]);
+            for (Position pos : copy) {
+                this.updateIndexGrid(tileIndex, pos.getRow(), pos.getCol());
+            }
+            this.fireTilesChanged(positions);
 	}
 	
 	private void fireTilesChanged(Set positions) {
@@ -274,6 +275,7 @@ public class TiledLayer extends Layer implements ImageResourceListener {
 		int right = Integer.MIN_VALUE;
 		int top = Integer.MAX_VALUE;
 		int bottom = Integer.MIN_VALUE;
+                boolean layerEmpty = true;
 		synchronized (this.grid) {
 			for (int r = 0; r < this.grid.length; r++ ) {
 				for (int c = 0; c < this.grid[r].length; c++) {
@@ -286,9 +288,16 @@ public class TiledLayer extends Layer implements ImageResourceListener {
 						top = Math.min(top, r);
 						//find bottom boundry
 						bottom = Math.max(bottom, r);
+                                                layerEmpty = false;
 					}
 				}
 			}
+                        if (layerEmpty){
+                            left = 0;
+                            right = 0;
+                            top = 0;
+                            bottom = 0;
+                        }
 			//then remove all the rows and cols outside the boundries
 			//remove right
 			this.deleteColumns(right + 1, this.grid[0].length - right -1);
