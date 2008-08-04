@@ -98,6 +98,8 @@ import org.netbeans.modules.uml.core.support.umlutils.IElementLocator;
 import org.netbeans.modules.uml.core.support.umlsupport.Log;
 import java.util.ArrayList;
 import java.util.List;
+import org.netbeans.modules.uml.core.metamodel.infrastructure.IDerivationClassifier;
+import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IDerivation;
 import org.openide.util.NbPreferences;
 
 /**
@@ -237,7 +239,8 @@ public class JavaChangeHandlerUtilities
                 int lCnt = pBaseClasses.size();
                 for (int lIndx = 0; lIndx < lCnt; lIndx++)
                 {
-                    IClassifier cpClassifier = pBaseClasses.get(lIndx);
+                    IClassifier cpClassifier = checkIfDerivation(pBaseClasses.get(lIndx));
+                    
                     if (cpClassifier != null)
                         vopList =
                             collectVirtualOperations(
@@ -256,7 +259,7 @@ public class JavaChangeHandlerUtilities
 
                 for (int lIndx = 0; lIndx < lCnt; lIndx++)
                 {
-                    IClassifier cpClassifier = pBaseClasses.get(lIndx);
+                    IClassifier cpClassifier = checkIfDerivation(pBaseClasses.get(lIndx));
 
                     if (cpClassifier != null)
                     {
@@ -2461,6 +2464,19 @@ public class JavaChangeHandlerUtilities
             }
         return retClass;
     }
+
+    private IClassifier checkIfDerivation(IClassifier cpClassifier)
+    {
+        IClassifier retVal = cpClassifier;
+        
+        if (cpClassifier instanceof IDerivationClassifier)
+        {
+            IDerivationClassifier classifier = (IDerivationClassifier) cpClassifier;
+            retVal = classifier.getTemplate();
+        }
+
+        return retVal;
+    }
     
     private IChangeRequest getChangeRequest() {
         return m_pRequest;
@@ -2646,7 +2662,7 @@ public class JavaChangeHandlerUtilities
                                 // At this point, we don't know if the passed class is the
                                 // implementee, or the implementor. We only want to get the
                                 // implementees ( the contracts ).
-                                IInterface pContract = pItem.getContract();
+                                IClassifier pContract = pItem.getContract();
                                 if (pContract != null)
                                 {
                                     if (!isSame(pClass, pContract))
@@ -2702,11 +2718,6 @@ public class JavaChangeHandlerUtilities
                     }
                 }
             }
-            /*		   
-            	 #else
-            		   impList = pClass.getImplementations();
-            	 #endif
-            */
 
             if (impList != null)
             {
@@ -2752,6 +2763,26 @@ public class JavaChangeHandlerUtilities
                     {
                         classList =
                             getImplementingClassifiers(pItem, classList);
+                    }
+                }
+            }
+            
+            ETList < IDependency > derivations = pClass.getSupplierDependenciesByType("Derivation");
+
+            if (derivations != null)
+            {
+                int count = derivations.size();
+                int idx = 0;
+                while (idx < count)
+                {
+                    IDependency pItem = derivations.get(idx++);
+                    if (pItem instanceof IDerivation)
+                    {
+                        IDerivation derivation = (IDerivation)pItem;
+                        if(derivation.getDerivedClassifier() != null)
+                        {
+                            classList = getImplementingClassifiers(derivation.getDerivedClassifier(), classList);
+                        }
                     }
                 }
             }
@@ -3759,12 +3790,12 @@ public class JavaChangeHandlerUtilities
 	 * @return opList The list of operations
 	 */
 	public ETList < IOperation > collectVirtualOperations(
-									IClassifier pBaseClass,
-									ETList<IClassifier> pBaseClasses,
-									ETList < IOperation > opList,
-									IOperationCollectionBehavior behaviorControl)
+                                                            IClassifier pBaseClass,
+                                                            ETList<IClassifier> pBaseClasses,
+                                                            ETList < IOperation > opList,
+                                                            IOperationCollectionBehavior behaviorControl)
 	{
-		if (opList == null)
+            	if (opList == null)
 			opList = new ETArrayList < IOperation > ();
 		ETList < IOperation > currentList = new ETArrayList < IOperation > ();
 
@@ -3893,7 +3924,7 @@ public class JavaChangeHandlerUtilities
                     IImplementation pRel = impRels.get(idx++);
                     if (pRel != null)
                     {
-                        IInterface pInterface = pRel.getContract();
+                        IClassifier pInterface = pRel.getContract();
                         if (pInterface != null)
                         {
                             opList =
