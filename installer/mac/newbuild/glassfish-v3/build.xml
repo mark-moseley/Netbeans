@@ -19,31 +19,33 @@ Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
 Microsystems, Inc. All Rights Reserved.
 -->
 
-<project name="glassfish" basedir="." default="build-pkg">
+<project name="glassfish-v3" basedir="." default="build-pkg">
 
     <property name="appdir" value="${basedir}/build/app"/>
     
-    <target name="clean"  depends="clean-getport">
+<!--    <target name="clean"  depends="clean-getport">-->
+    <target name="clean">
         <delete dir="build"/>
         <mkdir dir="build"/>            
     </target>
     
     <target name="get-bits">
-        <condition property="glassfish_bits_location" value="${glassfish_location_ml}" else="${glassfish_location}">
+        <condition property="glassfish_v3_bits_location" value="${glassfish_v3_location_ml}" else="${glassfish_v3_location}">
             <istrue value="${mlbuild}"/>
         </condition>  
-        <echo message="Downloading GlassFish from ${glassfish_bits_location}" />
-        <get src="${glassfish_bits_location}" dest="./build/glassfish_image.zip" usetimestamp="true"/>
+        <echo message="Downloading GlassFish V3 from ${glassfish_v3_bits_location}" />
+        <get src="${glassfish_v3_bits_location}" dest="./build/glassfish_v3_image.zip" usetimestamp="true"/>
     </target>
     
     <target name="unzip" depends="get-bits">
         <mkdir dir="build/app"/>
         <exec executable="sh" failonerror="yes">
             <arg value="-c"/>
-            <arg value="cd ${basedir}/build ; unzip glassfish_image.zip -d ${appdir}; rm ${basedir}/build/glassfish_image.zip"/>
+            <arg value="cd ${basedir}/build ; unzip glassfish_v3_image.zip -d ${appdir}; mv -f ${appdir}/${glassfish.v3.subdir}/* ${appdir}; mv -f ${appdir}/${glassfish.v3.subdir}/.org* ${appdir}; rm -rf ${appdir}/${glassfish.v3.subdir}; rm ${basedir}/build/glassfish_v3_image.zip"/>
         </exec>
     </target>
-    
+
+<!--    
     <target name="build-getport">
         <ant dir="${basedir}/getport" target="jar"/>
     </target>
@@ -52,13 +54,14 @@ Microsystems, Inc. All Rights Reserved.
         <ant dir="${basedir}/getport" target="clean"/>
         <delete file="pkg/scripts/getport.jar"/>
     </target>    
-    
-    <target name="build-pkg" depends="clean, unzip, build-getport">
+-->    
+<!--    <target name="build-pkg" depends="clean, unzip, build-getport">-->
+    <target name="build-pkg" depends="clean, unzip">
         <exec executable="sh" failonerror="yes" outputproperty="size">
             <arg value="-c"/>
-            <arg value="du -sk build | sed 's/[\t]*build//' | xargs -I {}  expr {} + 22528"/>
+            <arg value="du -sk build | sed 's/[\t]*build//' | xargs -I {}  expr {} + 5000"/>
         </exec>        
-        <echo message="sizeof.glassfish=${size}${line.separator}" file="${basedir}/../build/sizes.pro" append="true"/>            
+        <echo message="sizeof.glassfish.v3=${size}${line.separator}" file="${basedir}/../build/sizes.pro" append="true"/>            
         <echo message="Executing pack200 in ${appdir}"/>
         <exec executable="sh" failonerror="yes">
             <arg value="-c"/>
@@ -68,14 +71,14 @@ Microsystems, Inc. All Rights Reserved.
         
         <copy file="pkg/Info.plist" filtering="true" tofile="${basedir}/build/Info.plist">
             <filterset>
-                <filter token="INSTALLDIR" value="${glassfish.install.dir}"/>
-                <filter token="APPVERSION" value="${glassfish.version}"/>
+                <filter token="INSTALLDIR" value="${glassfish.v3.install.dir}"/>
+                <filter token="APPVERSION" value="${glassfish.v3.version}"/>
             </filterset>
         </copy>
         
         <copy file="../commonfiles/Description.plist" overwrite="true" filtering="true" tofile="pkg/scripts/Description.plist">
             <filterset>
-                <filter token="TITLE" value="${glassfish-title}"/>
+                <filter token="TITLE" value="${glassfish-v3-title}"/>
             </filterset>
         </copy>
         
@@ -83,14 +86,14 @@ Microsystems, Inc. All Rights Reserved.
         <copy file="${basedir}/../commonfiles/get_current_jdk.sh" tofile="${basedir}/pkg/scripts/get_current_jdk.sh"/>
         <copy file="${basedir}/../netBeans/baseide/pkg/scripts/env.sh" tofile="${basedir}/pkg/scripts/env.sh"/>
         <copy file="${basedir}/../netBeans/baseide/pkg/scripts/addproduct_id.sh" tofile="${basedir}/pkg/scripts/addproduct_id.sh"/>          
-        <copy file="${basedir}/../netBeans/baseide/pkg/scripts/add_gf.sh" tofile="${basedir}/pkg/scripts/add_gf.sh"/>
+        <copy file="${basedir}/../netBeans/baseide/pkg/scripts/add_gfv3.sh" tofile="${basedir}/pkg/scripts/add_gfv3.sh"/>
         <copy file="${basedir}/../netBeans/baseide/pkg/scripts/perm.sh" tofile="${basedir}/pkg/scripts/perm.sh"/>
-        <copy file="${basedir}/getport/dist/getport.jar" tofile="${basedir}/pkg/scripts/getport.jar"/>        
+        <!--<copy file="${basedir}/getport/dist/getport.jar" tofile="${basedir}/pkg/scripts/getport.jar"/>        -->
         
-        <echo message="Building glassfish.pkg into ${basedir}/../build/glassfish.pkg"/>
+        <echo message="Building glassfish-v3.pkg into ${basedir}/../build/glassfish-v3.pkg"/>
         <exec executable="sh" failonerror="yes">
             <arg value="-c"/>
-            <arg value="cd ${basedir} ; /Developer/Tools/packagemaker -build -v -p ${basedir}/../build/glassfish.pkg -f ${appdir} -i ${basedir}/build/Info.plist -r ${basedir}/pkg/scripts -d ${basedir}/pkg/scripts/Description.plist"/>
+            <arg value="cd ${basedir} ; /Developer/Tools/packagemaker -build -v -p ${basedir}/../build/glassfish-v3.pkg -f ${appdir} -i ${basedir}/build/Info.plist -r ${basedir}/pkg/scripts -d ${basedir}/pkg/scripts/Description.plist"/>
         </exec>
     </target>
     
