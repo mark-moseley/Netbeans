@@ -69,12 +69,22 @@ import org.w3c.dom.NodeList;
  */
 public class JBPluginUtils {
 
-    public static final String SERVER_XML = File.separator + "deploy" + File.separator +
-                "jbossweb-tomcat55.sar" + File.separator + "server.xml";
+    public static final String SERVER_4_XML = File.separator + "deploy" + File.separator + // NOI18N
+                "jbossweb-tomcat55.sar" + File.separator + "server.xml"; // NOI18N
+
+    public static final String SERVER_4_2_XML = File.separator + "deploy" + File.separator + // NOI18N
+                "jboss-web.deployer" + File.separator + "server.xml"; // NOI18N
+
+    public static final String SERVER_5_XML = File.separator + "deployers" + File.separator + // NOI18N
+                "jbossweb.deployer" + File.separator + "server.xml"; // NOI18N
+
+    public static final Version JBOSS_5_0_0 = new Version("5.0.0"); // NOI18N
 
     private static final Logger LOGGER = Logger.getLogger(JBPluginUtils.class.getName());
 
-    private static final Version DOM4J_SERVER = new Version("4.0.4");
+    private static final Version DOM4J_SERVER = new Version("4.0.4"); // NOI18N
+
+    
 
     //--------------- checking for possible domain directory -------------
     private static List<String> domainRequirements4x;
@@ -371,13 +381,21 @@ public class JBPluginUtils {
         //todo: get real deploy path
     }
 
-    public static String getHTTPConnectorPort(String domainDir){
-        String defaultPort = "8080";
-        String serverXml = domainDir + SERVER_XML; //NOI18N
+    public static String getHTTPConnectorPort(String domainDir) {
+        String defaultPort = "8080"; // NOI18N
 
-        File serverXmlFile = new File(serverXml);
-        if(!serverXmlFile.exists()){
-            return defaultPort;
+        /*
+         * Following block is trying to solve different server versions.
+         */
+        File serverXmlFile = new File(domainDir + SERVER_4_XML);
+        if (!serverXmlFile.exists()) {
+            serverXmlFile = new File(domainDir + SERVER_4_2_XML);
+            if (!serverXmlFile.exists()) {
+                serverXmlFile = new File(domainDir + SERVER_5_XML);
+                if (!serverXmlFile.exists()) {
+                    return defaultPort;
+                }
+            }
         }
 
         InputStream inputStream = null;
@@ -559,6 +577,10 @@ public class JBPluginUtils {
         assert serverPath != null : "Can't determine version with null server path"; // NOI18N
 
         File systemJarFile = new File(serverPath, "lib/jboss-system.jar"); // NOI18N
+        return getVersion(systemJarFile);
+    }
+
+    private static Version getVersion(File systemJarFile) {
         if (!systemJarFile.exists()) {
             return null;
         }
@@ -580,7 +602,7 @@ public class JBPluginUtils {
             return null;
         }
     }
-
+    
     /**
      * Class representing the JBoss version.
      * <p>
