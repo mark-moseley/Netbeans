@@ -104,16 +104,11 @@ public class FileCommandActionTest extends NbTestCase {
         
     }
     
-    protected void tearDown() throws Exception {
-        clearWorkDir();
-        super.tearDown();
-    }
-    
     public boolean runInEQ () {
         return true;
     }
     
-    public void testCommandEnablement() {
+    public void testCommandEnablement() throws Exception {
         TestSupport.ChangeableLookup lookup = new TestSupport.ChangeableLookup();
         FileCommandAction action = new FileCommandAction( "COMMAND", "TestFileCommandAction", (Icon)null, lookup );
         
