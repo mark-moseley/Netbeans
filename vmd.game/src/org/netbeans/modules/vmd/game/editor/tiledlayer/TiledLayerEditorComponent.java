@@ -62,7 +62,6 @@ import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
-import java.awt.event.ItemListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionAdapter;
@@ -199,9 +198,10 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         this.setEditMode(EDIT_MODE_PAINT);
     
         // vlv: print
-        putClientProperty(java.awt.print.Printable.class, ""); // NOI18N
+        putClientProperty("print.printable", Boolean.TRUE); // NOI18N
     }
     
+    @Override
     public Dimension getMaximumSize() {
         return new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE);
     }
@@ -216,6 +216,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         }
     }
     
+    @Override
     public String getToolTipText(MouseEvent event) {
         Position cell = this.getCellAtPoint(event.getPoint());
         int index = this.tiledLayer.getTileIndexAt(cell);
@@ -232,6 +233,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         //return "Index: " + index + " [" + cell.getRow() + "," + cell.getCol() + "]";
     }
     
+    @Override
     public Dimension getPreferredSize() {
         int width = this.gridWidth + (this.cellWidth + this.gridWidth) * this.tiledLayer.getColumnCount();
         int height = this.gridWidth + (this.cellHeight + this.gridWidth) * this.tiledLayer.getRowCount();
@@ -244,6 +246,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         this.cellHeight = this.tiledLayer.getTileHeight() + (CELL_BORDER_WIDTH*2);
     }
     
+    @Override
     public void paintComponent(Graphics g) {
         if (DEBUG) System.out.println("EditorComponent clip : " + g.getClipBounds()); // NOI18N
         if (g instanceof DebugGraphics)
@@ -514,7 +517,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         if (this.isSelectMode()) {
             synchronized (this.cellsSelected) {
                 if (e.isControlDown()) {
-                    //ctrl-left_press toogle a single cell without affecting other selection
+                    //ctrl-left_press toggle a single cell without affecting other selection
                     if (!this.cellsSelected.remove(cell)) {
                         this.cellsSelected.add(cell);
                     }
@@ -545,6 +548,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
     //MouseMotionListener
     private class PaintMotionListener extends MouseMotionAdapter {
         
+        @Override
         public void mouseDragged(MouseEvent e) {
             Point point = e.getPoint();
             Position cell = TiledLayerEditorComponent.this.getCellAtPoint(point);
@@ -650,6 +654,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
             scrollRectToVisible(r);
         }
         
+        @Override
         public void mouseMoved(MouseEvent e) {
             TiledLayerEditorComponent.this.updateHiLite(e.getPoint());
         }
@@ -663,6 +668,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         EraseSelectionAction es = new EraseSelectionAction();
         if (TiledLayerEditorComponent.this.cellsSelected.size() < 2) {
             cfs.setEnabled(false);
+            es.setEnabled(false);
         }
         
         SelectRowAction sr = new SelectRowAction();
@@ -1188,11 +1194,11 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
         this.repaint();
     }
 
-	public void tilesStructureChanged(TiledLayer source) {
-		if (DEBUG) System.out.println("tilesStructureChanged()");
+    public void tilesStructureChanged(TiledLayer source) {
+        if (DEBUG) System.out.println("tilesStructureChanged()");
         this.revalidate();
         this.repaint();
-	}
+    }
     
     public void columnsInserted(TiledLayer tiledLayer, int index, int count) {
         this.shiftSelectedCellColumns(index, count);
@@ -1370,6 +1376,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
             this.addMouseMotionListener(this);
         }
         
+        @Override
         public String getToolTipText(MouseEvent event) {
             return NbBundle.getMessage(TiledLayerEditorComponent.class, 
                     "TiledLayerEditorComponent.verticalRuler.tooltip", 
@@ -1377,12 +1384,14 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
             //return "Row: " + this.getRowAtPoint(event.getPoint());
         }
         
+        @Override
         public Dimension getPreferredSize() {
             Dimension size = TiledLayerEditorComponent.this.getPreferredSize();
             size.width = SIZE;
             return size;
         }
         
+        @Override
         protected void paintComponent(Graphics graphincs) {
             Graphics2D g = (Graphics2D) graphincs;
             
@@ -1566,6 +1575,7 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
             this.addMouseMotionListener(this);
         }
         
+        @Override
         public String getToolTipText(MouseEvent event) {
             return NbBundle.getMessage(TiledLayerEditorComponent.class, 
                     "TiledLayerEditorComponent.horizontalRuler.tooltip", 
@@ -1573,11 +1583,13 @@ public class TiledLayerEditorComponent extends JComponent implements MouseListen
             //return "Column: " + this.getColumnAtPoint(event.getPoint());
         }
         
+        @Override
         public Dimension getPreferredSize() {
             Dimension size = TiledLayerEditorComponent.this.getPreferredSize();
             size.height = SIZE;
             return size;
         }
+        @Override
         protected void paintComponent(Graphics graphincs) {
             Graphics2D g = (Graphics2D) graphincs;
             
