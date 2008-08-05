@@ -102,15 +102,15 @@ public final class RetrieveXMLResourceWizardIterator implements TemplateWizard.I
                 if (c instanceof JComponent) { // assume Swing components
                     JComponent jc = (JComponent) c;
                     // Sets step number of a component
-                    jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i));
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i));
                     // Sets steps names for a panel
-                    jc.putClientProperty("WizardPanel_contentData", steps);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);
                     // Turn on subtitle creation on each step
-                    jc.putClientProperty("WizardPanel_autoWizardStyle", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE);
                     // Show steps on the left side with the image on the background
-                    jc.putClientProperty("WizardPanel_contentDisplayed", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE);
                     // Turn on numbering of all steps
-                    jc.putClientProperty("WizardPanel_contentNumbered", Boolean.TRUE);
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE);
                 }
             }
         }
@@ -120,12 +120,11 @@ public final class RetrieveXMLResourceWizardIterator implements TemplateWizard.I
     public Set instantiate(TemplateWizard wizard) throws IOException {
         
         RetrieveXMLResourceVisualPanel1.SourceType srcType = (RetrieveXMLResourceVisualPanel1.SourceType) wizard.getProperty(IConstants.SOURCE_LOCATION_TYPE_KEY);
-        if(srcType == RetrieveXMLResourceVisualPanel1.SourceType.LOCAL_FILE){
-            return instantiateLocalFile();
-        }
-        if(srcType == RetrieveXMLResourceVisualPanel1.SourceType.URL_ADDR){
+        //always use RetrieverEngine
+        if(srcType == RetrieveXMLResourceVisualPanel1.SourceType.LOCAL_FILE ||srcType == RetrieveXMLResourceVisualPanel1.SourceType.URL_ADDR ){
             return instantiateURL();
         }
+      
         return Collections.singleton(wizard.getTargetFolder());
     }
     
@@ -137,7 +136,7 @@ public final class RetrieveXMLResourceWizardIterator implements TemplateWizard.I
         //for which new file type, was the wizard invoked??
         if (((TemplateWizard) wizard).getTemplate().getName().equals(schemaFileType) )
             new ImportDirectory(getFileURI, storedFile, overwriteFiles, DocumentTypesEnum.schema);
-        else 
+        else
             new ImportDirectory(getFileURI, storedFile, overwriteFiles, DocumentTypesEnum.wsdl);
         if (storedFile == null) {
             // Doesn't matter what it is, just so it's not null.
@@ -158,11 +157,16 @@ public final class RetrieveXMLResourceWizardIterator implements TemplateWizard.I
         boolean overwriteFiles = ((Boolean)wizard.getProperty(IConstants.OVERWRITE_FILES)).booleanValue();
         RetrieverEngine instance = RetrieverEngine.getRetrieverEngine(selectedSaveRootFolder);
         RetrieveEntry rent = null;
-        if(((Boolean) wizard.getProperty(IConstants.RETRIVE_CLOSURE_KEY)).booleanValue())
-            rent = new RetrieveEntry(null, sourceURL, null, null, DocumentTypesEnum.schema, true);
-        else
-            rent = new RetrieveEntry(null, sourceURL, null, saveRootFile, DocumentTypesEnum.schema, false);
-        instance.addResourceToRetrieve(rent);
+        //in case of from local file systems, there can be multiple files.
+        String[] urls = sourceURL.split(",");
+        for (int i = 0; i < urls.length; i++) {
+            if (((Boolean) wizard.getProperty(IConstants.RETRIVE_CLOSURE_KEY)).booleanValue()) {
+                rent = new RetrieveEntry(null, urls[i], null, null, DocumentTypesEnum.schema, true);
+            } else {
+                rent = new RetrieveEntry(null, urls[i], null, saveRootFile, DocumentTypesEnum.schema, false);
+            }
+            instance.addResourceToRetrieve(rent);
+        }
         instance.setFileOverwrite(overwriteFiles);
         instance.start();
         if (saveRootFile == null) {
@@ -285,7 +289,7 @@ public final class RetrieveXMLResourceWizardIterator implements TemplateWizard.I
     // client code.
     private String[] createSteps() {
         String[] beforeSteps = null;
-        Object prop = wizard.getProperty("WizardPanel_contentData");
+        Object prop = wizard.getProperty(WizardDescriptor.PROP_CONTENT_DATA);
         if (prop != null && prop instanceof String[]) {
             beforeSteps = (String[]) prop;
         }
