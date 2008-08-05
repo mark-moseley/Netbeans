@@ -58,7 +58,7 @@ H23
         
 #if FOUR > 5
         HI    
-#elseif FOUR+FOUR > 7
+#elif FOUR+FOUR > 7
         HI
 #else
         H2
@@ -67,3 +67,7 @@ H23
 INT main(INT argc, char**argv) {
     H2
 }
+
+#define X
+#define MACRO(x) "keyword.cc"
+#include MACRO(X)
