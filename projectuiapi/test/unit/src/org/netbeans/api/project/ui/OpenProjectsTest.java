@@ -46,7 +46,6 @@ import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.TestUtil;
@@ -67,6 +66,7 @@ public class OpenProjectsTest extends NbTestCase {
         super(testName);
     }
 
+    @Override
     protected void setUp() throws Exception {
         scratch = TestUtil.makeScratchDir(this);
         TestUtil.setLookup(new Object[] {
@@ -82,6 +82,8 @@ public class OpenProjectsTest extends NbTestCase {
     }
 
     public void testListenersNotified() throws Exception {
+        OpenProjects.getDefault().openProjects().get();
+
         PropertyChangeListenerImpl l = new PropertyChangeListenerImpl();
         
         OpenProjects.getDefault().addPropertyChangeListener(l);
@@ -89,7 +91,7 @@ public class OpenProjectsTest extends NbTestCase {
         assertEquals(0, l.events.size());
         
         OpenProjects.getDefault().open(new Project[] {testProject}, false);
-        
+
         assertEquals(1, l.events.size());
         
         PropertyChangeEvent e = l.events.remove(0);
