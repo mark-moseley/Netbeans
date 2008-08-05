@@ -41,6 +41,9 @@
 
 package org.netbeans.modules.xml.jaxb.util;
 
+import java.math.BigDecimal;
+import org.openide.WizardDescriptor;
+
 /**
  *
  * @author gpatil
@@ -50,10 +53,10 @@ public class JAXBWizModuleConstants {
     public static final String LAST_BROWSED_BINDING_DIR = "last.browsed.binding.dir" ; //NOI18N
     public static final String LAST_BROWSED_CATALOG_DIR = "last.browsed.catalog.dir" ; //NOI18N
     
-    public static final String WIZ_ERROR_MSG = "WizardPanel_errorMessage" ; //NOI18N
-    public static final String WIZ_STYLE_AUTO = "WizardPanel_autoWizardStyle"; //NOI18N
-    public static final String WIZ_CONTENT_DISPLAYED = "WizardPanel_contentDisplayed" ; //NOI18N
-    public static final String WIZ_CONTENT_NUMBERED = "WizardPanel_contentNumbered"; //I18N
+    public static final String WIZ_ERROR_MSG = WizardDescriptor.PROP_ERROR_MESSAGE ; //NOI18N
+    public static final String WIZ_STYLE_AUTO = WizardDescriptor.PROP_AUTO_WIZARD_STYLE; //NOI18N
+    public static final String WIZ_CONTENT_DISPLAYED = WizardDescriptor.PROP_CONTENT_DISPLAYED ; //NOI18N
+    public static final String WIZ_CONTENT_NUMBERED = WizardDescriptor.PROP_CONTENT_NUMBERED; //I18N
     
     public static final String JAXB_SCHEMA_TYPE_XML_SCHEMA = "-xmlschema" ; //NOI18N
     public static final String JAXB_SCHEMA_TYPE_RELAX_NG = "-relaxng" ; //NOI18N
@@ -89,6 +92,7 @@ public class JAXBWizModuleConstants {
     public static final String JAXB_COMPILE_TARGET_DEPENDS = "-pre-pre-compile" ;//NOI18N
     public static final String JAXB_COMPILE_TARGET = "jaxb-code-generation"; //NOI18N
     public static final String JAXB_CLEAN_COMPILE_TARGET = "jaxb-clean-code-generation"; //NOI18N
+    public static final BigDecimal LATEST_CFG_VERSION = new BigDecimal("0.5"); //NOI18n    
     
     private JAXBWizModuleConstants() {
     }
