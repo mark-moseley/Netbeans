@@ -175,7 +175,8 @@ public abstract class TitleWrapperPanel extends ABEBaseDropPanel{
             }
         }));
         Font font = titleLabel.getFont();
-        font = new Font(font.getName(), Font.BOLD, font.getSize());
+        //font = new Font(font.getFontName(), Font.BOLD, getFont().getSize());
+        font = font.deriveFont((font.getStyle() | java.awt.Font.BOLD), font.getSize());
         titleLabel.setFont(font);
         titleLabel.setForeground(InstanceDesignConstants.TAG_NAME_COLOR);
         

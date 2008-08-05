@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.xml.schema.abe;
 
 import java.awt.BorderLayout;
@@ -50,10 +49,7 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.awt.dnd.DropTargetEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.io.IOException;
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -69,6 +65,7 @@ import org.netbeans.modules.xml.axi.Element;
 import org.netbeans.modules.xml.schema.abe.nodes.ABEAbstractNode;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.schema.model.SchemaModel;
+import org.netbeans.spi.palette.DragAndDropHandler;
 import org.netbeans.spi.palette.PaletteActions;
 import org.netbeans.spi.palette.PaletteController;
 import org.netbeans.spi.palette.PaletteFactory;
@@ -76,6 +73,7 @@ import org.openide.ErrorManager;
 import org.openide.loaders.DataObject;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
+import org.openide.util.datatransfer.ExTransferable;
 import org.openide.windows.TopComponent;
 
 /**
@@ -111,7 +109,8 @@ public class InstanceDesignerPanel extends ABEBaseDropPanel {
         JPanel wrapperPanel = new JPanel(new BorderLayout());
         wrapperPanel.setOpaque(true);
         wrapperPanel.setBackground(new Color(252, 250, 245));
-        
+//        wrapperPanel.putClientProperty("print.printable", Boolean.TRUE); // NOI18N
+//        wrapperPanel.putClientProperty("print.size", new java.awt.Dimension(width, height)); // NOI18N
         /*wrapperPanel.addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent e) {
                 weakThis.get().dispatchEvent(e);
@@ -169,7 +168,7 @@ public class InstanceDesignerPanel extends ABEBaseDropPanel {
         context.setFocusTraversalManager(new FocusTraversalManager(context));
 
         // vlv: print
-        wrapperPanel.putClientProperty(java.awt.print.Printable.class, ""); // NOI18N
+        wrapperPanel.putClientProperty("print.printable", Boolean.TRUE); // NOI18N
     }
     
     private static String globalElementsStr = NbBundle.getMessage(InstanceDesignerPanel.class,"" +
@@ -214,16 +213,19 @@ public class InstanceDesignerPanel extends ABEBaseDropPanel {
      *
      *
      */
-    public synchronized PaletteController getPaletteController() {
+    public static synchronized PaletteController getPaletteController() {
         if (paletteController!=null)
             return paletteController;
         
         PaletteActions actions=
                 new PaletteActionsImpl();
         
+        DragAndDropHandler dndHandler = 
+                new DragAndDropHandlerImpl();
+        
         try {
             paletteController=
-                    PaletteFactory.createPalette("xmlschema-abe-palette",actions);
+                    PaletteFactory.createPalette("xmlschema-abe-palette",actions, null, dndHandler);
         } catch (IOException e) {
             ErrorManager.getDefault().notify(e);
         }
@@ -391,7 +393,7 @@ public class InstanceDesignerPanel extends ABEBaseDropPanel {
     
     private SchemaModel schemaModel;
     private AXIModel axiModel;
-    private PaletteController paletteController;
+    private static PaletteController paletteController;
     GlobalElementsContainerPanel globalElementsChildrenPanel;
     List<Component> childrenList = new ArrayList<Component>();
     NamespacePanel namespacePanel;
@@ -423,4 +425,14 @@ class PaletteActionsImpl extends PaletteActions {
     
 }
 
+class DragAndDropHandlerImpl extends DragAndDropHandler {
 
+    public DragAndDropHandlerImpl() {
+        super( true );
+    }
+    
+    @Override
+    public void customize(ExTransferable t, Lookup item) {
+    }
+
+}
