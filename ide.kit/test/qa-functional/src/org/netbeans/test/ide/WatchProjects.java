@@ -39,25 +39,37 @@
 
 package org.netbeans.test.ide;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Frame;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.JTree;
+import javax.swing.SwingUtilities;
 import junit.framework.Assert;
+import junit.framework.AssertionFailedError;
+import org.netbeans.api.java.source.ui.ScanDialog;
 import org.netbeans.junit.Log;
 import org.openide.util.Lookup;
+import org.openide.windows.TopComponent;
 
 /**
  *
  * @author Jaroslav Tulach <jtulach@netbeans.org>
  */
-final class WatchProjects {
+public final class WatchProjects {
     private static Logger LOG = Logger.getLogger(WatchProjects.class.getName());
     
     
     private static Method getProjects;
     private static Method closeProjects;
     private static Object projectManager;
-    
+
     private WatchProjects() {
     }
     
@@ -89,8 +101,135 @@ final class WatchProjects {
             getProjects.invoke(projectManager)
         );
         
-        System.setProperty("assertgc.paths", "20");
-     // disabled due to issue 124038
-     // Log.assertInstances("Checking if all projects are really garbage collected");
+        resetJTreeUIs(Frame.getFrames());
+
+        tryCloseNavigator();
+        
+        StringSelection ss = new StringSelection("");
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(ss, ss);
+        Toolkit.getDefaultToolkit().getSystemSelection().setContents(ss, ss);
+            
+        for (Frame f : Frame.getFrames()) {
+            f.setVisible(false);
+        }
+        
+        clearField("sun.awt.im.InputContext", "previousInputMethod");
+        clearField("sun.awt.im.InputContext", "inputMethodWindowContext");
+        clearField("sun.awt.im.CompositionAreaHandler", "compositionAreaOwner");
+        clearField("sun.awt.AppContext", "mainAppContext");
+        clearField("org.netbeans.modules.beans.BeanPanel", "INSTANCE");
+        clearField("java.awt.KeyboardFocusManager", "focusedWindow");
+        clearField("java.awt.KeyboardFocusManager", "activeWindow");
+        clearField("java.awt.KeyboardFocusManager", "focusOwner");
+        clearField("org.netbeans.jemmy.EventTool", "listenerSet");
+        clearField("sun.awt.X11.XKeyboardFocusManagerPeer", "currentFocusOwner");
+        clearField("sun.awt.X11.XKeyboardFocusManagerPeer", "currentFocusedWindow");
+        clearField("org.netbeans.modules.java.navigation.CaretListeningFactory", "INSATNCE");
+        
+        Object o = getFieldValue("org.netbeans.api.java.source.JavaSource", "toRemove");
+        if (o instanceof Collection) {
+            Collection c = (Collection)o;
+            c.clear();
+        }
+        
+        clearField("sun.awt.im.InputContext", "previousInputMethod");
+        clearField("sun.awt.im.InputContext", "inputMethodWindowContext");
+        
+        System.setProperty("assertgc.paths", "5");
+        Log.assertInstances("Checking if all projects are really garbage collected");
+    }
+    
+    private static void resetJTreeUIs(Component[] arr) {
+        for (Component c : arr) {
+            if (c instanceof JTree) {
+                JTree jt = (JTree)c;
+                jt.updateUI();
+            }
+            if (c instanceof Container) {
+                Container o = (Container)c;
+                resetJTreeUIs(o.getComponents());
+            }
+        }
+    }
+
+    /** 
+     * #124061 workaround - close navigator before tests
+     */
+    private static void tryCloseNavigator() throws Exception {
+        for (TopComponent c : TopComponent.getRegistry().getOpened()) {
+            LOG.fine("Processing TC " + c.getDisplayName() + "class " + c.getClass().getName());
+            if (c.getClass().getName().equals("org.netbeans.modules.navigator.NavigatorTC")) {
+                final TopComponent navigator = (TopComponent)c;
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        navigator.close();
+                    }
+                });
+                LOG.fine("tryCloseNavigator: Navigator closed, OK!");
+                break;
+            }
+        }
+        clearField("org.netbeans.modules.navigator.NavigatorTC", "instance");
+        clearField("org.netbeans.modules.navigator.ProviderRegistry","instance");
+    }
+
+    private static void clearField(String clazz, String... name) throws Exception {
+        Object ret = null;
+        for (int i = 0; i < name.length; i++) {
+            Field f = i == 0 ? getField(clazz, name[0]) : getField(ret.getClass(), name[i]);
+            Object now = ret;
+            ret = f.get(now);
+            f.set(now, null);
+            Assert.assertEquals("Field is really cleared " + f, null, f.get(now));
+        }
+    }
+    private static Object getFieldValue(String clazz, String... name) throws Exception {
+        Object ret = null;
+        for (int i = 0; i < name.length; i++) {
+            Field f = i == 0 ? getField(clazz, name[0]) : getField(ret.getClass(), name[i]);
+            ret = f.get(ret);
+        }
+        return ret;
+    }
+    
+    
+    private static Field getField(String clazz, String name) throws NoSuchFieldException, ClassNotFoundException {
+        ClassLoader l = Thread.currentThread().getContextClassLoader();
+        if (l == null) {
+            l = WatchProjects.class.getClassLoader();
+        }
+        Class<?> c = Class.forName(clazz, true, l);
+        return getField(c, name);
+    }
+    private static Field getField(Class<?> clazz, String name) throws NoSuchFieldException {
+        Field f = clazz.getDeclaredField(name);
+        f.setAccessible(true);
+        return f;
+    }
+    
+    
+    public static void waitScanFinished() {
+        try {
+            class Wait implements Runnable {
+
+                boolean initialized;
+                boolean ok;
+
+                public void run() {
+                    if (initialized) {
+                        ok = true;
+                        return;
+                    }
+                    initialized = true;
+                    boolean canceled = ScanDialog.runWhenScanFinished(this, "tests");
+                    Assert.assertFalse("Dialog really finished", canceled);
+                    Assert.assertTrue("Runnable run", ok);
+                }
+            }
+            Wait wait = new Wait();
+            SwingUtilities.invokeAndWait(wait);
+        } catch (Exception ex) {
+            throw (AssertionFailedError)new AssertionFailedError().initCause(ex);
+        }
     }
 }

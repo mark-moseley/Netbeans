@@ -54,6 +54,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import org.netbeans.core.windows.Switches;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
+import org.openide.util.Mutex;
 
 
 /** An action that can toggle maximized window system mode for specific window.
@@ -63,7 +67,7 @@ import java.beans.PropertyChangeListener;
 public class MaximizeWindowAction extends AbstractAction {
 
     private final PropertyChangeListener propListener;
-    private TopComponent topComponent;
+    private Reference<TopComponent> topComponent;
     private boolean isPopup;
     
     public MaximizeWindowAction() {
@@ -96,7 +100,7 @@ public class MaximizeWindowAction extends AbstractAction {
      * see #38801 for details
      */
     public MaximizeWindowAction (TopComponent tc) {
-        topComponent = tc;
+        topComponent = new WeakReference<TopComponent>(tc);
         propListener = null;
         isPopup = true;
         updateState();
@@ -148,15 +152,11 @@ public class MaximizeWindowAction extends AbstractAction {
      * #44825 - Shortcuts folder can call our constructor from non-AWT thread.
      */
     private void updateState() {
-        if (SwingUtilities.isEventDispatchThread()) {
-            doUpdateState();
-        } else {
-            SwingUtilities.invokeLater(new Runnable() {
-                public void run() {
-                    doUpdateState();
-                }
-            });
-        }
+        Mutex.EVENT.readAccess( new Runnable() {
+            public void run() {
+                doUpdateState();
+            }
+        });
     }
     
     /** Updates state and text of this action.
@@ -164,10 +164,12 @@ public class MaximizeWindowAction extends AbstractAction {
     private void doUpdateState() {
         WindowManagerImpl wm = WindowManagerImpl.getInstance();
         TopComponent active = getTCToWorkWith();
-        Object param = active == null ? "" : active.getName(); // NOI18N
         boolean maximize;
         ModeImpl activeMode = (ModeImpl)wm.findMode(active);
-        if (activeMode == null) {
+        if (activeMode == null || !Switches.isTopComponentMaximizationEnabled() ) {
+            String label = NbBundle.getMessage(MaximizeWindowAction.class, "CTL_MaximizeWindowAction"); //NOI18N
+            putValue(Action.NAME, (isPopup ? Actions.cutAmpersand(label) : label));
+            setEnabled(false);
             return;
         }
 
@@ -183,9 +185,9 @@ public class MaximizeWindowAction extends AbstractAction {
 
         String label;
         if(maximize) {
-            label = NbBundle.getMessage(MaximizeWindowAction.class, "CTL_MaximizeWindowAction", param);
+            label = NbBundle.getMessage(MaximizeWindowAction.class, "CTL_MaximizeWindowAction");
         } else {
-            label = NbBundle.getMessage(MaximizeWindowAction.class, "CTL_UnmaximizeWindowAction", param);
+            label = NbBundle.getMessage(MaximizeWindowAction.class, "CTL_UnmaximizeWindowAction");
         }
         putValue(Action.NAME, (isPopup ? Actions.cutAmpersand(label) : label));
         
@@ -194,13 +196,17 @@ public class MaximizeWindowAction extends AbstractAction {
     
     private TopComponent getTCToWorkWith () {
         if (topComponent != null) {
-            return topComponent;
+            TopComponent tc = topComponent.get();
+            if (tc != null) {
+                return tc;
+            }
         }
         return TopComponent.getRegistry().getActivated();
     }
     
     /** Overriden to share accelerator between instances of this action.
      */ 
+    @Override
     public void putValue(String key, Object newValue) {
         if (Action.ACCELERATOR_KEY.equals(key)) {
             ActionUtils.putSharedAccelerator("MaximizeWindow", newValue);
