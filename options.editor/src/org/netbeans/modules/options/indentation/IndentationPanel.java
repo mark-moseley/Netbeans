@@ -48,21 +48,29 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import javax.swing.AbstractButton;
+import javax.swing.JComponent;
+import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SpinnerNumberModel;
-import javax.swing.SwingUtilities;
-import javax.swing.border.EtchedBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.Document;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.Formatter;
-import org.netbeans.spi.options.OptionsPanelController;
+import org.netbeans.modules.editor.indent.api.IndentUtils;
+import org.netbeans.modules.editor.indent.api.Reformat;
+import org.netbeans.modules.options.editor.spi.PreviewProvider;
 import org.openide.awt.Mnemonics;
+import org.openide.text.CloneableEditorSupport;
 import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
 
 
 /**
@@ -70,123 +78,214 @@ import org.openide.util.NbBundle;
  *
  * @author Jan Jancura
  */
-public class IndentationPanel extends JPanel implements ChangeListener, 
-ActionListener {
-    
-    private IndentationModel    model;
-    private String              originalText;
-    private boolean             listen = false;
-    private boolean             changed = false;
+public class IndentationPanel extends JPanel implements ChangeListener, ActionListener, PreferenceChangeListener {
 
+    private static final Logger LOG = Logger.getLogger(IndentationPanel.class.getName());
+    
+    private final Preferences prefs;
+    private final PreviewProvider preview;
+    private final boolean showOverrideGlobalOptions;
     
     /** 
      * Creates new form IndentationPanel.
      */
-    public IndentationPanel () {
+    public IndentationPanel(Preferences prefs, PreviewProvider preview) {
+        this.prefs = prefs;
+        this.prefs.addPreferenceChangeListener(WeakListeners.create(PreferenceChangeListener.class, this, prefs));
+
+        if (preview == null) {
+            this.preview = new IndentationPreview();
+            this.showOverrideGlobalOptions = false;
+        } else {
+            this.preview = preview;
+            this.showOverrideGlobalOptions = true;
+        }
+        
         initComponents ();
+        cbOverrideGlobalOptions.setVisible(showOverrideGlobalOptions);
         
         // localization
-        setName(loc ("Indentation_Tab")); //NOI18N
+        loc (cbOverrideGlobalOptions, "Override_Global_Options"); //NOI18N
         loc (lNumberOfSpacesPerIndent, "Indent"); //NOI18N
         loc (lTabSize, "TabSize"); //NOI18N
-        loc (lPreview, "Preview"); //NOI18N
-        loc (lExpandTabsToSpaces, "Expand_Tabs"); //NOI18N
+        loc (cbExpandTabsToSpaces, "Expand_Tabs"); //NOI18N
         loc (lRightMargin, "Right_Margin"); //NOI18N
         cbExpandTabsToSpaces.getAccessibleContext ().setAccessibleName (loc ("AN_Expand_Tabs")); //NOI18N
         cbExpandTabsToSpaces.getAccessibleContext ().setAccessibleDescription (loc ("AD_Expand_Tabs")); //NOI18N
-        epPreview.getAccessibleContext ().setAccessibleName (loc ("AN_Preview")); //NOI18N
-        epPreview.getAccessibleContext ().setAccessibleDescription (loc ("AD_Preview")); //NOI18N
 
         //listeners
-        epPreview.setBorder (new EtchedBorder ());
-        cbExpandTabsToSpaces.addActionListener (this);
-        sNumberOfSpacesPerIndent.setModel (new SpinnerNumberModel (4, 1, 50, 1));
-        sNumberOfSpacesPerIndent.addChangeListener (this);
-        sTabSize.setModel (new SpinnerNumberModel (4, 1, 50, 1));
-        sTabSize.addChangeListener (this);
-        sRightMargin.setModel (new SpinnerNumberModel (120, 1, 200, 10));
-        sRightMargin.addChangeListener (this);
-        epPreview.setEnabled (false);
+        cbOverrideGlobalOptions.addActionListener(this);
+        cbExpandTabsToSpaces.addActionListener(this);
+        sNumberOfSpacesPerIndent.setModel(new SpinnerNumberModel(4, 1, 50, 1));
+        sNumberOfSpacesPerIndent.addChangeListener(this);
+        sTabSize.setModel(new SpinnerNumberModel(4, 1, 50, 1));
+        sTabSize.addChangeListener(this);
+        sRightMargin.setModel(new SpinnerNumberModel(120, 1, 200, 10));
+        sRightMargin.addChangeListener(this);
+
+        // initialize controls
+        preferenceChange(null);
     }
+
+    public PreviewProvider getPreviewProvider() {
+        return preview;
+    }
+
+    // ------------------------------------------------------------------------
+    // ChangeListener implementation
+    // ------------------------------------------------------------------------
+
+    public void stateChanged (ChangeEvent e) {
+        if (sNumberOfSpacesPerIndent == e.getSource()) {
+            prefs.putInt(SimpleValueNames.INDENT_SHIFT_WIDTH, (Integer) sNumberOfSpacesPerIndent.getValue());
+            prefs.putInt(SimpleValueNames.SPACES_PER_TAB, (Integer) sNumberOfSpacesPerIndent.getValue());
+        } else if (sTabSize == e.getSource()) {
+            prefs.putInt(SimpleValueNames.TAB_SIZE, (Integer) sTabSize.getValue());
+        } else if (sRightMargin == e.getSource()) {
+            prefs.putInt(SimpleValueNames.TEXT_LIMIT_WIDTH, (Integer) sRightMargin.getValue());
+        }
+    }
+    
+    // ------------------------------------------------------------------------
+    // ActionListener implementation
+    // ------------------------------------------------------------------------
+
+    public void actionPerformed (ActionEvent e) {
+        if (cbOverrideGlobalOptions == e.getSource()) {
+            prefs.putBoolean(SimpleValueNames.OVERRIDE_GLOBAL_FORMATTING_OPTIONS, cbOverrideGlobalOptions.isSelected());
+        } else if (cbExpandTabsToSpaces == e.getSource()) {
+            prefs.putBoolean(SimpleValueNames.EXPAND_TABS, cbExpandTabsToSpaces.isSelected());
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // PreferenceChangeListener implementation
+    // ------------------------------------------------------------------------
+
+    public void preferenceChange(PreferenceChangeEvent evt) {
+        String key = evt == null ? null : evt.getKey();
+        boolean needsRefresh = false;
+
+        if (key == null || SimpleValueNames.EXPAND_TABS.equals(key)) {
+            boolean value = prefs.getBoolean(SimpleValueNames.EXPAND_TABS, true);
+            if (value != cbExpandTabsToSpaces.isSelected()) {
+                cbExpandTabsToSpaces.setSelected(value);
+            }
+            needsRefresh = true;
+        }
+        
+        if (key == null || SimpleValueNames.INDENT_SHIFT_WIDTH.equals(key)) {
+            int nue = prefs.getInt(SimpleValueNames.INDENT_SHIFT_WIDTH, 4);
+            if (nue != (Integer) sNumberOfSpacesPerIndent.getValue()) {
+                sNumberOfSpacesPerIndent.setValue(nue);
+            }
+            needsRefresh = true;
+        }
+        
+        if (key == null || SimpleValueNames.SPACES_PER_TAB.equals(key)) {
+            int nue = prefs.getInt(SimpleValueNames.SPACES_PER_TAB, 4);
+            if (nue != (Integer) sNumberOfSpacesPerIndent.getValue()) {
+                sNumberOfSpacesPerIndent.setValue(nue);
+            }
+            needsRefresh = true;
+        }
+        
+        if (key == null || SimpleValueNames.TAB_SIZE.equals(key)) {
+            int nue = prefs.getInt(SimpleValueNames.TAB_SIZE, 8);
+            if (nue != (Integer) sTabSize.getValue()) {
+                sTabSize.setValue(nue);
+            }
+            needsRefresh = true;
+        }
+
+        if (key == null || SimpleValueNames.TEXT_LIMIT_WIDTH.equals(key)) {
+            int nue = prefs.getInt(SimpleValueNames.TEXT_LIMIT_WIDTH, 80);
+            if (nue != (Integer) sRightMargin.getValue()) {
+                sRightMargin.setValue(nue);
+            }
+            needsRefresh = true;
+        }
+
+        if (needsRefresh) {
+            preview.refreshPreview();
+        }
+    }
+
     
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
         lNumberOfSpacesPerIndent = new javax.swing.JLabel();
         sNumberOfSpacesPerIndent = new javax.swing.JSpinner();
         cbExpandTabsToSpaces = new javax.swing.JCheckBox();
-        lPreview = new javax.swing.JLabel();
-        jScrollPane1 = new javax.swing.JScrollPane();
-        epPreview = new javax.swing.JEditorPane();
         lTabSize = new javax.swing.JLabel();
         sTabSize = new javax.swing.JSpinner();
-        lExpandTabsToSpaces = new javax.swing.JLabel();
         lRightMargin = new javax.swing.JLabel();
         sRightMargin = new javax.swing.JSpinner();
+        cbOverrideGlobalOptions = new javax.swing.JCheckBox();
 
         lNumberOfSpacesPerIndent.setLabelFor(sNumberOfSpacesPerIndent);
         lNumberOfSpacesPerIndent.setText("Number of Spaces per Indent:");
 
+        cbExpandTabsToSpaces.setText("Expand Tabs to Spaces");
         cbExpandTabsToSpaces.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         cbExpandTabsToSpaces.setMargin(new java.awt.Insets(0, 0, 0, 0));
-
-        lPreview.setText("Preview:");
-
-        jScrollPane1.setViewportView(epPreview);
 
         lTabSize.setLabelFor(sTabSize);
         lTabSize.setText("Tab Size:");
 
-        lExpandTabsToSpaces.setLabelFor(cbExpandTabsToSpaces);
-        lExpandTabsToSpaces.setText("Expand Tabs To Spaces:");
-
         lRightMargin.setLabelFor(sRightMargin);
         lRightMargin.setText("Right Margin:");
+
+        cbOverrideGlobalOptions.setText("Override Global Options");
+        cbOverrideGlobalOptions.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 763, Short.MAX_VALUE)
             .add(layout.createSequentialGroup()
-                .add(lPreview)
-                .addContainerGap())
-            .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(layout.createSequentialGroup()
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(layout.createSequentialGroup()
-                                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                                    .add(lNumberOfSpacesPerIndent, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 211, Short.MAX_VALUE)
-                                    .add(lTabSize, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 211, Short.MAX_VALUE))
-                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED))
-                            .add(layout.createSequentialGroup()
-                                .add(lRightMargin)
-                                .add(140, 140, 140)))
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING, false)
-                            .add(sRightMargin)
-                            .add(sTabSize)
-                            .add(sNumberOfSpacesPerIndent, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 42, Short.MAX_VALUE))
-                        .add(204, 204, 204))
+                        .add(lRightMargin, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 195, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 12, Short.MAX_VALUE))
                     .add(layout.createSequentialGroup()
-                        .add(cbExpandTabsToSpaces)
+                        .add(lTabSize, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 219, Short.MAX_VALUE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED))
+                    .add(layout.createSequentialGroup()
+                        .add(lNumberOfSpacesPerIndent, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 219, Short.MAX_VALUE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED))
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
+                            .add(org.jdesktop.layout.GroupLayout.LEADING, cbExpandTabsToSpaces, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 207, Short.MAX_VALUE)
+                            .add(cbOverrideGlobalOptions, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 207, Short.MAX_VALUE))
+                        .add(24, 24, 24)))
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
+                    .add(layout.createSequentialGroup()
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(lExpandTabsToSpaces)))
-                .add(294, 294, 294))
+                        .add(sNumberOfSpacesPerIndent, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 42, Short.MAX_VALUE))
+                    .add(layout.createSequentialGroup()
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(sTabSize, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 42, Short.MAX_VALUE))
+                    .add(layout.createSequentialGroup()
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(sRightMargin, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 42, Short.MAX_VALUE))))
         );
+
+        layout.linkSize(new java.awt.Component[] {sNumberOfSpacesPerIndent, sRightMargin, sTabSize}, org.jdesktop.layout.GroupLayout.HORIZONTAL);
+
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
-                .add(14, 14, 14)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(cbExpandTabsToSpaces)
-                    .add(lExpandTabsToSpaces))
+                .add(cbOverrideGlobalOptions)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(cbExpandTabsToSpaces, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 19, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(lNumberOfSpacesPerIndent)
                     .add(sNumberOfSpacesPerIndent, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
@@ -198,21 +297,18 @@ ActionListener {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(lRightMargin)
                     .add(sRightMargin, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
-                .add(lPreview)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 165, Short.MAX_VALUE))
+                .add(0, 0, Short.MAX_VALUE))
         );
+
+        layout.linkSize(new java.awt.Component[] {sNumberOfSpacesPerIndent, sRightMargin, sTabSize}, org.jdesktop.layout.GroupLayout.VERTICAL);
+
     }// </editor-fold>//GEN-END:initComponents
     
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JCheckBox cbExpandTabsToSpaces;
-    private javax.swing.JEditorPane epPreview;
-    private javax.swing.JScrollPane jScrollPane1;
-    private javax.swing.JLabel lExpandTabsToSpaces;
+    private javax.swing.JCheckBox cbOverrideGlobalOptions;
     private javax.swing.JLabel lNumberOfSpacesPerIndent;
-    private javax.swing.JLabel lPreview;
     private javax.swing.JLabel lRightMargin;
     private javax.swing.JLabel lTabSize;
     private javax.swing.JSpinner sNumberOfSpacesPerIndent;
@@ -237,132 +333,69 @@ ActionListener {
         }
     }
 
-    private void updatePreview () {
-        model.setExpandTabs (cbExpandTabsToSpaces.isSelected ());
-        model.setSpacesPerTab (
-            (Integer) sNumberOfSpacesPerIndent.getValue ()
-        );
-        model.setTabSize(
-            (Integer) sTabSize.getValue ()
-        );
-        model.setRightMargin(
-            (Integer) sRightMargin.getValue ()
-        );
-        
-        // start formatter
-        SwingUtilities.invokeLater (new Runnable () {
-            public void run () {
-                epPreview.setText (originalText);
-                Document doc = epPreview.getDocument ();
-                if (doc instanceof BaseDocument) {
-                    BaseDocument bdoc = (BaseDocument)doc;
-                    Formatter formatter = bdoc.getFormatter();
-                    formatter.reformatLock();
-                    bdoc.atomicLock();
-                    try {
-                        formatter.reformat (bdoc, 0, bdoc.getLength());
-                    } catch (BadLocationException ex) {
-                        ex.printStackTrace ();
-                    } finally {
-                        bdoc.atomicUnlock();
-                        formatter.reformatUnlock();
-                    }
-                }
-            }
-        });
-    }
-    
-    
-    // ActionListener ..........................................................
-    
-    public void stateChanged (ChangeEvent e) {
-        if (!listen) return;
-        updatePreview ();
-        if (changed != model.isChanged ()) {
-            firePropertyChange (
-                OptionsPanelController.PROP_CHANGED,
-                Boolean.valueOf (changed),
-                Boolean.valueOf (model.isChanged ())
-            );
-        }
-        changed = model.isChanged ();
-    }
-    
-    public void actionPerformed (ActionEvent e) {
-        if (!listen) return;
-        updatePreview ();
-        if (changed != model.isChanged ()) {
-            firePropertyChange (
-                OptionsPanelController.PROP_CHANGED,
-                Boolean.valueOf (changed),
-                Boolean.valueOf (model.isChanged ())
-            );
-        }
-        changed = model.isChanged ();
-    }
+    private static class IndentationPreview implements PreviewProvider {
 
-    public void update () {
-        model = new IndentationModel ();
-        
-        if (originalText == null) {
-            // add text to preview
-            try {
-                InputStream is = getClass ().getResourceAsStream("/org/netbeans/modules/options/indentation/indentationExample"); //NOI18N
-                BufferedReader r = new BufferedReader (new InputStreamReader (is));
+        private JEditorPane jep;
+        private String previewText;
+
+        public JComponent getPreviewComponent() {
+            if (jep == null) {
+                jep = new JEditorPane();
+                jep.getAccessibleContext().setAccessibleName(NbBundle.getMessage(IndentationPanel.class, "AN_Preview")); //NOI18N
+                jep.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(IndentationPanel.class, "AD_Preview")); //NOI18N
+                jep.putClientProperty("HighlightsLayerIncludes", "^org\\.netbeans\\.modules\\.editor\\.lib2\\.highlighting\\.SyntaxHighlighting$"); //NOI18N
+                jep.setEditorKit(CloneableEditorSupport.getEditorKit("text/xml"));
+                jep.setEditable(false);
+            }
+            return jep;
+        }
+
+        public void refreshPreview() {
+            if (previewText == null) {
+                // add text to preview
                 try {
-                    StringBuffer sb = new StringBuffer ();
-                    String line = r.readLine ();
-                    while (line != null) {
-                        sb.append (line).append ('\n'); //NOI18N
-                        line = r.readLine ();
+                    InputStream is = getClass ().getResourceAsStream("/org/netbeans/modules/options/indentation/indentationExample"); //NOI18N
+                    BufferedReader r = new BufferedReader (new InputStreamReader (is));
+                    try {
+                        StringBuilder sb = new StringBuilder();
+                        for (String line = r.readLine (); line != null; line = r.readLine()) {
+                            sb.append (line).append ('\n'); //NOI18N
+                        }
+                        previewText = sb.toString();
+                    } finally {
+                        r.close();
                     }
-                        originalText = new String (sb);
-                } finally {
-                    r.close();
+                } catch (IOException ioe) {
+                    LOG.log(Level.WARNING, null, ioe);
                 }
-            } catch (IOException ex) {
-                ex.printStackTrace ();
             }
-        }
-        
-        // init components
-        listen = false;
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                epPreview.setContentType("text/xml");
-                cbExpandTabsToSpaces.setSelected(model.isExpandTabs());
-                sNumberOfSpacesPerIndent.setValue(model.getSpacesPerTab());
-                sTabSize.setValue(model.getTabSize());
-                sRightMargin.setValue(model.getRightMargin());
-                listen = true;
 
-                // update preview
-                updatePreview();
+            JEditorPane pane = (JEditorPane) getPreviewComponent();
+            pane.setText(previewText);
+            BaseDocument doc = (BaseDocument) pane.getDocument();
+            Reformat reformat = Reformat.get(doc);
+            reformat.lock();
+            try {
+                doc.atomicLock();
+                try {
+                    if (LOG.isLoggable(Level.FINE)) {
+                        LOG.fine("Refreshing preview: expandTabs=" + IndentUtils.isExpandTabs(doc) //NOI18N
+                                + ", indentLevelSize=" + IndentUtils.indentLevelSize(doc) //NOI18N
+                                + ", tabSize=" + IndentUtils.tabSize(doc) //NOI18N
+                                + ", mimeType='" + doc.getProperty("mimeType") + "'" //NOI18N
+                                + ", doc=" + doc); //NOI18N
+                    }
+                    reformat.reformat(0, doc.getLength());
+                } catch (BadLocationException ble) {
+                    LOG.log(Level.WARNING, null, ble);
+                } finally {
+                    doc.atomicUnlock();
+                }
+            } finally {
+                reformat.unlock();
             }
-        });
-    }
-    
-    public void applyChanges () {
-        if (model != null) {
-            model.applyChanges ();
+            
         }
-    }
-    
-    public void cancel () {
-        if (model != null) {
-            model.revertChanges ();
-        }
-    }
-    
-    public boolean dataValid () {
-        return true;
-    }
-    
-    public boolean isChanged () {
-        if (model == null) {
-            return false;
-        } else {
-            return model.isChanged ();
-        }
-    }
+
+    } // End of IndentationPreview class
 }
