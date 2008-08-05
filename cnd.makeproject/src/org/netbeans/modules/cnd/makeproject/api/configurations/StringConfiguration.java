@@ -104,6 +104,10 @@ public class StringConfiguration {
 	value = getDefault();
 	setModified(false);
     }
+    
+    public void setDefaultValue(String def) {
+        this.def = def;
+    }
 
     // Clone and Assign
     public void assign(StringConfiguration conf) {
@@ -111,6 +115,7 @@ public class StringConfiguration {
 	setModified(conf.getModified());
     }
 
+    @Override
     public Object clone() {
 	StringConfiguration clone = new StringConfiguration(master, def);
 	clone.setValue(getValue());
