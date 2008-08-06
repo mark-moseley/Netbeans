@@ -153,6 +153,13 @@ public class IntroduceHintTest extends NbTestCase {
     public void testCorrectSelection13() throws Exception {
         performSimpleSelectionVerificationTest("package test; public class Test {public void test() {new |Object|();}}", false);
     }
+
+    public void test142424() throws Exception {
+        performFixTest("package test; public class Test {private static void bar(int i) {} public void test() {new Runnable() {public void run() {String foo = \"foo\";bar(|foo.length()|);}}.run();}}",
+                       "package test; public class Test {private static void bar(int i) {} public void test() {new Runnable() {public void run() {String foo = \"foo\";int length = foo.length(); bar( length);}}.run();}}",
+                       new DialogDisplayerImpl(null, false, false, true),
+                       3, 0);
+    }
     
     public void testFix1() throws Exception {
         performFixTest("package test; public class Test {public void test() {int y = 3; int x = y + 9;}}",
@@ -245,6 +252,42 @@ public class IntroduceHintTest extends NbTestCase {
         performFixTest("package test; import java.util.List; public class Test {public void test1() {List<? extends CharSequence> l = null; CharSequence c = |l.get(0)|;} }",
                        "package test; import java.util.List; public class Test {public void test1() {List<? extends CharSequence> l = null;CharSequence name = l.get(0); CharSequence c = name;} }",
                        new DialogDisplayerImpl("name", true, null, true),
+                       3, 0);
+    }
+    
+    public void testFix126460() throws Exception {
+        performFixTest("package test; import java.util.List; public class Test {public void test1() {List<String> l = null; assert |l.get(0)| == null;} }",
+                       "package test; import java.util.List; public class Test {public void test1() {List<String> l = null;String name = l.get(0); assert name == null;} }",
+                       new DialogDisplayerImpl("name", true, false, true),
+                       3, 0);
+    }
+    
+    public void testFix126269() throws Exception {
+        performFixTest("package test;\n" +
+                       "public class Test {\n" +
+                       "    public void test() {\n" +
+                       "        javax.swing.JTable table = null;\n" +
+                       "        if (true) {\n" +
+                       "            table.getColumnModel().getColumn(0);\n" +
+                       "        } else {\n" +
+                       "            |table.getColumnModel()|.getColumn(0);\n" +
+                       "        }\n" +
+                       "    }\n" +
+                       "}\n",
+                       "package test;\n" +
+                       "import javax.swing.table.TableColumnModel;\n" +
+                       "public class Test {\n" +
+                       "    public void test() {\n" +
+                       "        javax.swing.JTable table = null;\n" +
+                       "        TableColumnModel name = table.getColumnModel();\n" +
+                       "        if (true) {\n" +
+                       "            name.getColumn(0);\n" +
+                       "        } else {\n" +
+                       "            name.getColumn(0);\n" +
+                       "        }\n" +
+                       "    }\n" +
+                       "}\n",
+                       new DialogDisplayerImpl("name", true, false, true),
                        3, 0);
     }
     
@@ -950,7 +993,7 @@ public class IntroduceHintTest extends NbTestCase {
     
     private void performSimpleSelectionVerificationTest(String code, int start, int end, boolean awaited) throws Exception {
         prepareTest(code);
-        
+
         assertEquals(awaited, IntroduceHint.validateSelection(info, start, end) != null);
     }
     
@@ -1014,6 +1057,7 @@ public class IntroduceHintTest extends NbTestCase {
         fixes.get(useFix).implement();
         
         String result = doc.getText(0, doc.getLength()).replaceAll("[ \t\n]+", " ");
+        golden = golden.replaceAll("[ \t\n]+", " ");
         
         assertEquals(golden, result);
     }
