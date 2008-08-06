@@ -84,6 +84,7 @@ public final class LogRecords {
         String formated = FORMATTER.format(rec);
         byte[] arr = formated.getBytes("utf-8");
         os.write(arr);
+        os.flush();
     }
 
     public static void scan(InputStream is, Handler h) throws IOException {
@@ -275,12 +276,12 @@ public final class LogRecords {
                 if (lev != null) {
                     LogRecord r = new LogRecord(parseLevel(lev), key != null && catalog != null ? key : msg);
                     try {
-                        r.setThreadID(Integer.parseInt(thread));
+                        r.setThreadID(parseInt(thread));
                     } catch (NumberFormatException ex) {
                         LOG.log(Level.WARNING, ex.getMessage(), ex);
                     }
-                    r.setSequenceNumber(Long.parseLong(seq));
-                    r.setMillis(Long.parseLong(millis));
+                    r.setSequenceNumber(parseLong(seq));
+                    r.setMillis(parseLong(millis));
                     r.setResourceBundleName(key);
                     if (catalog != null && key != null) {
                         r.setResourceBundleName(catalog);
@@ -315,7 +316,30 @@ public final class LogRecords {
             }
             
         }
-        
+
+        private long parseLong(String str){
+            if (str == null){
+                return 0l;
+            }
+            try{
+                return Long.parseLong(str);
+            }catch(NumberFormatException exc){
+                LOG.log(Level.INFO, exc.getMessage(), exc);
+                return 0l;
+            }
+        }
+
+        private int parseInt(String str){
+            if (str == null){
+                return 0;
+            }
+            try{
+                return Integer.parseInt(str);
+            }catch(NumberFormatException exc){
+                LOG.log(Level.INFO, exc.getMessage(), exc);
+                return 0;
+            }
+        }
         /** set first element of exceptions as a result of this calling and
          * recursively fill it's cause
          */
