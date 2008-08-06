@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,57 +38,50 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.test.j2ee.addmethod;
 
-import java.io.File;
 import java.io.IOException;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.EditorWindowOperator;
-import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.actions.ActionNoBlock;
 import org.netbeans.jellytools.actions.OpenAction;
 import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jemmy.JemmyException;
-import org.netbeans.jemmy.Waitable;
-import org.netbeans.jemmy.Waiter;
 import org.netbeans.jemmy.operators.*;
-import org.netbeans.jemmy.util.PNGEncoder;
-import org.netbeans.test.j2ee.*;
 import javax.swing.JTextField;
+import org.netbeans.test.j2ee.EJBValidation;
+import org.netbeans.jellytools.modules.java.editor.GenerateCodeOperator;
 
 /**
  *
  * @author lm97939
  */
 public class AddFinderMethodTest extends AddMethodTest {
-    
+
     private boolean returnManyCardinality = true;
     protected String ejbql = null;
     private String toSearchFile;
-    
+
     /** Creates a new instance of AddMethodTest */
     public AddFinderMethodTest(String name) {
         super(name);
     }
-    
+
     /** Use for execution inside IDE */
     public static void main(java.lang.String[] args) {
         // run only selected test case
         junit.textui.TestRunner.run(new AddFinderMethodTest("testAddFinderMethod2InEB"));
     }
-    
-    public void setUp() {
-        System.out.println("########  "+getName()+"  #######");
+
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+        System.out.println("########  " + getName() + "  #######");
     }
-    
-    public void testAddFinderMethod1InEB()  throws IOException{
+
+    public void testAddFinderMethod1InEB() throws IOException {
         beanName = "TestingEntity";
-        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_EJBActionGroup")
-                               +"|"+Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddFinderMethodAction");
         dialogTitle = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddFinderMethodAction");
         methodName = "findByTest1";
         returnManyCardinality = true;
@@ -96,65 +89,59 @@ public class AddFinderMethodTest extends AddMethodTest {
         remote = Boolean.FALSE;
         local = Boolean.TRUE;
         ejbql = null;
-        toSearchFile = beanName+"LocalHome.java";
+        toSearchFile = beanName + "LocalHome.java";
         isDDModified = true;
         saveFile = true;
         addMethod();
     }
 
-    public void testAddFinderMethod2InEB()  throws IOException{
+    public void testAddFinderMethod2InEB() throws IOException {
         beanName = "TestingEntity";
-        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_EJBActionGroup")
-                               +"|"+Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddFinderMethodAction");
         dialogTitle = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddFinderMethodAction");
         methodName = "findByTest3";
         returnManyCardinality = false;
-        parameters = new String[][] {{"java.lang.String", "a"}};
+        parameters = new String[][]{{"java.lang.String", "a"}};
         remote = Boolean.TRUE;
         local = Boolean.TRUE;
         ejbql = "SELECT OBJECT(o)\nFROM TestingEntity o\nWHERE o.key = ?1";
-        toSearchFile = beanName+"LocalHome.java";
+        toSearchFile = beanName + "LocalHome.java";
         isDDModified = true;
         saveFile = true;
         addMethod();
     }
-    
+
+    @Override
     protected void addMethod() throws IOException {
-        EditorOperator editor = new EditorWindowOperator().getEditor(beanName+"Bean.java");
+        EditorOperator editor = EditorWindowOperator.getEditor(beanName + "Bean.java");
         editor.select(11);
 
         // invoke Add Business Method dialog
-        new ActionNoBlock(null,editorPopup).perform(editor);
+        GenerateCodeOperator.openDialog(dialogTitle, editor);
         NbDialogOperator dialog = new NbDialogOperator(dialogTitle);
         JLabelOperator lblOper = new JLabelOperator(dialog, "Name");
-        new JTextFieldOperator((JTextField)lblOper.getLabelFor()).setText(methodName);
+        new JTextFieldOperator((JTextField) lblOper.getLabelFor()).setText(methodName);
         if (returnManyCardinality) {
-            new JRadioButtonOperator(dialog,"Many").setSelected(true);
+            new JRadioButtonOperator(dialog, "Many").setSelected(true);
         } else {
-            new JRadioButtonOperator(dialog,"One").setSelected(true);
+            new JRadioButtonOperator(dialog, "One").setSelected(true);
         }
-        
         fillParameters(dialog);
         setRemoteLocalCheckBox(dialog);
-        
         if (ejbql != null) {
             new JTextAreaOperator(dialog).setText(ejbql);
         }
         dialog.ok();
-        
-        if (saveFile) 
+        if (saveFile) {
             editor.save();
-        
+        }
         if (toSearchFile != null) {
             Node openFile2 = new Node(new ProjectsTabOperator().getProjectRootNode(EJBValidation.EJB_PROJECT_NAME),
-                                 "Source Packages|test|"+toSearchFile);
+                    "Source Packages|test|" + toSearchFile);
             new OpenAction().performAPI(openFile2);
-            final EditorOperator editor2 = new EditorWindowOperator().getEditor(toSearchFile);
+            final EditorOperator editor2 = EditorWindowOperator.getEditor(toSearchFile);
             waitForEditorText(editor2, methodName);
             editor2.closeDiscard();
         }
-        
         compareFiles();
     }
-    
 }
