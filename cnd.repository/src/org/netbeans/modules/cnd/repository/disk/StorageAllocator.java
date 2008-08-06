@@ -44,7 +44,6 @@ package org.netbeans.modules.cnd.repository.disk;
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.netbeans.modules.cnd.repository.testbench.Stats;
@@ -64,7 +63,7 @@ public class StorageAllocator {
             diskRepositoryPath = System.getProperty("java.io.tmpdir");
             
             diskRepositoryPath += File.separator +         //NOI18N
-                    System.getProperty("user.name") +  "-cnd60-caches-";  //NOI18N
+                    System.getProperty("user.name") +  "-cnd65-caches-";  //NOI18N
             
             File diskRepositoryFile = new File(diskRepositoryPath + index);
             // find name for directory which is not occupied by file
