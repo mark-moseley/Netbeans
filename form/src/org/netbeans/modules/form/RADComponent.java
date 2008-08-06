@@ -41,9 +41,16 @@
 
 package org.netbeans.modules.form;
 
+import java.awt.EventQueue;
 import java.beans.*;
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.lang.reflect.Method;
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
+import javax.swing.AbstractButton;
+import javax.swing.ButtonGroup;
+import javax.swing.JComponent;
 import org.netbeans.modules.form.RADProperty.FakePropertyDescriptor;
 
 import org.openide.*;
@@ -91,6 +98,8 @@ public class RADComponent {
     private EventProperty[] eventProperties;
     private Map<Object,RADProperty[]> otherProperties;
     private List actionProperties;
+    private MetaAccessibleContext accessibilityData;
+    private FormProperty[] accessibilityProperties;
 
     private RADProperty[] knownBeanProperties;
     private Event[] knownEvents; // must be grouped by EventSetDescriptor
@@ -700,6 +709,8 @@ public class RADComponent {
                 createBeanProperties();
             if (eventProperties == null && name.startsWith("$")) // NOI18N
                 createEventProperties();
+            if (accessibilityProperties == null)
+                createAccessibilityProperties();
 
             prop = nameToProperty.get(name);
         }
@@ -1023,6 +1034,8 @@ public class RADComponent {
         knownBeanProperties = null;
         eventProperties = null;
         knownEvents = null;
+        accessibilityData = null;
+        accessibilityProperties = null;
     }
 
     protected void createPropertySets(List<Node.PropertySet> propSets) {
@@ -1101,7 +1114,7 @@ public class RADComponent {
 
             ps.setValue("tabName", bundle.getString("CTL_EventsTab")); // NOI18N
             propSets.add(ps);
-        
+
         }        
         
         ps = new Node.PropertySet(
@@ -1115,6 +1128,22 @@ public class RADComponent {
         };
         ps.setValue("tabName", bundle.getString("CTL_SyntheticTab_Short")); // NOI18N
         propSets.add(ps);
+
+        if (accessibilityProperties == null) {
+            createAccessibilityProperties();
+        }
+
+        if (accessibilityProperties.length > 0) {
+            propSets.add(new Node.PropertySet(
+                "accessibility", // NOI18N
+                FormUtils.getBundleString("CTL_AccessibilityTab"), // NOI18N
+                FormUtils.getBundleString("CTL_AccessibilityTabHint")) // NOI18N
+            {
+                public Node.Property[] getProperties() {
+                    return getAccessibilityProperties();
+                }
+            });
+        }
     }
 
     protected Node.Property[] createSyntheticProperties() {
@@ -1282,6 +1311,34 @@ public class RADComponent {
         eventProperties = eventProps;
     }
 
+    public FormProperty[] getAccessibilityProperties() {
+        if (accessibilityProperties == null)
+            createAccessibilityProperties();
+        return accessibilityProperties;
+    }
+
+    private void createAccessibilityProperties() {
+        Object comp = getBeanInstance();
+        if (comp instanceof Accessible
+            && ((Accessible)comp).getAccessibleContext() != null)
+        {
+            if (accessibilityData == null)
+                accessibilityData = new MetaAccessibleContext();
+            accessibilityProperties = accessibilityData.getProperties();
+
+            for (int i=0; i < accessibilityProperties.length; i++) {
+                FormProperty prop = accessibilityProperties[i];
+                setPropertyListener(prop);
+                prop.setPropertyContext(new FormPropertyContext.Component(this));
+                nameToProperty.put(prop.getName(), prop);
+            }
+        }
+        else {
+            accessibilityData = null;
+            accessibilityProperties = NO_PROPERTIES;
+        }
+    }
+
     protected RADProperty createBeanProperty(PropertyDescriptor desc,
                                              Object[] propAccessClsf,
                                              Object[] propParentChildDepClsf)
@@ -1314,6 +1371,54 @@ public class RADComponent {
 
 	// prop.addPropertyChangeListener(getPropertyListener());
 	nameToProperty.put(desc.getName(), prop);
+        
+        // setting javax.swing.Action property should not overwrite
+        // manually entered prop values (text, tooltip, etc.)
+        if ("action".equals(prop.getName()) && // NOI18N 
+                AbstractButton.class.isAssignableFrom(beanClass)) {
+            prop.addPropertyChangeListener(new PropertyChangeListener() {
+
+                public void propertyChange(PropertyChangeEvent evt) {
+                    if (FormProperty.CURRENT_EDITOR.equals(evt.getPropertyName())) {
+                        // Another event will come later, now it is too soon
+                        // to re-set the properties. The change in action property
+                        // will be fired later and would clear the re-set properties.
+                        return;
+                    }
+                    try {
+                        // prop names copied from AbstractButton.configurePropertiesFromAction()
+                        // method from JDK5
+                        String[] propNames = {"mnemonic", "text", "toolTipText", // NOI18N
+                            "icon", "actionCommand", "enabled"}; // NOI18N
+                        for (String propName : propNames) {
+                            FormProperty property = (FormProperty) getPropertyByName(propName);
+
+                            if (property != null) {
+                                boolean exChangeMonitoring = property.isExternalChangeMonitoring();
+                                property.setExternalChangeMonitoring(false);
+
+                                if (property.isChanged()) {
+                                    Object origValue = property.getValue();
+
+                                    if (!propName.equals("text") || // NOI18N
+                                            !getName().equals(property.getRealValue())) {
+                                        property.setExternalChangeMonitoring(exChangeMonitoring);
+                                        property.setValue(origValue);
+                                    } else {
+                                        property.setExternalChangeMonitoring(exChangeMonitoring);
+                                    }
+                                } else {
+                                    // no changes, just set monitor back
+                                    property.setExternalChangeMonitoring(exChangeMonitoring);
+                                }
+                            }
+                        }
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            });
+        }
 
         return prop;
     }
@@ -1399,7 +1504,7 @@ public class RADComponent {
         return new PropertyListenerConvertor();
     }
 
-    protected void setPropertyListener(FormProperty property) {
+    public void setPropertyListener(FormProperty property) {
         if (propertyListener == null)
             propertyListener = createPropertyListener();
         if (propertyListener != null) {
@@ -1579,6 +1684,115 @@ public class RADComponent {
                 groupName + ".add(" + getRADComponent().getName() + ");" : // NOI18N
                 null;
         }
+
+        @Override
+        public void restoreDefaultValue() throws IllegalAccessException, InvocationTargetException {
+            if (this.getValue() instanceof FormDesignValue) {
+                FormDesignValue formValue = (FormDesignValue) this.getValue();
+
+                if (formValue.getDesignValue() instanceof ButtonGroup) {
+                    AbstractButton button = (AbstractButton) this.getRADComponent().getBeanInstance();
+                    synchronizeButtonGroupInAWT(button, formValue, null);
+                }
+            }
+            super.restoreDefaultValue();
+        }
+        
+        // add/removes AbtractButton components to/from RadioGroup component now or later
+        private void synchronizeButtonGroup(final AbstractButton button, 
+                                            final Object originalComponent, 
+                                            final Object newComponent)
+        {
+            boolean isOriginalValid = (originalComponent == null) ||
+                    (originalComponent instanceof FormDesignValue);
+            boolean isNewValid = (newComponent == null) ||
+                    (newComponent instanceof FormDesignValue);
+
+            if (isOriginalValid && isNewValid) {
+                boolean waitForButtonGroupInstance = false;
+
+                if (newComponent != null) {
+                    Object comp = ((FormDesignValue) newComponent).getDesignValue();
+                    waitForButtonGroupInstance = !(comp instanceof ButtonGroup);
+                }
+
+                if (originalComponent != null) {
+                    Object comp = ((FormDesignValue) originalComponent).getDesignValue();
+                    waitForButtonGroupInstance = !(comp instanceof ButtonGroup);
+                }
+
+                // if there are already instances of buttongroup components
+                if (!waitForButtonGroupInstance) {
+                    synchronizeButtonGroupInAWT(button,
+                            (FormDesignValue) originalComponent,
+                            (FormDesignValue) newComponent);
+                } else {
+                    // there are no instances of buttongroup components yet, 
+                    // ide is loading form right now, try later ...
+                    EventQueue.invokeLater(new Runnable() {
+
+                        public void run() {
+                            synchronizeButtonGroupInAWT(button,
+                                    (FormDesignValue) originalComponent,
+                                    (FormDesignValue) newComponent);
+                        }
+                    });
+                }
+            }
+        }
+
+        // add/removes AbtractButton components to/from RadioGroup component
+        private void synchronizeButtonGroupInAWT(AbstractButton button, 
+                                                 FormDesignValue originalComponent, 
+                                                 FormDesignValue newComponent)
+        {
+            if (originalComponent != null) {
+                //remove button from original buttongroup
+                Object group = originalComponent.getDesignValue();
+                if (group instanceof ButtonGroup) {
+                    ((ButtonGroup) group).remove(button);
+                }
+            }
+
+            if (newComponent != null) {
+                // add button to new buttongroup
+                Object groupObj = newComponent.getDesignValue();
+                if (groupObj instanceof ButtonGroup) {
+                    ButtonGroup group = (ButtonGroup) groupObj;
+                    
+                    // try to find button inside buttongroup
+                    boolean add = true;
+                    for (Enumeration e = group.getElements(); e.hasMoreElements(); ) {
+                         if (button.equals(e.nextElement())) {
+                            add = false;
+                            break;
+                         }
+                     }                    
+
+                    // button not found inside group, add it
+                    if (add) {
+                        group.add(button);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void setValue(Object value) throws IllegalAccessException,
+                                                  IllegalArgumentException,
+                                                  InvocationTargetException
+        {
+            Object originalValue = super.getValue();
+            super.setValue(value);
+
+            // get swing abstractbutton component
+            AbstractButton button = (AbstractButton) this.getRADComponent().getBeanInstance();
+
+            // add/remove button from buttongroup
+            // note: using "getValue()" instead of "value", because setValue()
+            //       handles more different types (eg.FormProperty.ValueWithEditor)
+            synchronizeButtonGroup(button, originalValue, this.getValue());
+        }
     }
 
     // property editor for selecting ButtonGroup (for ButtonGroupProperty)
@@ -1609,7 +1823,7 @@ public class RADComponent {
         
         @Override
         public BeanDescriptor getBeanDescriptor() {
-            return (beanInfo == this) ? null : beanInfo.getBeanDescriptor();            
+            return (beanInfo == this) ? new BeanDescriptor(beanClass) : beanInfo.getBeanDescriptor();            
         }
 
         @Override
@@ -1638,4 +1852,165 @@ public class RADComponent {
             propertyDescriptors.clear();
         }
     }
+
+    private class MetaAccessibleContext {
+        private Object accName = BeanSupport.NO_VALUE;
+        private Object accDescription = BeanSupport.NO_VALUE;
+        private Object accParent = BeanSupport.NO_VALUE;
+
+        private FormProperty[] properties;
+
+        FormProperty[] getProperties() {
+            if (properties == null) {
+                properties = new FormProperty[] {
+                    new FormProperty(
+                        "AccessibleContext.accessibleName", // NOI18N
+                        String.class,
+                        FormUtils.getBundleString("PROP_AccessibleName"), // NOI18N
+                        FormUtils.getBundleString("PROP_AccessibleName")) // NOI18N
+                    {
+                        public Object getTargetValue() {
+                            return accName != BeanSupport.NO_VALUE ?
+                                       accName : getDefaultValue();
+                        }
+                        public void setTargetValue(Object value) {
+                            accName = (String) value;
+                        }
+                        @Override
+                        public boolean supportsDefaultValue () {
+                            return true;
+                        }
+                        @Override
+                        public Object getDefaultValue() {
+                            return getAccessibleContext().getAccessibleName();
+                        }
+                        @Override
+                        public void restoreDefaultValue()
+                            throws IllegalAccessException,
+                                   java.lang.reflect.InvocationTargetException
+                        {
+                            super.restoreDefaultValue();
+                            accName = BeanSupport.NO_VALUE;
+                        }
+                        @Override
+                        String getPartialSetterCode(String javaInitStr) {
+                            return "getAccessibleContext().setAccessibleName(" // NOI18N
+                                   + javaInitStr + ")"; // NOI18N
+                        }
+                    },
+
+                    new FormProperty(
+                        "AccessibleContext.accessibleDescription", // NOI18N
+                        String.class,
+                        FormUtils.getBundleString("PROP_AccessibleDescription"), // NOI18N
+                        FormUtils.getBundleString("PROP_AccessibleDescription")) // NOI18N
+                    {
+                        public Object getTargetValue() {
+                            return accDescription != BeanSupport.NO_VALUE ?
+                                       accDescription : getDefaultValue();
+                        }
+                        public void setTargetValue(Object value) {
+                            accDescription = (String) value;
+                        }
+                        @Override
+                        public boolean supportsDefaultValue () {
+                            return true;
+                        }
+                        @Override
+                        public Object getDefaultValue() {
+                            AccessibleContext context = getAccessibleContext();
+                            Object bean = getBeanInstance();
+                            if (bean instanceof JComponent) {
+                                Object o = ((JComponent)bean).getClientProperty("labeledBy"); // NOI18N
+                                if (o instanceof Accessible) {
+                                    AccessibleContext ac = ((Accessible) o).getAccessibleContext();
+                                    if (ac == context) {
+                                        return FormUtils.getBundleString("MSG_CyclicAccessibleContext"); // NOI18N
+                                    }
+                                }
+                            }
+                            return context.getAccessibleDescription();
+                        }
+                        @Override
+                        public void restoreDefaultValue()
+                            throws IllegalAccessException,
+                                   java.lang.reflect.InvocationTargetException
+                        {
+                            super.restoreDefaultValue();
+                            accDescription = BeanSupport.NO_VALUE;
+                        }
+                        @Override
+                        String getPartialSetterCode(String javaInitStr) {
+                            return
+                              "getAccessibleContext().setAccessibleDescription(" // NOI18N
+                              + javaInitStr + ")"; // NOI18N
+                        }
+                    },
+
+                    new FormProperty(
+                        "AccessibleContext.accessibleParent", // NOI18N
+                        Accessible.class,
+                        FormUtils.getBundleString("PROP_AccessibleParent"), // NOI18N
+                        FormUtils.getBundleString("PROP_AccessibleParent")) // NOI18N
+                    {
+                        public Object getTargetValue() {
+                            return accParent != BeanSupport.NO_VALUE ?
+                                       accParent : getDefaultValue();
+                        }
+                        public void setTargetValue(Object value) {
+                            accParent = value;
+                        }
+                        @Override
+                        public boolean supportsDefaultValue () {
+                            return true;
+                        }
+                        @Override
+                        public Object getDefaultValue() {
+                            Object acP = getAccessibleContext()
+                                             .getAccessibleParent();
+                            if (acP != null) {
+                                RADComponent metaparent = getParentComponent();
+                                if (metaparent != null) {
+                                    Object cont;
+                                    if (metaparent instanceof RADVisualContainer) {
+                                        RADVisualContainer metacont = (RADVisualContainer)metaparent;
+                                        cont = metacont.getContainerDelegate(metacont.getBeanInstance());
+                                    } else {
+                                        cont = metaparent.getBeanInstance();
+                                    }
+                                    if (cont == acP)
+                                        return metaparent;
+                                }
+                            }
+                            return acP;
+                        }
+                        @Override
+                        public void restoreDefaultValue()
+                            throws IllegalAccessException,
+                                   java.lang.reflect.InvocationTargetException
+                        {
+                            super.restoreDefaultValue();
+                            accParent = BeanSupport.NO_VALUE;
+                        }
+                        @Override
+                        public PropertyEditor getExpliciteEditor() {
+                            return new RADVisualComponent.AccessibleParentEditor();
+                        }
+                        @Override
+                        String getPartialSetterCode(String javaInitStr) {
+                            return javaInitStr == null ? null :
+                                "getAccessibleContext().setAccessibleParent(" // NOI18N
+                                + javaInitStr + ")"; // NOI18N
+                        }
+                    }
+                };
+            }
+            return properties;
+        }
+
+        private AccessibleContext getAccessibleContext() {
+            return ((Accessible)getBeanInstance()).getAccessibleContext();
+        }
+    }
+
 }
