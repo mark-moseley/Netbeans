@@ -51,6 +51,8 @@ import org.netbeans.editor.Utilities;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.jellytools.modules.editor.CompletionJListOperator;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.junit.NbTestSuite;
 import org.netbeans.test.web.FileObjectFilter;
 import org.netbeans.test.web.RecurrentSuiteFactory;
 import org.netbeans.test.syntax.CompletionTest.TestStep;
@@ -60,36 +62,46 @@ import org.openide.util.actions.SystemAction;
 
 /**
  *
- * @author jindra
+ * @author Jindrich Sedek
  */
 public class AutoCompletionTest extends CompletionTest {
     
     /** Creates a new instance of AutoCompletionTest */
     public AutoCompletionTest(String name, FileObject testFileObj) {
         super(name, testFileObj);
-        debug = false;
     }
     
     public static Test suite() {
-        // find folder with test projects and define file objects filter
-        File datadir = new AutoCompletionTest(null, null).getDataDir();
-        File projectsDir = new File(datadir, "AutoCompletionTestProjects");
-        FileObjectFilter filter = new FileObjectFilter() {
+        NbModuleSuite.Configuration conf = NbModuleSuite.emptyConfiguration();
+        addServerTests(Server.GLASSFISH, conf, new String[0]);//register server
+        conf = conf.enableModules(".*").clusters(".*");
+        return NbModuleSuite.create(conf.addTest(SuiteCreator.class));
+    }
 
-            public boolean accept(FileObject fo) {
-                String ext = fo.getExt();
-                String name = fo.getName();
-                return (name.startsWith("test") || name.startsWith("Test")) && (XML_EXTS.contains(ext) || JSP_EXTS.contains(ext) || ext.equals("java"));
-            }
-        };
-        return RecurrentSuiteFactory.createSuite(AutoCompletionTest.class, projectsDir, filter);
+    public static final class SuiteCreator extends NbTestSuite {
+
+        public SuiteCreator() {
+            super();
+            File datadir = new AutoCompletionTest(null, null).getDataDir();
+            File projectsDir = new File(datadir, "AutoCompletionTestProjects");
+            FileObjectFilter filter = new FileObjectFilter() {
+
+                public boolean accept(FileObject fo) {
+                    String ext = fo.getExt();
+                    String name = fo.getName();
+                    return (name.startsWith("test") || name.startsWith("Test")) && (XML_EXTS.contains(ext) || JSP_EXTS.contains(ext) || ext.equals("java"));
+                }
+            };
+            addTest(RecurrentSuiteFactory.createSuite(AutoCompletionTest.class, projectsDir, filter));
+        }
     }
-    
+
     @Override
-    public void setUp() {
-        super.setUp();
+    protected File getProjectsDir() {
+        File datadir = new CompletionTest().getDataDir();
+        return new File(datadir, "AutoCompletionTestProjects");
     }
-        
+
     @Override
     protected void exec(JEditorPane editor, TestStep step) throws Exception {
         try {
@@ -99,10 +111,10 @@ public class AutoCompletionTest extends CompletionTest {
             caret.setDot(step.getOffset() + 1);
             EditorOperator eo = new EditorOperator(testFileObj.getNameExt());
             eo.insert(step.getPrefix());
-            waitTypingFinished(doc);
 
             caret.setDot(step.getCursorPos());
             eo.save();
+            waitTypingFinished(doc);
             final Object lock = new Object();
             synchronized (lock) {
                 doc.addDocumentListener(new DocumentListener() {
@@ -123,11 +135,11 @@ public class AutoCompletionTest extends CompletionTest {
                 eo.txtEditorPane().pressKey(KeyEvent.VK_SPACE, KeyEvent.CTRL_MASK);
                 lock.wait(10000);
             }
-            doc.atomicLock();
+            waitTypingFinished(doc);
+            waitTypingFinished(doc);
             int rowStart = Utilities.getRowStart(doc, step.getOffset() + 1);
             int rowEnd = Utilities.getRowEnd(doc, step.getOffset() + 1);
             String result = doc.getText(new int[]{rowStart, rowEnd}).trim();
-            doc.atomicUnlock();
             if (!result.equals(step.getResult())) {
                 ref("EE: unexpected CC result:\n< " + result + "\n> " + step.getResult());
             }
