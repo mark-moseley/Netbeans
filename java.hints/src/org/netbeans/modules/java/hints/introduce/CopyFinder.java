@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -23,7 +23,7 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2007-2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.java.hints.introduce;
 
@@ -50,8 +50,6 @@ import com.sun.source.util.TreePathScanner;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import org.netbeans.api.java.source.CompilationInfo;
 
@@ -81,6 +79,18 @@ public class CopyFinder extends TreePathScanner<Boolean, TreePath> {
         return f.result;
     }
 
+    public static boolean isDuplicate(CompilationInfo info, TreePath one, TreePath second, AtomicBoolean cancel) {
+        if (one.getLeaf().getKind() != second.getLeaf().getKind()) {
+            return false;
+        }
+        
+        CopyFinder f = new CopyFinder(one, info, cancel);
+
+        f.allowGoDeeper = false;
+        
+        return f.scan(second, one);
+    }
+
     @Override
     public Boolean scan(Tree node, TreePath p) {
         if (cancel.get()) {
@@ -93,7 +103,7 @@ public class CopyFinder extends TreePathScanner<Boolean, TreePath> {
         if (p != null && node.getKind() == p.getLeaf().getKind()) {
             //maybe equivalent:
             boolean result = super.scan(node, p) == Boolean.TRUE;
-            
+
             if (result) {
                 if (p == searchingFor && node != searchingFor) {
                     this.result.add(new TreePath(getCurrentPath(), node));
@@ -278,7 +288,7 @@ public class CopyFinder extends TreePathScanner<Boolean, TreePath> {
         
         Element nodeEl = info.getTrees().getElement(getCurrentPath());
         Element pEl    = info.getTrees().getElement(p);
-        
+
         if (nodeEl == pEl) { //covers null == null
             return true;
         }
