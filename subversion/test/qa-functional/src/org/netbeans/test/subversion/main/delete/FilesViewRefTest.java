@@ -29,7 +29,7 @@ package org.netbeans.test.subversion.main.delete;
 
 import java.io.File;
 import java.io.PrintStream;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.FilesTabOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
@@ -41,7 +41,7 @@ import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JTableOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.CommitOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
@@ -71,9 +71,9 @@ public class FilesViewRefTest extends JellyTestCase {
         super(name);
     }
 
+    @Override
     protected void setUp() throws Exception {
         os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### " + getName() + " ###");
     }
 
@@ -84,29 +84,26 @@ public class FilesViewRefTest extends JellyTestCase {
         }
         return unix;
     }
-
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new FilesViewRefTest("testFilesViewRefactoring"));
-        return suite;
-    }
+    
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(FilesViewRefTest.class).addTest(
+                    "testFilesViewRefactoring"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
 
     public void testFilesViewRefactoring() throws Exception {
         try {
-            TestKit.closeProject(PROJECT_NAME);
             OutputOperator.invoke();
-            JTableOperator table;
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             VersioningOperator vo = VersioningOperator.invoke();
             comOperator = new Operator.DefaultStringComparator(true, true);
             oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
             Operator.setDefaultStringComparator(comOperator);
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            CheckoutWizardOperator.invoke();
             Operator.setDefaultStringComparator(oldOperator);
             RepositoryStepOperator rso = new RepositoryStepOperator();
 
@@ -115,7 +112,6 @@ public class FilesViewRefTest extends JellyTestCase {
             new File(TMP_PATH).mkdirs();
             work.mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
@@ -128,13 +124,10 @@ public class FilesViewRefTest extends JellyTestCase {
             wdso.finish();
             //open project
             OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-//            oto.clear();
             oto.waitText("Checking out... finished.");
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-
             TestKit.waitForScanFinishedAndQueueEmpty();
 
             oto = new OutputTabOperator("file:///tmp/repo");
@@ -152,7 +145,6 @@ public class FilesViewRefTest extends JellyTestCase {
             node = new Node(new FilesTabOperator().tree(), PROJECT_NAME + "|src|a");
             node.performPopupActionNoBlock("Cut");
             node = new Node(new FilesTabOperator().tree(), PROJECT_NAME + "|src|javaapp");
-//            node.performPopupActionNoBlock("Paste");
             node.performPopupActionNoBlock("Paste|Refactor Move");
 
             nbdialog = new NbDialogOperator("Move Classes");
@@ -168,10 +160,6 @@ public class FilesViewRefTest extends JellyTestCase {
             for (int i = 0; i < vo.tabFiles().getRowCount(); i++) {
                 actual[i] = vo.tabFiles().getValueAt(i, 0).toString().trim();
             }
-//            for (int idx = 0; idx < vo.tabFiles().getRowCount(); idx++) {
-//                System.out.println(actual[idx]);
-//                System.out.println(expected[idx]);
-//            }
             int result = TestKit.compareThem(expected, actual, false);
             assertEquals("Wrong files in Versioning View", expected.length, result);
             expected = new String[]{"Locally Deleted", "Locally Deleted", "Locally Deleted", "Locally New", "Locally Copied", "Locally New", "Locally Copied", "Locally New", "Locally Copied"};
@@ -195,8 +183,6 @@ public class FilesViewRefTest extends JellyTestCase {
                 e = ex;
             }
             assertNull("Unexpected behavior - File should be in explorer!!!", e);
-        } catch (Exception e) {
-            throw new Exception("Test failed: " + e);
         } finally {
             TestKit.closeProject(PROJECT_NAME);
         }

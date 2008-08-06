@@ -12,21 +12,18 @@ package org.netbeans.test.subversion.main.commit;
 import java.io.File;
 import java.io.PrintStream;
 import javax.swing.table.TableModel;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.OutputOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jemmy.JemmyProperties;
-import org.netbeans.jemmy.QueueTool;
 import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.VersioningOperator;
@@ -55,9 +52,9 @@ public class IgnoreTest extends JellyTestCase {
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {        
         os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
         
     }
@@ -70,34 +67,29 @@ public class IgnoreTest extends JellyTestCase {
         return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new IgnoreTest("testIgnoreUnignoreFile"));
-        suite.addTest(new IgnoreTest("testIgnoreUnignorePackage"));
-        suite.addTest(new IgnoreTest("testIgnoreUnignoreFilePackage"));
-        suite.addTest(new IgnoreTest("testFinalRemove"));
-        return suite;
-    }
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(IgnoreTest.class).addTest(
+                    "testIgnoreUnignoreFile",
+                    "testIgnoreUnignorePackage",
+                    "testIgnoreUnignoreFilePackage",
+                    "testFinalRemove"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void testIgnoreUnignoreFile() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);    
         try {
-            TestKit.closeProject(PROJECT_NAME);
-            
             VersioningOperator vo = VersioningOperator.invoke();
-            OutputOperator oo = OutputOperator.invoke();
+            OutputOperator.invoke();
             
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             comOperator = new Operator.DefaultStringComparator(true, true);
             oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
             Operator.setDefaultStringComparator(comOperator);
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            CheckoutWizardOperator.invoke();
             Operator.setDefaultStringComparator(oldOperator);
             RepositoryStepOperator rso = new RepositoryStepOperator();
             
@@ -106,7 +98,6 @@ public class IgnoreTest extends JellyTestCase {
             new File(TMP_PATH).mkdirs();
             work.mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
@@ -119,12 +110,10 @@ public class IgnoreTest extends JellyTestCase {
             wdso.finish();
             //open project
             OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-//            oto.clear();            
             oto.waitText("Checking out... finished.");
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-            
             TestKit.waitForScanFinishedAndQueueEmpty();
             
             oto = new OutputTabOperator("file:///tmp/repo");
@@ -177,28 +166,21 @@ public class IgnoreTest extends JellyTestCase {
             
             stream.flush();
             stream.close();
-            
-        } catch (Exception e) {
-            throw new Exception("Test failed: " + e);
         } finally {
             TestKit.closeProject(PROJECT_NAME);
         }    
     }
     
     public void testIgnoreUnignorePackage() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);    
         try {
-            TestKit.closeProject(PROJECT_NAME);
-            
             VersioningOperator vo = VersioningOperator.invoke();
-            OutputOperator oo = OutputOperator.invoke();
+            OutputOperator.invoke();
             
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             comOperator = new Operator.DefaultStringComparator(true, true);
             oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
             Operator.setDefaultStringComparator(comOperator);
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            CheckoutWizardOperator.invoke();
             Operator.setDefaultStringComparator(oldOperator);
             RepositoryStepOperator rso = new RepositoryStepOperator();
             
@@ -207,7 +189,6 @@ public class IgnoreTest extends JellyTestCase {
             new File(TMP_PATH).mkdirs();
             work.mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
@@ -220,7 +201,6 @@ public class IgnoreTest extends JellyTestCase {
             wdso.finish();
             //open project
             OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-//            oto.clear();            
             oto.waitText("Checking out... finished.");
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
@@ -237,21 +217,8 @@ public class IgnoreTest extends JellyTestCase {
             
             node = new Node(new SourcePackagesNode(PROJECT_NAME), "xx");
             org.openide.nodes.Node nodeIDE = (org.openide.nodes.Node) node.getOpenideNode();
-            //String color = TestKit.getColor(nodeIDE.getHtmlDisplayName());
             String status = TestKit.getStatus(nodeIDE.getHtmlDisplayName());
-            //assertEquals("Wrong color of node - package color should be ignored!!!", TestKit.IGNORED_COLOR, color);
             assertEquals("Wrong annotation of node - package status should be ignored!!!", TestKit.IGNORED_STATUS, status);
-            
-        /*verify content of Versioning view
-        oto = new OutputTabOperator("file:///tmp/repo");
-        oto.clear();
-        node = new Node(new SourcePackagesNode("JavaApp"), "javaapp|NewClass");
-        node.performPopupAction("Subversion|Show Changes");
-        oto.waitText("Refreshing... finished.");
-        Thread.sleep(1000);
-        vo = VersioningOperator.invoke();
-        TableModel model = vo.tabFiles().getModel();
-        assertEquals("Versioning view should be empty", 0, model.getRowCount());*/
             
             node = new Node(new SourcePackagesNode(PROJECT_NAME), "xx");
             TimeoutExpiredException tee = null;
@@ -270,9 +237,7 @@ public class IgnoreTest extends JellyTestCase {
             oto.waitText("finished.");
             node = new Node(new SourcePackagesNode(PROJECT_NAME), "xx");
             nodeIDE = (org.openide.nodes.Node) node.getOpenideNode();
-            //color = TestKit.getColor(nodeIDE.getHtmlDisplayName());
             status = TestKit.getStatus(nodeIDE.getHtmlDisplayName());
-            //assertEquals("Wrong color of node - package color should be new!!!", TestKit.NEW_COLOR, color);
             assertEquals("Wrong annotation of node - package status should be new!!!", TestKit.NEW_STATUS, status);
             
             //verify content of Versioning view
@@ -289,29 +254,21 @@ public class IgnoreTest extends JellyTestCase {
             
             stream.flush();
             stream.close();
-            
-        } catch (Exception e) {
-            throw new Exception("Test failed: " + e);
         } finally {
             TestKit.closeProject(PROJECT_NAME);
         }    
     }
     
     public void testIgnoreUnignoreFilePackage() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);   
-        
         try {
-            TestKit.closeProject(PROJECT_NAME);
-            
             VersioningOperator vo = VersioningOperator.invoke();
-            OutputOperator oo = OutputOperator.invoke();
+            OutputOperator.invoke();
             
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             comOperator = new Operator.DefaultStringComparator(true, true);
             oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
             Operator.setDefaultStringComparator(comOperator);
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            CheckoutWizardOperator.invoke();
             Operator.setDefaultStringComparator(oldOperator);
             RepositoryStepOperator rso = new RepositoryStepOperator();
             
@@ -320,7 +277,6 @@ public class IgnoreTest extends JellyTestCase {
             new File(TMP_PATH).mkdirs();
             work.mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
@@ -333,12 +289,10 @@ public class IgnoreTest extends JellyTestCase {
             wdso.finish();
             //open project
             OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-//            oto.clear();            
             oto.waitText("Checking out... finished.");
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-            
             TestKit.waitForScanFinishedAndQueueEmpty();
             
             oto = new OutputTabOperator("file:///tmp/repo");
@@ -354,10 +308,8 @@ public class IgnoreTest extends JellyTestCase {
             node2 = new Node(new SourcePackagesNode(PROJECT_NAME), "xx|NewClass");
             org.openide.nodes.Node nodeIDE = (org.openide.nodes.Node) node.getOpenideNode();
             org.openide.nodes.Node nodeIDE2 = (org.openide.nodes.Node) node2.getOpenideNode();
-            //String color = TestKit.getColor(nodeIDE.getHtmlDisplayName());
             String status = TestKit.getStatus(nodeIDE.getHtmlDisplayName());
             String status2 = TestKit.getStatus(nodeIDE2.getHtmlDisplayName());
-            //assertEquals("Wrong color of node - package color should be ignored!!!", TestKit.IGNORED_COLOR, color);
             assertEquals("Wrong annotation of node - package status should be ignored!!!", TestKit.IGNORED_STATUS, status);
             assertEquals("Wrong annotation of file - package status should be ignored!!!", TestKit.IGNORED_STATUS, status2);
             
@@ -397,9 +349,6 @@ public class IgnoreTest extends JellyTestCase {
             assertEquals("Wrong records in Versioning view", 2, result);
             stream.flush();
             stream.close();
-            
-        } catch (Exception e) {
-            throw new Exception("Test failed: " + e);
         } finally {
             TestKit.closeProject(PROJECT_NAME);
         }    

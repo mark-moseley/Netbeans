@@ -29,15 +29,15 @@ package org.netbeans.test.subversion.main.properties;
 
 import java.io.File;
 import java.io.PrintStream;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.OutputOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JTableOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.SvnPropertiesOperator;
@@ -64,6 +64,7 @@ public class SvnPropertiesTest extends JellyTestCase {
         super(name);
     }
 
+    @Override
     protected void setUp() throws Exception {
         os_name = System.getProperty("os.name");
         //System.out.println(os_name);
@@ -77,25 +78,24 @@ public class SvnPropertiesTest extends JellyTestCase {
         }
         return unix;
     }
-
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new SvnPropertiesTest("SvnPropertiesTest"));
-        return suite;
-    }
+    
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(SvnPropertiesTest.class).addTest(
+                    "SvnPropertiesTest"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
 
     public void SvnPropertiesTest() throws Exception {
         try {
-            TestKit.closeProject(PROJECT_NAME);
-
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
-            VersioningOperator vo = VersioningOperator.invoke();
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            VersioningOperator.invoke();
+            OutputOperator.invoke();
+            TestKit.showStatusLabels();
+            CheckoutWizardOperator.invoke();
             RepositoryStepOperator rso = new RepositoryStepOperator();
 
             //create repository...
@@ -121,12 +121,7 @@ public class SvnPropertiesTest extends JellyTestCase {
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-
             TestKit.waitForScanFinishedAndQueueEmpty();
-
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
 
             // set svnProperty for file
             Node node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|Main.java");
@@ -134,7 +129,6 @@ public class SvnPropertiesTest extends JellyTestCase {
             spo.typePropertyName("fileName");
             spo.typePropertyValue("fileValue");
             spo.add();
-            oto.waitText("property 'fileName' set on");
             Thread.sleep(1000);
             assertEquals("1. Wrong row count of table.", 1, spo.propertiesTable().getRowCount());
             assertFalse("Recursively checkbox should be disabled on file! ", spo.cbRecursively().isEnabled());
@@ -149,15 +143,12 @@ public class SvnPropertiesTest extends JellyTestCase {
             spo.typePropertyName("nonrecursiveName");
             spo.typePropertyValue("nonrecursiveValue");
             spo.add();
-            oto.waitText("property 'nonrecursiveName' set on");
             Thread.sleep(1000);
             spo.checkRecursively(true);
             spo.typePropertyName("recursiveName");
             spo.typePropertyValue("recursiveValue");
             spo.add();
-            oto.waitText("property 'recursiveName' set (recursively) on");
             spo.refresh();
-            oto.waitText("Scanning svn properties finished.");
             Thread.sleep(1000);
             assertEquals("2. Wrong row count of table.", 2, spo.propertiesTable().getRowCount());
             spo.cancel();
@@ -170,14 +161,10 @@ public class SvnPropertiesTest extends JellyTestCase {
             assertEquals("Expected file is missing.", "recursiveName", spo.propertiesTable().getModel().getValueAt(1, 0).toString());
             spo.propertiesTable().selectCell(1, 0);
             spo.remove();
-            oto.waitText("property 'recursiveName' deleted");
-            oto.clear();
             spo.refresh();
-            oto.waitText("Scanning svn properties finished.");
+            Thread.sleep(5000);
             assertEquals("4. Wrong row count of table.", 1, spo.propertiesTable().getRowCount());
             spo.cancel();
-        } catch (Exception e) {
-            throw new Exception("Test failed: " + e);
         } finally {
             TestKit.closeProject(PROJECT_NAME);
         }

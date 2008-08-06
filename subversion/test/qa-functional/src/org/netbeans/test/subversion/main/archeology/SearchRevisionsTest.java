@@ -11,13 +11,11 @@ package org.netbeans.test.subversion.main.archeology;
 
 import java.io.File;
 import java.io.PrintStream;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.OutputTabOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.SearchRevisionsOperator;
@@ -46,9 +44,9 @@ public class SearchRevisionsTest extends JellyTestCase {
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {        
         os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
         
     }
@@ -61,41 +59,40 @@ public class SearchRevisionsTest extends JellyTestCase {
         return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new SearchRevisionsTest("testSearchRevisionsTest"));
-        return suite;
-    }
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(SearchRevisionsTest.class).addTest(
+                    "testSearchRevisionsTest"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void testSearchRevisionsTest() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);    
         try {
-            TestKit.closeProject(PROJECT_NAME);
-
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             comOperator = new Operator.DefaultStringComparator(true, true);
             oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
             Operator.setDefaultStringComparator(comOperator);
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            CheckoutWizardOperator.invoke();
             Operator.setDefaultStringComparator(oldOperator);
             RepositoryStepOperator rso = new RepositoryStepOperator();        
 
             //create repository... 
             File work = new File(TMP_PATH + File.separator + WORK_PATH + File.separator + "w" + System.currentTimeMillis());
             new File(TMP_PATH).mkdirs();
+            Thread.sleep(1000);
             work.mkdirs();
+            Thread.sleep(1000);
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
+            Thread.sleep(500);
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);   
+            Thread.sleep(500);
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");      
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
-
+            Thread.sleep(500);
+            
             rso.next();
 
             WorkDirStepOperator wdso = new WorkDirStepOperator();
@@ -104,11 +101,8 @@ public class SearchRevisionsTest extends JellyTestCase {
             wdso.checkCheckoutContentOnly(false);
 
             SearchRevisionsOperator sro = wdso.search();
-            OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-//            oto.clear();            
             sro.setFrom("");
             sro.list();
-            oto.waitText("Searching revisions finished.");
             sro.verify();
             sro.selectListItem(0);
             sro.ok();
@@ -117,8 +111,6 @@ public class SearchRevisionsTest extends JellyTestCase {
 
             stream.flush();
             stream.close();
-        } catch (Exception e) {
-            throw new Exception("Test failed: " + e); 
         } finally {
             TestKit.closeProject(PROJECT_NAME);
         }   
