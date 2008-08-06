@@ -42,7 +42,9 @@
 package org.netbeans.modules.j2ee.earproject;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
@@ -58,10 +60,12 @@ import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.deployment.plugins.api.ServerDebugInfo;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.EarProjectProperties;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.modules.web.spi.webmodule.WebModuleProvider;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.SubprojectProvider;
+import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -94,7 +98,12 @@ public class EarActionProvider implements ActionProvider {
         COMMAND_MOVE,
         COMMAND_RENAME
     };
-    
+
+    private static final Set<String> actionsDisabledForCoS = new HashSet<String>(3);
+    static {
+        Collections.addAll(actionsDisabledForCoS, COMMAND_BUILD, COMMAND_COMPILE_SINGLE);
+    };
+
     EarProject project;
     
     // Ant project helper of the project
@@ -261,6 +270,11 @@ public class EarActionProvider implements ActionProvider {
         if ( findBuildXml() == null ) {
             return false;
         }
+        boolean cos = !Boolean.parseBoolean(project.getAntProjectHelper().getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH).getProperty(EarProjectProperties.DISABLE_DEPLOY_ON_SAVE));
+        if (cos && actionsDisabledForCoS.contains(command)) {
+            return false;
+        }
+
         if ( command.equals( COMMAND_VERIFY ) ) {
             J2eeModuleProvider provider = project.getLookup().lookup(J2eeModuleProvider.class);
             return provider != null && provider.hasVerifierSupport();

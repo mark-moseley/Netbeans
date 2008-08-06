@@ -50,7 +50,6 @@ import java.util.logging.Logger;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.AntDeploymentHelper;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
@@ -62,8 +61,8 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.api.queries.FileEncodingQuery;
+import org.netbeans.modules.j2ee.common.SharabilityUtility;
 import org.netbeans.modules.j2ee.common.project.ui.ProjectProperties;
-import org.netbeans.modules.j2ee.common.sharability.SharabilityUtilities;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.ProjectGenerator;
@@ -104,7 +103,7 @@ public class EjbJarProjectGenerator {
     private static final String DEFAULT_JAVA_FOLDER = "java"; //NOI18N
     private static final String DEFAULT_BUILD_DIR = "build"; //NOI18N
     
-    public static final String MINIMUM_ANT_VERSION = "1.6";
+    public static final String MINIMUM_ANT_VERSION = "1.6.5";
     
     private EjbJarProjectGenerator() {}
     
@@ -151,9 +150,13 @@ public class EjbJarProjectGenerator {
         //create a default manifest
         FileUtil.copyFile(Repository.getDefault().getDefaultFileSystem().findResource("org-netbeans-modules-j2ee-ejbjarproject/MANIFEST.MF"), confRoot, "MANIFEST"); //NOI18N
         
+        final String realServerLibraryName = configureServerLibrary(librariesDefinition,
+                serverInstanceID, projectDir, serverLibraryName != null);
+        
         final AntProjectHelper h = setupProject(projectDir, name,
                 "src", "test", null, null, null, j2eeLevel, serverInstanceID,
-                librariesDefinition, serverLibraryName);
+                librariesDefinition, realServerLibraryName);
+        
         EditableProperties ep = h.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
         ep.put(EjbJarProjectProperties.SOURCE_ROOT, DEFAULT_SRC_FOLDER); //NOI18N
         ep.setProperty(EjbJarProjectProperties.META_INF, "${"+EjbJarProjectProperties.SOURCE_ROOT+"}/"+DEFAULT_DOC_BASE_FOLDER); //NOI18N
@@ -262,21 +265,26 @@ public class EjbJarProjectGenerator {
     private static AntProjectHelper importProjectImpl(final FileObject projectDir, final String name,
             final File[] sourceFolders, final File[] testFolders,
             final File configFilesBase, final File libFolder, final String j2eeLevel,
-            String serverInstanceID, String librariesDefinition, String serverLibraryName) throws IOException {
+            final String serverInstanceID, String librariesDefinition, final String serverLibraryName) throws IOException {
         
         assert sourceFolders != null && testFolders != null: "Package roots can't be null";   //NOI18N
         // this constructor creates only java application type
+        
+        final String realServerLibraryName = configureServerLibrary(librariesDefinition,
+                serverInstanceID, projectDir, serverLibraryName != null);
         
         final AntProjectHelper h = setupProject(projectDir,
                 name,
                 null,
                 null,
-                configFilesBase, (libFolder == null ? null : libFolder),
+                configFilesBase,
+                (libFolder == null ? null : libFolder),
                 null,
                 j2eeLevel,
                 serverInstanceID,
                 librariesDefinition,
-                serverLibraryName);
+                realServerLibraryName);
+        
         final EjbJarProject p = (EjbJarProject) ProjectManager.getDefault().findProject(projectDir);
         final ReferenceHelper refHelper = p.getReferenceHelper();
         try {
@@ -308,7 +316,7 @@ public class EjbJarProjectGenerator {
                     } else {
                         for (int i=0; i<testFolders.length; i++) {
                             if (!testFolders[i].exists()) {
-                                testFolders[i].mkdirs();
+                                FileUtil.createFolder(testFolders[i]);
                             }
                             String propName = "test.src.dir" + (i == 0 ? "" : Integer.toString(i+1)); //NOI18N
                             String testReference = refHelper.createForeignFileReference(testFolders[i], JavaProjectConstants.SOURCES_TYPE_JAVA);
@@ -321,6 +329,7 @@ public class EjbJarProjectGenerator {
                         }
                     }
                     h.putPrimaryConfigurationData(data,true);
+                    copyRequiredLibraries(h, refHelper, serverInstanceID, serverLibraryName);
                     ProjectManager.getDefault().saveProject(p);
                     return null;
                 }
@@ -369,13 +378,29 @@ public class EjbJarProjectGenerator {
         if (rh.getProjectLibraryManager().getLibrary("junit_4") == null) { // NOI18N
             rh.copyLibrary(LibraryManager.getDefault().getLibrary("junit_4")); // NOI18N
         }
-
-        if (h.isSharableProject() && serverlibraryName != null  && SharabilityUtilities.getLibrary(
-                h.resolveFile(h.getLibrariesLocation()), serverlibraryName) == null) {
-
-            SharabilityUtilities.createLibrary(
-                h.resolveFile(h.getLibrariesLocation()), serverlibraryName, serverInstanceId);
+        if (rh.getProjectLibraryManager().getLibrary("CopyLibs") == null) {
+            rh.copyLibrary(LibraryManager.getDefault().getLibrary("CopyLibs")); // NOI18N
         }
+    }
+    
+    private static String configureServerLibrary(final String librariesDefinition,
+            final String serverInstanceId, final FileObject projectDir, final boolean serverLibrary) {
+
+        String serverLibraryName = null;
+        if (librariesDefinition != null && serverLibrary) {
+            try {
+                serverLibraryName = ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<String>() {
+                    public String run() throws Exception {
+                        return SharabilityUtility.findOrCreateLibrary(
+                                PropertyUtils.resolveFile(FileUtil.toFile(projectDir), librariesDefinition),
+                                serverInstanceId).getName();
+                    }
+                });
+            } catch (MutexException ex) {
+                Exceptions.printStackTrace(ex.getException());
+            }
+        }
+        return serverLibraryName;
     }
     
     private static String createFileReference(ReferenceHelper refHelper, FileObject projectFO, FileObject referencedFO) {
@@ -399,6 +424,10 @@ public class EjbJarProjectGenerator {
     private static AntProjectHelper setupProject(FileObject dirFO, String name,
             String srcRoot, String testRoot, File configFiles, File libraries, String resources,
             String j2eeLevel, String serverInstanceID, String librariesDefinition, String serverLibraryName) throws IOException {
+
+        Utils.logUI(NbBundle.getBundle(EjbJarProjectGenerator.class), "UI_EJB_PROJECT_CREATE_SHARABILITY", // NOI18N
+                new Object[]{Boolean.valueOf(librariesDefinition != null), Boolean.valueOf(serverLibraryName != null)});
+
         AntProjectHelper h = ProjectGenerator.createProject(dirFO, EjbJarProjectType.TYPE, librariesDefinition);
         final EjbJarProject prj = (EjbJarProject) ProjectManager.getDefault().findProject(h.getProjectDirectory());
         final ReferenceHelper referenceHelper = prj.getReferenceHelper();
@@ -452,8 +481,6 @@ public class EjbJarProjectGenerator {
         ep.setProperty(EjbJarProjectProperties.JAVAC_SOURCE, sourceLevel); //NOI18N
         ep.setProperty(EjbJarProjectProperties.JAVAC_TARGET, sourceLevel); //NOI18N
         
-        ep.setProperty(ProjectProperties.JAVAC_CLASSPATH, "");
-        
         ep.setProperty(EjbJarProjectProperties.DIST_DIR, "dist");
         ep.setProperty(EjbJarProjectProperties.DIST_JAR, "${"+EjbJarProjectProperties.DIST_DIR+"}/" + "${" + EjbJarProjectProperties.JAR_NAME + "}");
         //XXX the name of the dist.ear.jar file should be different, but now it cannot be since the name is used as a key in module provider mapping
@@ -467,10 +494,27 @@ public class EjbJarProjectGenerator {
         ep.setProperty(EjbJarProjectProperties.J2EE_SERVER_TYPE, deployment.getServerID(serverInstanceID));
         
         if (h.isSharableProject() && serverLibraryName != null) {
-            ep.setProperty(EjbJarProjectProperties.J2EE_PLATFORM_CLASSPATH, "${libs." + serverLibraryName + ".classpath}"); //NOI18N
+            // TODO constants
+            ep.setProperty(ProjectProperties.JAVAC_CLASSPATH,
+                    "${libs." + serverLibraryName + "." + "classpath" + "}"); // NOI18N             
+            ep.setProperty(EjbJarProjectProperties.J2EE_PLATFORM_CLASSPATH,
+                    "${libs." + serverLibraryName + "." + "classpath" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSCOMPILE_CLASSPATH,
+                     "${libs." + serverLibraryName + "." + "wscompile" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIMPORT_CLASSPATH,
+                     "${libs." + serverLibraryName + "." + "wsimport" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSGEN_CLASSPATH,
+                     "${libs." + serverLibraryName + "." + "wsgenerate" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIT_CLASSPATH, 
+                     "${libs." + serverLibraryName + "." + "wsinterop" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_JWSDP_CLASSPATH, 
+                     "${libs." + serverLibraryName + "." + "wsjwsdp" + "}"); //NOI18N
+        } else {
+            ep.setProperty(ProjectProperties.JAVAC_CLASSPATH, "");
         }
-        ep.setProperty(EjbJarProjectProperties.J2EE_PLATFORM_SHARED,
-                Boolean.toString(h.isSharableProject() && serverLibraryName != null));        
+
+        // deploy on save since nb 6.5
+        ep.setProperty(EjbJarProjectProperties.DISABLE_DEPLOY_ON_SAVE, "false"); // NOI18N
         
         ep.setProperty(EjbJarProjectProperties.JAVAC_DEBUG, "true");
         ep.setProperty(EjbJarProjectProperties.JAVAC_DEPRECATION, "false");
@@ -512,6 +556,12 @@ public class EjbJarProjectGenerator {
         ep.setProperty(EjbJarProjectProperties.JAVADOC_PREVIEW, "true"); // NOI18N
         ep.setProperty(EjbJarProjectProperties.JAVADOC_ADDITIONALPARAM, ""); // NOI18N
         
+        ep.setProperty(EjbJarProjectProperties.RUNMAIN_JVM_ARGS, ""); // NOI18N
+        ep.setComment(EjbJarProjectProperties.RUNMAIN_JVM_ARGS, new String[] { // NOI18N
+            "# " + NbBundle.getMessage(EjbJarProjectGenerator.class, "COMMENT_runmain.jvmargs"), // NOI18N
+            "# " + NbBundle.getMessage(EjbJarProjectGenerator.class, "COMMENT_runmain.jvmargs_2"), // NOI18N
+        }, false);
+        
         // use the default encoding
         Charset enc = FileEncodingQuery.getDefaultEncoding();
         ep.setProperty(EjbJarProjectProperties.SOURCE_ENCODING, enc.name());
@@ -544,13 +594,39 @@ public class EjbJarProjectGenerator {
         if (!h.isSharableProject() || serverLibraryName == null) {
             String classpath = Utils.toClasspathString(j2eePlatform.getClasspathEntries());
             ep.setProperty(EjbJarProjectProperties.J2EE_PLATFORM_CLASSPATH, classpath);
-        }
         
-        // set j2ee.platform.wscompile.classpath
-        if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSCOMPILE)) {
-            File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSCOMPILE);
-            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSCOMPILE_CLASSPATH,
-                    Utils.toClasspathString(wsClasspath));
+            // set j2ee.platform.wscompile.classpath
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSCOMPILE)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSCOMPILE);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSCOMPILE_CLASSPATH,
+                        Utils.toClasspathString(wsClasspath));
+            }
+
+            // set j2ee.platform.wsimport.classpath
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSIMPORT)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSIMPORT);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIMPORT_CLASSPATH,
+                        Utils.toClasspathString(wsClasspath));
+            }
+
+            // set j2ee.platform.wsgen.classpath
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSGEN)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSGEN);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSGEN_CLASSPATH,
+                        Utils.toClasspathString(wsClasspath));
+            }
+            
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSIT)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSIT);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIT_CLASSPATH, 
+                        Utils.toClasspathString(wsClasspath));
+            }
+
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_JWSDP)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_JWSDP);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_JWSDP_CLASSPATH, 
+                        Utils.toClasspathString(wsClasspath));
+            }            
         }
         
         // ant deployment support

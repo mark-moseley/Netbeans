@@ -64,6 +64,8 @@ import javax.swing.ComboBoxModel;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.ListCellRenderer;
+import javax.swing.event.ListDataEvent;
+import javax.swing.event.ListDataListener;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
@@ -93,6 +95,7 @@ import org.netbeans.modules.j2ee.earproject.classpath.ClassPathSupportCallbackIm
 import org.netbeans.modules.j2ee.earproject.ui.customizer.CustomizerRun.ApplicationUrisComboBoxModel;
 import org.netbeans.modules.j2ee.earproject.util.EarProjectUtil;
 import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.java.api.common.util.CommonProjectUtils;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
@@ -151,6 +154,7 @@ public final class EarProjectProperties {
     
     public static final String LAUNCH_URL_RELATIVE = "client.urlPart"; //NOI18N
     public static final String DISPLAY_BROWSER = "display.browser"; //NOI18N
+    public static final String DISABLE_DEPLOY_ON_SAVE = "disable.deploy.on.save"; //NOI18N
     public static final String CLIENT_MODULE_URI = "client.module.uri"; //NOI18N
     public static final String J2EE_SERVER_INSTANCE = "j2ee.server.instance"; //NOI18N
     public static final String J2EE_SERVER_TYPE = "j2ee.server.type"; //NOI18N
@@ -206,6 +210,8 @@ public final class EarProjectProperties {
     
     public static final String ANT_DEPLOY_BUILD_SCRIPT = "nbproject/ant-deploy.xml"; // NOI18N
     
+    private static final Logger LOGGER = Logger.getLogger(EarProjectProperties.class.getName());
+    
     // CustomizerLibraries
     Document SHARED_LIBRARIES_MODEL;
     DefaultListModel DEBUG_CLASSPATH_MODEL;
@@ -228,9 +234,7 @@ public final class EarProjectProperties {
     Document ARUGMENTS_MODEL;
     Document VM_OPTIONS_MODEL;
     Document APPLICATION_CLIENT_MODEL;
-    
-    static final String UI_LOGGER_NAME = "org.netbeans.ui.ear.project"; //NOI18N
-    static final Logger UI_LOGGER = Logger.getLogger(UI_LOGGER_NAME);
+    ButtonModel DEPLOY_ON_SAVE_MODEL;
     
     // Private fields ----------------------------------------------------------
     
@@ -281,18 +285,35 @@ public final class EarProjectProperties {
         ARCHIVE_NAME_MODEL = projectGroup.createStringDocument( evaluator, JAR_NAME );
         BUILD_CLASSES_EXCLUDES_MODEL = projectGroup.createStringDocument( evaluator, BUILD_CLASSES_EXCLUDES );
         EAR_CONTENT_ADDITIONAL_MODEL = AdditionalContentTableModel.createTableModel( cs.itemsIterator( (String)projectProperties.get( JAR_CONTENT_ADDITIONAL ), TAG_WEB_MODULE__ADDITIONAL_LIBRARIES) );
+        EAR_CONTENT_ADDITIONAL_MODEL.getDefaultListModel().addListDataListener(new ListDataListener() {
+            public void intervalAdded(ListDataEvent e) {
+                CLIENT_MODULE_MODEL.refresh(ClassPathUiSupport.getList( EAR_CONTENT_ADDITIONAL_MODEL.getDefaultListModel()));
+            }
+
+            public void intervalRemoved(ListDataEvent e) {
+                CLIENT_MODULE_MODEL.refresh(ClassPathUiSupport.getList( EAR_CONTENT_ADDITIONAL_MODEL.getDefaultListModel()));
+            }
+
+            public void contentsChanged(ListDataEvent e) {
+                CLIENT_MODULE_MODEL.refresh(ClassPathUiSupport.getList( EAR_CONTENT_ADDITIONAL_MODEL.getDefaultListModel()));
+            }
+        });
         CLASS_PATH_TABLE_RENDERER = ProjectProperties.createClassPathTableRendered(evaluator, project.getProjectDirectory());
 
         // CustomizerRun
         J2EE_PLATFORM_MODEL = projectGroup.createStringDocument(evaluator, J2EE_PLATFORM);
         LAUNCH_URL_RELATIVE_MODEL = projectGroup.createStringDocument(evaluator, LAUNCH_URL_RELATIVE);
         DISPLAY_BROWSER_MODEL = projectGroup.createToggleButtonModel(evaluator, DISPLAY_BROWSER);
-        J2EE_SERVER_INSTANCE_MODEL = J2eePlatformUiSupport.createPlatformComboBoxModel(privateProperties.getProperty( J2EE_SERVER_INSTANCE ), projectProperties.getProperty(J2EE_PLATFORM));
+        DEPLOY_ON_SAVE_MODEL = projectGroup.createInverseToggleButtonModel(evaluator, DISABLE_DEPLOY_ON_SAVE);
+        J2EE_SERVER_INSTANCE_MODEL = J2eePlatformUiSupport.createPlatformComboBoxModel(
+                privateProperties.getProperty( J2EE_SERVER_INSTANCE ),
+                projectProperties.getProperty(J2EE_PLATFORM),
+                J2eeModule.EAR);
         MAIN_CLASS_MODEL = projectGroup.createStringDocument(evaluator, APPCLIENT_MAIN_CLASS);
         ARUGMENTS_MODEL = projectGroup.createStringDocument(evaluator, APPCLIENT_ARGS);
         VM_OPTIONS_MODEL = projectGroup.createStringDocument(evaluator, APPCLIENT_JVM_OPTIONS);
         APPLICATION_CLIENT_MODEL = projectGroup.createStringDocument(evaluator, APPLICATION_CLIENT);
-        CLIENT_MODULE_MODEL = CustomizerRun.createApplicationUrisComboBoxModel(project, this);
+        CLIENT_MODULE_MODEL = CustomizerRun.createApplicationUrisComboBoxModel(project);
     }
 
     private void saveLibrariesLocation() throws IOException, IllegalArgumentException {
@@ -341,18 +362,20 @@ public final class EarProjectProperties {
                     project, projectProperties, privateProperties);
         }
         
-        ArrayList libs = new ArrayList ();
-        libs.addAll(ClassPathUiSupport.getList(EAR_CONTENT_ADDITIONAL_MODEL.getDefaultListModel()));
-        ProjectProperties.storeLibrariesLocations (libs.iterator(), projectProperties, project.getProjectDirectory());
-        
-        if (CLIENT_MODULE_MODEL.getSelectedItem() != null) {
-            CLIENT_MODULE_MODEL.storeSelectedItem(projectProperties);
-        }
+        CLIENT_MODULE_MODEL.storeSelectedItem(projectProperties);
         
         // Store the property changes into the project
         updateHelper.putProperties( AntProjectHelper.PROJECT_PROPERTIES_PATH, projectProperties );
         updateHelper.putProperties( AntProjectHelper.PRIVATE_PROPERTIES_PATH, privateProperties );
         
+        // compile on save listeners
+        if (DEPLOY_ON_SAVE_MODEL.isEnabled() && DEPLOY_ON_SAVE_MODEL.isSelected()) {
+            LOGGER.log(Level.FINE, "Starting listening on cos for {0}", project.getAppModule());
+            Deployment.getDefault().enableCompileOnSaveSupport(project.getAppModule());
+        } else {
+            LOGGER.log(Level.FINE, "Stopping listening on cos for {0}", project.getAppModule());
+            Deployment.getDefault().disableCompileOnSaveSupport(project.getAppModule());
+        }        
     }
 
     public static void setServerInstance(final Project project, final UpdateHelper helper, final String serverInstanceID) {
@@ -375,6 +398,9 @@ public final class EarProjectProperties {
     
     private static void setNewServerInstanceValue(String newServInstID, Project project, 
             EditableProperties projectProps, EditableProperties privateProps) {
+
+        assert newServInstID != null : "Server isntance id to set can't be null"; // NOI18N
+
         String oldServInstID = privateProps.getProperty(J2EE_SERVER_INSTANCE);
         if (oldServInstID != null) {
             J2eePlatform oldJ2eePlatform = Deployment.getDefault().getJ2eePlatform(oldServInstID);
@@ -404,16 +430,12 @@ public final class EarProjectProperties {
         
         // ui log for the server change
         if(newServInstID != null && !newServInstID.equals(oldServInstID)) {
-            LogRecord logRecord = new LogRecord(Level.INFO, "UI_EAR_PROJECT_SERVER_CHANGED");  //NOI18N
-            logRecord.setLoggerName(UI_LOGGER_NAME); //NOI18N
-            logRecord.setResourceBundle(NbBundle.getBundle(EarProjectProperties.class));
-            logRecord.setParameters(new Object[] { 
-                Deployment.getDefault().getServerID(oldServInstID),
-                oldServInstID,
-                Deployment.getDefault().getServerID(newServInstID),
-                newServInstID });
-                
-            UI_LOGGER.log(logRecord);
+            EarProjectUtil.logUI(NbBundle.getBundle(EarProjectProperties.class), "UI_EAR_PROJECT_SERVER_CHANGED", // NOI18N
+                    new Object[] { 
+                        Deployment.getDefault().getServerID(oldServInstID),
+                        oldServInstID,
+                        Deployment.getDefault().getServerID(newServInstID),
+                        newServInstID });
         }
     }
     
@@ -426,20 +448,18 @@ public final class EarProjectProperties {
             if (serverLibraryName != null) {
                 projectProps.setProperty(J2EE_PLATFORM_CLASSPATH,
                     "${libs." + serverLibraryName + "." + "classpath" + "}"); //NOI18N
-                projectProps.setProperty(APPCLIENT_TOOL_RUNTIME,
-                    "${libs." + serverLibraryName + "." + "appclient" + "}");
             }
         } else {
             String classpath = EarProjectGenerator.toClasspathString(j2eePlatform.getClasspathEntries());
             privateProps.setProperty(J2EE_PLATFORM_CLASSPATH, classpath);
-            
-            // update j2ee.appclient.tool.runtime
-            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_APP_CLIENT_RUNTIME)) {
-                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_APP_CLIENT_RUNTIME);
-                privateProps.setProperty(APPCLIENT_TOOL_RUNTIME, EarProjectGenerator.toClasspathString(wsClasspath));
-            } else {
-                privateProps.remove(APPCLIENT_TOOL_RUNTIME);
-            }
+        }
+        
+        // update j2ee.appclient.tool.runtime
+        if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_APP_CLIENT_RUNTIME)) {
+            File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_APP_CLIENT_RUNTIME);
+            privateProps.setProperty(APPCLIENT_TOOL_RUNTIME, EarProjectGenerator.toClasspathString(wsClasspath));
+        } else {
+            privateProps.remove(APPCLIENT_TOOL_RUNTIME);
         }
         
         // update j2ee.server.type
@@ -492,7 +512,7 @@ public final class EarProjectProperties {
         boolean saveNeeded = false;
         // delete the old entries out of the application
         for (ClassPathSupport.Item item : deleted) {
-            removeItemFromAppDD(project, app, item, props, false);
+            removeItemFromAppDD(project, app, item);
             saveNeeded = true;
         }
         // add the new stuff "back"
@@ -502,38 +522,35 @@ public final class EarProjectProperties {
         }
         for (ClassPathSupport.Item item : needsUpdate) {
             ClassPathSupport.Item old = oldContent.get(oldContent.indexOf(item));
-            // #76008 - PATH_IN_DEPLOYMENT could have changed; remove old one and save new one:
-            // #128854 - keep "app.client" or "client.module.uri" otherwise removeItemFromAppDD() removes it but never readds it
-            removeItemFromAppDD(project, app, old, props, true);
-            addItemToAppDD(project, app, item);
-            saveNeeded = true;
+            boolean changed = old.getAdditionalProperty(ClassPathSupportCallbackImpl.PATH_IN_DEPLOYMENT) == null ? 
+                item.getAdditionalProperty(ClassPathSupportCallbackImpl.PATH_IN_DEPLOYMENT) != null : 
+                !old.getAdditionalProperty(ClassPathSupportCallbackImpl.PATH_IN_DEPLOYMENT).equals(
+                item.getAdditionalProperty(ClassPathSupportCallbackImpl.PATH_IN_DEPLOYMENT));
+            if (changed) {
+                // #76008 - PATH_IN_DEPLOYMENT have changed; remove old one and save new one:
+                removeItemFromAppDD(project, app, old);
+                addItemToAppDD(project, app, item);
+                saveNeeded = true;
+            }
         }
         
-        if (saveNeeded) {
-            project.getUpdateHelper().putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, props);
-            if (EarProjectUtil.isDDWritable(project)) {
+        if (saveNeeded && EarProjectUtil.isDDWritable(project)) {
                 try {
                     app.write(project.getAppModule().getDeploymentDescriptor());
                 } catch (IOException ioe) {
                     Logger.getLogger("global").log(Level.INFO, ioe.getLocalizedMessage());
                 }
-            }
         }
     }
     
-    static private void removeItemFromAppDD(EarProject project, final Application dd,
-            final ClassPathSupport.Item item, EditableProperties props, boolean leaveModuleUri) {
+    static private void removeItemFromAppDD(EarProject project, Application dd, ClassPathSupport.Item item) {
         String pathInEAR = getCompletePathInArchive(project, item);
         Module m = searchForModule(dd, pathInEAR);
         if (null != m) {
             dd.removeModule(m);
-            if (item.getType() == ClassPathSupport.Item.TYPE_ARTIFACT) {
+            if (item.getType() == ClassPathSupport.Item.TYPE_ARTIFACT && !item.isBroken()) {
                 AntArtifact aa = item.getArtifact();
                 Project p = aa.getProject();
-                if (!leaveModuleUri) {
-                    // update clientModule / appCLient properties:
-                    ApplicationUrisComboBoxModel.moduleWasRemove(p, props);
-                }
                 J2eeModuleProvider jmp = p.getLookup().lookup(J2eeModuleProvider.class);
                 if (null != jmp) {
                     J2eeModule jm = jmp.getJ2eeModule();
@@ -581,7 +598,6 @@ public final class EarProjectProperties {
         Module mod = null;
         if (item.getType() == ClassPathSupport.Item.TYPE_ARTIFACT) {
             mod = getModFromAntArtifact(project, item.getArtifact(), dd, path);
-            // TODO: init clientModule / appCLient here
         } else if (item.getType() == ClassPathSupport.Item.TYPE_JAR) {
            mod = getModFromFile(item.getResolvedFile(), dd, path);
         }
@@ -719,7 +735,7 @@ public final class EarProjectProperties {
         Map<String, J2eeModuleProvider> mods = new HashMap<String, J2eeModuleProvider>();
         for (ClassPathSupport.Item item : getJarContentAdditional(project)) {
             Project p;
-            if (item.getType() == ClassPathSupport.Item.TYPE_ARTIFACT) {
+            if (item.getType() == ClassPathSupport.Item.TYPE_ARTIFACT && !item.isBroken()) {
                 AntArtifact aa = item.getArtifact();
                 p = aa.getProject();
             } else {
@@ -739,6 +755,14 @@ public final class EarProjectProperties {
 
 
     public static void addJ2eeSubprojects(final EarProject project, final Project[] moduleProjects) {
+        addRemoveJ2eeSubprojects(project, moduleProjects, true);
+    }
+    
+    public static void removeJ2eeSubprojects(final EarProject project, final Project[] moduleProjects) {
+        addRemoveJ2eeSubprojects(project, moduleProjects, false);
+    }
+    
+    private static void addRemoveJ2eeSubprojects(final EarProject project, final Project[] moduleProjects, final boolean add) {
         ProjectManager.mutex().writeAccess(new Runnable() {
             public void run() {
                 try {
@@ -746,6 +770,7 @@ public final class EarProjectProperties {
                     List<ClassPathSupport.Item> oldContent = project.getClassPathSupport().itemsList(
                             ep.get( JAR_CONTENT_ADDITIONAL ), TAG_WEB_MODULE__ADDITIONAL_LIBRARIES);
                     List<ClassPathSupport.Item> l = new ArrayList(oldContent);
+                    List<String> referencesToBeDestroyed = new ArrayList<String>();
                     for (int i = 0; i < moduleProjects.length; i++) {
                         AntArtifact artifacts[] = AntArtifactQuery.findArtifactsByType(
                                 moduleProjects[i],
@@ -753,13 +778,29 @@ public final class EarProjectProperties {
                         for (AntArtifact artifact : artifacts) {
                             ClassPathSupport.Item item = ClassPathSupport.Item.create(artifact, artifact.getArtifactLocations()[0], null);
                             item.setAdditionalProperty(ClassPathSupportCallbackImpl.PATH_IN_DEPLOYMENT, "/"); // NOI18N
-                            l.add(item);
+                            if (add) {
+                                l.add(item);
+                            } else {
+                                assert l.indexOf(item) != -1 : "cannot find item for: " + item; // NOI18N
+                                ClassPathSupport.Item existingItem = l.get(l.indexOf(item));
+                                l.remove(existingItem);
+                                if (isLastReference(CommonProjectUtils.getAntPropertyName(existingItem.getReference()), ep, JAR_CONTENT_ADDITIONAL)) {
+                                    referencesToBeDestroyed.add(existingItem.getReference());
+                                }
+                            }
                         }
                     }
                     String[] newValue = project.getClassPathSupport().encodeToStrings(l, TAG_WEB_MODULE__ADDITIONAL_LIBRARIES);
                     ep = project.getUpdateHelper().getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
                     ep.setProperty(JAR_CONTENT_ADDITIONAL, newValue);
                     updateContentDependency(project, oldContent, l, ep);
+                    // put properties here so that updateClientModule can read them from project:
+                    project.getUpdateHelper().putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
+                    updateClientModule(project, ep);
+                    project.getUpdateHelper().putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
+                    for (String ref : referencesToBeDestroyed) {
+                        project.getReferenceHelper().destroyReference(ref);
+                    }
                     ProjectManager.getDefault().saveProject(project);
                 } catch (IOException e) {
                     Exceptions.printStackTrace(e);
@@ -769,10 +810,34 @@ public final class EarProjectProperties {
     }
 
     /**
+     * Check whether given property is referenced by other properties.
+     * 
+     * @param property property which presence it going to be tested
+     * @param props properties
+     * @param ignoreProperty a property to ignore
+     */
+    private static boolean isLastReference(String property, EditableProperties props, String ignoreProperty) {
+        for (Map.Entry<String,String> entry : props.entrySet()) {
+            if (ignoreProperty.equals(entry.getKey())) {
+                continue;
+            }
+            if (entry.getValue().contains(property)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void updateClientModule(EarProject project, EditableProperties ep) {
+        // using model here just to update currently selected client module / app client
+        ApplicationUrisComboBoxModel m = new ApplicationUrisComboBoxModel(project);
+        m.storeSelectedItem(ep);
+    }
+    /**
      * @see #getApplicationSubprojects(Object)
      */
     static List<Project> getApplicationSubprojects(EarProject p) {
-        return getApplicationSubprojects(p, null);
+        return getApplicationSubprojects(getJarContentAdditional(p), null);
     }
 
     /**
@@ -783,8 +848,7 @@ public final class EarProjectProperties {
      *                   If it is <code>null</code> then all modules are returned.
      * @return list of EAR project subprojects.
      */
-    static List<Project> getApplicationSubprojects(EarProject p, Object moduleType) {
-        List<ClassPathSupport.Item> items = getJarContentAdditional(p);
+    static List<Project> getApplicationSubprojects(List<ClassPathSupport.Item> items, Object moduleType) {
         List<Project> projects = new ArrayList<Project>(items.size());
         for (ClassPathSupport.Item item : items) {
             if (item.getType() != ClassPathSupport.Item.TYPE_ARTIFACT || item.getArtifact() == null) {
@@ -939,10 +1003,12 @@ public final class EarProjectProperties {
         newArtifacts.addAll(ClassPathUiSupport.getList( DEBUG_CLASSPATH_MODEL));
         newArtifacts.addAll(ClassPathUiSupport.getList( EAR_CONTENT_ADDITIONAL_MODEL.getDefaultListModel()));
 
+        projectProperties = updateHelper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
         updateContentDependency(project,
             cs.itemsList(projectProperties.get(JAR_CONTENT_ADDITIONAL), TAG_WEB_MODULE__ADDITIONAL_LIBRARIES), 
             ClassPathUiSupport.getList( EAR_CONTENT_ADDITIONAL_MODEL.getDefaultListModel()),
             projectProperties);
+        updateHelper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, projectProperties);
         
         // Create set of removed artifacts and remove them
         Set removed = new HashSet( oldArtifacts );
@@ -958,15 +1024,7 @@ public final class EarProjectProperties {
                     item.getType() == ClassPathSupport.Item.TYPE_JAR ) {
                 refHelper.destroyReference(item.getReference());
                 if (item.getType() == ClassPathSupport.Item.TYPE_JAR) {
-                    //oh well, how do I do this otherwise??
-                    EditableProperties ep = updateHelper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-                    if (item.getJavadocProperty() != null) {
-                        ep.remove(item.getJavadocProperty());
-                    }
-                    if (item.getSourceProperty() != null) {
-                        ep.remove(item.getSourceProperty());
-                    }
-                    updateHelper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
+                    item.removeSourceAndJavadoc(updateHelper);
                 }
             }
         }
@@ -1030,10 +1088,6 @@ public final class EarProjectProperties {
 
     public EarProject getProject() {
         return project;
-    }
-    
-    public void removeAdditionalContentItem(ClassPathSupport.Item item) {
-        EAR_CONTENT_ADDITIONAL_MODEL.getDefaultListModel().removeElement(item);
     }
     
 }
