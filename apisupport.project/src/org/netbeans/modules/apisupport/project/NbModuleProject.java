@@ -48,10 +48,10 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.jar.Manifest;
@@ -117,6 +117,7 @@ import org.netbeans.spi.project.ui.RecommendedTemplates;
 import org.netbeans.spi.project.ui.support.UILookupMergerSupport;
 import org.openide.modules.SpecificationVersion;
 import org.openide.util.Exceptions;
+import org.openide.util.lookup.ProxyLookup;
 
 /**
  * A NetBeans module project.
@@ -131,6 +132,7 @@ public final class NbModuleProject implements Project {
             Utilities.loadImage(NB_PROJECT_ICON_PATH));
     
     public static final String SOURCES_TYPE_JAVAHELP = "javahelp"; // NOI18N
+    static final String[] COMMON_TEST_TYPES = {"unit", "qa-functional"}; // NOI18N
     
     private final AntProjectHelper helper;
     private final Evaluator eval;
@@ -159,67 +161,40 @@ public final class NbModuleProject implements Project {
             throw new IOException("netbeans.org-type module not in a complete netbeans.org source root: " + this); // NOI18N
         }
         eval = new Evaluator(this, typeProvider);
-        FileBuiltQueryImplementation fileBuilt;
         // XXX could add globs for other package roots too
-        if (supportsUnitTests()) {
-            fileBuilt = helper.createGlobFileBuiltQuery(eval, new String[] {
-                "${src.dir}/*.java", // NOI18N
-                "${test.unit.src.dir}/*.java", // NOI18N
-            }, new String[] {
-                "${build.classes.dir}/*.class", // NOI18N
-                "${build.test.unit.classes.dir}/*.class", // NOI18N
-            });
-        } else {
-            fileBuilt = helper.createGlobFileBuiltQuery(eval, new String[] {
-                "${src.dir}/*.java", // NOI18N
-            }, new String[] {
-                "${build.classes.dir}/*.class", // NOI18N
-            });
+        List<String> from = new ArrayList<String>();
+        List<String> to = new ArrayList<String>();
+        from.add("${src.dir}/*.java"); // NOI18N
+        to.add("${build.classes.dir}/*.class"); // NOI18N
+        for (String type : supportedTestTypes()) {
+            from.add("${test." + type + ".src.dir}/*.java"); // NOI18N
+            to.add("${build.test." + type + ".classes.dir}/*.class"); // NOI18N
         }
+        FileBuiltQueryImplementation fileBuilt = helper.createGlobFileBuiltQuery(
+                eval,from.toArray(new String[0]), to.toArray(new String[0]));
         final SourcesHelper sourcesHelper = new SourcesHelper(helper, eval);
         // Temp build dir is always internal; NBM build products go elsewhere, but
         // difficult to predict statically exactly what they are!
         // XXX would be good to mark at least the module JAR as owned by this project
         // (currently FOQ/SH do not support that)
         sourcesHelper.addPrincipalSourceRoot("${src.dir}", NbBundle.getMessage(NbModuleProject.class, "LBL_source_packages"), null, null); // #56457
-        sourcesHelper.addPrincipalSourceRoot("${test.unit.src.dir}", NbBundle.getMessage(NbModuleProject.class, "LBL_unit_test_packages"), null, null); // #68727
+        for (String type : supportedTestTypes()) {
+            sourcesHelper.addPrincipalSourceRoot("${test." + type + ".src.dir}", NbBundle.getMessage(NbModuleProject.class, "LBL_" + type + "_test_packages"), null, null); // #68727
+        }
         sourcesHelper.addTypedSourceRoot("${src.dir}", JavaProjectConstants.SOURCES_TYPE_JAVA, NbBundle.getMessage(NbModuleProject.class, "LBL_source_packages"), null, null);
         // XXX other principal source roots, as needed...
-        sourcesHelper.addTypedSourceRoot("${test.unit.src.dir}", JavaProjectConstants.SOURCES_TYPE_JAVA, NbBundle.getMessage(NbModuleProject.class, "LBL_unit_test_packages"), null, null);
-        sourcesHelper.addTypedSourceRoot("${test.qa-functional.src.dir}", JavaProjectConstants.SOURCES_TYPE_JAVA, NbBundle.getMessage(NbModuleProject.class, "LBL_functional_test_packages"), null, null);
-        sourcesHelper.addTypedSourceRoot("${test.qa-performance.src.dir}", JavaProjectConstants.SOURCES_TYPE_JAVA, NbBundle.getMessage(NbModuleProject.class, "LBL_performance_test_packages"), null, null);
-        // #42332: also any other misc. test dirs (just add source roots, no CP etc. for now)
-        FileObject testDir = helper.getProjectDirectory().getFileObject("test"); // NOI18N
-        if (testDir != null) {
-            Enumeration<? extends FileObject> kids = testDir.getChildren(false);
-            while (kids.hasMoreElements()) {
-                FileObject testSubdir = (FileObject) kids.nextElement();
-                if (!testSubdir.isFolder()) {
-                    continue;
-                }
-                String name = testSubdir.getNameExt();
-                if (testDir.getFileObject("build-" + name + ".xml") == null) { // NOI18N
-                    continue;
-                }
-                if (name.equals("unit") || name.equals("qa-functional") || name.equals("qa-performance")) { // NOI18N
-                    // Already handled specially.
-                    continue;
-                }
-                sourcesHelper.addTypedSourceRoot("test/" + name + "/src", JavaProjectConstants.SOURCES_TYPE_JAVA, NbBundle.getMessage(NbModuleProject.class, "LBL_unknown_test_packages", name), null, null);
-            }
+        for (String type : supportedTestTypes()) {
+            sourcesHelper.addTypedSourceRoot("${test." + type + ".src.dir}", JavaProjectConstants.SOURCES_TYPE_JAVA, NbBundle.getMessage(NbModuleProject.class, "LBL_" + type + "_test_packages"), null, null);
         }
         if (helper.resolveFileObject("javahelp/manifest.mf") == null) { // NOI18N
             // Special hack for core - ignore core/javahelp
             sourcesHelper.addTypedSourceRoot("javahelp", SOURCES_TYPE_JAVAHELP, NbBundle.getMessage(NbModuleProject.class, "LBL_javahelp_packages"), null, null);
         }
-        Iterator it = getExtraCompilationUnits().entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry entry = (Map.Entry) it.next();
-            Element ecu = (Element) entry.getValue();
-            Element pkgrootEl = Util.findElement(ecu, "package-root", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
+        for (Map.Entry<FileObject,Element> entry : getExtraCompilationUnits().entrySet()) {
+            Element pkgrootEl = Util.findElement(entry.getValue(), "package-root", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
             String pkgrootS = Util.findText(pkgrootEl);
-            FileObject pkgroot = (FileObject) entry.getKey();
-            sourcesHelper.addTypedSourceRoot(pkgrootS, JavaProjectConstants.SOURCES_TYPE_JAVA, /* XXX should schema incl. display name? */pkgroot.getNameExt(), null, null);
+            sourcesHelper.addTypedSourceRoot(pkgrootS, JavaProjectConstants.SOURCES_TYPE_JAVA,
+                    /* XXX should schema incl. display name? */entry.getKey().getNameExt(), null, null);
         }
         // #56457: support external source roots too.
         ProjectManager.mutex().postWriteRequest(new Runnable() {
@@ -227,11 +202,24 @@ public final class NbModuleProject implements Project {
                 sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
             }
         });
+        lookup = new LazyLookup(new Info(), aux, helper, fileBuilt, sourcesHelper); //NOI18N
+    }
+    
+    public @Override String toString() {
+        return "NbModuleProject[" + getProjectDirectory() + "]"; // NOI18N
+    }
+    
+    public Lookup getLookup() {
+        return lookup;
+    }
+
+    private Lookup createLookup(ProjectInformation info, AuxiliaryConfiguration aux, AntProjectHelper helper, FileBuiltQueryImplementation fileBuilt, final SourcesHelper sourcesHelper) {
         Lookup baseLookup = Lookups.fixed(
             this,
-            new Info(),
+            info,
             aux,
             helper.createCacheDirectoryProvider(),
+            helper.createAuxiliaryProperties(),
             new SavedHook(),
             UILookupMergerSupport.createProjectOpenHookMerger(new OpenedHook()),
             new ModuleActions(this),
@@ -263,17 +251,44 @@ public final class NbModuleProject implements Project {
             UILookupMergerSupport.createRecommendedTemplatesMerger(),
             new TemplateAttributesProvider(getHelper(), getModuleType() == NbModuleType.NETBEANS_ORG),
             new FileEncodingQueryImpl());
-        lookup = LookupProviderSupport.createCompositeLookup(baseLookup, "Projects/org-netbeans-modules-apisupport-project/Lookup"); //NOI18N
+        return  LookupProviderSupport.createCompositeLookup(baseLookup, "Projects/org-netbeans-modules-apisupport-project/Lookup"); //NOI18N
     }
-    
-    public @Override String toString() {
-        return "NbModuleProject[" + getProjectDirectory() + "]"; // NOI18N
-    }
-    
-    public Lookup getLookup() {
-        return lookup;
-    }
-    
+
+ 
+
+ // in 6.5 the ProjectInformation icon is used in project open dialog.
+   // however we don't want this call to initiate the comple lookup of the project
+   //as that's time consuming and suboptimal to do for all projects in the filechooser.
+   private class LazyLookup extends ProxyLookup {
+       AuxiliaryConfiguration aux;
+       AntProjectHelper helper;
+       FileBuiltQueryImplementation fileBuilt;
+       SourcesHelper sourcesHelper;
+       private ProjectInformation info;
+       private Lookup lookup;
+       boolean initialized = false;
+       LazyLookup(ProjectInformation info, AuxiliaryConfiguration aux, AntProjectHelper helper, FileBuiltQueryImplementation fileBuilt, final SourcesHelper sourcesHelper) {
+           setLookups(Lookups.fixed(info));
+           this.aux = aux;
+           this.helper = helper;
+           this.fileBuilt = fileBuilt;
+           this.sourcesHelper = sourcesHelper;
+           this.info = info;
+       }
+
+       @Override
+       protected synchronized void beforeLookup(Template<?> template) {
+           if (!initialized &&
+               (! (ProjectInformation.class.equals(template.getType())))) {
+               initialized = true;
+               lookup = createLookup(info, aux, helper, fileBuilt, sourcesHelper);
+               setLookups(lookup);
+           }
+           super.beforeLookup(template);
+       }
+   }
+
+
     public FileObject getProjectDirectory() {
         return helper.getProjectDirectory();
     }
@@ -380,26 +395,18 @@ public final class NbModuleProject implements Project {
         return getDir("src.dir"); // NOI18N
     }
     
-    public FileObject getTestSourceDirectory() {
-        return getDir("test.unit.src.dir"); // NOI18N
-    }
-    
-    public FileObject getFunctionalTestSourceDirectory() {
-        return getDir("test.qa-functional.src.dir"); // NOI18N
-    }
-    
-    public FileObject getPerformanceTestSourceDirectory() {
-        return getDir("test.qa-performance.src.dir"); // NOI18N
+    public FileObject getTestSourceDirectory(String type) {
+        return getDir("test." + type + ".src.dir"); // NOI18N
     }
     
     public File getClassesDirectory() {
         String classesDir = evaluator().getProperty("build.classes.dir"); // NOI18N
-        return helper.resolveFile(classesDir);
+        return classesDir != null ? helper.resolveFile(classesDir) : null;
     }
     
-    public File getTestClassesDirectory() {
-        String testClassesDir = evaluator().getProperty("build.test.unit.classes.dir"); // NOI18N
-        return helper.resolveFile(testClassesDir);
+    public File getTestClassesDirectory(String type) {
+        String testClassesDir = evaluator().getProperty("build.test." + type + ".classes.dir"); // NOI18N
+        return testClassesDir != null ? helper.resolveFile(testClassesDir) : null;
     }
     
     public FileObject getJavaHelpDirectory() {
@@ -415,6 +422,10 @@ public final class NbModuleProject implements Project {
         return helper.resolveFile(evaluator().evaluate("${cluster}/${module.jar}")); // NOI18N
     }
     
+    public File getTestUserDirLockFile() {
+        return getHelper().resolveFile(evaluator().evaluate("${test.user.dir}/lock"));
+    }
+
     public String getCodeNameBase() {
         Element config = getPrimaryConfigurationData();
         Element cnb = Util.findElement(config, "code-name-base", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
@@ -504,7 +515,8 @@ public final class NbModuleProject implements Project {
         NbPlatform p = getPlatform(false);
         if (p == null) {
             // #67148: have to use something... (and getEntry(codeNameBase) will certainly fail!)
-            return ModuleList.getModuleList(getProjectDirectoryFile(), NbPlatform.getDefaultPlatform().getDestDir());
+            NbPlatform p2 = NbPlatform.getDefaultPlatform();
+            return ModuleList.getModuleList(getProjectDirectoryFile(), p2 != null ? p2.getDestDir() : null);
         }
         ModuleList ml;
         try {
@@ -512,7 +524,8 @@ public final class NbModuleProject implements Project {
         } catch (IOException x) {
             // #69029: maybe invalidated platform? Try the default platform instead.
             Logger.getLogger(NbModuleProject.class.getName()).log(Level.FINE, null, x);
-            return ModuleList.getModuleList(getProjectDirectoryFile(), NbPlatform.getDefaultPlatform().getDestDir());
+            NbPlatform p2 = NbPlatform.getDefaultPlatform();
+            return ModuleList.getModuleList(getProjectDirectoryFile(), p2 != null ? p2.getDestDir() : null);
         }
         if (ml.getEntry(getCodeNameBase()) == null) {
             ModuleList.refresh();
@@ -617,8 +630,15 @@ public final class NbModuleProject implements Project {
         return pubPkgs != null && !Util.findSubElements(pubPkgs).isEmpty();
     }
     
-    public boolean supportsUnitTests() {
-        return getTestSourceDirectory() != null;
+    public List<String> supportedTestTypes() {
+        List<String> types = new ArrayList<String>();
+        for (String type : COMMON_TEST_TYPES) {
+            if (getTestSourceDirectory(type) != null && !Boolean.parseBoolean(evaluator().getProperty("disable." + type + ".tests"))) {
+                types.add(type);
+            }
+        }
+        // XXX could look for others in project.xml, in which case fix Evaluator to use that
+        return types;
     }
     
     /**
@@ -647,7 +667,7 @@ public final class NbModuleProject implements Project {
     
     /** Get the Java source level used for this module. Default is 1.4. */
     public String getJavacSource() {
-        String javacSource = evaluator().getProperty("javac.source");
+        String javacSource = evaluator().getProperty(SingleModuleProperties.JAVAC_SOURCE);
         assert javacSource != null;
         return javacSource;
     }
