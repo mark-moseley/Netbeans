@@ -77,7 +77,7 @@ import org.openide.util.Utilities;
  */
 public class GoToPanel extends javax.swing.JPanel {
             
-    private static Icon WAIT_ICON = new ImageIcon( Utilities.loadImage("org/netbeans/modules/jumpto/file/resources/wait.gif") ); // NOI18N
+    private static Icon WAIT_ICON = new ImageIcon( Utilities.loadImage("org/netbeans/modules/jumpto/resources/wait.gif") ); // NOI18N
     private static Icon WARN_ICON = new ImageIcon( Utilities.loadImage("org/netbeans/modules/jumpto/resources/warning.png") ); // NOI18N
         
     private static final int BRIGHTER_COLOR_COMPONENT = 10;
@@ -215,11 +215,14 @@ public class GoToPanel extends javax.swing.JPanel {
         org.openide.awt.Mnemonics.setLocalizedText(jLabelText, org.openide.util.NbBundle.getMessage(GoToPanel.class, "TXT_GoToType_TypeName_Label")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
+        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.SOUTHWEST;
+        gridBagConstraints.weightx = 1.0;
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 4, 0);
         add(jLabelText, gridBagConstraints);
+        jLabelText.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GoToPanel.class, "GoToPanel.jLabelText.AccessibleContext.accessibleDescription")); // NOI18N
 
-        nameField.setFont(new java.awt.Font("Monospaced", 0, 12));
+        nameField.setFont(new java.awt.Font("Monospaced", 0, getFontSize()));
         nameField.setBorder(javax.swing.BorderFactory.createEtchedBorder());
         nameField.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -227,14 +230,14 @@ public class GoToPanel extends javax.swing.JPanel {
             }
         });
         nameField.addKeyListener(new java.awt.event.KeyAdapter() {
-            public void keyTyped(java.awt.event.KeyEvent evt) {
-                nameFieldKeyTyped(evt);
-            }
             public void keyPressed(java.awt.event.KeyEvent evt) {
                 nameFieldKeyPressed(evt);
             }
             public void keyReleased(java.awt.event.KeyEvent evt) {
                 nameFieldKeyReleased(evt);
+            }
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                nameFieldKeyTyped(evt);
             }
         });
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -243,7 +246,7 @@ public class GoToPanel extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 8, 0);
         add(nameField, gridBagConstraints);
 
-        jLabelList.setLabelFor(matchesScrollPane1);
+        jLabelList.setLabelFor(matchesList);
         jLabelList.setText(org.openide.util.NbBundle.getMessage(GoToPanel.class, "TXT_GoToType_MatchesList_Label")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
@@ -258,7 +261,7 @@ public class GoToPanel extends javax.swing.JPanel {
         matchesScrollPane1.setBorder(null);
         matchesScrollPane1.setFocusable(false);
 
-        matchesList.setFont(new java.awt.Font("Monospaced", 0, 12));
+        matchesList.setFont(new java.awt.Font("Monospaced", 0, getFontSize()));
         matchesList.setVisibleRowCount(15);
         matchesList.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseReleased(java.awt.event.MouseEvent evt) {
@@ -266,10 +269,11 @@ public class GoToPanel extends javax.swing.JPanel {
             }
         });
         matchesScrollPane1.setViewportView(matchesList);
+        matchesList.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(GoToPanel.class, "ACSD_GoToListName")); // NOI18N
+        matchesList.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GoToPanel.class, "GoToPanel.matchesList.AccessibleContext.accessibleDescription")); // NOI18N
 
         listPanel.add(matchesScrollPane1, java.awt.BorderLayout.CENTER);
 
-        jLabelWarning.setBorder(null);
         jLabelWarning.setFocusable(false);
         listPanel.add(jLabelWarning, java.awt.BorderLayout.PAGE_END);
 
@@ -287,6 +291,7 @@ public class GoToPanel extends javax.swing.JPanel {
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 4, 0);
         add(caseSensitive, gridBagConstraints);
+        caseSensitive.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GoToPanel.class, "GoToPanel.caseSensitive.AccessibleContext.accessibleDescription")); // NOI18N
 
         jLabelLocation.setText(org.openide.util.NbBundle.getMessage(GoToPanel.class, "LBL_GoToType_LocationJLabel")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -359,6 +364,10 @@ public class GoToPanel extends javax.swing.JPanel {
         catch( BadLocationException ex ) {
             return null;
         }
+    }
+    
+    private int getFontSize () {
+        return this.jLabelList.getFont().getSize();
     }
     
     public boolean isCaseSensitive () {
