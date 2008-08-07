@@ -43,6 +43,7 @@ package org.netbeans.modules.debugger.jpda.models;
 
 import com.sun.jdi.AbsentInformationException;
 import com.sun.jdi.ClassNotLoadedException;
+import com.sun.jdi.InvalidStackFrameException;
 import com.sun.jdi.InvalidTypeException;
 import com.sun.jdi.LocalVariable;
 import com.sun.jdi.ObjectReference;
@@ -125,11 +126,14 @@ org.netbeans.api.debugger.jpda.LocalVariable {
         try {
             StackFrame sf = ((CallStackFrameImpl) thread.getCallStack(depth, depth + 1)[0]).getStackFrame();
             sf.setValue (local, value);
+            setInnerValue(value);
         } catch (AbsentInformationException aiex) {
             throw new InvalidExpressionException(aiex);
         } catch (InvalidTypeException ex) {
             throw new InvalidExpressionException (ex);
         } catch (ClassNotLoadedException ex) {
+            throw new InvalidExpressionException (ex);
+        } catch (InvalidStackFrameException ex) {
             throw new InvalidExpressionException (ex);
         }
     }
