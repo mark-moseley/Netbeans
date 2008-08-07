@@ -37,7 +37,7 @@ import org.w3c.dom.Node;
  */
 public class WatchesNodeModel implements NodeModel, Constants {
     public static final String WATCH_ICON =
-        "org/netbeans/modules/debugger/resources/watchesView/Watch";
+        "org/netbeans/modules/bpel/debugger/ui/resources/image/watches/watch";
     
     final ContextProvider myContextProvider;
     final BpelDebugger myDebugger;
@@ -48,8 +48,7 @@ public class WatchesNodeModel implements NodeModel, Constants {
             final ContextProvider contextProvider) {
         
         myContextProvider = contextProvider;
-        myDebugger = (BpelDebugger) 
-                contextProvider.lookupFirst(null, BpelDebugger.class);
+        myDebugger = contextProvider.lookupFirst(null, BpelDebugger.class);
         myHelper = new VariablesUtil(myDebugger);
     }
     
