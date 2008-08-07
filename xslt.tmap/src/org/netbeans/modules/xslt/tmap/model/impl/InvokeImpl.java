@@ -19,6 +19,7 @@
 package org.netbeans.modules.xslt.tmap.model.impl;
 
 import org.netbeans.modules.xml.wsdl.model.Operation;
+import org.netbeans.modules.xml.wsdl.model.PortType;
 import org.netbeans.modules.xml.wsdl.model.extensions.bpel.PartnerLinkType;
 import org.netbeans.modules.xml.wsdl.model.extensions.bpel.Role;
 import org.netbeans.modules.xml.xam.Reference;
@@ -36,9 +37,7 @@ import org.w3c.dom.Element;
  * @author Vitaly Bychkov
  * @version 1.0
  */
-public class InvokeImpl  extends TMapComponentAbstract 
-    implements Invoke 
-{
+public class InvokeImpl extends NameableImpl implements Invoke {
 
     public InvokeImpl(TMapModelImpl model) {
         this(model, createNewElement(TMapComponents.INVOKE, model));
@@ -52,6 +51,15 @@ public class InvokeImpl  extends TMapComponentAbstract
         visitor.visit(this);
     }
 
+    public WSDLReference<PortType> getPortType() {
+        return getWSDLReference(TMapAttributes.PORT_TYPE, PortType.class);
+    }
+
+    public void setPortType(WSDLReference<PortType> ref) {
+        setWSDLReference( TMapAttributes.PORT_TYPE, ref);
+    }
+
+// 142908
     public WSDLReference<PartnerLinkType> getPartnerLinkType() {
         return getWSDLReference(TMapAttributes.PARTNER_LINK_TYPE, PartnerLinkType.class);
     }
@@ -71,6 +79,12 @@ public class InvokeImpl  extends TMapComponentAbstract
     public Reference[] getReferences() {
         return new Reference[] {getPartnerLinkType(), getRole(), getOperation()};
     }
+
+
+//142908
+//    public Reference[] getReferences() {
+//        return new Reference[] {getPortType(), getOperation()};
+//    }
 
     public Reference<Operation> getOperation() {
         return getWSDLReference(TMapAttributes.OPERATION_NAME, Operation.class);

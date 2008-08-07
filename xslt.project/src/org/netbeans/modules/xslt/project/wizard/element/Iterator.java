@@ -50,6 +50,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.event.ChangeListener;
 
 import org.openide.WizardDescriptor;
@@ -78,14 +80,19 @@ import org.netbeans.modules.xslt.tmap.model.api.VariableDeclarator;
 import org.netbeans.modules.xslt.tmap.model.api.WSDLReference;
 import org.netbeans.modules.xslt.tmap.model.impl.VariableReferenceImpl;
 import org.netbeans.modules.xml.catalogsupport.util.ProjectUtilities;
-import org.netbeans.modules.soa.ui.SoaUiUtil;
-import static org.netbeans.modules.soa.ui.util.UI.*;
+import org.netbeans.modules.soa.ui.SoaUtil;
+import org.openide.util.NbBundle;
+import static org.netbeans.modules.xml.ui.UI.*;
 
 /**
  * @author Vladimir Yaroslavskiy
  * @version 2006.12.25
  */
 public final class Iterator implements TemplateWizard.Iterator {
+
+  private static final long serialVersionUID = 1L;
+
+  private static final Logger LOGGGER = Logger.getLogger("xslt.project");
 
   public static Iterator createXsl() {
     return new Iterator();
@@ -283,7 +290,7 @@ public final class Iterator implements TemplateWizard.Iterator {
         FileObject xslFo = null;
 
         if (dirFo != null) {
-            xslFo = dirFo.getFileObject(file);
+            xslFo = dirFo.getFileObject(file, XSL);
             if (xslFo == null) {
                 xslFo = PanelUtil.copyFile(dirFo, 
                     TEMPLATES_PATH, XSLT_SERVICE,
@@ -291,7 +298,7 @@ public final class Iterator implements TemplateWizard.Iterator {
                 if (!isCreatedDir) {
                     createdFos.add(xslFo);
                 }
-                SoaUiUtil.fixEncoding(DataObject.find(xslFo), dirFo);
+                SoaUtil.fixEncoding(DataObject.find(xslFo), dirFo);
             }
         }
         return xslFo;
@@ -394,13 +401,18 @@ public final class Iterator implements TemplateWizard.Iterator {
             if (tMapOp != null) {
                 invoke = createInvoke(tMapOp, wizard, componentFactory);
             }
-            
 
+            
             if (foTransform != null) {
                 tMapOp.addTransform(foTransform);
+//                foTransform = getTransform(tMapOp, foTransform.getName());
             }
             if (invoke != null) {
                 tMapOp.addInvoke(invoke);
+//                invoke = getInvoke(tMapOp, invoke.getName());
+//                if (invoke != null) {
+//                    configureInvoke(invoke, wizard);
+//                }
             }
             
             if (tMapOp != null) {
@@ -421,6 +433,10 @@ public final class Iterator implements TemplateWizard.Iterator {
             
             if (foTransform != null) {
                 String result = getTMapVarRef(invoke.getInputVariable());
+                if (result == null) {
+                    LOGGGER.log(Level.WARNING, NbBundle.getMessage(
+                            Iterator.class, "MSG_Warning_VariableReferenceNull", "result"));// NOI18N
+                }
                 if (result != null) {
                     foTransform.setResult(result);
                 }
@@ -457,23 +473,35 @@ public final class Iterator implements TemplateWizard.Iterator {
                     (String)wizard.getProperty(Panel.INPUT_FILE), 
                     tMapOp);
 
+            if (inTransform != null) {
+                tMapOp.addTransform(inTransform);
+//                inTransform = getTransform(tMapOp, inTransform.getName());
+            }
             invoke = createInvoke(tMapOp, inputInvokeVar, outputInvokeVar,
                       wizard, componentFactory);
+
+            if (invoke != null) {
+                tMapOp.addInvoke(invoke);
+//                invoke = getInvoke(tMapOp, invoke.getName());
+//                if (invoke != null) {
+//                    configureInvoke(invoke, wizard);
+//                }
+            }
 
             Transform outTransform = null;
             outTransform = createTransform(componentFactory, 
                     (String)wizard.getProperty(Panel.OUTPUT_FILE), 
                     tMapOp);
 
-            if (inTransform != null) {
-                tMapOp.addTransform(inTransform);
-            }
-            if (invoke != null) {
-                tMapOp.addInvoke(invoke);
-            }
             if (outTransform != null) {
                 tMapOp.addTransform(outTransform);
+//                outTransform = getTransform(tMapOp, outTransform.getName());
+
                 String source = getTMapVarRef(invoke.getOutputVariable());
+                if (source == null) {
+                    LOGGGER.log(Level.WARNING, NbBundle.getMessage(
+                            Iterator.class, "MSG_Warning_VariableReferenceNull", "source"));// NOI18N
+                }
                 if (source != null) {
                     outTransform.setSource(source);
                 }
@@ -481,6 +509,10 @@ public final class Iterator implements TemplateWizard.Iterator {
             
             if (inTransform != null) {
                 String result = getTMapVarRef(invoke.getInputVariable());
+                if (result == null) {
+                    LOGGGER.log(Level.WARNING, NbBundle.getMessage(
+                            Iterator.class, "MSG_Warning_VariableReferenceNull", "result"));// NOI18N
+                }
                 if (result != null) {
                     inTransform.setResult(result);
                 }
@@ -666,6 +698,64 @@ public final class Iterator implements TemplateWizard.Iterator {
         return tMapService;
     }
 
+//    private Service getService(TransformMap tMap, String name) {
+//        if (tMap == null || name == null) {
+//            return null;
+//        }
+//        
+//        List<Service> services = tMap.getServices();
+//        if (services == null) {
+//            return null;
+//        }
+//        
+//        for (Service service : services) {
+//            if (service != null && name.equals(service.getName())) {
+//                return service;
+//            }
+//        }
+//        return null;
+//    }
+//    
+//    private Transform getTransform(org.netbeans.modules.xslt.tmap.model.api.Operation tMapOp, 
+//            String name) 
+//    {
+//        if (tMapOp == null || name == null) {
+//            return null;
+//        }
+//        
+//        List<Transform> transforms = tMapOp.getTransforms();
+//        if (transforms == null) {
+//            return null;
+//        }
+//        
+//        for (Transform transform : transforms) {
+//            if (transform != null && name.equals(transform.getName())) {
+//                return transform;
+//            }
+//        }
+//        return null;
+//    }
+//
+//    private Invoke getInvoke(org.netbeans.modules.xslt.tmap.model.api.Operation tMapOp, 
+//            String name) 
+//    {
+//        if (tMapOp == null || name == null) {
+//            return null;
+//        }
+//        
+//        List<Invoke> invokes = tMapOp.getInvokes();
+//        if (invokes == null) {
+//            return null;
+//        }
+//        
+//        for (Invoke invoke : invokes) {
+//            if (invoke != null && name.equals(invoke.getName())) {
+//                return invoke;
+//            }
+//        }
+//        return null;
+//    }
+  
     private Transform createTransform(TMapComponentFactory componentFactory, 
             String inputFileStr, Variable source, Variable result) 
     {
