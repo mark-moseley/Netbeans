@@ -39,22 +39,24 @@
 
 package org.netbeans.modules.php.editor.parser;
 
-import org.netbeans.modules.php.editor.PHPTestBase;
+import java.util.List;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.HtmlFormatter;
+import org.netbeans.modules.gsf.api.StructureItem;
 
 /**
  *
  * @author Petr Pisl
  */
-public class SemanticAnalyzerTest extends PHPTestBase {
+public class PhpStructureScannerTest extends ParserTestBase{
 
-    public SemanticAnalyzerTest(String testName) {
+    public PhpStructureScannerTest(String testName) {
         super(testName);
     }
 
-    @Override
+     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        clearWorkDir();
     }
 
     @Override
@@ -62,40 +64,64 @@ public class SemanticAnalyzerTest extends PHPTestBase {
         super.tearDown();
     }
 
-    public void testAnalysisFields() throws Exception {
-        checkSemantic("testfiles/class001.php");
-    }
-
-    public void testAnalysisStatic() throws Exception {
-        checkSemantic("testfiles/class002.php");
-    }
-
-    public void testAnalysisUnusedPrivateField() throws Exception {
-        checkSemantic("testfiles/class003.php");
-    }
-
-    public void testAnalysisUnusedPrivateMethod() throws Exception {
-        checkSemantic("testfiles/class004.php");
-    }
-
-    public void testAnalysisAll() throws Exception {
-        checkSemantic("testfiles/class005.php");
-    }
+    /**
+     * Test of scan method, of class PhpStructureScanner.
+     */
     
-    public void testAnalysisDeclarationAfterUsage() throws Exception {
-        checkSemantic("testfiles/class006.php");
-    }
-    
-    public void testIssue142005() throws Exception {
-        checkSemantic("testfiles/class007.php");
+    public void xtestScan() throws Exception {
+        performTest("interface_001");
+
     }
 
-    // issue #139813
-    public void testAbstract() throws Exception {
-        checkSemantic("testfiles/abstract01.php");
+    public void xtest133484() throws Exception {
+        performTest("referenceParameter_001");
+    }
+
+    public void testClass() throws Exception {
+        performTest("class005");
     }
     
     public void testIssue142644() throws Exception {
-        checkSemantic("testfiles/issue142644.php");
+        performTest("issue142644");
     }
+
+    @Override
+    protected String getTestResult(String filename) throws Exception {
+        StringBuffer sb = new StringBuffer();
+        CompilationInfo info = getInfo("testfiles/" + filename +".php");
+        PhpStructureScanner instance = new PhpStructureScanner();
+        List<? extends StructureItem> result = instance.scan(info);
+        for (StructureItem structureItem : result) {
+            sb.append(printStructureItem(structureItem, 0));
+        }
+        return sb.toString();
+    }
+
+    private String printStructureItem(StructureItem structureItem, int indent) {
+        StringBuffer sb = new StringBuffer();
+        sb.append(indent(indent));
+        sb.append(structureItem.getName());
+        sb.append(" [");
+        sb.append(structureItem.getPosition());
+        sb.append(", ");
+        sb.append(structureItem.getEndPosition());
+        sb.append("] : ");
+        HtmlFormatter formatter = new TestHtmlFormatter() ;
+        sb.append(structureItem.getHtml(formatter));
+        for (StructureItem item : structureItem.getNestedItems()) {
+            sb.append("\n");
+            sb.append(printStructureItem(item, indent+1));
+        }
+        return sb.toString();
+    }
+
+    private String indent(int indent) {
+        String text = "|-";
+        for (int i = 0; i < indent; i++  ) {
+            text = text + "-";
+        }
+        return text;
+    }
+
+
 }
