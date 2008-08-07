@@ -52,10 +52,13 @@ import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.common.api.J2eeLibraryTypeProvider;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.J2eePlatformImpl;
+import org.netbeans.modules.j2ee.deployment.plugins.spi.support.LookupProviderSupport;
 import org.netbeans.modules.tomcat5.util.TomcatProperties;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
+import org.openide.util.lookup.Lookups;
 
 /**
  * Tomcat's implementation of the J2eePlatformImpl.
@@ -136,19 +139,19 @@ public class TomcatPlatformImpl extends J2eePlatformImpl {
     };
 
     private static final String[] KEYSTORE_LOCATION = new String[] {
-        "xws-security/etc/server-keystore.jks"  //NOI18N
+        "certs/server-keystore.jks"  //NOI18N
     };
     
     private static final String[] TRUSTSTORE_LOCATION = new String[] {
-        "xws-security/etc/server-truststore.jks"  //NOI18N
+        "certs/server-truststore.jks"  //NOI18N
     };
     
     private static final String[] KEYSTORE_CLIENT_LOCATION = new String[] {
-        "xws-security/etc/client-keystore.jks"  //NOI18N
+        "certs/client-keystore.jks"  //NOI18N
     };
     
     private static final String[] TRUSTSTORE_CLIENT_LOCATION = new String[] {
-        "xws-security/etc/client-truststore.jks"  //NOI18N
+        "certs/client-truststore.jks"  //NOI18N
     };
     
     private static final String ICON = "org/netbeans/modules/tomcat5/resources/tomcat5instance.png"; // NOI18N
@@ -354,6 +357,7 @@ public class TomcatPlatformImpl extends J2eePlatformImpl {
         if (J2eePlatform.TOOL_WSIMPORT.equals(toolName)) {
             File homeDir = tp.getCatalinaHome();
             boolean wsit = isToolSupported(J2eePlatform.TOOL_WSIT);
+            
             if (wsit) {
                 for (int i = 0; i < WSIT_WSIMPORT_LIBS.length; i++) {
                     if (!new File(homeDir, WSIT_WSIMPORT_LIBS[i]).exists()) {
@@ -465,6 +469,13 @@ public class TomcatPlatformImpl extends J2eePlatformImpl {
     
     public JavaPlatform getJavaPlatform() {
         return tp.getJavaPlatform();
+    }
+    
+    public Lookup getLookup() {
+        Lookup baseLookup = Lookups.fixed(tp.getCatalinaHome());
+        return LookupProviderSupport.createCompositeLookup(baseLookup, "J2EE/DeploymentPlugins/Tomcat5/Lookup"); //NOI18N
+//        WSStackSPI jaxWsStack = new TomcatJaxWsStack(tp.getCatalinaHome());
+//        return Lookups.fixed(WSStackFactory.createWSStack(jaxWsStack));
     }
     
     // private helper methods -------------------------------------------------
