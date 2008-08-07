@@ -48,23 +48,28 @@ import java.beans.PropertyChangeListener;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import javax.swing.AbstractAction;
 import javax.swing.Icon;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JMenuItem;
+import org.openide.awt.DynamicMenuContent;
 import org.openide.nodes.Node;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
 import org.openide.util.WeakListeners;
+import org.openide.util.actions.Presenter;
 import org.openide.util.lookup.ProxyLookup;
 import org.openide.windows.TopComponent;
 
 /** Action sensitive to current project
  * @author Petr Hrebejk
  */
-public abstract class LookupSensitiveAction extends BasicAction implements LookupListener {
-    private static Logger UILOG = Logger.getLogger("org.netbeans.ui.actions"); // NOI18N
+public abstract class LookupSensitiveAction extends BasicAction implements LookupListener, Presenter.Popup, Presenter.Menu {
+    static Logger UILOG = Logger.getLogger("org.netbeans.ui.actions"); // NOI18N
+    private static Logger LOG = Logger.getLogger(LookupSensitiveAction.class.getName());
 
     private Lookup lookup;
     private Class<?>[] watch;
@@ -160,8 +165,21 @@ public abstract class LookupSensitiveAction extends BasicAction implements Looku
     }
 
     private void doRefresh() {
+        if (refreshing) {
+            return;
+        }
         refreshing = true;
         try {
+            if (LOG.isLoggable(Level.FINER)) {
+                LogRecord r = new LogRecord(Level.FINER, "LOG_ACTION_REFRESH"); // NOI18N
+                r.setResourceBundle(NbBundle.getBundle(LookupSensitiveAction.class));
+                r.setParameters(new Object[]{
+                    getClass(),
+                    lookup
+                });
+                r.setLoggerName(LOG.getName());
+                LOG.log(r);
+            }
             refresh( lookup );
         } finally {
             refreshing = false;
@@ -194,11 +212,44 @@ public abstract class LookupSensitiveAction extends BasicAction implements Looku
         }
     }
 
+    // Implementation of Presenter.Menu and Presenter.Popup --------------------
+    
+    public JMenuItem getMenuPresenter () {
+        return new DynamicMenuItem(this, false);
+    }
+    
+    public JMenuItem getPopupPresenter () {
+        return new DynamicMenuItem(this, true);
+    }
+
+    private class DynamicMenuItem extends JMenuItem implements DynamicMenuContent {
+        
+        private AbstractAction action;
+        private boolean popup;
+        
+        public DynamicMenuItem(AbstractAction action, boolean popup) {
+            this.action = action;
+            this.popup = popup;
+            org.openide.awt.Actions.connect(this, action, popup);
+        }
+        
+        public JComponent[] getMenuPresenters() {
+            JMenuItem menuPresenter = new JMenuItem();
+            org.openide.awt.Actions.connect(menuPresenter, action, popup);
+            return new JComponent [] { menuPresenter };
+        }
+        
+        public JComponent[] synchMenuPresenters(JComponent[] items) {
+            return getMenuPresenters();
+        }
+        
+    }
+    
     /**
      * #120721: do not want to use Utilities.actionsGlobalContext since that does not survive focus change,
      * and we would like to mimic the selection tracking behavior of Hacks.keepCurrentProjectNameUpdated.
      */
-    private static final class LastActivatedWindowLookup extends ProxyLookup implements PropertyChangeListener {
+    static final class LastActivatedWindowLookup extends ProxyLookup implements PropertyChangeListener {
 
         static final Lookup INSTANCE = new LastActivatedWindowLookup();
 

@@ -34,7 +34,9 @@ import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.AbstractAction;
@@ -51,6 +53,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.ListCellRenderer;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.border.Border;
 import javax.swing.plaf.UIResource;
@@ -68,9 +71,12 @@ import org.openide.filesystems.MultiFileSystem;
 import org.openide.util.ContextAwareAction;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
+import org.openide.util.LookupEvent;
+import org.openide.util.LookupListener;
 import org.openide.util.Mutex;
 import org.openide.util.MutexException;
 import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
 import org.openide.util.actions.CallableSystemAction;
 import org.openide.util.actions.Presenter;
 
@@ -78,7 +84,7 @@ import org.openide.util.actions.Presenter;
  * Action permitting selection of a configuration for the main project.
  * @author Greg Crawley, Adam Sotona, Jesse Glick
  */
-public class ActiveConfigAction extends CallableSystemAction implements ContextAwareAction {
+public class ActiveConfigAction extends CallableSystemAction implements LookupListener, PropertyChangeListener, ContextAwareAction {
 
     private static final Logger LOGGER = Logger.getLogger(ActiveConfigAction.class.getName());
 
@@ -86,11 +92,15 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
     private static final Object CUSTOMIZE_ENTRY = new Object();
 
     private final PropertyChangeListener lst;
+    private final LookupListener looklst;
     private final JComboBox configListCombo;
     private boolean listeningToCombo = true;
 
     private Project currentProject;
     private ProjectConfigurationProvider pcp;
+    private Lookup.Result<ProjectConfigurationProvider> currentResult;
+
+    private Lookup lookup;
 
     public ActiveConfigAction() {
         super();
@@ -109,7 +119,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                     activeConfigurationChanged(pcp != null ? getActiveConfiguration(pcp) : null);
                     pcp.customize();
                 } else if (o != null) {
-                    activeConfigurationSelected((ProjectConfiguration) o);
+                    activeConfigurationSelected((ProjectConfiguration) o, null);
                 }
             }
         });
@@ -130,6 +140,21 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                 }
             }
         });
+        looklst = new LookupListener() {
+            public void resultChanged(LookupEvent ev) {
+                activeProjectProviderChanged();
+            }
+        };
+
+        OpenProjectList.getDefault().addPropertyChangeListener(WeakListeners.propertyChange(this, OpenProjectList.getDefault()));
+
+        lookup = LookupSensitiveAction.LastActivatedWindowLookup.INSTANCE;
+        Lookup.Result result = lookup.lookupResult(Project.class);
+        result.addLookupListener(WeakListeners.create(LookupListener.class, this, result));
+
+        DynLayer.INSTANCE.setEnabled(true);
+        refreshView(lookup);
+
     }
 
 
@@ -137,7 +162,6 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
         LOGGER.log(Level.FINER, "configurationsListChanged: {0}", configs);
         if (configs == null) {
             configListCombo.setModel(EMPTY_MODEL);
-            DynLayer.INSTANCE.setEnabled(false);
             configListCombo.setEnabled(false); // possibly redundant, but just in case
         } else {
             DefaultComboBoxModel model = new DefaultComboBoxModel(configs.toArray());
@@ -145,7 +169,6 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                 model.addElement(CUSTOMIZE_ENTRY);
             }
             configListCombo.setModel(model);
-            DynLayer.INSTANCE.setEnabled(true);
             configListCombo.setEnabled(true);
         }
         if (pcp != null) {
@@ -153,36 +176,46 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
         }
     }
 
-    private synchronized void activeConfigurationChanged(ProjectConfiguration config) {
+    private synchronized void activeConfigurationChanged(final ProjectConfiguration config) {
         LOGGER.log(Level.FINER, "activeConfigurationChanged: {0}", config);
         listeningToCombo = false;
         try {
-            configListCombo.setSelectedIndex(-1);
-            if (config != null) {
-                ComboBoxModel m = configListCombo.getModel();
-                for (int i = 0; i < m.getSize(); i++) {
-                    if (config.equals(m.getElementAt(i))) {
-                        configListCombo.setSelectedIndex(i);
-                        break;
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    configListCombo.setSelectedIndex(-1);
+                    if (config != null) {
+                        ComboBoxModel m = configListCombo.getModel();
+                        for (int i = 0; i < m.getSize(); i++) {
+                            if (config.equals(m.getElementAt(i))) {
+                                listeningToCombo = false;
+                                configListCombo.setSelectedIndex(i);
+                                listeningToCombo = true;
+                                break;
+                            }
+                        }
                     }
                 }
-            }
+            });
         } finally {
             listeningToCombo = true;
         }
     }
-
-    private synchronized void activeConfigurationSelected(ProjectConfiguration cfg) {
+    
+    private synchronized void activeConfigurationSelected(ProjectConfiguration cfg, ProjectConfigurationProvider ppcp) {
+        ProjectConfigurationProvider lpcp = pcp;
+        if (ppcp != null) {
+            lpcp = ppcp;
+        } 
         LOGGER.log(Level.FINER, "activeConfigurationSelected: {0}", cfg);
-        if (pcp != null && cfg != null && !cfg.equals(getActiveConfiguration(pcp))) {
+        if (lpcp != null && cfg != null && !cfg.equals(getActiveConfiguration(lpcp))) {
             try {
-                setActiveConfiguration(pcp, cfg);
+                setActiveConfiguration(lpcp, cfg);
             } catch (IOException x) {
                 LOGGER.log(Level.WARNING, null, x);
             }
         }
     }
-
+    
     public HelpCtx getHelpCtx() {
         return new HelpCtx(ActiveConfigAction.class);
     }
@@ -195,6 +228,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
         assert false;
     }
 
+    @Override
     public Component getToolbarPresenter() {
         // Do not return combo box directly; looks bad.
         JPanel toolbarPanel = new JPanel(new GridBagLayout());
@@ -241,7 +275,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
 
     }
 
-    class ConfigMenu extends JMenu implements DynamicMenuContent {
+    class ConfigMenu extends JMenu implements DynamicMenuContent, ActionListener {
 
         private final Lookup context;
 
@@ -254,20 +288,23 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
             }
         }
 
-        public JComponent[] getMenuPresenters() {
-            removeAll();
-            final ProjectConfigurationProvider<?> pcp;
+        private ProjectConfigurationProvider<?> findPCP() {
             if (context != null) {
                 Collection<? extends Project> projects = context.lookupAll(Project.class);
                 if (projects.size() == 1) {
-                    pcp = projects.iterator().next().getLookup().lookup(ProjectConfigurationProvider.class);
+                    return projects.iterator().next().getLookup().lookup(ProjectConfigurationProvider.class);
                 } else {
                     // No selection, or multiselection.
-                    pcp = null;
+                    return null;
                 }
             } else {
-                pcp = ActiveConfigAction.this.pcp; // global menu item; take from main project
+                return ActiveConfigAction.this.pcp; // global menu item; take from main project
             }
+        }
+        
+        public JComponent[] getMenuPresenters() {
+            removeAll();
+            final ProjectConfigurationProvider<?> pcp = findPCP();
             if (pcp != null) {
                 boolean something = false;
                 ProjectConfiguration activeConfig = getActiveConfiguration(pcp);
@@ -275,7 +312,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                     JRadioButtonMenuItem jmi = new JRadioButtonMenuItem(config.getDisplayName(), config.equals(activeConfig));
                     jmi.addActionListener(new ActionListener() {
                         public void actionPerformed(ActionEvent e) {
-                            activeConfigurationSelected(config);
+                            activeConfigurationSelected(config, findPCP());
                         }
                     });
                     add(jmi);
@@ -288,11 +325,7 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
                     something = true;
                     JMenuItem customize = new JMenuItem();
                     Mnemonics.setLocalizedText(customize, NbBundle.getMessage(ActiveConfigAction.class, "ActiveConfigAction.customize"));
-                    customize.addActionListener(new ActionListener() {
-                        public void actionPerformed(ActionEvent e) {
-                            pcp.customize();
-                        }
-                    });
+                    customize.addActionListener(this);
                     add(customize);
                 }
                 setEnabled(something);
@@ -310,8 +343,16 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
             return getMenuPresenters();
         }
 
+        public void actionPerformed(ActionEvent e) {
+            ProjectConfigurationProvider<?> pcp = findPCP();
+            if (pcp != null) {
+                pcp.customize();
+            }
+        }
+
     }
 
+    @Override
     public JMenuItem getMenuPresenter() {
         return new ConfigMenu(null);
     }
@@ -369,13 +410,19 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
 
     private synchronized void activeProjectChanged(Project p) {
         LOGGER.log(Level.FINER, "activeProjectChanged: {0} -> {1}", new Object[] {currentProject, p});
+        if (currentResult != null) {
+            currentResult.removeLookupListener(looklst);
+        }
+        currentResult = null;
         if (currentProject != p) {
             if (pcp != null) {
                 pcp.removePropertyChangeListener(lst);
             }
             currentProject = p;
             if (currentProject != null) {
-                pcp = currentProject.getLookup().lookup(ProjectConfigurationProvider.class);
+                currentResult = currentProject.getLookup().lookupResult(ProjectConfigurationProvider.class);
+                pcp = currentResult.allInstances().isEmpty() ? null : currentResult.allInstances().iterator().next();
+                currentResult.addLookupListener(looklst);
                 if (pcp != null) {
                     pcp.addPropertyChangeListener(lst);
                 }
@@ -386,6 +433,21 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
 
         }
     }
+    
+    private synchronized void activeProjectProviderChanged() {
+        if (currentResult != null) {
+            if (pcp != null) {
+                pcp.removePropertyChangeListener(lst);
+            }
+            Collection<? extends ProjectConfigurationProvider> all = currentResult.allInstances();
+            pcp = all.isEmpty() ? null : all.iterator().next();
+            if (pcp != null) {
+                pcp.addPropertyChangeListener(lst);
+            } 
+            configurationsListChanged(pcp == null ? null : getConfigurations(pcp));
+        }
+    }
+    
 
     public Action createContextAwareInstance(final Lookup actionContext) {
         class A extends AbstractAction implements Presenter.Popup {
@@ -428,6 +490,46 @@ public class ActiveConfigAction extends CallableSystemAction implements ContextA
         } catch (MutexException e) {
             throw (IOException) e.getException();
         }
+    }
+
+    private void refreshView(Lookup context) {
+
+        Project mainPrj = OpenProjectList.getDefault().getMainProject();
+
+        Project contextPrj = null;
+        if (mainPrj == null) {
+            contextPrj = getProjectFromLookup(context);
+        }
+
+        if (contextPrj != null) {
+            activeProjectChanged(contextPrj);
+        }
+
+    }
+
+    private Project getProjectFromLookup(Lookup context) {
+        Project toReturn = null;
+        List<Project> result = new ArrayList<Project>();
+        if (context != null) {
+            for (Project p : context.lookupAll(Project.class)) {
+                result.add(p);
+            }
+        }
+        if (result.size() > 0) {
+            toReturn = result.get(0);
+        }
+        return toReturn;
+    }
+
+    public void propertyChange(PropertyChangeEvent evt) {
+        if (evt.getPropertyName().equals(OpenProjectList.PROPERTY_MAIN_PROJECT) ||
+            evt.getPropertyName().equals(OpenProjectList.PROPERTY_OPEN_PROJECTS) ) {
+            refreshView(lookup);
+        }
+    }
+
+    public void resultChanged(LookupEvent ev) {
+        refreshView(lookup);
     }
 
 }
