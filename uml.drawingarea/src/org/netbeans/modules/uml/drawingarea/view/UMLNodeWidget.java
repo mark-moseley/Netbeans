@@ -53,6 +53,7 @@ import java.beans.PropertyChangeListener;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
@@ -91,6 +92,7 @@ import org.netbeans.modules.uml.drawingarea.widgets.NameFontHandler;
 import org.netbeans.modules.uml.util.DummyCorePreference;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.lookup.AbstractLookup;
 import org.openide.util.lookup.InstanceContent;
@@ -142,7 +144,7 @@ public abstract class UMLNodeWidget extends Widget
     public static final String LOCATION = "LOCATION";
     public static final String  GRANDPARENTLOCATION = "GRANDPARENTLOCATION"; // needed for combined fragments
     public static final String SIZE = "SIZE";
-
+    public static final String LAYER_INDEX = "LAYER_INDEX";
 
     
     public UMLNodeWidget(Scene scene)
@@ -159,7 +161,8 @@ public abstract class UMLNodeWidget extends Widget
         
         if (useDefaultNodeResource)
         {
-            childLayer = new CustomizableNodeViewContainer(scene, getResourcePath(), "Default");
+            childLayer = new CustomizableNodeViewContainer(scene, getResourcePath(), 
+                                                           NbBundle.getMessage(UMLNodeWidget.class, "LBL_Default"));
 //            childLayer.setOpaque(true);
             childLayer.setForeground((Color) null);
             childLayer.setLayout(LayoutFactory.createOverlayLayout());
@@ -417,6 +420,17 @@ public abstract class UMLNodeWidget extends Widget
     public void save(NodeWriter nodeWriter) {
         nodeWriter.getProperties().put(RESIZEMODEPROPERTY, getResizeMode().toString());
         setNodeWriterValues(nodeWriter, this);
+        //save the widet index for layering
+        int index = -1;
+        Widget parent = this.getParentWidget();
+        if (parent != null)
+        {
+            index = parent.getChildren().indexOf(this);
+        }
+        HashMap map = nodeWriter.getProperties();
+        map.put(LAYER_INDEX, index);
+        nodeWriter.setProperties(map);
+        
         nodeWriter.beginGraphNodeWithModelBridge();
         nodeWriter.beginContained();
         //write contained
@@ -701,28 +715,29 @@ public abstract class UMLNodeWidget extends Widget
     
     public void duplicate(boolean setBounds, Widget target)
     {
-        //todo
-//        if (target instanceof UMLNodeWidget)
-//        {
-//            ((UMLNodeWidget) target).setNodeBackground(getNodeBackground());
-//            ((UMLNodeWidget) target).setNodeForeground(getNodeForeground());
-//            ((UMLNodeWidget) target).setNodeFont(getNodeFont());
-
-            if (setBounds)
+        assert target instanceof UMLNodeWidget;
+        
+        ((UMLNodeWidget) target).setNodeBackground(getNodeBackground());
+        ((UMLNodeWidget) target).setNodeForeground(getNodeForeground());
+        ((UMLNodeWidget) target).setNodeFont(getNodeFont());
+        
+        if (setBounds)
+        {
+            Insets insets = getBorder().getInsets();
+            if(getResizeMode()==RESIZEMODE.PREFERREDBOUNDS)
             {
-                //target.setPreferredBounds(this.getBounds());
-                if(getResizeMode()==RESIZEMODE.PREFERREDBOUNDS)
-                {
-                    target.setPreferredBounds(getPreferredBounds());
-                }
-                else if(getResizeMode()==RESIZEMODE.PREFERREDSIZE)
-                {
-                    target.setPreferredSize(getPreferredSize());
-                }
-                else target.setMinimumSize(this.getMinimumSize());
-                if(target instanceof UMLNodeWidget)((UMLNodeWidget)target).setResizeMode(getResizeMode());
+                target.setPreferredBounds(new Rectangle(
+                        getPreferredBounds().x + insets.left,  getPreferredBounds().y + insets.top,
+                        getPreferredBounds().width - insets.left - insets.right,
+                        getPreferredBounds().height - insets.top - insets.bottom));
             }
-//        }
+            else if(getResizeMode()==RESIZEMODE.PREFERREDSIZE)
+            {
+                target.setPreferredSize(getPreferredSize());
+            }
+            else target.setMinimumSize(this.getMinimumSize());
+            if(target instanceof UMLNodeWidget)((UMLNodeWidget)target).setResizeMode(getResizeMode());
+        }
     }
     
     @Override
