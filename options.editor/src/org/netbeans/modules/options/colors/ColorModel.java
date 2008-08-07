@@ -46,6 +46,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Image;
+import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -69,11 +70,11 @@ import javax.swing.event.CaretListener;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
+import javax.swing.text.EditorKit;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import org.netbeans.api.editor.settings.EditorStyleConstants;
 import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.AnnotationType;
 import org.netbeans.editor.AnnotationTypes;
@@ -81,6 +82,7 @@ import org.netbeans.editor.SyntaxSupport;
 import org.netbeans.editor.TokenItem;
 import org.netbeans.editor.Utilities;
 import org.netbeans.editor.ext.ExtSyntaxSupport;
+import org.netbeans.modules.editor.NbEditorDocument;
 import org.netbeans.modules.editor.settings.storage.api.EditorSettings;
 import org.netbeans.modules.editor.settings.storage.api.FontColorSettingsFactory;
 import org.openide.filesystems.FileObject;
@@ -356,12 +358,11 @@ public final class ColorModel {
             editorPane = new JEditorPane();
             add(editorPane, BorderLayout.CENTER);
             
-            Document document = editorPane.getDocument ();
-            document.putProperty ("mimeType", hackMimeType);
-            editorPane.setEditorKit (CloneableEditorSupport.getEditorKit(hackMimeType));
-            document = editorPane.getDocument ();
-            document.putProperty ("mimeType", hackMimeType);
-            editorPane.firePropertyChange(null, 0, 1);
+            EditorKit kit = CloneableEditorSupport.getEditorKit(hackMimeType);
+            Document document = kit.createDefaultDocument();
+            document.putProperty(NbEditorDocument.MIME_TYPE_PROP, hackMimeType);
+            editorPane.setEditorKit(kit);
+            editorPane.setDocument(document);
             
             editorPane.addCaretListener (new CaretListener () {
                 public void caretUpdate (CaretEvent e) {
@@ -421,6 +422,14 @@ public final class ColorModel {
             
             editorPane.setEnabled(false);
             editorPane.setText(exampleText);
+
+            // scroll the view, but leave the caret where it is, otherwise it will
+            // change the selected category (#143058)
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    editorPane.scrollRectToVisible(new Rectangle(0, 0, 10, 10));
+                }
+            });
         }
         
         private String [] loadPreviewExample(String mimeType) {
