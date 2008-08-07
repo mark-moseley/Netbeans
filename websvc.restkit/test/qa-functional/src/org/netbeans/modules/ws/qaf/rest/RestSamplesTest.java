@@ -39,13 +39,11 @@
 
 package org.netbeans.modules.ws.qaf.rest;
 
-import com.meterware.httpunit.WebResponse;
 import java.io.IOException;
 import java.net.MalformedURLException;
-import junit.framework.TestSuite;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.Bundle;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.xml.sax.SAXException;
 
 /**
@@ -72,7 +70,7 @@ public class RestSamplesTest extends RestTestBase {
 
     @Override
     protected String getSamplesCategoryName() {
-        return Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.samples.resources.Bundle", "Templates/Project/Samples/REST");
+        return Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.samples.resources.Bundle", "Templates/Project/Samples/Metro");
     }
 
     /**
@@ -83,12 +81,9 @@ public class RestSamplesTest extends RestTestBase {
      * @throws org.xml.sax.SAXException
      */
     public void testHelloWorldSample() throws IOException, MalformedURLException, SAXException {
-        String sampleName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.samples.resources.Bundle", "Templates/Project/Samples/REST/HelloWorldSampleProject");
+        String sampleName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.samples.resources.Bundle", "Templates/Project/Samples/Metro/HelloWorldSampleProject");
         createProject(sampleName, getProjectType(), null);
         deployProject(getProjectName());
-        WebResponse wr = doGet(getRestAppURL() + "/resources/helloWorld", MimeType.TEXT_HTML); //NOI18N
-        String expectedResponse = "<html><body><h1>Hello World!</body></h1></html>"; //NOI18N
-        assertEquals("invalid response", expectedResponse, wr.getText()); //NOI18N
         undeployProject(getProjectName());
     }
 
@@ -98,7 +93,7 @@ public class RestSamplesTest extends RestTestBase {
      * @throws java.io.IOException
      */
     public void testCustomerDBSample() throws IOException {
-        String sampleName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.samples.resources.Bundle", "Templates/Project/Samples/REST/CustomerDBSampleProject");
+        String sampleName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.samples.resources.Bundle", "Templates/Project/Samples/Metro/CustomerDBSampleProject");
         createProject(sampleName, getProjectType(), null);
         deployProject(getProjectName());
     }
@@ -109,25 +104,21 @@ public class RestSamplesTest extends RestTestBase {
      * @throws java.io.IOException
      */
     public void testCustomerDBClientSample() throws IOException {
-        String sampleName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.samples.resources.Bundle", "Templates/Project/Samples/REST/CustomerDBClientSampleProject");
+        String sampleName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.samples.resources.Bundle", "Templates/Project/Samples/Metro/CustomerDBClientSampleProject");
         createProject(sampleName, getProjectType(), null);
         deployProject(getProjectName());
         undeployProject(getProjectName());
         undeployProject("CustomerDBSample"); //NOI18N
     }
 
-    /** Creates suite from particular test cases. You can define order of testcases here. */
-    public static TestSuite suite() {
-        TestSuite suite = new NbTestSuite();
-        suite.addTest(new RestSamplesTest("testHelloWorldSample"));
-        suite.addTest(new RestSamplesTest("testCustomerDBSample"));
-        suite.addTest(new RestSamplesTest("testCustomerDBClientSample"));
-        return suite;
-    }
-
-    /* Method allowing test execution directly from the IDE. */
-    public static void main(java.lang.String[] args) {
-        // run whole suite
-        TestRunner.run(suite());
+    /**
+     * Creates suite from particular test cases. You can define order of testcases here.
+     */
+    public static Test suite() {
+        return NbModuleSuite.create(addServerTests(NbModuleSuite.createConfiguration(RestSamplesTest.class),
+                "testHelloWorldSample",
+                "testCustomerDBSample",
+                "testCustomerDBClientSample"
+                ).enableModules(".*").clusters(".*"));
     }
 }
