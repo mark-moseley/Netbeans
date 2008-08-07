@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -50,7 +50,6 @@ import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.actions.Action;
 import org.netbeans.jellytools.actions.ActionNoBlock;
 import org.netbeans.jellytools.nodes.Node;
@@ -60,8 +59,8 @@ import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.operators.JLabelOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.test.ide.WatchProjects;
 
 /**
  * Overall validation suite for ruby cluster.
@@ -69,22 +68,42 @@ import org.netbeans.junit.ide.ProjectSupport;
  * @author Jiri.Skrivanek@sun.com
  */
 public class RubyValidation extends JellyTestCase {
-    
+
+     static final String [] tests = {
+                "testCreateRubyProject",
+                "testRunRubyFile",
+                "testCreateRailsProject",
+                "testRailsGenerate",
+                "testIrbShell", // TODO: does not work due to issue 137398
+    };
+
     /** Need to be defined because of JUnit */
     public RubyValidation(String name) {
         super(name);
     }
 
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new RubyValidation("testIrbShell"));
-        suite.addTest(new RubyValidation("testCreateRubyProject"));
-        suite.addTest(new RubyValidation("testRunRubyFile"));
-        suite.addTest(new RubyValidation("testCreateRailsProject"));
-        suite.addTest(new RubyValidation("testRailsGenerate"));
-        return suite;
+    public static junit.framework.Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(RubyValidation.class)
+                .addTest(tests)
+                .clusters(".*")
+                .enableModules(".*")
+                .gui(true)
+                );
     }
-    
+
+//    public static NbTestSuite suite() {
+//        NbTestSuite suite = new NbTestSuite();
+//        suite.addTest(new RubyValidation("testCreateRubyProject"));
+//        suite.addTest(new RubyValidation("testRunRubyFile"));
+//        suite.addTest(new RubyValidation("testCreateRailsProject"));
+//        suite.addTest(new RubyValidation("testRailsGenerate"));
+//        suite.addTest(new RubyValidation("testIrbShell"));
+//        return suite;
+//    }
+
+
+
     /** Use for execution inside IDE */
     public static void main(java.lang.String[] args) {
         // run whole suite
@@ -113,13 +132,12 @@ public class RubyValidation extends JellyTestCase {
      * - open IRB shell window 
      * - close it
      */
-    public void testIrbShell() throws Exception{
-        String rubyproject_packagename = "org.netbeans.modules.ruby.rubyproject.Bundle";
-        String irb_action = Bundle.getStringTrimmed(rubyproject_packagename, "CTL_IrbAction");
-        String irb_TC = Bundle.getString(rubyproject_packagename, "CTL_IrbTopComponent");
-        new Action("Window|Other|" + irb_action, null).perform(); //NOI18N
-        TopComponentOperator tco = new TopComponentOperator(irb_TC);
-        tco.close();
+    public void testIrbShell() {
+        String irbItem = Bundle.getStringTrimmed("org.netbeans.modules.ruby.rubyproject.Bundle", "CTL_IrbAction");
+        String irbTitle = Bundle.getString("org.netbeans.modules.ruby.rubyproject.Bundle", "CTL_IrbTopComponent");
+        ProjectRootNode projectRootNode = new ProjectsTabOperator().getProjectRootNode(SAMPLE_RAILS_PROJECT_NAME);
+        new ActionNoBlock(null, irbItem).perform(projectRootNode);
+        new OutputTabOperator(irbTitle).close();
     }   
 
 
@@ -132,6 +150,8 @@ public class RubyValidation extends JellyTestCase {
      * - wait classpath scanning finished
      */
     public void testCreateRubyProject() {
+        //workaround for 142928
+        NewProjectWizardOperator.invoke().cancel();
         // create new web application project
         NewProjectWizardOperator npwo = NewProjectWizardOperator.invoke();
         // "Ruby"
@@ -145,26 +165,29 @@ public class RubyValidation extends JellyTestCase {
         npnlso.txtProjectName().setText(SAMPLE_RUBY_PROJECT_NAME);
         npnlso.txtProjectLocation().setText(System.getProperty("netbeans.user")); // NOI18N
         npnlso.finish();
-        // wait project appear in projects view
-        // wait 30 second
+            // wait project appear in projects view
+            // wait 30 second
         JemmyProperties.setCurrentTimeout("JTreeOperator.WaitNextNodeTimeout", 30000); // NOI18N
         new ProjectsTabOperator().getProjectRootNode(SAMPLE_RUBY_PROJECT_NAME);
         // wait classpath scanning finished
-        ProjectSupport.waitScanFinished();
+        WatchProjects.waitScanFinished();
     }
     
     /** Test run Ruby file
      * - find main.rb in editor
-     * - call "Run File" popup action in editor
+     * - call "Run "main.rb"" popup action in editor
      * - wait for main.rb output tab
      * - check "Hello World" is printed out
      */
     public void testRunRubyFile() {
         // wait main.rb is opened in editor
         EditorOperator editor = new EditorOperator("main.rb"); // NOI18N
-        // "Run File"
-        String runFileItem = Bundle.getStringTrimmed("org.netbeans.modules.ruby.rubyproject.Bundle", "LBL_RunFile_Action");
-        // call "Run File" in editor
+        // "Run "main.rb""
+        String runFileItem = Bundle.getStringTrimmed(
+                "org.netbeans.modules.project.ui.actions.Bundle",
+                "LBL_RunSingleAction_Name",
+                new Object[]{new Integer(1), "main.rb"});
+        // call "Run "main.rb"" in editor
         new Action(null, runFileItem).perform(editor);
         // check message in output tab
         new OutputTabOperator("main.rb").waitText("Hello World"); // NOI18N
@@ -194,7 +217,7 @@ public class RubyValidation extends JellyTestCase {
         JemmyProperties.setCurrentTimeout("JTreeOperator.WaitNextNodeTimeout", 30000); // NOI18N
         new ProjectsTabOperator().getProjectRootNode(SAMPLE_RAILS_PROJECT_NAME);
         // wait classpath scanning finished
-        ProjectSupport.waitScanFinished();
+        WatchProjects.waitScanFinished();
     }
     
     /** Test Rails Generator
@@ -225,8 +248,8 @@ public class RubyValidation extends JellyTestCase {
         viewsOper.setText("myview");
         generatorOper.ok();
         
-        // wait 60 second
-        JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 60000);
+        // wait 180 second
+        JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 180000);
         
         String filename = "myapp_controller.rb"; // NOI18N
         new EditorOperator(filename);
@@ -240,7 +263,7 @@ public class RubyValidation extends JellyTestCase {
         String helpersLabel = Bundle.getString("org.netbeans.modules.ruby.railsprojects.Bundle", "app_helpers");
         new Node(projectRootNode, helpersLabel+"|"+filename);
         
-        filename = "myview.rhtml"; // NOI18N
+        filename = "myview.html.erb"; // NOI18N
         new EditorOperator(filename);
         // "Views"
         String viewsLabel = Bundle.getString("org.netbeans.modules.ruby.railsprojects.Bundle", "app_views");
