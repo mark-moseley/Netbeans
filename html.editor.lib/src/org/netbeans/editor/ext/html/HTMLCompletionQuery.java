@@ -284,6 +284,15 @@ public class HTMLCompletionQuery  {
                 
                 if( elem == null ) return null;
                 
+                if( elem.getElementOffset() == offset) {
+                    //we are at the border between two syntax elements, 
+                    //but need to use the previous one
+                    //
+                    //for example: < a hre|<td>...</td>
+                    
+                    elem = sup.getElementChain(offset - 1);
+                }
+                
                 if( elem.getType() == SyntaxElement.TYPE_TAG ) { // not endTags
                     SyntaxElement.Tag tagElem = (SyntaxElement.Tag)elem;
                     
@@ -314,7 +323,7 @@ public class HTMLCompletionQuery  {
                         DTD.Attribute attr = (DTD.Attribute)i.next();
                         String aName = attr.getName();
                         if( aName.equals( prefix )
-                        || (!existingAttrsNames.contains( aName.toUpperCase()) && !existingAttrsNames.contains( aName.toLowerCase()))
+                        || (!existingAttrsNames.contains( aName.toUpperCase()) && !existingAttrsNames.contains( aName.toLowerCase(Locale.ENGLISH)))
                         || (wordAtCursor.equals( aName ) && prefix.length() > 0)) {
                             attribs.add( attr );
                         }
@@ -369,7 +378,7 @@ public class HTMLCompletionQuery  {
                     
                     if(argItem.id() != HTMLTokenId.ARGUMENT) return null; // no ArgItem
                     
-                    String argName = argItem.text().toString().toLowerCase();
+                    String argName = argItem.text().toString().toLowerCase(Locale.ENGLISH);
                     
                     DTD.Attribute arg = tag.getAttribute( argName );
                     if( arg == null || arg.getType() != DTD.Attribute.TYPE_SET ) return null;
@@ -413,7 +422,7 @@ public class HTMLCompletionQuery  {
         }
         if (commonLength == preText.trim().length()) {
             ArrayList<CompletionItem> items = new ArrayList<CompletionItem>(1);
-            items.add(new EndTagItem(lowerCase ? tagName.toLowerCase() : tagName, offset - commonLength, commonLength));
+            items.add(new EndTagItem(lowerCase ? tagName.toLowerCase(Locale.ENGLISH) : tagName, offset - commonLength, commonLength));
             return items;
         }
         return null;
@@ -508,7 +517,7 @@ public class HTMLCompletionQuery  {
         private static final int HTML_ITEMS_SORT_PRIORITY = 20;
         
         public HTMLResultItem( String baseText, int offset, int length ) {
-            this.baseText = lowerCase ? baseText.toLowerCase() : baseText.toUpperCase();
+            this.baseText = lowerCase ? baseText.toLowerCase(Locale.ENGLISH) : baseText.toUpperCase();
             this.offset = offset;
             this.length = length;
             this. helpID = null;
