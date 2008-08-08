@@ -193,11 +193,11 @@ public final class SourcesHelper {
                     if (owner != null && owner != p) {
                         return false;
                     }
+                    File f = FileUtil.toFile(file);
+                    if (f != null && SharabilityQuery.getSharability(f) == SharabilityQuery.NOT_SHARABLE) {
+                        return false;
+                    } // else MIXED, UNKNOWN, or SHARABLE; or not a disk file
                 }
-                File f = FileUtil.toFile(file);
-                if (f != null && SharabilityQuery.getSharability(f) == SharabilityQuery.NOT_SHARABLE) {
-                    return false;
-                } // else MIXED, UNKNOWN, or SHARABLE; or not a disk file
                 return true;
             }
 
@@ -256,9 +256,9 @@ public final class SourcesHelper {
         @Override
         public Collection<FileObject> getIncludeRoots() {
             Collection<FileObject> supe = super.getIncludeRoots();
-            computeIncludeExcludePatterns();
             if (supe.size() == 1) {
                 Set<FileObject> roots = new HashSet<FileObject>();
+                computeIncludeExcludePatterns();
                 for (File r : matcher.findIncludedRoots()) {
                     FileObject subroot = FileUtil.toFileObject(r);
                     if (subroot != null) {
