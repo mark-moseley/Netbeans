@@ -50,7 +50,6 @@ package org.netbeans.modules.uml;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import org.openide.modules.ModuleInstall;
 import java.util.zip.*;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -60,10 +59,9 @@ import org.openide.util.Utilities;
 /**
  *
  */
-public class UMLCoreModule extends ModuleInstall 
+public class UMLCoreModule 
 {   
-   public void restored() 
-   {
+   public static void checkInitUml1() {
       // Retrieve the desired configuration home.  If the property
       // embarcadero.home-dir has already been set then do not change it
       // (because that is where the user wants the configuration directory).
@@ -77,29 +75,6 @@ public class UMLCoreModule extends ModuleInstall
            copyDotUmlIntoUserDir(nbuser, "org/netbeans/modules/uml/dotuml1.zip", null);
        }
    }
-   
-      
-   public static void instantiateDrawingLibrary() {
-       try
-        {            
-	    synchronized(dLock) 
-	    {
-		if (! libDecrypted) 
-		{
-		    org.netbeans.modules.uml.DrawingLibraryDecrypter decrypter = 
-			new org.netbeans.modules.uml.DrawingLibraryDecrypter("org.netbeans.modules.uml");
-		    decrypter.myDecrypt(decrypter); 
-		    libDecrypted = true;
-		}
-	    }           
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-   }
-   private static Object dLock = new Object();
-   private static boolean libDecrypted = false; 
    
    
    public static void checkInit() {
@@ -115,20 +90,18 @@ public class UMLCoreModule extends ModuleInstall
 
    public static void copyDotUmlIntoUserDir(String userdir, String zipResource, String subdirToExist) 
    {
-       try 
-	   {
+       try {
 			//check to see if .uml already exists in the userdir
-			File file1 = new File(userdir+File.separator+".uml"
-                                              + (subdirToExist != null && ! subdirToExist.equals("")
-                                                 ? File.separator + subdirToExist
-                                                 : ""));
-			if (file1.exists()) {
+                        File file1;
+                        if (subdirToExist == null || subdirToExist.length() == 0) {
+                            file1 = new File(new File(new File(userdir), ".uml"), ".created-" + Integer.toHexString(zipResource.hashCode()));
+                        } else {
+                            file1 = new File(new File(new File(userdir), ".uml"), subdirToExist);
+                        }
+                        
+                        if (file1.exists()) {
                             return;
 			}
-
-                        if (Utilities.isMac()) {
-                               showMacWarning() ;
-                        }
                         
 			ClassLoader loader = UMLCoreModule.class.getClassLoader();
 			InputStream in = null;
@@ -174,26 +147,14 @@ public class UMLCoreModule extends ModuleInstall
             }//while
 
             zipInputStream.close();
+            
+            if (!file1.exists()) {
+                file1.createNewFile();
+            }
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
    }
- 
-   private static void showMacWarning() {
-       MacWarningPanel mwp = new MacWarningPanel() ;
-        DialogDescriptor dd = new DialogDescriptor(
-                mwp, 
-                NbBundle.getMessage (UMLCoreModule.class, "MAC_WARNING_TITLE"), 
-                 false, 
-                 new Object[] {DialogDescriptor.OK_OPTION}, 
-                 null, 
-                 DialogDescriptor.DEFAULT_ALIGN,
-                 null,
-                 null)  ;
-        
-        DialogDisplayer.getDefault().createDialog(dd).setVisible(true);
-    }
-   
 }
