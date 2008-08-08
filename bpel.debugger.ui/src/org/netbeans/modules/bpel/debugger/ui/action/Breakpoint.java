@@ -24,6 +24,7 @@ import java.beans.PropertyChangeListener;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.swing.SwingUtilities;
 import javax.swing.text.StyledDocument;
 import org.netbeans.api.debugger.ActionsManager;
 import org.netbeans.api.debugger.DebuggerManager;
@@ -35,6 +36,8 @@ import org.netbeans.modules.bpel.debugger.api.breakpoints.LineBreakpoint;
 import org.netbeans.modules.bpel.debugger.ui.breakpoint.BpelBreakpointListener;
 import org.netbeans.modules.bpel.debugger.ui.util.EditorUtil;
 import org.netbeans.modules.bpel.debugger.ui.util.ModelUtil;
+import org.netbeans.modules.bpel.editors.api.nodes.actions.ActionType;
+import org.netbeans.modules.bpel.editors.api.nodes.actions.BpelNodeTypedAction;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.api.support.UniqueId;
@@ -61,7 +64,7 @@ public class Breakpoint extends ActionsProviderSupport
     
     /**{@inheritDoc}*/
     public Breakpoint() {
-        setEnabled(ActionsManager.ACTION_TOGGLE_BREAKPOINT, true);
+        setEnabled(ActionsManager.ACTION_TOGGLE_BREAKPOINT, false);
         
         TopComponent.getRegistry().addPropertyChangeListener(
                 WeakListeners.propertyChange(this, TopComponent.getRegistry()));
@@ -87,9 +90,61 @@ public class Breakpoint extends ActionsProviderSupport
     public void propertyChange(
             final PropertyChangeEvent event) {
         
-        setEnabled(
-                ActionsManager.ACTION_TOGGLE_BREAKPOINT, 
-                EditorUtil.getCurrentLine() != null);
+        // IZ 135771. Ensure we're in EDT.
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    Breakpoint.this.propertyChange(event);
+                }
+            });
+            
+            return;
+        }
+        
+        final TopComponent activeTc = 
+                WindowManager.getDefault().getRegistry().getActivated();
+        final MultiViewHandler mvh = 
+                MultiViews.findMultiViewHandler(activeTc);
+        
+        String currentViewName = null;
+        
+        if (mvh != null) {
+            final MultiViewPerspective mvp = mvh.getSelectedPerspective();
+            
+            if (mvp != null) {
+                currentViewName = mvp.preferredID();
+            }
+        }
+        
+        boolean enabled = false;
+        if ("bpelsource".equals(currentViewName)) {
+            enabled = true;
+        } else if ("bpel-business-rules".equals(currentViewName)) {
+            enabled = false;
+        } else if ("bpel-logging-alerting".equals(currentViewName)) {
+            enabled = false;
+        } else {
+            final Node node = getCurrentNode();
+            
+            if (node != null) {
+                final javax.swing.Action[] actions = node.getActions(true);
+                if (actions != null) {
+                    for (javax.swing.Action action: actions) {
+                        if (action instanceof BpelNodeTypedAction) {
+                            final BpelNodeTypedAction bnAction = 
+                                    (BpelNodeTypedAction) action;
+                                    
+                            if (bnAction.getType() == ActionType.TOGGLE_BREAKPOINT) {
+                                enabled = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        setEnabled(ActionsManager.ACTION_TOGGLE_BREAKPOINT, enabled);
     }
     
     // Private /////////////////////////////////////////////////////////////////
@@ -126,6 +181,12 @@ public class Breakpoint extends ActionsProviderSupport
             
             bpelEntityId = bpelEntity.getUID();
             lineNumber = ModelUtil.getLineNumber(bpelEntityId);
+            
+            final int translatedLineNumber = EditorContextBridge.
+                    translateBreakpointLine(url, lineNumber);
+            if ((translatedLineNumber != -1)) {
+                lineNumber = translatedLineNumber;
+            }
         } else {
             lineNumber = EditorUtil.getLineNumber(node);
             
@@ -222,9 +283,7 @@ public class Breakpoint extends ActionsProviderSupport
     
     private BpelBreakpointListener getBreakpointAnnotationListener() {
         if (myBreakpointAnnotationListener == null) {
-            myBreakpointAnnotationListener = (BpelBreakpointListener) 
-                    DebuggerManager.getDebuggerManager().lookupFirst 
-                    (null, BpelBreakpointListener.class);
+            myBreakpointAnnotationListener = DebuggerManager.getDebuggerManager().lookupFirst(null, BpelBreakpointListener.class);
         }
         
         return myBreakpointAnnotationListener;
