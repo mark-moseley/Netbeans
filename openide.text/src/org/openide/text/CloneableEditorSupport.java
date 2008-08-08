@@ -118,6 +118,11 @@ import org.openide.util.UserCancelException;
 * @author Jaroslav Tulach
 */
 public abstract class CloneableEditorSupport extends CloneableOpenSupport {
+    static final RequestProcessor RP = new RequestProcessor("Document Processing");
+
+    /** Thread for postprocessing work in CloneableEditor.DoInitialize.initRest */
+    static final RequestProcessor RPPostprocessing = new RequestProcessor("Document Postprocessing");
+    
     /** Common name for editor mode. */
     public static final String EDITOR_MODE = "editor"; // NOI18N
     private static final String PROP_PANE = "CloneableEditorSupport.Pane"; //NOI18N
@@ -359,6 +364,9 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
 
     void ensureAnnotationsLoaded() {
         if (!annotationsLoaded) {
+            /*ERR.log(Level.FINE,"CES.ensureAnnotationsLoaded Enter Asynchronous"
+            + " Time:" + System.currentTimeMillis()
+            + " Thread:" + Thread.currentThread().getName());*/
             annotationsLoaded = true;
 
             Line.Set lines = getLineSet();
@@ -558,7 +566,7 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
 
 
             // The thread nume should be: "Loading document " + env; // NOI18N
-            prepareTask = RequestProcessor.getDefault().post(new Runnable() {
+            prepareTask = RP.post(new Runnable() {
                                                    private boolean runningInAtomicLock;
 
                                                    public void run() {
@@ -629,6 +637,9 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
                                                        }
                                                    }
                                                });
+            if (RP.isRequestProcessorThread()) {
+                prepareTask.waitFinished();
+            }
 	    failed = false;
         } catch (RuntimeException ex) {
             prepareDocumentRuntimeException = ex;
@@ -688,6 +699,12 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
     * <P>
     * If the document is not loaded the method blocks until
     * it is.
+    * 
+    * <p>Method will throw {@link org.openide.util.UserQuestionException} exception
+    * if file size is too big. This exception could be caught and 
+    * its method {@link org.openide.util.UserQuestionException#confirmed} 
+    * can be used for confirmation. You need to call {@link #openDocument}}
+    * one more time after confirmation.
     *
     * @return the styled document for this cookie that
     *   understands the guarded attribute
@@ -728,7 +745,9 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
 
         case DOCUMENT_RELOADING: // proceed to DOCUMENT_READY
         case DOCUMENT_READY:
-            return getDoc();
+            StyledDocument document = getDoc();
+            assert document != null : "no document although status is " + documentStatus + "; doc=" + doc;
+            return document;
 
         default: // loading
 
@@ -895,6 +914,12 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
                     throw ex;
                 }
             }
+        }
+
+        // Run before-save actions
+        Runnable beforeSaveRunnable = (Runnable) myDoc.getProperty("beforeSaveRunnable");
+        if (beforeSaveRunnable != null) {
+            beforeSaveRunnable.run();
         }
 
         SaveAsReader saveAsReader = new SaveAsReader();
@@ -1223,6 +1248,17 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
             return redirect.isDocumentLoaded();
         }
         return documentStatus != DOCUMENT_NO;
+    }
+    
+    /** Test whether the document is ready.
+    * @return <code>true</code> if document is ready
+    */
+    private boolean isDocumentReady() {
+        CloneableEditorSupport redirect = CloneableEditorSupportRedirector.findRedirect(this);
+        if (redirect != null) {
+            return redirect.isDocumentReady();
+        }
+        return documentStatus == DOCUMENT_READY;
     }
 
     /**
@@ -1677,7 +1713,7 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
             synchronized (this) {
                 if (!this.inUserQuestionExceptionHandler) {
                     this.inUserQuestionExceptionHandler = true;
-                    RequestProcessor.getDefault().post(new Runnable() {
+                    RP.post(new Runnable() {
 
                                                            public void run() {
                                                                NotifyDescriptor nd = new NotifyDescriptor.Confirmation(ex.getLocalizedMessage(),
@@ -2158,7 +2194,7 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
     /** If one or more editors are opened finds one.
     * @return an editor or null if none is opened
     */
-    private Pane getAnyEditor() {
+    Pane getAnyEditor() {
         CloneableTopComponent ctc;
         ctc = allEditors.getArbitraryComponent();
 
@@ -2195,9 +2231,14 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
             return null;
         }
     }
-   
+    
     final Pane openReuse(final PositionRef pos, final int column, int mode) {
         if (mode == Line.SHOW_REUSE_NEW) lastReusable.clear();
+        return openAtImpl(pos, column, true);
+    }
+
+    final Pane openReuse(final PositionRef pos, final int column, Line.ShowOpenType mode) {
+        if (mode == Line.ShowOpenType.REUSE_NEW) lastReusable.clear();
         return openAtImpl(pos, column, true);
     }
     
@@ -2264,7 +2305,7 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
                         offset = el.getEndOffset();
                     }
                 } else {
-                    offset = pos.getOffset();
+                    offset = Math.min(pos.getOffset(), doc.getLength());
                 }
 
                 caret.setDot(offset);
@@ -2276,7 +2317,9 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
                         ePane.scrollRectToVisible(r);
                     }
                 } catch (BadLocationException ex) {
-                    Exceptions.printStackTrace(ex);
+                    ERR.log(Level.WARNING, "Can't scroll to text: pos.getOffset=" + pos.getOffset() //NOI18N
+                        + ", column=" + column + ", offset=" + offset //NOI18N
+                        + ", doc.getLength=" + doc.getLength(), ex); //NOI18N
                 }
             }
         }
@@ -2329,12 +2372,8 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
     }
 
     private StyledDocument getDoc() {
-        Object o = doc;
-        if (o instanceof WeakReference) {
-            WeakReference<?> w = (WeakReference<?>)o;
-            return (StyledDocument)w.get();
-        }
-        return null;
+        StrongRef _doc = doc;
+        return _doc != null ? _doc.get() : null;
     }
 
     private void setDoc(StyledDocument doc, boolean strong) {
@@ -2344,12 +2383,7 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
         }
         this.doc = new StrongRef(doc, strong);
     }
-    //
-    // Interfaces to abstract away from the DataSystem and FileSystem level
-    //
 
-
-    
     private final class StrongRef extends WeakReference<StyledDocument> 
     implements Runnable {
         private StyledDocument doc;
@@ -2376,7 +2410,14 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
                 this.doc = null;
             }
         }
+
+        @Override
+        public String toString() {
+            return "StrongRef[doc=" + doc + ",super.get=" + super.get() + "]";
+        }
+
     } // end of StrongRef
+
     /** Interface for providing data for the support and also
     * locking the source of data.
     */
@@ -2915,21 +2956,30 @@ public abstract class CloneableEditorSupport extends CloneableOpenSupport {
         }
 
         public java.lang.String getUndoOrRedoPresentationName() {
-            final StyledDocument myDoc = support.getDocument();
-
-            return new RenderUndo(8, myDoc).stringResult;
+            if (support.isDocumentReady()) {
+                final StyledDocument myDoc = support.getDocument();
+                return new RenderUndo(8, myDoc).stringResult;
+            } else {
+                return "";
+            }
         }
 
         public java.lang.String getRedoPresentationName() {
-            final StyledDocument myDoc = support.getDocument();
-
-            return new RenderUndo(9, myDoc).stringResult;
+            if (support.isDocumentReady()) {
+                final StyledDocument myDoc = support.getDocument();
+                return new RenderUndo(9, myDoc).stringResult;
+            } else {
+                return "";
+            }
         }
 
         public java.lang.String getUndoPresentationName() {
-            final StyledDocument myDoc = support.getDocument();
-
-            return new RenderUndo(10, myDoc).stringResult;
+            if (support.isDocumentReady()) {
+                final StyledDocument myDoc = support.getDocument();
+                return new RenderUndo(10, myDoc).stringResult;
+            } else {
+                return "";
+            }
         }
 
         public void undoOrRedo() throws javax.swing.undo.CannotUndoException, javax.swing.undo.CannotRedoException {
