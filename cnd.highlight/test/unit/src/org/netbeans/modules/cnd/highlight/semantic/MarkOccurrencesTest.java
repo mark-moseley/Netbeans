@@ -38,9 +38,10 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+
 package org.netbeans.modules.cnd.highlight.semantic;
 
-import java.util.List;
+import java.util.Collection;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 
@@ -48,39 +49,49 @@ import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
  *
  * @author Sergey Grinev
  */
-public class ClassFieldsTest extends SemanticHighlightingTestBase {
+public class MarkOccurrencesTest extends SemanticHighlightingTestBase {
 
-    public ClassFieldsTest(String testName) {
+    public MarkOccurrencesTest(String testName) {
         super(testName);
     }
 
-    public void testClassFieldsInItsMethodsBody() throws Exception {
-        performTest("welcome.cc"); // NOI18N
-    }
-    
-    protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile, int offset) {
-        List<? extends CsmOffsetable> list = ModelUtils.getFieldsBlocks(testFile);
-        assert list != null && list.size() > 0;
-        return list;
+    private static final String SOURCE = "markocc.cc"; // NOI18N
+
+    public void testMacro() throws Exception {
+        // FOO 
+        performTest(SOURCE, 214);
     }
 
-//    /////////////////////////////////////////////////////////////////////
-//    // FAILS
-//    public static class Failed extends SemanticHighlightingTestBase {
-//
-//
-//        public Failed(String testName) {
-//            super(testName);
-//        }
-//
-//        public void testOK() {
-//
-//        }
-//
-//        protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile,int offset) {
-//            List<? extends CsmOffsetable> list = SemanticHighlighter.getFieldsBlocks(testFile);
-//            assert list != null && list.size() > 0;
-//            return list;
-//        }
-//    }
+    public void testLocalVariable() throws Exception {
+        performTest(SOURCE, 236);
+    }
+
+    public void testGlobalVariable() throws Exception {
+        // int bar
+        performTest(SOURCE, 264);
+    }
+
+    public void testField() throws Exception {
+        //boo 
+        performTest(SOURCE, 122);
+    }
+
+    public void testCtor() throws Exception {
+        // Foo() 
+        performTest(SOURCE, 115);
+    }
+
+    public void testCtor2() throws Exception {
+        // Foo(int) 
+        performTest(SOURCE, 138);
+    }
+
+    public void testClassName() throws Exception {
+        // class Foo 
+        performTest(SOURCE, 110);
+    }
+    
+    protected Collection<? extends CsmOffsetable> getBlocks(FileImpl testFile,int offset) {
+        return MarkOccurrencesHighlighter.getOccurrences(testFile, offset);
+    }
 }
