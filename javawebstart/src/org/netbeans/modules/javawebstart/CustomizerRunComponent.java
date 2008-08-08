@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.netbeans.modules.java.j2seproject.api.J2SERunConfigProvider;
+import org.netbeans.modules.javawebstart.ui.customizer.JWSProjectProperties;
 
 /**
  * 
@@ -79,23 +80,27 @@ public class CustomizerRunComponent extends javax.swing.JPanel implements Action
 
         setLayout(new java.awt.GridBagLayout());
 
-        runCheckBox.setText(org.openide.util.NbBundle.getMessage(CustomizerRunComponent.class, "LBL_Run_with_JWS")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(runCheckBox, org.openide.util.NbBundle.getMessage(CustomizerRunComponent.class, "LBL_Run_with_JWS")); // NOI18N
         runCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        runCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 0;
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         add(runCheckBox, gridBagConstraints);
+        runCheckBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(CustomizerRunComponent.class, "ACSN_Run_With_JWS")); // NOI18N
+        runCheckBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRunComponent.class, "ACSD_Run_With_JWS")); // NOI18N
 
-        hintLabel.setText(org.openide.util.NbBundle.getMessage(CustomizerRunComponent.class, "HINT_Run_with_JWS")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(hintLabel, org.openide.util.NbBundle.getMessage(CustomizerRunComponent.class, "HINT_Run_with_JWS")); // NOI18N
+        hintLabel.setToolTipText(org.openide.util.NbBundle.getMessage(CustomizerRunComponent.class, "HINT_Run_with_JWS_tooltip")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 1;
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.gridheight = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(4, 22, 0, 0);
+        gridBagConstraints.insets = new java.awt.Insets(4, 6, 0, 0);
         add(hintLabel, gridBagConstraints);
     }// </editor-fold>//GEN-END:initComponents
     
@@ -125,10 +130,12 @@ public class CustomizerRunComponent extends javax.swing.JPanel implements Action
     }
     
     private void initMaps() {
-        runUnselectedMap.put("$target.run", null);
-        runUnselectedMap.put("$target.debug", null);
-        runSelectedMap.put("$target.run", "jws-run");
-        runSelectedMap.put("$target.debug", "jws-debug");
+        runUnselectedMap.put(JWSProjectProperties.CONFIG_TARGET_RUN_PROPNAME, null);
+        runUnselectedMap.put(JWSProjectProperties.CONFIG_TARGET_DEBUG_PROPNAME, null);
+        runUnselectedMap.put(JWSProjectProperties.COS_UNSUPPORTED_PROPNAME, null);
+        runSelectedMap.put(JWSProjectProperties.CONFIG_TARGET_RUN_PROPNAME, JWSProjectProperties.CONFIG_TARGET_RUN);
+        runSelectedMap.put(JWSProjectProperties.CONFIG_TARGET_DEBUG_PROPNAME, JWSProjectProperties.CONFIG_TARGET_DEBUG);
+        runSelectedMap.put(JWSProjectProperties.COS_UNSUPPORTED_PROPNAME, "true"); // NOI18N
     }
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
