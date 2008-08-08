@@ -48,7 +48,7 @@ public class RestConstants {
 
     public static final String PATH_ANNOTATION = "Path"; //NOI18N
     
-    public static final String URI_PARAM_ANNOTATION = "UriParam";       //NOI18N
+    public static final String PATH_PARAM_ANNOTATION = "PathParam";       //NOI18N
     
     public static final String QUERY_PARAM_ANNOTATION = "QueryParam";       //NOI18N
     
@@ -62,14 +62,24 @@ public class RestConstants {
     
     public static final String DELETE_ANNOTATION = "DELETE";   //NOI18N
     
-    public static final String PRODUCE_MIME_ANNOTATION = "ProduceMime"; //NOI18N
+    public static final String PRODUCE_MIME_ANNOTATION = "Produces"; //NOI18N
     
-    public static final String CONSUME_MIME_ANNOTATION = "ConsumeMime"; //NOI18N
+    public static final String CONSUME_MIME_ANNOTATION = "Consumes"; //NOI18N
     
-    public static final String HTTP_CONTEXT_ANNOTATION = "HttpContext";     //NOI18N
+    public static final String SINGLETON_ANNOTATION = "Singleton";     //NOI18N
+    
+    public static final String CONTEXT_ANNOTATION = "Context";     //NOI18N
     
     public static final String REST_API_PACKAGE = "javax.ws.rs.";       //NOI18N
     
+    public static final String REST_API_CORE_PACKAGE = REST_API_PACKAGE + "core.";      //NOI18N
+    
+    public static final String JERSEY_PACKAGE = "com.sun.jersey.";       //NOI18N
+    
+    public static final String JERSEY_API_PACKAGE = JERSEY_PACKAGE + "api.";        //NOI18N
+    
+    public static final String JERSEY_SPI_PACKAGE = JERSEY_PACKAGE + "spi.";        //NOI18M
+   
     public static final String PATH = REST_API_PACKAGE + PATH_ANNOTATION;
     
     public static final String GET = REST_API_PACKAGE + GET_ANNOTATION;
@@ -84,10 +94,29 @@ public class RestConstants {
     
     public static final String CONSUME_MIME = REST_API_PACKAGE + CONSUME_MIME_ANNOTATION;
     
-    public static final String URI_PARAM = REST_API_PACKAGE + URI_PARAM_ANNOTATION;
+    public static final String PATH_PARAM = REST_API_PACKAGE + PATH_PARAM_ANNOTATION;
     
     public static final String QUERY_PARAM = REST_API_PACKAGE + QUERY_PARAM_ANNOTATION;
     
     public static final String DEFAULT_VALUE = REST_API_PACKAGE + DEFAULT_VALUE_ANNOTATION;
+    
+    public static final String WEB_APPLICATION_EXCEPTION = REST_API_PACKAGE + "WebApplicationException";
+    
+    public static final String HTTP_RESPONSE = RestConstants.REST_API_CORE_PACKAGE + "Response"; //NOI18N
+    
+    public static final String RESPONSE_BUILDER = RestConstants.REST_API_CORE_PACKAGE + "Response.Builder";       //NOI18N
+    
+    public static final String ENTITY_TYPE = RestConstants.REST_API_PACKAGE + "Entity";
+    
+    public static final String CONTEXT = RestConstants.REST_API_CORE_PACKAGE + "Context";    //NOI18N
+    
+    public static final String URI_INFO = RestConstants.REST_API_CORE_PACKAGE + "UriInfo";     //NOI18N
+    
+    public static final String URI_BUILDER = RestConstants.REST_API_CORE_PACKAGE + "UriBuilder"; //NOI18N
+
+    public static final String SINGLETON = JERSEY_SPI_PACKAGE + "resource." + SINGLETON_ANNOTATION;     //NOI18N
+    
+    public static final String RESOURCE_CONTEXT = JERSEY_API_PACKAGE + "core.ResourceContext";          //NOI18N
+    
     
 }
