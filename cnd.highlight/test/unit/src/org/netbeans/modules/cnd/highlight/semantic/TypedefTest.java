@@ -48,40 +48,21 @@ import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
  *
  * @author Sergey Grinev
  */
-public class ClassFieldsTest extends SemanticHighlightingTestBase {
+public class TypedefTest extends SemanticHighlightingTestBase {
 
-    public ClassFieldsTest(String testName) {
+    public TypedefTest(String testName) {
         super(testName);
     }
 
-    public void testClassFieldsInItsMethodsBody() throws Exception {
+    public void testTypedefs() throws Exception {
         performTest("welcome.cc"); // NOI18N
     }
     
-    protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile, int offset) {
+    protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile,int offset) {
         List<? extends CsmOffsetable> list = ModelUtils.collect(
-                testFile, new ModelUtils.FieldReferenceCollector());
+                testFile, new ModelUtils.TypedefReferenceCollector());
         assert list != null && list.size() > 0;
         return list;
     }
 
-//    /////////////////////////////////////////////////////////////////////
-//    // FAILS
-//    public static class Failed extends SemanticHighlightingTestBase {
-//
-//
-//        public Failed(String testName) {
-//            super(testName);
-//        }
-//
-//        public void testOK() {
-//
-//        }
-//
-//        protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile,int offset) {
-//            List<? extends CsmOffsetable> list = SemanticHighlighter.getFieldsBlocks(testFile);
-//            assert list != null && list.size() > 0;
-//            return list;
-//        }
-//    }
 }

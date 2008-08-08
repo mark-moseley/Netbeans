@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  * 
- * Contributor(s):
- * 
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,51 +31,42 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.cnd.highlight.semantic;
 
-import java.util.List;
-import org.netbeans.modules.cnd.api.model.CsmOffsetable;
-import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
+package org.netbeans.modules.cnd.modelutil;
+
+import javax.swing.text.AttributeSet;
 
 /**
  *
  * @author Sergey Grinev
  */
-public class ClassFieldsTest extends SemanticHighlightingTestBase {
+public interface FontColorProvider {
+    AttributeSet getColor(Entity color);
 
-    public ClassFieldsTest(String testName) {
-        super(testName);
-    }
+    public enum Entity {
 
-    public void testClassFieldsInItsMethodsBody() throws Exception {
-        performTest("welcome.cc"); // NOI18N
+        INACTIVE_CODE("cc-highlighting-inactive"), // NOI18N
+        USER_MACRO("cc-highlighting-macros"), // NOI18N
+        SYSTEM_MACRO("cc-highlighting-macros-system"), // NOI18N
+        CLASS_FIELD("cc-highlighting-class-fields"), // NOI18N
+        MARK_OCCURENCES("cc-highlighting-mark-occurrences"), // NOI18N
+        TYPEDEF("cc-highlighting-typedefs"), // NOI18N
+        UNUSED_VARIABLES("cc-highlighting-unused-variables"); // NOI18N
+        
+        private final String resourceName;
+
+        Entity(String resourceName) {
+            this.resourceName = resourceName;
+        }
+
+        public String getResourceName() {
+            return resourceName;
+        }
     }
     
-    protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile, int offset) {
-        List<? extends CsmOffsetable> list = ModelUtils.collect(
-                testFile, new ModelUtils.FieldReferenceCollector());
-        assert list != null && list.size() > 0;
-        return list;
-    }
-
-//    /////////////////////////////////////////////////////////////////////
-//    // FAILS
-//    public static class Failed extends SemanticHighlightingTestBase {
-//
-//
-//        public Failed(String testName) {
-//            super(testName);
-//        }
-//
-//        public void testOK() {
-//
-//        }
-//
-//        protected List<? extends CsmOffsetable> getBlocks(FileImpl testFile,int offset) {
-//            List<? extends CsmOffsetable> list = SemanticHighlighter.getFieldsBlocks(testFile);
-//            assert list != null && list.size() > 0;
-//            return list;
-//        }
-//    }
 }
