@@ -41,19 +41,21 @@
 
 package org.netbeans.modules.db.sql.execute;
 
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+import org.netbeans.modules.db.sql.history.SQLHistory;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.api.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.dataview.api.DataView;
+import org.netbeans.modules.db.sql.history.SQLHistoryManager;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.Repository;
+import org.openide.util.Exceptions;
 
 /**
  * Support class for executing SQL statements.
@@ -64,6 +66,8 @@ public final class SQLExecuteHelper {
 
     private static final Logger LOGGER = Logger.getLogger(SQLExecuteHelper.class.getName());
     private static final boolean LOG = LOGGER.isLoggable(Level.FINE);
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final FileObject USERDIR = Repository.getDefault().getDefaultFileSystem().getRoot();
     
     /**
      * Executes a SQL string, possibly containing multiple statements. Returns the execution
@@ -72,16 +76,22 @@ public final class SQLExecuteHelper {
      * @param sqlScript the SQL script to execute. If it contains multiple lines
      * they have to be delimited by '\n' characters.
      */
-    public static SQLExecutionResults execute(String sqlScript, int startOffset, int endOffset, Connection conn, ProgressHandle progressHandle, SQLExecutionLogger executionLogger) {
+    public static SQLExecutionResults execute(String sqlScript, int startOffset, int endOffset, 
+            DatabaseConnection conn, SQLExecutionLogger executionLogger) {
         
         boolean cancelled = false;
         
         List<StatementInfo> statements = getStatements(sqlScript, startOffset, endOffset);
-        boolean computeResults = statements.size() == 1;
         
-        List<SQLExecutionResult> resultList = new ArrayList<SQLExecutionResult>();
+        List<SQLExecutionResult> results = new ArrayList<SQLExecutionResult>();
         long totalExecutionTime = 0;
-        
+        String url = null;
+        try {
+            url = conn.getJDBCConnection().getMetaData().getURL();
+        } catch (SQLException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+
         for (Iterator i = statements.iterator(); i.hasNext();) {
             
             cancelled = Thread.currentThread().isInterrupted();
@@ -92,57 +102,27 @@ public final class SQLExecuteHelper {
             StatementInfo info = (StatementInfo)i.next();
             String sql = info.getSQL();
 
+            SQLExecutionResult result = null;
+            
+            
             if (LOG) {
                 LOGGER.log(Level.FINE, "Executing: " + sql);
             }
-            
-            SQLExecutionResult result = null;
-            Statement stmt = null;
 
-            try {
-                if (sql.startsWith("{")) { // NOI18N
-                    stmt = conn.prepareCall(sql);
-                } else {
-                    stmt = conn.createStatement();
-                }
-                
-                boolean isResultSet = false;
-                long startTime = System.currentTimeMillis();
-                if (stmt instanceof PreparedStatement) {
-                    isResultSet = ((PreparedStatement)stmt).execute();
-                } else {
-                    isResultSet = stmt.execute(sql);
-                }
-                long executionTime = System.currentTimeMillis() - startTime;
-                totalExecutionTime += executionTime;
+            DataView view = DataView.create(conn, sql, DEFAULT_PAGE_SIZE);
 
-                if (isResultSet) {
-                    result = new SQLExecutionResult(info, stmt, stmt.getResultSet(), executionTime);
-                } else {
-                    result = new SQLExecutionResult(info, stmt, stmt.getUpdateCount(), executionTime);
-                }
-            } catch (SQLException e) {
-                result = new SQLExecutionResult(info, stmt, e);
-            }
-            assert result != null;
-            
+            // Save SQL statements executed for the SQLHistoryManager
+            SQLHistoryManager.getInstance().saveSQL(new SQLHistory(url, sql, new Date()));
+
+            result = new SQLExecutionResult(info, view);
+
             executionLogger.log(result);
-            
-            if (LOG) {
-                LOGGER.log(Level.FINE, "Result: " + result);
-            }
-            
-            if (computeResults || result.getException() != null) {
-                resultList.add(result);
-            } else {
-                try {
-                    result.close();
-                } catch (SQLException e) {
-                    Logger.getLogger("global").log(Level.INFO, null, e);
-                }
-            }
+
+            totalExecutionTime += result.getExecutionTime();
+
+            results.add(result);
         }
-        
+
         if (!cancelled) {
             executionLogger.finish(totalExecutionTime);
         } else {
@@ -151,31 +131,15 @@ public final class SQLExecuteHelper {
             }
             executionLogger.cancel();
         }
-        
-        SQLExecutionResults results = new SQLExecutionResults(resultList);
+                
+        // Persist SQL executed
+        SQLHistoryManager.getInstance().save(USERDIR);
+
         if (!cancelled) {
-            return results;
+            return new SQLExecutionResults(results);
         } else {
-            results.close();
             return null;
         }
-    }
-    
-    private static int[] getSupportedResultSetTypeConcurrency(Connection conn) throws SQLException {
-        // XXX some drivers don't implement the DMD.supportsResultSetConcurrency() method
-        // for example the MSSQL WebLogic driver 4v70rel510 always throws AbstractMethodError
-        
-        DatabaseMetaData dmd = conn.getMetaData();
-        
-        int type = ResultSet.TYPE_SCROLL_INSENSITIVE;
-        int concurrency = ResultSet.CONCUR_UPDATABLE;
-        if (!dmd.supportsResultSetConcurrency(type, concurrency)) {
-            concurrency = ResultSet.CONCUR_READ_ONLY;
-            if (!dmd.supportsResultSetConcurrency(type, concurrency)) {
-                type = ResultSet.TYPE_FORWARD_ONLY;
-            }
-        }
-        return new int[] { type, concurrency };
     }
     
     private static List<StatementInfo> getStatements(String script, int startOffset, int endOffset) {
@@ -200,8 +164,8 @@ public final class SQLExecuteHelper {
         }
         return Collections.unmodifiableList(statements);
     }
-    
-    static List<StatementInfo> split(String script) {
+        
+    public static List<StatementInfo> split(String script) {
         return new SQLSplitter(script).getStatements();
     }
     
@@ -214,6 +178,7 @@ public final class SQLExecuteHelper {
         private static final int STATE_BLOCK_COMMENT = 4;
         private static final int STATE_MAYBE_END_BLOCK_COMMENT = 5;
         private static final int STATE_STRING = 6;
+        private static final int STATE_END_COMMENT = 7;
         
         private String sql;
         private int sqlLength;
@@ -235,6 +200,9 @@ public final class SQLExecuteHelper {
         
         private int state = STATE_MEANINGFUL_TEXT;
         
+        private String delimiter = ";"; // NOI18N
+        private static final String DELIMITER_TOKEN = "delimiter"; // NOI18N
+                
         /**
          * @param sql the SQL string to parse. If it contains multiple lines
          * they have to be delimited by '\n' characters.
@@ -247,6 +215,7 @@ public final class SQLExecuteHelper {
         }
         
         private void parse() {
+            checkDelimiterStatement();
             while (pos < sqlLength) {
                 char ch = sql.charAt(pos);
                 
@@ -258,27 +227,15 @@ public final class SQLExecuteHelper {
                     continue;
                 }
                 
-                if (wasEOL) {
-                    line++;
-                    column = 0;
-                    wasEOL = false;
-                } else {
-                    column++;
-                }
-                
-                if (ch == '\n') {
-                    wasEOL = true;
-                }
+                nextColumn();
                 
                 switch (state) {
                     case STATE_MEANINGFUL_TEXT:
                         if (ch == '-') {
                             state = STATE_MAYBE_LINE_COMMENT;
-                        }
-                        if (ch == '/') {
+                        } else if (ch == '/') {
                             state = STATE_MAYBE_BLOCK_COMMENT;
-                        }
-                        if (ch == '\'') {
+                        } else if (ch == '\'') {
                             state = STATE_STRING;
                         }
                         break;
@@ -341,36 +298,176 @@ public final class SQLExecuteHelper {
                         assert false;
                 }
                 
-                if (state == STATE_MEANINGFUL_TEXT && ch == ';') {
+                if (state == STATE_MEANINGFUL_TEXT && isDelimiter()) {
                     rawEndOffset = pos;
                     addStatement();
                     statement.setLength(0);
-                    rawStartOffset = pos + 1; // skip the semicolon
-                } else {
-                    if (state == STATE_MEANINGFUL_TEXT || state == STATE_STRING) {
-                        // don't append leading whitespace
-                        if (statement.length() > 0 || !Character.isWhitespace(ch)) {
-                            // remember the position of the first appended char
-                            if (statement.length() == 0) {
-                                startOffset = pos;
-                                endOffset = pos;
-                                startLine = line;
-                                startColumn = column;
+                    rawStartOffset = pos + delimiter.length(); // skip the delimiter
+                    pos += delimiter.length();
+                } else if (state == STATE_MEANINGFUL_TEXT || state == STATE_STRING) {
+                    // don't append leading whitespace
+                    if (statement.length() > 0 || !Character.isWhitespace(ch)) {
+                        // remember the position of the first appended char
+                        if (statement.length() == 0) {
+                            // See if the next statement changes the delimiter
+                            // Note how we skip over a 'delimiter' statement - it's not
+                            // something we send to the server.
+                            if (checkDelimiterStatement()) {
+                                continue;
                             }
-                            statement.append(ch);
-                            // the end offset is the character after the last non-whitespace character
-                            if (state == STATE_STRING || !Character.isWhitespace(ch)) {
-                                endOffset = pos + 1;
-                            }
+                            startOffset = pos;
+                            endOffset = pos;
+                            startLine = line;
+                            startColumn = column;
+                        }
+                        statement.append(ch);
+                        // the end offset is the character after the last non-whitespace character
+                        if (state == STATE_STRING || !Character.isWhitespace(ch)) {
+                            endOffset = pos + 1;
                         }
                     }
+                    pos++;
+                } else {
+                    pos++;
                 }
-                
-                pos++;
             }
             
             rawEndOffset = pos;
             addStatement();
+        }
+        
+        /**
+         * See if the user wants to use a different delimiter for splitting
+         * up statements.  This is useful if, for example, their SQL contains
+         * stored procedures or triggers or other blocks that contain multiple
+         * statements but should be executed as a single unit. 
+         * 
+         * If we see the delimiter token, we read in what the new delimiter 
+         * should be, and then return the new character position past the
+         * delimiter statement, as this shouldn't be passed on to the 
+         * database.
+         */
+        private boolean checkDelimiterStatement() {
+            skipWhitespace();
+                        
+            if ( pos == sqlLength) {
+                return false;
+            }
+            
+            if ( ! isToken(DELIMITER_TOKEN)) {
+                return false;
+            }
+            
+            // Skip past the delimiter token
+            int tokenLength = DELIMITER_TOKEN.length();
+            pos += tokenLength;
+            
+            skipWhitespace();
+            
+            int endPos = pos;
+            while ( endPos < sqlLength &&
+                    ! Character.isWhitespace(sql.charAt(endPos))) {
+                endPos++;
+            }
+            
+            if ( pos == endPos ) {
+                return false;
+            }
+            
+            delimiter = sql.substring(pos, endPos);
+            
+            pos = endPos;
+            statement.setLength(0);
+            rawStartOffset = pos;
+
+            return true;
+        }
+        
+        private void skipWhitespace() {
+            while ( pos < sqlLength && Character.isWhitespace(sql.charAt(pos)) ) {
+                nextColumn();
+                pos++;
+            }            
+        }
+        
+        private boolean isDelimiter() {
+            int length = delimiter.length();
+            
+            if ( pos + length > sqlLength) {
+                return false;
+            }
+            
+            for ( int i = 0 ; i < length ; i++ ) {
+                if (delimiter.charAt(i) != sql.charAt(pos + i)) {
+                    return false;
+                }
+                i++;
+            }
+            
+            return true;
+        }
+        
+        private void nextColumn() {
+            if (wasEOL) {
+                line++;
+                column = 0;
+                wasEOL = false;
+            } else {
+                column++;
+            }
+                            
+            if (sql.charAt(pos) == '\n') {
+                wasEOL = true;
+            }
+        }
+        
+        
+        /** 
+         * See if the SQL text starting at the given position is a given token 
+         * 
+         * @param sql - the full SQL text
+         * @param ch - the character at the current position
+         * @param pos - the current position index for the SQL text
+         * @param token - the token we are looking for
+         * 
+         * @return true if the token is found at the current position
+         */
+        private boolean isToken(String token) {
+            char ch = sql.charAt(pos);
+            
+            // Simple check to see if there's potential.  In most cases this
+            // will return false and we don't have to waste our time doing
+            // any other processing.  Move along, move along...
+            if ( Character.toUpperCase(ch) != 
+                    Character.toUpperCase(token.charAt(0)) ) {
+                return false;
+            }
+
+            // Don't want to recognize larger strings that contain the token
+            if ( pos > 0 &&  !Character.isWhitespace(sql.charAt(pos - 1)) ) {
+                return false;
+            }
+            
+            if ( sql.length() > pos + token.length() &&
+                    Character.isLetterOrDigit(sql.charAt(pos + token.length())) ) {
+                return false;
+            }
+        
+
+            // Create a substring that contains just the potential token
+            // This way we don't have to uppercase the entire SQL string.
+            String substr;
+            try {
+                substr = sql.substring(pos, pos + token.length()); // NOI18N
+            } catch ( IndexOutOfBoundsException e ) {
+                return false;
+            }
+            
+            if ( substr.toUpperCase().equals(token.toUpperCase())) { // NOI18N
+                return true;
+            }
+            
+            return false;            
         }
         
         private void addStatement() {
