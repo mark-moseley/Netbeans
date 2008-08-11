@@ -42,7 +42,6 @@ package org.netbeans.test.subversion.operators;
 
 import java.awt.Component;
 import javax.swing.JComponent;
-import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.actions.Action;
 import org.netbeans.jemmy.ComponentChooser;
@@ -86,9 +85,7 @@ public class VersioningOperator extends TopComponentOperator {
      * VersioningOperator.
      * @return new instance of VersioningOperator */
     public static VersioningOperator invoke() {
-        String windowItem = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Window");
-        String versioningItem = "Subversion";
-        new Action(windowItem + "|" + VERSIONING_TITLE + "|" + versioningItem, null).perform();
+        new Action("Window|" + VERSIONING_TITLE + "|" + SUBVERSION_TITLE, null).perform();
         return new VersioningOperator();
     }
     

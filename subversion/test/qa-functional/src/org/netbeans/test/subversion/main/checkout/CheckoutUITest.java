@@ -50,18 +50,16 @@
 package org.netbeans.test.subversion.main.checkout;
 
 import java.io.File;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.OutputOperator;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.TimeoutExpiredException;
-import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JFileChooserOperator;
-import org.netbeans.jemmy.operators.JLabelOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryBrowserOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
@@ -89,9 +87,9 @@ public class CheckoutUITest extends JellyTestCase{
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {
         os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
         
     }
@@ -104,32 +102,30 @@ public class CheckoutUITest extends JellyTestCase{
         return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new CheckoutUITest("testInvokeClose"));
-        suite.addTest(new CheckoutUITest("testChangeAccessTypes"));
-        suite.addTest(new CheckoutUITest("testIncorrentUrl"));
-        suite.addTest(new CheckoutUITest("testAvailableFields"));
-        suite.addTest(new CheckoutUITest("testRepositoryFolder"));
-        return suite;
-    }
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(CheckoutUITest.class).addTest(
+//                    "testInvokeClose",
+                    "testChangeAccessTypes"//,
+//                    "testIncorrentUrl",
+//                    "testAvailableFields",
+//                    "testRepositoryFolder"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void testInvokeClose() throws Exception {
         TestKit.showStatusLabels();
-        OutputOperator oo = OutputOperator.invoke();
+        OutputOperator.invoke();
         CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
         co.btCancel().pushNoBlock();
     }
     
     public void testChangeAccessTypes() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 3000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 3000);
-        
+        OutputOperator.invoke();
+        TestKit.showStatusLabels();
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -137,33 +133,30 @@ public class CheckoutUITest extends JellyTestCase{
         Operator.setDefaultStringComparator(oldOperator);
         RepositoryStepOperator rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE);
-        Thread.sleep(1000);
+        Thread.sleep(100);
         //
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_SVN);
         rso.txtUser().setText(RepositoryStepOperator.ITEM_SVN);
         rso.txtPassword().setText(RepositoryStepOperator.ITEM_SVN);
-        Thread.sleep(1000);
+        Thread.sleep(100);
         //
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_SVNSSH);
         rso.txtUser().setText(RepositoryStepOperator.ITEM_SVNSSH);
-        //rso.txtPassword().setText(RepositoryStepOperator.ITEM_SVNSSH);
-        Thread.sleep(1000);
+        Thread.sleep(100);
         //
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_HTTP);
         rso.txtUser().setText(RepositoryStepOperator.ITEM_HTTP);
         rso.txtPassword().setText(RepositoryStepOperator.ITEM_HTTP);
-        Thread.sleep(1000);
+        Thread.sleep(100);
         //
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_HTTPS);
         rso.txtUser().setText(RepositoryStepOperator.ITEM_HTTPS);
         rso.txtPassword().setText(RepositoryStepOperator.ITEM_HTTPS);
-        Thread.sleep(1000);
+        Thread.sleep(100);
         co.btCancel().pushNoBlock();
     }
     
     public void testIncorrentUrl() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 3000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 3000);
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -172,25 +165,25 @@ public class CheckoutUITest extends JellyTestCase{
         RepositoryStepOperator rso = new RepositoryStepOperator();
         //wrong file
         rso.setRepositoryURL("dfile:///");
-        assertEquals("This should be wrong url string!!!", "Invalid svn url :dfile:///", rso.lblWarning().getText());
+        assertEquals("This should be wrong url string!!!", "Invalid svn url: dfile:///", rso.lblWarning().getText());
         //wrong svn
         rso.setRepositoryURL("dsvn://");
-        assertEquals("This should be wrong url string!!!", "Invalid svn url :dsvn://", rso.lblWarning().getText());
+        assertEquals("This should be wrong url string!!!", "Invalid svn url: dsvn://", rso.lblWarning().getText());
         //space in file
         rso.setRepositoryURL("file :///");
-        assertEquals("This should be wrong url string!!!", "Invalid svn url :file :///", rso.lblWarning().getText());
+        assertEquals("This should be wrong url string!!!", "Invalid svn url: file :///", rso.lblWarning().getText());
         //space in svn
         rso.setRepositoryURL("svn ://");
-        assertEquals("This should be wrong url string!!!", "Invalid svn url :svn ://", rso.lblWarning().getText());
+        assertEquals("This should be wrong url string!!!", "Invalid svn url: svn ://", rso.lblWarning().getText());
         //space in http
         rso.setRepositoryURL("http ://");
-        assertEquals("This should be wrong url string!!!", "Invalid svn url :http ://", rso.lblWarning().getText());
+        assertEquals("This should be wrong url string!!!", "Invalid svn url: http ://", rso.lblWarning().getText());
         //space in https
         rso.setRepositoryURL("https ://");
-        assertEquals("This should be wrong url string!!!", "Invalid svn url :https ://", rso.lblWarning().getText());
+        assertEquals("This should be wrong url string!!!", "Invalid svn url: https ://", rso.lblWarning().getText());
         //space in svn+ssh
         rso.setRepositoryURL("svn+ssh ://");
-        assertEquals("This should be wrong url string!!!", "Invalid svn url :svn+ssh ://", rso.lblWarning().getText());
+        assertEquals("This should be wrong url string!!!", "Invalid svn url: svn+ssh ://", rso.lblWarning().getText());
         
         co.btCancel().pushNoBlock();
     }
@@ -202,21 +195,21 @@ public class CheckoutUITest extends JellyTestCase{
         } catch (Exception e) {
             JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", timeoutCO);
         }
-        
+
         long timeoutDW = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
         try {
             JemmyProperties.setCurrentTimeout("DialogWaiter.WaitComponentTimeout", 3000);
         } catch (Exception e) {
             JemmyProperties.setCurrentTimeout("DialogWaiter.WaitComponentTimeout", timeoutDW);
         }
-        
+
         long timeoutRSO = JemmyProperties.getCurrentTimeout("RepositoryStepOperator.WaitComponentTimeout");
         try {
             JemmyProperties.setCurrentTimeout("RepositoryStepOperator.WaitComponentTimeout", 3000);
         } catch (Exception e) {
             JemmyProperties.setCurrentTimeout("RepositoryStepOperator.WaitComponentTimeout", timeoutRSO);
         }
-        
+
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -227,7 +220,7 @@ public class CheckoutUITest extends JellyTestCase{
         rso.selectRepositoryURL(RepositoryStepOperator.ITEM_FILE);
         TimeoutExpiredException tee = null;
         try {
-            JLabelOperator lbl = rso.lblUser();
+            rso.lblUser();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -235,7 +228,7 @@ public class CheckoutUITest extends JellyTestCase{
         
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblPassword();
+            rso.lblPassword();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -244,16 +237,16 @@ public class CheckoutUITest extends JellyTestCase{
         //http
         rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_HTTP);
-        JLabelOperator lblU = rso.lblUser();
-        JLabelOperator lblP = rso.lblPassword();
-        JButtonOperator btnProxy = rso.btProxyConfiguration();
+        rso.lblUser();
+        rso.lblPassword();
+        rso.btProxyConfiguration();
         
         //file
         rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE);
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblUser();
+            rso.lblUser();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -261,7 +254,7 @@ public class CheckoutUITest extends JellyTestCase{
         
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblPassword();
+            rso.lblPassword();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -270,16 +263,16 @@ public class CheckoutUITest extends JellyTestCase{
         //https
         rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_HTTPS);
-        lblU = rso.lblUser();
-        lblP = rso.lblPassword();
-        btnProxy = rso.btProxyConfiguration();
+        rso.lblUser();
+        rso.lblPassword();
+        rso.btProxyConfiguration();
         
         //file
         rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE);
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblUser();
+            rso.lblUser();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -287,7 +280,7 @@ public class CheckoutUITest extends JellyTestCase{
         
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblPassword();
+            rso.lblPassword();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -296,16 +289,16 @@ public class CheckoutUITest extends JellyTestCase{
         //svn
         rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_SVN);
-        lblU = rso.lblUser();
-        lblP = rso.lblPassword();
-        btnProxy = rso.btProxyConfiguration();
+        rso.lblUser();
+        rso.lblPassword();
+        rso.btProxyConfiguration();
         
         //file
         rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE);
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblUser();
+            rso.lblUser();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -313,7 +306,7 @@ public class CheckoutUITest extends JellyTestCase{
         
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblPassword();
+            rso.lblPassword();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -322,21 +315,18 @@ public class CheckoutUITest extends JellyTestCase{
         //svn+ssh
         rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_SVNSSH);
-        lblU = rso.lblUseExternal();
-        lblU = rso.lblTunnelCommand();
+        rso.lblUseExternal();
+        rso.lblTunnelCommand();
         JTextFieldOperator txt = rso.txtTunnelCommand();
         txt.typeText("plink");
         Thread.sleep(2000);
-        //lblU = rso.lblUser();
-        //lblP = rso.lblPassword();
-        //btnProxy = rso.btProxyConfiguration();
-        
+
         //file
         rso = new RepositoryStepOperator();
         rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE);
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblUser();
+            rso.lblUser();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -344,7 +334,7 @@ public class CheckoutUITest extends JellyTestCase{
         
         tee = null;
         try {
-            JLabelOperator lbl = rso.lblPassword();
+            rso.lblPassword();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
         }
@@ -356,9 +346,6 @@ public class CheckoutUITest extends JellyTestCase{
     }
     
     public void testRepositoryFolder() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 3000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 3000);
-        
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -403,9 +390,6 @@ public class CheckoutUITest extends JellyTestCase{
     }
     
     public void testStopProcess() throws Exception {
-        //emmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 3000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 3000);
-        
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -422,7 +406,6 @@ public class CheckoutUITest extends JellyTestCase{
         
         //next step
         rso.next();
-        //Thread.sleep(2000);
         rso.btStop().push();
         assertEquals("Warning message - process was cancelled by user", "Action canceled by user", rso.lblWarning().getText());
         co.btCancel().pushNoBlock();
