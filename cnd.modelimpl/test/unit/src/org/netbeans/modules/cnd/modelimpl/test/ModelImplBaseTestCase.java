@@ -42,8 +42,12 @@
 package org.netbeans.modules.cnd.modelimpl.test;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
 import org.netbeans.junit.Manager;
-import org.netbeans.modules.cnd.test.BaseTestCase;
+import org.netbeans.modules.cnd.api.model.CsmDeclaration;
+import org.netbeans.modules.cnd.api.model.CsmProject;
 
 /**
  * IMPORTANT NOTE:
@@ -59,7 +63,7 @@ import org.netbeans.modules.cnd.test.BaseTestCase;
  * base class for modelimpl module tests
  * @author Vladimir Voskresensky
  */
-public abstract class ModelImplBaseTestCase extends BaseTestCase {
+public abstract class ModelImplBaseTestCase extends ModelBasedTestCase {
     
     public static final String PROPERTY_DATA_PATH = "cnd.modelimpl.unit.data";
     public static final String PROPERTY_GOLDEN_PATH = "cnd.modelimpl.unit.golden";
@@ -101,4 +105,27 @@ public abstract class ModelImplBaseTestCase extends BaseTestCase {
             return Manager.normalizeFile(new File(dataDirPath, filename));
         }
     }   
+    
+    protected void sleep(long timeout) {
+        try {
+            Thread.sleep(timeout);
+        } catch( InterruptedException e ) {
+        }
+    }
+    
+    protected void writeFile(File file, String text) throws IOException {
+        PrintWriter writer = new PrintWriter(new FileOutputStream(file));
+        writer.append(text);
+        writer.close();
+    }
+
+    protected CsmDeclaration findDeclaration(String name, CsmProject project) {
+        for( CsmDeclaration decl : project.getGlobalNamespace().getDeclarations() ) {
+            if( name.equals(decl.getName().toString())) {
+                return decl;
+            }
+        }
+        return null;
+    }
+    
 }
