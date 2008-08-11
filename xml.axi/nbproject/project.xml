@@ -85,12 +85,6 @@ made subject to such option by the copyright holder.
                 <test-type>
                     <name>unit</name>
                     <test-dependency>
-                        <code-name-base>org.netbeans.modules.xml.text</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                        <test/>
-                    </test-dependency>
-                    <test-dependency>
                         <code-name-base>org.netbeans.modules.xml.xdm</code-name-base>
                         <recursive/>
                         <compile-dependency/>
@@ -105,12 +99,6 @@ made subject to such option by the copyright holder.
                         <recursive/>
                         <compile-dependency/>
                     </test-dependency>
-                    <!--
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.xml.refactoring</code-name-base>
-                        <compile-dependency/>
-                    </test-dependency>
-                    -->
                     <test-dependency>
                         <code-name-base>org.openide.loaders</code-name-base>
                         <compile-dependency/>
@@ -124,6 +112,7 @@ made subject to such option by the copyright holder.
             <friend-packages>
                 <friend>org.netbeans.modules.bpel.editors</friend>
                 <friend>org.netbeans.modules.soa.ui</friend>
+                <friend>org.netbeans.modules.soa.ui01</friend>
                 <friend>org.netbeans.modules.xml</friend>
                 <friend>org.netbeans.modules.xml.schema</friend>
                 <friend>org.netbeans.modules.xml.schema.abe</friend>
@@ -133,6 +122,7 @@ made subject to such option by the copyright holder.
                 <friend>org.netbeans.modules.xslt.core</friend>
                 <friend>org.netbeans.modules.xslt.mapper</friend>
                 <friend>org.netbeans.modules.xslt.tmap</friend>
+                <friend>org.netbeans.modules.iep.editor</friend>
                 <package>org.netbeans.modules.xml.axi</package>
                 <package>org.netbeans.modules.xml.axi.datatype</package>
                 <package>org.netbeans.modules.xml.axi.visitor</package>
