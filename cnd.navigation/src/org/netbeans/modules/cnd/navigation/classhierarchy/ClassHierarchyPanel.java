@@ -41,7 +41,11 @@
 
 package org.netbeans.modules.cnd.navigation.classhierarchy;
 
+import java.awt.Component;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.beans.PropertyVetoException;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -55,6 +59,7 @@ import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.navigation.services.HierarchyFactory;
 import org.netbeans.modules.cnd.navigation.services.HierarchyModel;
+import org.openide.awt.Mnemonics;
 import org.openide.explorer.ExplorerManager;
 import org.openide.explorer.view.BeanTreeView;
 import org.openide.nodes.AbstractNode;
@@ -63,6 +68,7 @@ import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.Presenter;
+import org.openide.windows.TopComponent;
 
 /**
  *
@@ -116,12 +122,18 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         getExplorerManager().setRootContext(root);
     }
 
-    public void setClose(Action close) {
-        this.close = close;
+    public void setClose() {
+        close = new DialogClose();
+        getTreeView().addCloseAction(close);
     }
-    
-    public BeanTreeView getTreeView(){
-        return (BeanTreeView)hierarchyPane;
+
+    public void clearClose() {
+        close = null;
+        getTreeView().addCloseAction(close);
+    }
+
+    private MyBeanTreeView getTreeView(){
+        return (MyBeanTreeView)hierarchyPane;
     }
     
     /** This method is called from within the constructor to
@@ -143,7 +155,7 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         directOnlyButton = new javax.swing.JToggleButton();
         treeButton = new javax.swing.JToggleButton();
         jPanel2 = new javax.swing.JPanel();
-        hierarchyPane = new BeanTreeView();
+        hierarchyPane = new MyBeanTreeView();
 
         setLayout(new java.awt.GridBagLayout());
 
@@ -244,7 +256,8 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         gridBagConstraints.insets = new java.awt.Insets(4, 4, 4, 0);
         add(toolBar, gridBagConstraints);
 
-        jPanel2.setBorder(javax.swing.BorderFactory.createLineBorder(javax.swing.UIManager.getDefaults().getColor("SplitPane.shadow"))); // NOI18N
+        jPanel2.setBorder(javax.swing.BorderFactory.createLineBorder(javax.swing.UIManager.getDefaults().getColor("SplitPane.shadow")));
+        jPanel2.setFocusable(false);
         jPanel2.setMinimumSize(new java.awt.Dimension(1, 1));
         jPanel2.setPreferredSize(new java.awt.Dimension(1, 1));
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -252,6 +265,8 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         gridBagConstraints.gridy = 1;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         add(jPanel2, gridBagConstraints);
+
+        hierarchyPane.setFocusable(false);
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -401,10 +416,10 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
     private class RefreshAction extends AbstractAction implements Presenter.Popup {
         private JMenuItem menuItem;
         public RefreshAction() {
-            putValue(Action.NAME, NbBundle.getMessage(ClassHierarchyPanel.class, "ClassHierarchyPanel.refreshButton.toolTipText")); //NOI18N
+            putValue(Action.NAME, NbBundle.getMessage(ClassHierarchyPanel.class, "ClassHierarchyPanel.refreshButton.menuText")); //NOI18N
             putValue(Action.SMALL_ICON, refreshButton.getIcon());
-            menuItem = new JMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
 
         public void actionPerformed(ActionEvent e) {
@@ -421,8 +436,8 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         public SubTypeAction() {
             putValue(Action.NAME, getButtonTooltip(ClassHierarchyPanel.SUB_TYPES)); //NOI18N
             putValue(Action.SMALL_ICON, subtypeButton.getIcon());
-            menuItem = new JRadioButtonMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JRadioButtonMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
  
         public void actionPerformed(ActionEvent e) {
@@ -440,8 +455,8 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         public SuperTypeAction() {
             putValue(Action.NAME, getButtonTooltip(ClassHierarchyPanel.SUPER_TYPES));
             putValue(Action.SMALL_ICON, supertypeButton.getIcon());
-            menuItem = new JRadioButtonMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JRadioButtonMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
  
         public void actionPerformed(ActionEvent e) {
@@ -459,8 +474,8 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         public DirectOnlyAction() {
             putValue(Action.NAME, getButtonTooltip(ClassHierarchyPanel.DIRECT_ONLY));
             putValue(Action.SMALL_ICON, getButtonIcon(ClassHierarchyPanel.DIRECT_ONLY));
-            menuItem = new JCheckBoxMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JCheckBoxMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
  
         public void actionPerformed(ActionEvent e) {
@@ -478,8 +493,8 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         public TreeAction() {
             putValue(Action.NAME, getButtonTooltip(ClassHierarchyPanel.TREE));
             putValue(Action.SMALL_ICON, getButtonIcon(ClassHierarchyPanel.TREE));
-            menuItem = new JCheckBoxMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JCheckBoxMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
  
         public void actionPerformed(ActionEvent e) {
@@ -489,6 +504,43 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         public final JMenuItem getPopupPresenter() {
             menuItem.setSelected(!plain);
             return menuItem;
+        }
+    }
+
+    private class DialogClose extends AbstractAction {
+        public DialogClose() {
+        }
+        public void actionPerformed(ActionEvent e) {
+            Component p = ClassHierarchyPanel.this;
+            while (p != null){
+                if (p instanceof TopComponent) {
+                    ((TopComponent)p).close();
+                    return;
+                } else if (p instanceof Window) {
+                    ((Window)p).setVisible(false);
+                    return;
+                }
+                p = p.getParent();
+           }
+        }
+    }
+    
+    private class MyBeanTreeView extends BeanTreeView {
+        public MyBeanTreeView(){
+        }
+        public void addCloseAction(final Action action){
+            tree.addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyReleased(KeyEvent e) {
+                    if (e.getKeyCode()==KeyEvent.VK_ESCAPE) {
+                        if (action != null) {
+                            action.actionPerformed(null);
+                            e.consume();
+                        }
+                    }
+                    super.keyReleased(e);
+                }
+            });
         }
     }
 
@@ -521,16 +573,16 @@ public class ClassHierarchyPanel extends JPanel implements ExplorerManager.Provi
         String path = null;
         switch (kind){
         case SUB_TYPES:
-            path = "ClassHierarchyPanel.subtypeButton.toolTipText"; // NOI18N
+            path = "ClassHierarchyPanel.subtypeButton.menuText"; // NOI18N
             break;
         case SUPER_TYPES:
-            path = "ClassHierarchyPanel.supertypeButton.toolTipText"; // NOI18N
+            path = "ClassHierarchyPanel.supertypeButton.menuText"; // NOI18N
             break;
         case DIRECT_ONLY:
-            path = "ClassHierarchyPanel.directOnlyButton.toolTipText"; // NOI18N
+            path = "ClassHierarchyPanel.directOnlyButton.menuText"; // NOI18N
             break;
         case TREE:
-            path = "ClassHierarchyPanel.treeButton.toolTipText"; // NOI18N
+            path = "ClassHierarchyPanel.treeButton.menuText"; // NOI18N
             break;
         }
         return org.openide.util.NbBundle.getMessage(getClass(), path);

@@ -41,8 +41,16 @@
 
 package org.netbeans.modules.cnd.navigation.includeview;
 
+import java.awt.Component;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.beans.PropertyVetoException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ImageIcon;
@@ -50,11 +58,13 @@ import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JRadioButtonMenuItem;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.navigation.services.HierarchyFactory;
 import org.netbeans.modules.cnd.navigation.services.IncludedModel;
+import org.openide.awt.Mnemonics;
 import org.openide.explorer.ExplorerManager;
 import org.openide.explorer.view.BeanTreeView;
 import org.openide.nodes.AbstractNode;
@@ -63,6 +73,7 @@ import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.Presenter;
+import org.openide.windows.TopComponent;
 
 /**
  *
@@ -116,12 +127,19 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         getExplorerManager().setRootContext(root);
     }
 
-    public void setClose(Action close) {
-        this.close = close;
+    public void setClose() {
+        close = new DialogClose();
+        getTreeView().addCloseAction(close);
     }
 
-    public BeanTreeView getTreeView(){
-        return (BeanTreeView)hierarchyPane;
+    public void clearClose() {
+        close = null;
+        getTreeView().addCloseAction(close);
+    }
+
+
+    private MyBeanTreeView getTreeView(){
+        return (MyBeanTreeView)hierarchyPane;
     }
     
     /** This method is called from within the constructor to
@@ -143,7 +161,7 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         directOnlyButton = new javax.swing.JToggleButton();
         treeButton = new javax.swing.JToggleButton();
         jPanel2 = new javax.swing.JPanel();
-        hierarchyPane = new BeanTreeView();
+        hierarchyPane = new MyBeanTreeView();
 
         setLayout(new java.awt.GridBagLayout());
 
@@ -246,7 +264,8 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         gridBagConstraints.insets = new java.awt.Insets(4, 4, 4, 0);
         add(toolBar, gridBagConstraints);
 
-        jPanel2.setBorder(javax.swing.BorderFactory.createLineBorder(javax.swing.UIManager.getDefaults().getColor("SplitPane.shadow"))); // NOI18N
+        jPanel2.setBorder(javax.swing.BorderFactory.createLineBorder(javax.swing.UIManager.getDefaults().getColor("SplitPane.shadow")));
+        jPanel2.setFocusable(false);
         jPanel2.setMinimumSize(new java.awt.Dimension(1, 1));
         jPanel2.setPreferredSize(new java.awt.Dimension(1, 1));
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -255,6 +274,8 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.weightx = 1.0;
         add(jPanel2, gridBagConstraints);
+
+        hierarchyPane.setFocusable(false);
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -353,22 +374,88 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
 
     private synchronized void update(final CsmFile csmFile) {
         if (csmFile != null){
+            final Node[] oldSelection = getExplorerManager().getSelectedNodes();
             final Children children = root.getChildren();
             if (!Children.MUTEX.isReadAccess()){
                 Children.MUTEX.writeAccess(new Runnable(){
                     public void run() {
                         children.remove(children.getNodes());
-                        IncludedModel model = HierarchyFactory.getInstance().buildIncludeHierarchyModel(csmFile, actions, whoIncludes, plain, recursive);
+                        final IncludedModel model = HierarchyFactory.getInstance().buildIncludeHierarchyModel(csmFile, actions, whoIncludes, plain, recursive);
                         model.setCloseWindowAction(close);
                         final Node node = new IncludeNode(csmFile, model, null);
                         children.add(new Node[]{node});
-                        try {
-                            getExplorerManager().setSelectedNodes(new Node[]{node});
-                        } catch (PropertyVetoException ex) {
-                        }
                         SwingUtilities.invokeLater(new Runnable() {
                             public void run() {
                                 ((BeanTreeView) hierarchyPane).expandNode(node);
+                                Node selected = findSelection();
+                                try {
+                                    getExplorerManager().setSelectedNodes(new Node[]{selected});
+                                } catch (PropertyVetoException ex) {
+                                }
+                            }
+
+                            private Node findSelection() {
+                                if (oldSelection != null && oldSelection.length == 1 &&
+                                   (oldSelection[0] instanceof IncludeNode)) {
+                                    CsmFile what = (CsmFile) ((IncludeNode)oldSelection[0]).getCsmObject();
+                                    for (Node n : node.getChildren().getNodes()) {
+                                        if (n instanceof IncludeNode) {
+                                            CsmFile f2 = (CsmFile) ((IncludeNode)n).getCsmObject();
+                                            if (what != null && f2 != null) {
+                                                if (what.getAbsolutePath().equals(f2.getAbsolutePath())) {
+                                                    return n;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    return findInModel(what);
+                                }
+                                return node;
+                            }
+                            
+                            private Node findInModel(CsmFile what){
+                                List<CsmFile> path = new ArrayList<CsmFile>();
+                                Set<CsmFile> antiLoop = new HashSet<CsmFile>();
+                                Node n = node;
+                                if (findInModel(csmFile, what, path, 25, antiLoop)){
+                                    for(int i = path.size()-1; i >= 0; i--){
+                                        CsmFile f1 = path.get(i);
+                                        ((BeanTreeView) hierarchyPane).expandNode(n);
+                                        for (Node c : n.getChildren().getNodes()){
+                                            CsmFile f2 = (CsmFile) ((IncludeNode)c).getCsmObject();
+                                            if (f1 != null && f2 != null) {
+                                                if (f1.getAbsolutePath().equals(f2.getAbsolutePath())) {
+                                                    n = c;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                return n;
+                            }
+                            
+                            private boolean findInModel(CsmFile root, CsmFile what, List<CsmFile> path, int level, Set<CsmFile> antiLoop){
+                                if (level < 0 || antiLoop.contains(root)) {
+                                    return false;
+                                }
+                                antiLoop.add(root);
+                                Set<CsmFile> set = model.getModel().get(root);
+                                if (set != null){
+                                    for(CsmFile f : set){
+                                        if (f.getAbsolutePath().equals(what.getAbsolutePath())){
+                                            path.add(f);
+                                            return true;
+                                        }
+                                    }
+                                    for(CsmFile f : set){
+                                        if (findInModel(f, what, path, level - 1, antiLoop)){
+                                            path.add(f);
+                                            return true;
+                                        }
+                                    }
+                                }
+                                return false;
                             }
                         });
                     }
@@ -407,10 +494,10 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
     private class RefreshAction extends AbstractAction implements Presenter.Popup {
         private JMenuItem menuItem;
         public RefreshAction() {
-            putValue(Action.NAME, NbBundle.getMessage(IncludeHierarchyPanel.class, "IncludeHierarchyPanel.refreshButton.toolTipText")); //NOI18N
+            putValue(Action.NAME, NbBundle.getMessage(IncludeHierarchyPanel.class, "IncludeHierarchyPanel.refreshButton.menuText")); //NOI18N
             putValue(Action.SMALL_ICON, refreshButton.getIcon());
-            menuItem = new JMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
 
         public void actionPerformed(ActionEvent e) {
@@ -427,8 +514,8 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         public WhoIncludesAction() {
             putValue(Action.NAME, getButtonTooltip(IncludeHierarchyPanel.WHO_INCLUDES));
             putValue(Action.SMALL_ICON, getButtonIcon(IncludeHierarchyPanel.WHO_INCLUDES));
-            menuItem = new JRadioButtonMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JRadioButtonMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
  
         public void actionPerformed(ActionEvent e) {
@@ -446,8 +533,8 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         public WhoIsIncludedAction() {
             putValue(Action.NAME, getButtonTooltip(IncludeHierarchyPanel.WHO_IS_INCLUDED));
             putValue(Action.SMALL_ICON, getButtonIcon(IncludeHierarchyPanel.WHO_IS_INCLUDED));
-            menuItem = new JRadioButtonMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JRadioButtonMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
  
         public void actionPerformed(ActionEvent e) {
@@ -465,8 +552,8 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         public DirectOnlyAction() {
             putValue(Action.NAME, getButtonTooltip(IncludeHierarchyPanel.DIRECT_ONLY));
             putValue(Action.SMALL_ICON, getButtonIcon(IncludeHierarchyPanel.DIRECT_ONLY));
-            menuItem = new JCheckBoxMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JCheckBoxMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
  
         public void actionPerformed(ActionEvent e) {
@@ -484,8 +571,8 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         public TreeAction() {
             putValue(Action.NAME, getButtonTooltip(IncludeHierarchyPanel.TREE));
             putValue(Action.SMALL_ICON, getButtonIcon(IncludeHierarchyPanel.TREE));
-            menuItem = new JCheckBoxMenuItem((String)getValue(Action.NAME)); 
-            menuItem.setAction(this);
+            menuItem = new JCheckBoxMenuItem(this); 
+            Mnemonics.setLocalizedText(menuItem, (String)getValue(Action.NAME));
         }
  
         public void actionPerformed(ActionEvent e) {
@@ -497,6 +584,44 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
             return menuItem;
         }
     }
+
+    private class MyBeanTreeView extends BeanTreeView {
+        public MyBeanTreeView(){
+        }
+        public void addCloseAction(final Action action){
+            tree.addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyReleased(KeyEvent e) {
+                    if (e.getKeyCode()==KeyEvent.VK_ESCAPE) {
+                        if (action != null) {
+                            action.actionPerformed(null);
+                            e.consume();
+                        }
+                    }
+                    super.keyReleased(e);
+                }
+            });
+        }
+    }
+    
+    private class DialogClose extends AbstractAction {
+        public DialogClose() {
+        }
+        public void actionPerformed(ActionEvent e) {
+            Component p = IncludeHierarchyPanel.this;
+            while (p != null){
+                if (p instanceof TopComponent) {
+                    ((TopComponent)p).close();
+                    return;
+                } else if (p instanceof Window) {
+                    ((Window)p).setVisible(false);
+                    return;
+                }
+                p = p.getParent();
+           }
+        }
+    }
+
 
     private static final int WHO_INCLUDES = 1;
     private static final int WHO_IS_INCLUDED= 2;
@@ -528,16 +653,16 @@ public class IncludeHierarchyPanel extends JPanel implements ExplorerManager.Pro
         String path = null;
         switch (kind){
         case WHO_INCLUDES:
-            path = "IncludeHierarchyPanel.whoIncludesButton.toolTipText"; // NOI18N
+            path = "IncludeHierarchyPanel.whoIncludesButton.menuText"; // NOI18N
             break;
         case WHO_IS_INCLUDED:
-            path = "IncludeHierarchyPanel.whoIsIncludedButton.toolTipText"; // NOI18N
+            path = "IncludeHierarchyPanel.whoIsIncludedButton.menuText"; // NOI18N
             break;
         case DIRECT_ONLY:
-            path = "IncludeHierarchyPanel.directOnlyButton.toolTipText"; // NOI18N
+            path = "IncludeHierarchyPanel.directOnlyButton.menuText"; // NOI18N
             break;
         case TREE:
-            path = "IncludeHierarchyPanel.treeButton.toolTipText"; // NOI18N
+            path = "IncludeHierarchyPanel.treeButton.menuText"; // NOI18N
             break;
         }
         return org.openide.util.NbBundle.getMessage(getClass(), path);
