@@ -43,6 +43,7 @@ package org.netbeans.modules.editor.lib2.highlighting;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -133,7 +134,7 @@ public final class HighlightingManager {
 
         private final JTextComponent pane;
         private HighlightsLayerFilter paneFilter;
-        private Document lastKnownDocument = null;
+        private Reference<Document> lastKnownDocumentRef;
         private MimePath [] lastKnownMimePaths = null;
         private boolean inRebuildAllLayers = false;
         
@@ -205,6 +206,8 @@ public final class HighlightingManager {
         private synchronized void rebuildAll() {
             // Get the new set of mime path
             MimePath [] mimePaths = getAllDocumentMimePath();
+
+            Document lastKnownDocument = lastKnownDocumentRef == null ? null : lastKnownDocumentRef.get();
 
             // Recalculate factories and all containers if needed
             if (!Utilities.compareObjects(lastKnownDocument, pane.getDocument()) ||
@@ -334,6 +337,7 @@ public final class HighlightingManager {
         
         private synchronized void rebuildAllContainers(Document document) {
             if (LOG.isLoggable(Level.FINE)) {
+                Document lastKnownDocument = lastKnownDocumentRef == null ? null : lastKnownDocumentRef.get();
                 LOG.fine("rebuildAllContainers: lastKnownDocument = " + simpleToString(lastKnownDocument) + //NOI18N
                         ", lastKnownMimePaths = " + mimePathsToString(lastKnownMimePaths)); //NOI18N
             }
@@ -375,8 +379,11 @@ public final class HighlightingManager {
             StringBuilder sb = new StringBuilder();
             
             sb.append("HighlighsLayers {\n"); //NOI18N
+            
             sb.append(" * document : "); //NOI18N
-            sb.append(doc.toString());
+            sb.append(doc.getClass().getName()).append('@').append(Integer.toHexString(System.identityHashCode(doc)));
+            Object streamDescriptor = doc.getProperty(Document.StreamDescriptionProperty);
+            sb.append(" [").append(streamDescriptor == null ? "no stream descriptor" : streamDescriptor.toString()).append(']');
             sb.append("\n"); //NOI18N
 
             sb.append(" * mime paths : \n"); //NOI18N

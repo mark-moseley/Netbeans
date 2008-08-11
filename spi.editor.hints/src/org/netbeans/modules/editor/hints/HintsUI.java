@@ -50,6 +50,8 @@ import java.awt.event.MouseListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
@@ -69,7 +71,6 @@ import org.netbeans.modules.editor.hints.borrowed.ListCompletionView;
 import org.netbeans.modules.editor.hints.borrowed.ScrollCompletionPane;
 import org.netbeans.spi.editor.hints.ChangeInfo;
 import org.netbeans.spi.editor.hints.Fix;
-import org.netbeans.spi.editor.hints.LazyFixList;
 import org.openide.ErrorManager;
 import org.openide.cookies.EditCookie;
 import org.openide.cookies.EditorCookie;
@@ -95,6 +96,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     
     private static HintsUI INSTANCE;
     private static final String POPUP_NAME = "hintsPopup"; // NOI18N
+    private static final int POPUP_VERTICAL_OFFSET = 5;
     
     public static synchronized HintsUI getDefault() {
         if (INSTANCE == null)
@@ -105,8 +107,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     
     static Logger UI_GESTURES_LOGGER = Logger.getLogger("org.netbeans.ui.editor.hints");
     
-    private JTextComponent comp;
-    private LazyFixList hints = new StaticFixList();
+    private Reference<JTextComponent> compRef;
     private Popup listPopup;
     private Popup tooltipPopup;
     private JLabel hintIcon;
@@ -120,40 +121,26 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     }
     
     public JTextComponent getComponent() {
-        return comp;
+        return compRef == null ? null : compRef.get();
     }
     
-    public void setHints (LazyFixList hints, JTextComponent comp, boolean showPopup) {
-        if (this.hints.equals(hints) && this.comp == comp) {
-            return;
-        }
-        if (comp != this.comp || !this.hints.equals(hints) && comp != null) {
-            removePopups();
-        }
-        boolean show =  hints != null && comp != null/* && !hints.isEmpty()*/;
-        if (!show && this.comp != null) {
-            removePopups();
-        }
-        this.hints = hints == null ? new StaticFixList() : hints;
-        setComponent (comp);
-        if (show) {
-            showHints();
-            if (showPopup) {
-                showPopup();
-            }
-        }
+    public void removeHints() {
+        removePopups();
+        setComponent(null);
     }
     
     public void setComponent (JTextComponent comp) {
-        boolean change = this.comp != comp;
+        JTextComponent thisComp = getComponent();
+        boolean change = thisComp != comp;
         if (change) {
             unregister();
-            this.comp = comp;
+            this.compRef = new WeakReference<JTextComponent>(comp);
             register();
         }
     }
     
     private void register() {
+        JTextComponent comp = getComponent(); 
         if (comp == null) {
             return;
         }
@@ -161,6 +148,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     }
     
     private void unregister() {
+        JTextComponent comp = getComponent(); 
         if (comp == null) {
             return;
         }
@@ -169,6 +157,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     
     
     public void removePopups() {
+        JTextComponent comp = getComponent(); 
         if (comp == null) {
             return;
         }
@@ -209,6 +198,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     }
     
     boolean isKnownComponent(Component c) {
+        JTextComponent comp = getComponent(); 
         return c != null && 
                (c == comp 
                 || c == hintIcon 
@@ -218,50 +208,8 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
         ;
     }
     
-    private void showHints() {
-        if (comp == null || !comp.isDisplayable() || !comp.isShowing()) {
-            return;
-        }
-        configureBounds (getHintIcon());
-    }
-    
-    private void configureBounds (JComponent jc) {
-        JRootPane pane = comp.getRootPane();
-        JLayeredPane lp = pane.getLayeredPane();
-        Rectangle r = null;
-        try {
-            int pos = javax.swing.text.Utilities.getRowStart(comp, comp.getCaret().getDot());
-            r = comp.modelToView (pos);
-        } catch (BadLocationException e) {
-            setHints (null, null, false);
-            ErrorManager.getDefault().notify (e);
-            return;
-        }
-        Point p = new Point(r.x - comp.getX(), r.y );
-         
-        Dimension d = jc.getPreferredSize();
-        
-        SwingUtilities.convertPointToScreen(p, comp);
-        SwingUtilities.convertPointFromScreen(p, lp);
-        jc.setBounds (p.x, p.y, d.width, d.height);
-        lp.add (jc, JLayeredPane.POPUP_LAYER);
-        jc.setVisible(true);
-        jc.repaint();
-    }
-    
-    private JLabel getHintIcon() {
-        if (hintIcon == null) {
-            hintIcon = new JLabel();
-            hintIcon.addMouseListener (this);
-            hintIcon.setToolTipText(NbBundle.getMessage(HintsUI.class, "HINT_Bulb")); // NOI18N
-        }
-        String iconBase =
-                "org/netbeans/modules/editor/hints/resources/error.png"; //NOI18N
-        hintIcon.setIcon (new ImageIcon (org.openide.util.Utilities.loadImage(iconBase)));
-        return hintIcon;
-    }
-    
-    public void showPopup() {
+    public void showPopup(FixData hints) {
+        JTextComponent comp = getComponent(); 
         if (comp == null || (hints.isComputed() && hints.getFixes().isEmpty())) {
             return;
         }
@@ -295,19 +243,18 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
             listPopup.show();
         } catch (BadLocationException ble) {
             ErrorManager.getDefault().notify (ble);
-            setHints (null, null, false);
+            removeHints();
         }
     }
     
-    public void showPopup(LazyFixList fixes, String description, JTextComponent component, Point position) {
-        setHints(null, null, false);
+    public void showPopup(FixData fixes, String description, JTextComponent component, Point position) {
+        removeHints();
         setComponent(component);
+        JTextComponent comp = getComponent(); 
         
         if (comp == null || fixes == null)
             return ;
 
-        this.hints = fixes;
-        
         Point p = new Point(position);
         SwingUtilities.convertPointToScreen(p, comp);
         
@@ -333,20 +280,42 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
                     comp, errorTooltip, p.x, p.y);
         } else {
             assert hintListComponent == null;
+
+            int rowHeight = 14; //default
             
+            hintListComponent =
+                    new ScrollCompletionPane(comp, fixes, null, null, getMaxSizeAt( p ));
+
+            Dimension popup = hintListComponent.getPreferredSize();
+            Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+            boolean exceedsHeight = p.y + popup.height > screen.height;
+
             try {
                 int pos = javax.swing.text.Utilities.getRowStart(comp, comp.getCaret().getDot());
                 Rectangle r = comp.modelToView (pos);
+                rowHeight = r.height;
+
+                int y;
+                if (exceedsHeight)
+                    y = p.y + POPUP_VERTICAL_OFFSET;
+                else
+                    y = p.y-rowHeight-errorTooltip.getPreferredSize().height-POPUP_VERTICAL_OFFSET;
 
                 tooltipPopup = getPopupFactory().getPopup(
-                        comp, errorTooltip, p.x, p.y-r.height-errorTooltip.getPreferredSize().height-5);
+                        comp, errorTooltip, p.x, y);
             } catch( BadLocationException blE ) {
                 ErrorManager.getDefault().notify (blE);
                 errorTooltip = null;
             }
-            hintListComponent =
-                    new ScrollCompletionPane(comp, fixes, null, null, getMaxSizeAt( p ));
-            
+
+            if(exceedsHeight) {
+                p.y -= popup.height + rowHeight + POPUP_VERTICAL_OFFSET;
+            }
+
+            if(p.x + popup.width > screen.width) { //shift popup left necessary
+                p.x -= p.x + popup.width - screen.width;
+            }
+
             hintListComponent.getView().addMouseListener (this);
             hintListComponent.setName(POPUP_NAME);
             assert listPopup == null;
@@ -368,6 +337,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     }
     
     private Dimension getMaxSizeAt( Point p ) {
+        JTextComponent comp = getComponent(); 
         Rectangle screenBounds = null;
         if( null != comp && null != comp.getGraphicsConfiguration() ) {
             screenBounds = comp.getGraphicsConfiguration().getBounds();
@@ -391,13 +361,13 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
             
             if (f != null) {
                 e.consume();
-                JTextComponent c = this.comp;
+                JTextComponent c = getComponent(); 
                 invokeHint (f);
                 if (c != null && org.openide.util.Utilities.isMac()) {
                     // see issue #65326
                     c.requestFocus();
                 }
-                setHints (null, null, false);
+                removeHints();
                 //the component was reset when setHints was called, set it back so further hints will work:
                 setComponent(c);
             }
@@ -411,11 +381,6 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     }
 
     public void mousePressed(java.awt.event.MouseEvent e) {
-        if (e.getSource() instanceof JLabel) {
-            if (!isPopupActive()) {
-                showPopup();
-            }
-        } 
     }
 
     public void mouseReleased(java.awt.event.MouseEvent e) {
@@ -444,7 +409,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
                 if (a instanceof ParseErrorAnnotation) {
                     ParseErrorAnnotation pa = (ParseErrorAnnotation) a;
 
-                    if (lineNum == pa.getLineNumber()
+                    if (lineNum == pa.getLineNumber() && desc != null
                             && org.openide.util.Utilities.compareObjects(desc.getShortDescription(), a.getShortDescription())) {
                         return pa;
                     }
@@ -455,8 +420,8 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
         return null;
     }
     
-    boolean invokeDefaultAction() {
-        JTextComponent comp = this.comp;
+    boolean invokeDefaultAction(boolean onlyActive) {
+        JTextComponent comp = getComponent(); 
         if (comp == null) {
             Logger.getLogger(HintsUI.class.getName()).log(Level.WARNING, "HintsUI.invokeDefaultAction called, but comp == null");
             return false;
@@ -471,15 +436,35 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
                 Rectangle carretRectangle = comp.modelToView(comp.getCaretPosition());            
                 int line = Utilities.getLineOffset((BaseDocument) doc, comp.getCaretPosition());
                 AnnotationDesc desc = annotations.getActiveAnnotation(line);
+                ParseErrorAnnotation annotation = findAnnotation(doc, desc, line);
+                
+                if (annotation == null) {
+                    if (onlyActive) {
+                        return false;
+                    }
+                    
+                    AnnotationDesc[] pas = annotations.getPasiveAnnotations(line);
+                    
+                    if (pas == null) {
+                        return false;
+                    }
+                    
+                    for (AnnotationDesc ad : pas) {
+                        if ((annotation = findAnnotation(doc, ad, line)) != null) {
+                            break;
+                        }
+                    }
+
+                    if (annotation == null) {
+                        return false;
+                    }
+                }
+                
                 Point p = comp.modelToView(Utilities.getRowStartFromLineOffset((BaseDocument) doc, line)).getLocation();
                 p.y += carretRectangle.height;
                 if( comp.getParent() instanceof JViewport ) {
                     p.x += ((JViewport)comp.getParent()).getViewPosition().x;
                 }
-                ParseErrorAnnotation annotation = findAnnotation(doc, desc, line);
-                
-                if (annotation == null)
-                    return false;
                 
                 showPopup(annotation.getFixes(), annotation.getDescription(), comp, p);
                 
@@ -493,6 +478,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
     }
     
     public void keyPressed(KeyEvent e) {
+        JTextComponent comp = getComponent(); 
         if (comp == null) {
             return;
         }
@@ -509,7 +495,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
             if (   e.getModifiersEx() == (KeyEvent.CTRL_DOWN_MASK | KeyEvent.SHIFT_DOWN_MASK)
                 || e.getModifiersEx() == KeyEvent.ALT_DOWN_MASK) {
                 if ( !popupShowing) {
-                    invokeDefaultAction();
+                    invokeDefaultAction(false);
                     e.consume();
                 }
             } else if ( e.getModifiersEx() == 0 ) {
@@ -564,7 +550,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
         }
         
         removePopups();
-        final JTextComponent component = comp;
+        final JTextComponent component = getComponent(); 
         JumpList.checkAddEntry(component);
         final Cursor cur = component.getCursor();
         component.setCursor (Cursor.getPredefinedCursor (Cursor.WAIT_CURSOR));
@@ -665,7 +651,7 @@ public class HintsUI implements MouseListener, KeyListener, PropertyChangeListen
         JTextComponent active = EditorRegistry.lastFocusedComponent();
         
         if (getComponent() != active) {
-            setHints(null, null, false);
+            removeHints();
             setComponent(active);
         }
     }

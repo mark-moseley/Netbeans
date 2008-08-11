@@ -46,12 +46,16 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.api.editor.mimelookup.MimePath;
-import org.netbeans.modules.palette.ui.PalettePanel;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataShadow;
@@ -81,7 +85,7 @@ final class PaletteSwitch implements Runnable, LookupListener {
     private PropertyChangeSupport propertySupport;
     
     private PaletteController currentPalette;
-    private boolean isGroupOpen = false;
+//    private boolean isGroupOpen = false;
     private Lookup.Result lookupRes;
     
     /** Creates a new instance of PaletteSwitcher */
@@ -142,7 +146,7 @@ final class PaletteSwitch implements Runnable, LookupListener {
 
         propertySupport.firePropertyChange( PROP_PALETTE_CONTENTS, oldPalette, currentPalette );
     }
-    
+
     private PaletteController findPalette() {
         TopComponent.Registry registry = TopComponent.getRegistry();
         
@@ -201,7 +205,7 @@ final class PaletteSwitch implements Runnable, LookupListener {
             return null;
         
         PaletteController pc = (PaletteController)tc.getLookup().lookup( PaletteController.class );
-        if( null == pc && WindowManager.getDefault().isOpenedEditorTopComponent( tc ) ) {
+        if( null == pc && tc.isOpened() ) {
             //check if there's any palette assigned to TopComponent's mime type
             Node[] activeNodes = tc.getActivatedNodes();
             if( null != activeNodes && activeNodes.length > 0 ) {
@@ -241,19 +245,21 @@ final class PaletteSwitch implements Runnable, LookupListener {
             return;
         
         WindowManager wm = WindowManager.getDefault();
-        final TopComponentGroup group = wm.findTopComponentGroup( "commonpalette" ); // NOI18N
-        if( null == group )
-            return; // group not found (should not happen)
+        TopComponent palette = wm.findTopComponent("CommonPalette"); // NOI18N
+        if( null == palette ) {
+            Logger.getLogger( getClass().getName() ).log( Level.INFO, "Cannot find CommonPalette component." ); // NOI18N
+                
+            //for unit-testing
+            palette = PaletteTopComponent.getDefault();
+        }
         
-        if( null == prevPalette && null != newPalette ) {
-            group.open();
-            isGroupOpen = true;
-        } else if( ((null != prevPalette && null == newPalette) 
-            || (null == prevPalette && null == newPalette))
-            && (isGroupOpen || isGroupOpenHack( group )) ) {
-            PalettePanel.getDefault().setContent( null, null, null );
-            group.close();
-            isGroupOpen = false;
+        if( PaletteVisibility.isVisible(newPalette) || PaletteVisibility.isVisible(null) ) {
+            if( !palette.isOpened() )
+                palette.open();
+            PaletteVisibility.setVisible(newPalette, true);
+        } else {
+            if( palette.isOpened() )
+                palette.close();
         }
     }
     
@@ -300,6 +306,12 @@ final class PaletteSwitch implements Runnable, LookupListener {
                     || TopComponent.Registry.PROP_OPENED.equals( evt.getPropertyName() )
                     || TopComponent.Registry.PROP_ACTIVATED.equals( evt.getPropertyName() ) ) {
 
+                    if( TopComponent.Registry.PROP_ACTIVATED.equals( evt.getPropertyName() )
+                        || TopComponent.Registry.PROP_OPENED.equals( evt.getPropertyName() ) ) {
+                        //listen to Lookup changes of showing editor windows
+                        watchOpenedEditors();
+                    }
+                    
                     if( TopComponent.Registry.PROP_ACTIVATED.equals( evt.getPropertyName() ) ) {
                         //switch lookup listener for the activated TC
                         switchLookupListener();
@@ -313,4 +325,42 @@ final class PaletteSwitch implements Runnable, LookupListener {
     public void resultChanged(LookupEvent ev) {
         run();
     }
+    
+    private Map<TopComponent, Lookup.Result> watchedLkpResults = new WeakHashMap<TopComponent, Lookup.Result>(3);
+    
+    private void watchOpenedEditors() {
+        ArrayList<TopComponent> editorsToWatch = findShowingEditors();
+        ArrayList<TopComponent> toAddListeners = new ArrayList<TopComponent>( editorsToWatch );
+        toAddListeners.removeAll(watchedLkpResults.keySet());
+        
+        ArrayList<TopComponent> toRemoveListeners = new ArrayList<TopComponent>( watchedLkpResults.keySet() );
+        toRemoveListeners.removeAll(editorsToWatch);
+        
+        for( TopComponent tc : toRemoveListeners ) {
+            Lookup.Result res = watchedLkpResults.get(tc);
+            if( null != res ) {
+                res.removeLookupListener(this);
+                watchedLkpResults.remove(tc);
+            }
+        }
+        
+        for( TopComponent tc : toAddListeners ) {
+            Lookup.Result res = tc.getLookup().lookup( new Lookup.Template<PaletteController>( PaletteController.class ) );
+            res.addLookupListener( this );
+            res.allItems();
+            watchedLkpResults.put( tc, res );
+        }
+    }
+    
+    private ArrayList<TopComponent> findShowingEditors() {
+        ArrayList<TopComponent> res = new ArrayList<TopComponent>( 3 );
+        WindowManager wm = WindowManager.getDefault();
+        for( TopComponent tc : TopComponent.getRegistry().getOpened() ) {
+            if( tc.isShowing() && wm.isEditorTopComponent(tc) )
+                res.add( tc );
+        }
+        return res;
+    }
+            
+            
 }
