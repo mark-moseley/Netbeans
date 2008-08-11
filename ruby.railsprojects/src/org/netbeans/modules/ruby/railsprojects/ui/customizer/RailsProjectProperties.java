@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,6 +44,7 @@ package org.netbeans.modules.ruby.railsprojects.ui.customizer;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -58,10 +59,12 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.ruby.railsprojects.RailsProject;
-import org.netbeans.modules.ruby.railsprojects.UpdateHelper;
+import org.netbeans.modules.ruby.railsprojects.server.spi.RubyInstance;
 import org.netbeans.modules.ruby.rubyproject.JavaClassPathUi;
 import org.netbeans.modules.ruby.rubyproject.ProjectPropertyExtender;
+import org.netbeans.modules.ruby.rubyproject.ProjectPropertyExtender.Item;
 import org.netbeans.modules.ruby.rubyproject.SharedRubyProjectProperties;
+import org.netbeans.modules.ruby.rubyproject.UpdateHelper;
 import org.netbeans.modules.ruby.spi.project.support.rake.RakeProjectHelper;
 import org.netbeans.modules.ruby.spi.project.support.rake.EditableProperties;
 import org.netbeans.modules.ruby.spi.project.support.rake.GeneratedFilesHelper;
@@ -78,18 +81,15 @@ import org.openide.util.MutexException;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
-/**
- * @author Petr Hrebejk
- */
 public class RailsProjectProperties extends SharedRubyProjectProperties {
+    
     public static final String RAILS_PORT = "rails.port"; // NOI18N
     public static final String RAILS_SERVERTYPE = "rails.servertype"; // NOI18N
     public static final String RAILS_ENV = "rails.env"; // NOI18N
     
     // Special properties of the project
     //public static final String Ruby_PROJECT_NAME = "rails.project.name"; // NOI18N
-    public static final String JAVA_PLATFORM = "platform.active"; // NOI18N
-
+    
     // Properties stored in the PROJECT.PROPERTIES    
     // TODO - nuke me!
     public static final String MAIN_CLASS = "main.file"; // NOI18N
@@ -117,7 +117,17 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
                     
     // Properties stored in the PRIVATE.PROPERTIES
     public static final String APPLICATION_ARGS = "application.args"; // NOI18N
+    public static final String PLATFORM_ACTIVE = "platform.active"; // NOI18N
     
+    /** All per-configuration properties to be stored. */
+    private static final String[] CONFIG_PROPS = {
+        RAILS_PORT, RAILS_SERVERTYPE, RAKE_ARGS, RAILS_ENV,
+        MAIN_CLASS, APPLICATION_ARGS, RUN_JVM_ARGS
+    };
+    
+    /** Private per-configuration properties. */
+    private static final String[] PRIVATE_PROPS = { RAILS_PORT, RAILS_ENV, RAKE_ARGS, APPLICATION_ARGS, RAILS_SERVERTYPE };
+
 //    ButtonModel NO_DEPENDENCIES_MODEL;
     Document JAVAC_COMPILER_ARG_MODEL;
     
@@ -140,6 +150,8 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
     private StoreGroup privateGroup; 
     private StoreGroup projectGroup;
     private RubyPlatform platform;
+    private RubyInstance server;
+    private String railsEnvironment;
     
     RailsProject getProject() {
         return project;
@@ -178,16 +190,16 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
         CLASS_PATH_LIST_RENDERER = new JavaClassPathUi.ClassPathListCellRenderer( evaluator );
 
         EditableProperties projectProperties = updateHelper.getProperties( RakeProjectHelper.PROJECT_PROPERTIES_PATH );         
-        String cp = (String)projectProperties.get( JAVAC_CLASSPATH )  ;
+        String cp = projectProperties.get( JAVAC_CLASSPATH )  ;
         JAVAC_CLASSPATH_MODEL = /*ClassPathUiSupport.*/createListModel(cs.itemsIterator(cp) );
-        INCLUDE_JAVA_MODEL = projectGroup.createToggleButtonModel( evaluator, INCLUDE_JAVA );
+        //INCLUDE_JAVA_MODEL = projectGroup.createToggleButtonModel( evaluator, INCLUDE_JAVA );
         
         JAVAC_COMPILER_ARG_MODEL = projectGroup.createStringDocument( evaluator, JAVAC_COMPILER_ARG );
         
         // CustomizerRun
         RUN_CONFIGS = readRunConfigs();
         activeConfig = evaluator.getProperty("config");
-                
+        
     }
     
     // From ClassPathUiSupport:
@@ -202,28 +214,28 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
         return model;
     }
     // From ClassPathUiSupport:
-    public static Iterator getIterator( DefaultListModel model ) {        
+    public static Iterator<Item> getIterator( DefaultListModel model ) {        
         // XXX Better performing impl. would be nice
         return getList( model ).iterator();        
     }
     
     // From ClassPathUiSupport:
-    public static List getList( DefaultListModel model ) {
-        return Collections.list( model.elements() );
+    public static List<Item> getList(DefaultListModel model) {
+        @SuppressWarnings("unchecked")
+        List<Item> items = (List<Item>) Collections.list(model.elements());
+        return items;
     }
-
     
     public void save() {
         try {                        
             // Store properties 
-            Boolean result = (Boolean) ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction() {
+            Boolean result = ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<Boolean>() {
                 final FileObject projectDir = updateHelper.getRakeProjectHelper().getProjectDirectory();
-                public Object run() throws IOException {
+                public Boolean run() throws IOException {
                     if ((genFileHelper.getBuildScriptState(GeneratedFilesHelper.BUILD_IMPL_XML_PATH,
-                        RailsProject.class.getResource("resources/build-impl.xsl") //NOI18N
-                        )
-                        & GeneratedFilesHelper.FLAG_MODIFIED) == GeneratedFilesHelper.FLAG_MODIFIED) {  //NOI18N
-                        if (showModifiedMessage (NbBundle.getMessage(RailsProjectProperties.class,"TXT_ModifiedTitle"))) {
+                            RailsProject.class.getResource("resources/build-impl.xsl")) //NOI18N
+                            & GeneratedFilesHelper.FLAG_MODIFIED) == GeneratedFilesHelper.FLAG_MODIFIED) {  //NOI18N
+                        if (showModifiedMessage(NbBundle.getMessage(RailsProjectProperties.class, "TXT_ModifiedTitle"))) {
                             //Delete user modified build-impl.xml
                             FileObject fo = projectDir.getFileObject(GeneratedFilesHelper.BUILD_IMPL_XML_PATH);
                             if (fo != null) {
@@ -231,11 +243,11 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
                             }
                         }
                         else {
-                            return Boolean.FALSE;
+                            return false;
                         }
                     }
                     storeProperties();
-                    return Boolean.TRUE;
+                    return true;
                 }
             });
             // and save the project
@@ -258,12 +270,15 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
         //this.cs = new ClassPathSupport( evaluator, refHelper, updateHelper.getAntProjectHelper(), WELL_KNOWN_PATHS, LIBRARY_PREFIX, LIBRARY_SUFFIX, ANT_ARTIFACT_PREFIX );
         String[] javac_cp = cs.encodeToStrings(/*ClassPathUiSupport.*/getIterator( JAVAC_CLASSPATH_MODEL ) );
         
-        
         // Store standard properties
         EditableProperties projectProperties = updateHelper.getProperties( RakeProjectHelper.PROJECT_PROPERTIES_PATH );        
         EditableProperties privateProperties = updateHelper.getProperties(RakeProjectHelper.PRIVATE_PROPERTIES_PATH);
 
         RailsProjectProperties.storePlatform(privateProperties, getPlatform());
+        RailsProjectProperties.storeServer(privateProperties, getServer());
+        if (getRailsEnvironment() != null) {
+            privateProperties.setProperty(RAILS_ENV, getRailsEnvironment()); // NOI18N
+        }
 
         // Standard store of the properties
         projectGroup.store( projectProperties );        
@@ -328,12 +343,33 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
     }
 
     public static void storePlatform(final EditableProperties ep, final RubyPlatform platform) {
-        ep.setProperty("platform.active", platform.getID()); // NOI18N
+        ep.setProperty(PLATFORM_ACTIVE, platform.getID());
     }
 
-    /**
-     * A mess.
-     */
+    RubyInstance getServer() {
+        return this.server;
+    }
+    
+    void setServer(RubyInstance server) {
+        this.server = server;
+    }
+    
+    public static void storeServer(final EditableProperties ep, final RubyInstance server) {
+        ep.setProperty(RAILS_SERVERTYPE, server.getServerUri()); // NOI18N
+    }
+
+    String getRailsEnvironment() {
+        return this.railsEnvironment;
+    }
+
+    void setRailsEnvironment(String railsEnvironment) {
+        this.railsEnvironment = railsEnvironment;
+    }
+    
+    private static boolean isPrivateConfigProperty(final String prop) {
+        return Arrays.asList(PRIVATE_PROPS).contains(prop);
+    }
+
     Map<String/*|null*/,Map<String,String>> readRunConfigs() {
         Map<String,Map<String,String>> m = new TreeMap<String,Map<String,String>>(new Comparator<String>() {
             public int compare(String s1, String s2) {
@@ -341,8 +377,7 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
             }
         });
         Map<String,String> def = new TreeMap<String,String>();
-        for (String prop : new String[] { RAILS_PORT, RAILS_SERVERTYPE, RAKE_ARGS, RAILS_ENV,
-                MAIN_CLASS, APPLICATION_ARGS, RUN_JVM_ARGS/*, RUN_WORK_DIR*/}) {
+        for (String prop : CONFIG_PROPS) {
             String v = updateHelper.getProperties(RakeProjectHelper.PRIVATE_PROPERTIES_PATH).getProperty(prop);
             if (v == null) {
                 v = updateHelper.getProperties(RakeProjectHelper.PROJECT_PROPERTIES_PATH).getProperty(prop);
@@ -351,6 +386,7 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
                 def.put(prop, v);
             }
         }
+        def.put(PLATFORM_ACTIVE, getPlatform().getID());
         m.put(null, def);
         FileObject configs = project.getProjectDirectory().getFileObject("nbproject/configs"); // NOI18N
         if (configs != null) {
@@ -378,20 +414,13 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
         return m;
     }
 
-    /**
-     * A royal mess.
-     */
     void storeRunConfigs(Map<String/*|null*/,Map<String,String/*|null*/>/*|null*/> configs,
             EditableProperties projectProperties, EditableProperties privateProperties) throws IOException {
         //System.err.println("storeRunConfigs: " + configs);
         Map<String,String> def = configs.get(null);
-        for (String prop : new String[] {RAILS_PORT, RAILS_SERVERTYPE, RAKE_ARGS, RAILS_ENV,
-                MAIN_CLASS, APPLICATION_ARGS, RUN_JVM_ARGS/*, RUN_WORK_DIR*/}) {
+        for (String prop : CONFIG_PROPS) {
             String v = def.get(prop);
-            EditableProperties ep = (prop.equals(RAILS_PORT) ||
-                    prop.equals(RAKE_ARGS) || prop.equals(RAILS_ENV) ||
-                    prop.equals(RAILS_SERVERTYPE) || prop.equals(APPLICATION_ARGS)/* || prop.equals(RUN_WORK_DIR)*/) ?
-                privateProperties : projectProperties;
+            EditableProperties ep = isPrivateConfigProperty(prop) ? privateProperties : projectProperties;
             if (!Utilities.compareObjects(v, ep.getProperty(prop))) {
                 if (v != null && v.length() > 0) {
                     ep.setProperty(prop, v);
@@ -416,10 +445,7 @@ public class RailsProjectProperties extends SharedRubyProjectProperties {
             for (Map.Entry<String,String> entry2 : c.entrySet()) {
                 String prop = entry2.getKey();
                 String v = entry2.getValue();
-                String path = (prop.equals(RAILS_PORT) || 
-                    prop.equals(RAKE_ARGS) || prop.equals(RAILS_ENV) ||
-                    prop.equals(RAILS_SERVERTYPE) || prop.equals(APPLICATION_ARGS) /* || prop.equals(RUN_WORK_DIR)*/) ?
-                    privatePath : sharedPath;
+                String path = isPrivateConfigProperty(prop) ? privatePath : sharedPath;
                 EditableProperties ep = updateHelper.getProperties(path);
                 if (!Utilities.compareObjects(v, ep.getProperty(prop))) {
                     if (v != null && (v.length() > 0 || (def.get(prop) != null && def.get(prop).length() > 0))) {
