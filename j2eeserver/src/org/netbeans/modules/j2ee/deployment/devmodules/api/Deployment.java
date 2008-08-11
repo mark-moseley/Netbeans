@@ -41,19 +41,28 @@
 
 package org.netbeans.modules.j2ee.deployment.devmodules.api;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.logging.Level;
 import javax.enterprise.deploy.spi.Target;
 import javax.enterprise.deploy.spi.status.ProgressObject;
+import org.netbeans.api.java.source.BuildArtifactMapper;
+import org.netbeans.api.java.source.BuildArtifactMapper.ArtifactsUpdated;
 import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
 import org.netbeans.modules.j2ee.deployment.common.api.ConfigurationException;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.ArtifactListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.InstanceListener;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeApplicationProvider;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
+import org.netbeans.modules.j2ee.deployment.impl.DeployOnSaveManager;
 import org.netbeans.modules.j2ee.deployment.impl.ProgressObjectUtil;
 import org.netbeans.modules.j2ee.deployment.impl.Server;
 import org.netbeans.modules.j2ee.deployment.impl.ServerInstance;
@@ -67,6 +76,8 @@ import org.netbeans.modules.j2ee.deployment.impl.ui.ProgressUI;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.IncrementalDeployment;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.JDBCDriverDeployer;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.URLMapper;
 import org.openide.util.NbBundle;
 import org.openide.util.Parameters;
 
@@ -76,10 +87,12 @@ import org.openide.util.Parameters;
  */
 public final class Deployment {
 
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(Deployment.class.getName());
+    
     private static boolean alsoStartTargets = true;    //TODO - make it a property? is it really needed?
     
     private static Deployment instance = null;
-
+    
     public static synchronized Deployment getDefault () {
         if (instance == null) {
             instance = new Deployment ();
@@ -160,7 +173,10 @@ public final class Deployment {
             // inform the plugin about the deploy action, even if there was
             // really nothing needed to be deployed
             targetserver.notifyIncrementalDeployment(modules);
-            
+            if (targetserver.supportsDeployOnSave(modules)) {
+                DeployOnSaveManager.getDefault().notifyInitialDeployment(jmp);
+            }
+
             if (modules != null && modules.length > 0) {
                 deploymentTarget.setTargetModules(modules);
             } else {
@@ -178,7 +194,15 @@ public final class Deployment {
             }
         }
     }
-    
+
+    public void enableCompileOnSaveSupport(J2eeModuleProvider provider) {
+        DeployOnSaveManager.getDefault().startListening(provider);
+    }
+
+    public void disableCompileOnSaveSupport(J2eeModuleProvider provider) {
+        DeployOnSaveManager.getDefault().stopListening(provider);
+    }
+
     private static void deployMessageDestinations(J2eeModuleProvider jmp) throws ConfigurationException {
         ServerInstance si = ServerRegistry.getInstance ().getServerInstance (jmp.getServerInstanceID ());
         if (si != null) {
