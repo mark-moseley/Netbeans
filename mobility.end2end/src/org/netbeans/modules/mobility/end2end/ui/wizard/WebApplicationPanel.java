@@ -94,6 +94,7 @@ import org.netbeans.modules.websvc.api.jaxws.client.JAXWSClientSupport;
 import org.netbeans.modules.websvc.api.jaxws.client.JAXWSClientView;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Client;
 import org.netbeans.spi.java.project.support.ui.PackageView;
+import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
@@ -705,7 +706,7 @@ final public class WebApplicationPanel extends JPanel
     }
     
     public String isValidServletLocation() {
-        if( getTargetName() == null ) {
+        if( "".equals(getTargetName())) {
             return NbBundle.getMessage( WebApplicationPanel.class, "ERR_File_NoTargetName"); // NOI18N
         }
         
@@ -716,10 +717,14 @@ final public class WebApplicationPanel extends JPanel
             
         }
         
-        final FileObject rootFolder = getRootFolder();
-        final String errorMessage = canUseFileName(rootFolder, getPackageFileName(), getTargetName(), "java"); // NOI18N
-        
-        return errorMessage;
+        try {
+            final FileObject rootFolder = getRootFolder();
+            final String errorMessage = canUseFileName(rootFolder, getPackageFileName(), getTargetName(), "java"); // NOI18N
+            
+            return errorMessage;
+        } catch( NullPointerException e ) {
+            return NbBundle.getMessage( WebApplicationPanel.class, "ERR_Project_Missing_Source_Folders" ); // NOI18N
+        }
     }
     
     static boolean isValidPackageName(final String str) {
@@ -777,12 +782,7 @@ final public class WebApplicationPanel extends JPanel
     }
     
     public String getTargetName() {
-        final String text = documentNameTextField.getText().trim();
-        
-        if (text.length() == 0) {
-            return null;
-        }
-        return text;
+        return documentNameTextField.getText().trim();
     }
     
     // helper methods copied from project/ui/ProjectUtilities
@@ -1222,7 +1222,7 @@ final public class WebApplicationPanel extends JPanel
         
         private void setLocalizedErrorMessage(final String message) {
             if( templateWizard != null )
-                templateWizard.putProperty("WizardPanel_errorMessage", message); // NOI18N
+                templateWizard.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, message); // NOI18N
         }
         
         public void readSettings( final Object settings ) {
