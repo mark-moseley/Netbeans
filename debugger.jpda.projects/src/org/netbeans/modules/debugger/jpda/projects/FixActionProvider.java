@@ -61,6 +61,7 @@ import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.spi.debugger.ActionsProviderSupport;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.ErrorManager;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
@@ -79,13 +80,12 @@ public class FixActionProvider extends ActionsProviderSupport {
     
     
     public FixActionProvider (ContextProvider lookupProvider) {
-        debugger = (JPDADebugger) lookupProvider.lookupFirst 
-            (null, JPDADebugger.class);
+        debugger = lookupProvider.lookupFirst(null, JPDADebugger.class);
         
         listener = new Listener ();
         MainProjectManager.getDefault ().addPropertyChangeListener (listener);
         debugger.addPropertyChangeListener (JPDADebugger.PROP_STATE, listener);
-        TopComponent.getRegistry ().addPropertyChangeListener (listener);
+        EditorContextDispatcher.getDefault().addPropertyChangeListener("text/x-java", listener);
         
         setEnabled (
             ActionsManager.ACTION_FIX,
@@ -96,7 +96,7 @@ public class FixActionProvider extends ActionsProviderSupport {
     private void destroy () {
         debugger.removePropertyChangeListener (JPDADebugger.PROP_STATE, listener);
         MainProjectManager.getDefault ().removePropertyChangeListener (listener);
-        TopComponent.getRegistry ().removePropertyChangeListener (listener);
+        EditorContextDispatcher.getDefault().removePropertyChangeListener (listener);
     }
     
     public Set getActions () {
@@ -140,7 +140,9 @@ public class FixActionProvider extends ActionsProviderSupport {
         Node[] nodes = TopComponent.getRegistry ().getActivatedNodes ();
         if (nodes == null || nodes.length == 0) return MainProjectManager.getDefault().getMainProject();
         DataObject dao = (DataObject) nodes[0].getCookie(DataObject.class);
-        if (dao == null) return MainProjectManager.getDefault().getMainProject();
+        if (dao == null || !dao.isValid()) {
+            return MainProjectManager.getDefault().getMainProject();
+        }
         return FileOwnerQuery.getOwner(dao.getPrimaryFile());        
     }
     
@@ -174,9 +176,9 @@ public class FixActionProvider extends ActionsProviderSupport {
         int i, k = nodes.length;
         ArrayList l = new ArrayList ();
         for (i = 0; i < k; i++) {
-            Object o = nodes [i].getCookie (DataObject.class);
-            if (o != null)
-                l.add (o);
+            DataObject dobj = (DataObject)nodes [i].getCookie (DataObject.class);
+            if (dobj != null && dobj.isValid())
+                l.add (dobj);
         }
         return Lookups.fixed (l.toArray (new DataObject [l.size ()]));
     }
