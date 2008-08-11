@@ -123,9 +123,9 @@ table.components_table {
 table.components_table th {
     padding:            2px 5px 2px 5px;
     text-align:         center;
-    color:              #FF8E00;
+    color:              #333333;
     font-family:        Arial, sans-serif;
-    font-weight:        bold;
+    font-weight:        normal;
     font-size:          1.1em;
     cursor:             default;
 }
@@ -138,7 +138,7 @@ table.components_table th.over {
 table.components_table .star {
     padding:            0px 0px 0px 5px;
     text-align:         center;
-    color:              #FF8E00;
+    color:              #333333;
     font-family:        Arial, sans-serif;
     font-weight:        bold;
     font-size:          1.2em;
@@ -188,6 +188,10 @@ table.components_table .no_padding {
 
 table.components_table .left_border {
     border-left:        1px solid #D5D5D5;
+}
+
+table.components_table .right_border {
+    border-right:       1px solid #D5D5D5;
 }
 
 table.components_table .bottom_border {
@@ -283,4 +287,8 @@ table.components_table .title {
      padding: 4px 5px 10px 10px;
      margin-right: 25px;
      background-color:#E6F6FE;
+}
+
+.download_tab_active {
+     color: #999999;
 }
