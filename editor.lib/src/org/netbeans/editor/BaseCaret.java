@@ -68,6 +68,11 @@ import java.awt.event.InputEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import javax.swing.Action;
 import javax.swing.JComponent;
 import javax.swing.JScrollBar;
@@ -86,14 +91,22 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.EventListenerList;
 import javax.swing.text.AbstractDocument;
+import javax.swing.text.AttributeSet;
 import javax.swing.text.Position;
+import javax.swing.text.StyleConstants;
 import org.netbeans.api.editor.fold.Fold;
 import org.netbeans.api.editor.fold.FoldHierarchy;
 import org.netbeans.api.editor.fold.FoldHierarchyEvent;
 import org.netbeans.api.editor.fold.FoldHierarchyListener;
 import org.netbeans.api.editor.fold.FoldStateChange;
 import org.netbeans.api.editor.fold.FoldUtilities;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.FontColorNames;
+import org.netbeans.api.editor.settings.FontColorSettings;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.lib.editor.util.swing.DocumentListenerPriority;
+import org.netbeans.modules.editor.lib.EditorPreferencesDefaults;
+import org.netbeans.modules.editor.lib.SettingsConversions;
 import org.openide.util.WeakListeners;
 
 /**
@@ -105,7 +118,7 @@ import org.openide.util.WeakListeners;
 
 public class BaseCaret implements Caret,
 MouseListener, MouseMotionListener, PropertyChangeListener,
-DocumentListener, ActionListener, SettingsChangeListener,
+DocumentListener, ActionListener, 
 AtomicLockListener, FoldHierarchyListener {
 
     /** Caret type representing block covering current character */
@@ -117,16 +130,24 @@ AtomicLockListener, FoldHierarchyListener {
     /** One dot thin line compatible with Swing default caret */
     public static final String THIN_LINE_CARET = "thin-line-caret"; // NOI18N
 
-    private static final boolean debugCaretFocus
-    = Boolean.getBoolean("netbeans.debug.editor.caret.focus"); // NOI18N
+    /** @since 1.23 */
+    public static final String THICK_LINE_CARET = "thick-line-caret"; // NOI18N
 
-    private static final boolean debugCaretFocusExtra
-    = Boolean.getBoolean("netbeans.debug.editor.caret.focus.extra"); // NOI18N
+    // -J-Dorg.netbeans.editor.BaseCaret.level=FINEST
+    private static final Logger LOG = Logger.getLogger(BaseCaret.class.getName());
     
+    static {
+        // Compatibility debugging flags mapping to logger levels
+        if (Boolean.getBoolean("netbeans.debug.editor.caret.focus") && LOG.getLevel().intValue() < Level.FINE.intValue())
+            LOG.setLevel(Level.FINE);
+        if (Boolean.getBoolean("netbeans.debug.editor.caret.focus.extra") && LOG.getLevel().intValue() < Level.FINER.intValue())
+            LOG.setLevel(Level.FINER);
+    }
+
     /**
      * Implementation of various listeners.
      */
-    private ListenerImpl listenerImpl;
+    private final ListenerImpl listenerImpl;
     
     /**
      * Present bounds of the caret. This rectangle needs to be repainted
@@ -168,6 +189,9 @@ AtomicLockListener, FoldHierarchyListener {
     /** Type of the caret */
     String type;
 
+    /** Width of thick caret */
+    int width;
+    
     /** Is the caret italic for italic fonts */
     boolean italic;
 
@@ -233,79 +257,69 @@ AtomicLockListener, FoldHierarchyListener {
      * its relative visual position on the screen.
      */
     private boolean updateAfterFoldHierarchyChange;
+    private FoldHierarchyListener weakFHListener;
+
+    private Preferences prefs = null;
+    private final PreferenceChangeListener prefsListener = new PreferenceChangeListener() {
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            String setingName = evt == null ? null : evt.getKey();
+            if (setingName == null || SimpleValueNames.CARET_BLINK_RATE.equals(setingName)) {
+                SettingsConversions.callSettingsChange(BaseCaret.this);
+                int rate = prefs.getInt(SimpleValueNames.CARET_BLINK_RATE, -1);
+                if (rate == -1) {
+                    JTextComponent c = component;
+                    Integer rateI = c == null ? null : (Integer) c.getClientProperty(BaseTextUI.PROP_DEFAULT_CARET_BLINK_RATE);
+                    rate = rateI != null ? rateI : EditorPreferencesDefaults.defaultCaretBlinkRate;
+                }
+                setBlinkRate(rate);
+                refresh();
+            }
+        }
+    };
+    private PreferenceChangeListener weakPrefsListener = null;
+    
     
     public BaseCaret() {
         listenerImpl = new ListenerImpl();
-        Settings.addSettingsChangeListener(this);
-    }
-
-    /** Called when settings were changed. The method is called
-    * also in constructor, so the code must count with the evt being null.
-    */
-    public void settingsChange(SettingsChangeEvent evt) {
-        if( evt != null && SettingsNames.CARET_BLINK_RATE.equals( evt.getSettingName() ) ) {
-            
-            JTextComponent c = component;
-            if (c == null) return;
-            if (evt.getKitClass() != Utilities.getKitClass(c)) return;
-            
-            Object value = evt.getNewValue();
-            if( value instanceof Integer ) {
-                setBlinkRate( ((Integer)value).intValue() );
-            }
-        }
-        updateType();
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                updateCaretBounds(); // the line height etc. may have change
-            }
-        });
     }
 
     void updateType() {
         JTextComponent c = component;
-        if (c != null) {
-            Class kitClass = Utilities.getKitClass(c);
-            if (kitClass==null) return;
+        if (c != null && prefs != null) {
+            
             String newType;
+            int newWidth = 0;
             boolean newItalic;
-            Color caretColor;
+            Color caretColor = Color.black;
+            
             if (overwriteMode) {
-                newType = SettingsUtil.getString(kitClass,
-                                                 SettingsNames.CARET_TYPE_OVERWRITE_MODE, LINE_CARET);
-                newItalic = SettingsUtil.getBoolean(kitClass,
-                                                    SettingsNames.CARET_ITALIC_OVERWRITE_MODE, false);
-
-                Color insertModeColor = getColor( kitClass, SettingsNames.CARET_COLOR_INSERT_MODE,
-                    SettingsDefaults.defaultCaretColorInsertMode );
-                
-                caretColor = getColor( kitClass, SettingsNames.CARET_COLOR_OVERWRITE_MODE,
-                    insertModeColor );
-                
+                newType = prefs.get(SimpleValueNames.CARET_TYPE_OVERWRITE_MODE, EditorPreferencesDefaults.defaultCaretTypeOverwriteMode);
+                newItalic = prefs.getBoolean(SimpleValueNames.CARET_ITALIC_OVERWRITE_MODE, EditorPreferencesDefaults.defaultCaretItalicOverwriteMode);
             } else { // insert mode
-                newType = SettingsUtil.getString(kitClass,
-                                                 SettingsNames.CARET_TYPE_INSERT_MODE, LINE_CARET);
-                newItalic = SettingsUtil.getBoolean(kitClass,
-                                                    SettingsNames.CARET_ITALIC_INSERT_MODE, false);
-                caretColor = getColor( kitClass, SettingsNames.CARET_COLOR_INSERT_MODE,
-                    SettingsDefaults.defaultCaretColorInsertMode );
+                newType = prefs.get(SimpleValueNames.CARET_TYPE_INSERT_MODE, EditorPreferencesDefaults.defaultCaretTypeInsertMode);
+                newItalic = prefs.getBoolean(SimpleValueNames.CARET_ITALIC_INSERT_MODE, EditorPreferencesDefaults.defaultCaretItalicInsertMode);
+                newWidth = prefs.getInt(SimpleValueNames.THICK_CARET_WIDTH, EditorPreferencesDefaults.defaultThickCaretWidth);
             }
 
+            FontColorSettings fcs = MimeLookup.getLookup(org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(c)).lookup(FontColorSettings.class);
+            if (fcs != null) {
+                AttributeSet attribs = fcs.getFontColors(FontColorNames.CARET_COLOR_INSERT_MODE); //NOI18N
+                if (attribs != null) {
+                    caretColor = (Color) attribs.getAttribute(StyleConstants.Foreground);
+                }
+            }
+            
             this.type = newType;
             this.italic = newItalic;
+            this.width = newWidth;
             c.setCaretColor(caretColor);
-            if (debugCaretFocusExtra){
-                System.err.println("Updating caret color:"+caretColor); // NOI18N
+            if (LOG.isLoggable(Level.FINER)) {
+                LOG.finer("Updating caret color:" + caretColor + '\n'); // NOI18N
             }
 
             resetBlink();
             dispatchUpdate(false);
         }
-    }
-
-    private static Color getColor( Class kitClass, String settingName, Color defaultValue) {
-        Object value = Settings.getValue(kitClass, settingName);
-        return (value instanceof Color) ? (Color)value : defaultValue;
     }
 
     /**
@@ -369,15 +383,10 @@ AtomicLockListener, FoldHierarchyListener {
         EditorUI editorUI = Utilities.getEditorUI(component);
         editorUI.addPropertyChangeListener( this );
         
-        FoldHierarchy hierarchy = FoldHierarchy.get(c);
-        if (hierarchy != null) {
-            hierarchy.addFoldHierarchyListener(this);
-        }
-        
         if (component.hasFocus()) {
-            if (debugCaretFocus || debugCaretFocusExtra) {
-                System.err.println("Component has focus, calling BaseCaret.focusGained(); doc=" // NOI18N
-                    + component.getDocument().getProperty(Document.TitleProperty));
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.fine("Component has focus, calling BaseCaret.focusGained(); doc=" // NOI18N
+                    + component.getDocument().getProperty(Document.TitleProperty) + '\n');
             }
             listenerImpl.focusGained(null); // emulate focus gained
         }
@@ -405,11 +414,13 @@ AtomicLockListener, FoldHierarchyListener {
         c.removeFocusListener(listenerImpl);
         c.removePropertyChangeListener(this);
         
-        FoldHierarchy hierarchy = FoldHierarchy.get(c);
-        if (hierarchy != null) {
-            hierarchy.removeFoldHierarchyListener(this);
+        if (weakFHListener != null) {
+            FoldHierarchy hierarchy = FoldHierarchy.get(c);
+            if (hierarchy != null) {
+                hierarchy.removeFoldHierarchyListener(weakFHListener);
+            }
         }
-        
+
         modelChanged(listenDoc, null);
     }
 
@@ -430,6 +441,9 @@ AtomicLockListener, FoldHierarchyListener {
             }
 
             listenDoc = null;
+            if (prefs != null && weakPrefsListener != null) {
+                prefs.removePreferenceChangeListener(weakPrefsListener);
+            }
         }
 
 
@@ -449,8 +463,12 @@ AtomicLockListener, FoldHierarchyListener {
                 Utilities.annotateLoggable(e);
             }
 
-            settingsChange(null); // update settings
-
+            prefs = MimeLookup.getLookup(org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(newDoc)).lookup(Preferences.class);
+            if (prefs != null) {
+                weakPrefsListener = WeakListeners.create(PreferenceChangeListener.class, prefsListener, prefs);
+                prefs.addPreferenceChangeListener(weakPrefsListener);
+            }
+            
             Utilities.runInEventDispatchThread(
                 new Runnable() {
                     public void run() {
@@ -458,7 +476,6 @@ AtomicLockListener, FoldHierarchyListener {
                     }
                 }
             );
-
         }
     }
 
@@ -473,6 +490,9 @@ AtomicLockListener, FoldHierarchyListener {
         // and if so compute the bounds and scroll the view if necessary.
         if (getDot() != 0 && caretBounds == null) {
             update(true);
+        }
+        if (LOG.isLoggable(Level.FINEST)) {
+            LOG.finest("BaseCaret.paint(): caretBounds=" + caretBounds + dumpVisibility() + '\n');
         }
         if (caretBounds != null && isVisible() && blinkVisible) {
             paintCustomCaret(g);
@@ -491,7 +511,15 @@ AtomicLockListener, FoldHierarchyListener {
                 }
                 g.drawLine((int)upperX, caretBounds.y, caretBounds.x,
                         (caretBounds.y + caretBounds.height - 1));
-
+            } else if (THICK_LINE_CARET.equals(type)) { // thick caret
+                int blkWidth = this.width;
+                if (blkWidth <= 0) blkWidth = 5; // sanity check
+                if (afterCaretFont != null) g.setFont(afterCaretFont);
+                Color textBackgroundColor = c.getBackground();
+                if (textBackgroundColor != null) {
+                    g.setXORMode( textBackgroundColor);
+                }
+                g.fillRect(caretBounds.x, caretBounds.y, blkWidth, caretBounds.height - 1);
             } else if (BLOCK_CARET.equals(type)) { // block caret
                 if (afterCaretFont != null) g.setFont(afterCaretFont);
                 if (afterCaretFont != null && afterCaretFont.isItalic() && italic) { // paint italic caret
@@ -747,6 +775,12 @@ AtomicLockListener, FoldHierarchyListener {
     }
 
     protected void setVisibleImpl(boolean v) {
+        if (LOG.isLoggable(Level.FINER)) {
+            LOG.finer("BaseCaret.setVisible(" + v + ")\n");
+            if (LOG.isLoggable(Level.FINEST)) {
+                LOG.log(Level.INFO, "", new Exception());
+            }
+        }
         boolean visible = isVisible();
         synchronized (this) {
             synchronized (listenerImpl) {
@@ -754,17 +788,13 @@ AtomicLockListener, FoldHierarchyListener {
                     if (visible) {
                         flasher.stop();
                     }
+                    if (LOG.isLoggable(Level.FINER)) {
+                        LOG.finer((v ? "Starting" : "Stopping") + // NOI18N
+                                " the caret blinking timer: " + dumpVisibility() + '\n'); // NOI18N
+                    }
                     if (v) {
-                        if (debugCaretFocusExtra){
-                            System.err.println("starting the caret blinking timer: visible=" // NOI18N
-                                    + visible + ", blinkVisible=" + blinkVisible); // NOI18N
-                        }
                         flasher.start();
-
                     } else {
-                        if (debugCaretFocusExtra){
-                            System.err.println("stopping the caret blinking timer"); // NOI18N
-                        }
                         flasher.stop();
                     }
                 }
@@ -783,6 +813,10 @@ AtomicLockListener, FoldHierarchyListener {
         }
     }
 
+    private String dumpVisibility() {
+        return "visible=" + isVisible() + ", blinkVisible=" + blinkVisible;
+    }
+
     synchronized void resetBlink() {
         boolean visible = isVisible();
         synchronized (listenerImpl) {
@@ -790,19 +824,15 @@ AtomicLockListener, FoldHierarchyListener {
                 flasher.stop();
                 blinkVisible = true;
                 if (visible) {
-                    if (debugCaretFocusExtra){
-                        System.err.println("Reset blinking (caret already visible)" // NOI18N
-                                + " - starting the caret blinking timer: visible=" // NOI18N
-                                + visible + ", blinkVisible=" + blinkVisible // NOI18N
-                        );
+                    if (LOG.isLoggable(Level.FINER)){
+                        LOG.finer("Reset blinking (caret already visible)" + // NOI18N
+                                " - starting the caret blinking timer: " + dumpVisibility() + '\n'); // NOI18N
                     }
                     flasher.start();
                 } else {
-                    if (debugCaretFocusExtra){
-                        System.err.println("Reset blinking (caret not visible)" // NOI18N
-                                + " - caret blinking timer not started: visible=" // NOI18N
-                                + visible + ", blinkVisible=" + blinkVisible // NOI18N
-                        );
+                    if (LOG.isLoggable(Level.FINER)){
+                        LOG.finer("Reset blinking (caret not visible)" + // NOI18N
+                                " - caret blinking timer not started: " + dumpVisibility() + '\n'); // NOI18N
                     }
                 }
             }
@@ -866,6 +896,9 @@ AtomicLockListener, FoldHierarchyListener {
     * @param rate blink rate in milliseconds, 0 means no blink
     */
     public synchronized void setBlinkRate(int rate) {
+        if (LOG.isLoggable(Level.FINER)) {
+            LOG.finer("setBlinkRate(" + rate + ")" + dumpVisibility() + '\n'); // NOI18N
+        }
         synchronized (listenerImpl) {
             if (flasher == null && rate > 0) {
                 flasher = new Timer(rate, new WeakTimerListener(this));
@@ -873,20 +906,16 @@ AtomicLockListener, FoldHierarchyListener {
             if (flasher != null) {
                 if (rate > 0) {
                     if (flasher.getDelay() != rate) {
-                        if (debugCaretFocusExtra){
-                            System.err.println("blink rate:"+rate); // NOI18N
-                        }
                         flasher.setDelay(rate);
                     }
                 } else { // zero rate - don't blink
-                    if (debugCaretFocusExtra){
-                        System.err.println("zero rate - don't blink"); // NOI18N
-                        System.err.println("setting blinkVisible to true and disabling timer"); // NOI18N
-                    }
                     flasher.stop();
                     flasher.removeActionListener(this);
                     flasher = null;
                     blinkVisible = true;
+                    if (LOG.isLoggable(Level.FINER)){
+                        LOG.finer("Zero blink rate - no blinking. flasher=null; blinkVisible=true"); // NOI18N
+                    }
                 }
             }
         }
@@ -916,15 +945,11 @@ AtomicLockListener, FoldHierarchyListener {
     */
     public int getMark() {
         if (component != null) {
-            if (selectionVisible) {
                 try {
                     return selectionMark.getOffset();
                 } catch (InvalidMarkException e) {
                 }
-            } else { // selection not visible
-                return getDot(); // must return same position as dot
             }
-        }
         return 0;
     }
 
@@ -972,7 +997,6 @@ AtomicLockListener, FoldHierarchyListener {
     public void setDot(int offset, Rectangle scrollRect, int scrollPolicy, boolean expandFold) {
         JTextComponent c = component;
         if (c != null) {
-            setSelectionVisible(false);
             BaseDocument doc = (BaseDocument)c.getDocument();
             boolean dotChanged = false;
             doc.readLock();
@@ -981,8 +1005,16 @@ AtomicLockListener, FoldHierarchyListener {
                     dotChanged = true;
                     try {
                         Utilities.moveMark(doc, caretMark, offset);
-                        // Unfold fold 
+                        Utilities.moveMark(doc, selectionMark, offset);
+
                         FoldHierarchy hierarchy = FoldHierarchy.get(c);
+                        // hook the listener if not already done
+                        if (weakFHListener == null) {
+                            weakFHListener = WeakListeners.create(FoldHierarchyListener.class, this, hierarchy);
+                            hierarchy.addFoldHierarchyListener(weakFHListener);
+                        }
+
+                        // Unfold fold
                         hierarchy.lock();
                         try {
                             Fold collapsed = null;
@@ -1057,25 +1089,10 @@ AtomicLockListener, FoldHierarchyListener {
                     if (offset == oldCaretPos) { // no change
                         return;
                     }
-                    int selPos; // current position of selection mark
-
-                    if (selectionVisible) {
-                        selPos = selectionMark.getOffset();
-                    } else {
-                        Utilities.moveMark(doc, selectionMark, oldCaretPos);
-                        selPos = oldCaretPos;
-                    }
-
                     Utilities.moveMark(doc, caretMark, offset);
                     if (selectionVisible) { // selection already visible
                         Utilities.getEditorUI(c).repaintBlock(oldCaretPos, offset);
-                        if (selPos == offset) { // same positions -> invisible selection
-                            setSelectionVisible(false);
                         }
-
-                    } else { // selection not yet visible
-                        setSelectionVisible(true);
-                    }
                 } catch (BadLocationException e) {
                     throw new IllegalStateException(e.toString());
                     // position is incorrect
@@ -1096,6 +1113,8 @@ AtomicLockListener, FoldHierarchyListener {
             BaseDocumentEvent bevt = (BaseDocumentEvent)evt;
             if ((bevt.isInUndo() || bevt.isInRedo())
                     && component == Utilities.getLastActiveComponent()
+                    && !Boolean.TRUE.equals(org.netbeans.lib.editor.util.swing.
+                        DocumentUtilities.getEventProperty(evt, "caretIgnore"))
                ) {
                 // in undo mode and current component
                 undoOffset = evt.getOffset() + evt.getLength();
@@ -1114,13 +1133,11 @@ AtomicLockListener, FoldHierarchyListener {
         if (c != null) {
             BaseDocument doc = (BaseDocument)c.getDocument();
             // make selection invisible if removal shrinked block to zero size
-            if (selectionVisible && (getDot() == getMark())) {
-                setSelectionVisible(false);
-            }
-            
             BaseDocumentEvent bevt = (BaseDocumentEvent)evt;
             if ((bevt.isInUndo() || bevt.isInRedo())
                 && c == Utilities.getLastActiveComponent()
+                && !Boolean.TRUE.equals(org.netbeans.lib.editor.util.swing.
+                    DocumentUtilities.getEventProperty(evt, "caretIgnore"))
             ) {
                 // in undo mode and current component
                 undoOffset = evt.getOffset();
@@ -1227,25 +1244,24 @@ AtomicLockListener, FoldHierarchyListener {
                     Transferable trans = buffer.getContents(null);
                     if (trans == null) return;
 
-                    BaseDocument doc = (BaseDocument)c.getDocument();
+                    final BaseDocument doc = (BaseDocument)c.getDocument();
                     if (doc == null) return;
                     
-                    int offset = ((BaseTextUI)c.getUI()).viewToModel(c,
+                    final int offset = ((BaseTextUI)c.getUI()).viewToModel(c,
                                     evt.getX(), evt.getY());
 
                     try{
-                        String pastingString = (String)trans.getTransferData(DataFlavor.stringFlavor);
+                        final String pastingString = (String)trans.getTransferData(DataFlavor.stringFlavor);
                         if (pastingString == null) return;
-                         try {
-                             doc.atomicLock();
-                             try {
-                                 doc.insertString(offset, pastingString, null);
-                                 setDot(offset+pastingString.length());
-                             } finally {
-                                 doc.atomicUnlock();
-                             }
-                         } catch( BadLocationException exc ) {
-                         }
+                        doc.runAtomicAsUser (new Runnable () {
+                            public void run () {
+                                 try {
+                                     doc.insertString(offset, pastingString, null);
+                                     setDot(offset+pastingString.length());
+                                 } catch( BadLocationException exc ) {
+                                 }
+                            }
+                        });
                     }catch(UnsupportedFlavorException ufe){
                     }catch(IOException ioe){
                     }
@@ -1257,13 +1273,12 @@ AtomicLockListener, FoldHierarchyListener {
     private void mousePressedImpl(MouseEvent evt){
         JTextComponent c = component;
         if (c != null) {
-            Utilities.getEditorUI(c).getWordMatch().clear(); // [PENDING] should be done cleanly
-
             // Position the cursor at the appropriate place in the document
             if ((SwingUtilities.isLeftMouseButton(evt) && 
                 !(evt.isPopupTrigger()) &&
                  (evt.getModifiers() & (InputEvent.META_MASK|InputEvent.ALT_MASK)) == 0) ||
-               !isSelectionVisible()) {
+               !(isSelectionVisible() && getMark() != getDot())
+            ) {
                 int offset = ((BaseTextUI)c.getUI()).viewToModel(c,
                           evt.getX(), evt.getY());
                 if (offset >= 0) {
@@ -1425,6 +1440,19 @@ AtomicLockListener, FoldHierarchyListener {
                     }
                 }
             }
+        } else if("enabled".equals(evt.getPropertyName())) {
+            Boolean enabled = (Boolean) evt.getNewValue();
+            if(component.isFocusOwner()) {
+                if(enabled == Boolean.TRUE) {
+                    if(component.isEditable()) {
+                        setVisible(true);
+                    }
+                    setSelectionVisible(true);
+                } else {
+                    setVisible(false);
+                    setSelectionVisible(false);
+                }
+            }
         }
     }
 
@@ -1498,40 +1526,44 @@ AtomicLockListener, FoldHierarchyListener {
 
         // FocusListener methods
         public void focusGained(FocusEvent evt) {
-            if (debugCaretFocus || debugCaretFocusExtra) {
-                System.err.println(
-                        (debugCaretFocusExtra ? "\n" : "") // NOI18N
-                        + "BaseCaret.focusGained(); doc=" // NOI18N
-                        + component.getDocument().getProperty(Document.TitleProperty)
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.fine(
+                        "BaseCaret.focusGained(); doc=" + // NOI18N
+                        component.getDocument().getProperty(Document.TitleProperty) + '\n'
                 );
             }
             
             JTextComponent c = component;
             if (c != null) {
                 updateType();
-                if (debugCaretFocusExtra) {
-                    System.err.println("going to set caret visible to: "+c.isEnabled()); // NOI18N
+                if (component.isEnabled()) {
+                    if (component.isEditable()) {
+                        setVisible(true);
                 }
-                setVisible(c.isEnabled()); // invisible caret if disabled
+                    setSelectionVisible(true);
+                }
+                if (LOG.isLoggable(Level.FINER)) {
+                    LOG.finer("Caret visibility: " + isVisible() + '\n'); // NOI18N
+                }
             } else {
-                if (debugCaretFocusExtra) {
-                    System.err.println("component is null, caret will not be dislayed"); // NOI18N
+                if (LOG.isLoggable(Level.FINER)) {
+                    LOG.finer("Text component is null, caret will not be visible" + '\n'); // NOI18N
                 }
             }
         }
 
         public void focusLost(FocusEvent evt) {
-            if (debugCaretFocus || debugCaretFocusExtra) {
-                System.err.println((debugCaretFocusExtra ? "\n" : "") // NOI18N
-                        + "BaseCaret.focusLost(); doc=" // NOI18N
-                        + component.getDocument().getProperty(Document.TitleProperty)
-                        + "\nFOCUS GAINER: " + evt.getOppositeComponent() // NOI18N
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.fine("BaseCaret.focusLost(); doc=" + // NOI18N
+                        component.getDocument().getProperty(Document.TitleProperty) +
+                        "\nFOCUS GAINER: " + evt.getOppositeComponent() + '\n' // NOI18N
                 );
-                if (debugCaretFocusExtra) {
-                    System.err.println("FOCUS EVENT: " + evt); // NOI18N
+                if (LOG.isLoggable(Level.FINER)) {
+                    LOG.finer("FOCUS EVENT: " + evt + '\n'); // NOI18N
                 }
             }
 	    setVisible(false);
+            setSelectionVisible(evt.isTemporary());
         }
 
         // ComponentListener methods
@@ -1583,4 +1615,12 @@ AtomicLockListener, FoldHierarchyListener {
 
     } // End of ListenerImpl class
 
+    public final void refresh() {
+        updateType();
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                updateCaretBounds(); // the line height etc. may have change
+            }
+        });
+    }
 }
