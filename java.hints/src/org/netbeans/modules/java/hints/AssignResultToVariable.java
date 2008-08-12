@@ -42,6 +42,8 @@ package org.netbeans.modules.java.hints;
 
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
@@ -93,7 +95,7 @@ public class AssignResultToVariable extends AbstractHint {
     }
     
     public Set<Kind> getTreeKinds() {
-        return EnumSet.of(Kind.METHOD_INVOCATION);
+        return EnumSet.of(Kind.METHOD_INVOCATION, Kind.NEW_CLASS);
     }
 
     public List<ErrorDescription> run(CompilationInfo info, TreePath treePath) {
@@ -101,20 +103,26 @@ public class AssignResultToVariable extends AbstractHint {
             if (treePath.getParentPath().getLeaf().getKind() != Kind.EXPRESSION_STATEMENT)
                 return null;
             
-            MethodInvocationTree mit    = (MethodInvocationTree) treePath.getLeaf();
-            ExpressionTree       method = mit.getMethodSelect();
+            Tree tree = treePath.getLeaf();
+            Tree exprTree = null;
+            Kind kind = tree.getKind();
+            if (kind == Kind.METHOD_INVOCATION) {
+                exprTree = ((MethodInvocationTree)tree).getMethodSelect();
+            } else if (kind == Kind.NEW_CLASS) {
+                exprTree = ((NewClassTree)tree).getIdentifier();
+            }
             
-            long start = info.getTrees().getSourcePositions().getStartPosition(info.getCompilationUnit(), method);
-            long end   = info.getTrees().getSourcePositions().getEndPosition(info.getCompilationUnit(), method);
-            int   offset = CaretAwareJavaSourceTaskFactory.getLastPosition(info.getFileObject());
+            long start = info.getTrees().getSourcePositions().getStartPosition(info.getCompilationUnit(), exprTree);
+            long end   = info.getTrees().getSourcePositions().getEndPosition(info.getCompilationUnit(), exprTree);
+            int offset = CaretAwareJavaSourceTaskFactory.getLastPosition(info.getFileObject());
             
             if (start == (-1) || end == (-1) || offset < start || offset > end) {
                 return null;
             }
             
-            Element e = info.getTrees().getElement(treePath);
+            Element elem = info.getTrees().getElement(treePath);
             
-            if (e == null || e.getKind() != ElementKind.METHOD) {
+            if (elem == null || (elem.getKind() != ElementKind.METHOD && elem.getKind() != ElementKind.CONSTRUCTOR)) {
                 return null;
             }
             
@@ -137,8 +145,6 @@ public class AssignResultToVariable extends AbstractHint {
     public void cancel() {
         // XXX implement me
     }
-    
-    
     
     public String getId() {
         return AssignResultToVariable.class.getName();
@@ -184,18 +190,28 @@ public class AssignResultToVariable extends AbstractHint {
                         }
                         
                         TypeMirror type = copy.getTrees().getTypeMirror(tp);
+                        Element el = copy.getTrees().getElement(tp);
                         
                         if (type == null || NOT_ACCEPTABLE_TYPE_KINDS.contains(type.getKind())) {
                             return ;
                         }
-                        
+
+                        Tree t = tp.getLeaf();
+                        boolean isAnonymous = false; //handle anonymous classes #138223
+                        ExpressionTree identifier = null;
+                        if (t instanceof NewClassTree) {
+                            NewClassTree nct = ((NewClassTree)t);
+                            isAnonymous = nct.getClassBody() != null || el.getKind().isInterface() || el.getModifiers().contains(Modifier.ABSTRACT);
+                            identifier = nct.getIdentifier();
+                        }
+
                         type = Utilities.resolveCapturedType(copy, type);
                         
                         TreeMaker make = copy.getTreeMaker();
                         
                         name[0] = Utilities.guessName(copy, tp);
-                        
-                        VariableTree var = make.Variable(make.Modifiers(EnumSet.noneOf(Modifier.class)), name[0], make.Type(type), (ExpressionTree) tp.getLeaf());
+
+                        VariableTree var = make.Variable(make.Modifiers(EnumSet.noneOf(Modifier.class)), name[0], isAnonymous ? identifier : make.Type(type), (ExpressionTree) tp.getLeaf());
                         
                         var = Utilities.copyComments(copy, tp.getLeaf(), var);
                         
