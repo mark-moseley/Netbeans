@@ -41,6 +41,13 @@
 
 package org.netbeans.modules.web.project.api;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.AntDeploymentHelper;
@@ -66,7 +73,6 @@ import org.openide.util.NbBundle;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import java.io.*;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.Enumeration;
@@ -76,15 +82,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.java.project.classpath.ProjectClassPathModifier;
 import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.api.queries.FileEncodingQuery;
 
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.common.FileSearchUtility;
+import org.netbeans.modules.j2ee.common.SharabilityUtility;
 import org.netbeans.modules.j2ee.common.project.ui.ProjectProperties;
-import org.netbeans.modules.j2ee.common.sharability.SharabilityUtilities;
 import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.j2ee.dd.api.web.WelcomeFileList;
@@ -129,10 +133,10 @@ public class WebProjectUtilities {
     private static final String WEB_INF = "WEB-INF"; //NOI18N
     private static final String SOURCE_ROOT_REF = "${" + WebProjectProperties.SOURCE_ROOT + "}"; //NOI18N
     
-    public static final String MINIMUM_ANT_VERSION = "1.6";
+    public static final String MINIMUM_ANT_VERSION = "1.6.5";
     
     private static final Logger LOGGER = Logger.getLogger(WebProjectUtilities.class.getName());
-    
+    private static String RESOURCE_FOLDER = "org/netbeans/modules/web/project/ui/resources/"; //NOI18N
     private WebProjectUtilities() {}
     
     /**
@@ -179,7 +183,7 @@ public class WebProjectUtilities {
     }
     
     private static AntProjectHelper createProjectImpl(final WebProjectCreateData createData, 
-            FileObject projectDir) throws IOException {
+            final FileObject projectDir) throws IOException {
         String name = createData.getName();
         String serverInstanceID = createData.getServerInstanceID();
         String sourceStructure = createData.getSourceStructure();
@@ -195,9 +199,12 @@ public class WebProjectUtilities {
         
         final boolean createBluePrintsStruct = SRC_STRUCT_BLUEPRINTS.equals(sourceStructure);
         final boolean createJakartaStructure = SRC_STRUCT_JAKARTA.equals(sourceStructure);
-        
+
+        final String serverLibraryName = configureServerLibrary(createData.getLibrariesDefinition(),
+                serverInstanceID, projectDir, createData.getServerLibraryName() != null);
+
         final AntProjectHelper h = setupProject(projectDir, name, serverInstanceID,
-                j2eeLevel, createData.getLibrariesDefinition(), createData.getServerLibraryName());
+                j2eeLevel, createData.getLibrariesDefinition(), serverLibraryName);
         
         FileObject srcFO = projectDir.createFolder(DEFAULT_SRC_FOLDER);
         FileObject confFolderFO = null;
@@ -213,7 +220,16 @@ public class WebProjectUtilities {
         
         //create default manifest
         if(confFolderFO != null) {
-            FileUtil.copyFile(Repository.getDefault().getDefaultFileSystem().findResource("org-netbeans-modules-web-project/MANIFEST.MF"), confFolderFO, "MANIFEST"); //NOI18N
+            String manifestText = readResource(Thread.currentThread().getContextClassLoader().getResourceAsStream(RESOURCE_FOLDER + "MANIFEST.MF")); //NOI18N
+            FileObject manifest = FileUtil.createData(confFolderFO, "MANIFEST"); //NOI18N
+            FileLock lock = manifest.lock();
+            BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(manifest.getOutputStream(lock)));
+            try {
+                bw.write(manifestText);
+            } finally {
+                bw.close();
+                lock.releaseLock();
+            }
         }
         
         //test folder
@@ -225,11 +241,11 @@ public class WebProjectUtilities {
         // PENDING : should be easier to define in layer and copy related FileObject (doesn't require systemClassLoader)
         String webXMLContent = null;
         if (J2eeModule.JAVA_EE_5.equals(j2eeLevel))
-            webXMLContent = readResource(Repository.getDefault().getDefaultFileSystem().findResource("org-netbeans-modules-web-project/web-2.5.xml").getInputStream()); //NOI18N
+            webXMLContent = readResource(Thread.currentThread().getContextClassLoader().getResourceAsStream(RESOURCE_FOLDER + "web-2.5.xml")); //NOI18N
         else if (WebModule.J2EE_14_LEVEL.equals(j2eeLevel))
-            webXMLContent = readResource(Repository.getDefault().getDefaultFileSystem().findResource("org-netbeans-modules-web-project/web-2.4.xml").getInputStream()); //NOI18N
+            webXMLContent = readResource(Thread.currentThread().getContextClassLoader().getResourceAsStream(RESOURCE_FOLDER + "web-2.4.xml")); //NOI18N
         else if (WebModule.J2EE_13_LEVEL.equals(j2eeLevel))
-            webXMLContent = readResource(Repository.getDefault().getDefaultFileSystem().findResource("org-netbeans-modules-web-project/web-2.3.xml").getInputStream()); //NOI18N
+            webXMLContent = readResource(Thread.currentThread().getContextClassLoader().getResourceAsStream(RESOURCE_FOLDER + "web-2.3.xml")); //NOI18N
         assert webXMLContent != null : "Cannot find web.xml template for J2EE specification level:" + j2eeLevel;
         final String webXmlText = webXMLContent;
         FileObject webXML = FileUtil.createData(webInfFO, "web.xml");//NOI18N
@@ -281,6 +297,8 @@ public class WebProjectUtilities {
         if(createJakartaStructure) {
             ep.setProperty(WebProjectProperties.CONF_DIR, DEFAULT_CONF_FOLDER);
         }
+        // Default to conf.dir
+        ep.setProperty(WebProjectProperties.PERSISTENCE_XML_DIR, "${"+WebProjectProperties.CONF_DIR+"}"); //NOI18N
         
         ep.setProperty(WebProjectProperties.RESOURCE_DIR, DEFAULT_RESOURCE_FOLDER);
         ep.setProperty(WebProjectProperties.LIBRARIES_DIR, "${" + WebProjectProperties.WEB_DOCBASE_DIR + "}/" + WEB_INF + "/lib"); //NOI18N
@@ -448,8 +466,11 @@ public class WebProjectUtilities {
         assert serverInstanceID != null: "Server instance ID can't be null"; //NOI18N
         assert j2eeLevel != null: "Java EE version can't be null"; //NOI18N
         
+        final String serverLibraryName = configureServerLibrary(createData.getLibrariesDefinition(),
+                serverInstanceID, projectDir, createData.getServerLibraryName() != null);
+        
         final AntProjectHelper antProjectHelper = setupProject(projectDir, name,
-                serverInstanceID, j2eeLevel, createData.getLibrariesDefinition(), createData.getServerLibraryName());
+                serverInstanceID, j2eeLevel, createData.getLibrariesDefinition(), serverLibraryName);
         
         final WebProject p = (WebProject) ProjectManager.getDefault().findProject(antProjectHelper.getProjectDirectory());
         final ReferenceHelper referenceHelper = p.getReferenceHelper();
@@ -500,7 +521,7 @@ public class WebProjectUtilities {
                     } else {
                         for (int i=0; i<testFolders.length; i++) {
                             if (!testFolders[i].exists()) {
-                                testFolders[i].mkdirs();
+                                FileUtil.createFolder(testFolders[i]);
                             }
 
                             String name = testFolders[i].getName();
@@ -545,7 +566,7 @@ public class WebProjectUtilities {
                         libs.add(URLMapper.findURL(FileUtil.getArchiveRoot(children[i]), URLMapper.EXTERNAL));
                     }
                 }
-                ProjectClassPathModifier.addRoots(libs.toArray(new URL[libs.size()]), p.getSourceRoots().getRoots()[0], ClassPath.COMPILE);
+                p.getClassPathModifier().addRoots(libs.toArray(new URL[libs.size()]), ProjectProperties.JAVAC_CLASSPATH);
                 //do we really need to add the listener? commenting it out
                 //libFolder.addFileChangeListener(p);
             }
@@ -570,8 +591,19 @@ public class WebProjectUtilities {
             // if no conf directory was found, create default directory (#82147)
             projectDir.createFolder(DEFAULT_CONF_FOLDER);
             ep.setProperty(WebProjectProperties.CONF_DIR, DEFAULT_CONF_FOLDER);
-        } else
+        } else {
             ep.setProperty(WebProjectProperties.CONF_DIR, confDir); //NOI18N
+        }
+        // Default to conf.dir
+        ep.setProperty(WebProjectProperties.PERSISTENCE_XML_DIR, "${"+WebProjectProperties.CONF_DIR+"}"); //NOI18N
+        
+        // #142164: try to find persistence.xml under project's source roots - that's where Eclipse stores is by default
+        for (int i=0; i<sourceFolders.length; i++) {
+            if (new File(sourceFolders[i], "META-INF"+File.separatorChar+"persistence.xml").exists()) { //NOI18N
+                ep.setProperty(WebProjectProperties.PERSISTENCE_XML_DIR, "${src.dir}" + (i == 0 ? "" : Integer.toString(i+1))+"/META-INF"); //NOI18N
+                break;
+            }
+        }
         
         //create resource.dir property, by default set to "setup"
         //(it would be nice to have a possibily to set this property in the wizard)
@@ -607,16 +639,31 @@ public class WebProjectUtilities {
         if (rh.getProjectLibraryManager().getLibrary("junit_4") == null) { // NOI18N
             rh.copyLibrary(LibraryManager.getDefault().getLibrary("junit_4")); // NOI18N
         }
-
-        if (h.isSharableProject() && data.getServerLibraryName() != null  && SharabilityUtilities.getLibrary(
-                h.resolveFile(h.getLibrariesLocation()), data.getServerLibraryName()) == null) {
-
-            SharabilityUtilities.createLibrary(
-                h.resolveFile(h.getLibrariesLocation()), data.getServerLibraryName(),
-                data.getServerInstanceID());
+        if (rh.getProjectLibraryManager().getLibrary("CopyLibs") == null) {
+            rh.copyLibrary(LibraryManager.getDefault().getLibrary("CopyLibs")); // NOI18N
         }
     }
-    
+
+    private static String configureServerLibrary(final String librariesDefinition,
+            final String serverInstanceId, final FileObject projectDir, final boolean serverLibrary) {
+
+        String serverLibraryName = null;
+        if (librariesDefinition != null && serverLibrary) {
+            try {
+                serverLibraryName = ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<String>() {
+                    public String run() throws Exception {
+                        return SharabilityUtility.findOrCreateLibrary(
+                                PropertyUtils.resolveFile(FileUtil.toFile(projectDir), librariesDefinition),
+                                serverInstanceId).getName();
+                    }
+                });
+            } catch (MutexException ex) {
+                Exceptions.printStackTrace(ex.getException());
+            }
+        }
+        return serverLibraryName;
+    }
+
     private static String createFileReference(ReferenceHelper refHelper, FileObject projectFO, FileObject sourceprojectFO, FileObject referencedFO) {
         if (FileUtil.isParentOf(projectFO, referencedFO)) {
             return relativePath(projectFO, referencedFO);
@@ -638,6 +685,10 @@ public class WebProjectUtilities {
     
     private static AntProjectHelper setupProject(FileObject dirFO, String name, 
             String serverInstanceID, String j2eeLevel, String librariesDefinition, String serverLibraryName) throws IOException {
+
+        Utils.logUI(NbBundle.getBundle(WebProjectUtilities.class), "UI_WEB_PROJECT_CREATE_SHARABILITY", // NOI18N
+                new Object[]{Boolean.valueOf(librariesDefinition != null), Boolean.valueOf(serverLibraryName != null)});
+
         AntProjectHelper h = ProjectGenerator.createProject(dirFO, WebProjectType.TYPE, librariesDefinition);
         Element data = h.getPrimaryConfigurationData(true);
         Document doc = data.getOwnerDocument();
@@ -661,15 +712,28 @@ public class WebProjectUtilities {
         ep.setProperty(WebProjectProperties.DIST_WAR, "${"+WebProjectProperties.DIST_DIR+"}/${" + WebProjectProperties.WAR_NAME + "}"); // NOI18N
         ep.setProperty(WebProjectProperties.DIST_WAR_EAR, "${" + WebProjectProperties.DIST_DIR+"}/${" + WebProjectProperties.WAR_EAR_NAME + "}"); //NOI18N
         
-        ep.setProperty(ProjectProperties.JAVAC_CLASSPATH, ""); // NOI18N
         Deployment deployment = Deployment.getDefault();
         String serverType = deployment.getServerID(serverInstanceID);
         
         if (h.isSharableProject() && serverLibraryName != null) {
-            ep.setProperty(WebProjectProperties.J2EE_PLATFORM_CLASSPATH, "${libs." + serverLibraryName + ".classpath}"); //NOI18N
+            // TODO constants
+            ep.setProperty(ProjectProperties.JAVAC_CLASSPATH,
+                    "${libs." + serverLibraryName + "." + "classpath" + "}"); // NOI18N
+            ep.setProperty(WebProjectProperties.J2EE_PLATFORM_CLASSPATH,
+                    "${libs." + serverLibraryName + "." + "classpath" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSCOMPILE_CLASSPATH,
+                    "${libs." + serverLibraryName + "." + "wscompile" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIMPORT_CLASSPATH,
+                    "${libs." + serverLibraryName + "." + "wsimport" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSGEN_CLASSPATH,
+                    "${libs." + serverLibraryName + "." + "wsgenerate" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIT_CLASSPATH, 
+                    "${libs." + serverLibraryName + "." + "wsinterop" + "}"); //NOI18N
+            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_JWSDP_CLASSPATH, 
+                    "${libs." + serverLibraryName + "." + "wsjwsdp" + "}"); //NOI18N
+        } else {
+            ep.setProperty(ProjectProperties.JAVAC_CLASSPATH, ""); // NOI18N
         }
-        ep.setProperty(WebProjectProperties.J2EE_PLATFORM_SHARED,
-                Boolean.toString(h.isSharableProject() && serverLibraryName != null));
         
         
         ep.setProperty(WebProjectProperties.JSPCOMPILATION_CLASSPATH, "${jspc.classpath}:${javac.classpath}");
@@ -686,6 +750,9 @@ public class WebProjectUtilities {
         ep.setProperty(WebProjectProperties.LAUNCH_URL_RELATIVE, ""); // NOI18N
         ep.setProperty(WebProjectProperties.DISPLAY_BROWSER, "true"); // NOI18N
 
+        // deploy on save since nb 6.5
+        ep.setProperty(WebProjectProperties.DISABLE_DEPLOY_ON_SAVE, "false"); // NOI18N
+        
         ep.setProperty(WebProjectProperties.J2EE_SERVER_TYPE, serverType);
         
         ep.setProperty(WebProjectProperties.JAVAC_DEBUG, "true"); // NOI18N
@@ -723,8 +790,8 @@ public class WebProjectUtilities {
         // #113297, #118187
         ep.setProperty(WebProjectProperties.DEBUG_CLASSPATH, Utils.getDefaultDebugClassPath());
         
-        ep.setProperty("runmain.jvmargs", ""); // NOI18N
-        ep.setComment("runmain.jvmargs", new String[] { // NOI18N
+        ep.setProperty(WebProjectProperties.RUNMAIN_JVM_ARGS, ""); // NOI18N
+        ep.setComment(WebProjectProperties.RUNMAIN_JVM_ARGS, new String[] { // NOI18N
             "# " + NbBundle.getMessage(WebProjectUtilities.class, "COMMENT_runmain.jvmargs"), // NOI18N
             "# " + NbBundle.getMessage(WebProjectUtilities.class, "COMMENT_runmain.jvmargs_2"), // NOI18N
         }, false);
@@ -763,27 +830,39 @@ public class WebProjectUtilities {
         if (!h.isSharableProject() || serverLibraryName == null) {
             String classpath = Utils.toClasspathString(j2eePlatform.getClasspathEntries());
             ep.setProperty(WebProjectProperties.J2EE_PLATFORM_CLASSPATH, classpath);
-        }
-        
-        // set j2ee.platform.wscompile.classpath
-        if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSCOMPILE)) {
-            File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSCOMPILE);
-            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSCOMPILE_CLASSPATH,
-                    Utils.toClasspathString(wsClasspath));
-        }
-        
-        // set j2ee.platform.wsimport.classpath
-        if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSIMPORT)) {
-            File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSIMPORT);
-            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIMPORT_CLASSPATH,
-                    Utils.toClasspathString(wsClasspath));
-        }
-        
-        // set j2ee.platform.wsgen.classpath
-        if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSGEN)) {
-            File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSGEN);
-            ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSGEN_CLASSPATH,
-                    Utils.toClasspathString(wsClasspath));
+
+            // set j2ee.platform.wscompile.classpath
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSCOMPILE)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSCOMPILE);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSCOMPILE_CLASSPATH,
+                        Utils.toClasspathString(wsClasspath));
+            }
+
+            // set j2ee.platform.wsimport.classpath
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSIMPORT)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSIMPORT);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIMPORT_CLASSPATH,
+                        Utils.toClasspathString(wsClasspath));
+            }
+
+            // set j2ee.platform.wsgen.classpath
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSGEN)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSGEN);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSGEN_CLASSPATH,
+                        Utils.toClasspathString(wsClasspath));
+            }
+            
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSIT)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_WSIT);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_WSIT_CLASSPATH, 
+                        Utils.toClasspathString(wsClasspath));
+            }
+
+            if (j2eePlatform.isToolSupported(J2eePlatform.TOOL_JWSDP)) {
+                File[] wsClasspath = j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_JWSDP);
+                ep.setProperty(WebServicesConstants.J2EE_PLATFORM_JWSDP_CLASSPATH, 
+                        Utils.toClasspathString(wsClasspath));
+            }           
         }
         
         // set j2ee.platform.jsr109 support
@@ -813,16 +892,20 @@ public class WebProjectUtilities {
     private static String readResource(InputStream is) throws IOException {
         // read the config from resource first
         StringBuffer sb = new StringBuffer();
-        String lineSep = System.getProperty("line.separator");//NOI18N
+        String lineSep = System.getProperty("line.separator"); // NOI18N
         BufferedReader br = new BufferedReader(new InputStreamReader(is));
-        String line = br.readLine();
-        while (line != null) {
-            sb.append(line);
-            sb.append(lineSep);
-            line = br.readLine();
+        try {
+            String line = br.readLine();
+            while (line != null) {
+                sb.append(line);
+                sb.append(lineSep);
+                line = br.readLine();
+            }
+        } finally {
+            br.close();
         }
-        br.close();
+
         return sb.toString();
     }
-    
+
 }
