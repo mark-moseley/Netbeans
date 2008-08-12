@@ -43,10 +43,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.logging.Logger;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.NewFileWizardOperator;
 import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
@@ -55,19 +55,19 @@ import org.netbeans.jellytools.OutputOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.actions.Action;
+import org.netbeans.jellytools.modules.j2ee.J2eeTestCase;
 import org.netbeans.jellytools.modules.j2ee.nodes.J2eeServerNode;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.ProjectRootNode;
 import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.TimeoutExpiredException;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JComboBoxOperator;
 import org.netbeans.jemmy.operators.JDialogOperator;
 import org.netbeans.jemmy.operators.JTabbedPaneOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.jemmy.operators.Operator;
-import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.modules.project.ui.test.ProjectSupport;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 
@@ -75,9 +75,10 @@ import org.openide.filesystems.FileUtil;
  * Base class for web services UI tests
  * @author lukas
  */
-public abstract class WebServicesTestBase extends JellyTestCase {
+public abstract class WebServicesTestBase extends J2eeTestCase {
 
     protected static final ServerType REGISTERED_SERVER;
+    private static final Logger LOGGER = Logger.getLogger(WebServicesTestBase.class.getName());
     private Project project;
     private String projectName;
     private ProjectType projectType;
@@ -167,7 +168,6 @@ public abstract class WebServicesTestBase extends JellyTestCase {
                     return -1;
                 case WEB:
                 case EJB:
-                    return 1;
                 case APPCLIENT:
                     return 0;
             }
@@ -185,9 +185,8 @@ public abstract class WebServicesTestBase extends JellyTestCase {
                     return -1;
                 case WEB:
                 case APPCLIENT:
-                    return 2;
                 case EJB:
-                    return 0;
+                    return 1;
             }
             throw new AssertionError("Unknown type: " + this); //NOI18N
         }
@@ -206,10 +205,11 @@ public abstract class WebServicesTestBase extends JellyTestCase {
             switch (this) {
                 case J2EE14:
                     //J2EE 1.4
-                    return Bundle.getStringTrimmed("org.netbeans.modules.web.project.ui.wizards.Bundle", "J2EESpecLevel_14");
+                    return Bundle.getStringTrimmed("org.netbeans.modules.j2ee.common.project.ui.Bundle", "J2EESpecLevel_14");
                 case JAVAEE5:
                     //Java EE 5
-                    return Bundle.getStringTrimmed("org.netbeans.modules.web.project.ui.wizards.Bundle", "JavaEESpecLevel_50");
+                    return Bundle.getStringTrimmed("org.netbeans.modules.j2ee.common.project.ui.Bundle", "JavaEESpecLevel_50");
+
             }
             throw new AssertionError("Unknown type: " + this); //NOI18N
         }
@@ -255,11 +255,11 @@ public abstract class WebServicesTestBase extends JellyTestCase {
             switch (this) {
                 case SJSAS:
                 case GLASSFISH:
-                    return System.getProperty("com.sun.aas.installRoot") != null; //NOI18N
+                    return System.getProperty("glassfish.home") != null; //NOI18N
                 case TOMCAT:
-                    return System.getProperty("org.netbeans.modules.tomcat.autoregister.catalinaHome") != null; //NOI18N
+                    return System.getProperty("tomcat.home") != null; //NOI18N
                 case JBOSS:
-                    return System.getProperty("org.netbeans.modules.j2ee.jboss4.installRoot") != null; //NOI18N
+                    return System.getProperty("jboss.home") != null; //NOI18N
             }
             throw new AssertionError("Unknown type: " + this); //NOI18N
         }
@@ -343,10 +343,9 @@ public abstract class WebServicesTestBase extends JellyTestCase {
      *  <li>look for a project in <i>projects</i> directory in data directory
      *      and if project is found there then open it in the IDE
      *  </li>
-     *  <li>look for a project in <code>System.getProperty("xtest.tmpdir")</code>
-     *      (if test is run by <i>XTest</i>) or
-     *      in <code>System.getProperty("java.io.tmpdir")</code> directory
-     *      (if internal execution is used), if project is found then open it
+     *  <li>look for a project in <code>getWorkDir().getParentFile().getParentFile()</code>
+     *      or in <code>System.getProperty("java.io.tmpdir")</code> directory
+     *      (if some parent file does not exist), if project is found then open it
      *      in the IDE</li>
      *  <li>if project is not found then it will be created from scratch</li>
      * </ol>
@@ -366,17 +365,14 @@ public abstract class WebServicesTestBase extends JellyTestCase {
             File projectRoot = new File(getDataDir(), "projects/" + getProjectName()); //NOI18N
             if (projectRoot.exists()) {
                 project = (Project) ProjectSupport.openProject(new File(getDataDir(), "projects/" + getProjectName()));
+                checkMissingServer(getProjectName());
             } else {
-                if (System.getProperty("xtest.tmpdir") != null) { //NOI18N
-                    //XTest execution
-                    projectRoot = new File(System.getProperty("xtest.tmpdir"), getProjectName()); //NOI18N
-                } else {
-                    //Internal-execution
-                    projectRoot = new File(System.getProperty("java.io.tmpdir"), getProjectName()); //NOI18N
-                }
+                projectRoot = new File(getProjectsRootDir(), projectName);
+                LOGGER.info("Using project in: " + projectRoot.getAbsolutePath()); //NOI18N
                 if (!projectRoot.exists()) {
                     project = createProject(projectName, getProjectType(), getJavaEEversion());
                 } else {
+                    openProjects(projectRoot.getAbsolutePath());
                     FileObject fo = FileUtil.toFileObject(FileUtil.normalizeFile(projectRoot));
                     assertNotNull("FO cannot be null", fo); //NOI18N
                     project = ProjectManager.getDefault().findProject(fo);
@@ -444,33 +440,30 @@ public abstract class WebServicesTestBase extends JellyTestCase {
             op.txtLocation().setText(getWorkDirPath());
         } else {
             File projectLocation = null;
-            if (System.getProperty("xtest.tmpdir") != null) { //NOI18N
-                //XTest execution
-                projectLocation = new File(System.getProperty("xtest.tmpdir")); //NOI18N
-            } else {
-                //Internal-execution
-                projectLocation = new File(System.getProperty("java.io.tmpdir")); //NOI18N
-            }
+            projectLocation = getProjectsRootDir();
             op.txtProjectLocation().setText(projectLocation.getAbsolutePath());
-            if (!ProjectType.JAVASE_APPLICATION.equals(type)) {
-                //choose server type and Java EE version
-                JComboBoxOperator jcboServer = new JComboBoxOperator(op, type.getServerComboBoxIndex());
-                jcboServer.selectItem(REGISTERED_SERVER.toString());
-                JComboBoxOperator jcboVersion = new JComboBoxOperator(op, type.getServerVersionComboBoxIndex());
-                jcboVersion.selectItem(javaeeVersion.toString());
-            }
+        }
+        LOGGER.info("Creating project in: " + op.txtProjectLocation().getText()); //NOI18N
+        if (!(ProjectType.SAMPLE.equals(type) || ProjectType.JAVASE_APPLICATION.equals(type))) {
+            //second panel in New Web, Ejb and AppClient project wizards
+            op.next();
+            //choose server type and Java EE version
+            JComboBoxOperator jcboServer = new JComboBoxOperator(op, type.getServerComboBoxIndex());
+            jcboServer.selectItem(REGISTERED_SERVER.toString());
+            JComboBoxOperator jcboVersion = new JComboBoxOperator(op, type.getServerVersionComboBoxIndex());
+            jcboVersion.selectItem(javaeeVersion.toString());
         }
         op.finish();
         // Opening Projects
         String openingProjectsTitle = Bundle.getStringTrimmed("org.netbeans.modules.project.ui.Bundle", "LBL_Opening_Projects_Progress");
         waitDialogClosed(openingProjectsTitle);
         if (ProjectType.SAMPLE.equals(type)) {
-            checkMissingServer(projectName);
+            checkMissingServer(name);
         }
         // wait project appear in projects view
         ProjectRootNode node = ProjectsTabOperator.invoke().getProjectRootNode(name);
         // wait classpath scanning finished
-        ProjectSupport.waitScanFinished();
+        org.netbeans.junit.ide.ProjectSupport.waitScanFinished();
         // get a project instance to return
         Project p = ((org.openide.nodes.Node) node.getOpenideNode()).getLookup().lookup(Project.class);
         assertNotNull("Project instance has not been found", p);
@@ -570,11 +563,11 @@ public abstract class WebServicesTestBase extends JellyTestCase {
         }
         appsNode.expand();
         appsNode.callPopup().pushMenu(refreshLabel);
-        if (appsNode.isChildPresent(projectName)) {
-            Node n = new Node(appsNode, projectName);
-            n.callPopup().pushMenu(undeployLabel);
-            new EventTool().waitNoEvent(2000);
-        }
+        // needed for slower machines
+        JemmyProperties.setCurrentTimeout("JTreeOperator.WaitNextNodeTimeout", 30000); //NOI18N
+        Node n = new Node(appsNode, projectName);
+        n.callPopup().pushMenu(undeployLabel);
+        new EventTool().waitNoEvent(2000);
         appsNode.callPopup().pushMenu(refreshLabel);
         new EventTool().waitNoEvent(2000);
         dumpOutput();
@@ -665,7 +658,7 @@ public abstract class WebServicesTestBase extends JellyTestCase {
         }
     }
 
-    private void checkMissingServer(String project) {
+    protected void checkMissingServer(String project) {
         // check missing target server dialog is shown
         // "Open Project"
         String openProjectTitle = Bundle.getString("org.netbeans.modules.j2ee.common.ui.Bundle", "MSG_Broken_Server_Title");
@@ -694,6 +687,22 @@ public abstract class WebServicesTestBase extends JellyTestCase {
             propertiesDialogOper.ok();
         }
         // if setting default server, it scans server jars; otherwise it continues immediatelly
-        ProjectSupport.waitScanFinished();
+        org.netbeans.junit.ide.ProjectSupport.waitScanFinished();
+    }
+
+    private File getProjectsRootDir() throws IOException {
+        File f = getWorkDir();
+        LOGGER.fine("Working directory is set to: " + f.getAbsolutePath());
+        if (f != null) {
+            f = f.getParentFile();
+            if (f != null) {
+                f = f.getParentFile();
+            } else {
+                return new File(System.getProperty("java.io.tmpdir"));
+            }
+        } else {
+            return new File(System.getProperty("java.io.tmpdir"));
+        }
+        return f;
     }
 }
