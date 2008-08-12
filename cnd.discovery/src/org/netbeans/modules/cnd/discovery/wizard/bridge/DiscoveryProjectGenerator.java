@@ -43,15 +43,14 @@ package org.netbeans.modules.cnd.discovery.wizard.bridge;
 
 import java.io.File;
 import java.io.IOException;
-import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.Vector;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.discovery.api.ItemProperties;
 import org.netbeans.modules.cnd.discovery.wizard.api.DiscoveryDescriptor;
@@ -59,14 +58,9 @@ import org.netbeans.modules.cnd.discovery.wizard.api.FileConfiguration;
 import org.netbeans.modules.cnd.discovery.wizard.api.ProjectConfiguration;
 import org.netbeans.modules.cnd.discovery.wizard.checkedtree.AbstractRoot;
 import org.netbeans.modules.cnd.discovery.wizard.checkedtree.UnusedFactory;
-import org.netbeans.modules.cnd.discovery.wizard.tree.FileSystemFactory;
-import org.netbeans.modules.cnd.loaders.HDataLoader;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Folder;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
 /**
@@ -92,7 +86,7 @@ public class DiscoveryProjectGenerator {
         }
     }
     
-    public Set makeProject(){
+    public void process(){
         List<ProjectConfiguration> projectConfigurations = wizard.getConfigurations();
         Folder sourceRoot = projectBridge.getRoot();
         level = wizard.getLevel();
@@ -103,12 +97,16 @@ public class DiscoveryProjectGenerator {
         }
         // add other files
         addAdditional(sourceRoot, baseFolder, used);
+        projectBridge.save();
+    }
+    
+    public Set makeProject(){
+        process();
         return projectBridge.getResult();
     }
     
     private Set<String> getSourceFolders(){
         Set<String> used = new HashSet<String>();
-        Set<String> folders = new HashSet<String>();
         List<ProjectConfiguration> projectConfigurations = wizard.getConfigurations();
         for (ProjectConfiguration conf : projectConfigurations) {
             for (FileConfiguration file : conf.getFiles()){
@@ -194,7 +192,7 @@ public class DiscoveryProjectGenerator {
             }
         }
         if (needAdd.size()>0) {
-            addNewExtension(needAdd);
+            projectBridge.checkForNewExtensions(needAdd);
             AbstractRoot additional = UnusedFactory.createRoot(needAdd);
             addAdditionalFolder(folder, additional);
         }
@@ -215,7 +213,6 @@ public class DiscoveryProjectGenerator {
                 sorted.put(item.getPath(),item);
             }
         }
-        Map<String,Item> unused = new HashMap<String,Item>();
         for (Map.Entry<String,Item> entry : sorted.entrySet()){
             String path = entry.getKey();
             Item item = entry.getValue();
@@ -223,59 +220,12 @@ public class DiscoveryProjectGenerator {
             if (!(relatives.contains(path) || used.contains(path) ||
                   relatives.contains(canonicalPath) || used.contains(canonicalPath))) {
                 // remove item;
-                Folder parent = item.getFolder();
                 if (DEBUG) System.out.println("Exclude Item "+path); // NOI18N
                 projectBridge.setExclude(item,true);
             }
         }
     }
 
-    private void addNewExtension(Set<String> needAdd){
-        Set<String> headerExtension = FileSystemFactory.getHeaderSuffixes();
-        Set<String> sourceExtension = FileSystemFactory.getSourceSuffixes();
-        Set<String> usedExtension = FileSystemFactory.createExtensionSet();
-        for(String name : needAdd){
-            name = name.replace('\\','/');
-            int i = name.lastIndexOf('/');
-            if (i >= 0){
-                name = name.substring(i);
-            }
-            i = name.lastIndexOf('.');
-            if (i > 0){
-                String extension = name.substring(i+1);
-                if (extension.length()>0) {
-                    if (!headerExtension.contains(extension) && !sourceExtension.contains(extension)){
-                        usedExtension.add(extension);
-                    }
-                }
-            }
-        }
-        if (usedExtension.size()>0 && addNewExtensionDialog(usedExtension)){
-            // add unknown extensin to HDataLoader
-            HDataLoader.getInstance().addExtensions(usedExtension);
-        }
-    }
-    
-    private boolean addNewExtensionDialog(Set<String> usedExtension) {
-        String message = getString("ADD_EXTENSION_QUESTION"+(usedExtension.size()==1?"":"S")); // NOI18N
-        StringBuilder extensions = new StringBuilder();
-        for(String ext : usedExtension){
-            if (extensions.length()>0){
-                extensions.append(',');
-            }
-            extensions.append(ext);
-        }
-        NotifyDescriptor d = new NotifyDescriptor.Confirmation(
-                MessageFormat.format(message, new Object[]{extensions.toString()}),
-                getString("ADD_EXTENSION_DIALOG_TITLE"+(usedExtension.size()==1?"":"S")), // NOI18N
-                NotifyDescriptor.YES_NO_OPTION); 
-        return DialogDisplayer.getDefault().notify(d) == NotifyDescriptor.YES_OPTION;
-    }
-
-    private String getString(String key) {
-        return NbBundle.getBundle(DiscoveryProjectGenerator.class).getString(key);
-    }
-    
     private void addAdditionalFolder(Folder folder, AbstractRoot used){
         String name = used.getName();
         Folder added = folder.findFolderByName(name);
@@ -320,28 +270,27 @@ public class DiscoveryProjectGenerator {
                 reConsolidatePaths(set, file);
                 macros.putAll(file.getUserMacros());
             }
-            Vector<String> vector = new Vector<String>(set);
-            String buf = buildMacrosString(macros);
+            List<String> vector = new ArrayList<String>(set);
+            List<String> buf = buildMacrosString(macros);
             projectBridge.setupProject(vector, buf, config.getLanguageKind() == ItemProperties.LanguageKind.CPP);
         } else {
             // cleanup project configuration
-            Vector<String> vector = new Vector<String>();
-            String buf = "";// NOI18N
+            List<String> vector = Collections.<String>emptyList();
+            List<String> buf = Collections.<String>emptyList();
             projectBridge.setupProject(vector, buf, config.getLanguageKind() == ItemProperties.LanguageKind.CPP);
         }
     }
     
-    private String buildMacrosString(final Map<String, String> map) {
-        StringBuilder buf = new StringBuilder();
+    private List<String> buildMacrosString(final Map<String, String> map) {
+        List<String> vector = new ArrayList<String>();
         for(Map.Entry<String,String> entry : map.entrySet()){
-            buf.append(entry.getKey());
             if (entry.getValue()!=null) {
-                buf.append('=');
-                buf.append(entry.getValue());
+                vector.add(entry.getKey()+"="+entry.getValue()); // NOI18N
+            } else {
+                vector.add(entry.getKey());
             }
-            buf.append('\n');
         }
-        return buf.toString();
+        return vector;
     }
     
     private void setupFile(FileConfiguration config, Item item, boolean isCPP) {
@@ -351,13 +300,13 @@ public class DiscoveryProjectGenerator {
             Map<String,String> macros = new HashMap<String,String>();
             reConsolidatePaths(set, config);
             macros.putAll(config.getUserMacros());
-            Vector<String> vector = new Vector<String>(set);
-            String buf = buildMacrosString(macros);
+            List<String> vector = new ArrayList<String>(set);
+            List<String> buf = buildMacrosString(macros);
             projectBridge.setupFile(config.getCompilePath(), vector, !config.overrideIncludes(), buf, !config.overrideMacros(), item);
         } else {
             // cleanup file configuration
-            Vector<String> vector = new Vector<String>();
-            String buf = "";// NOI18N
+            List<String> vector = Collections.<String>emptyList();
+            List<String> buf = Collections.<String>emptyList();
             projectBridge.setupFile(config.getCompilePath(), vector, true, buf, true, item);
         }
     }
@@ -383,9 +332,9 @@ public class DiscoveryProjectGenerator {
     
     private boolean isDifferentCompilePath(String name, String path){
         if (Utilities.isWindows()) {
-            name = name.replace('\\', '/');
+            name = name.replace('\\', '/'); // NOI18N
         }
-        int i = name.lastIndexOf('/');
+        int i = name.lastIndexOf('/'); // NOI18N
         if (i > 0) {
             name = name.substring(0,i);
             if (!name.equals(path)) {
@@ -406,7 +355,6 @@ public class DiscoveryProjectGenerator {
             // reconsolidate folders;
             Map<Folder,Set<FileConfiguration>> folders = new HashMap<Folder,Set<FileConfiguration>>();
             for(Map.Entry<String,Set<Pair>> entry : configurationStructure.entrySet()){
-                String path = entry.getKey();
                 Set<Pair> files = entry.getValue();
                 for(Pair pair : files){
                     if (pair.item != null) {
@@ -418,7 +366,7 @@ public class DiscoveryProjectGenerator {
                         }
                         content.add(pair.fileConfiguration);
                     } else {
-                        if (DEBUG) System.err.println("Cannot find pair by path "+pair.fileConfiguration.getFilePath());
+                        if (DEBUG) System.err.println("Cannot find pair by path "+pair.fileConfiguration.getFilePath()); // NOI18N
                     }
                 }
             }
@@ -431,8 +379,8 @@ public class DiscoveryProjectGenerator {
                     reConsolidatePaths(inludes, file);
                     macros.putAll(file.getUserMacros());
                 }
-                String buf = buildMacrosString(macros);
-                Vector<String> vector = new Vector<String>(inludes);
+                List<String> buf = buildMacrosString(macros);
+                List<String> vector = new ArrayList<String>(inludes);
                 projectBridge.setupFolder(vector, false,
                         buf, false, conf.getLanguageKind()==ItemProperties.LanguageKind.CPP, folder);
             }
@@ -449,8 +397,8 @@ public class DiscoveryProjectGenerator {
                 }
             }
             for(Folder folder : folders){
-                String buf = ""; // NOI18N
-                Vector<String> vector = new Vector<String>();
+                List<String> buf = Collections.<String>emptyList();
+                List<String> vector = Collections.<String>emptyList();
                 projectBridge.setupFolder(vector, true,
                         buf, true, conf.getLanguageKind()==ItemProperties.LanguageKind.CPP, folder);
             }
@@ -493,12 +441,12 @@ public class DiscoveryProjectGenerator {
                     item = projectBridge.createItem(file);
                     added.addItem(item);
                 } else {
-                    if (DEBUG) System.err.println("Orphan pair found by path "+file);
+                    if (DEBUG) System.err.println("Orphan pair found by path "+file); // NOI18N
                 }
                 pair.item = item;
                 setupFile(pair.fileConfiguration, pair.item, isCPP);
             } else {
-                if (DEBUG) System.err.println("Cannot find pair by path "+file);
+                if (DEBUG) System.err.println("Cannot find pair by path "+file); // NOI18N
             }
         }
     }
@@ -508,7 +456,6 @@ public class DiscoveryProjectGenerator {
         Map<String,Folder> preffered = prefferedFolders();
         List<Pair> orphan = new ArrayList<Pair>();
         for(Map.Entry<String,Set<Pair>> entry : configurationStructure.entrySet()){
-            String path = entry.getKey();
             Set<Pair> files = entry.getValue();
             Folder folder = null;
             List<Pair> list = new ArrayList<Pair>();
@@ -521,26 +468,26 @@ public class DiscoveryProjectGenerator {
                 } else {
                     String prefferedFolder = pair.fileConfiguration.getFilePath();
                     if (Utilities.isWindows()) {
-                        prefferedFolder = prefferedFolder.replace('\\', '/');
+                        prefferedFolder = prefferedFolder.replace('\\', '/'); // NOI18N
                     }
-                    int i = prefferedFolder.lastIndexOf('/');
+                    int i = prefferedFolder.lastIndexOf('/'); // NOI18N
                     if (i >= 0){
                         prefferedFolder = prefferedFolder.substring(0,i);
                         folder = preffered.get(prefferedFolder);
                     }
-                    if (folder == null) {
+                    //if (folder == null) {
                         list.add(pair);
-                    }
+                    //}
                 }
             }
             if (folder != null) {
                 for(Pair pair : list){
                     String relPath = projectBridge.getRelativepath(pair.fileConfiguration.getFilePath());
-                    Item item = projectBridge.getProjectItem(path);
+                    Item item = projectBridge.getProjectItem(relPath);
                     if (item == null){
                         item = projectBridge.createItem(pair.fileConfiguration.getFilePath());
-                        folder.addItem(item);
                         pair.item = item;
+                        folder.addItem(item);
                     }
                     setupFile(pair.fileConfiguration, item, isCPP);
                 }
