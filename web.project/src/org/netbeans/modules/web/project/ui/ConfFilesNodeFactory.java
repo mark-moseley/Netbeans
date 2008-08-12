@@ -54,9 +54,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.swing.Icon;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
@@ -84,6 +82,7 @@ import org.openide.filesystems.FileStatusEvent;
 import org.openide.filesystems.FileStatusListener;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
+import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -92,13 +91,11 @@ import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Exceptions;
-import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
-import org.openide.util.actions.CookieAction;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.Lookups;
 
@@ -178,7 +175,6 @@ public final class ConfFilesNodeFactory implements NodeFactory {
     private static final class ConfFilesNode extends org.openide.nodes.AbstractNode implements Runnable, FileStatusListener, ChangeListener, PropertyChangeListener {
 
         private static final Image CONFIGURATION_FILES_BADGE = Utilities.loadImage("org/netbeans/modules/web/project/ui/resources/config-badge.gif", true); // NOI18N
-        private Node projectNode;
 
         // icon badging >>>
         private Set files;
@@ -190,65 +186,40 @@ public final class ConfFilesNodeFactory implements NodeFactory {
         private ChangeListener sourcesListener;
         private Map groupsListeners;
         private final Project project;
-        // icon badging <<<
-        private String iconbase = "org/openide/loaders/defaultFolder.gif";
+        private  Node iconDelegate;
 
         public ConfFilesNode(Project prj) {
             super(ConfFilesChildren.forProject(prj), createLookup(prj));
             this.project = prj;
             setName("configurationFiles"); // NOI18N
-            setIconBaseWithExtension(iconbase);
-
-            FileObject projectDir = prj.getProjectDirectory();
-            try {
-                DataObject projectDo = DataObject.find(projectDir);
-                if (projectDo != null) {
-                    projectNode = projectDo.getNodeDelegate();
-                }
-            } catch (DataObjectNotFoundException e) {
-            }
+            iconDelegate = DataFolder.findFolder (Repository.getDefault().getDefaultFileSystem().getRoot()).getNodeDelegate();
         }
 
+        @Override
         public Image getIcon(int type) {
-            Image img = computeIcon(false, type);
-            return (img != null) ? img : super.getIcon(type);
+            return computeIcon(false, type);
         }
 
+        @Override
         public Image getOpenedIcon(int type) {
-            Image img = computeIcon(true, type);
-            return (img != null) ? img : super.getIcon(type);
+            return computeIcon(true, type);
         }
 
         private Image computeIcon(boolean opened, int type) {
-            if (projectNode == null) {
-                return null;
-            }
-            Image image = opened ? icon2image("Tree.openIcon") : icon2image("Tree.closedIcon"); //NOI18N
-            if (null == image) {
-                image = opened ? super.getOpenedIcon(type) : super.getIcon(type);
-            }
+            Image image;
+
+            image = opened ? iconDelegate.getOpenedIcon(type) : iconDelegate.getIcon(type);
             image = Utilities.mergeImages(image, CONFIGURATION_FILES_BADGE, 7, 7);
-            return image;
+
+            return image;        
         }
 
-        private static Image icon2image(String key) {
-            Object obj = UIManager.get(key);
-            if (obj instanceof Image) {
-                return (Image) obj;
-            }
-
-            if (obj instanceof Icon) {
-                Icon icon = (Icon) obj;
-                return Utilities.icon2Image(icon);
-            }
-
-            return null;
-        }
-
+        @Override
         public String getDisplayName() {
             return NbBundle.getMessage(ConfFilesNodeFactory.class, "LBL_Node_Config"); //NOI18N
         }
 
+        @Override
         public javax.swing.Action[] getActions(boolean context) {
             return new javax.swing.Action[]{SystemAction.get(FindAction.class)};
         }
@@ -373,6 +344,9 @@ public final class ConfFilesNodeFactory implements NodeFactory {
         private final ProjectWebModule pwm;
         private final HashSet keys;
         private final java.util.Comparator comparator = new NodeComparator();
+        // Need to hold the conf dir strongly, otherwise it can be garbage-collected.
+        private FileObject confDir;
+        private FileObject persistenceXmlDir;
 
         private final FileChangeListener webInfListener = new FileChangeAdapter() {
 
@@ -467,7 +441,7 @@ public final class ConfFilesNodeFactory implements NodeFactory {
                     n = dataObject.getNodeDelegate().cloneNode();
                     if (fo.isFolder()) {
                         DataFolder dataFolder = DataFolder.findFolder(fo);
-                        n = new FilterNode(n, dataFolder.createNodeChildren(new VisibilityQueryDataFilter()));
+                        n = new FilterNode(n, dataFolder.createNodeChildren(new VisibilityQueryDataFilter(null)));
                     }
                 } catch (DataObjectNotFoundException dnfe) {
                 }
@@ -499,6 +473,7 @@ public final class ConfFilesNodeFactory implements NodeFactory {
 
             addWellKnownFiles();
             addConfDirectoryFiles();
+            addPersistenceXmlDirectoryFiles();
             addServerSpecificFiles();
             addFrameworkFiles();
         }
@@ -531,18 +506,34 @@ public final class ConfFilesNodeFactory implements NodeFactory {
         }
 
         private void addConfDirectoryFiles() {
-            FileObject conf = pwm.getConfDir();
-            if (conf == null) {
+            confDir = pwm.getConfDir();
+            if (confDir == null) {
                 return;
             }
-            FileObject[] children = conf.getChildren();
+            FileObject[] children = confDir.getChildren();
             for (int i = 0; i < children.length; i++) {
                 if (VisibilityQuery.getDefault().isVisible(children[i])) {
                     keys.add(children[i]);
                 }
             }
 
-            conf.addFileChangeListener(anyFileListener);
+            confDir.addFileChangeListener(anyFileListener);
+        }
+        
+        private void addPersistenceXmlDirectoryFiles() {
+            persistenceXmlDir = pwm.getPersistenceXmlDir();
+            if (persistenceXmlDir == null ||
+                    (confDir != null && FileUtil.toFile(persistenceXmlDir).equals(FileUtil.toFile(confDir)))) {
+                return;
+            }
+            FileObject[] children = persistenceXmlDir.getChildren();
+            for (int i = 0; i < children.length; i++) {
+                if (VisibilityQuery.getDefault().isVisible(children[i])) {
+                    keys.add(children[i]);
+                }
+            }
+
+            persistenceXmlDir.addFileChangeListener(anyFileListener);
         }
 
         private void addServerSpecificFiles() {
@@ -584,9 +575,8 @@ public final class ConfFilesNodeFactory implements NodeFactory {
             if (webInf != null) {
                 pwm.getWebInf().removeFileChangeListener(webInfListener);
             }
-            FileObject conf = pwm.getConfDir();
-            if (conf != null) {
-                conf.removeFileChangeListener(anyFileListener);
+            if (confDir != null) {
+                confDir.removeFileChangeListener(anyFileListener);
             }
         }
 
@@ -629,45 +619,6 @@ public final class ConfFilesNodeFactory implements NodeFactory {
             public boolean equals(Object o) {
                 return o instanceof NodeComparator;
             }
-        }
-    }
-
-    private static class ConfFilesRefreshAction extends CookieAction {
-
-        protected Class[] cookieClasses() {
-            return new Class[]{RefreshCookie.class};
-        }
-
-        protected boolean enable(Node[] activatedNodes) {
-            return true;
-        }
-
-        protected int mode() {
-            return CookieAction.MODE_EXACTLY_ONE;
-        }
-
-        protected boolean asynchronous() {
-            return false;
-        }
-
-        public String getName() {
-            return NbBundle.getMessage(ConfFilesNodeFactory.class, "LBL_Refresh"); //NOI18N
-        }
-
-        public HelpCtx getHelpCtx() {
-            return HelpCtx.DEFAULT_HELP;
-        }
-
-        public void performAction(Node[] selectedNodes) {
-            for (int i = 0; i < selectedNodes.length; i++) {
-                RefreshCookie cookie = (RefreshCookie) selectedNodes[i].getCookie(RefreshCookie.class);
-                cookie.refresh();
-            }
-        }
-
-        private static interface RefreshCookie extends Node.Cookie {
-
-            public void refresh();
         }
     }
 }
