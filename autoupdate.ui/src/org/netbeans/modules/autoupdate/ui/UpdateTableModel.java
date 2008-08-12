@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -65,7 +65,11 @@ public class UpdateTableModel extends UnitCategoryTableModel {
     private OperationContainer<InstallSupport> container = Containers.forUpdate ();
     private OperationContainer<OperationSupport> containerCustom = Containers.forCustomInstall ();
     
-    /** Creates a new instance of UpdateTableModel */
+    private static String col0, col1, col2;
+    
+    /** Creates a new instance of UpdateTableModel
+     * @param units 
+     */
     public UpdateTableModel (List<UpdateUnit> units) {
         setUnits (units);
     }
@@ -109,15 +113,6 @@ public class UpdateTableModel extends UnitCategoryTableModel {
         case 2 :
             res = u.getCategoryName();
             break;
-        case 3 :
-            res = u.getInstalledVersion();
-            break;
-        case 4 :
-            res = u.getAvailableVersion();
-            break;
-        case 5 :
-            res = Utilities.getDownloadSizeAsString(u.getCompleteSize());
-            break;
         }
         
         return res;
@@ -140,15 +135,6 @@ public class UpdateTableModel extends UnitCategoryTableModel {
         case 2 :
             res = String.class;
             break;
-        case 3 :
-            res = String.class;
-            break;
-        case 4 :
-            res = String.class;
-            break;
-        case 5 :
-            res = String.class;
-            break;
         }
         
         return res;
@@ -157,18 +143,21 @@ public class UpdateTableModel extends UnitCategoryTableModel {
     @Override
     public String getColumnName (int column) {
         switch (column) {
-        case 0 :
-            return getBundle ("UpdateTableModel_Columns_Update");
-        case 1 :
-            return getBundle ("UpdateTableModel_Columns_Name");
-        case 2 :
-            return getBundle("UpdateTableModel_Columns_Category");
-        case 3 :
-            return getBundle ("UpdateTableModel_Columns_Installed");
-        case 4 :
-            return getBundle ("UpdateTableModel_Columns_Available");
-        case 5 :
-            return getBundle ("UpdateTableModel_Columns_Size");
+            case 0 :
+                if (col0 == null) {
+                    col0 = getBundle ("UpdateTableModel_Columns_Update");
+                }
+                return col0;
+            case 1 :
+                if (col1 == null) {
+                    col1 = getBundle ("UpdateTableModel_Columns_Name");
+                }
+                return col1;
+            case 2 :
+                if (col2 == null) {
+                    col2 = getBundle("UpdateTableModel_Columns_Category");
+                }
+                return col2;
         }
         
         assert false;
@@ -210,12 +199,6 @@ public class UpdateTableModel extends UnitCategoryTableModel {
                     return Unit.compareDisplayNames (unit1, unit2);
                 } else if (getColumnName (2).equals (columnIdentifier)) {
                     return Unit.compareCategories(unit1, unit2);
-                } else if (getColumnName (3).equals (columnIdentifier)) {
-                    return Unit.Update.compareInstalledVersions (unit1, unit2);
-                } else if (getColumnName (4).equals (columnIdentifier)) {
-                    return Unit.Update.compareAvailableVersions (unit1, unit2);
-                } else if (getColumnName (5).equals (columnIdentifier)) {
-                    return Unit.compareCompleteSizes (unit1, unit2);
                 }
                 return 0;
             }
@@ -257,7 +240,7 @@ public class UpdateTableModel extends UnitCategoryTableModel {
     }
 
     public int getTabIndex() {
-        return 0;
+        return PluginManagerUI.INDEX_OF_UPDATES_TAB;
     }
 
     @Override

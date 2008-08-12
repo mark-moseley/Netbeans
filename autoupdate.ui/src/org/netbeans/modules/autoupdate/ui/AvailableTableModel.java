@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,8 +41,6 @@
 
 package org.netbeans.modules.autoupdate.ui;
 
-import java.net.URL;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -63,8 +61,11 @@ public class AvailableTableModel extends UnitCategoryTableModel {
     //just prevents from gc, do not delete
     private OperationContainer container = Containers.forAvailable();
     private OperationContainer containerCustom = Containers.forCustomInstall ();
+    private static String col0, col1, col2, col3;
     
-    /** Creates a new instance of AvailableTableModel */
+    /** Creates a new instance of AvailableTableModel
+     * @param units 
+     */
     public AvailableTableModel (List<UpdateUnit> units) {
         setUnits(units);
     }
@@ -99,6 +100,9 @@ public class AvailableTableModel extends UnitCategoryTableModel {
         if (isExpansionControlAtRow(row)) return "";//NOI18N
         
         Unit.Available u = (Unit.Available) getUnitAtRow(row);
+        if (u == null) {
+            return null;
+        }
         switch (col) {
         case 0 :
             res = u.isMarked() ? Boolean.TRUE : Boolean.FALSE;
@@ -146,13 +150,25 @@ public class AvailableTableModel extends UnitCategoryTableModel {
     public String getColumnName(int column) {
         switch (column) {
             case 0 :
-                return getBundle ("AvailableTableModel_Columns_Install");
+                if (col0 == null) {
+                    col0 = getBundle ("AvailableTableModel_Columns_Install");
+                }
+                return col0;
             case 1 :
-                return getBundle ("AvailableTableModel_Columns_Name");
+                if (col1 == null) {
+                    col1 = getBundle ("AvailableTableModel_Columns_Name");
+                }
+                return col1;
             case 2 :
-                return getBundle("AvailableTableModel_Columns_Category");
+                if (col2 == null) {
+                    col2 = getBundle("AvailableTableModel_Columns_Category");
+                }
+                return col2;
             case 3 :
-                return getBundle ("AvailableTableModel_Source_Category");
+                if (col3 == null) {
+                    col3 = getBundle ("AvailableTableModel_Source_Category");
+                }
+                return col3;
         }
         
         assert false;
@@ -241,7 +257,7 @@ public class AvailableTableModel extends UnitCategoryTableModel {
     }
 
     public int getTabIndex() {
-        return 1;
+        return PluginManagerUI.INDEX_OF_AVAILABLE_TAB;
     }
 
     @Override

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -69,7 +69,11 @@ public class InstalledTableModel extends UnitCategoryTableModel {
     
     private final Logger err = Logger.getLogger ("org.netbeans.modules.autoupdate.ui.InstalledTableModel");
     
-    /** Creates a new instance of InstalledTableModel */
+    private static String col0, col1, col2, col3;
+    
+    /** Creates a new instance of InstalledTableModel
+     * @param units 
+     */
     public InstalledTableModel(List<UpdateUnit> units) {
         setUnits(units);
     }
@@ -129,13 +133,15 @@ public class InstalledTableModel extends UnitCategoryTableModel {
         Unit.Installed u = (Unit.Installed) getUnitAtRow(row);
         assert anValue instanceof Boolean : anValue + " must be instanceof Boolean.";
         boolean beforeMarked = u.isMarked();
-        u.setMarked(! beforeMarked);
-        if (u.isMarked() != beforeMarked) {
-            fireButtonsChange();
-        } else {
-            //TODO: message should contain spec.version
-            String message = getBundle ("NotificationAlreadyPreparedToIntsall", u.getDisplayName ()); // NOI18N
-            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(message));
+        if ((Boolean) anValue != beforeMarked) {
+            u.setMarked(! beforeMarked);
+            if (u.isMarked() != beforeMarked) {
+                fireButtonsChange();
+            } else {
+                //TODO: message should contain spec.version
+                String message = getBundle ("NotificationAlreadyPreparedToIntsall", u.getDisplayName ()); // NOI18N
+                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(message));
+            }
         }
         
     }
@@ -156,9 +162,6 @@ public class InstalledTableModel extends UnitCategoryTableModel {
             break;
         case 3 :
             res = u.getRelevantElement().isEnabled();
-            break;
-        case 4 :
-            res = u.getInstalledVersion();
             break;
         }
         
@@ -185,9 +188,6 @@ public class InstalledTableModel extends UnitCategoryTableModel {
         case 3 :
             res = Boolean.class;
             break;
-        case 4 :
-            res = String.class;
-            break;
         }
         
         return res;
@@ -196,16 +196,26 @@ public class InstalledTableModel extends UnitCategoryTableModel {
     @Override
     public String getColumnName(int column) {
         switch (column) {
-        case 0 :
-            return getBundle ("InstalledTableModel_Columns_Uninstall");
-        case 1 :
-            return getBundle ("InstalledTableModel_Columns_Name");
-        case 2:
-            return getBundle("InstalledTableModel_Columns_Category");
-        case 3 :
-            return getBundle ("InstalledTableModel_Columns_Enabled");                        
-        case 4 :
-            return getBundle ("InstalledTableModel_Columns_Installed");
+            case 0 :
+                if (col0 == null) {
+                    col0 = getBundle ("InstalledTableModel_Columns_Uninstall");
+                }
+                return col0;
+            case 1 :
+                if (col1 == null) {
+                    col1 = getBundle ("InstalledTableModel_Columns_Name");
+                }
+                return col1;
+            case 2 :
+                if (col2 == null) {
+                    col2 = getBundle("InstalledTableModel_Columns_Category");
+                }
+                return col2;
+            case 3 :
+                if (col3 == null) {
+                    col3 = getBundle ("InstalledTableModel_Columns_Enabled");
+                }
+                return col3;
         }
         
         assert false;
@@ -251,8 +261,6 @@ public class InstalledTableModel extends UnitCategoryTableModel {
                     return Unit.compareCategories(unit1, unit2);
                 } else if (getColumnName(3).equals(columnIdentifier)) {
                     return Unit.Installed.compareEnabledState(unit1, unit2);
-                } else if (getColumnName(4).equals(columnIdentifier)) {
-                    return Unit.Installed.compareInstalledVersions(unit1, unit2);
                 }                 
                 return 0;
             }
@@ -278,7 +286,7 @@ public class InstalledTableModel extends UnitCategoryTableModel {
     }
 
     public int getTabIndex() {
-        return 3;
+        return PluginManagerUI.INDEX_OF_INSTALLED_TAB;
     }
 
     public boolean needsRestart () {
