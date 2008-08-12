@@ -67,8 +67,11 @@ import org.netbeans.modules.uml.ui.support.applicationmanager.IProduct;
 import org.netbeans.modules.uml.ui.support.applicationmanager.IProductDiagramManager;
 import org.netbeans.modules.uml.core.support.Debug;
 import java.awt.Dialog;
+import java.io.File;
 import java.text.MessageFormat;
 import java.util.ResourceBundle;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagramKind;
 import org.netbeans.modules.uml.core.support.umlsupport.FileExtensions;
@@ -87,7 +90,6 @@ import org.netbeans.modules.uml.ui.support.helpers.ProgressBarHelper;
 import org.netbeans.modules.uml.util.DummyCorePreference;
 import org.openide.DialogDisplayer;
 import org.openide.WizardDescriptor;
-import org.openide.explorer.ExplorerManager;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.Utilities;
@@ -101,7 +103,7 @@ public class UMLDiagramManager
       implements IProductDiagramManager, INewUMLFileTemplates
 {
     private HashMap <String, UMLDiagramTopComponent> m_OpenDiagrams = new HashMap<String, UMLDiagramTopComponent>();
-    private IDiagram m_CurrentDiagram = null;
+    private IDiagram m_CurrentDiagram = null;    
     
     /**
      * Create a new diagram manager.
@@ -118,30 +120,39 @@ public class UMLDiagramManager
             boolean bMaximized,
             IDiagramCallback pDiagramCreatedCallback)
     {
-        final TopComponent tc = WindowManager.getDefault().findTopComponent( "projectTabLogical_tc" );
-        if (tc==null)
-            return null;
-        
-        final ExplorerManager manager =
-                ((ExplorerManager.Provider)tc).getExplorerManager();
-        tc.setCursor( Utilities.createProgressCursor( tc ) );
-        
-        showDiagram(sTOMFilename);
-        
-        IDiagram retVal = retrieveDiagram(sTOMFilename);
-        m_CurrentDiagram = retVal;
-        if(pDiagramCreatedCallback != null)
+        IDiagram retVal = null;
+        TopComponent tc = null;
+        try
         {
-            pDiagramCreatedCallback.returnedDiagram(retVal);
+            tc = TopComponent.getRegistry().getActivated();//WindowManager.getDefault().findTopComponent("projectTabLogical_tc");
+
+            if (tc != null)
+            {
+                tc.setCursor(Utilities.createProgressCursor(tc));
+            }
+            showDiagram(sTOMFilename);
+
+            retVal = retrieveDiagram(sTOMFilename);
+            m_CurrentDiagram = retVal;
+            if (pDiagramCreatedCallback != null)
+            {
+                pDiagramCreatedCallback.returnedDiagram(retVal);
+            }
+            raiseWindow(retVal);
+            garbageCollect();
+        } catch (Exception e)
+        {
+            e.printStackTrace();
+        } finally
+        {
+            if (tc != null)
+            {
+                tc.setCursor(null);
+            }
         }
-        raiseWindow(retVal);
-        
-        tc.setCursor(null);
-        
-        garbageCollect();
         return retVal;
     }
-    
+
    /* (non-Javadoc)
     * @see org.netbeans.modules.uml.ui.support.applicationmanager.IProductDiagramManager#openDiagram2(org.netbeans.modules.uml.core.metamodel.diagrams.IProxyDiagram, boolean, org.netbeans.modules.uml.ui.support.applicationmanager.IDiagramCallback)
     */
@@ -410,7 +421,7 @@ public class UMLDiagramManager
     
     protected void showDiagram(String diagramFile)
     {
-        if (diagramFile != null)
+        if (diagramFile != null && (new File(diagramFile)).length() > 0)
         {
             UMLDiagramTopComponent topComponent = findTopComponent(diagramFile);
             
@@ -422,12 +433,11 @@ public class UMLDiagramManager
             
             else
             {
+                IProxyDiagramManager proxyDiaMgr = ProxyDiagramManager.instance();
+                IProxyDiagram pDia = proxyDiaMgr.getDiagram(diagramFile);
                 try 
                 {
-                    IProxyDiagramManager proxyDiaMgr = ProxyDiagramManager.instance();
-                    IProxyDiagram pDia = proxyDiaMgr.getDiagram(diagramFile);
-                    
-                    if (diagramFile.endsWith(FileExtensions.DIAGRAM_TS_LAYOUT_EXT))
+                   if (diagramFile.endsWith(FileExtensions.DIAGRAM_TS_LAYOUT_EXT))
                     {
                         if (pDia == null)
                         {
@@ -478,6 +488,9 @@ public class UMLDiagramManager
                                 //need to persist in some preference
                                 prefs.put ("UML_Convert_61_Diagram_To_65_Format", "PSK_ALWAYS");
                             }
+                            //after converting, set topcomponent dirty to save the diagram
+                            topComponent.setDiagramDirty(true);  
+                            
                         }
                         else
                         {
