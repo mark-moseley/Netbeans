@@ -74,13 +74,13 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
     public Object state() {
         return null; // always in default state
     }
-    
+
     protected final void backup(int n) {
         input.backup(n + escapedEatenChars);
         lastTokenEndedByEscapedLine = escapedEatenChars;
         tokenSplittedByEscapedLine -= escapedEatenChars;
     }
-    
+
     @SuppressWarnings("fallthrough")
     protected final int read(boolean skipEscapedLF) {
         int c = input.read();
@@ -112,11 +112,11 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
         }
         return c;
     }
-    
+
     protected final boolean consumeNewline() {
         return input.consumeNewline();
     }
-    
+
     @SuppressWarnings("fallthrough")
     public Token<CppTokenId> nextToken() {
         while (true) {
@@ -139,6 +139,8 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
                 }
             } else {
                 int c = read(true);
+                // if read of the first char caused skipping escaped line
+                // do we need to backup and create escaped lines first?
                 switch (c) {
                     case '"': {
                         Token<CppTokenId> out = finishDblQuote();
@@ -247,7 +249,12 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
 
                     case '*':
                         switch (read(true)) {
-                            case '/': // invalid comment end - */
+                            case '/': // invalid comment end - */ or int*/* */
+                                if (read(true) == '*') {
+                                    backup(2);
+                                    return token(CppTokenId.STAR);
+                                }
+                                backup(1);
                                 return token(CppTokenId.INVALID_COMMENT_END);
                             case '=':
                                 return token(CppTokenId.STAREQ);
@@ -382,6 +389,21 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
                                     case 'p':
                                     case 'P': // binary exponent
                                         return finishFloatExponent();
+                                    case 'u':
+                                    case 'U':
+                                        c = read(true);
+                                        if (c == 'l' || c == 'L') {
+                                            c = read(true);
+                                            if (c=='l' || c == 'L') {
+                                                return token(CppTokenId.UNSIGNED_LONG_LONG_LITERAL);
+                                            } else {
+                                                backup(1);
+                                                return token(CppTokenId.UNSIGNED_LONG_LITERAL);
+                                            }
+                                        } else {
+                                            backup(1);
+                                            return token(CppTokenId.UNSIGNED_LITERAL);
+                                        }
                                     default:
                                         backup(1);
                                         // if float then before mandatory binary exponent => invalid
@@ -432,11 +454,26 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
                         return finishWhitespace();
 
                     case EOF:
+                        if (isTokenSplittedByEscapedLine()) {
+                            backup(1);
+                            assert lastTokenEndedByEscapedLine > 0 : "lastTokenEndedByEscapedLine is " + lastTokenEndedByEscapedLine;
+                            break;
+                        }
                         return null;
 
                     default:
                         c = translateSurrogates(c);
                         if (CndLexerUtilities.isCppIdentifierStart(c)) {
+                            if (c == 'L') {
+                                if (read(true) == '"') {
+                                    // string with L prefix
+                                    Token<CppTokenId> out = finishDblQuote();
+                                    assert out != null : "not handled dobule quote";
+                                    return out;
+                                } else {
+                                    backup(1);
+                                }
+                            }
                             return keywordOrIdentifier(c);
                         }
                         if (Character.isWhitespace(c)) {
@@ -516,7 +553,7 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
             // so do not call translateSurrogates()
             if (c == EOF || !Character.isWhitespace(c) || c == '\n' || c == '\r') {
                 backup(1);
-                return token(CppTokenId.WHITESPACE);
+                return isTokenSplittedByEscapedLine() ? token(CppTokenId.ESCAPED_WHITESPACE) : token(CppTokenId.WHITESPACE);
             }
         }
     }
@@ -559,7 +596,19 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
                     return token(CppTokenId.FLOAT_LITERAL);
                 case 'u':
                 case 'U':
-                    return token(CppTokenId.UNSIGNED_LITERAL);
+                    c = read(true);
+                    if (c == 'l' || c == 'L') {
+                        c = read(true);
+                        if (c=='l' || c == 'L') {
+                            return token(CppTokenId.UNSIGNED_LONG_LONG_LITERAL);
+                        } else {
+                            backup(1);
+                            return token(CppTokenId.UNSIGNED_LONG_LITERAL);
+                        }
+                    } else {
+                        backup(1);
+                        return token(CppTokenId.UNSIGNED_LITERAL);
+                    }
                 case '0':
                 case '1':
                 case '2':
@@ -613,8 +662,8 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
 
     protected final Token<CppTokenId> tokenPart(CppTokenId id, PartType part) {
         return token(id, null, part);
-    }  
-    
+    }
+
     private Token<CppTokenId> token(CppTokenId id, String fixedText, PartType part) {
         assert id != null : "id must be not null";
         Token<CppTokenId> token = null;
@@ -633,7 +682,7 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
         assert token != null : "token must be created as result for " + id;
         postTokenCreate(id);
         return token;
-    }  
+    }
 
     protected Token<CppTokenId> finishSharp() {
         if (read(true) == '#') {
@@ -642,7 +691,7 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
         backup(1);
         return token(CppTokenId.SHARP);
     }
-    
+
     @SuppressWarnings("fallthrough")
     protected Token<CppTokenId> finishDblQuote() {
         while (true) { // string literal
@@ -659,7 +708,7 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
                 case EOF:
                     return tokenPart(CppTokenId.STRING_LITERAL, PartType.START);
             }
-        }   
+        }
     }
 
     protected Token<CppTokenId> finishLT() {
@@ -676,14 +725,14 @@ public abstract class CndLexer implements Lexer<CppTokenId> {
         backup(1);
         return token(CppTokenId.LT);
     }
-    
+
     protected void postTokenCreate(CppTokenId id) {
-        
+
     }
-    
+
     public void release() {
     }
-    
+
     private final boolean isTokenSplittedByEscapedLine() {
         return tokenSplittedByEscapedLine > 0;
     }
