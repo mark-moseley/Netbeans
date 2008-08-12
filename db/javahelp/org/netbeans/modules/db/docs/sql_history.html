@@ -1,5 +1,5 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-    <!--
+<!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
 Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
@@ -39,47 +39,37 @@ to extend the choice of license to its licensees as provided above.
 However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
-    -->
-
+-->
 <html>
 
 <head>
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
 
-        <title>Creating Database Views</title>
+        <title>Connecting to a Database</title>
         <link rel="stylesheet" href="nbdocs://org.netbeans.modules.usersguide/org/netbeans/modules/usersguide/ide.css" type="text/css">
     </head>
 
-
-
     <body>
-
-        <h2>Creating Database Views</h2>
-        <p><small><a href="#seealso">See Also</a></small></p>
-
-        <p>The Database Explorer enables you to create SQL views that are part of the
-        database itself and are available to application programs and other clients
-        of the database. </p>
-        <p> <b>To create views:</b> </p>
-        <ol>
-            <li>In the Services window, expand the node for a connected database.</li>
-            <li>Right-click Views and choose Create View.</li>
-            <li>In the Create View dialog box, type the name of the view in the View Name text field.</li>
-            <li>In the text area, enter the SQL (<tt>SELECT</tt>) statement that will define the new view and click OK. 
-	    The IDE adds a node for the new view (&nbsp;<img src="images/view.gif" alt="View node">&nbsp;) under the Views node for the database. </li>
-        </ol>
-	<p>Once the view is saved, you can see the data it contains by right-clicking the view in the Services window and choosing View Data.</p>
-        <dl>
+        <h2>SQL History</h2>
+    <p><small><a href="#seealso">See Also</a></small></p>
+        <p>SQL History provides a list of SQL statements that have been previously executed in the SQL Editor. The SQL can also be inserted in the SQL Editor to be re-executed by selecting a statement in the Table and clicking the Insert button.  </p>
+        <p>The order the statements appears in is descending, the more recently executed statement appears at the top of the dialog. To help search for an SQL statement, you can choose the connection for the database against which the statement was executed. </p>
+        <p>You can also view matching SQL statements by typing in the Match textfield. Matching is case insensitive.</p>
+        <p>SQL History is invoked from the SQL Editor by clicking  the toolbar icon or by typing the keyboard combination Ctrl-Shift-Alt-h or Command-Shift-Alt-h (Mac OSX). </p>
+<dl>
                 <dt><a name="seealso">See Also</a></dt>
-                <dd> <a href="createtables.html">Creating Database Tables</a></dd>
-        </dl>
-        <hr>
+                <dd><a href="dbmod.html">Executing SQL Statements and Scripts</a></dd>
+    </dl>
+
+<hr>
 
         <small><a href="credits.html">Legal Notices</a></small> 
         <table border="0" cellpadding="50">
             <tr><td>&nbsp;</td></tr>
         </table>
+
     </body>
 
 </html>
+
 
