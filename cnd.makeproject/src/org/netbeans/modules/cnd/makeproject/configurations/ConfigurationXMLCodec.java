@@ -43,12 +43,12 @@ package org.netbeans.modules.cnd.makeproject.configurations;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Stack;
 import java.util.Vector;
 import java.util.List;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.api.utils.CppUtils;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.api.MakeArtifact;
@@ -71,9 +71,12 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration
 import org.netbeans.modules.cnd.api.xml.VersionException;
 import org.netbeans.modules.cnd.makeproject.api.configurations.FolderConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.FortranCompilerConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.PackagingConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.RequiredProjectsConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
 import org.netbeans.modules.cnd.makeproject.api.platforms.Platforms;
+import org.netbeans.modules.cnd.makeproject.packaging.FileElement;
+import org.netbeans.modules.cnd.makeproject.packaging.InfoElement;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.xml.sax.Attributes;
@@ -100,6 +103,7 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
     private FortranCompilerConfiguration currentFortranCompilerConfiguration = null;
     private CustomToolConfiguration currentCustomToolConfiguration = null;
     private LinkerConfiguration currentLinkerConfiguration = null;
+    private PackagingConfiguration currentPackagingConfiguration = null;
     private ArchiverConfiguration currentArchiverConfiguration = null;
     private LibrariesConfiguration currentLibrariesConfiguration = null;
     private RequiredProjectsConfiguration currentRequiredProjectsConfiguration = null;
@@ -164,12 +168,11 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
             else {
                 // FIXUP
             }
-            currentConf = new MakeConfiguration(FileUtil.toFile(projectDirectory).getPath(), getString(atts.getValue(0)), confType);
-            
+            currentConf = createNewConfiguration(projectDirectory, atts.getValue(0), confType);
         } else if (element.equals(NEO_CONF_ELEMENT)) {
-            currentConf = new MakeConfiguration(FileUtil.toFile(projectDirectory).getPath(), getString(atts.getValue(0)), MakeConfiguration.TYPE_APPLICATION);
+            currentConf = createNewConfiguration(projectDirectory, atts.getValue(0), MakeConfiguration.TYPE_APPLICATION); 
         } else if (element.equals(EXT_CONF_ELEMENT)) {
-            currentConf = new MakeConfiguration(FileUtil.toFile(projectDirectory).getPath(), getString(atts.getValue(0)), MakeConfiguration.TYPE_MAKEFILE);
+            currentConf = createNewConfiguration(projectDirectory, atts.getValue(0), MakeConfiguration.TYPE_MAKEFILE);
         } else if (element.equals(SOURCE_FOLDERS_ELEMENT)) { // FIXUP:  < version 5
             currentFolder = new Folder(projectDescriptor, ((MakeConfigurationDescriptor)projectDescriptor).getLogicalFolders(), "ExternalFiles", "Important Files", false); // NOI18N
             ((MakeConfigurationDescriptor)projectDescriptor).setExternalFileItems(currentFolder);
@@ -190,7 +193,7 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
                     ((MakeConfigurationDescriptor)projectDescriptor).setExternalFileItems(currentFolder);
             }
         } else if (element.equals(SOURCE_ROOT_LIST_ELEMENT)) {
-            currentList = ((MakeConfigurationDescriptor)projectDescriptor).getSourceRootsRaw();
+            currentList = new ArrayList();
         } else if (element.equals(ItemXMLCodec.ITEM_ELEMENT)) {
             String path = atts.getValue(0);
             path = getString(adjustOffset(path));
@@ -245,6 +248,9 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
                 ; // FIXUP: ERROR
         } else if (element.equals(LINKERTOOL_ELEMENT)) {
             currentLinkerConfiguration = ((MakeConfiguration)currentConf).getLinkerConfiguration();
+        } else if (element.equals(PACK_ELEMENT)) {
+            currentPackagingConfiguration = ((MakeConfiguration)currentConf).getPackagingConfiguration();
+            currentPackagingConfiguration.getFiles().getValue().clear();
         } else if (element.equals(ARCHIVERTOOL_ELEMENT)) {
             currentArchiverConfiguration = ((MakeConfiguration)currentConf).getArchiverConfiguration();
         } else if (element.equals(INCLUDE_DIRECTORIES_ELEMENT)) {
@@ -290,6 +296,24 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
                 currentLibrariesConfiguration.add(projectItem);
             else if (currentRequiredProjectsConfiguration != null)
                 currentRequiredProjectsConfiguration.add(projectItem);
+        
+        } else if (element.equals(PACK_FILE_LIST_ELEMENT)) {
+            String type = atts.getValue(TYPE_ATTR); // NOI18N
+            String to = atts.getValue(TO_ATTR); // NOI18N
+            String from = atts.getValue(FROM_ATTR); // NOI18N
+            String perm = atts.getValue(PERM_ATTR); // NOI18N
+            String owner = atts.getValue(OWNER_ATTR); // NOI18N
+            String group = atts.getValue(GROUP_ATTR); // NOI18N
+            FileElement fileElement = new FileElement(FileElement.toFileType(type), from, to, perm, owner, group);
+            if (currentPackagingConfiguration != null)
+                currentPackagingConfiguration.getFiles().add(fileElement);
+        } else if (element.equals(PACK_INFO_LIST_ELEMENT)) {
+            String name = atts.getValue(NAME_ATTR); // NOI18N
+            String value = atts.getValue(VALUE_ATTR); // NOI18N
+            String mandatory = atts.getValue(MANDATORY_ATTR); // NOI18N
+            InfoElement infoElement = new InfoElement(name, value, mandatory.equals(TRUE_VALUE));
+            if (currentPackagingConfiguration != null)
+                currentPackagingConfiguration.getHeader().add(infoElement);
         }
     }
     
@@ -308,15 +332,24 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
 	    if (descriptorVersion <= 33) {
 		currentText = currentText.equals("1") ? "GNU" : "Sun"; // NOI18N
             }
-            ((MakeConfiguration) currentConf).getCompilerSet().setValue(currentText);
-        } else if (element.equals(COMPILER_SET_ELEMENT+"2")) {
-            ((MakeConfiguration) currentConf).getCompilerSet2().setValue(currentText);
+            ((MakeConfiguration) currentConf).getCompilerSet().setNameAndFlavor(currentText, descriptorVersion);
+        } else if (element.equals(DEVELOPMENT_SERVER_ELEMENT)) {
+            ((MakeConfiguration) currentConf).getDevelopmentHost().setValue(currentText);
         } else if (element.equals(C_REQUIRED_ELEMENT)) {
-            ((MakeConfiguration) currentConf).getCRequired().setValue(currentText.equals(TRUE_VALUE));
+            if (descriptorVersion <= 41) {
+                return; // ignore
+            }
+            ((MakeConfiguration) currentConf).getCRequired().setValue(currentText.equals(TRUE_VALUE), !currentText.equals(TRUE_VALUE));
         } else if (element.equals(CPP_REQUIRED_ELEMENT)) {
-            ((MakeConfiguration) currentConf).getCppRequired().setValue(currentText.equals(TRUE_VALUE));
+            if (descriptorVersion <= 41) {
+                return; // ignore
+            }
+            ((MakeConfiguration) currentConf).getCppRequired().setValue(currentText.equals(TRUE_VALUE), !currentText.equals(TRUE_VALUE));
         } else if (element.equals(FORTRAN_REQUIRED_ELEMENT)) {
-            ((MakeConfiguration) currentConf).getFortranRequired().setValue(currentText.equals(TRUE_VALUE));
+            if (descriptorVersion <= 41) {
+                return; // ignore
+            }
+            ((MakeConfiguration) currentConf).getFortranRequired().setValue(currentText.equals(TRUE_VALUE), !currentText.equals(TRUE_VALUE));
         } else if (element.equals(PLATFORM_ELEMENT)) {
             int set = new Integer(currentText).intValue();
             if (descriptorVersion <= 37 && set == 4) {
@@ -376,6 +409,8 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
             } else {
                 currentFolder = null;
             }
+        } else if (element.equals(SOURCE_ENCODING_ELEMENT)) {
+            ((MakeConfigurationDescriptor)projectDescriptor).setSourceEncoding(currentText);
         } else if (element.equals(PREPROCESSOR_LIST_ELEMENT)) {
             currentList = null;
         } else if (element.equals(ITEM_PATH_ELEMENT)) {
@@ -424,6 +459,8 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
             if (descriptorVersion <= 27 && !currentLinkerConfiguration.getOutput().getModified())
                 currentLinkerConfiguration.getOutput().setValue(currentLinkerConfiguration.getOutputDefault27());
             currentLinkerConfiguration = null;
+        } else if (element.equals(PACK_ELEMENT)) {
+            currentPackagingConfiguration = null;
         } else if (element.equals(ARCHIVERTOOL_ELEMENT)) {
             if (descriptorVersion <= 27 && !currentArchiverConfiguration.getOutput().getModified())
                 currentArchiverConfiguration.getOutput().setValue(currentArchiverConfiguration.getOutputDefault27());
@@ -435,6 +472,13 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
         } else if (element.equals(LINKER_ADD_LIB_ELEMENT)) {
             currentList = null;
         } else if (element.equals(LINKER_DYN_SERCH_ELEMENT)) {
+            currentList = null;
+        } else if (element.equals(SOURCE_ROOT_LIST_ELEMENT)) {
+            Iterator iter = currentList.iterator();
+            while (iter.hasNext()) {
+                String sf = (String)iter.next();
+                ((MakeConfigurationDescriptor)projectDescriptor).addSourceRootRaw(sf);
+            }
             currentList = null;
         } else if (element.equals(DIRECTORY_PATH_ELEMENT)) {
             if (currentList != null) {
@@ -459,6 +503,22 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
                 currentLinkerConfiguration.getTool().setValue(getString(currentText));
             if (currentArchiverConfiguration != null)
                 currentArchiverConfiguration.getTool().setValue(getString(currentText));
+            if (currentPackagingConfiguration != null)
+                currentPackagingConfiguration.getTool().setValue(getString(currentText));
+        } else if (element.equals(VERBOSE_ELEMENT)) {
+            if (currentPackagingConfiguration != null) {
+                boolean val = currentText.equals(TRUE_VALUE);
+                currentPackagingConfiguration.getVerbose().setValue(val);
+            }
+        } else if (element.equals(ADDITIONAL_OPTIONS_ELEMENT)) {
+            if (currentPackagingConfiguration != null) {
+                currentPackagingConfiguration.getOptions().setValue(getString(currentText));
+            }
+        } else if (element.equals(PACK_TYPE_ELEMENT)) {
+            if (currentPackagingConfiguration != null) {
+                int type = new Integer(currentText).intValue();
+                currentPackagingConfiguration.getType().setValue(type);
+            }
         } else if (element.equals(PREPROCESSOR_ELEMENT)) {
             // Old style preprocessor list
             if (currentCCCCompilerConfiguration != null) {
@@ -523,6 +583,8 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
                 currentLinkerConfiguration.getOutput().setValue(getString(currentText));
             if (currentArchiverConfiguration != null)
                 currentArchiverConfiguration.getOutput().setValue(getString(currentText));
+            if (currentPackagingConfiguration != null)
+                currentPackagingConfiguration.getOutput().setValue(getString(currentText));
         } else if (element.equals(LINKER_KPIC_ELEMENT)) {
             boolean ds = currentText.equals(TRUE_VALUE);
             if (currentLinkerConfiguration != null)
@@ -578,6 +640,19 @@ class ConfigurationXMLCodec extends CommonConfigurationXMLCodec {
         if (relativeOffset != null && path.startsWith("..")) // NOI18N
             path = IpeUtils.trimDotDot(relativeOffset + path);
         return path;
+    }
+
+    private MakeConfiguration createNewConfiguration(FileObject projectDirectory, String value, int confType) {
+        String host;
+        // here we need to handle tags added between version.
+        // becase such tags will not be handled in "endElement" callbacks        
+        if (descriptorVersion < 46) {
+            host = CompilerSetManager.LOCALHOST;
+        } else {
+            host = CompilerSetManager.getDefaultDevelopmentHost();
+        }
+        MakeConfiguration makeConfiguration = new MakeConfiguration(FileUtil.toFile(projectDirectory).getPath(), getString(value), confType, host);
+        return makeConfiguration;
     }
     
     private String getString(String s){
