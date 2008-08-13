@@ -312,7 +312,7 @@ public class ConvertAnonymousToInnerTest extends NbTestCase {
                 "        new XImpl();\n" +
                 "    }\n" +
                 "    class X {}\n" +
-                "    private class XImpl extends Test.X {\n" +
+                "    private class XImpl extends X {\n" +
                 "        public XImpl() {\n" +
                 "        }\n" +
                 "    }\n" +
@@ -534,7 +534,7 @@ public class ConvertAnonymousToInnerTest extends NbTestCase {
         };
         testSource.runModificationTask(task).commit();
         String res = TestUtilities.copyFileToString(testFile);
-        System.err.println(res);
+//        System.err.println(res);
         assertEquals(removeWhitespaces(golden), removeWhitespaces(res));
     }
     
