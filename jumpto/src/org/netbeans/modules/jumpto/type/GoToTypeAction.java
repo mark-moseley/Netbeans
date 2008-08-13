@@ -287,6 +287,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
    private Dialog createDialog( final GoToPanel panel) {
        
         okButton = new JButton (NbBundle.getMessage(GoToTypeAction.class, "CTL_OK"));
+        okButton.getAccessibleContext().setAccessibleDescription(okButton.getText());
         okButton.setEnabled (false);
         panel.getAccessibleContext().setAccessibleName( NbBundle.getMessage( GoToTypeAction.class, "AN_GoToType") ); //NOI18N
         panel.getAccessibleContext().setAccessibleDescription( NbBundle.getMessage( GoToTypeAction.class, "AD_GoToType") ); //NOI18N
@@ -310,19 +311,22 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
         
         Dialog d = DialogDisplayer.getDefault().createDialog( dialogDescriptor );
         
-        // Set size
-        d.setPreferredSize( new Dimension(  UiOptions.GoToTypeDialog.getWidth(),
-                                   UiOptions.GoToTypeDialog.getHeight() ) );
+        // Set size when needed
+        final int width = UiOptions.GoToTypeDialog.getWidth();
+        final int height = UiOptions.GoToTypeDialog.getHeight();
+        if (width != -1 && height != -1) {
+            d.setPreferredSize(new Dimension(width,height));
+        }
         
         // Center the dialog after the size changed.
         Rectangle r = Utilities.getUsableScreenBounds();
         int maxW = (r.width * 9) / 10;
         int maxH = (r.height * 9) / 10;
-        Dimension dim = d.getPreferredSize();
+        final Dimension dim = d.getPreferredSize();
         dim.width = Math.min(dim.width, maxW);
         dim.height = Math.min(dim.height, maxH);
         d.setBounds(Utilities.findCenterBounds(dim));
-        
+        initialDimension = dim;
         d.addWindowListener(new WindowAdapter() {
             public void windowClosed(WindowEvent e) {
                 cleanup();
@@ -332,6 +336,8 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
         return d;
 
     } 
+   
+    private Dimension initialDimension;
     
     private void cleanup() {
         //System.out.println("CLEANUP");                
@@ -339,10 +345,14 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
 
         if ( GoToTypeAction.this.dialog != null ) { // Closing event for some reson sent twice
         
-            // Save dialog size     
-            UiOptions.GoToTypeDialog.setHeight(dialog.getHeight());
-            UiOptions.GoToTypeDialog.setWidth(dialog.getWidth());        
-            
+            // Save dialog size only when changed
+            final int currentWidth = dialog.getWidth();
+            final int currentHeight = dialog.getHeight();
+            if (initialDimension != null && (initialDimension.width != currentWidth || initialDimension.height != currentHeight)) {
+                UiOptions.GoToTypeDialog.setHeight(currentHeight);
+                UiOptions.GoToTypeDialog.setWidth(currentWidth);
+            }
+            initialDimension = null;
             // Clean caches
             GoToTypeAction.this.dialog.dispose();
             GoToTypeAction.this.dialog = null;
@@ -360,6 +370,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
     private class Worker implements Runnable {
         
         private volatile boolean isCanceled = false;
+        private volatile TypeProvider current;
         private final String text;
         
         private final long createTime;
@@ -374,7 +385,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             
             LOGGER.fine( "Worker for " + text + " - started " + ( System.currentTimeMillis() - createTime ) + " ms."  );                
             
-            List<? extends TypeDescriptor> types = getTypeNames( text );
+            final List<? extends TypeDescriptor> types = getTypeNames( text );
             if ( isCanceled ) {
                 LOGGER.fine( "Worker for " + text + " exited after cancel " + ( System.currentTimeMillis() - createTime ) + " ms."  );                                
                 return;
@@ -383,18 +394,22 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             if (typeFilter != null) {
                 model = LazyListModel.create(model, GoToTypeAction.this, 0.1, "Not computed yet");;
             }
+            final ListModel fmodel = model;
             if ( isCanceled ) {            
                 LOGGER.fine( "Worker for " + text + " exited after cancel " + ( System.currentTimeMillis() - createTime ) + " ms."  );                                
                 return;
             }
             
-            if ( !isCanceled && model != null ) {
+            if ( !isCanceled && fmodel != null ) {                
                 LOGGER.fine( "Worker for text " + text + " finished after " + ( System.currentTimeMillis() - createTime ) + " ms."  );                
-                
-                panel.setModel(model);
-                if (okButton != null && !types.isEmpty()) {
-                    okButton.setEnabled (true);
-                }
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        panel.setModel(fmodel);
+                        if (okButton != null && !types.isEmpty()) {
+                            okButton.setEnabled (true);
+                        }
+                    }
+                });
             }
             
             
@@ -404,8 +419,14 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             if ( panel.time != -1 ) {
                 LOGGER.fine( "Worker for text " + text + " canceled after " + ( System.currentTimeMillis() - createTime ) + " ms."  );                
             }
-
-            isCanceled = true;
+            TypeProvider _provider;
+            synchronized (this) {
+                isCanceled = true;
+                _provider = current;
+            }
+            if (_provider != null) {
+                _provider.cancel();
+            }
         }
 
         @SuppressWarnings("unchecked")
@@ -421,7 +442,13 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
                 if (isCanceled) {
                     return null;
                 }
-                provider.computeTypeNames(context, result);
+                current = provider;
+                try {
+                    provider.computeTypeNames(context, result);
+                } finally {
+                    current = null;
+                }
+                
             }
             if ( !isCanceled ) {   
                 //time = System.currentTimeMillis();
