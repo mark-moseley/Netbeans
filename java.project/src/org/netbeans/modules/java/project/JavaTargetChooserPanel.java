@@ -114,32 +114,57 @@ public final class JavaTargetChooserPanel implements WizardDescriptor.Panel<Wiza
     }
 
     public boolean isValid() {              
-        if (gui == null || gui.getTargetName() == null) {
+        if (gui == null) {
            setErrorMessage( null );
            return false;
         }        
         if ( type == NewJavaFileWizardIterator.TYPE_PACKAGE) {
+            if (gui.getTargetName() == null) {
+                setInfoMessage("INFO_JavaTargetChooser_ProvidePackageName");
+                return false;
+            }
             if ( !isValidPackageName( gui.getTargetName() ) ) {
                 setErrorMessage( "ERR_JavaTargetChooser_InvalidPackage" );
                 return false;
             }
+            if (!isValidPackage(gui.getRootFolder(), gui.getTargetName())) {
+                setErrorMessage("ERR_JavaTargetChooser_InvalidFolder");
+                return false;
+            }
         }
         else if (type == NewJavaFileWizardIterator.TYPE_PKG_INFO) {
+            //Change in firing order caused that isValid is called before readSettings completed => no targetName available
+            if (gui.getTargetName() == null) {
+                setInfoMessage("INFO_JavaTargetChooser_ProvideClassName");
+                return false;
+            }
             assert "package-info".equals( gui.getTargetName() );        //NOI18N
             if ( !isValidPackageName( gui.getPackageName() ) ) {
                 setErrorMessage( "ERR_JavaTargetChooser_InvalidPackage" );
                 return false;
             }
+            if (!isValidPackage(gui.getRootFolder(), gui.getPackageName())) {
+                setErrorMessage("ERR_JavaTargetChooser_InvalidFolder");
+                return false;
+            }
         }
         else {
-            if ( !isValidTypeIdentifier( gui.getTargetName() ) ) {
+            if (gui.getTargetName() == null) {
+                setInfoMessage("INFO_JavaTargetChooser_ProvideClassName");
+                return false;
+            } 
+            else if ( !isValidTypeIdentifier( gui.getTargetName() ) ) {
                 setErrorMessage( "ERR_JavaTargetChooser_InvalidClass" );
                 return false;
             }
             else if ( !isValidPackageName( gui.getPackageName() ) ) {
                 setErrorMessage( "ERR_JavaTargetChooser_InvalidPackage" );
                 return false;
-            }            
+            }
+            if (!isValidPackage(gui.getRootFolder(), gui.getPackageName())) {
+                setErrorMessage("ERR_JavaTargetChooser_InvalidFolder");
+                return false;
+            }
         }
         
         // check if the file name can be created
@@ -154,13 +179,13 @@ public final class JavaTargetChooserPanel implements WizardDescriptor.Panel<Wiza
         }
         String errorMessage = canUseFileName (rootFolder, gui.getPackageFileName(), gui.getTargetName(), template.getExt ());        
         if (gui != null) {
-            setLocalizedErrorMessage (errorMessage);
+            setLocalizedMessage(WizardDescriptor.PROP_ERROR_MESSAGE, errorMessage);
         }
         if (errorMessage!=null) returnValue=false;                
         
         if (type != NewJavaFileWizardIterator.TYPE_PACKAGE && returnValue && gui.getPackageName().length() == 0 && specVersion != null && JDK_14.compareTo(specVersion)<=0) { 
             if(isValidPackageRequired){
-                setErrorMessage( "ERR_JavaTargetChooser_CantUseDefaultPackage" );
+                setInfoMessage( "ERR_JavaTargetChooser_CantUseDefaultPackage" );
                 return false;
             }
             //Only warning, display it only if everything else is OK.
@@ -249,15 +274,22 @@ public final class JavaTargetChooserPanel implements WizardDescriptor.Panel<Wiza
     
     private void setErrorMessage( String key ) {
         if ( key == null ) {
-            setLocalizedErrorMessage ( "" ); // NOI18N
-        }
-        else {
-            setLocalizedErrorMessage ( NbBundle.getMessage( JavaTargetChooserPanelGUI.class, key) ); // NOI18N
+            setLocalizedMessage(WizardDescriptor.PROP_ERROR_MESSAGE, null);
+        } else {
+            setLocalizedMessage(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(JavaTargetChooserPanelGUI.class, key));
         }
     }
     
-    private void setLocalizedErrorMessage (String message) {
-        wizard.putProperty ("WizardPanel_errorMessage", message); // NOI18N
+    private void setInfoMessage(String key) {
+        if (key == null) {
+            setLocalizedMessage(WizardDescriptor.PROP_INFO_MESSAGE, null);
+        } else {
+            setLocalizedMessage(WizardDescriptor.PROP_INFO_MESSAGE, NbBundle.getMessage(JavaTargetChooserPanelGUI.class, key));
+        }
+    }
+    
+    private void setLocalizedMessage(String msgType, String message) {
+        wizard.putProperty(msgType, message);
     }
     
     private FileObject getTargetFolderFromGUI (WizardDescriptor wd) {
@@ -274,7 +306,7 @@ public final class JavaTargetChooserPanel implements WizardDescriptor.Panel<Wiza
                     String name = null;
                     while (tk.hasMoreTokens()) {
                         name = tk.nextToken();
-                        FileObject fo = folder.getFileObject (name,"");   //NOI8N
+                        FileObject fo = folder.getFileObject (name,"");   //NOI18N
                         if (fo == null) {
                             break;
                         }
@@ -323,6 +355,22 @@ public final class JavaTargetChooserPanel implements WizardDescriptor.Panel<Wiza
         return true;
     }
     
+    private static boolean isValidPackage (FileObject root, final String path) {
+        assert root != null;
+        assert path != null;
+        final StringTokenizer tk = new StringTokenizer(path,".");   //NOI18N
+        while (tk.hasMoreTokens()) {
+            root = root.getFileObject(tk.nextToken());
+            if (root == null) {
+                return true;
+            }
+            else if (root.isData()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
     static boolean isValidTypeIdentifier(String ident) {
         if (ident == null || "".equals(ident) || !Utilities.isJavaIdentifier( ident ) ) {
             return false;
@@ -344,7 +392,7 @@ public final class JavaTargetChooserPanel implements WizardDescriptor.Panel<Wiza
     final public static String canUseFileName (FileObject targetFolder, String folderName, String newObjectName, String extension) {
         String newObjectNameToDisplay = newObjectName;
         if (newObjectName != null) {
-            newObjectName = newObjectName.replace ('.', '/'); // NOI8N
+            newObjectName = newObjectName.replace ('.', '/'); // NOI18N
         }
         if (extension != null && extension.length () > 0) {
             StringBuffer sb = new StringBuffer ();
