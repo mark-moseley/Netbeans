@@ -40,19 +40,18 @@
 
 package org.netbeans.modules.profiler.j2ee.tomcat;
 
-import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.IntegrationProvider;
-import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
-import org.netbeans.lib.profiler.common.integration.exceptions.*;
-import org.netbeans.modules.profiler.ui.wizards.providers.TargetPlatformEnum;
-import org.netbeans.modules.profiler.ui.wizards.providers.ValidationResult;
-import org.openide.util.NbBundle;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.text.MessageFormat;
-
+import org.netbeans.lib.profiler.common.AttachSettings;
+import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
+import org.netbeans.modules.profiler.attach.providers.TargetPlatformEnum;
+import org.netbeans.modules.profiler.attach.providers.ValidationResult;
+import org.netbeans.modules.profiler.attach.spi.IntegrationProvider;
+import org.netbeans.modules.profiler.attach.spi.ModificationException;
+import org.openide.util.NbBundle;
 
 /**
  *
@@ -119,10 +118,6 @@ public class Tomcat5IntegrationProvider extends AbstractTomcatIntegrationProvide
         } else {
             super.modify(attachSettings);
         }
-    }
-
-    public boolean supportsJVM(TargetPlatformEnum jvm) {
-        return true;
     }
 
     public ValidationResult validateInstallation(final String targetOS, final String path) {

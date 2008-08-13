@@ -40,14 +40,7 @@
 
 package org.netbeans.modules.profiler.j2ee.tomcat;
 
-import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.IntegrationProvider;
-import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
-import org.netbeans.modules.profiler.ui.wizards.providers.TargetPlatformEnum;
-import java.io.File;
-import java.text.MessageFormat;
-import java.util.Properties;
-
+import org.netbeans.modules.profiler.attach.providers.TargetPlatformEnum;
 
 /**
  *
@@ -58,10 +51,6 @@ public class Tomcat4IntegrationProvider extends AbstractTomcatIntegrationProvide
 
     public String getTitle() {
         return "Tomcat 4.x"; // NOI18N
-    }
-
-    public boolean supportsJVM(TargetPlatformEnum jvm) {
-        return true;
     }
 
     protected int getAttachWizardPriority() {
