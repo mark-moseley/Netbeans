@@ -91,9 +91,8 @@ implements PropertyChangeListener, DebuggerManagerListener {
     public BreakpointsEngineListener (ContextProvider lookupProvider) {
         debugger = (JPDADebuggerImpl) lookupProvider.lookupFirst 
             (null, JPDADebugger.class);
-        engineContext = (SourcePath) lookupProvider.
-            lookupFirst (null, SourcePath.class);
-        session = (Session) lookupProvider.lookupFirst(null, Session.class);
+        engineContext = lookupProvider.lookupFirst(null, SourcePath.class);
+        session = lookupProvider.lookupFirst(null, Session.class);
         debugger.addPropertyChangeListener (
             JPDADebugger.PROP_STATE,
             this
@@ -227,7 +226,7 @@ implements PropertyChangeListener, DebuggerManagerListener {
             removeBreakpointImpl (bs [i]);
     }
     
-    public void fixBreakpointImpls () {
+    public synchronized void fixBreakpointImpls () {
         Iterator<BreakpointImpl> i = breakpointToImpl.values ().iterator ();
         while (i.hasNext ())
             i.next ().fixed ();
