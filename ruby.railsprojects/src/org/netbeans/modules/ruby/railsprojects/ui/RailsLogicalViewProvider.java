@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -55,7 +55,6 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.Set;
 import javax.swing.Action;
-import javax.swing.JSeparator;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.ruby.railsprojects.GenerateAction;
@@ -65,17 +64,20 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
+import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.ruby.railsprojects.MigrateAction;
-import org.netbeans.modules.ruby.railsprojects.ui.customizer.RailsProjectProperties;
 import org.netbeans.modules.ruby.railsprojects.RailsProject;
-import org.netbeans.modules.ruby.railsprojects.UpdateHelper;
 import org.netbeans.modules.ruby.railsprojects.plugins.PluginAction;
 import org.netbeans.modules.ruby.rubyproject.AutoTestSupport;
-import org.netbeans.modules.ruby.rubyproject.RakeTargetsAction;
-import org.netbeans.modules.ruby.rubyproject.RakeTargetsDebugAction;
+import org.netbeans.modules.ruby.rubyproject.IrbAction;
+import org.netbeans.modules.ruby.rubyproject.RSpecSupport;
+import org.netbeans.modules.ruby.rubyproject.UpdateHelper;
+import org.netbeans.modules.ruby.rubyproject.rake.RakeRunnerAction;
+import org.netbeans.modules.ruby.spi.project.support.rake.RakeProjectEvent;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.modules.ruby.spi.project.support.rake.PropertyEvaluator;
+import org.netbeans.modules.ruby.spi.project.support.rake.RakeProjectListener;
 import org.netbeans.modules.ruby.spi.project.support.rake.ReferenceHelper;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.netbeans.spi.project.ui.support.CommonProjectActions;
@@ -96,6 +98,7 @@ import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
+import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.Lookups;
@@ -113,7 +116,7 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
     private final PropertyEvaluator evaluator;
     private final SubprojectProvider spp;
     private final ReferenceHelper resolver;
-    private List changeListeners;
+    private List<ChangeListener> changeListeners;
     
     public RailsLogicalViewProvider(RailsProject project, UpdateHelper helper, PropertyEvaluator evaluator, SubprojectProvider spp, ReferenceHelper resolver) {
         this.project = project;
@@ -144,15 +147,15 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
     }
     
     public Node findPath(Node root, Object target) {
-        Project project = root.getLookup().lookup(Project.class);
-        if (project == null) {
+        Project _project = root.getLookup().lookup(Project.class);
+        if (_project == null) {
             return null;
         }
         
         if (target instanceof FileObject) {
             FileObject targetFO = (FileObject) target;
             Project owner = FileOwnerQuery.getOwner(targetFO);
-            if (!project.equals(owner)) {
+            if (!_project.equals(owner)) {
                 return null; // Don't waste time if project does not own the fo
             }
             
@@ -177,7 +180,7 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
     
     public synchronized void addChangeListener(ChangeListener l) {
         if (this.changeListeners == null) {
-            this.changeListeners = new ArrayList();
+            this.changeListeners = new ArrayList<ChangeListener>();
         }
         this.changeListeners.add(l);
     }
@@ -200,8 +203,7 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
             if (this.changeListeners == null) {
                 return;
             }
-            _listeners = (ChangeListener[]) this.changeListeners.toArray(
-                    new ChangeListener[this.changeListeners.size()]);
+            _listeners = this.changeListeners.toArray(new ChangeListener[this.changeListeners.size()]);
         }
         ChangeEvent event = new ChangeEvent(this);
         for (int i=0; i < _listeners.length; i++) {
@@ -209,38 +211,20 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
         }
     }
     
-//    private static Lookup createLookup( Project project ) {
-//        DataFolder rootFolder = DataFolder.findFolder(project.getProjectDirectory());
-//        // XXX Remove root folder after FindAction rewrite
-//        return Lookups.fixed(new Object[] {project, rootFolder});
-//    }
-    
-    
-    // Private innerclasses ----------------------------------------------------------------
-    
-    private static final String[] BREAKABLE_PROPERTIES = new String[] {
-        RailsProjectProperties.JAVAC_CLASSPATH,
-        RailsProjectProperties.RUN_CLASSPATH,
-        RailsProjectProperties.DEBUG_CLASSPATH,
-        RailsProjectProperties.RUN_TEST_CLASSPATH,
-        RailsProjectProperties.DEBUG_TEST_CLASSPATH,
-        RailsProjectProperties.JAVAC_TEST_CLASSPATH,
-    };
-    
-//    private static Image brokenProjectBadge = Utilities.loadImage("org/netbeans/modules/ruby/railsprojects/ui/resources/brokenProjectBadge.gif", true);
-    
-    /** Filter node containin additional features for the Ruby physical
-     */
-    private final class RailsLogicalViewRootNode extends AbstractNode implements Runnable, FileStatusListener, ChangeListener, PropertyChangeListener {
-        
-        private Set files;
-        private Map fileSystemListeners;
+    /** Filter node containin additional features for the Ruby physical. */
+    private final class RailsLogicalViewRootNode extends AbstractNode
+            implements Runnable, FileStatusListener, ChangeListener, PropertyChangeListener {
+
+        private Set<FileObject> files;
+        private Map<FileSystem, FileStatusListener> fileSystemListeners;
         private RequestProcessor.Task task;
         private final Object privateLock = new Object();
         private boolean iconChange;
         private boolean nameChange;
         private ChangeListener sourcesListener;
-        private Map groupsListeners;
+        private Map<SourceGroup, PropertyChangeListener> groupsListeners;
+        private final RSpecSupport rspecSupport;
+
         
         public RailsLogicalViewRootNode() {
             super(NodeFactorySupport.createCompositeChildren(project, "Projects/org-netbeans-modules-ruby-railsprojects/Nodes"),  // NOI18N
@@ -248,8 +232,27 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
             setIconBaseWithExtension("org/netbeans/modules/ruby/railsprojects/ui/resources/rails.png"); // NOI18N
             super.setName( ProjectUtils.getInformation( project ).getDisplayName() );
             setProjectFiles(project);
+            helper.getRakeProjectHelper().addRakeProjectListener(new RakeProjectListener() {
+                public void configurationXmlChanged(RakeProjectEvent ev) {
+                    fireShortDescriptionChange(null, null);
+                }
+
+                public void propertiesChanged(RakeProjectEvent ev) {
+                    fireShortDescriptionChange(null, null);
+                }
+            });
+            this.rspecSupport = new RSpecSupport(project);
         }
-        
+
+        public @Override String getShortDescription() {
+            String platformDesc = RubyPlatform.platformDescriptionFor(project);
+            if (platformDesc == null) {
+                platformDesc = NbBundle.getMessage(RailsLogicalViewProvider.class, "RailsLogicalViewProvider.PlatformNotFound");
+            }
+            String dirName = FileUtil.getFileDisplayName(project.getProjectDirectory());
+            return NbBundle.getMessage(RailsLogicalViewProvider.class, "RailsLogicalViewProvider.ProjectTooltipDescription", dirName, platformDesc);
+        }
+
         protected final void setProjectFiles(Project project) {
             Sources sources = ProjectUtils.getSources(project);  // returns singleton
             if (sourcesListener == null) {
@@ -260,20 +263,19 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
         }
         
         
-        private final void setGroups(Collection groups) {
+        private final void setGroups(Collection<SourceGroup> groups) {
             if (groupsListeners != null) {
                 Iterator it = groupsListeners.keySet().iterator();
                 while (it.hasNext()) {
                     SourceGroup group = (SourceGroup) it.next();
-                    PropertyChangeListener pcl = (PropertyChangeListener) groupsListeners.get(group);
+                    PropertyChangeListener pcl = groupsListeners.get(group);
                     group.removePropertyChangeListener(pcl);
                 }
             }
-            groupsListeners = new HashMap();
-            Set roots = new HashSet();
+            groupsListeners = new HashMap<SourceGroup, PropertyChangeListener>();
+            Set<FileObject> roots = new HashSet<FileObject>();
             Iterator it = groups.iterator();
-            while (it.hasNext()) {
-                SourceGroup group = (SourceGroup) it.next();
+            for (SourceGroup group : groups) {
                 PropertyChangeListener pcl = WeakListeners.propertyChange(this, group);
                 groupsListeners.put(group, pcl);
                 group.addPropertyChangeListener(pcl);
@@ -283,24 +285,22 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
             setFiles(roots);
         }
         
-        protected final void setFiles(Set files) {
+        protected final void setFiles(Set<FileObject> files) {
             if (fileSystemListeners != null) {
-                Iterator it = fileSystemListeners.keySet().iterator();
-                while (it.hasNext()) {
-                    FileSystem fs = (FileSystem) it.next();
-                    FileStatusListener fsl = (FileStatusListener) fileSystemListeners.get(fs);
+                for (FileSystem fs : fileSystemListeners.keySet()) {
+                    FileStatusListener fsl = fileSystemListeners.get(fs);
                     fs.removeFileStatusListener(fsl);
                 }
             }
             
-            fileSystemListeners = new HashMap();
+            fileSystemListeners = new HashMap<FileSystem, FileStatusListener>();
             this.files = files;
             if (files == null) {
                 return;
             }
             
             Iterator it = files.iterator();
-            Set hookedFileSystems = new HashSet();
+            Set<FileSystem> hookedFileSystems = new HashSet<FileSystem>();
             while (it.hasNext()) {
                 FileObject fo = (FileObject) it.next();
                 try {
@@ -337,7 +337,7 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
             
             if (files != null && files.iterator().hasNext()) {
                 try {
-                    FileObject fo = (FileObject) files.iterator().next();
+                    FileObject fo = files.iterator().next();
                     img = fo.getFileSystem().getStatus().annotateIcon(img, type, files);
                 } catch (FileStateInvalidException e) {
                     ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
@@ -349,7 +349,7 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
         
         private Image getMyIcon(int type) {
             Image original = super.getIcon(type);
-//            return broken || illegalState ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;
+//            return broken || illegalState ? ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;
             return original;
         }
         
@@ -358,7 +358,7 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
             
             if (files != null && files.iterator().hasNext()) {
                 try {
-                    FileObject fo = (FileObject) files.iterator().next();
+                    FileObject fo = files.iterator().next();
                     img = fo.getFileSystem().getStatus().annotateIcon(img, type, files);
                 } catch (FileStateInvalidException e) {
                     ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
@@ -370,7 +370,7 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
         
         private Image getMyOpenedIcon(int type) {
             Image original = super.getOpenedIcon(type);
-            //return broken || illegalState ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;
+            //return broken || illegalState ? ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;
             return original;
         }
         
@@ -416,6 +416,7 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
         // sources change
         public void stateChanged(ChangeEvent e) {
             setProjectFiles(project);
+            fireShortDescriptionChange(null, null);
         }
         
         // group change
@@ -453,12 +454,11 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
         
         // Private methods -------------------------------------------------------------
         
-        @SuppressWarnings("unchecked")
         private Action[] getAdditionalActions() {
             
             ResourceBundle bundle = NbBundle.getBundle(RailsLogicalViewProvider.class);
             
-            List actions = new ArrayList();
+            List<Action> actions = new ArrayList<Action>();
             
             actions.add(SystemAction.get(GenerateAction.class));
             actions.add(null);
@@ -468,8 +468,8 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
             //actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_REBUILD, bundle.getString("LBL_RebuildAction_Name"), null)); // NOI18N
             //actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_CLEAN, bundle.getString("LBL_CleanAction_Name"), null)); // NOI18N
             //actions.add(null);
-            actions.add(SystemAction.get(RakeTargetsAction.class));
-            actions.add(SystemAction.get(RakeTargetsDebugAction.class));
+            actions.add(SystemAction.get(RakeRunnerAction.class));
+            actions.add(SystemAction.get(IrbAction.class));
             actions.add(SystemAction.get(MigrateAction.class));
             actions.add(null);
             actions.add(ProjectSensitiveActions.projectCommandAction(RailsActionProvider.COMMAND_RAILS_CONSOLE, bundle.getString("LBL_ConsoleAction_Name"), null)); // NOI18N
@@ -480,6 +480,10 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
             if (AutoTestSupport.isInstalled(project)) {
                 actions.add(ProjectSensitiveActions.projectCommandAction(RailsActionProvider.COMMAND_AUTOTEST, bundle.getString("LBL_AutoTest"), null)); // NOI18N
             }
+            if (rspecSupport.isRSpecInstalled()) {
+                actions.add(ProjectSensitiveActions.projectCommandAction(RailsActionProvider.COMMAND_RSPEC, bundle.getString("LBL_RSpec"), null)); // NOI18N
+            }
+
             actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_DEBUG, bundle.getString("LBL_DebugAction_Name"), null)); // NOI18N
             actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_TEST, bundle.getString("LBL_TestAction_Name"), null)); // NOI18N
             actions.add(CommonProjectActions.setProjectConfigurationAction());
@@ -496,23 +500,13 @@ public class RailsLogicalViewProvider implements LogicalViewProvider {
             actions.add(SystemAction.get(FindAction.class));
             
             // honor 57874 contact
-            
-            Collection<? extends Object> res = Lookups.forPath("Projects/Actions").lookupAll(Object.class); // NOI18N
-            if (!res.isEmpty()) {
-                actions.add(null);
-                for (Object next : res) {
-                    if (next instanceof Action) {
-                        actions.add((Action) next);
-                    } else if (next instanceof JSeparator) {
-                        actions.add(null);
-                    }
-                }
-            }
+            actions.add(null);
+            actions.addAll(Utilities.actionsForPath("Projects/Actions")); // NOI18N
 
             actions.add(null);
             actions.add(CommonProjectActions.customizeProjectAction());
             
-            return (Action[]) actions.toArray(new Action[actions.size()]);
+            return actions.toArray(new Action[actions.size()]);
         }
 
         public @Override String toString() {
