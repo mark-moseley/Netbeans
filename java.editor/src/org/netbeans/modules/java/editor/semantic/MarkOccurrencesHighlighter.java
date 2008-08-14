@@ -46,6 +46,7 @@ import com.sun.source.tree.DoWhileLoopTree;
 import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.LabeledStatementTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.StatementTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
@@ -80,6 +81,7 @@ import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.modules.editor.errorstripe.privatespi.Mark;
+import org.netbeans.modules.java.editor.javadoc.JavadocImports;
 import org.netbeans.modules.java.editor.options.MarkOccurencesSettings;
 import org.netbeans.modules.java.editor.semantic.ColoringAttributes.Coloring;
 import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
@@ -207,6 +209,16 @@ public class MarkOccurrencesHighlighter implements CancellableTask<CompilationIn
     }
     
     List<int[]> processImpl(CompilationInfo info, Preferences node, Document doc, int caretPosition) {
+        TokenSequence<JavaTokenId> cts = info.getTokenHierarchy().tokenSequence(JavaTokenId.language());
+
+        if (cts != null) {
+            cts.move(caretPosition);
+
+            if (cts.moveNext() && cts.token().id() == JavaTokenId.IDENTIFIER && cts.offset() == caretPosition) {
+                caretPosition++;
+            }
+        }
+
         CompilationUnitTree cu = info.getCompilationUnit();
         TreePath tp = info.getTreeUtilities().pathFor(caretPosition);
         TreePath typePath = findTypePath(tp);
@@ -338,13 +350,35 @@ public class MarkOccurrencesHighlighter implements CancellableTask<CompilationIn
             return detectBreakOrContinueTarget(info, doc, tp);
         }
         
+        Element el;
+        
+        el = JavadocImports.findReferencedElement(info, caretPosition);
+        boolean insideJavadoc = el != null;
+        
+        if (isCancelled()) {
+            return null;
+        }
+        
         //variable declaration:
-        Element el = info.getTrees().getElement(tp);
+        if (!insideJavadoc) {
+            if (tp.getParentPath() != null && tp.getParentPath().getLeaf().getKind() == Kind.NEW_CLASS) {
+                TreePath c = new TreePath(tp.getParentPath(), ((NewClassTree) tp.getParentPath().getLeaf()).getIdentifier());
+                if (isIn(caretPosition, Utilities.findIdentifierSpan(info, doc, c))) {
+                    el = info.getTrees().getElement(tp.getParentPath());
+                } else {
+                    el = info.getTrees().getElement(tp);
+                }
+            } else {
+                el = info.getTrees().getElement(tp);
+            }
+        }
+        
         if (   el != null
                 && (!(tree.getKind() == Kind.CLASS) || isIn(caretPosition, Utilities.findIdentifierSpan(info, doc, tp)))
                 && !Utilities.isKeyword(tree)
                 && (!(tree.getKind() == Kind.METHOD) || isIn(caretPosition, Utilities.findIdentifierSpan(info, doc, tp)))
-                && isEnabled(node, el)) {
+                && isEnabled(node, el)
+                || (insideJavadoc && isEnabled(node, el))) {
             FindLocalUsagesQuery fluq = new FindLocalUsagesQuery();
             
             setLocalUsages(fluq);
