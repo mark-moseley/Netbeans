@@ -64,6 +64,7 @@ import org.netbeans.modules.xml.schema.abe.UIUtilities;
 import org.netbeans.modules.xml.schema.abe.action.ShowDesignAction;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.schema.model.SchemaModel;
+import org.netbeans.modules.xml.schema.ui.basic.DesignGotoType;
 import org.netbeans.modules.xml.schema.ui.basic.SchemaGotoType;
 import org.netbeans.modules.xml.xam.Component;
 import org.netbeans.modules.xml.xam.Nameable;
@@ -169,6 +170,14 @@ public abstract class ABEAbstractNode extends AbstractNode
             doLookup = Lookups.exclude(doLookup, new Class[]{Node.class});
         }
         
+        //issue 141220.
+        Lookup compLookup = Lookup.EMPTY;
+        try {
+            compLookup = component.getModel().getSchemaModel().getModelSource().getLookup();
+        } catch (Exception ex) {
+            //ignore
+        }
+        
         return new ProxyLookup(new Lookup[]{
             // schemamodel lookup
             // exclude the DataObject here because the DataObject for the
@@ -177,7 +186,7 @@ public abstract class ABEAbstractNode extends AbstractNode
             // DataObjects in the lookup and this may cause a problem with
             // save cookies, etc.
             Lookups.exclude(
-                    component.getModel().getSchemaModel().getModelSource().getLookup(),
+                    compLookup,
                     new Class[] {DataObject.class}
             ),
             // axi component
@@ -238,31 +247,30 @@ public abstract class ABEAbstractNode extends AbstractNode
     }
     
     public Action[] getActions(boolean b) {
-        if(uiNode){
-            if(getAXIComponent().isReadOnly()){
-                //filter out refactor action if this is a readonly file
-                SystemAction[] ret = new SystemAction[ALL_ACTIONS.length];
-                for(int i = 0; i < ALL_ACTIONS.length; i++){
-                    String name = null;
-                    if(ALL_ACTIONS[i] != null)
-                        name = (String)ALL_ACTIONS[i].getValue(Action.NAME);
-                                
-                    if(name != null && name.equals("Refactor") ){
-                        ret[i] = null;
-                    }else{
-                        ret[i] = ALL_ACTIONS[i];
-                    }
+        if(!uiNode)
+            return SUB_ACTIONS;            
+        if(getAXIComponent() != null && getAXIComponent().isReadOnly()) {
+            //filter out refactor action if this is a readonly file
+            SystemAction[] ret = new SystemAction[ALL_ACTIONS.length];
+            for(int i = 0; i < ALL_ACTIONS.length; i++) {
+                String name = null;
+                if(ALL_ACTIONS[i] != null)
+                    name = (String)ALL_ACTIONS[i].getValue(Action.NAME);
+                if(name != null && name.equals("Refactor") ) {
+                    ret[i] = null;
+                } else {
+                    ret[i] = ALL_ACTIONS[i];
                 }
-                return ret;
             }
-            return ALL_ACTIONS;
-        } else
-            return SUB_ACTIONS;
+            return ret;
+        }
+        return ALL_ACTIONS;
     }
     
     private static final GotoType[] GOTO_TYPES = new GotoType[] {
         new SourceGotoType(),
         new SchemaGotoType(),
+        new DesignGotoType(),        
     };
     
     
@@ -305,6 +313,8 @@ public abstract class ABEAbstractNode extends AbstractNode
     }
     
     private void setAXIComponent(AXIComponent axiComponent) {
+        if(axiComponent == null || axiComponent.getModel() == null)
+            return;
         this.axiComponent = axiComponent;
         axiComponent.getModel().addPropertyChangeListener(
                 WeakListeners.propertyChange(this, axiComponent.getModel())
@@ -461,8 +471,8 @@ public abstract class ABEAbstractNode extends AbstractNode
         // try rename silently
         
         try {
-            
-            context.setUserInducedEventMode(true);
+            if(context != null)
+                context.setUserInducedEventMode(true);
             SchemaModel sm = model.getSchemaModel();
           //  RefactoringManager.getInstance().execute(request, false);
             SharedUtils.silentRename((Nameable)ref,value, false);
