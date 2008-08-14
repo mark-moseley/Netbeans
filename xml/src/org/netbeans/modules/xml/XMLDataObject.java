@@ -41,11 +41,9 @@
 package org.netbeans.modules.xml;
 
 import java.beans.*;
-
+import java.io.IOException;
 import javax.xml.transform.Source;
-
 import org.xml.sax.*;
-
 import org.openide.awt.HtmlBrowser;
 import org.openide.filesystems.*;
 import org.openide.loaders.*;
@@ -55,14 +53,12 @@ import org.openide.cookies.*;
 import org.openide.actions.*;
 import org.openide.windows.CloneableOpenSupport;
 import org.openide.util.actions.SystemAction;
-
 import org.netbeans.modules.xml.text.TextEditorSupport;
 import org.netbeans.modules.xml.sync.*;
 import org.netbeans.modules.xml.cookies.*;
-
+import org.netbeans.modules.xml.lib.Util;
 import org.netbeans.modules.xml.text.syntax.XMLKit;
 import org.netbeans.spi.xml.cookies.*;
-import org.openide.util.lookup.Lookups;
 
 /** Object that provides main functionality for xml document.
  * Instance holds all synchronization related state information.
@@ -84,11 +80,6 @@ public final class XMLDataObject extends org.openide.loaders.XMLDataObject
     private final DataObjectCookieManager cookieManager;
     
 
-    //
-    // init
-    //
-
-
     /** Create new XMLDataObject
      *
      * @param fo the primary file object
@@ -100,40 +91,43 @@ public final class XMLDataObject extends org.openide.loaders.XMLDataObject
         CookieSet set = getCookieSet();
         set.add (cookieManager = new DataObjectCookieManager (this, set));
         sync = new XMLSyncSupport(this);
-        TextEditorSupport.TextEditorSupportFactory editorFactory =
-            TextEditorSupport.findEditorSupportFactory (this, XMLKit.MIME_TYPE);
+        String mimetype = fo.getMIMEType();
+        //when undelying fileobject has a mimetype defined,
+        //don't enforce text/xml on the editor document.
+        //be conservative and apply the new behaviour only when the mimetype is xml like..
+        if (fo.getMIMEType().indexOf("xml") == -1) { // NOI18N
+            mimetype = XMLKit.MIME_TYPE;
+        }
+        final TextEditorSupport.TextEditorSupportFactory editorFactory =
+            TextEditorSupport.findEditorSupportFactory (this, mimetype);
         editorFactory.registerCookies (set);
         CookieSet.Factory viewCookieFactory = new ViewCookieFactory();
         set.add (ViewCookie.class, viewCookieFactory);
         InputSource is = DataObjectAdapters.inputSource (this);
+        //enable "Save As"
+        set.assign( SaveAsCapable.class, new SaveAsCapable() {
+            public void saveAs(FileObject folder, String fileName) throws IOException {
+                editorFactory.createEditor().saveAs( folder, fileName );
+            }
+        });
         // add check and validate cookies
         set.add (new CheckXMLSupport (is));
         set.add (new ValidateXMLSupport (is));        
         // add TransformableCookie
         Source source = DataObjectAdapters.source (this);
-        set.add (new TransformableSupport (source));        
+        set.add (new TransformableSupport (source));
         new CookieManager (this, set, XMLCookieFactoryCreator.class);
         this.addPropertyChangeListener (this);  //??? - strange be aware of firing cycles
     }
     
+    @Override
     public final Lookup getLookup() {
-        return Lookups.fixed( new Object[]{
-                    super.getLookup(), 
-                    this
-                    });
+        return getCookieSet().getLookup();
     }
-
-    
-/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * DATAOBJECT stuff
- *  cookie management
- *  node delegate
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- */
-
 
     /**
      */
+    @Override
     protected Node createNodeDelegate () {
         if ( Util.THIS.isLoggable() ) /* then */ Util.THIS.debug ("--> XMLDataObject.createNodeDelegate: this = " + this);
 
@@ -167,12 +161,14 @@ public final class XMLDataObject extends org.openide.loaders.XMLDataObject
 
 
     // it is called by super class constructor
+    @Override
     protected EditorCookie createEditorCookie () {
         return null;        
     }
     
 
     /** Delegate to super with possible debug messages. */
+    @Override
     public void setModified (boolean state) {
         if ( Util.THIS.isLoggable() ) /* then */ Util.THIS.debug ("XMLDataObject:setModified: state = " + state); // NOI18N
 
@@ -181,10 +177,9 @@ public final class XMLDataObject extends org.openide.loaders.XMLDataObject
 
 
     /** Delegate to super with possible debug messages. */
-    public org.openide.nodes.Node.Cookie getCookie(Class klass) {       
-                
+    @Override
+    public org.openide.nodes.Node.Cookie getCookie(Class klass) {                       
         Node.Cookie cake = null;
-        boolean change = false;
 
         if (SaveCookie.class.equals (klass) ) {
             if ( Util.THIS.isLoggable() ) /* then */ Util.THIS.debug ("XMLDataObject::getCookie");//, new RuntimeException ("Save cookie check")); // NOI18N
@@ -211,22 +206,6 @@ public final class XMLDataObject extends org.openide.loaders.XMLDataObject
         return cookieManager;
     }
     
-    
-/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * UPDATE section
- *   handles updating one representation by changed another one
- *
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- */
-
-//     // from XMLDataObjectLook
-//     public void updateTextDocument () {
-//         EditorCookie es = (EditorCookie)getCookie (EditorCookie.class);
-//         if (es != null) {
-//             es.close();
-//         }
-//     }
-
     /** TREE -> TEXT
      * Updates document by content of parsed tree based on the 
      * last document version.
@@ -274,6 +253,7 @@ public final class XMLDataObject extends org.openide.loaders.XMLDataObject
     }
 
 
+    @Override
     public HelpCtx getHelpCtx() {
         //return new HelpCtx(XMLDataObject.class);
         return HelpCtx.DEFAULT_HELP;
@@ -291,13 +271,13 @@ public final class XMLDataObject extends org.openide.loaders.XMLDataObject
         /** Create new XMLDataNode. */
         public XMLDataNode (XMLDataObject obj) {
             super (obj, Children.LEAF);
-
             setIconBaseWithExtension ("org/netbeans/modules/xml/resources/xmlObject.gif"); // NOI18N
-            setShortDescription (Util.THIS.getString ("PROP_XMLDataNode_description"));
+            setShortDescription (Util.THIS.getString (XMLDataObject.class, "PROP_XMLDataNode_description"));
         }
 
+        @Override
         public SystemAction getDefaultAction() {
-            return SystemAction.get (EditAction.class);
+            return SystemAction.get (OpenAction.class);
         }
     
     } // end of class XMLDataNode
