@@ -58,51 +58,88 @@ import org.netbeans.spi.lexer.LexerRestartInfo;
  *
  * @author mmetelka
  */
-public enum TestJoinSectionsTextTokenId implements TokenId {
+public enum TestJoinTextTokenId implements TokenId {
     
-    TEXT(), // Text except of text within braces
-    BRACES(); // "{ ... }" i.e. text within braces
+    
+    /**
+     * Text enclosed in (..) including '(' and ')'. <br/>
+     * Expicit embedding may be created (preferrably TestJoinTextTokenId.inBracesLanguage).
+     */
+    PARENS(),
+    /**
+     * Text enclosed in [..] including '[' and ']'. <br/>
+     * Automatic joining embedding of TestPlainTokenId.inBracketsLanguage.
+     */
+    BRACKETS(),
+    /**
+     * Text in apostrophes including them. </br>
+     * Automatic non-joining embedding of TestPlainTokenId.inApostrophesLanguage.
+     */
+    APOSTROPHES(),
+    /**
+     * All other text. <br/>
+     * No embedding.
+     */
+    TEXT();
 
-    private TestJoinSectionsTextTokenId() {
+    private TestJoinTextTokenId() {
     }
     
     public String primaryCategory() {
         return null;
     }
 
-    private static final Language<TestJoinSectionsTextTokenId> language
-    = new LanguageHierarchy<TestJoinSectionsTextTokenId>() {
+    public static final Language<TestJoinTextTokenId> language
+            = new LH("text/x-join-text").language();
+            
+    public static final Language<TestJoinTextTokenId> inTagLanguage
+            = new LH("text/x-join-in-tag").language();
+            
+    public static final Language<TestJoinTextTokenId> inBracesLanguage
+            = new LH("text/x-join-in-braces").language();
+            
+    public static final Language<TestJoinTextTokenId> inBackquotesLanguage
+            = new LH("text/x-join-in-quotes").language();
+            
+    private static final class LH extends LanguageHierarchy<TestJoinTextTokenId> {
+
+        private String mimeType;
+        
+        LH(String mimeType) {
+            this.mimeType = mimeType;
+        }
 
         @Override
         protected String mimeType() {
-            return "text/x-join-sections-text";
+            return mimeType;
         }
 
         @Override
-        protected Collection<TestJoinSectionsTextTokenId> createTokenIds() {
-            return EnumSet.allOf(TestJoinSectionsTextTokenId.class);
+        protected Collection<TestJoinTextTokenId> createTokenIds() {
+            return EnumSet.allOf(TestJoinTextTokenId.class);
         }
 
         @Override
-        protected Lexer<TestJoinSectionsTextTokenId> createLexer(LexerRestartInfo<TestJoinSectionsTextTokenId> info) {
-            return new TestJoinSectionsTextLexer(info);
+        protected Lexer<TestJoinTextTokenId> createLexer(LexerRestartInfo<TestJoinTextTokenId> info) {
+            return new TestJoinTextLexer(info);
         }
         
         @Override
         public LanguageEmbedding<?> embedding(
-        Token<TestJoinSectionsTextTokenId> token, LanguagePath languagePath, InputAttributes inputAttributes) {
+        Token<TestJoinTextTokenId> token, LanguagePath languagePath, InputAttributes inputAttributes) {
             // Test language embedding in the block comment
             switch (token.id()) {
+//                case PARENS: - explicit custom embedding
+//                    return LanguageEmbedding.create(TestPlainTokenId.inParensLanguage, 1, 1, true);
+                case BRACKETS:
+                    return LanguageEmbedding.create(TestPlainTokenId.inBracketsLanguage, 1, 1, true);
+                case APOSTROPHES:
+                    return LanguageEmbedding.create(TestPlainTokenId.inApostrophesLanguage, 1, 1, false);
 //                case TEXT:
 //                    return LanguageEmbedding.create(TestStringTokenId.language(), 1, 1);
             }
             return null; // No embedding
         }
 
-    }.language();
-
-    public static Language<TestJoinSectionsTextTokenId> language() {
-        return language;
     }
-
 }

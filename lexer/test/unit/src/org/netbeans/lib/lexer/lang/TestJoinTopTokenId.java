@@ -58,51 +58,79 @@ import org.netbeans.spi.lexer.LexerRestartInfo;
  *
  * @author mmetelka
  */
-public enum TestJoinSectionsTopTokenId implements TokenId {
+public enum TestJoinTopTokenId implements TokenId {
     
-    TEXT(),
-    TAG();
+    /**
+     * Text enclosed in &lt;..&gt; including them. <br/>
+     * Implicit joining embedding of TestJoinTextTokenId.inTagLanguage.
+     */
+    TAG(),
+    /**
+     * Text enclosed in {..} including '{' and '}'. <br/>
+     * Implicit non-joining embedding of TestJoinTextTokenId.inBracesLanguage
+     */
+    BRACES(),
+    /**
+     * Text enclosed within back quotes `xyz` - it's used instead of regular quotes not run into
+     * necessity to prefix the regular quotes by backslash e.g. when making an extract of a failing test.
+     * <br/>
+     * Implicit non-joining embedding of TestJoinTextTokenId.inQuotesLanguage
+     */
+    BACKQUOTES(),
+    /**
+     * Everything else.
+     * Implicit embedding of TestPlainTokenId.inQuotesLanguage
+     */
+    TEXT();
 
-    private TestJoinSectionsTopTokenId() {
+    private TestJoinTopTokenId() {
     }
     
     public String primaryCategory() {
         return null;
     }
 
-    private static final Language<TestJoinSectionsTopTokenId> language
-    = new LanguageHierarchy<TestJoinSectionsTopTokenId>() {
+    private static final Language<TestJoinTopTokenId> language
+    = new LanguageHierarchy<TestJoinTopTokenId>() {
 
         @Override
         protected String mimeType() {
-            return "text/x-join-sections-top";
+            return "text/x-join-top";
         }
 
         @Override
-        protected Collection<TestJoinSectionsTopTokenId> createTokenIds() {
-            return EnumSet.allOf(TestJoinSectionsTopTokenId.class);
+        protected Collection<TestJoinTopTokenId> createTokenIds() {
+            return EnumSet.allOf(TestJoinTopTokenId.class);
         }
 
         @Override
-        protected Lexer<TestJoinSectionsTopTokenId> createLexer(LexerRestartInfo<TestJoinSectionsTopTokenId> info) {
-            return new TestJoinSectionsTopLexer(info);
+        protected Lexer<TestJoinTopTokenId> createLexer(LexerRestartInfo<TestJoinTopTokenId> info) {
+            return new TestJoinTopLexer(info);
         }
         
         @Override
         public LanguageEmbedding<?> embedding(
-        Token<TestJoinSectionsTopTokenId> token, LanguagePath languagePath, InputAttributes inputAttributes) {
+        Token<TestJoinTopTokenId> token, LanguagePath languagePath, InputAttributes inputAttributes) {
             // Test language embedding in the block comment
             switch (token.id()) {
-                case TEXT:
+                case TAG:
                     // Create embedding that joins the sections
-                    return LanguageEmbedding.create(TestJoinSectionsTextTokenId.language(), 0, 0, true);
+                    return LanguageEmbedding.create(TestJoinTextTokenId.inTagLanguage, 1, 1, true);
+                case BRACES:
+                    // Embedding that does not join tokens
+                    return LanguageEmbedding.create(TestJoinTextTokenId.inBracesLanguage, 1, 1, false);
+                case BACKQUOTES:
+                    return LanguageEmbedding.create(TestJoinTextTokenId.inBackquotesLanguage, 1, 1, false);
+                case TEXT:
+                    // Create embedding that joins the sections - has 0-length start/end skip lengths
+                    return LanguageEmbedding.create(TestJoinTextTokenId.language, 0, 0, true);
             }
             return null; // No embedding
         }
 
     }.language();
 
-    public static Language<TestJoinSectionsTopTokenId> language() {
+    public static Language<TestJoinTopTokenId> language() {
         return language;
     }
 
