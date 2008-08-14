@@ -48,7 +48,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import org.netbeans.modules.cnd.api.model.CsmChangeEvent;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
+import org.netbeans.modules.cnd.api.model.CsmListeners;
 import org.netbeans.modules.cnd.api.model.CsmModelListener;
 import org.netbeans.modules.cnd.api.model.CsmProgressAdapter;
 import org.netbeans.modules.cnd.api.model.CsmProject;
@@ -71,27 +71,31 @@ public abstract class CsmFileTaskFactory {
     private final ModelListener modelListener = new ModelListener();
 
     protected CsmFileTaskFactory() {
-        CsmModelAccessor.getModel().addProgressListener(progressListener);
-        CsmModelAccessor.getModel().addModelListener(modelListener);
+        CsmListeners.getDefault().addProgressListener(progressListener);
+        CsmListeners.getDefault().addModelListener(modelListener);
     }
 
     protected abstract PhaseRunner createTask(FileObject fo);
     
     protected abstract Collection<FileObject> getFileObjects();
-
+    
     protected final void fileObjectsChanged() {
         final List<FileObject> currentFiles = new ArrayList<FileObject>(getFileObjects());
-
+        final long id = Math.round(100.0*Math.random());
+        final String name = this.getClass().getName();
+        if (OpenedEditors.SHOW_TIME) System.err.println("CsmFileTaskFactory: POST worker " + id);
         WORKER.post(new Runnable() {
 
             public void run() {
+                long start = System.currentTimeMillis();
+                if (OpenedEditors.SHOW_TIME) System.err.println("CsmFileTaskFactory: RUN worker " + id + " [" + name + "]" );
                 stateChangedImpl(currentFiles);
+                if (OpenedEditors.SHOW_TIME) System.err.println("CsmFileTaskFactory: DONE worker " + id + " after " + (System.currentTimeMillis() - start) + "ms.");
             }
         });
     }
 
     private void stateChangedImpl(List<FileObject> currentFiles) {
-        //System.err.println("stateChangedImpl, newFiles: " + currentFiles.size() + ", file2Tasks: " + fobj2csm.size());
         Map<CsmFile, PhaseRunner> toRemove = new HashMap<CsmFile, PhaseRunner>();
         Map<CsmFile, PhaseRunner> toAdd = new HashMap<CsmFile, PhaseRunner>();
 
@@ -137,14 +141,14 @@ public abstract class CsmFileTaskFactory {
 
 
         for (Entry<CsmFile, PhaseRunner> e : toRemove.entrySet()) {
-            //System.err.println("CFTF: removing " + e.getKey().getAbsolutePath());
+            if (OpenedEditors.SHOW_TIME) System.err.println("CFTF: removing " + e.getKey().getAbsolutePath());
             if (e!=null && e.getValue()!=null ) {
                 post(e.getValue(), e.getKey(), PhaseRunner.Phase.CLEANUP, IMMEDIATELY);
             }
         }
 
         for (Entry<CsmFile, PhaseRunner> e : toAdd.entrySet()) {
-            //System.err.println("CFTF: adding " + e.getKey().getAbsolutePath());
+            if (OpenedEditors.SHOW_TIME) System.err.println("CFTF: adding " + e.getKey().getAbsolutePath());
             post(e.getValue(), e.getKey(), e.getKey().isParsed() ? PhaseRunner.Phase.PARSED : PhaseRunner.Phase.INIT, DELAY);
         }
     }
@@ -166,6 +170,15 @@ public abstract class CsmFileTaskFactory {
         PhaseRunner pr = csm2task.get(file);
         
         if (pr!=null) {
+            if (!pr.isValid()) {
+                //if (OpenedEditors.SHOW_TIME) System.err.println("CsmFileTaskFactory: invalid task detected: " + pr.getClass().toString());
+                FileObject fo = CsmUtilities.getFileObject(file);
+                pr = createTask(fo);
+                assert pr.isValid();
+                //if (OpenedEditors.SHOW_TIME) System.err.println("CsmFileTaskFactory: new task created: " + pr.getClass().toString());
+                csm2task.put(file, pr);
+            }
+            pr.cancel();
             post(pr, file, phase, delay);
         }
     }
@@ -233,6 +246,8 @@ public abstract class CsmFileTaskFactory {
         
         };
         public abstract void run(Phase phase);
+        public abstract boolean isValid();
+        public abstract void cancel();
 
     }
     
@@ -248,6 +263,13 @@ public abstract class CsmFileTaskFactory {
         return new PhaseRunner() {
             public void run(Phase phase) {
                 // do nothing for all phases
+            }
+
+            public boolean isValid() {
+                return true;
+            }
+
+            public void cancel() {
             }
         };
     }

@@ -42,23 +42,25 @@
 package org.netbeans.modules.cnd.highlight.semantic;
 
 import java.awt.Color;
-import java.lang.ref.WeakReference;
 import java.util.Collection;
 import java.util.Collections;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.Document;
-import org.netbeans.api.editor.settings.FontColorSettings;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.model.tasks.CaretAwareCsmFileTaskFactory;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceKind;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceRepository;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceResolver;
 import org.netbeans.modules.cnd.highlight.semantic.options.SemanticHighlightingOptions;
+import org.netbeans.modules.cnd.modelutil.CsmFontColorManager;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.netbeans.modules.cnd.modelutil.FontColorProvider;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.editor.errorstripe.privatespi.Mark;
+import org.netbeans.spi.editor.highlighting.HighlightsSequence;
 import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
@@ -71,8 +73,7 @@ import org.openide.util.NbBundle;
 public class MarkOccurrencesHighlighter extends HighlighterBase {
 
     private static AttributeSet defaultColors;
-    private final static String COLORS = "cc-highlighting-mark-occurences"; // NOI18N
-    private WeakReference<CsmFile> weakFile;
+    private final static String COLORS = "cc-highlighting-mark-occurrences"; // NOI18N
 
     public static OffsetsBag getHighlightsBag(Document doc) {
         if (doc == null) {
@@ -102,19 +103,8 @@ public class MarkOccurrencesHighlighter extends HighlighterBase {
     }
     
     private CsmFile getCsmFile() {
-        if (weakFile == null || weakFile.get() == null) {
-            if (getDocument() == null) {
-                return null;
-            }
-            DataObject dobj = NbEditorUtilities.getDataObject(getDocument());
-            CsmFile file = CsmUtilities.getCsmFile(dobj, false);
-            if (file != null) {
-                weakFile = new WeakReference<CsmFile>(file);
-            } else {
-                return null;
-            }
-        }
-        return weakFile.get();
+        DataObject dobj = NbEditorUtilities.getDataObject(getDocument());
+        return CsmUtilities.getCsmFile(dobj, false);
     }
     
     private void clean() {
@@ -131,52 +121,94 @@ public class MarkOccurrencesHighlighter extends HighlighterBase {
 
     public static final Color ES_COLOR = new Color( 175, 172, 102 ); 
 
-    // Runnable
+    private boolean valid = true;
+    // PhaseRunner
     public void run(Phase phase) {
+        if (!SemanticHighlightingOptions.instance().getEnableMarkOccurrences()) {
+            clean();
+            valid = false;
+            return;
+        }
+        
         if (phase == Phase.PARSED || phase == Phase.INIT /*&& getCsmFile().isParsed()*/) {
-            if (!SemanticHighlightingOptions.getEnableMarkOccurences()) {
+            Document doc = getDocument();
+            
+            if (doc == null) {
                 clean();
                 return;
             }
-            Collection<CsmReference> out = getOccurences();
-            if (out == null) {
-                if (SemanticHighlightingOptions.getKeepMarks()) {
+            
+            CsmFile file = getCsmFile();
+            FileObject fo = CsmUtilities.getFileObject(file);
+            
+            if (file == null || fo == null) {
+                // this can happen if MO was triggered right before closing project
+                clean();
+                return;
+            }
+            
+            int lastPosition = CaretAwareCsmFileTaskFactory.getLastPosition(fo);
+            
+            HighlightsSequence hs = getHighlightsBag(doc).getHighlights(0, doc.getLength()-1);
+            while(hs.moveNext()) {
+                if (lastPosition >= hs.getStartOffset() && lastPosition <= hs.getEndOffset()) {
+                    // cursor is still in the marked area, so previous result is valid
                     return;
                 }
-                out = Collections.<CsmReference>emptyList();
             }
-            clean();
-            Document doc = getDocument();
-            OffsetsBag obag = new OffsetsBag(doc);
+            
+            Collection<CsmReference> out = getOccurrences(file, lastPosition);
+            if (out.isEmpty()) {
+                if (!SemanticHighlightingOptions.instance().getKeepMarks()) {
+                    clean();
+                }
+            } else {
+                OffsetsBag obag = new OffsetsBag(doc);
+                obag.clear();
 
-            obag.clear();
-            for (CsmReference csmReference : out) {
-                obag.addHighlight(csmReference.getStartOffset(), csmReference.getEndOffset(), defaultColors);
+                for (CsmReference csmReference : out) {
+                    obag.addHighlight(csmReference.getStartOffset(), csmReference.getEndOffset(), defaultColors);
+                }
+
+                getHighlightsBag(doc).setHighlights(obag);
+                OccurrencesMarkProvider.get(doc).setOccurrences(
+                        OccurrencesMarkProvider.createMarks(doc, out, ES_COLOR, NbBundle.getMessage(MarkOccurrencesHighlighter.class, "LBL_ES_TOOLTIP")));
             }
-            getHighlightsBag(doc).setHighlights(obag);
-            OccurrencesMarkProvider.get(doc).setOccurrences(
-                    OccurrencesMarkProvider.createMarks(doc, out, ES_COLOR, NbBundle.getMessage(MarkOccurrencesHighlighter.class, "LBL_ES_TOOLTIP")));
         } else if (phase == Phase.CLEANUP) {
             clean();
         } 
     }
     
-    private Collection<CsmReference> getOccurences() {
+    public boolean isValid() {
+        return valid;
+    }
+
+    public void cancel() {
+    }
+    
+/*    private Collection<CsmReference> getOccurrences() {
         Collection<CsmReference> out = null;
         CsmFile file = getCsmFile();
-        if (file != null && file.isParsed() && getDocument() != null ) {
             FileObject fo = CsmUtilities.getFileObject(file);
             assert fo != null;
-            CsmReference ref = CsmReferenceResolver.getDefault().findReference(file, CaretAwareCsmFileTaskFactory.getLastPosition(fo));
+            out = getOccurrences(file, CaretAwareCsmFileTaskFactory.getLastPosition(fo));
+        }
+        return out;
+    }*/
+    
+    /* package-local */ static Collection<CsmReference> getOccurrences(CsmFile file, int position) {
+        Collection<CsmReference> out = Collections.<CsmReference>emptyList();
+        if (file != null && file.isParsed() ) {
+            CsmReference ref = CsmReferenceResolver.getDefault().findReference(file, position);
             if (ref!=null && ref.getReferencedObject()!=null) {
-                out = CsmReferenceRepository.getDefault().getReferences(ref.getReferencedObject(), file, true);
+                out = CsmReferenceRepository.getDefault().getReferences(ref.getReferencedObject(), file, CsmReferenceKind.ALL);
             }
         }
         return out;
     }
     
     @Override
-    protected void initFontColors(FontColorSettings fcs) {
-        defaultColors = fcs.getTokenFontColors(COLORS);
+    protected void updateFontColors(FontColorProvider provider) {
+        defaultColors = provider.getColor(FontColorProvider.Entity.MARK_OCCURENCES);
     }
 }

@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,55 +38,29 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.cnd.highlight.semantic;
 
-import javax.swing.text.Document;
-import org.netbeans.modules.cnd.highlight.semantic.options.SemanticHighlightingOptions;
-import org.netbeans.modules.cnd.model.tasks.CaretAwareCsmFileTaskFactory;
-import org.openide.cookies.EditorCookie;
-import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.util.Exceptions;
+package org.netbeans.cnd.api.lexer;
+
+import org.netbeans.api.lexer.Token;
 
 /**
  *
- * @author Sergey Grinev
+ * @author Vladimir Voskresensky
  */
-public class MarkOccurrencesHighlighterFactory extends CaretAwareCsmFileTaskFactory {
+public abstract class CppAbstractTokenProcessor implements CppTokenProcessor {
+    public void start(int startOffset, int firstTokenOffset) {}
 
-    @Override
-    protected PhaseRunner createTask(final FileObject fo) {
-        MarkOccurrencesHighlighter ph = null;
-        if (enabled()) {
-            try {
-                DataObject dobj = DataObject.find(fo);
-                EditorCookie ec = dobj.getCookie(EditorCookie.class);
-                Document doc = ec.getDocument();
-                if (doc != null) {
-                    ph = new MarkOccurrencesHighlighter(doc);
-                }
-            } catch (DataObjectNotFoundException ex) {
-                Exceptions.printStackTrace(ex);
-            }
-        }
-        return ph != null ? ph :new PhaseRunner() {
+    public void end(int offset, int lastTokenOffset) {}
 
-            public void run(Phase phase) {
-                // rest
-            }
-
-            public boolean isValid() {
-                return !enabled();
-            }
-            
-            public void cancel() {
-            }
-        };
+    public int getLastSeparatorOffset() {
+        return -1;
     }
-    
-    private static boolean enabled() {
-        return SemanticHighlightingOptions.instance().getEnableMarkOccurrences()
-                &&!HighlighterBase.MINIMAL;
-    }
+
+    /**
+     *
+     * @param token
+     * @param tokenOffset
+     * @return true if token processor is interested in getting embedding of input token as well
+     */
+    public abstract boolean token(Token<CppTokenId> token, int tokenOffset);
 }
