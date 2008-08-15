@@ -102,10 +102,14 @@ MSG_ARG_CPA="nlu.arg.cpa"
 MSG_ARG_CPP="nlu.arg.cpp"
 MSG_ARG_DISABLE_FREE_SPACE_CHECK="nlu.arg.disable.space.check"
 MSG_ARG_LOCALE="nlu.arg.locale"
+MSG_ARG_SILENT="nlu.arg.silent"
 MSG_ARG_HELP="nlu.arg.help"
 MSG_USAGE="nlu.msg.usage"
 
-entryPoint() {		
+isSymlink=
+
+entryPoint() {
+        initSymlinkArgument        
 	CURRENT_DIRECTORY=`pwd`
 	LAUNCHER_NAME=`echo $0`
 	parseCommandLineArguments "$@"
@@ -135,6 +139,15 @@ entryPoint() {
 	fi
 }
 
+initSymlinkArgument() {
+        testSymlinkErr=`test -L / > /dev/null`
+        if [ -z "$testSymlinkErr" ] ; then
+            isSymlink=-L
+        else
+            isSymlink=-h
+        fi
+}
+
 debugLauncherArguments() {
 	debug "Launcher Command : $0"
 	argCounter=1
@@ -162,7 +175,9 @@ parseCommandLineArguments() {
 		$ARG_VERBOSE)
                         USE_DEBUG_OUTPUT=1;;
 		$ARG_NOSPACECHECK)
-                        PERFORM_FREE_SPACE_CHECK=0;;
+                        PERFORM_FREE_SPACE_CHECK=0
+                        parseJvmAppArgument "$1"
+                        ;;
                 $ARG_OUTPUT)
 			if [ -n "$2" ] ; then
                         	OUTPUT_FILE="$2"
@@ -235,7 +250,7 @@ parseCommandLineArguments() {
 	done
 }
 
-setLauncherLocale() {        index=0
+setLauncherLocale() {
 	if [ 0 -eq $LOCAL_OVERRIDDEN ] ; then		
         	SYSTEM_LOCALE="$LANG"
 		debug "Setting initial launcher locale from the system : $SYSTEM_LOCALE"
@@ -267,8 +282,8 @@ setLauncherLocale() {        index=0
   			# the less the length the less the difference and more coincedence
 
                         comp=`echo "$SYSTEM_LOCALE" | sed -e "s/^${arg}//"`				
-			length1=`awk 'END{ print length(a) }' a="$comp" < /dev/null`
-			length2=`awk 'END{ print length(b) }' b="$LAUNCHER_LOCALE" < /dev/null`
+			length1=`getStringLength "$comp"`
+                        length2=`getStringLength "$LAUNCHER_LOCALE"`
                         if [ $length1 -lt $length2 ] ; then	
 				# more coincidence between $SYSTEM_LOCALE and $arg than between $SYSTEM_LOCALE and $arg
                                 compare=`ifLess "$comp" "$LAUNCHER_LOCALE"`
@@ -309,6 +324,83 @@ ifLess() {
 	echo $compare
 }
 
+formatVersion() {
+        formatted=`echo "$1" | sed "s/-ea//g;s/-rc[0-9]*//g;s/-beta[0-9]*//g;s/-preview[0-9]*//g;s/-dp[0-9]*//g;s/-alpha[0-9]*//g;s/-fcs//g;s/_/./g;s/-/\./g"`
+        formatted=`echo "$formatted" | sed "s/^\(\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\)\)\.b\([0-9][0-9]*\)/\1\.0\.\5/g"`
+        formatted=`echo "$formatted" | sed "s/\.b\([0-9][0-9]*\)/\.\1/g"`
+	echo "$formatted"
+
+}
+
+compareVersions() {
+        current1=`formatVersion "$1"`
+        current2=`formatVersion "$2"`
+	compresult=
+	#0 - equals
+	#-1 - less
+	#1 - more
+
+	while [ -z "$compresult" ] ; do
+		value1=`echo "$current1" | sed "s/\..*//g"`
+		value2=`echo "$current2" | sed "s/\..*//g"`
+
+
+		removeDots1=`echo "$current1" | sed "s/\.//g"`
+		removeDots2=`echo "$current2" | sed "s/\.//g"`
+
+		if [ 1 -eq `ifEquals "$current1" "$removeDots1"` ] ; then
+			remainder1=""
+		else
+			remainder1=`echo "$current1" | sed "s/^$value1\.//g"`
+		fi
+		if [ 1 -eq `ifEquals "$current2" "$removeDots2"` ] ; then
+			remainder2=""
+		else
+			remainder2=`echo "$current2" | sed "s/^$value2\.//g"`
+		fi
+
+		current1="$remainder1"
+		current2="$remainder2"
+		
+		if [ -z "$value1" ] || [ 0 -eq `ifNumber "$value1"` ] ; then 
+			value1=0 
+		fi
+		if [ -z "$value2" ] || [ 0 -eq `ifNumber "$value2"` ] ; then 
+			value2=0 
+		fi
+		if [ "$value1" -gt "$value2" ] ; then 
+			compresult=1
+			break
+		elif [ "$value2" -gt "$value1" ] ; then 
+			compresult=-1
+			break
+		fi
+
+		if [ -z "$current1" ] && [ -z "$current2" ] ; then	
+			compresult=0
+			break
+		fi
+	done
+	echo $compresult
+}
+
+ifVersionLess() {
+	compareResult=`compareVersions "$1" "$2"`
+        if [ -1 -eq $compareResult ] ; then
+            echo 1
+        else
+            echo 0
+        fi
+}
+
+ifVersionGreater() {
+	compareResult=`compareVersions "$1" "$2"`
+        if [ 1 -eq $compareResult ] ; then
+            echo 1
+        else
+            echo 0
+        fi
+}
 
 ifGreater() {
 	arg1=`escapeBackslash "$1"`
@@ -337,6 +429,11 @@ ifNumber()
 	fi 
 	echo $result
 }
+getStringLength() {
+    strlength=`awk 'END{ print length(a) }' a="$1" < /dev/null`
+    echo $strlength
+}
+
 resolveRelativity() {
 	if [ 1 -eq `ifPathRelative "$1"` ] ; then
 		echo "$CURRENT_DIRECTORY"/"$1" | sed 's/\"//g' 2>/dev/null
@@ -397,7 +494,12 @@ getLauncherLocation() {
 }
 
 getLauncherSize() {
-	ls -l "$LAUNCHER_FULL_PATH" | awk ' { print $5 }' 2>/dev/null
+	lsOutput=`ls -l --block-size=1 "$LAUNCHER_FULL_PATH" 2>/dev/null`
+	if [ $? -ne 0 ] ; then
+	    #default block size
+	    lsOutput=`ls -l "$LAUNCHER_FULL_PATH" 2>/dev/null`
+	fi
+	echo "$lsOutput" | awk ' { print $5 }' 2>/dev/null
 }
 
 verifyIntegrity() {
@@ -427,7 +529,8 @@ showHelp() {
 	msg7=`message "$MSG_ARG_CPP $ARG_CLASSPATHP"`
 	msg8=`message "$MSG_ARG_DISABLE_FREE_SPACE_CHECK $ARG_NOSPACECHECK"`
         msg9=`message "$MSG_ARG_LOCALE $ARG_LOCALE"`
-	msg10=`message "$MSG_ARG_HELP $ARG_HELP"`
+        msg10=`message "$MSG_ARG_SILENT $ARG_SILENT"`
+	msg11=`message "$MSG_ARG_HELP $ARG_HELP"`
 	out "$msg0"
 	out "$msg1"
 	out "$msg2"
@@ -439,6 +542,7 @@ showHelp() {
 	out "$msg8"
 	out "$msg9"
 	out "$msg10"
+	out "$msg11"
 	exitProgram $ERROR_OK
 }
 
@@ -478,11 +582,19 @@ message() {
 createTempDirectory() {
 	if [ 0 -eq $EXTRACT_ONLY ] ; then
             if [ -z "$LAUNCHER_JVM_TEMP_DIR" ] ; then
-		if [ 0 -eq $EXTRACT_ONLY ] ; then 
-                    SYSTEM_TEMP="/tmp"
-                    if [ -d "$SYSTEM_TEMP" ] ; then
-                                debug "Using system temp"
-                                LAUNCHER_JVM_TEMP_DIR="/tmp"
+		if [ 0 -eq $EXTRACT_ONLY ] ; then
+                    if [ -n "$TEMP" ] && [ -d "$TEMP" ] ; then
+                        debug "TEMP var is used : $TEMP"
+                        LAUNCHER_JVM_TEMP_DIR="$TEMP"
+                    elif [ -n "$TMP" ] && [ -d "$TMP" ] ; then
+                        debug "TMP var is used : $TMP"
+                        LAUNCHER_JVM_TEMP_DIR="$TMP"
+                    elif [ -n "$TEMPDIR" ] && [ -d "$TEMPDIR" ] ; then
+                        debug "TEMPDIR var is used : $TEMPDIR"
+                        LAUNCHER_JVM_TEMP_DIR="$TEMPDIR"
+                    elif [ -d "/tmp" ] ; then
+                        debug "Using /tmp for temp"
+                        LAUNCHER_JVM_TEMP_DIR="/tmp"
                     else
                         debug "Using home dir for temp"
                         LAUNCHER_JVM_TEMP_DIR="$HOME"
@@ -544,7 +656,7 @@ setTestJVMClasspath() {
 	if [ -d "$TEST_JVM_PATH" ] ; then
 		TEST_JVM_CLASSPATH="$TEST_JVM_PATH"
 		debug "... testJVM path is a directory"
-	elif [ -L "$TEST_JVM_PATH" ] && [ $notClassFile -eq 1 ] ; then
+	elif [ $isSymlink "$TEST_JVM_PATH" ] && [ $notClassFile -eq 1 ] ; then
 		TEST_JVM_CLASSPATH="$TEST_JVM_PATH"
 		debug "... testJVM path is a link but not a .class file"
 	else
@@ -636,6 +748,13 @@ resolveResourceSize() {
     	echo "$resourceSize"
 }
 
+resolveResourceMd5() {
+	resourcePrefix="$1"
+	resourceVar="$""$resourcePrefix""_MD5"
+	resourceMd5=`eval "echo \"$resourceVar\""`
+    	echo "$resourceMd5"
+}
+
 resolveResourceType() {
 	resourcePrefix="$1"
 	resourceVar="$""$resourcePrefix""_TYPE"
@@ -653,8 +772,11 @@ extractResource() {
                 resourceSize=`resolveResourceSize "$resourcePrefix"`
 		debug "... resource size=$resourceSize"
             	resourcePath=`resolveResourcePath "$resourcePrefix"`
-	    	debug "... resource path=$resourcePath"		
+	    	debug "... resource path=$resourcePath"
             	extractFile "$resourceSize" "$resourcePath"
+                resourceMd5=`resolveResourceMd5 "$resourcePrefix"`
+	    	debug "... resource md5=$resourceMd5"
+                checkMd5 "$resourcePath" "$resourceMd5"
 		debug "... done"
 	fi
 	debug "... extracting resource finished"	
@@ -693,7 +815,7 @@ processJarsClasspath() {
 	while [ $jarsCounter -lt $JARS_NUMBER ] ; do
 		resolvedFile=`resolveResourcePath "JAR_$jarsCounter"`
 		debug "... adding jar to classpath : $resolvedFile"
-		if [ ! -f "$resolvedFile" ] && [ ! -d "$resolvedFile" ] && [ ! -L "$resolvedFile" ] ; then
+		if [ ! -f "$resolvedFile" ] && [ ! -d "$resolvedFile" ] && [ ! $isSymlink "$resolvedFile" ] ; then
 				message "$MSG_ERROP_MISSING_RESOURCE" "$resolvedFile"
 				exitProgram $ERROR_MISSING_RESOURCES
 		else
@@ -712,7 +834,7 @@ processJarsClasspath() {
 extractFile() {
         start=$LAUNCHER_TRACKING_SIZE
         size=$1 #absolute size
-        name=$2 #relative part
+        name="$2" #relative part        
         fullBlocks=`expr $size / $FILE_BLOCK_SIZE`
         fullBlocksSize=`expr "$FILE_BLOCK_SIZE" \* "$fullBlocks"`
         oneBlocks=`expr  $size - $fullBlocksSize`
@@ -747,9 +869,62 @@ extractFile() {
 		LAUNCHER_TRACKING_SIZE=`expr "$LAUNCHER_TRACKING_SIZE" + 1`
 
 		LAUNCHER_TRACKING_SIZE_BYTES=`expr "$LAUNCHER_TRACKING_SIZE_BYTES" + "$oneBlocks"`
-        fi
+        fi        
 }
 
+md5_program=""
+no_md5_program_id="no_md5_program"
+
+initMD5program() {
+    if [ -z "$md5_program" ] ; then 
+        type digest >> /dev/null 2>&1
+        if [ 0 -eq $? ] ; then
+            md5_program="digest -a md5"
+        else
+            type md5sum >> /dev/null 2>&1
+            if [ 0 -eq $? ] ; then
+                md5_program="md5sum"
+            else 
+                type gmd5sum >> /dev/null 2>&1
+                if [ 0 -eq $? ] ; then
+                    md5_program="gmd5sum"
+                else
+                    type md5 >> /dev/null 2>&1
+                    if [ 0 -eq $? ] ; then
+                        md5_program="md5 -q"
+                    else 
+                        md5_program="$no_md5_program_id"
+                    fi
+                fi
+            fi
+        fi
+        debug "... program to check: $md5_program"
+    fi
+}
+
+checkMd5() {
+     name="$1"
+     md5="$2"     
+     if [ 32 -eq `getStringLength "$md5"` ] ; then
+         #do MD5 check         
+         initMD5program            
+         if [ 0 -eq `ifEquals "$md5_program" "$no_md5_program_id"` ] ; then
+            debug "... check MD5 of file : $name"           
+            debug "... expected md5: $md5"
+            realmd5=`$md5_program "$name" 2>/dev/null | sed "s/ .*//g"`
+            debug "... real md5 : $realmd5"
+            if [ 32 -eq `getStringLength "$realmd5"` ] ; then
+                if [ 0 -eq `ifEquals "$md5" "$realmd5"` ] ; then
+                        debug "... integration check FAILED"
+			message "$MSG_ERROR_INTEGRITY" `normalizePath "$LAUNCHER_FULL_PATH"`
+			exitProgram $ERROR_INTEGRITY
+                fi
+            else
+                debug "... looks like not the MD5 sum"
+            fi
+         fi
+     fi   
+}
 searchJavaEnvironment() {
      if [ -z "$LAUNCHER_JAVA_EXE" ] ; then
 		    # search java in the environment
@@ -786,6 +961,32 @@ installBundledJVMs() {
 	fi
 }
 
+searchJavaSystemDefault() {
+        if [ -z "$LAUNCHER_JAVA_EXE" ] ; then
+            debug "... check default java in the path"
+            java_bin=`which java 2>&1`
+            if [ $? -eq 0 ] && [ -n "$java_bin" ] ; then
+                remove_no_java_in=`echo "$java_bin" | sed "s/no java in//g"`
+                if [ 1 -eq `ifEquals "$remove_no_java_in" "$java_bin"` ] && [ -f "$java_bin" ] ; then
+                    debug "... java in path found: $java_bin"
+                    # java is in path
+                    java_bin=`resolveSymlink "$java_bin"`
+                    debug "... java real path: $java_bin"
+                    parentDir=`dirname "$java_bin"`
+                    if [ -n "$parentDir" ] ; then
+                        parentDir=`dirname "$parentDir"`
+                        if [ -n "$parentDir" ] ; then
+                            debug "... java home path: $parentDir"
+                            parentDir=`resolveSymlink "$parentDir"`
+                            debug "... java home real path: $parentDir"
+                            verifyJVM "$parentDir"
+                        fi
+                    fi
+                fi
+            fi
+	fi
+}
+
 searchJavaSystemPaths() {
 	if [ -z "$LAUNCHER_JAVA_EXE" ] ; then
 	    # search java in the common system paths
@@ -806,7 +1007,7 @@ searchJavaSystemPaths() {
 				debug "... next item is $nextItem"				
 				nextItem=`removeEndSlashes "$nextItem"`
 				if [ -n "$nextItem" ] ; then
-					if [ -d "$nextItem" ] || [ -L "$nextItem" ] ; then
+					if [ -d "$nextItem" ] || [ $isSymlink "$nextItem" ] ; then
 	               				debug "... checking item : $nextItem"
 						verifyJVM "$nextItem"
 					fi
@@ -836,7 +1037,7 @@ searchJavaUserDefined() {
 }
 searchJava() {
 	message "$MSG_JVM_SEARCH"
-        if [ ! -f "$TEST_JVM_CLASSPATH" ] && [ ! -L "$TEST_JVM_CLASSPATH" ] && [ ! -d "$TEST_JVM_CLASSPATH" ]; then
+        if [ ! -f "$TEST_JVM_CLASSPATH" ] && [ ! $isSymlink "$TEST_JVM_CLASSPATH" ] && [ ! -d "$TEST_JVM_CLASSPATH" ]; then
                 debug "Cannot find file for testing JVM at $TEST_JVM_CLASSPATH"
 		message "$MSG_ERROR_JVM_NOT_FOUND" "$ARG_JAVAHOME"
                 exitProgram $ERROR_TEST_JVM_FILE
@@ -844,6 +1045,7 @@ searchJava() {
 		searchJavaUserDefined
 		installBundledJVMs
 		searchJavaEnvironment
+		searchJavaSystemDefault
 		searchJavaSystemPaths		
         fi
 
@@ -883,7 +1085,7 @@ normalizePath() {
 
 resolveSymlink() {  
     pathArg="$1"	
-    while [ -L "$pathArg" ] ; do
+    while [ $isSymlink "$pathArg" ] ; do
         ls=`ls -ld "$pathArg"`
         link=`expr "$ls" : '^.*-> \(.*\)$' 2>/dev/null`
     
@@ -936,10 +1138,10 @@ checkJavaHierarchy() {
 	tryJava="$1"
 	javaHierarchy=0
 	if [ -n "$tryJava" ] ; then
-		if [ -d "$tryJava" ] || [ -L "$tryJava" ] ; then # existing directory or a symlink        			
+		if [ -d "$tryJava" ] || [ $isSymlink "$tryJava" ] ; then # existing directory or a isSymlink        			
 			javaLib="$tryJava"/"lib"
 	        
-			if [ -d "$javaLib" ] || [ -L "$javaLib" ] ; then
+			if [ -d "$javaLib" ] || [ $isSymlink "$javaLib" ] ; then
 				javaLibDtjar="$javaLib"/"dt.jar"
 				if [ -f "$javaLibDtjar" ] || [ -f "$javaLibDtjar" ] ; then
 					#definitely JDK as the JRE doesn`t have dt.jar
@@ -949,7 +1151,7 @@ checkJavaHierarchy() {
 					javaLibJce="$javaLib"/"jce.jar"
 					javaLibCharsets="$javaLib"/"charsets.jar"					
 					javaLibRt="$javaLib"/"rt.jar"
-					if [ -f "$javaLibJce" ] || [ -L "$javaLibJce" ] || [ -f "$javaLibCharsets" ] || [ -L "$javaLibCharsets" ] || [ -f "$javaLibRt" ] || [ -L "$javaLibRt" ] ; then
+					if [ -f "$javaLibJce" ] || [ $isSymlink "$javaLibJce" ] || [ -f "$javaLibCharsets" ] || [ $isSymlink "$javaLibCharsets" ] || [ -f "$javaLibRt" ] || [ $isSymlink "$javaLibRt" ] ; then
 						javaHierarchy=1
 					fi
 					
@@ -1034,13 +1236,18 @@ verifyJavaHome() {
 				debug "Java OS Name     : $JAVA_COMP_OSNAME"
 				debug "Java OS Arch     : $JAVA_COMP_OSARCH"
 
-				compMin=`ifLess "$javaVersion" "$JAVA_COMP_VERSION_MIN"`
-				compMax=`ifGreater "$javaVersion" "$JAVA_COMP_VERSION_MAX"`
-				if [ -n "$JAVA_COMP_VERSION_MIN" ] && [ 1 -eq $compMin ] ; then
-				    comp=0
+				if [ -n "$JAVA_COMP_VERSION_MIN" ] ; then
+                                    compMin=`ifVersionLess "$javaVersion" "$JAVA_COMP_VERSION_MIN"`
+                                    if [ 1 -eq $compMin ] ; then
+                                        comp=0
+                                    fi
 				fi
-		                if [ -n "$JAVA_COMP_VERSION_MAX" ] && [ 1 -eq $compMax ] ; then
-		    	    	    comp=0
+
+		                if [ -n "$JAVA_COMP_VERSION_MAX" ] ; then
+                                    compMax=`ifVersionGreater "$javaVersion" "$JAVA_COMP_VERSION_MAX"`
+                                    if [ 1 -eq $compMax ] ; then
+                                        comp=0
+                                    fi
 		                fi				
 				if [ -n "$JAVA_COMP_VENDOR" ] ; then
 					debug " checking vendor = {$vendor}, {$JAVA_COMP_VENDOR}"
@@ -1086,7 +1293,13 @@ verifyJavaHome() {
 
 checkFreeSpace() {
 	size="$1"
-	path=`dirname "$2"`	
+	path="$2"
+
+	if [ ! -d "$path" ] && [ ! $isSymlink "$path" ] ; then
+		# if checking path is not an existing directory - check its parent dir
+		path=`dirname "$path"`
+	fi
+
 	diskSpaceCheck=0
 
 	if [ 0 -eq $PERFORM_FREE_SPACE_CHECK ] ; then
