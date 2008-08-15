@@ -38,11 +38,13 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+
 package org.netbeans.modules.apisupport.project.metainf;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
@@ -54,7 +56,6 @@ import org.netbeans.modules.apisupport.project.spi.NbModuleProvider;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
-import org.openide.actions.DeleteAction;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.AbstractNode;
@@ -64,27 +65,27 @@ import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
 /**
- * Wraps the META-INF/services node in Important Files node 
+ * Wraps the META-INF/services node in Important Files node
  * @author pzajac
  */
 public final class ServiceNodeHandler  {
      private static final String KEY_WAIT = "wait"; // NOI18N
-    
+
     private static final String THIS_SERVICES = NbBundle.getMessage(ServiceNodeHandler.class,"LBL_this_services");
     private static final String THIS_SERVICES_IN_CONTEXT = NbBundle.getMessage(ServiceNodeHandler.class,"LBL_this_services_in_context");
     static final String ROOT_NODE_NAME = NbBundle.getMessage(ServiceNodeHandler.class,"LBL_META_INF_services");
     // All services in platform
-    TreeMap<String,List<Service>> /* service class -> List of classes */ allServicesMap ; 
+    TreeMap<String,List<Service>> /* service class -> List of classes */ allServicesMap ;
     // services in module
     TreeMap <String,List<Service>>/* service class -> List of classes */moduleServiceMap;
-    
+
     int prevAllServicesCount = -1;
     int prevModuleServicesCount = -1;
-    
+
     final Project project;
     final NbModuleProvider info;
     List<Service> moduleServices;
-    
+
     /** services in this module
      */
     ServiceRootChildren moduleChild ;
@@ -92,9 +93,9 @@ public final class ServiceNodeHandler  {
      */
     ServiceRootChildren allInContextChild;
     boolean registeredListener;
-    /** holds reference to META-INF/services folder 
+    /** holds reference to META-INF/services folder
      */
-    private FileObject metaInfServicesFo;    
+    private FileObject metaInfServicesFo;
     /** cached codebase name
      */
     private String codeNameBase;
@@ -105,7 +106,7 @@ public final class ServiceNodeHandler  {
         /** show services  of this project or platfrom
          */
         private final boolean bProjectServices ;
-        
+
         ServiceRootChildren(boolean bProjectServices) {
             this.bProjectServices = bProjectServices;
         }
@@ -113,30 +114,31 @@ public final class ServiceNodeHandler  {
             // synchronize access to allServicesMap and moduleServices
             if (key.equals(KEY_WAIT)) {
                 return new Node[] {new AbstractNode(Children.LEAF) {
+                    @Override
                     public String getName() {
                         return KEY_WAIT;
                     }
+                    @Override
                     public String getDisplayName() {
                         return NbBundle.getMessage(ServiceNodeHandler.class,"LBL_ServiceNode_please_wait");
                     }
+                    @Override
                     public Action[] getActions(boolean context) {
                         return new Action[0];
-                    } 
+                    }
                 }};
-            } else if (key instanceof String ) {
-                Node parent = getNode(); 
+            } else {
+                Node parent = getNode();
                 String parentName = parent.getName();
                 boolean isThisModule = parentName.equals(THIS_SERVICES);
                 ServiceNode node = new ServiceNode(key,isThisModule);
                 return new Node[] {node};
-            } else {
-                throw new AssertionError(key);
             }
-            
-            
+
         }
-        
-    protected void addNotify() {
+
+        @Override
+        protected void addNotify() {
             SUtil.log(SUtil.LOG_SERVICE_NODE_HANDLER_ADD_NOTIFY);
             super.addNotify();
             if (fullyComputed) {
@@ -163,7 +165,7 @@ public final class ServiceNodeHandler  {
                                     moduleServiceMap = new TreeMap<String,List<Service>>();
                                     moduleServices = Service.getOnlyProjectServices(project);
                                     sortServices(moduleServiceMap, moduleServices);
-                                }                                
+                                }
                                 if (bProjectServices) {
                                     // only services from this project
                                     keys = moduleServiceMap.keySet();
@@ -183,11 +185,10 @@ public final class ServiceNodeHandler  {
                                         SUtil.log(keys.iterator().next().toString());
                                     }
                                 }
-                                
+
                             }
                             setKeys(keys);
                             synchronized (ServiceNodeHandler.this) {
-                                // tell the test that it is initialized
                                 fullyComputed = true;
                                 SUtil.log(SUtil.LOG_END_COMPUTE_KEYS);
                             }
@@ -195,9 +196,9 @@ public final class ServiceNodeHandler  {
                             Util.err.notify(ErrorManager.INFORMATIONAL, e);
                         }
                     } // run
-                    
-                    
-                    
+
+
+
                     private void sortServices(final TreeMap<String,List<Service>> map, final List<Service> services) {
                         //               sortServices(map,services);
                         for (Service service : services) {
@@ -213,8 +214,8 @@ public final class ServiceNodeHandler  {
                 }); // runnable
             } // else
         }
-        
-    void refreshKeys() {
+
+        void refreshKeys() {
             if (bProjectServices) {
                 setKeys(moduleServiceMap.keySet());
                 prevModuleServicesCount = moduleServiceMap.size();
@@ -222,24 +223,24 @@ public final class ServiceNodeHandler  {
                 setKeys(allServicesMap.keySet());
                 prevAllServicesCount = allServicesMap.size();
             }
-            
         }
-        
+
         public void updateNode(String keyName) {
             for (Node _n : getNodes()) {
                 ServiceNode n = (ServiceNode) _n;
                 if (n.getName().equals(keyName)) {
                     n.refreshName();
                     ((ServiceNodeChildren)n.getChildren()).nodesChanged();
-                } 
+                }
              }
         }
-        
-    protected void removeNotify() {
+
+        @Override
+        protected void removeNotify() {
             setKeys(new String[0]);
             super.removeNotify();
         }
-        
+
     }
     class ServiceClassKey {
         String name;
@@ -249,34 +250,36 @@ public final class ServiceNodeHandler  {
             this.bRemoved = bRemoved;
         }
 
+        @Override
         public int hashCode() {
             return name.hashCode();
         }
-        
+
+        @Override
         public boolean equals(Object obj) {
             return  (obj instanceof ServiceClassKey) && ((ServiceClassKey)obj).name.equals(name);
         }
 
     }
-    
+
     class  ServiceNodeChildren extends Children.Keys<ServiceClassKey>  {
         private boolean isThisModule;
-        /** className -> ServiceClassKey 
+        /** className -> ServiceClassKey
          */
         private TreeMap<String,ServiceClassKey> keys;
         boolean initialized = true;
-        
+
         ServiceNodeChildren(boolean isThisModule) {
             this.isThisModule = isThisModule;
 //            setKeys(new Object[]{KEY_WAIT});
         }
         private TreeMap<String,ServiceClassKey> getKeysMap () {
             if (keys == null) {
-                keys = new TreeMap<String,ServiceClassKey>(); 
+                keys = new TreeMap<String,ServiceClassKey>();
             }
             return keys;
         }
-        
+
         private ServiceClassKey addKey(ServiceClassKey key,TreeMap<String,ServiceClassKey> newKeyMap) {
             TreeMap<String, ServiceClassKey> ks = getKeysMap();
             ServiceClassKey oldKey = ks.get(key.name);
@@ -286,19 +289,20 @@ public final class ServiceNodeHandler  {
                   oldKey.bRemoved = key.bRemoved;
                   refreshKey(oldKey);
               }
-              newKeyMap.put(key.name,oldKey); 
+              newKeyMap.put(key.name,oldKey);
               return oldKey;
         }
-        
-         protected void addNotify() {
+
+        @Override
+        protected void addNotify() {
             ServiceNode serviceNode = (ServiceNode) getNode();
             isThisModule = serviceNode.isThisModule();
-            List<Service> servicesGroup  =  ((isThisModule) ? moduleServiceMap.get(serviceNode.getName()) : 
+            List<Service> servicesGroup  =  ((isThisModule) ? moduleServiceMap.get(serviceNode.getName()) :
                                                                   allServicesMap.get(serviceNode.getName()));
-           
+
             List<String> classes  = new ArrayList<String>();
             List<String> maskedClasses = new ArrayList<String>();
-            
+
             TreeMap<String,ServiceClassKey> newKeyMap = new TreeMap<String,ServiceClassKey>();
             // creates two groups - classes and masked class
             //
@@ -311,18 +315,16 @@ public final class ServiceNodeHandler  {
                     }
                 }
             }
-            
+
             // create nodes from classes
             //
-            int i;
-            for (i = 0 ; i < classes.size() ; i++) {
-                String name = classes.get(i);
+            for (String name : classes) {
                 ServiceClassKey key = new ServiceClassKey(name,false);
                 if (!isThisModule) {
                     String filteredName = '-' + name;
                     // register class like masked
-                    for (int fIt = 0 ; fIt < maskedClasses.size() ; fIt++) {
-                        if (maskedClasses.get(fIt).equals(filteredName)) {
+                    for (String masked : maskedClasses) {
+                        if (masked.equals(filteredName)) {
                             key.bRemoved = true;
                         }
                     }
@@ -333,8 +335,8 @@ public final class ServiceNodeHandler  {
             // show element which masks services in this module view
             //
             if (isThisModule) {
-                for ( int j = 0; j < maskedClasses.size() ; j++ ) {
-                    addKey(new ServiceClassKey(maskedClasses.get(j),false),newKeyMap);
+                for (String masked : maskedClasses) {
+                    addKey(new ServiceClassKey(masked, false), newKeyMap);
                 }
             }
             this.keys = newKeyMap;
@@ -345,13 +347,13 @@ public final class ServiceNodeHandler  {
             ServiceClassKey classKey = key;
             ServiceClassNode node = new ServiceClassNode(classKey.name,classKey.bRemoved);
             return new Node[] {node};
-        } 
+        }
 
         synchronized  void nodesChanged() {
             if (initialized) {
                 addNotify();
             }
-            
+
         }
 
     }
@@ -370,30 +372,32 @@ public final class ServiceNodeHandler  {
         boolean isThisModule() {
             return (getParentNode() == null) ? false : getParentNode().getName().equals(THIS_SERVICES);
         }
+        @Override
         public String getHtmlDisplayName() {
-            List services = (List) moduleServiceMap.get(getName());
-            
-            return  (services != null && !isThisModule()) ? "<b>" + getName() + "</b>" : getName(); //NOI18N
+            List<Service> services = moduleServiceMap.get(getName());
+            return (services != null && !isThisModule()) ? "<b>" + getName() + "</b>" : getName(); //NOI18N
         }
 
+        @Override
         public Action[] getActions(boolean context) {
             return new Action[] {AddService.getInstance()};
         }
-        
+
         /** create new service (also creates new file)
          */
         void addService(String serviceName, String classServiceName) {
-            List<Service> services = allServicesMap.get(serviceName);
+            // #139887: when allServicesMap is null then we're called from <exported services> node
+            // and can safely use moduleServiceMap instead. As it offers only classes from this project, 
+            // it is also consistent regarding duplicate services.
+            TreeMap<String,List<Service>> usedMap = allServicesMap != null ? allServicesMap : moduleServiceMap;
+            List<Service> services = usedMap.get(serviceName);
             boolean exists = false;
-            for (int sIt = 0 ; sIt < services.size() ; sIt++ ) {
-                Service service = services.get(sIt);
-                List classes = service.getClasses();
-                for (int cIt = 0 ; cIt < classes.size() ; cIt++) {
-                    String className = (String) classes.get(cIt);
+            for (Service service : services) {
+                for (String className : service.getClasses()) {
                     if (classServiceName.equals(className)) {
                         // already exist
                         exists = true;
-                        NotifyDescriptor.Message msgDesc = 
+                        NotifyDescriptor.Message msgDesc =
                                 new NotifyDescriptor.Message(NbBundle.getMessage(ServiceNodeHandler.class,"MSG_ServiceExist",className));
                         DialogDisplayer.getDefault().notify(msgDesc);
                     }
@@ -408,25 +412,25 @@ public final class ServiceNodeHandler  {
                    service = new Service(getInfo().getCodeNameBase(),serviceName,new ArrayList<String>());
                }
                service.getClasses().add(classServiceName);
-               service.write(project);  
+               service.write(project);
             }
         }
 
         void refreshName() {
             fireDisplayNameChange(null,null);
         }
-        
+
         Project getProject() {
             return project;
         }
-        
+
         NbModuleProvider getInfo() {
             return project.getLookup().lookup(NbModuleProvider.class);
         }
-        
+
     }
-    
-    /** leaf of services - a node for a class  
+
+    /** leaf of services - a node for a class
      */
     public final class ServiceClassNode extends AbstractNode {
         /** is the classs masked in other module?
@@ -442,6 +446,7 @@ public final class ServiceNodeHandler  {
                 setIconBaseWithExtension("org/netbeans/modules/apisupport/project/metainf/instance.png");
             }
         }
+        /* XXX #126577: not used
         Service getService() {
             // The parent node can be null
             if (getParentNode() != null) {
@@ -450,7 +455,7 @@ public final class ServiceNodeHandler  {
                 if (services != null) {
                     for (Service service : services) {
                         for (String n : service.getClasses()) {
-                            if (name.equals(n)) { 
+                            if (name.equals(n)) {
                                 return service;
                             }
                         }
@@ -458,11 +463,14 @@ public final class ServiceNodeHandler  {
                 }
             }
             return null;
-        }
+        }*/
+        @Override
         public Action[] getActions(boolean context) {
-            return new Action[] {DeleteAction.get(DeleteAction.class)}; 
+            // XXX cannot delete anyway, see ##126577: return new Action[] {DeleteAction.get(DeleteAction.class)};
+            return new Action[0];
         }
-        
+
+        @Override
         public String getHtmlDisplayName() {
             List<Service> services = moduleServiceMap.get(getParentNode().getName() );
             String name = getName();
@@ -483,18 +491,24 @@ public final class ServiceNodeHandler  {
             }
             return dispName;
         }
+        /* XXX #126577: just throws NPE if you try
+        @Override
         public boolean canDestroy() {
             return true;
         }
+         */
+        @Override
         public boolean canCopy() {
             return false;
         }
+        /* XXX #126577: not used 
+        @Override
         public void destroy() throws IOException {
             Service service = getService();
             // exists the service?
             if (service != null) {
                 Service moduleService = null;
-                List moduleServices = (List) moduleServiceMap.get(service.getFileName());
+                List<Service> moduleServices = moduleServiceMap.get(service.getFileName());
                 if (moduleServices == null || moduleServices.size() == 0) {
                     // create service in this modulu if the service doesn't exist
                     List<String> classes = new ArrayList<String>();
@@ -502,34 +516,34 @@ public final class ServiceNodeHandler  {
                                                         service.getFileName(),
                                                         classes);
                 } else {
-                    moduleService = (Service) moduleServices.get(0);
+                    moduleService = moduleServices.get(0);
                 }
                 moduleService.removeClass(getName(),project);
             }
-        }
+        }*/
     }
-    
+
     public ServiceNodeHandler(Project project, NbModuleProvider provider) {
         this.project = project;
         this.info = provider;
         if (!registeredListener) {
             // #87269 deadlock when file is modified externally on project initialization
-            // for example cvs update can cause it 
+            // for example cvs update can cause it
             ProjectManager.mutex().postWriteRequest(new Runnable() {
                 public void run() {
                   registerFileObjectListener();
                 }
             });
         }
-        
+
     }
-    
+
     /** creates root node which will be placed into important files node
      */
     public  Node createServiceRootNode() {
         return new ServiceRootNode();
     }
-    
+
     class ServiceRootNode extends AbstractNode {
         ServiceRootNode () {
             super (new Children.Array());
@@ -544,15 +558,17 @@ public final class ServiceNodeHandler  {
             return ServiceNodeHandler.this;
         }
 
+        @Override
         public Action[] getActions(boolean context) {
             return new Action[0];
         }
     }
-    
+
     static class ServiceFolderNode extends AbstractNode {
         ServiceFolderNode(Children children) {
             super(children);
         }
+        @Override
         public Action[] getActions(boolean context) {
             return new Action[0];
         }
@@ -573,23 +589,23 @@ public final class ServiceNodeHandler  {
         }
         return node;
     }
-    
+
     ////////////////////////////////////////////////////////////////
     // Filechange listener
     /////////////////////////////////////////////////////
-    
+
     /** listen on :
      *  META-INF/service | META-INF | project/src
      */
     public  void registerFileObjectListener() {
         FileObject srcDir = project.getProjectDirectory().getFileObject(
                                 info.getResourceDirectoryPath(false));
-        
+
         // srcDir is sometimes null, is it bug?
         if (srcDir != null) {
             if (!registeredListener) {
                 registeredListener = true;
-                FileObject fo = srcDir.getFileObject("META-INF"); //NOI18N 
+                FileObject fo = srcDir.getFileObject("META-INF"); //NOI18N
                 FileChangeListener listener = ServicesFileListener.getInstance();
                 if (fo != null) {
                     fo.removeFileChangeListener(listener);
@@ -608,14 +624,14 @@ public final class ServiceNodeHandler  {
                 }
             }
         } else {
-            // Error - logging 
+            // Error - logging
             ErrorManager em = ErrorManager.getDefault();
             em.log(" project.getSourceDirectory() = null");
             em.log("codenamebase = " + info.getCodeNameBase() );
             em.log("projectroot = " + project.getProjectDirectory().getPath());
         }
     }
-    
+
     void updateFile(FileObject fo) {
         try {
             if (fo.getParent() == SUtil.getServicesFolder(project,false) ) {
@@ -628,10 +644,10 @@ public final class ServiceNodeHandler  {
         } catch (IOException ioe) {
             ErrorManager.getDefault().notify(ioe);
         }
-        
+
     }
-    
-    
+
+
     /** remove nodes ...
      */
     void removeFile(FileObject fileObject) throws IOException {
@@ -645,12 +661,12 @@ public final class ServiceNodeHandler  {
                         service = (Service)services.get(0);
                     }
                     moduleServiceMap.remove(name);
-                    
+
                     if (allServicesMap != null ) {
                         services = (List)allServicesMap.get(name);
                         if (services != null) {
                             services.remove(service);
-                            
+
                             if (services.isEmpty()) {
                                 allServicesMap.remove(name);
                             }
@@ -661,7 +677,7 @@ public final class ServiceNodeHandler  {
             }
         }
     }
-    
+
     /** update node of services list
      * - add node
      * - modify list of classes
@@ -669,7 +685,7 @@ public final class ServiceNodeHandler  {
      */
     private void updateNode(Service service) {
         String name = (service == null) ? null : service.getFileName();
-        if (moduleChild != null && moduleChild.fullyComputed &&moduleServiceMap != null ) {
+        if (moduleChild != null && moduleChild.fullyComputed && moduleServiceMap != null ) {
             if (prevModuleServicesCount == moduleServiceMap.size() && name != null ) {
                 // update only key
                 moduleChild.updateNode(name);
@@ -688,12 +704,14 @@ public final class ServiceNodeHandler  {
         }
     }
 
+    @Override
     public int hashCode() {
         return getKeyName().hashCode();
     }
 
+    @Override
     public boolean equals(Object obj) {
-        return obj instanceof ServiceNodeHandler && 
+        return obj instanceof ServiceNodeHandler &&
           getKeyName().equals(((ServiceNodeHandler)obj).getKeyName());
     }
 
@@ -716,9 +734,10 @@ public final class ServiceNodeHandler  {
                     services = allServicesMap.get(service.getFileName()) ;
                     if (services != null && services.size() > 0 ) {
                         // find service
-                        for (int sIt = 0 ; sIt < services.size() ; sIt++ ) {
-                            if ((services.get(sIt)).getCodebase().equals(service.getCodebase())) {
-                                services.remove(sIt);
+                        Iterator<Service> sIt = services.iterator();
+                        while (sIt.hasNext()) {
+                            if (sIt.next().getCodebase().equals(service.getCodebase())) {
+                                sIt.remove();
                                 break;
                             }
                         }
@@ -738,14 +757,14 @@ public final class ServiceNodeHandler  {
     }
 
     private String getKeyName() {
-        // #103798 important files node hashCode problems. 
+        // #103798 important files node hashCode problems.
         // probably on cnb change
-        if (codeNameBase == null) {   
+        if (codeNameBase == null) {
             codeNameBase  = info.getCodeNameBase();
         }
           // cnb will be null if project is deleted
         if (codeNameBase == null) {
-          codeNameBase = "unknown"; // NOI18N  
+          codeNameBase = "unknown"; // NOI18N
         }
         return codeNameBase;
     }
