@@ -42,9 +42,11 @@
 package org.netbeans.modules.editor.java;
 
 
+import java.util.prefs.Preferences;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Caret;
-import javax.swing.text.Document;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.SyntaxSupport;
 import org.netbeans.editor.TokenID;
@@ -53,9 +55,7 @@ import org.netbeans.editor.TokenContextPath;
 import org.netbeans.editor.ext.ExtSyntaxSupport;
 import org.netbeans.editor.ext.java.JavaTokenContext;
 import org.netbeans.editor.TokenItem;
-import org.netbeans.editor.Settings;
 import org.netbeans.editor.Utilities;
-import org.netbeans.editor.ext.java.JavaSettingsNames;
 
 
 
@@ -642,10 +642,20 @@ class BracketCompletion {
             //#69524
             char chr = doc.getChars(dotPos,1)[0];
             if (chr == bracket){
-                doc.insertString(dotPos, "" + bracket , null); //NOI18N
-                doc.remove(dotPos, 1);
-                return true;
+                //#83044
+                if (dotPos > 0) {
+                    token = syntax.getTokenID (dotPos-1);
+                    if (    token == JavaTokenContext.STRING_LITERAL ||
+                            token == JavaTokenContext.CHAR_LITERAL
+                    ) {
+                        doc.insertString(dotPos, "" + bracket , null); //NOI18N
+                        doc.remove(dotPos, 1);
+                        return true;
+                    }
+                }
+                //end of #83044
             }
+            //end of #69524
         }
     }
     
@@ -712,12 +722,8 @@ class BracketCompletion {
    * Returns true if bracket completion is enabled in options.
    */
   private static boolean completionSettingEnabled() {
-      Object result = Settings.getValue(JavaKit.class, JavaSettingsNames.PAIR_CHARACTERS_COMPLETION);
-      if (result == null) {
-          return false;
-      } else {
-          return ((Boolean) result).booleanValue();
-  }
+      Preferences prefs = MimeLookup.getLookup(JavaKit.JAVA_MIME_TYPE).lookup(Preferences.class);
+      return prefs.getBoolean(SimpleValueNames.COMPLETION_PAIR_CHARACTERS, false);
   }
 
   /**

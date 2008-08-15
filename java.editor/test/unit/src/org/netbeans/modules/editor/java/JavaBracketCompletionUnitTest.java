@@ -44,9 +44,9 @@ package org.netbeans.modules.editor.java;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Caret;
 import org.netbeans.editor.TokenID;
-import org.netbeans.editor.ext.ExtSyntaxSupport;
 import org.netbeans.editor.ext.java.JavaTokenContext;
-import org.netbeans.modules.editor.java.BracketCompletion;
+import org.openide.modules.ModuleInfo;
+import org.openide.util.Lookup;
 
 
 /**
@@ -59,7 +59,13 @@ public class JavaBracketCompletionUnitTest extends JavaBaseDocumentUnitTestCase 
     public JavaBracketCompletionUnitTest(String testMethodName) {
         super(testMethodName);
     }
-    
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        Lookup.getDefault().lookup(ModuleInfo.class);
+    }
+
     // ------- Tests for completion of right parenthesis ')' -------------
     
     public void testRightParenSimpleMethodCall() {
@@ -341,6 +347,17 @@ public class JavaBracketCompletionUnitTest extends JavaBaseDocumentUnitTestCase 
             "\"\"|"
         );
     }    
+    
+    /** issue #69524 */
+    public void testQuoteOnFirstQuote () throws Exception {
+        setLoadDocumentText (
+            " |\"asdf\""
+        );
+        typeQuoteChar('"');
+        assertDocumentTextAndCaret ("New Quote Addewd", 
+            " \"|\"asdf\""
+        );
+    }
 
     /** issue #69935 */
     public void testQuoteInsideComments() throws Exception {
