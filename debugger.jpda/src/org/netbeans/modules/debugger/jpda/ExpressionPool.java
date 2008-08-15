@@ -137,7 +137,7 @@ public class ExpressionPool {
         ReferenceType clazzType = loc.declaringType();
         final Method method = loc.method();
         final byte[] bytecodes = method.bytecodes();
-        byte[] constantPool = new byte[0];
+        byte[] constantPool = null;
         String JDKVersion = System.getProperty("java.version"); // NOI18N
         if (IS_JDK_16) {
             try {     // => clazzType.constantPool(); on JDK 1.6.0 and higher
@@ -206,9 +206,10 @@ public class ExpressionPool {
         Location startLocation;
         int startlocline = 0;
         int endlocline;
+        int firstLine = allLocations.get(0).lineNumber(language);
         do {
             startLocation = getLocationOfLine(allLocations, language, startLine - startlocline++);
-        } while (startLocation == null);
+        } while (startLocation == null && (startLine - (startlocline - 1)) >= firstLine);
         if (endLine > startLine - (startlocline - 1)) {
             endlocline = 0;
         } else {

@@ -71,6 +71,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
+import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Types;
@@ -97,7 +98,7 @@ class AST2Bytecode {
     static EditorContext.Operation[] matchSourceTree2Bytecode(
             CompilationUnitTree cu, CompilationController ci,
             List<Tree> treeNodes, ExpressionScanner.ExpressionsInfo info,
-            byte[] bytecodes, int[] indexes, byte[] constantPool,
+            byte[] bytecodes, int[] indexes, byte[] constantPoolBytes,
             OperationCreationDelegate opCreationDelegate,
             Map<Tree, EditorContext.Operation> nodeOperations) {
         
@@ -113,6 +114,12 @@ class AST2Bytecode {
         int indexesIndex = 0;
         int from = indexes[indexesIndex];
         int to = indexes[indexesIndex + 1];
+        ConstantPool constantPool;
+        if (constantPoolBytes != null) {
+            constantPool = ConstantPool.parse(constantPoolBytes);
+        } else {
+            constantPool = null;
+        }
         for (int treeIndex = 0; treeIndex < length; treeIndex++) {
             Tree node = treeNodes.get(treeIndex);
             Tree.Kind kind = node.getKind();
@@ -141,7 +148,13 @@ class AST2Bytecode {
                     }
                 } while (true);
                 if (from < to) { // We have the method call
-                    if (!ci.getTreeUtilities().isSynthetic(ci.getTrees().getPath(cu, node))) {
+                    TreePath nodePath = trees.getPath(cu, node);
+                    if (nodePath != null && !ci.getTreeUtilities().isSynthetic(nodePath)) {
+                        String methodNameInBytecode = null;
+                        if (constantPool != null) {
+                            int constantPoolIndex = ((bytecodes[from+1] & 0xFF) << 8) + (bytecodes[from+2] & 0xFF);
+                            methodNameInBytecode = constantPool.getMethodName(constantPoolIndex);
+                        }
                         int pos = (int) sp.getStartPosition(cu, node);
                         EditorContext.Position startPosition =
                                 opCreationDelegate.createPosition(
@@ -195,6 +208,11 @@ class AST2Bytecode {
                                     return null;
                                 }
                                 TypeElement te;
+                                String array = "";
+                                while (type.getKind() == TypeKind.ARRAY) {
+                                    type = ((ArrayType) type).getComponentType();
+                                    array += "[]";
+                                }
                                 if (type.getKind() == TypeKind.DECLARED) {
                                     te = (TypeElement) types.asElement(type);
                                 } else if (type.getKind() == TypeKind.TYPEVAR) {
@@ -214,9 +232,35 @@ class AST2Bytecode {
                                     ErrorManager.getDefault().notify(new IllegalStateException("Unexpected type "+type+" in "+treeNodes));
                                     return null;
                                 }
-                                methodClassType = ElementUtilities.getBinaryName(te);
+                                methodClassType = ElementUtilities.getBinaryName(te)+array;
                             }
                         }
+                        if (methodNameInBytecode != null) {
+                            if (!methodNameInBytecode.equals(methodName)) {
+                                // There are some extra methods in the bytecode, we have to skip them
+                                int next = from;
+                                next += getInstrSize(opcode, bytecodes, next);
+                                while (next < to) {
+                                    //System.err.println("AST2Bytecode: skipped method in bytecode '"+methodNameInBytecode+"'");
+                                    opcode = bytecodes[next] & 0xFF;
+                                    if (isMethodCall(opcode)) {
+                                        int constantPoolIndex = ((bytecodes[next+1] & 0xFF) << 8) + (bytecodes[next+2] & 0xFF);
+                                        methodNameInBytecode = constantPool.getMethodName(constantPoolIndex);
+                                        if (methodNameInBytecode.equals(methodName)) {
+                                            break;
+                                        } else {
+                                            //System.err.println("AST2Bytecode: skipped method in bytecode '"+methodNameInBytecode+"'");
+                                        }
+                                    }
+                                    next += getInstrSize(opcode, bytecodes, next);
+                                }
+                                if (next < to) {
+                                    // Method found
+                                    from = next;
+                                }
+                            }
+                        }
+                        //System.err.println("AST2Bytecode: methodNameInBytecode = '"+methodNameInBytecode+"', methodNameInSource = '"+methodName+"'");
                         pos = (int) sp.getEndPosition(cu, identifier);
                         EditorContext.Position methodEndPosition =
                                 opCreationDelegate.createPosition(
@@ -265,22 +309,26 @@ class AST2Bytecode {
             }
         }
         // Check the rest of the bytecode for method calls:
-        do {
-            while (from < to) {
-                int opcode = bytecodes[(int) from] & 0xFF;
-                if (isMethodCall(opcode)) {
-                    return null; // Mismatch
+        if (constantPool == null) {
+            // Do not do that if we can control method names
+            // - there can be extra utility calls in the bytecode
+            do {
+                while (from < to) {
+                    int opcode = bytecodes[(int) from] & 0xFF;
+                    if (isMethodCall(opcode)) {
+                        return null; // Mismatch
+                    }
+                    from += getInstrSize(opcode, bytecodes, from);
                 }
-                from += getInstrSize(opcode, bytecodes, from);
-            }
-            if ((indexesIndex + 2) < indexes.length) {
-                indexesIndex += 2;
-                from = indexes[indexesIndex];
-                to = indexes[indexesIndex + 1];
-            } else {
-                break;
-            }
-        } while (true);
+                if ((indexesIndex + 2) < indexes.length) {
+                    indexesIndex += 2;
+                    from = indexes[indexesIndex];
+                    to = indexes[indexesIndex + 1];
+                } else {
+                    break;
+                }
+            } while (true);
+        }
         /*
         // Assign next operations:
         for (int treeIndex = 0; treeIndex < length; treeIndex++) {
