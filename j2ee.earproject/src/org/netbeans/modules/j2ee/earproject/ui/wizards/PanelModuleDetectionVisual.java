@@ -133,29 +133,7 @@ public class PanelModuleDetectionVisual extends JPanel {
     }
     
     boolean valid(WizardDescriptor wizardDescriptor) {
-        File project = getProject(wizardDescriptor);
-        for (Vector<String> module : modules) {
-            if (isModuleForbidden(project, module.get(REL_PATH_INDEX))) {
-                wizardDescriptor.putProperty("WizardPanel_errorMessage", //NOI18N
-                        getMessage("MSG_ModuleLocationAlreadyExists")); //NOI18N
-                return false;
-            }
-        }
-        wizardDescriptor.putProperty("WizardPanel_errorMessage", null); // NOI18N
         return true;
-    }
-    
-    /** Get the project directory. */
-    private File getProject(WizardDescriptor wizardDescriptor) {
-        return (File) wizardDescriptor.getProperty(WizardProperties.PROJECT_DIR);
-    }
-    
-    // #87604
-    /** Return <code>true</code> if the module location already exists in the project directory. */
-    private boolean isModuleForbidden(File project, String module) {
-        String moduleName = new File(project, module).getName();
-        File forbiddenLocation = new File(project, moduleName);
-        return forbiddenLocation.exists();
     }
     
     void store(WizardDescriptor wd) {
