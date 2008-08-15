@@ -61,6 +61,7 @@ import org.netbeans.modules.vmd.midp.screen.display.injector.ImageItemInjectorPr
 import org.openide.util.NbBundle;
 
 import java.util.*;
+import org.netbeans.modules.vmd.midp.codegen.MidpDatabindingCodeSupport;
 
 /**
  *
@@ -99,6 +100,10 @@ public class ImageItemCD extends ComponentDescriptor {
     @Override
     protected void gatherPresenters (ArrayList<Presenter> presenters) {
         DocumentSupport.removePresentersOfClass (presenters, ScreenDisplayPresenter.class);
+        presenters.addAll(MidpDatabindingCodeSupport.createDatabindingPresenters(PROP_IMAGE
+                                                                                 ,"getImage()", //NOI18N
+                                                                                 TYPEID,
+                                                                                 MidpDatabindingCodeSupport.FeatureType.ImageItem_FEATURE_IMAGE));
         super.gatherPresenters (presenters);
     }
 
@@ -112,7 +117,7 @@ public class ImageItemCD extends ComponentDescriptor {
                     PropertyEditorComboBox.createInstance(getAppearanceValues(), TYPEID,
                         NbBundle.getMessage(ImageItemCD.class, "DISP_ImageItem_Appearance_RB_LABEL"), // NOI18N
                         NbBundle.getMessage(ImageItemCD.class, "DISP_ImageItem_Appearance_UCLABEL")), ItemCD.PROP_APPEARANCE_MODE) // NOI18N
-                .addProperty(NbBundle.getMessage(ImageItemCD.class, "DISP_ImageItem_Image"), PropertyEditorResource.createImagePropertyEditor(), PROP_IMAGE); // NOI18N
+                .addProperty(NbBundle.getMessage(ImageItemCD.class, "DISP_ImageItem_Image"), PropertyEditorResource.createImagePropertyEditorWithDatabinding(), PROP_IMAGE); // NOI18N
     }
     
     private static Presenter createSetterPresenter() {
@@ -127,8 +132,6 @@ public class ImageItemCD extends ComponentDescriptor {
 
     protected List<? extends Presenter> createPresenters() {
         return Arrays.asList(
-                // accept
-                new MidpAcceptTrensferableKindPresenter().addType(ImageCD.TYPEID, PROP_IMAGE),
                 // properties
                 createPropertiesPresenter(),
                 // code
@@ -138,6 +141,8 @@ public class ImageItemCD extends ComponentDescriptor {
                 //accept
                 new ImageFileAcceptPresenter(ImageItemCD.PROP_IMAGE, ImageCD.TYPEID, "jpg", "gif", "png"), //NOI18N
                 new MidpAcceptProducerKindPresenter().addType(ImageCD.TYPEID, PROP_IMAGE),
+                new MidpAcceptTrensferableKindPresenter().addType(ImageCD.TYPEID, PROP_IMAGE),
+                DatabindingItemAcceptPresenter.create(PROP_IMAGE, ItemCD.PROP_LABEL),
                 // screen
                 new ImageItemDisplayPresenter(),
                 new ImageItemInjectorPresenter ()

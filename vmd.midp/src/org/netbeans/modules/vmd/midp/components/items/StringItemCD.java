@@ -60,6 +60,8 @@ import org.netbeans.modules.vmd.midp.screen.display.StringItemDisplayPresenter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.netbeans.modules.vmd.midp.codegen.MidpDatabindingCodeSupport;
+import org.netbeans.modules.vmd.midp.components.databinding.DataSetAbstractCD;
 import org.openide.util.NbBundle;
 
 /**
@@ -93,6 +95,10 @@ public class StringItemCD extends ComponentDescriptor {
     @Override
     protected void gatherPresenters (ArrayList<Presenter> presenters) {
         DocumentSupport.removePresentersOfClass (presenters, ScreenDisplayPresenter.class);
+        presenters.addAll(MidpDatabindingCodeSupport.createDatabindingPresenters(PROP_TEXT
+                                                                                 ,"getText()"
+                                                                                 ,TYPEID
+                                                                                 ,MidpDatabindingCodeSupport.FeatureType.StringItem_FEATURE_TEXT));
         super.gatherPresenters (presenters);
     }
 
@@ -100,7 +106,7 @@ public class StringItemCD extends ComponentDescriptor {
         return new DefaultPropertiesPresenter()
             .addPropertiesCategory(MidpPropertiesCategories.CATEGORY_PROPERTIES)
                 .addProperty(NbBundle.getMessage(StringItemCD.class, "DISP_StringItem_Text"), // NOI18N
-                    PropertyEditorString.createInstance(NbBundle.getMessage(StringItemCD.class, "LBL_StringItem_Text")), PROP_TEXT) // NOI18N
+                    PropertyEditorString.createInstanceWithDatabinding(NbBundle.getMessage(StringItemCD.class, "LBL_StringItem_Text")), PROP_TEXT) // NOI18N
                 .addProperty(NbBundle.getMessage(StringItemCD.class, "DISP_StringItem_Appearance"), // NOI18N
                     PropertyEditorComboBox.createInstance(ImageItemCD.getAppearanceValues(), TYPEID,
                         NbBundle.getMessage(StringItemCD.class, "DISP_StringItem_Appearance_RB_LABEL"), // NOI18N
@@ -129,7 +135,9 @@ public class StringItemCD extends ComponentDescriptor {
             // screen
             new StringItemDisplayPresenter(),
             // accept
-            new MidpAcceptProducerKindPresenter().addType(FontCD.TYPEID, PROP_FONT)
+            new MidpAcceptProducerKindPresenter().addType(FontCD.TYPEID, PROP_FONT),
+            new MidpAcceptTrensferableKindPresenter().addType(FontCD.TYPEID, PROP_FONT),
+            DatabindingItemAcceptPresenter.create(PROP_TEXT, ItemCD.PROP_LABEL)
        );   
     }
     
