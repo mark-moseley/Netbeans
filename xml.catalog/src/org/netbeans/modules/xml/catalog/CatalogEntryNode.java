@@ -154,21 +154,18 @@ final class CatalogEntryNode extends BeanNode implements EditCookie, Node.Cookie
      * Provide <code>ViewCookie</code>. Always provide same instance for
      * entry until its system ID changes.
      */
-    public Node.Cookie getCookie(Class clazz) {
-        
-        if (ViewCookie.class.equals(clazz)) {
-            
+    public Node.Cookie getCookie(Class clazz) {        
+        if (ViewCookie.class.equals(clazz)) {            
             try {
                 String sys = getSystemID();
                 if (sys == null) return null;
                                 
                 if (view == null) {                    
-                    URL url = new URL(sys);                    
-                    ViewEnv env = new ViewEnv(url);
+                    URL url = new URL(sys);                  
+                    ViewEnv env = new ViewEnv(getPublicID(), sys);
                     view = new ViewCookieImpl(env);
                 }
-                return view;                
-                
+                return view;
             } catch (MalformedURLException ex) {
                 ErrorManager emgr = ErrorManager.getDefault();
                 emgr.notify(ErrorManager.INFORMATIONAL, ex);
@@ -177,8 +174,7 @@ final class CatalogEntryNode extends BeanNode implements EditCookie, Node.Cookie
                 ErrorManager emgr = ErrorManager.getDefault();
                 emgr.notify(ErrorManager.INFORMATIONAL, ex);                
                 return null;
-            }
-            
+            }            
         } else {
             return super.getCookie(clazz);
         }
@@ -199,7 +195,10 @@ final class CatalogEntryNode extends BeanNode implements EditCookie, Node.Cookie
     }
     
     public String getShortDescription() {
-        return getSystemID();
+        String displayName = getPublicID();
+        if(displayName.startsWith("SCHEMA:")) //NOI18N
+            displayName = displayName.substring("SCHEMA:".length()); //NOI18N
+        return displayName;
     }
 
     public void destroy() throws IOException {
@@ -268,8 +267,8 @@ final class CatalogEntryNode extends BeanNode implements EditCookie, Node.Cookie
         /** Serial Version UID */
         private static final long serialVersionUID =-5031004511063404433L;
         
-        ViewEnv (URL url) {
-            super(url);
+        ViewEnv (String publicId, String systemId) {
+            super(publicId, systemId);
         }
 
         public org.openide.windows.CloneableOpenSupport findCloneableOpenSupport() {
