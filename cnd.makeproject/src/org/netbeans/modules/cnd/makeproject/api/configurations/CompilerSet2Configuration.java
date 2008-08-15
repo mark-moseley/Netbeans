@@ -41,26 +41,41 @@
 
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
 import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
-import org.netbeans.modules.cnd.settings.CppSettings;
+import org.netbeans.modules.cnd.api.remote.ServerList;
+import org.netbeans.modules.cnd.api.remote.ServerRecord;
+import org.netbeans.modules.cnd.makeproject.configurations.ui.CompilerSetNodeProp;
+import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
+import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 
-public class CompilerSet2Configuration {
-    private MakeConfiguration makeConfiguration;
+public class CompilerSet2Configuration implements PropertyChangeListener {
+
+    private DevelopmentHostConfiguration developmentHostConfiguration;
     private StringConfiguration compilerSetName;
-    private String cachedDisplayName = null;
+    private CompilerSetNodeProp compilerSetNodeProp;
+    private String flavor;
     private boolean dirty = false;
+
+    private CompilerSet2Configuration(CompilerSet2Configuration other) {
+        this.developmentHostConfiguration = (DevelopmentHostConfiguration) other.developmentHostConfiguration.clone();
+        this.compilerSetName = (StringConfiguration) other.compilerSetName.clone();
+        this.flavor = other.flavor;
+        this.compilerSetNodeProp = null;        
+    }
     
     // Constructors
-    public CompilerSet2Configuration(MakeConfiguration makeConfiguration, String cachedDisplayName) {
-        this.makeConfiguration = makeConfiguration;
-        this.cachedDisplayName = cachedDisplayName;
-        String csName = CppSettings.getDefault().getCompilerSetName();
-        if (csName == null || csName.length() == 0) {
-            // This can happen on Unix!!!!
-            if (CompilerSetManager.getDefault().getCompilerSetNames().size() > 0)
-                csName = CompilerSetManager.getDefault().getCompilerSet(0).getName();
+    public CompilerSet2Configuration(DevelopmentHostConfiguration developmentHostConfiguration) {
+        this.developmentHostConfiguration = developmentHostConfiguration;
+        String csName = getCompilerSetManager().getDefaultCompilerSet().getName();
+        if (csName.length() == 0) {
+            if (getCompilerSetManager().getCompilerSetNames().size() > 0)
+                csName = getCompilerSetManager().getCompilerSet(0).getName();
             else {
                 if (Utilities.getOperatingSystem() == Utilities.OS_SOLARIS)
                     csName = "Sun"; // NOI18N
@@ -69,57 +84,76 @@ public class CompilerSet2Configuration {
             }
         }
         compilerSetName = new StringConfiguration(null, csName);
+        flavor = null;
+        compilerSetNodeProp = null;
     }
-    
-    // MakeConfiguration
-    public void setMakeConfiguration(MakeConfiguration makeConfiguration) {
-        this.makeConfiguration = makeConfiguration;
+
+    // we can't store CSM because it's dependent on devHostConfig name which is not persistent
+    public CompilerSetManager getCompilerSetManager() {
+        return CompilerSetManager.getDefault(developmentHostConfiguration.getName());
     }
-    public MakeConfiguration getMakeConfiguration() {
-        return makeConfiguration;
-    }
-    
+
+//
+//    // MakeConfiguration
+//    public void setMakeConfiguration(MakeConfiguration makeConfiguration) {
+//        this.makeConfiguration = makeConfiguration;
+//    }
+//    public MakeConfiguration getMakeConfiguration() {
+//        return makeConfiguration;
+//    }
+
     // compilerSetName
     public StringConfiguration getCompilerSetName() {
         return compilerSetName;
     }
-    
+
     public void setCompilerSetName(StringConfiguration compilerSetName) {
         this.compilerSetName = compilerSetName;
     }
-    
-    public String getCachedDisplayName() {
-        return cachedDisplayName;
+
+    public void setCompilerSetNodeProp(CompilerSetNodeProp compilerSetNodeProp) {
+        this.compilerSetNodeProp = compilerSetNodeProp;
     }
-    
-    public void setCachedDisplayName(String cachedDisplayName) {
-        this.cachedDisplayName = cachedDisplayName;
-    }
-    
+
     // ----------------------------------------------------------------------------------------------------
-    
+
     public void setValue(String name) {
-        getCompilerSetName().setValue(name);
+        if (!getOption().equals(name)) {
+            setValue(name, null);
+        }
     }
-    
+
+    public void setNameAndFlavor(String name, int version) {
+        String nm;
+        String fl;
+        int index = name.indexOf("|"); // NOI18N
+        if (index > 0) {
+            nm = name.substring(0, index);
+            fl = name.substring(index+1);
+        }
+        else {
+            nm = name;
+            fl = name;
+        }
+        setValue(CompilerFlavor.mapOldToNew(nm, version), CompilerFlavor.mapOldToNew(fl, version));
+    }
+
+    public void setValue(String name, String flavor) {
+        getCompilerSetName().setValue(name);
+        setFlavor(flavor);
+    }
+
     /*
      * Keep backward compatibility with CompilerSetConfiguration (for now)
      */
     public int getValue() {
-        String s = cachedDisplayName;
+        // TODO: only usage of getValue is next:
+        // CompilerSetManager.getDefault(developmentHostConfiguration.getName()).getCompilerSet(conf.getCompilerSet().getValue());
+
+        String s = getCompilerSetName().getValue();
 	if (s != null) {
             int i = 0;
-            for (String csname : CompilerSetManager.getDefault().getCompilerSetDisplayNames()) {
-                if (s.equals(csname)) {
-                    return i;
-                }
-                i++;
-            }
-        }
-        s = getCompilerSetName().getValue();
-	if (s != null) {
-            int i = 0;
-            for (String csname : CompilerSetManager.getDefault().getCompilerSetNames()) {
+            for (String csname : CompilerSetManager.getDefault(developmentHostConfiguration.getName()).getCompilerSetNames()) {
                 if (s.equals(csname)) {
                     return i;
                 }
@@ -128,81 +162,139 @@ public class CompilerSet2Configuration {
         }
         return 0; // Default
     }
-    
+
+    /*
+     * TODO: spread it out (Sergey)
+     * Should this return csm.getCurrentCompilerSet()? (GRP)
+     */
+    public CompilerSet getCompilerSet() {
+        return getCompilerSetManager().getCompilerSet(getCompilerSetName().getValue());
+    }
+
+    public int getPlatform() {
+        return getCompilerSetManager().getPlatform();
+    }
+
     public String getName() {
         return getDisplayName();
     }
-    
+
     public String getDisplayName() {
         return getDisplayName(false);
     }
-    
+
     public String getDisplayName(boolean displayIfNotFound) {
-        CompilerSet compilerSet = null;
-        String dn = null;
-        if (getCachedDisplayName() != null) {
-            compilerSet = CompilerSetManager.getDefault().getCompilerSetByDisplayName(getCachedDisplayName());
-        }
-        if (compilerSet == null) {
-            compilerSet = CompilerSetManager.getDefault().getCompilerSet(getCompilerSetName().getValue());
-        }
+        CompilerSet compilerSet = getCompilerSetManager().getCompilerSet(getCompilerSetName().getValue());
+        String displayName = null;
+
         if (compilerSet != null) {
-            dn = compilerSet.getDisplayName();
+            displayName = compilerSet.getName();
         }
-        if (dn != null)
-            return dn;
-        else {
+        if (displayName != null) {
+            return displayName;
+        } else {
             if (displayIfNotFound)
                 return createNotFoundName(getCompilerSetName().getValue());
             else
                 return ""; // NOI18N
         }
     }
-    
+
     public String createNotFoundName(String name) {
-        return name + " - not found"; // FIXUP
+        return name.equals(CompilerSet.None) ? name : NbBundle.getMessage(CompilerSet2Configuration.class,  "NOT_FOUND", name); // NOI18N
     }
-    
+
     // Clone and assign
     public void assign(CompilerSet2Configuration conf) {
-        setDirty(getValue() != conf.getValue());
-        setMakeConfiguration(conf.getMakeConfiguration());
-        setCachedDisplayName(conf.getCachedDisplayName());
-        getCompilerSetName().assign(conf.getCompilerSetName());
+        String oldName = getCompilerSetName().getValue();
+        String newName = conf.getCompilerSetName().getValue();
+        setDirty(newName != null && !newName.equals(oldName));
+//        setMakeConfiguration(conf.getMakeConfiguration());
+        setValue(conf.getCompilerSetName().getValue());
     }
-    
+
     @Override
     public Object clone() {
-        CompilerSet2Configuration clone = new CompilerSet2Configuration(getMakeConfiguration(), getCachedDisplayName());
-        clone.setCompilerSetName((StringConfiguration)getCompilerSetName().clone());
+        CompilerSet2Configuration clone = new CompilerSet2Configuration(this);
         return clone;
     }
-    
-    
+
+    public void setDevelopmentHostConfiguration(DevelopmentHostConfiguration developmentHostConfiguration) {
+        this.developmentHostConfiguration = developmentHostConfiguration;
+    }
+
     public void setDirty(boolean dirty) {
         this.dirty = dirty;
     }
-    
+
     public boolean getDirty() {
         return dirty;
     }
-    
+
     /*
      * Backward compatibility with old CompilerSetConfiguration (for now)
      */
     public boolean isValid() {
-        return CompilerSetManager.getDefault().getCompilerSet(getCompilerSetName().getValue()) != null;
+        return getCompilerSet() != null;
     }
-    
+
     public void setValid() {
         // Nothing
     }
-    
+
     public String getOldName() {
         return getCompilerSetName().getValue();
     }
-    
+
     public String getOption() {
         return getCompilerSetName().getValue();
+    }
+
+    public String getNameAndFlavor() {
+        StringBuilder ret = new StringBuilder();
+        ret.append(getOption());
+        if (getFlavor() != null) {
+            ret.append("|"); // NOI18N
+            ret.append(getFlavor());
+        }
+        return ret.toString();
+    }
+
+    public String getFlavor() {
+        if (flavor == null) {
+            CompilerSet cs = getCompilerSet();
+            if (cs != null)
+                this.flavor = cs.getCompilerFlavor().toString();
+
+        }
+        return flavor;
+    }
+
+    public void setFlavor(String flavor) {
+        this.flavor = flavor;
+    }
+
+    public void propertyChange(final PropertyChangeEvent evt) {
+        final String key = evt.getNewValue().toString();
+        if (key.equals(CompilerSetManager.LOCALHOST)) {
+            setValue(getCompilerSetManager().getCompilerSet(0).getName());
+        } else {
+            setValue(CompilerSetManager.getDefault(key).getCompilerSet(0).getName());
+            RequestProcessor.getDefault().post(new Runnable() {
+                public void run() {
+                    ServerList server = (ServerList) Lookup.getDefault().lookup(ServerList.class);
+                    if (server != null) {
+                        ServerRecord record = server.get(key);
+                        if (record != null) {
+                            CompilerSetManager csm = CompilerSetManager.getDefault(key);
+                            setValue(csm.getCompilerSet(0).getName());
+                            if (compilerSetNodeProp != null) {
+                                compilerSetNodeProp.repaint();
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
 }
