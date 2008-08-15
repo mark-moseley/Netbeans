@@ -1,0 +1,128 @@
+/*
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
+ * The contents of this file are subject to the terms of either the GNU
+ * General Public License Version 2 only ("GPL") or the Common
+ * Development and Distribution License("CDDL") (collectively, the
+ * "License"). You may not use this file except in compliance with the
+ * License. You can obtain a copy of the License at
+ * http://www.netbeans.org/cddl-gplv2.html
+ * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
+ * specific language governing permissions and limitations under the
+ * License.  When distributing the software, include this License Header
+ * Notice in each file and include the License file at
+ * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Sun in the GPL Version 2 section of the License file that
+ * accompanied this code. If applicable, add the following below the
+ * License Header, with the fields enclosed by brackets [] replaced by
+ * your own identifying information:
+ * "Portions Copyrighted [year] [name of copyright owner]"
+ * 
+ * If you wish your version of this file to be governed by only the CDDL
+ * or only the GPL Version 2, indicate your decision by adding
+ * "[Contributor] elects to include this software in this distribution
+ * under the [CDDL or GPL Version 2] license." If you do not indicate a
+ * single choice of license, a recipient has the option to distribute
+ * your version of this file under either the CDDL, the GPL Version 2 or
+ * to extend the choice of license to its licensees as provided above.
+ * However, if you add GPL Version 2 code and therefore, elected the GPL
+ * Version 2 license, then the option applies only if the new code is
+ * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ */
+package org.netbeans.modules.cnd.remote.mapper;
+
+import java.util.HashMap;
+import java.util.Map;
+import org.netbeans.modules.cnd.api.remote.PathMap;
+import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
+import org.netbeans.modules.cnd.remote.support.RemoteCommandSupport;
+
+/**
+ *
+ * @author gordonp
+ */
+public class RemoteHostInfoProvider extends HostInfoProvider {
+
+    public static class RemoteHostInfo {
+
+        private final String hkey;
+
+        private RemoteHostInfo(String hkey) {
+            this.hkey = hkey;
+        }
+        private PathMap mapper;
+        private Map<String, String> envCache = new HashMap<String, String>();
+
+        private Boolean isCshShell;
+
+        public synchronized PathMap getMapper() {
+            if (mapper == null) {
+                mapper = RemotePathMap.getMapper(hkey);
+            }
+            return mapper;
+        }
+
+        public synchronized Map<String, String> getEnv() {
+            if (envCache == null) {
+                envCache = new HashMap<String, String>();
+                RemoteCommandSupport support = new RemoteCommandSupport(hkey, "env"); // NOI18N
+                if (support.run() == 0) {
+                    String val = support.toString();
+                    String[] lines = val.split("\n"); // NOI18N
+                    for (int i = 0; i < lines.length; i++) {
+                        int pos = lines[i].indexOf('=');
+                        if (pos > 0) {
+                            envCache.put(lines[i].substring(0, pos), lines[i].substring(pos + 1));
+                        }
+                    }
+                }
+            }
+            return envCache;
+        }
+
+        public boolean isCshShell() {
+            if (isCshShell == null ) {
+                //N.B.: this is only place where RemoteCommandSupport should take PATH= !!
+                RemoteCommandSupport support = new RemoteCommandSupport(hkey, "PATH=/bin:/usr/bin export"); // NOI18N
+                support.setPreserveCommand(true); // to avoid endless loop
+                isCshShell = new Boolean(support.run() != 0 );
+            }
+            return isCshShell.booleanValue();
+        }
+
+    }
+    private final static Map<String, RemoteHostInfo> hkey2hostInfo = new HashMap<String, RemoteHostInfo>();
+
+    public static synchronized RemoteHostInfo getHostInfo(String hkey) {
+        RemoteHostInfo hi = hkey2hostInfo.get(hkey);
+        if (hi == null) {
+            hi = new RemoteHostInfo(hkey);
+            hkey2hostInfo.put(hkey, hi);
+        }
+        return hi;
+    }
+
+    @Override
+    public PathMap getMapper(String hkey) {
+        return getHostInfo(hkey).getMapper();
+    }
+
+    @Override
+    public  Map<String, String> getEnv(String hkey) {
+        return getHostInfo(hkey).getEnv();
+    }
+
+    @Override
+    public boolean fileExists(String key, String path) {
+        RemoteCommandSupport support = new RemoteCommandSupport(key,
+                "/usr/bin/test -d \"" + path + "\" -o -f \"" + path + "\""); // NOI18N
+        return support.run() == 0;
+    }
+}
