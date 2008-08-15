@@ -41,90 +41,87 @@
 
 package org.netbeans.modules.ruby.railsprojects.ui.customizer;
 
-import java.awt.Component;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.nio.charset.Charset;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.IllegalCharsetNameException;
 import java.util.logging.Logger;
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.ListCellRenderer;
 import javax.swing.plaf.UIResource;
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
-import org.openide.util.HelpCtx;
-import org.openide.util.NbBundle;
 import java.awt.Component;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
 import java.text.Collator;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
+import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.api.ruby.platform.RubyPlatformManager;
+import org.netbeans.modules.ruby.platform.PlatformComponentFactory;
+import org.netbeans.modules.ruby.platform.PlatformComponentFactory.PlatformChangeListener;
 import org.netbeans.modules.ruby.platform.RubyPlatformCustomizer;
 import org.netbeans.modules.ruby.railsprojects.RailsProject;
+import org.netbeans.modules.ruby.railsprojects.server.RailsServerManager;
+import org.netbeans.modules.ruby.railsprojects.server.ServerRegistry;
+import org.netbeans.modules.ruby.railsprojects.server.spi.RubyInstance;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.filesystems.FileObject;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
 public class CustomizerRun extends JPanel implements HelpCtx.Provider {
     
-    private RailsProject project;
+    private final RailsProject project;
     private String originalEncoding;
+    private boolean notified;
     
-    private JTextField[] data;
-    private JLabel[] dataLabels;
-    private String[] keys;
-    private Map<String/*|null*/,Map<String,String/*|null*/>/*|null*/> configs;
-    RailsProjectProperties uiProperties;
-    private ItemListener platformListener;
+    private final JTextField[] configFields;
+    private final String[] configPropsKeys;
+    
+    private final Map<String/*|null*/,Map<String,String/*|null*/>/*|null*/> configs;
+    private final RailsProjectProperties uiProperties;
+    private PlatformChangeListener platformListener;
     
     public CustomizerRun( RailsProjectProperties uiProperties ) {
         this.uiProperties = uiProperties;
         initComponents();
 
-        this.project = uiProperties.getProject();
+        this.project = uiProperties.getRailsProject();
+        configs = uiProperties.getRunConfigs();
         
-        configs = uiProperties.RUN_CONFIGS;
-        
-        data = new JTextField[] {
+        configFields = new JTextField[] {
             portField,
             rakeTextField
         };
-        dataLabels = new JLabel[] {
+        JLabel[] configLabels = new JLabel[] {
             portLabel,
             rakeLabel
         };
-        keys = new String[] {
+        configPropsKeys = new String[] {
             RailsProjectProperties.RAILS_PORT,
             RailsProjectProperties.RAKE_ARGS
-            //RailsProjectProperties.RAILS_ENV,
         };
-        assert data.length == keys.length;
+        assert configFields.length == configPropsKeys.length;
         
-        configChanged(uiProperties.activeConfig);
+        configChanged(uiProperties.getActiveConfig());
         
         configCombo.setRenderer(new DefaultListCellRenderer() {
             public @Override Component getListCellRendererComponent(JList list, Object value,
@@ -147,10 +144,10 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
             }
         });
         
-        for (int i = 0; i < data.length; i++) {
-            final JTextField field = data[i];
-            final String prop = keys[i];
-            final JLabel label = dataLabels[i];
+        for (int i = 0; i < configFields.length; i++) {
+            final JTextField field = configFields[i];
+            final String prop = configPropsKeys[i];
+            final JLabel label = configLabels[i];
             field.getDocument().addDocumentListener(new DocumentListener() {
                 Font basefont = label.getFont();
                 Font boldfont = basefont.deriveFont(Font.BOLD);
@@ -165,10 +162,7 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
                 }
                 public void changedUpdate(DocumentEvent e) {}
                 void changed() {
-                    String config = (String) configCombo.getSelectedItem();
-                    if (config.length() == 0) {
-                        config = null;
-                    }
+                    String config = getSelectedConfig();
                     String v = field.getText();
                     if (v != null && config != null && v.equals(configs.get(null).get(prop))) {
                         // default value, do not store as such
@@ -179,17 +173,14 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
                 }
                 void updateFont() {
                     String v = field.getText();
-                    String config = (String) configCombo.getSelectedItem();
-                    if (config.length() == 0) {
-                        config = null;
-                    }
+                    String config = getSelectedConfig();
                     String def = configs.get(null).get(prop);
                     label.setFont(config != null && !Utilities.compareObjects(v != null ? v : "", def != null ? def : "") ? boldfont : basefont);
                 }
             });
         }
 
-        this.originalEncoding = this.uiProperties.getProject().evaluator().getProperty(RailsProjectProperties.SOURCE_ENCODING);
+        this.originalEncoding = project.evaluator().getProperty(RailsProjectProperties.SOURCE_ENCODING);
         if (this.originalEncoding == null) {
             this.originalEncoding = Charset.defaultCharset().name();
         }
@@ -197,6 +188,17 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
         this.encoding.setModel(new EncodingModel(this.originalEncoding));
         this.encoding.setRenderer(new EncodingRenderer());
         
+        final String lafid  = UIManager.getLookAndFeel().getID();
+        if (!"Aqua".equals(lafid)) { //NOI18N
+            this.encoding.putClientProperty("JComboBox.isTableCellEditor", Boolean.TRUE);    //NOI18N
+            this.encoding.addItemListener(new java.awt.event.ItemListener() {
+
+                public void itemStateChanged(java.awt.event.ItemEvent e) {
+                    JComboBox combo = (JComboBox) e.getSource();
+                    combo.setPopupVisible(false);
+                }
+            });
+        }
 
         this.encoding.addActionListener(new ActionListener () {
             public void actionPerformed(ActionEvent arg0) {
@@ -204,33 +206,67 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
             }            
         });
         platforms.setSelectedItem(uiProperties.getPlatform());
+        String serverId = project.evaluator().getProperty(RailsProjectProperties.RAILS_SERVERTYPE);
+        selectServer(serverId);
+        serverComboBox.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                handleServerChanged();
+            }
+        });
+        
+        initRailsEnvCombo();
     }
     
-    public @Override void addNotify() {
-        super.addNotify();
-        platformListener = new ItemListener() {
-            public void itemStateChanged(ItemEvent e) {
-                if (e.getStateChange() == ItemEvent.SELECTED) {
-                    uiProperties.setPlatform(((RubyPlatform) platforms.getSelectedItem()));
+    private void handleRailsEnvChanged() {
+        String env = (String) railsEnvCombo.getSelectedItem();
+        uiProperties.setRailsEnvironment(env, getSelectedConfig());
+    }
+
+    private void handleServerChanged() {
+        RubyInstance server = (RubyInstance) serverComboBox.getSelectedItem();
+        uiProperties.setServer(server, getSelectedConfig());
+    }
+    
+    private void initRailsEnvCombo() {
+        //XXX: may need to make dependent on the server combo when the V3 plugin is available
+        // search for environments in config/environments
+        List<String> environments = new ArrayList<String>();
+        FileObject envFolder = project.getProjectDirectory().getFileObject("config/environments"); //NOI18N
+        if (envFolder != null) {
+            for (FileObject each : envFolder.getChildren()) {
+                if (!each.isFolder() && "rb".equals(each.getExt())) { //NOI18N
+                    environments.add(each.getName());
                 }
             }
+        }
+        Collections.sort(environments);
+        railsEnvCombo.setModel(new DefaultComboBoxModel(environments.toArray(new String[environments.size()]))); //NOI18N
+        String definedEnv = project.evaluator().getProperty(RailsProjectProperties.RAILS_ENV);
+        selectRailsEnv(definedEnv);
+        railsEnvCombo.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                handleRailsEnvChanged();
+            }
+        });
+    }
+
+    public @Override void addNotify() {
+        super.addNotify();
+        platformListener = new PlatformChangeListener() {
+            public void platformChanged() {
+                RubyPlatform platform = (RubyPlatform) platforms.getSelectedItem();
+                uiProperties.setPlatform(platform);
+                configs.get(getSelectedConfig()).put(RailsProjectProperties.PLATFORM_ACTIVE, platform.getID());
+            }
         };
-        platforms.addItemListener(platformListener);
+        PlatformComponentFactory.addPlatformChangeListener(platforms, platformListener);
     }
     
     public @Override void removeNotify() {
-        platforms.removeItemListener(platformListener);
+        PlatformComponentFactory.removePlatformChangeListener(platforms, platformListener);
         super.removeNotify();
     }
     
-    private String[] getEnvironmentNames() {
-        return new String[] {
-            NbBundle.getMessage(CustomizerRun.class, "Development"),
-            NbBundle.getMessage(CustomizerRun.class, "Testing"),
-            NbBundle.getMessage(CustomizerRun.class, "Production")
-        };
-    }
-        
     private void handleEncodingChange() {
         Charset enc = (Charset)encoding.getSelectedItem();
         String encName;
@@ -239,7 +275,36 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
         } else {
             encName = originalEncoding;
         }
+        if (!notified && encName != null && !encName.equals(originalEncoding)) {
+            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                    NbBundle.getMessage(CustomizerRun.class, "MSG_EncodingWarning"), NotifyDescriptor.WARNING_MESSAGE));
+            notified = true;
+        }
+
         this.uiProperties.putAdditionalProperty(RailsProjectProperties.SOURCE_ENCODING, encName);
+    }
+
+    private String getSelectedConfig() {
+        String config = (String) configCombo.getSelectedItem();
+        if (config.length() == 0) {
+            config = null;
+        }
+        return config;
+    }
+
+    private void selectServer(String serverId) {
+        RubyInstance server = ServerRegistry.getDefault().getServer(serverId, uiProperties.getPlatform());
+        if (server != null) {
+            serverComboBox.setSelectedItem(server);
+        }
+    }
+
+    private void selectRailsEnv(final String definedEnv) {
+        if (definedEnv != null && !"".equals(definedEnv.trim())) {
+            railsEnvCombo.setSelectedItem(definedEnv);
+        } else {
+            railsEnvCombo.setSelectedIndex(-1);
+        }
     }
 
     public HelpCtx getHelpCtx() {
@@ -255,14 +320,6 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
     private void initComponents() {
 
         configSep = new javax.swing.JSeparator();
-        mainPanel = new javax.swing.JPanel();
-        portLabel = new javax.swing.JLabel();
-        portField = new javax.swing.JTextField();
-        encodingLabel = new javax.swing.JLabel();
-        encoding = new javax.swing.JComboBox();
-        rakeLabel = new javax.swing.JLabel();
-        rakeTextField = new javax.swing.JTextField();
-        rakeHelpLabel = new javax.swing.JLabel();
         configLabel = new javax.swing.JLabel();
         configCombo = new javax.swing.JComboBox();
         configNew = new javax.swing.JButton();
@@ -270,65 +327,18 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
         rubyPlatformLabel = new javax.swing.JLabel();
         platforms = org.netbeans.modules.ruby.platform.PlatformComponentFactory.getRubyPlatformsComboxBox();
         manageButton = new javax.swing.JButton();
-
-        portLabel.setLabelFor(portField);
-        org.openide.awt.Mnemonics.setLocalizedText(portLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "LBL_CustomizeRun_Run_Args_JLabel")); // NOI18N
-
-        portField.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                portFieldActionPerformed(evt);
-            }
-        });
-
-        encodingLabel.setLabelFor(encoding);
-        org.openide.awt.Mnemonics.setLocalizedText(encodingLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "TXT_Encoding")); // NOI18N
-
-        rakeLabel.setLabelFor(rakeTextField);
-        org.openide.awt.Mnemonics.setLocalizedText(rakeLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "RakeArgs")); // NOI18N
-
-        org.openide.awt.Mnemonics.setLocalizedText(rakeHelpLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "RakeArgsEx")); // NOI18N
-
-        org.jdesktop.layout.GroupLayout mainPanelLayout = new org.jdesktop.layout.GroupLayout(mainPanel);
-        mainPanel.setLayout(mainPanelLayout);
-        mainPanelLayout.setHorizontalGroup(
-            mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(mainPanelLayout.createSequentialGroup()
-                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING, false)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, rakeLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, encodingLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, portLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(encoding, 0, 479, Short.MAX_VALUE)
-                    .add(portField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 479, Short.MAX_VALUE)
-                    .add(rakeTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 479, Short.MAX_VALUE)))
-            .add(mainPanelLayout.createSequentialGroup()
-                .add(120, 120, 120)
-                .add(rakeHelpLabel)
-                .addContainerGap())
-        );
-        mainPanelLayout.setVerticalGroup(
-            mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(mainPanelLayout.createSequentialGroup()
-                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(portLabel)
-                    .add(portField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(encodingLabel)
-                    .add(encoding, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .add(18, 18, 18)
-                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(rakeLabel)
-                    .add(rakeTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(rakeHelpLabel)
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-        );
-
-        portField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(CustomizerRun.class).getString("AD_jTextFieldArgs")); // NOI18N
-        encoding.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_Encoding")); // NOI18N
-        rakeTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RakeArguments")); // NOI18N
+        mainPanel = new javax.swing.JPanel();
+        portLabel = new javax.swing.JLabel();
+        portField = new javax.swing.JTextField();
+        serverComboBox = RailsServerManager.getServerComboBox(getPlatform());
+        serverLabel = new javax.swing.JLabel();
+        railsEnvCombo = new javax.swing.JComboBox();
+        railsEnvLabel = new javax.swing.JLabel();
+        encoding = new javax.swing.JComboBox();
+        encodingLabel = new javax.swing.JLabel();
+        rakeTextField = new javax.swing.JTextField();
+        rakeLabel = new javax.swing.JLabel();
+        rakeHelpLabel = new javax.swing.JLabel();
 
         configLabel.setLabelFor(configCombo);
         org.openide.awt.Mnemonics.setLocalizedText(configLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "CustomizerRun.configLabel")); // NOI18N
@@ -354,7 +364,14 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
             }
         });
 
+        rubyPlatformLabel.setLabelFor(platforms);
         org.openide.awt.Mnemonics.setLocalizedText(rubyPlatformLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "RubyPlatformLabel")); // NOI18N
+
+        platforms.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                platformsActionPerformed(evt);
+            }
+        });
 
         org.openide.awt.Mnemonics.setLocalizedText(manageButton, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "RubyHomeBrowse")); // NOI18N
         manageButton.addActionListener(new java.awt.event.ActionListener() {
@@ -363,35 +380,127 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
             }
         });
 
+        portLabel.setLabelFor(portField);
+        org.openide.awt.Mnemonics.setLocalizedText(portLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "LBL_CustomizeRun_Run_Args_JLabel")); // NOI18N
+
+        portField.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                portFieldActionPerformed(evt);
+            }
+        });
+
+        serverLabel.setLabelFor(serverComboBox);
+        org.openide.awt.Mnemonics.setLocalizedText(serverLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "ServerLabel")); // NOI18N
+
+        railsEnvCombo.setEditable(true);
+
+        org.openide.awt.Mnemonics.setLocalizedText(railsEnvLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "RailsEnv")); // NOI18N
+
+        encodingLabel.setLabelFor(encoding);
+        org.openide.awt.Mnemonics.setLocalizedText(encodingLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "TXT_Encoding")); // NOI18N
+
+        rakeLabel.setLabelFor(rakeTextField);
+        org.openide.awt.Mnemonics.setLocalizedText(rakeLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "RakeArgs")); // NOI18N
+
+        org.openide.awt.Mnemonics.setLocalizedText(rakeHelpLabel, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "RakeArgsEx")); // NOI18N
+
+        org.jdesktop.layout.GroupLayout mainPanelLayout = new org.jdesktop.layout.GroupLayout(mainPanel);
+        mainPanel.setLayout(mainPanelLayout);
+        mainPanelLayout.setHorizontalGroup(
+            mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, mainPanelLayout.createSequentialGroup()
+                .addContainerGap()
+                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                        .add(mainPanelLayout.createSequentialGroup()
+                            .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING, false)
+                                    .add(serverLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                    .add(portLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                                .add(railsEnvLabel))
+                            .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED))
+                        .add(mainPanelLayout.createSequentialGroup()
+                            .add(encodingLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 80, Short.MAX_VALUE)
+                            .add(64, 64, 64)))
+                    .add(mainPanelLayout.createSequentialGroup()
+                        .add(rakeLabel)
+                        .add(34, 34, 34)))
+                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(mainPanelLayout.createSequentialGroup()
+                        .add(rakeHelpLabel)
+                        .addContainerGap())
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                        .add(railsEnvCombo, 0, 476, Short.MAX_VALUE)
+                        .add(serverComboBox, 0, 476, Short.MAX_VALUE)
+                        .add(portField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 476, Short.MAX_VALUE)
+                        .add(encoding, 0, 476, Short.MAX_VALUE)
+                        .add(rakeTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 476, Short.MAX_VALUE))))
+        );
+        mainPanelLayout.setVerticalGroup(
+            mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, mainPanelLayout.createSequentialGroup()
+                .addContainerGap(18, Short.MAX_VALUE)
+                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(serverLabel)
+                    .add(serverComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 22, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(portLabel)
+                    .add(portField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(railsEnvCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(railsEnvLabel))
+                .add(18, 18, 18)
+                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(encodingLabel)
+                    .add(encoding, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(mainPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(rakeLabel)
+                    .add(rakeTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(rakeHelpLabel)
+                .addContainerGap())
+        );
+
+        portLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_ServerPort")); // NOI18N
+        portField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getBundle(CustomizerRun.class).getString("AD_ServerPort")); // NOI18N
+        serverComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_ServerEnvironment")); // NOI18N
+        railsEnvCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RailsEnv")); // NOI18N
+        railsEnvLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RailsEnv")); // NOI18N
+        encoding.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_Encoding")); // NOI18N
+        rakeTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RakeArguments")); // NOI18N
+
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(layout.createSequentialGroup()
-                .add(configLabel)
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, configSep, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 632, Short.MAX_VALUE)
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, mainPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(rubyPlatformLabel)
+                    .add(configLabel))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(configCombo, 0, 356, Short.MAX_VALUE)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(configCombo, 0, 410, Short.MAX_VALUE)
+                    .add(platforms, 0, 410, Short.MAX_VALUE))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(configNew)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(configDel))
-            .add(layout.createSequentialGroup()
-                .add(rubyPlatformLabel)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(platforms, 0, 355, Short.MAX_VALUE)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(manageButton)
-                .add(68, 68, 68))
-            .add(org.jdesktop.layout.GroupLayout.TRAILING, configSep, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 614, Short.MAX_VALUE)
-            .add(mainPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(manageButton)
+                    .add(layout.createSequentialGroup()
+                        .add(configNew)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(configDel))))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(rubyPlatformLabel)
-                    .add(platforms, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                    .add(manageButton))
+                    .add(manageButton)
+                    .add(platforms, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .add(7, 7, 7)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(configDel)
@@ -401,11 +510,14 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
                 .add(14, 14, 14)
                 .add(configSep, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
-                .add(mainPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .add(mainPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
         configCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_Configuration")); // NOI18N
         configNew.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_NewConfiguration")); // NOI18N
+        platforms.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RubyPlatformLabel")); // NOI18N
+        manageButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "AD_RubyHomeBrowse")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
     private void portFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_portFieldActionPerformed
@@ -413,11 +525,11 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
 }//GEN-LAST:event_portFieldActionPerformed
 
     private void configDelActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_configDelActionPerformed
-        String config = (String) configCombo.getSelectedItem();
+        String config = getSelectedConfig();
         assert config != null;
         configs.put(config, null);
         configChanged(null);
-        uiProperties.activeConfig = null;
+        uiProperties.setActiveConfig(null);
     }//GEN-LAST:event_configDelActionPerformed
 
     private void configNewActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_configNewActionPerformed
@@ -441,21 +553,34 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
         }
         configs.put(config, m);
         configChanged(config);
-        uiProperties.activeConfig = config;
+        uiProperties.setActiveConfig(config);
     }//GEN-LAST:event_configNewActionPerformed
 
     private void configComboActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_configComboActionPerformed
-        String config = (String) configCombo.getSelectedItem();
-        if (config.length() == 0) {
-            config = null;
-        }
+        String config = getSelectedConfig();
         configChanged(config);
-        uiProperties.activeConfig = config;
+        uiProperties.setActiveConfig(config);
     }//GEN-LAST:event_configComboActionPerformed
 
     private void manageButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_manageButtonActionPerformed
         RubyPlatformCustomizer.manage(platforms);
     }//GEN-LAST:event_manageButtonActionPerformed
+
+    private void platformsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_platformsActionPerformed
+        initServerComboBox();
+    }//GEN-LAST:event_platformsActionPerformed
+
+    private void initServerComboBox(){
+        serverComboBox.setModel(new RailsServerManager.ServerListModel(getPlatform()));
+        String serverID = configs.get(getSelectedConfig()).get(RailsProjectProperties.RAILS_SERVERTYPE);
+        if (serverID != null) {
+            selectServer(serverID);
+        }
+    }
+    
+    private RubyPlatform getPlatform() {
+        return PlatformComponentFactory.getPlatform(platforms);
+    }
 
     private void configChanged(String activeConfig) {
         DefaultComboBoxModel model = new DefaultComboBoxModel();
@@ -471,7 +596,7 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
                 return label != null ? label : c;
             }
         });
-        for (Map.Entry<String,Map<String,String>> entry : configs.entrySet()) {
+        for (Map.Entry<String, Map<String, String>> entry : configs.entrySet()) {
             String config = entry.getKey();
             if (config != null && entry.getValue() != null) {
                 alphaConfigs.add(config);
@@ -482,17 +607,34 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
         }
         configCombo.setModel(model);
         configCombo.setSelectedItem(activeConfig != null ? activeConfig : "");
-        Map<String,String> m = configs.get(activeConfig);
+        Map<String,String> active = configs.get(activeConfig);
         Map<String,String> def = configs.get(null);
-        if (m != null) {
-            for (int i = 0; i < data.length; i++) {
-                String v = m.get(keys[i]);
+        if (active != null) {
+            for (int i = 0; i < configFields.length; i++) {
+                String v = active.get(configPropsKeys[i]);
                 if (v == null) {
                     // display default value
-                    v = def.get(keys[i]);
+                    v = def.get(configPropsKeys[i]);
                 }
-                data[i].setText(v);
+                configFields[i].setText(v);
             }
+            String activePlatformID = active.get(RailsProjectProperties.PLATFORM_ACTIVE);
+            if (activePlatformID == null) {
+                activePlatformID = def.get(RailsProjectProperties.PLATFORM_ACTIVE);
+            }
+            platforms.setSelectedItem(RubyPlatformManager.getPlatformByID(activePlatformID));
+
+            String serverID = active.get(RailsProjectProperties.RAILS_SERVERTYPE);
+            if (serverID == null) {
+                serverID = def.get(RailsProjectProperties.RAILS_SERVERTYPE);
+            }
+            selectServer(serverID);
+
+            String environment = active.get(RailsProjectProperties.RAILS_ENV);
+            if (environment == null) {
+                environment = def.get(RailsProjectProperties.RAILS_ENV);
+            }
+            selectRailsEnv(environment);
         } // else ??
         configDel.setEnabled(activeConfig != null);
     }
@@ -511,10 +653,14 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
     private javax.swing.JComboBox platforms;
     private javax.swing.JTextField portField;
     private javax.swing.JLabel portLabel;
+    private javax.swing.JComboBox railsEnvCombo;
+    private javax.swing.JLabel railsEnvLabel;
     private javax.swing.JLabel rakeHelpLabel;
     private javax.swing.JLabel rakeLabel;
     private javax.swing.JTextField rakeTextField;
     private javax.swing.JLabel rubyPlatformLabel;
+    private javax.swing.JComboBox serverComboBox;
+    private javax.swing.JLabel serverLabel;
     // End of variables declaration//GEN-END:variables
     
     private static class EncodingRenderer extends JLabel implements ListCellRenderer, UIResource {
@@ -592,4 +738,5 @@ public class CustomizerRun extends JPanel implements HelpCtx.Provider {
             throw new UnsupportedOperationException();
         }
     }
+
 }
