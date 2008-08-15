@@ -1,0 +1,6 @@
+Column customer_id in table customer
+Column customer_id in table customizations.customization
+Table customer
+Alias cus
+Schema customers
+Schema customizations
