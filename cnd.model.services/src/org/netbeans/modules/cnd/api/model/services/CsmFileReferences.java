@@ -41,8 +41,17 @@
 
 package org.netbeans.modules.cnd.api.model.services;
 
+import java.util.Set;
+import org.netbeans.cnd.api.lexer.CppTokenId;
+import org.netbeans.modules.cnd.api.model.CsmFunction;
+import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmScope;
+import org.netbeans.modules.cnd.api.model.CsmType;
+import org.netbeans.modules.cnd.api.model.CsmTypedef;
+import org.netbeans.modules.cnd.api.model.CsmVariable;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceKind;
 import org.openide.util.Lookup;
 
 /**
@@ -56,6 +65,12 @@ public abstract class CsmFileReferences {
      */
     public abstract void accept(CsmScope csmScope, Visitor visitor);
 
+    /**
+     * Provides visiting of the identifiers of the CsmFile and point prefered 
+     * kinds of references
+     */
+    public abstract void accept(CsmScope csmScope, Visitor visitor, Set<CsmReferenceKind> preferedKinds);
+    
     /**
      * A dummy resolver that do nothing.
      */
@@ -89,12 +104,109 @@ public abstract class CsmFileReferences {
         public void accept(CsmScope csmScope, Visitor visitor) {
             // do nothing
         }
+        
+        @Override
+        public void accept(CsmScope csmScope, Visitor visitor, Set<CsmReferenceKind> kinds) {
+            // do nothing
+        }        
     }
     
     /**
      * visitor inteface
      */
     public interface Visitor {
-        void visit(CsmReference ref);
+        /**
+         * This method is invoked for every matching reference in the file.
+         * 
+         * @param context  reference with its lexical context
+         */
+        void visit(CsmReferenceContext context);
     }
+
+    /**
+     * Determines whether reference is dereferenced template parameter
+     */
+    public static boolean isTemplateBased(CsmReferenceContext context) {
+        if (2 <= context.size() && isDereference(context.getToken())) {
+            CsmReference ref = context.getReference(context.size() - 2);
+            if (ref != null) {
+                CsmObject obj = ref.getReferencedObject();
+                if (obj == null || isTemplateParameterInvolved(obj)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Determines whether reference is dereferenced macro
+     */
+    public static boolean isMacroBased(CsmReferenceContext context) {
+        if (2 <= context.size() && isDereference(context.getToken())) {
+            CsmReference ref = context.getReference(context.size() - 2);
+            if (ref != null) {
+                CsmObject obj = ref.getReferencedObject();
+                if (obj == null || CsmKindUtilities.isMacro(obj)) {
+                    return true;
+                }
+            }
+        }
+        for (int i = context.size() - 1; 0 < i; --i) {
+            if (context.getToken(i) == CppTokenId.LPAREN) {
+                CsmReference ref = context.getReference(i - 1);
+                if (ref != null && CsmKindUtilities.isMacro(ref.getReferencedObject())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTemplateParameterInvolved(CsmObject obj) {
+        if (CsmKindUtilities.isTemplateParameter(obj)) {
+            return true;
+        }
+        CsmType type = null;
+        if (CsmKindUtilities.isFunction(obj)) {
+            type = ((CsmFunction)obj).getReturnType();
+        } else if (CsmKindUtilities.isVariable(obj)) {
+            type = ((CsmVariable)obj).getType();
+        } else if(CsmKindUtilities.isTypedef(obj)) {
+            type = ((CsmTypedef) obj).getType();
+        }
+        return (type == null) ? false : type.isTemplateBased();
+    }
+
+    public static boolean isDereference(CppTokenId token) {
+        if (token == null) {
+            return false;
+        }
+        switch (token) {
+            case DOT:
+            case DOTMBR:
+            case ARROW:
+            case ARROWMBR:
+            case SCOPE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public static boolean isBracket(CppTokenId token) {
+        if (token == null) { 
+            return false; 
+        }
+        switch (token) {
+            case LBRACE:
+            case LBRACKET:
+            case LPAREN:
+            case LT:
+                return true;
+            default:
+                return false;
+        }
+    }
+
 }
