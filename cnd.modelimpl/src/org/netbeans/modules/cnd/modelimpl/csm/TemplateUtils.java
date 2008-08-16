@@ -42,6 +42,16 @@
 package org.netbeans.modules.cnd.modelimpl.csm;
 
 import antlr.collections.AST;
+import java.util.ArrayList;
+import java.util.List;
+import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmScope;
+import org.netbeans.modules.cnd.api.model.CsmScopeElement;
+import org.netbeans.modules.cnd.api.model.CsmTemplate;
+import org.netbeans.modules.cnd.api.model.CsmTemplateParameter;
+import org.netbeans.modules.cnd.api.model.CsmType;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
+import org.netbeans.modules.cnd.modelimpl.csm.core.AstUtil;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 
 /**
@@ -63,6 +73,13 @@ public class TemplateUtils {
 		break;
 	    }
 	}
+	return sb.toString();
+    }
+    
+    // in class our parser skips LESSTHAN symbols in templates...
+    public static String getClassSpecializationSuffix(AST qIdToken) {
+	StringBuilder sb  = new StringBuilder();
+        addSpecializationSuffix(qIdToken.getFirstChild(), sb);
 	return sb.toString();
     }
     
@@ -110,5 +127,147 @@ public class TemplateUtils {
 	    }
 	}
 	return false;
+    }
+
+    public static AST getTemplateStart(AST ast) {
+        for (AST child = ast; child != null; child = child.getNextSibling()) {
+            if (child.getType() == CPPTokenTypes.LITERAL_template) {
+                return child;
+            }
+        }
+        return null;
+    }
+    
+    public static List<CsmTemplateParameter> getTemplateParameters(AST ast, CsmFile file, CsmScope scope) {
+        assert (ast != null && ast.getType() == CPPTokenTypes.LITERAL_template);
+        List<CsmTemplateParameter> res = new ArrayList<CsmTemplateParameter>();
+        AST parameterStart = null;
+        for (AST child = ast.getFirstChild(); child != null; child = child.getNextSibling()) {
+            switch (child.getType()) {
+                case CPPTokenTypes.LITERAL_class:
+                case CPPTokenTypes.LITERAL_typename:
+                    parameterStart = child;
+                    break;
+                case CPPTokenTypes.ID:
+                    // now create parameter
+                    AST fakeAST = null;
+                    if (parameterStart == null) {
+                        fakeAST = parameterStart = child;
+                    } else {
+                        // Fix for IZ#138099: unresolved identifier for functions' template parameter.
+                        // The fakeAST is needed to initialize TemplateParameter with correct offsets.
+                        // Without it TemplateParameter would span either "class"/"typename" keyword
+                        // or parameter name, but not both.
+                        fakeAST = AstUtil.createAST(parameterStart, child);
+                    }
+                    if (child.getNextSibling() != null) {
+                        AST assign = child.getNextSibling();
+                        if (assign.getType() == CPPTokenTypes.ASSIGNEQUAL) {
+                            if (assign.getNextSibling() != null) {
+                                AST type = assign.getNextSibling();
+                                if (type.getType() == CPPTokenTypes.CSM_TYPE_COMPOUND) {
+                                    res.add(new TemplateParameterImpl(fakeAST, child.getText(), file, scope, type));
+                                    parameterStart = null;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    res.add(new TemplateParameterImpl(fakeAST, child.getText(), file, scope));                    
+                    parameterStart = null;
+                    break;
+                case CPPTokenTypes.CSM_PARAMETER_DECLARATION:
+                    // now create parameter
+                    parameterStart = child;
+                    AST varDecl = child.getFirstChild();
+                    // check for existense of CSM_VARIABLE_DECLARATION branch
+                    if (varDecl != null && varDecl.getNextSibling() != null &&
+                            varDecl.getNextSibling().getType() == CPPTokenTypes.CSM_VARIABLE_DECLARATION) {
+                        // CSM_VARIABLE_DECLARATION branch has priority
+                        varDecl = varDecl.getNextSibling();
+                    }
+                    if (varDecl != null) {
+                        switch (varDecl.getType()) {
+                            case CPPTokenTypes.CSM_VARIABLE_DECLARATION:
+                                AST pn = varDecl.getFirstChild();
+                                if (pn != null) {
+                                    res.add(new TemplateParameterImpl(parameterStart, pn.getText(), file, scope));
+                                }
+                                break;
+                            case CPPTokenTypes.CSM_TYPE_BUILTIN:
+                            case CPPTokenTypes.CSM_TYPE_COMPOUND:
+                                for(AST p = varDecl.getFirstChild(); p != null; p = p.getNextSibling()){
+                                    if (p.getType() == CPPTokenTypes.ID) {
+                                       res.add(new TemplateParameterImpl(parameterStart, p.getText(), file, scope));
+                                       break;
+                                    }
+                                }
+                                break;
+                        }
+                    }
+                    break;
+                case CPPTokenTypes.CSM_TEMPLATE_TEMPLATE_PARAMETER:
+                    parameterStart = child;
+                    for (AST paramChild = child.getFirstChild(); paramChild != null; paramChild = paramChild.getNextSibling()) {
+                        if (paramChild.getType() == CPPTokenTypes.ID) {
+                            // IZ 141842 : If template parameter declared as a template class, its usage is unresolved
+                            // Now all IDs of template template parameter are added to template parameters of template.
+                            // When CsmClassifierBasedTemplateParameter will be finished, this should be replaced. 
+                            res.add(new TemplateParameterImpl(parameterStart, paramChild.getText(), file, scope));
+                        }
+                    }
+                    break;
+            }
+        }
+        return res;
+    }
+    
+    public static CsmType checkTemplateType(CsmType type, CsmScope scope) {
+        if (!(type instanceof TypeImpl)) {            
+            return type;
+        }
+
+        if (type instanceof NestedType) {
+            NestedType nestedType = (NestedType) type;
+            type = new NestedType(checkTemplateType(nestedType.getParent(), scope), nestedType);
+        }
+        
+        // Check instantiation parameters
+        if (type.isInstantiation()) {
+            TypeImpl typeImpl = (TypeImpl) type;
+            List<CsmType> params = typeImpl.getInstantiationParams();
+            for (CsmType instParam : params) {
+                CsmType newType = checkTemplateType(instParam, scope);
+                if (newType != instParam) {
+                    params.set(params.indexOf(instParam), newType);
+                }
+            }
+        }
+        
+        // first check scope and super classes if needed
+        while (scope != null) {
+            if (CsmKindUtilities.isTemplate(scope)) {
+                List<CsmTemplateParameter> params = ((CsmTemplate)scope).getTemplateParameters();
+                if (!params.isEmpty()) {
+                    String classifierText = ((TypeImpl)type).getClassifierText().toString();
+                    for (CsmTemplateParameter param : params) {
+                        if (param.getName().toString().equals(classifierText)) {
+                            return new TemplateParameterTypeImpl(type, param);
+                        }
+                    }
+                }
+            }
+            // then check class or super class
+            if (scope instanceof CsmScopeElement) {
+                scope = ((CsmScopeElement)scope).getScope();
+            } else {
+                break;
+            }
+        }
+        
+        return type;
+    }
+
+    private TemplateUtils() {
     }
 }
