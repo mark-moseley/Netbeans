@@ -43,6 +43,8 @@ package org.netbeans.modules.editor.mimelookup.impl;
 
 import java.net.URL;
 import java.util.Collection;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.spi.editor.mimelookup.Class2LayerFolder;
 import org.openide.filesystems.FileObject;
@@ -61,6 +63,7 @@ public class FolderPathLookupTest extends NbTestCase {
         super(name);
     }
 
+    @Override
     protected void setUp() throws java.lang.Exception {
         clearWorkDir();
         // Set up the default lookup, repository, etc.
@@ -68,8 +71,10 @@ public class FolderPathLookupTest extends NbTestCase {
             getClass().getClassLoader(), 
             null
         );
+        Logger.getLogger("org.openide.filesystems.Ordering").setLevel(Level.OFF);
     }
     
+    @Override
     protected void tearDown() {
         TestUtilities.gc();
     }
@@ -122,7 +127,7 @@ public class FolderPathLookupTest extends NbTestCase {
         instances = lookup.lookupAll(Class2LayerFolder.class);
         assertEquals("Wrong number of instances", 0, instances.size());
     }
-    
+
     public void testChangeEvents() throws Exception {
         Lookup.Result lr = new FolderPathLookup(new String [] { "Tmp/A/B/C/D" }).lookupResult(Class2LayerFolder.class);
         L listener = new L();

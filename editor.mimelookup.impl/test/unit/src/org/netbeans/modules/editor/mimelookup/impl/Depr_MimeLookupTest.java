@@ -44,6 +44,7 @@ package org.netbeans.modules.editor.mimelookup.impl;
 import java.io.IOException;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
 import org.openide.util.Lookup;
 import org.openide.util.Lookup.Result;
 import org.openide.util.Lookup.Template;
@@ -56,6 +57,7 @@ import org.openide.util.LookupListener;
  *
  * @author Martin Roskanin
  */
+@RandomlyFails
 public class Depr_MimeLookupTest extends NbTestCase {
     
     private static final int WAIT_TIME = 5000;
@@ -180,9 +182,6 @@ public class Depr_MimeLookupTest extends NbTestCase {
         //delete all
         TestUtilities.deleteFile(getWorkDir(),
                 "Editors/text/jsp/testLookup/org-netbeans-modules-editor-mimelookup-impl-TestLookupObject.instance");
-        
-        TestUtilities.deleteFile(getWorkDir(),
-                "Editors/text/x-java/text/xml/testLookupTwo/org-netbeans-modules-editor-mimelookup-impl-TestLookupObjectTwo.instance");
         
         TestUtilities.deleteFile(getWorkDir(),
                 "Editors/text/html/text/xml/testLookup/org-netbeans-modules-editor-mimelookup-impl-TestLookupObject.instance");
@@ -504,8 +503,6 @@ public class Depr_MimeLookupTest extends NbTestCase {
         checkLookupTemplate(lookup, TestLookupObjectTwo.class, 0);
 
         // testing issue #58941
-        TestUtilities.deleteFile(getWorkDir(),
-                "Editors/text/xml/text/jsp/testLookup/org-netbeans-modules-editor-mimelookup-impl-TestLookupObject.instance");
         TestUtilities.deleteFile(getWorkDir(),
                 "Editors/text/jsp/testLookup/org-netbeans-modules-editor-mimelookup-impl-TestLookupObject.instance");
         checkLookupTemplate(lookup, TestLookupObject.class, 0);

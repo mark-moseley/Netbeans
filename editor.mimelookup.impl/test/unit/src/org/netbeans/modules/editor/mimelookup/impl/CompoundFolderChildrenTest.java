@@ -45,6 +45,8 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.junit.NbTestCase;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.Repository;
@@ -60,7 +62,9 @@ public class CompoundFolderChildrenTest extends NbTestCase {
         super(name);
     }
 
+    @Override
     protected void setUp() throws java.lang.Exception {
+        clearWorkDir();
         // Set up the default lookup, repository, etc.
         EditorTestLookup.setLookup(
             new String[] {
@@ -70,6 +74,7 @@ public class CompoundFolderChildrenTest extends NbTestCase {
             getClass().getClassLoader(), 
             null
         );
+        Logger.getLogger("org.openide.filesystems.Ordering").setLevel(Level.OFF);
     }
 
     // test collecting files on different layers
