@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
 import org.openide.cookies.OpenCookie;
 import org.openide.util.Lookup;
 import org.openide.util.Lookup.Result;
@@ -427,7 +428,7 @@ public class FilterNodeTest extends NbTestCase {
     }
     
     private void doChildrenFireCorrectEvents (boolean subclassedChildren) throws Exception {
-        ChildrenKeysTest.Keys k = new ChildrenKeysTest.Keys (new String[] { "1", "2", "3" });
+        ChildrenKeysTest.Keys k = new ChildrenKeysTest.Keys (false, new String[] { "1", "2", "3" });
         AbstractNode an = new AbstractNode (k);
         
         FilterNode fn;
@@ -465,7 +466,9 @@ public class FilterNodeTest extends NbTestCase {
         assertEquals ("One node gone", 1, removed.length);
         assertEquals ("Middle one", 1, removed[0]);
     }
-    
+
+    private static Object HOLDER;
+    @RandomlyFails // NB-Core-Build #1047
     public void testFilterNodeCanGCNodes () {
         class K extends Children.Keys {
             public int addNotify;
@@ -517,6 +520,7 @@ public class FilterNodeTest extends NbTestCase {
         java.lang.ref.WeakReference ref = new java.lang.ref.WeakReference (arr[0]);
         assertEquals ("No removeNotify", 0, k.removeNotify);
         arr = null;
+        HOLDER = k;
         assertGC ("The node can go away", ref);
         assertGC ("Key can go away", k.keyRef);
         assertEquals ("One remove notify", 1, k.removeNotify);
@@ -804,6 +808,52 @@ public class FilterNodeTest extends NbTestCase {
         assertEquals("It is the filter node", n, all.iterator().next());
     }
     
-}
+    static class Keys extends Children.Keys {
 
+
+        public Keys(boolean lazy, String... args) {
+            super(lazy);
+            if (args != null && args.length > 0) {
+                setKeys(args);
+            }
+        }
+
+        public void keys(String... args) {
+            super.setKeys(args);
+        }
+
+        public void keys(Collection args) {
+            super.setKeys(args);
+        }
+
+        protected Node[] createNodes(Object key) {
+            AbstractNode an = new AbstractNode(Children.LEAF);
+            an.setName(key.toString());
+            return new Node[]{an};
+        }
+    }
+    
+    public void testChangeOriginalToAndFromLazy() {
+       
+        AbstractNode a = new AbstractNode (new Keys(false, "a", "b"));
+        AbstractNode b = new AbstractNode (new Keys(true, "la", "lb"));
+        AbstractNode c = new AbstractNode (new Keys(false, "A", "B"));
+    
+        FN fn = new FN(a);
+        assertFalse(fn.getChildren().isLazy());
+        assertEquals("a", fn.getChildren().getNodeAt(0).getName());
+        assertEquals("b", fn.getChildren().getNodeAt(1).getName());
+        
+        fn.changeCh(b, true);
+        assertTrue(fn.getChildren().isLazy());
+        assertEquals("la", fn.getChildren().getNodeAt(0).getName());
+        assertEquals("lb", fn.getChildren().getNodeAt(1).getName());
+        
+        fn.changeCh(c, true);
+        assertFalse(fn.getChildren().isLazy());
+        assertEquals("A", fn.getChildren().getNodeAt(0).getName());
+        assertEquals("B", fn.getChildren().getNodeAt(1).getName());
+    }    
+    
+}
 
