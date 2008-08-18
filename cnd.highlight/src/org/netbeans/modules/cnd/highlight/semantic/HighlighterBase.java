@@ -41,44 +41,41 @@
 package org.netbeans.modules.cnd.highlight.semantic;
 
 import java.lang.ref.WeakReference;
+import java.util.Collection;
+import java.util.HashSet;
 import javax.swing.text.Document;
-import org.netbeans.api.editor.mimelookup.MimeLookup;
-import org.netbeans.api.editor.mimelookup.MimePath;
-import org.netbeans.api.editor.settings.FontColorSettings;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceRepository.Interrupter;
 import org.netbeans.modules.cnd.model.tasks.CsmFileTaskFactory.PhaseRunner;
+import org.netbeans.modules.cnd.modelutil.CsmFontColorManager;
+import org.netbeans.modules.cnd.modelutil.FontColorProvider;
 import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
-import org.openide.util.Lookup;
-import org.openide.util.LookupEvent;
-import org.openide.util.LookupListener;
-import org.openide.util.WeakListeners;
+import org.openide.util.Cancellable;
 
 /**
  *
  * @author Sergey Grinev
  */
-public abstract class HighlighterBase implements PhaseRunner, LookupListener {
+public abstract class HighlighterBase implements PhaseRunner, CsmFontColorManager.FontColorChangeListener {
 
-    private final String mime;
+    /*package*/ static final boolean MINIMAL = Boolean.getBoolean("cnd.highlighting.minimal");
+    
     private final OffsetsBag bag;
     private final WeakReference<BaseDocument> weakDoc;
 
     public HighlighterBase(Document doc) {
         bag = new OffsetsBag(doc);
-        mime = (String) doc.getProperty("mimeType"); //NOI18N
-        Lookup lookup = MimeLookup.getLookup(MimePath.get(mime));
-        Lookup.Result<FontColorSettings> result =
-                lookup.lookup(new Lookup.Template<FontColorSettings>(FontColorSettings.class));
-        result.addLookupListener(WeakListeners.create(LookupListener.class, this, null));
-        result.allInstances();
 
         if (doc instanceof BaseDocument) {
             weakDoc = new WeakReference<BaseDocument>((BaseDocument) doc);
         } else {
             weakDoc = null;
         }
-
-        updateFontColors();
+    }
+    
+    protected void init(Document doc){
+        String mimeType = (String) doc.getProperty("mimeType"); //NOI18N
+        CsmFontColorManager.instance().addListener(mimeType, this);
     }
     
     protected BaseDocument getDocument() {
@@ -89,21 +86,48 @@ public abstract class HighlighterBase implements PhaseRunner, LookupListener {
         return bag;
     }
 
-    // LookupListener
-    public void resultChanged(LookupEvent ev) {
-        updateFontColors();
+    // ChangeListener
+    public void stateChanged(FontColorProvider provider) {
+        updateFontColors(provider);
         run(PhaseRunner.Phase.INIT);
     }
     
-    public void updateFontColors() {
-        Lookup lookup = MimeLookup.getLookup(MimePath.get(mime));
-        FontColorSettings fcs = lookup.lookup(FontColorSettings.class);
-        initFontColors(fcs);
-    }
-
-    protected abstract void initFontColors(FontColorSettings fcs);
+    protected abstract void updateFontColors(FontColorProvider provider);
 
     protected boolean isCancelled() {
         return Thread.interrupted();
     }
+
+    private Collection<Cancellable> listeners = new HashSet<Cancellable>();
+    protected void addCancelListener(Cancellable interruptor){
+        synchronized(listeners) {
+            listeners.add(interruptor);
+        }
+    }
+    
+    protected void removeCancelListener(Cancellable interruptor){
+        synchronized(listeners) {
+            listeners.remove(interruptor);
+        }
+    }
+
+    public void cancel() {
+        synchronized(listeners) {
+            for(Cancellable interruptor : listeners) {
+                interruptor.cancel();
+            }
+        }
+    }
+
+    protected class MyInterruptor implements Interrupter, Cancellable {
+        private boolean canceled = false;
+        public boolean cancelled() {
+            return canceled;
+        }
+        public boolean cancel() {
+            canceled = true;
+            return true;
+        }
+    }
+    
 }
