@@ -1,4 +1,3 @@
-package org.netbeans.modules.tasklist.todo;
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
@@ -40,6 +39,8 @@ package org.netbeans.modules.tasklist.todo;
  * made subject to such option by the copyright holder.
  */
 
+package org.netbeans.modules.tasklist.todo;
+
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
@@ -49,6 +50,7 @@ import java.util.List;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.junit.MockServices;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.modules.apisupport.project.DialogDisplayerImpl;
 import org.netbeans.modules.apisupport.project.InstalledFileLocatorImpl;
 import org.netbeans.modules.apisupport.project.NbModuleProject;
@@ -57,9 +59,6 @@ import org.netbeans.modules.apisupport.project.TestBase;
 import org.netbeans.modules.apisupport.project.layers.LayerTestBase;
 import org.netbeans.modules.apisupport.project.suite.SuiteProject;
 import org.netbeans.modules.tasklist.impl.CurrentEditorScanningScope;
-import org.netbeans.modules.tasklist.impl.TaskList;
-import org.netbeans.modules.tasklist.impl.TaskManagerImpl;
-import org.netbeans.modules.tasklist.impl.TaskManagerImplTest;
 import org.netbeans.modules.tasklist.projectint.MainProjectScanningScope;
 import org.netbeans.modules.tasklist.projectint.OpenedProjectsScanningScope;
 import org.netbeans.spi.tasklist.Task;
@@ -140,7 +139,8 @@ public class ToDoTest extends TestBase {
         scanScope.run();
         return scanTasks(scanScope);
     }
-    
+
+    @RandomlyFails // NB-Core-Build #852
     public void testProject1() throws IOException {
         NbModuleProject prj1 = generateStandaloneModule(getWorkDir(), "prj1");
         NbModuleProject prj2 = generateStandaloneModule(getWorkDir(), "prj2");
@@ -157,6 +157,8 @@ public class ToDoTest extends TestBase {
         logTasks(tasks); 
         assertEquals("Number of tasks",2,tasks.size());
     }
+
+    @RandomlyFails // NB-Core-Build #1049
     public void testMainProject() throws Exception {
         NbModuleProject prj1 = generateStandaloneModule(getWorkDir(), "prj1");
         NbModuleProject prj2 = generateStandaloneModule(getWorkDir(), "prj2");
@@ -177,9 +179,9 @@ public class ToDoTest extends TestBase {
         NbModuleProject prj3 = generateSuiteComponent(suite, getWorkDir(), "prjInSuite1");
         NbModuleProject prj4 = generateSuiteComponent(suite, getWorkDir(), "prjInSuite2");
         
-        FileObject fo4 = createSrcFile(prj3,"Main.java",javaFile);
-        FileObject fo5 = createSrcFile(prj4,"Main.java",javaFile);
-        ProjectXMLManagerTest.addDependecy(prj3, prj4);
+        createSrcFile(prj3,"Main.java",javaFile);
+        createSrcFile(prj4,"Main.java",javaFile);
+        ProjectXMLManagerTest.addDependency(prj3, prj4);
         OpenProjects.getDefault().open(new Project[]{suite,prj3,prj4}, false);
         OpenProjects.getDefault().setMainProject(prj4);
         
