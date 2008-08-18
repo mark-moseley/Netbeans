@@ -16,17 +16,21 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
+import org.netbeans.jellytools.JellyTestCase;
+import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.actions.Action;
 import org.netbeans.jellytools.util.StringFilter;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.TestOut;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.ide.ProjectSupport;
 import org.netbeans.test.junit.utils.Utilities;
 
 /**
  *
  * @author ms159439
  */
-public class JunitTestCase extends NbTestCase {
+public class JunitTestCase extends JellyTestCase {
     
     /** Should we create goldenfiles? */ 
     private static boolean CREATE_GOLDENFILES = false;
@@ -65,8 +69,11 @@ public class JunitTestCase extends NbTestCase {
     /**
      * Sets up logging facilities.
      */
-    public void setUp() {
+    public void setUp() throws IOException {
         System.out.println("########  " + getName() + "  #######");
+        openDataProjects("JunitTestProject");
+        new Action(null, "Set as Main Project").perform(new ProjectsTabOperator().getProjectRootNode("JunitTestProject"));
+        ProjectSupport.waitScanFinished();
         err = getLog();
         log = getRef();
         JemmyProperties.getProperties().setOutput(new TestOut(null,
