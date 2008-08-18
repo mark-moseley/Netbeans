@@ -50,7 +50,6 @@ import java.security.CodeSource;
 import java.security.PermissionCollection;
 import java.security.Permissions;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -422,44 +421,15 @@ public final class ModuleManager {
     private static final class SystemClassLoader extends JarClassLoader {
 
         private final PermissionCollection allPermissions;
-        private final StringBuffer debugme;
         private boolean empty = true;
+        int size;
 
         public SystemClassLoader(List<File> files, ClassLoader[] parents, Set<Module> modules) throws IllegalArgumentException {
             super(files, parents, false);
             allPermissions = new Permissions();
             allPermissions.add(new AllPermission());
             allPermissions.setReadOnly();
-            debugme = new StringBuffer(100 + 50 * modules.size());
-            debugme.append("SystemClassLoader["); // NOI18N
-            for (File file : files) {
-                if (empty) {
-                    empty = false;
-                } else {
-                    debugme.append(','); // NOI18N
-                }
-                debugme.append(file.getAbsolutePath());
-            }
-            record(modules);
-            debugme.append(']'); // NOI18N
-        }
-
-        private void record(Collection<Module> modules) {
-	    for (Module m: modules) {
-                if (empty) {
-                    empty = false;
-                } else {
-                    debugme.append(','); // NOI18N
-                }
-                debugme.append(m.getCodeNameBase());
-            }
-        }
-
-        public void append(ClassLoader[] ls, List<Module> modules) throws IllegalArgumentException {
-            super.append(ls);
-            debugme.deleteCharAt(debugme.length() - 1);
-            record(modules);
-            debugme.append(']'); // NOI18N
+            size = modules.size();
         }
 
         protected @Override void finalize() throws Throwable {
@@ -468,10 +438,7 @@ public final class ModuleManager {
         }
 
         public @Override String toString() {
-            if (debugme == null) {
-                return "SystemClassLoader";
-            }
-            return debugme.toString();
+            return "SystemClassLoader[" + size + " modules]";
         }
 
         /** Provide all permissions for any code loaded from the files list
@@ -511,22 +478,24 @@ public final class ModuleManager {
                         history, reloadable, autoload, eager, this, ev);
         ev.log(Events.FINISH_CREATE_REGULAR_MODULE, jar);
         subCreate(m);
-        if (m.isEager()) {
-            List<Module> immediate = simulateEnable(Collections.<Module>emptySet());
-            if (!immediate.isEmpty()) {
-                if (!immediate.contains(m)) throw new IllegalStateException("Can immediately enable modules " + immediate + ", but not including " + m); // NOI18N
-                boolean ok = true;
-		for (Module other: immediate) {
-                    if (!other.isAutoload() && !other.isEager()) {
-                        // Nope, would require a real module to be turned on first.
-                        ok = false;
-                        break;
-                    }
+        // Must run eager enablement check for *every* module that is created,
+        // even if it itself is not eager. Otherwise it is possible that an eager
+        // module gets created, followed immediately by one of its dependencies,
+        // and does not get turned on.
+        List<Module> immediate = simulateEnable(Collections.<Module>emptySet());
+        if (!immediate.isEmpty()) {
+            assert immediate.contains(m) : "Can immediately enable modules " + immediate + ", but not including " + m + "; its problems: " + m.getProblems();
+            boolean ok = true;
+            for (Module other: immediate) {
+                if (!other.isAutoload() && !other.isEager()) {
+                    // Nope, would require a real module to be turned on first.
+                    ok = false;
+                    break;
                 }
-                if (ok) {
-                    Util.err.fine("Enabling " + m + " immediately");
-                    enable(Collections.<Module>emptySet());
-                }
+            }
+            if (ok) {
+                Util.err.fine("Enabling " + m + " immediately");
+                enable(Collections.<Module>emptySet());
             }
         }
         return m;
@@ -622,9 +591,6 @@ public final class ModuleManager {
         }
         // The installer can perform additional checks:
         return installer.shouldDelegateResource(m, parent, pkg);
-    }
-    public boolean isSpecialResource(String pkg) {
-        return installer.isSpecialResource(pkg);
     }
     // Again, access from Module to ModuleInstaller:
     Manifest loadManifest(File jar) throws IOException {
@@ -910,7 +876,7 @@ public final class ModuleManager {
             // They all were OK so far; add to system classloader and install them.
             if (classLoader != null) {
                 Util.err.fine("enable: adding to system classloader");
-                List<ClassLoader> nueclassloaders = new ArrayList<ClassLoader>(toEnable.size());
+                LinkedList<ClassLoader> nueclassloaders = new LinkedList<ClassLoader>();
                 if (moduleFactory.removeBaseClassLoader()) {
                     ClassLoader base = ModuleManager.class.getClassLoader();
                     nueclassloaders.add(moduleFactory.getClasspathDelegateClassLoader(this, base));
@@ -922,10 +888,15 @@ public final class ModuleManager {
                     }
                 } else {
                     for (Module m : toEnable) {
-                        nueclassloaders.add(m.getClassLoader());
+                        if (m.getClassLoader() == ClassLoader.getSystemClassLoader()) {
+                            nueclassloaders.addFirst(m.getClassLoader());
+                        } else {
+                            nueclassloaders.add(m.getClassLoader());
+                        }
                     }
                 }
-                classLoader.append((nueclassloaders.toArray(new ClassLoader[nueclassloaders.size()])), toEnable);
+                classLoader.append((nueclassloaders.toArray(new ClassLoader[nueclassloaders.size()])));
+                classLoader.size += toEnable.size();
             } else {
                 Util.err.fine("enable: no class loader yet, not appending");
             }
@@ -1083,8 +1054,7 @@ public final class ModuleManager {
     }
     private void maybeAddToEnableList(Set<Module> willEnable, Set<Module> mightEnable, Module m, boolean okToFail) {
         if (! missingDependencies(m).isEmpty()) {
-            // Should never happen:
-            if (! okToFail) throw new IllegalStateException("Module was supposed to be OK: " + m); // NOI18N
+            assert okToFail : "Module " + m + " had unexpected problems: " + missingDependencies(m) + " (willEnable: " + willEnable + " mightEnable: " + mightEnable + ")";
             // Cannot satisfy its dependencies, exclude it.
             return;
         }
@@ -1317,7 +1287,7 @@ public final class ModuleManager {
                     for (int i = 0; i < dependencies.length; i++) {
                         Dependency dep = dependencies[i];
                         if (dep.getType() == Dependency.TYPE_MODULE) {
-                            if (dep.getName().equals(m.getCodeName())) {
+                            if (Util.parseCodeName(dep.getName())[0].equals(m.getCodeNameBase())) {
                                 // Still used, skip it.
                                 continue FIND_AUTOLOADS;
                             }
