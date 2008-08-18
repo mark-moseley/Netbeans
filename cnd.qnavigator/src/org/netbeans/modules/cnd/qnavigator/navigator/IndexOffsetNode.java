@@ -49,25 +49,45 @@ import org.openide.nodes.Node;
  */
 public class IndexOffsetNode implements Comparable<IndexOffsetNode>{
     private Node node;
-    private long offset;
+    private long startOffset;
+    private long endOffset;
+    private IndexOffsetNode scope;
     /** Creates a new instance of IndexOffsetNode */
-    public IndexOffsetNode(Node node, long offset) {
+    public IndexOffsetNode(Node node, long startOffset, long endOffset) {
         this.node = node;
-        this.offset = offset;
+        this.startOffset = startOffset;
+        this.endOffset = endOffset;
     }
 
-    public long getOffset(){
-        return offset;
+    public long getStartOffset(){
+        return startOffset;
+    }
+
+    public long getEndOffset(){
+        return endOffset;
+    }
+
+    public IndexOffsetNode getScope(){
+        return scope;
+    }
+
+    public void setScope(IndexOffsetNode scope){
+        this.scope = scope;
     }
 
     public Node getNode(){
         return node;
     }
     
+    void resetContent(IndexOffsetNode content){
+        startOffset = content.startOffset;
+        endOffset = content.endOffset;
+    }
+    
     public int compareTo(IndexOffsetNode o) {
-        if (getOffset() < o.getOffset()){
+        if (getStartOffset() < o.getStartOffset()){
             return -1;
-        } else if (getOffset() > o.getOffset()) {
+        } else if (getStartOffset() > o.getStartOffset()) {
             return 1;
         }
         return 0;
@@ -75,6 +95,6 @@ public class IndexOffsetNode implements Comparable<IndexOffsetNode>{
     
     @Override
     public String toString(){
-        return ""+offset+node.getDisplayName();
+        return ""+startOffset+node.getDisplayName();
     }
 }
