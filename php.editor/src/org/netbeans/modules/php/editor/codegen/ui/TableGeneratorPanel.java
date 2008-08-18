@@ -61,6 +61,8 @@ import javax.swing.event.DocumentListener;
 import org.netbeans.api.db.explorer.ConnectionManager;
 import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.api.db.explorer.support.DatabaseExplorerUIs;
+import org.netbeans.api.db.sql.support.SQLIdentifiers;
+import org.netbeans.api.db.sql.support.SQLIdentifiers.Quoter;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.modules.php.editor.codegen.DatabaseURL;
@@ -90,10 +92,12 @@ public class TableGeneratorPanel extends javax.swing.JPanel {
         DialogDescriptor desc = new DialogDescriptor(panel, NbBundle.getMessage(TableGeneratorPanel.class, "MSG_SelectTableAndColumns"));
         panel.initialize(desc, connVariable);
         Dialog dialog = DialogDisplayer.getDefault().createDialog(desc);
+        dialog.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ConnectionGeneratorPanel.class, "ACSD_SelectColumns"));
         dialog.setVisible(true);
         dialog.dispose();
         if (desc.getValue() == DialogDescriptor.OK_OPTION) {
-            return new TableAndColumns(panel.table, panel.getAllColumns(), panel.getSelectedColumns(), panel.getConnVariable()); // NOI18N
+            Quoter quoter = SQLIdentifiers.createQuoter(panel.dmd);
+            return new TableAndColumns(quoter, panel.table, panel.getAllColumns(), panel.getSelectedColumns(), panel.getConnVariable()); // NOI18N
         }
         return null;
     }
@@ -115,7 +119,6 @@ public class TableGeneratorPanel extends javax.swing.JPanel {
                 updateErrorState();
             }
         });
-        errorLabel.setForeground(UIUtils.getErrorForeground());
     }
 
     private void initialize(DialogDescriptor descriptor, String connVariable) {
@@ -299,8 +302,8 @@ public class TableGeneratorPanel extends javax.swing.JPanel {
     }
 
     private void setErrorMessage(String message) {
-        errorLabel.setText(message != null ? message : " "); // NOI18N
-         descriptor.setValid(message == null);
+        errorLabel.setText(message);
+        descriptor.setValid(message == null);
     }
 
     private static <T> T doWithProgress(String message, final Callable<? extends T> run) {
@@ -354,7 +357,7 @@ public class TableGeneratorPanel extends javax.swing.JPanel {
         columnList = new javax.swing.JList();
         connVariableLabel = new javax.swing.JLabel();
         connVariableTextField = new javax.swing.JTextField();
-        errorLabel = new javax.swing.JLabel();
+        errorLabel = new ErrorLabel();
 
         dbconnLabel.setLabelFor(dbconnComboBox);
         org.openide.awt.Mnemonics.setLocalizedText(dbconnLabel, org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "ConnectionGeneratorPanel.dbconnLabel.text")); // NOI18N
@@ -380,13 +383,15 @@ public class TableGeneratorPanel extends javax.swing.JPanel {
 
         columnList.setEnabled(false);
         columnScrollPane.setViewportView(columnList);
+        columnList.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.columnList.AccessibleContext.accessibleName")); // NOI18N
+        columnList.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.columnList.AccessibleContext.accessibleDescription")); // NOI18N
 
+        connVariableLabel.setLabelFor(connVariableLabel);
         org.openide.awt.Mnemonics.setLocalizedText(connVariableLabel, org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.connVariableLabel.text")); // NOI18N
 
         connVariableTextField.setColumns(16);
-        connVariableTextField.setText(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.connVariableTextField.text")); // NOI18N
 
-        org.openide.awt.Mnemonics.setLocalizedText(errorLabel, org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "ConnectionGeneratorPanel.errorLabel.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(errorLabel, org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.errorLabel.text")); // NOI18N
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -395,12 +400,12 @@ public class TableGeneratorPanel extends javax.swing.JPanel {
             .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, columnScrollPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 301, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, columnScrollPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 437, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, dbconnLabel)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, dbconnComboBox, 0, 301, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, dbconnComboBox, 0, 437, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, errorLabel)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, tableLabel)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, tableComboBox, 0, 301, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, tableComboBox, 0, 437, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, columnLabel)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, connVariableTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, connVariableLabel))
@@ -429,6 +434,13 @@ public class TableGeneratorPanel extends javax.swing.JPanel {
                 .add(errorLabel)
                 .addContainerGap())
         );
+
+        dbconnComboBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.dbconnComboBox.AccessibleContext.accessibleName")); // NOI18N
+        dbconnComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.dbconnComboBox.AccessibleContext.accessibleDescription")); // NOI18N
+        tableComboBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.tableComboBox.AccessibleContext.accessibleName")); // NOI18N
+        tableComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.tableComboBox.AccessibleContext.accessibleDescription")); // NOI18N
+        connVariableTextField.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.connVariableTextField.AccessibleContext.accessibleName")); // NOI18N
+        connVariableTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableGeneratorPanel.class, "TableGeneratorPanel.connVariableTextField.AccessibleContext.accessibleDescription")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
 private void dbconnComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_dbconnComboBoxActionPerformed
@@ -438,7 +450,7 @@ private void dbconnComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
             dbconn = (DatabaseConnection) selected;
         }
         lastErrorMessage = changeDatabaseConnection(dbconn);
-        if (lastErrorMessage == null) {
+        if (lastErrorMessage == null && this.dbconn != null) {
             tableComboBoxSelectionChanged();
         }
         updateErrorState();
@@ -495,16 +507,22 @@ private void tableComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN
 
     public static final class TableAndColumns {
 
+        private final Quoter identifierQuoter;
         private final String table;
         private final List<String> allColumns;
         private final List<String> selectedColumns;
         private final String connVariable;
 
-        private TableAndColumns(String table, List<String> allColumns, List<String> selectedColumns, String connVariable) {
+        private TableAndColumns(Quoter identifierQuoter, String table, List<String> allColumns, List<String> selectedColumns, String connVariable) {
+            this.identifierQuoter = identifierQuoter;
             this.table = table;
             this.allColumns = allColumns;
             this.selectedColumns = selectedColumns;
             this.connVariable = connVariable;
+        }
+
+        public Quoter getIdentifierQuoter() {
+            return identifierQuoter;
         }
 
         public String getTable() {
