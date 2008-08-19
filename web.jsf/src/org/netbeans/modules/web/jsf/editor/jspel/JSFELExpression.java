@@ -74,6 +74,7 @@ import org.openide.filesystems.FileObject;
 /**
  *
  * @author Petr Pisl
+ * @author Po-Ting Wu
  */
 public class JSFELExpression extends ELExpression{
     
@@ -84,7 +85,7 @@ public class JSFELExpression extends ELExpression{
     
     private WebModule webModule;
     
-    protected String bundle;
+    protected String bundleName;
     
     public JSFELExpression(WebModule wm, JspSyntaxSupport sup){
         super(sup);
@@ -101,8 +102,8 @@ public class JSFELExpression extends ELExpression{
             
             // look through all registered managed beans
             List <ManagedBean> beans = JSFBeanCache.getBeans(webModule);
-            for (int i = 0; i < beans.size(); i++) {
-                if (beans.get(i).getManagedBeanName().equals(first)){
+            for (ManagedBean bean : beans) {
+                if (first.equals(bean.getManagedBeanName())) {
                     value = EL_JSF_BEAN;
                     break;
                 }
@@ -110,10 +111,10 @@ public class JSFELExpression extends ELExpression{
             
             // look trhough all registered resource bundles
             List <ResourceBundle> bundles = getJSFResourceBundles(webModule);
-            for (int i = 0; i < bundles.size(); i++) {
-                if (first.equals(bundles.get(i).getVar())) {
+            for (ResourceBundle bundle : bundles) {
+                if (first.equals(bundle.getVar())) {
                     value = EL_JSF_RESOURCE_BUNDLE;
-                    bundle = bundles.get(i).getBaseName();
+                    bundleName = bundle.getBaseName();
                     break;
                 }
             }
@@ -160,7 +161,7 @@ public class JSFELExpression extends ELExpression{
         return bundles;
     }
     
-    public  List<CompletionItem> getPropertyKeys(String propertyFile, String prefix) {
+    public  List<CompletionItem> getPropertyKeys(String propertyFile, int anchorOffset, String prefix) {
         ArrayList<CompletionItem> items = new ArrayList<CompletionItem>();
         java.util.ResourceBundle labels = null;
         ClassPath classPath;
@@ -190,7 +191,7 @@ public class JSFELExpression extends ELExpression{
                     StringBuffer helpText = new StringBuffer();
                     helpText.append(key).append("=<font color='#ce7b00'>"); //NOI18N
                     helpText.append(labels.getString(key)).append("</font>"); //NOI18N
-                    items.add(new JSFResultItem.JSFResourceItem(key, helpText.toString()));
+                    items.add(new JSFResultItem.JSFResourceItem(key, anchorOffset, helpText.toString()));
                 }
             }
         }
@@ -198,8 +199,8 @@ public class JSFELExpression extends ELExpression{
         return items;
     }
     
-    public List<CompletionItem> getListenerMethodCompletionItems(String beanType){
-        JSFCompletionItemsTask task = new JSFCompletionItemsTask(beanType);
+    public List<CompletionItem> getListenerMethodCompletionItems(String beanType, int anchor){
+        JSFCompletionItemsTask task = new JSFCompletionItemsTask(beanType, anchor);
         runTask(task);
         return task.getCompletionItems();
     }
@@ -207,12 +208,14 @@ public class JSFELExpression extends ELExpression{
     public class JSFCompletionItemsTask extends ELExpression.BaseELTaskClass implements CancellableTask<CompilationController> {
         
         private List<CompletionItem> completionItems = new ArrayList<CompletionItem>();
+        private int anchor;
         
-        
-        JSFCompletionItemsTask(String beanType){
+        JSFCompletionItemsTask(String beanType, int anchor){
             super(beanType);
+            this.anchor = anchor;
         }
         
+        @Override
         public void cancel() {}
         
         public void run(CompilationController parameter) throws Exception {
@@ -228,7 +231,7 @@ public class JSFELExpression extends ELExpression{
                         String methodName = method.getSimpleName().toString();
                             if (methodName != null && methodName.startsWith(prefix)){
                                 CompletionItem item = new JSFResultItem.JSFMethod(
-                                    methodName, "void");
+                                    methodName, anchor, "void");
 
                             completionItems.add(item);
                         }

@@ -51,14 +51,14 @@ import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.TextAction;
 
-import org.netbeans.api.gsf.OffsetRange;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.SyntaxSupport;
 import org.netbeans.editor.Utilities;
 import org.netbeans.editor.ext.html.HTMLLexerFormatter;
 import org.netbeans.editor.ext.html.HTMLSyntaxSupport;
-import org.netbeans.modules.editor.html.HTMLKit;
+import org.netbeans.modules.html.editor.HTMLKit;
 import org.netbeans.modules.editor.indent.api.IndentUtils;
 import org.netbeans.modules.php.doc.DocumentationRegistry;
 import org.netbeans.modules.php.lexer.PhpTokenId;
