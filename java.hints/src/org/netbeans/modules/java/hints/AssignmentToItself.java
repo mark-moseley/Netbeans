@@ -27,6 +27,7 @@
  */
 package org.netbeans.modules.java.hints;
 
+import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
@@ -38,7 +39,6 @@ import com.sun.source.util.TreePath;
 import com.sun.source.util.Trees;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -94,7 +94,7 @@ public class AssignmentToItself extends AbstractHint {
         
         Element eVar = info.getTrees().getElement(tpVar);
         Element eExp = info.getTrees().getElement(tpExp);
-        
+
         if ( eVar != null && eExp != null && eVar.equals( eExp ) ) {
             
             List<Fix> fixes = new ArrayList<Fix>();
@@ -132,7 +132,7 @@ public class AssignmentToItself extends AbstractHint {
         return NbBundle.getMessage(AssignmentToItself.class, "DSC_ATI"); // NOI18N
     }
     
-   private boolean ignore(TreePath tp, AssignmentTree at, Trees trees ) {
+    private boolean ignore(TreePath tp, AssignmentTree at, Trees trees ) {
         
         ExpressionTree var = at.getVariable();
         ExpressionTree exp = at.getExpression();
@@ -154,7 +154,17 @@ public class AssignmentToItself extends AbstractHint {
             return true;
         } 
         else {
-            return !varElements.equals(expElements);
+            boolean equal = varElements.equals(expElements);
+            //compare array indexes in case of array access
+            if (equal && var.getKind() == Kind.MEMBER_SELECT && exp.getKind() == Kind.MEMBER_SELECT) {
+                ExpressionTree varExp = ((MemberSelectTree) var).getExpression();
+                ExpressionTree expExp = ((MemberSelectTree) exp).getExpression();
+                if (varExp.getKind() == Kind.ARRAY_ACCESS && expExp.getKind() == Kind.ARRAY_ACCESS) {
+                    if (!((ArrayAccessTree) varExp).getIndex().toString().equals(((ArrayAccessTree) expExp).getIndex().toString()))
+                            return true;
+                }
+            }
+            return !equal;
         }
     }
     
