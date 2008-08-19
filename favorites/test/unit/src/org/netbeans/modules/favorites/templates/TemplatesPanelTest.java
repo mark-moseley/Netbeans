@@ -51,6 +51,7 @@ import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
+import org.openide.util.test.MockLookup;
 
 /**
  * Tests creating/renaming/removing templates via TemplatesPanel.
@@ -69,15 +70,18 @@ public class TemplatesPanelTest extends NbTestCase {
         super(s);
     }
     
-    protected void setUp () {
+    @Override
+    protected void setUp() throws Exception {
+        MockLookup.setInstances(new Repository(FileUtil.createMemoryFileSystem()));
         try {
             templateFolder = Repository.getDefault ().getDefaultFileSystem ().getRoot ().createFolder ("TestTemplates");
         } catch (IOException ioe) {
             fail (ioe.getMessage ());
         }
         assertNotNull ("TestTemplates folder exists on SFS", templateFolder);
+        clearWorkDir();
         try {
-            popural = getWorkDir ().createTempFile ("popural", "java");
+            popural = File.createTempFile("popural", "java", getWorkDir());
         } catch (IOException ioe) {
             fail (ioe.getMessage ());
         }
@@ -89,6 +93,7 @@ public class TemplatesPanelTest extends NbTestCase {
         
     }
     
+    @Override
     protected void tearDown() {
         try {
             FileLock l = templateFolder.lock ();
