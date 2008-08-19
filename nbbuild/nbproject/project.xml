@@ -56,18 +56,6 @@ made subject to such option by the copyright holder.
             <folders>
                 <source-folder>
                     <label>Ant Tasks</label>
-                    <location>antsrc</location>
-                </source-folder>
-		<source-folder>
-                    <label>AU Ant Tasks</label>
-                    <location>ausrc</location>
-		</source-folder>
-                <source-folder>
-                    <label>Tests for Ant Tasks</label>
-                    <location>test/unit/src</location>
-                </source-folder>
-                <source-folder>
-                    <label>Ant Tasks</label>
                     <type>java</type>
                     <location>antsrc</location>
                 </source-folder>
@@ -75,6 +63,16 @@ made subject to such option by the copyright holder.
                     <label>Tests for Ant Tasks</label>
                     <type>java</type>
                     <location>test/unit/src</location>
+                </source-folder>
+                <source-folder>
+                    <label>Test Distribution Tasks</label>
+                    <type>java</type>
+                    <location>testdist/src</location>
+                </source-folder>
+                <source-folder>
+                    <label>Tests for Test Distribution Tasks</label>
+                    <type>java</type>
+                    <location>testdist/test</location>
                 </source-folder>
             </folders>
             <ide-actions>
@@ -89,17 +87,17 @@ made subject to such option by the copyright holder.
                     <target>localclean</target>
                 </action>
                 <action name="test">
-                    <target>localtest-nb</target>
+                    <target>localtest</target>
                 </action>
                 <action name="run.single">
-                    <target>localtest-single-nb</target>
+                    <target>localtest</target>
                     <context>
                         <property>includes</property>
                         <folder>test/unit/src</folder>
                         <pattern>\.java$</pattern>
-                        <format>absolute-path</format>
+                        <format>relative-path-noext</format>
                         <arity>
-                            <separated-files>:</separated-files>
+                            <one-file-only/>
                         </arity>
                     </context>
                 </action>
@@ -109,9 +107,9 @@ made subject to such option by the copyright holder.
                         <property>includes</property>
                         <folder>test/unit/src</folder>
                         <pattern>\.java$</pattern>
-                        <format>absolute-path</format>
+                        <format>relative-path-noext</format>
                         <arity>
-                            <separated-files>:</separated-files>
+                            <one-file-only/>
                         </arity>
                     </context>
                 </action>
@@ -137,13 +135,17 @@ made subject to such option by the copyright holder.
                         <label>Ant Tasks</label>
                         <location>antsrc</location>
                     </source-folder>
-                    <source-folder style="packages">
-		        <label>AU Ant Tasks</label>
-		        <location>ausrc</location>
-		    </source-folder>
 		    <source-folder style="packages">
                         <label>Tests for Ant Tasks</label>
                         <location>test/unit/src</location>
+                    </source-folder>
+                    <source-folder style="packages">
+                        <label>Test Distribution Tasks</label>
+                        <location>testdist/src</location>
+                    </source-folder>
+		    <source-folder style="packages">
+                        <label>Tests for Test Distribution Tasks</label>
+                        <location>testdist/test</location>
                     </source-folder>
                     <source-file>
                         <location>build.xml</location>
@@ -175,7 +177,7 @@ made subject to such option by the copyright holder.
                     </action>
                     <action>
                         <label>Clean Everything</label>
-                        <target>real-clean</target>
+                        <target>clean</target>
                     </action>
                     <separator/>
                     <ide-action name="run"/>
@@ -208,26 +210,33 @@ made subject to such option by the copyright holder.
         <java-data xmlns="http://www.netbeans.org/ns/freeform-project-java/2">
             <compilation-unit>
                 <package-root>antsrc</package-root>
-                <classpath mode="compile">${ant.home}/lib/ant.jar:${nb_all}/javahelp/external/jh-2.0_05.jar</classpath>
+                <classpath mode="compile">${ant.core.lib}:${nb_all}/javahelp/external/jh-2.0_05.jar</classpath>
                 <classpath mode="boot">${nbjdk.bootclasspath}</classpath>
                 <built-to>build/antclasses</built-to>
                 <built-to>nbantext.jar</built-to>
                 <source-level>1.5</source-level>
             </compilation-unit>
             <compilation-unit>
-                <package-root>ausrc</package-root>
-                <classpath mode="compile">${ant.home}/lib/ant.jar</classpath>
+                <package-root>test/unit/src</package-root>
+                <unit-tests/>
+                <classpath mode="compile">../libs.junit4/external/junit-4.5.jar:netbeans/harness/modules/org-netbeans-modules-nbjunit.jar:${ant.core.lib}:nbantext.jar</classpath>
                 <classpath mode="boot">${nbjdk.bootclasspath}</classpath>
-                <built-to>build/auclasses</built-to>
-                <built-to>nbauext.jar</built-to>
+                <built-to>build/test/unit/classes</built-to>
                 <source-level>1.5</source-level>
             </compilation-unit>
             <compilation-unit>
-                <package-root>test/unit/src</package-root>
-                <unit-tests/>
-                <classpath mode="compile">../junit/external/junit-3.8.2.jar:netbeans/testtools/modules/org-netbeans-modules-nbjunit.jar:../o.apache.tools.ant.module/external/lib/ant.jar:nbantext.jar</classpath>
+                <package-root>testdist/src</package-root>
+                <classpath mode="compile">${ant.core.lib}</classpath>
                 <classpath mode="boot">${nbjdk.bootclasspath}</classpath>
-                <built-to>build/test/unit/classes</built-to>
+                <built-to>build/testdistclasses</built-to>
+                <built-to>build/testdist/tasks.jar</built-to>
+                <source-level>1.5</source-level>
+            </compilation-unit>
+            <compilation-unit>
+                <package-root>testdist/test</package-root>
+                <unit-tests/>
+                <classpath mode="compile">../libs.junit4/external/junit-4.5.jar:netbeans/harness/modules/org-netbeans-modules-nbjunit.jar:${ant.core.lib}:build/testdistclasses</classpath>
+                <classpath mode="boot">${nbjdk.bootclasspath}</classpath>
                 <source-level>1.5</source-level>
             </compilation-unit>
         </java-data>
