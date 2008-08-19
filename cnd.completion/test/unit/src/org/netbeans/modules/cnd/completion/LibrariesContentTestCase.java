@@ -68,6 +68,7 @@ public class LibrariesContentTestCase extends CompletionBaseTestCase {
     
     public void testGlobalFunsWithPrefix() throws Exception {
         super.performTest("src/main.cc", 6, 5, "f");
+        super.performTest("src/main.cc", 6, 5, "::f");
     }
 
     private void checkDir(File srcDir) {
@@ -75,4 +76,14 @@ public class LibrariesContentTestCase extends CompletionBaseTestCase {
         assertTrue("Not directory" + srcDir, srcDir.isDirectory());
     }
     
+    public void testLibraryClassStaticFunctions() throws Exception {
+        super.performTest("src/main.cc", 6, 5, "AAA::f");
+        super.performTest("src/main.cc", 6, 5, "BBB::f");
+    }
+    
+    public void testMergeOfLibrariesNamespaces() throws Exception {
+        super.performTest("src/main.cc", 6, 5, "common::decl_from");
+        super.performTest("src/include_sys2_file.h", 5, 5, "common::decl_from");
+        super.performTest("src/include_sys1_file.h", 5, 5, "common::decl_from");
+    }
 }
