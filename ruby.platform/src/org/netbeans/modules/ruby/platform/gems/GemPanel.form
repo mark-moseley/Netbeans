@@ -12,6 +12,7 @@
   <AuxValues>
     <AuxValue name="FormSettings_autoResourcing" type="java.lang.Integer" value="1"/>
     <AuxValue name="FormSettings_autoSetComponentName" type="java.lang.Boolean" value="false"/>
+    <AuxValue name="FormSettings_generateFQN" type="java.lang.Boolean" value="true"/>
     <AuxValue name="FormSettings_generateMnemonicsCode" type="java.lang.Boolean" value="true"/>
     <AuxValue name="FormSettings_i18nAutoMode" type="java.lang.Boolean" value="true"/>
     <AuxValue name="FormSettings_layoutCodeTarget" type="java.lang.Integer" value="2"/>
@@ -24,35 +25,27 @@
     <DimensionLayout dim="0">
       <Group type="103" groupAlignment="0" attributes="0">
           <Group type="102" alignment="0" attributes="0">
-              <EmptySpace max="-2" attributes="0"/>
+              <EmptySpace min="-2" max="-2" attributes="0"/>
               <Group type="103" groupAlignment="0" attributes="0">
+                  <Component id="gemsTab" alignment="0" pref="791" max="32767" attributes="1"/>
                   <Group type="102" alignment="0" attributes="0">
-                      <Component id="gemsTab" pref="778" max="32767" attributes="0"/>
-                      <EmptySpace max="-2" attributes="0"/>
-                  </Group>
-                  <Group type="102" attributes="0">
+                      <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                          <Component id="gemHome" linkSize="3" max="32767" attributes="1"/>
+                          <Component id="rubyPlatformLabel" linkSize="3" alignment="0" max="32767" attributes="1"/>
+                      </Group>
+                      <EmptySpace min="-2" max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="0" attributes="0">
-                          <Group type="102" alignment="0" attributes="0">
-                              <Component id="rubyPlatformLabel" min="-2" max="-2" attributes="0"/>
-                              <EmptySpace max="-2" attributes="0"/>
-                              <Group type="103" groupAlignment="1" attributes="0">
-                                  <Component id="gemHomeValue" alignment="0" pref="587" max="32767" attributes="0"/>
-                                  <Component id="platforms" alignment="0" pref="587" max="32767" attributes="0"/>
-                              </Group>
-                          </Group>
-                          <Group type="102" attributes="0">
-                              <Component id="gemHome" pref="77" max="32767" attributes="1"/>
-                              <EmptySpace min="-2" pref="613" max="-2" attributes="0"/>
-                          </Group>
+                          <Component id="gemHomeValue" alignment="1" pref="591" max="32767" attributes="2"/>
+                          <Component id="platforms" alignment="1" pref="591" max="32767" attributes="2"/>
                       </Group>
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="0" attributes="0">
-                          <Component id="manageButton" linkSize="1" min="-2" max="-2" attributes="0"/>
-                          <Component id="browseGemHome" linkSize="1" min="-2" pref="80" max="-2" attributes="0"/>
+                          <Component id="manageButton" linkSize="1" alignment="1" min="-2" max="-2" attributes="0"/>
+                          <Component id="browseGemHome" linkSize="1" alignment="1" min="-2" pref="80" max="-2" attributes="0"/>
                       </Group>
-                      <EmptySpace max="-2" attributes="0"/>
                   </Group>
               </Group>
+              <EmptySpace max="-2" attributes="0"/>
           </Group>
       </Group>
     </DimensionLayout>
@@ -68,11 +61,11 @@
               <EmptySpace max="-2" attributes="0"/>
               <Group type="103" groupAlignment="3" attributes="0">
                   <Component id="gemHome" alignment="3" min="-2" max="-2" attributes="0"/>
-                  <Component id="gemHomeValue" alignment="3" min="-2" max="-2" attributes="0"/>
                   <Component id="browseGemHome" alignment="3" min="-2" max="-2" attributes="0"/>
+                  <Component id="gemHomeValue" alignment="3" min="-2" max="-2" attributes="0"/>
               </Group>
               <EmptySpace type="unrelated" max="-2" attributes="0"/>
-              <Component id="gemsTab" pref="392" max="32767" attributes="0"/>
+              <Component id="gemsTab" pref="369" max="32767" attributes="0"/>
               <EmptySpace max="-2" attributes="0"/>
           </Group>
       </Group>
@@ -83,6 +76,9 @@
       <AccessibilityProperties>
         <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
           <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.gemsTab.AccessibleContext.accessibleName" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+        <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.gemsTab.AccessibleContext.accessibleDescription" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </AccessibilityProperties>
 
@@ -107,7 +103,7 @@
                       <Group type="103" groupAlignment="0" attributes="0">
                           <Group type="102" alignment="1" attributes="0">
                               <Component id="reloadReposButton" min="-2" max="-2" attributes="0"/>
-                              <EmptySpace pref="423" max="32767" attributes="0"/>
+                              <EmptySpace pref="436" max="32767" attributes="0"/>
                               <Component id="searchUpdatedLbl" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="-2" attributes="0"/>
                               <Component id="searchUpdatedText" min="-2" pref="156" max="-2" attributes="0"/>
@@ -116,13 +112,13 @@
                               <Component id="updateButton" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="-2" attributes="0"/>
                               <Component id="updateAllButton" min="-2" max="-2" attributes="0"/>
-                              <EmptySpace pref="349" max="32767" attributes="0"/>
+                              <EmptySpace pref="362" max="32767" attributes="0"/>
                               <Component id="updatedProgressLabel" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="-2" attributes="0"/>
                               <Component id="updatedProgress" min="-2" max="-2" attributes="0"/>
                           </Group>
                           <Group type="102" alignment="1" attributes="0">
-                              <Component id="updatedSP" pref="448" max="32767" attributes="0"/>
+                              <Component id="updatedSP" pref="461" max="32767" attributes="0"/>
                               <EmptySpace type="separate" max="-2" attributes="0"/>
                               <Component id="jScrollPane6" min="-2" pref="283" max="-2" attributes="0"/>
                           </Group>
@@ -142,8 +138,8 @@
                       </Group>
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="1" attributes="0">
-                          <Component id="updatedSP" pref="279" max="32767" attributes="0"/>
-                          <Component id="jScrollPane6" alignment="1" pref="279" max="32767" attributes="0"/>
+                          <Component id="jScrollPane6" pref="256" max="32767" attributes="0"/>
+                          <Component id="updatedSP" alignment="1" pref="256" max="32767" attributes="0"/>
                       </Group>
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="1" attributes="0">
@@ -169,9 +165,6 @@
                   <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.searchUpdatedText.AccessibleContext.accessibleDescription" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
                 </Property>
               </AccessibilityProperties>
-              <Events>
-                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="searchUpdatedTextActionPerformed"/>
-              </Events>
             </Component>
             <Component class="javax.swing.JLabel" name="searchUpdatedLbl">
               <Properties>
@@ -273,6 +266,9 @@
               <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
               <SubComponents>
                 <Component class="javax.swing.JTextPane" name="updatedDesc">
+                  <Properties>
+                    <Property name="editable" type="boolean" value="false"/>
+                  </Properties>
                   <AccessibilityProperties>
                     <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
                       <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.updatedDesc.AccessibleContext.accessibleName" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
@@ -327,20 +323,20 @@
                       <Group type="103" groupAlignment="0" attributes="0">
                           <Group type="102" alignment="1" attributes="0">
                               <Component id="reloadInstalledButton" min="-2" max="-2" attributes="0"/>
-                              <EmptySpace pref="423" max="32767" attributes="0"/>
-                              <Component id="instSearchLbl" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace pref="436" max="32767" attributes="0"/>
+                              <Component id="searchInstLbl" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="-2" attributes="0"/>
-                              <Component id="instSearchText" min="-2" pref="156" max="-2" attributes="0"/>
+                              <Component id="searchInstText" min="-2" pref="156" max="-2" attributes="0"/>
                           </Group>
                           <Group type="102" alignment="0" attributes="0">
                               <Component id="uninstallButton" min="-2" max="-2" attributes="0"/>
-                              <EmptySpace pref="442" max="32767" attributes="0"/>
+                              <EmptySpace pref="455" max="32767" attributes="0"/>
                               <Component id="installedProgressLabel" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="-2" attributes="0"/>
                               <Component id="installedProgress" min="-2" max="-2" attributes="0"/>
                           </Group>
                           <Group type="102" alignment="1" attributes="0">
-                              <Component id="installedSP" pref="448" max="32767" attributes="0"/>
+                              <Component id="installedSP" pref="461" max="32767" attributes="0"/>
                               <EmptySpace type="separate" max="-2" attributes="0"/>
                               <Component id="jScrollPane5" min="-2" pref="283" max="-2" attributes="0"/>
                           </Group>
@@ -354,18 +350,18 @@
                   <Group type="102" alignment="0" attributes="0">
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="3" attributes="0">
-                          <Component id="instSearchLbl" alignment="3" min="-2" max="-2" attributes="0"/>
+                          <Component id="searchInstLbl" alignment="3" min="-2" max="-2" attributes="0"/>
                           <Component id="reloadInstalledButton" alignment="3" min="-2" max="-2" attributes="0"/>
-                          <Component id="instSearchText" alignment="3" min="-2" max="-2" attributes="0"/>
+                          <Component id="searchInstText" alignment="3" min="-2" max="-2" attributes="0"/>
                       </Group>
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="1" attributes="0">
-                          <Component id="installedSP" pref="279" max="32767" attributes="0"/>
-                          <Component id="jScrollPane5" alignment="1" pref="279" max="32767" attributes="0"/>
+                          <Component id="installedSP" pref="256" max="32767" attributes="0"/>
+                          <Component id="jScrollPane5" alignment="1" pref="256" max="32767" attributes="0"/>
                       </Group>
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="1" attributes="0">
-                          <Component id="uninstallButton" min="-2" max="-2" attributes="0"/>
+                          <Component id="uninstallButton" alignment="1" min="-2" max="-2" attributes="0"/>
                           <Component id="installedProgress" alignment="1" min="-2" max="-2" attributes="0"/>
                           <Component id="installedProgressLabel" min="-2" max="-2" attributes="0"/>
                       </Group>
@@ -375,7 +371,7 @@
             </DimensionLayout>
           </Layout>
           <SubComponents>
-            <Component class="javax.swing.JTextField" name="instSearchText">
+            <Component class="javax.swing.JTextField" name="searchInstText">
               <Properties>
                 <Property name="columns" type="int" value="14"/>
               </Properties>
@@ -384,17 +380,14 @@
                   <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.instSearchText.AccessibleContext.accessibleDescription" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
                 </Property>
               </AccessibilityProperties>
-              <Events>
-                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="instSearchTextActionPerformed"/>
-              </Events>
             </Component>
-            <Component class="javax.swing.JLabel" name="instSearchLbl">
+            <Component class="javax.swing.JLabel" name="searchInstLbl">
               <Properties>
                 <Property name="labelFor" type="java.awt.Component" editor="org.netbeans.modules.form.ComponentChooserEditor">
-                  <ComponentRef name="instSearchText"/>
+                  <ComponentRef name="searchInstText"/>
                 </Property>
                 <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
-                  <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.instSearchLbl.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+                  <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.searchInstLbl.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
                 </Property>
               </Properties>
               <AccessibilityProperties>
@@ -473,6 +466,9 @@
               <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
               <SubComponents>
                 <Component class="javax.swing.JTextPane" name="installedDesc">
+                  <Properties>
+                    <Property name="editable" type="boolean" value="false"/>
+                  </Properties>
                   <AccessibilityProperties>
                     <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
                       <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.installedDesc.AccessibleContext.accessibleName" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
@@ -527,20 +523,22 @@
                       <Group type="103" groupAlignment="0" attributes="0">
                           <Group type="102" alignment="1" attributes="0">
                               <Component id="reloadNewButton" min="-2" max="-2" attributes="0"/>
-                              <EmptySpace pref="423" max="32767" attributes="0"/>
+                              <EmptySpace pref="436" max="32767" attributes="0"/>
                               <Component id="searchNewLbl" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="-2" attributes="0"/>
                               <Component id="searchNewText" min="-2" pref="156" max="-2" attributes="0"/>
                           </Group>
                           <Group type="102" attributes="0">
                               <Component id="installButton" min="-2" max="-2" attributes="0"/>
-                              <EmptySpace pref="459" max="32767" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="installLocalButton" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace pref="348" max="32767" attributes="0"/>
                               <Component id="newProgressLabel" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="-2" attributes="0"/>
                               <Component id="newProgress" min="-2" max="-2" attributes="0"/>
                           </Group>
                           <Group type="102" alignment="1" attributes="0">
-                              <Component id="newSP" pref="448" max="32767" attributes="0"/>
+                              <Component id="newSP" pref="461" max="32767" attributes="0"/>
                               <EmptySpace type="separate" max="-2" attributes="0"/>
                               <Component id="jScrollPane4" min="-2" pref="283" max="-2" attributes="0"/>
                           </Group>
@@ -560,12 +558,15 @@
                       </Group>
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="0" attributes="0">
-                          <Component id="newSP" pref="279" max="32767" attributes="0"/>
-                          <Component id="jScrollPane4" alignment="0" pref="279" max="32767" attributes="0"/>
+                          <Component id="newSP" pref="256" max="32767" attributes="0"/>
+                          <Component id="jScrollPane4" alignment="0" pref="256" max="32767" attributes="0"/>
                       </Group>
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="1" attributes="0">
-                          <Component id="installButton" min="-2" max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="installButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="installLocalButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
                           <Component id="newProgress" min="-2" max="-2" attributes="0"/>
                           <Component id="newProgressLabel" min="-2" max="-2" attributes="0"/>
                       </Group>
@@ -584,9 +585,6 @@
                   <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.searchNewText.AccessibleContext.accessibleDescription" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
                 </Property>
               </AccessibilityProperties>
-              <Events>
-                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="searchNewTextActionPerformed"/>
-              </Events>
             </Component>
             <Component class="javax.swing.JLabel" name="searchNewLbl">
               <Properties>
@@ -673,6 +671,9 @@
               <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
               <SubComponents>
                 <Component class="javax.swing.JTextPane" name="newDesc">
+                  <Properties>
+                    <Property name="editable" type="boolean" value="false"/>
+                  </Properties>
                   <AccessibilityProperties>
                     <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
                       <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.newDesc.AccessibleContext.accessibleName" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
@@ -706,6 +707,16 @@
                 </Property>
               </AccessibilityProperties>
             </Component>
+            <Component class="javax.swing.JButton" name="installLocalButton">
+              <Properties>
+                <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+                  <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.installLocalButton.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+                </Property>
+              </Properties>
+              <Events>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="installLocalButtonActionPerformed"/>
+              </Events>
+            </Component>
           </SubComponents>
         </Container>
         <Container class="javax.swing.JPanel" name="settingsPanel">
@@ -724,8 +735,12 @@
               <Group type="103" groupAlignment="0" attributes="0">
                   <Group type="102" alignment="0" attributes="0">
                       <EmptySpace max="-2" attributes="0"/>
-                      <Component id="proxyButton" min="-2" max="-2" attributes="0"/>
-                      <EmptySpace pref="607" max="32767" attributes="0"/>
+                      <Group type="103" groupAlignment="0" attributes="0">
+                          <Component id="descriptionCheckbox" alignment="0" min="-2" max="-2" attributes="0"/>
+                          <Component id="proxyButton" min="-2" max="-2" attributes="0"/>
+                          <Component id="allVersionsCheckbox" alignment="0" min="-2" max="-2" attributes="0"/>
+                      </Group>
+                      <EmptySpace pref="463" max="32767" attributes="0"/>
                   </Group>
               </Group>
             </DimensionLayout>
@@ -734,7 +749,11 @@
                   <Group type="102" alignment="0" attributes="0">
                       <EmptySpace max="-2" attributes="0"/>
                       <Component id="proxyButton" min="-2" max="-2" attributes="0"/>
-                      <EmptySpace pref="328" max="32767" attributes="0"/>
+                      <EmptySpace type="separate" max="-2" attributes="0"/>
+                      <Component id="allVersionsCheckbox" min="-2" max="-2" attributes="0"/>
+                      <EmptySpace type="unrelated" max="-2" attributes="0"/>
+                      <Component id="descriptionCheckbox" min="-2" max="-2" attributes="0"/>
+                      <EmptySpace pref="237" max="32767" attributes="0"/>
                   </Group>
               </Group>
             </DimensionLayout>
@@ -755,18 +774,49 @@
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="proxyButtonActionPerformed"/>
               </Events>
             </Component>
+            <Component class="javax.swing.JCheckBox" name="allVersionsCheckbox">
+              <Properties>
+                <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+                  <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.allVersionsCheckbox.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+                </Property>
+              </Properties>
+              <Events>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="allVersionsCheckboxActionPerformed"/>
+              </Events>
+            </Component>
+            <Component class="javax.swing.JCheckBox" name="descriptionCheckbox">
+              <Properties>
+                <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+                  <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.descriptionCheckbox.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+                </Property>
+              </Properties>
+              <Events>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="descriptionCheckboxActionPerformed"/>
+              </Events>
+            </Component>
           </SubComponents>
         </Container>
       </SubComponents>
     </Container>
     <Component class="javax.swing.JLabel" name="rubyPlatformLabel">
       <Properties>
+        <Property name="labelFor" type="java.awt.Component" editor="org.netbeans.modules.form.ComponentChooserEditor">
+          <ComponentRef name="platforms"/>
+        </Property>
         <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
           <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.rubyPlatformLabel.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </Properties>
     </Component>
     <Component class="javax.swing.JComboBox" name="platforms">
+      <AccessibilityProperties>
+        <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.platforms.AccessibleContext.accessibleName" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+        <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.platforms.AccessibleContext.accessibleDescription" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+      </AccessibilityProperties>
       <AuxValues>
         <AuxValue name="JavaCodeGenerator_CreateCodeCustom" type="java.lang.String" value="org.netbeans.modules.ruby.platform.PlatformComponentFactory.getRubyPlatformsComboxBox()"/>
       </AuxValues>
@@ -777,12 +827,20 @@
           <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.manageButton.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </Properties>
+      <AccessibilityProperties>
+        <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.manageButton.AccessibleContext.accessibleDescription" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+      </AccessibilityProperties>
       <Events>
         <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="manageButtonActionPerformed"/>
       </Events>
     </Component>
     <Component class="javax.swing.JLabel" name="gemHome">
       <Properties>
+        <Property name="labelFor" type="java.awt.Component" editor="org.netbeans.modules.form.ComponentChooserEditor">
+          <ComponentRef name="gemHomeValue"/>
+        </Property>
         <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
           <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.gemHome.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
@@ -792,6 +850,14 @@
       <Properties>
         <Property name="editable" type="boolean" value="false"/>
       </Properties>
+      <AccessibilityProperties>
+        <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.gemHomeValue.AccessibleContext.accessibleName" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+        <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.gemHomeValue.AccessibleContext.accessibleDescription" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+      </AccessibilityProperties>
     </Component>
     <Component class="javax.swing.JButton" name="browseGemHome">
       <Properties>
@@ -799,6 +865,11 @@
           <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.browseGemHome.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </Properties>
+      <AccessibilityProperties>
+        <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/ruby/platform/gems/Bundle.properties" key="GemPanel.browseGemHome.AccessibleContext.accessibleDescription" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+      </AccessibilityProperties>
       <Events>
         <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="browseGemHomeActionPerformed"/>
       </Events>
