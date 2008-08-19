@@ -275,6 +275,11 @@ public abstract class TreeView extends JScrollPane {
 
     @Override
     public void updateUI() {
+        Set<Object> tmp = visHolder;
+        if (tmp != null) {
+            tmp.clear();
+        }
+
         super.updateUI();
 
         //On GTK L&F, the viewport border must be set to empty (not null!) or we still get border buildup
@@ -1552,7 +1557,6 @@ public abstract class TreeView extends JScrollPane {
     private final class ExplorerTree extends JTree implements Autoscroll {
         AutoscrollSupport support;
         private String maxPrefix;
-        int SEARCH_FIELD_PREFERRED_SIZE = 160;
         int SEARCH_FIELD_SPACE = 3;
         private boolean firstPaint = true;
 
@@ -1695,6 +1699,8 @@ public abstract class TreeView extends JScrollPane {
         public void setUI(TreeUI ui) {
             super.setUI(ui);
             for (Object key : getActionMap().allKeys()) {
+                if( "cancel".equals(key) ) //NOI18N
+                    continue;
                 Action a = getActionMap().get(key);
                 if (a.getClass().getName().contains("TreeUI")) {
                     getActionMap().put(key, new GuardedActions(99, a));
@@ -1754,10 +1760,7 @@ public abstract class TreeView extends JScrollPane {
             Rectangle visibleRect = getVisibleRect();
 
             if ((searchpanel != null) && searchpanel.isDisplayable()) {
-                int width = Math.min(
-                        getPreferredSize().width - (SEARCH_FIELD_SPACE * 2),
-                        SEARCH_FIELD_PREFERRED_SIZE - SEARCH_FIELD_SPACE
-                    );
+                int width = searchpanel.getPreferredSize().width;
 
                 searchpanel.setBounds(
                     Math.max(SEARCH_FIELD_SPACE, (visibleRect.x + visibleRect.width) - width),
@@ -1818,6 +1821,7 @@ public abstract class TreeView extends JScrollPane {
                 searchpanel.add(lbl);
                 searchpanel.add(searchTextField);
                 lbl.setLabelFor(searchTextField);
+                searchTextField.setColumns(10);
                 searchpanel.setBorder(BorderFactory.createRaisedBevelBorder());
                 lbl.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
             }
@@ -2143,7 +2147,7 @@ public abstract class TreeView extends JScrollPane {
             public void actionPerformed(final ActionEvent e) {
                 Children.MUTEX.readAccess(new Runnable() {
                     public void run() {
-                        ((Action)p1).actionPerformed(e);
+                            ((Action)p1).actionPerformed(e);
                     }
                 });
             }
