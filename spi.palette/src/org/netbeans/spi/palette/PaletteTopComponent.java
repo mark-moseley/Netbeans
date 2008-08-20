@@ -49,7 +49,6 @@ import java.beans.PropertyChangeListener;
 import org.netbeans.modules.palette.Utils;
 import org.netbeans.modules.palette.ui.PalettePanel;
 import org.openide.util.HelpCtx;
-import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
 
@@ -68,11 +67,6 @@ final class PaletteTopComponent extends TopComponent implements PropertyChangeLi
     static final long serialVersionUID = 4248268998485315735L;
 
     private static PaletteTopComponent instance;
-    /** holds currently scheduled/running task for set of activated node */
-    private RequestProcessor.Task nodeSetterTask;
-    private final Object NODE_SETTER_LOCK = new Object();
-    
-    private TopComponent paletteSource;
     
     /** Creates new PaletteTopComponent */
     private PaletteTopComponent() {
@@ -87,6 +81,7 @@ final class PaletteTopComponent extends TopComponent implements PropertyChangeLi
         putClientProperty( "keepPreferredSizeWhenSlideIn", Boolean.TRUE ); // NOI18N
     }
     
+    @Override
     public void requestActive() {
         super.requestActive();
         PalettePanel.getDefault().requestFocusInWindow();
@@ -103,31 +98,46 @@ final class PaletteTopComponent extends TopComponent implements PropertyChangeLi
     
     /** Overriden to explicitely set persistence type of PaletteTopComponent
      * to PERSISTENCE_ALWAYS */
+    @Override
     public int getPersistenceType() {
         return TopComponent.PERSISTENCE_ALWAYS;
     }
     
+    @Override
     public void componentOpened() {
         PaletteSwitch switcher = PaletteSwitch.getDefault();
         
         switcher.addPropertyChangeListener( this );
-        setPaletteController( switcher.getCurrentPalette() );
+        PaletteController pc = switcher.getCurrentPalette();
+        setPaletteController( pc );
+        if( Utils.isOpenedByUser(this) ) {
+            //only change the flag when the Palette window was opened from ShowPaletteAction
+            //i.e. user clicked the menu item or used keyboard shortcut - ignore window system load & restore
+            PaletteVisibility.setVisible( pc, true );
+        }
     }
     
+    @Override
     public void componentClosed() {
         // palette is closed so reset its contents
-        setPaletteController( null );
+        PaletteSwitch switcher = PaletteSwitch.getDefault();
         
-        PaletteSwitch.getDefault().removePropertyChangeListener( this );
+        switcher.removePropertyChangeListener( this );
+        PaletteController pc = switcher.getCurrentPalette();
+        PaletteVisibility.setVisible( pc, false );
+//        if( null != pc )
+//            PaletteVisibility.setVisible( null, false );
     }
 
     /** replaces this in object stream */
+    @Override
     public Object writeReplace() {
         return new ResolvableHelper();
     }
     
+    @Override
     protected String preferredID() {
-        return getClass().getName();
+        return "CommonPalette"; //NOI18N
     }
     
     public void propertyChange (PropertyChangeEvent e) {
@@ -146,6 +156,7 @@ final class PaletteTopComponent extends TopComponent implements PropertyChangeLi
         }
     }
 
+    @Override
     public HelpCtx getHelpCtx() {
         return PalettePanel.getDefault().getHelpCtx();
     }
