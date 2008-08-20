@@ -58,6 +58,7 @@ import org.netbeans.api.diff.*;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.subversion.Subversion;
 import org.netbeans.modules.subversion.client.*;
+import org.netbeans.modules.versioning.util.Utils;
 
 import org.tigris.subversion.svnclientadapter.*;
 
@@ -97,15 +98,20 @@ public class ResolveConflictsExecutor extends SvnProgressSupport {
         
         try {
             FileObject fo = FileUtil.toFileObject(file);
+            assert fo != null : "no fileobject for file " + file;
             handleMergeFor(file, fo, fo.lock(), merge);
         } catch (FileAlreadyLockedException e) {
-            Set components = TopComponent.getRegistry().getOpened();
-            for (Iterator i = components.iterator(); i.hasNext();) {
-                TopComponent tc = (TopComponent) i.next();
-                if (tc.getClientProperty(ResolveConflictsExecutor.class.getName()) != null) {
-                    tc.requestActive();
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    Set components = TopComponent.getRegistry().getOpened();
+                    for (Iterator i = components.iterator(); i.hasNext();) {
+                        TopComponent tc = (TopComponent) i.next();
+                        if (tc.getClientProperty(ResolveConflictsExecutor.class.getName()) != null) {
+                            tc.requestActive();
+                        }
+                    }
                 }
-            }
+            });
         } catch (IOException ioex) {
             Subversion.LOG.log(Level.SEVERE, null, ioex);;
         }
@@ -157,6 +163,8 @@ public class ResolveConflictsExecutor extends SvnProgressSupport {
         final StreamSource s1;
         final StreamSource s2;
         Charset encoding = FileEncodingQuery.getEncoding(fo);
+        Utils.associateEncoding(file, f1);
+        Utils.associateEncoding(file, f2);
         s1 = StreamSource.createSource(file.getName(), leftFileRevision, mimeType, f1);
         s2 = StreamSource.createSource(file.getName(), rightFileRevision, mimeType, f2);
         final StreamSource result = new MergeResultWriterInfo(f1, f2, f3, file, mimeType,
