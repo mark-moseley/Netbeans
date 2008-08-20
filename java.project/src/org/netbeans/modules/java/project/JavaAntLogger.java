@@ -85,6 +85,7 @@ public final class JavaAntLogger extends AntLogger {
      * <li>line number
      * </ol>
      */
+    // should be consistent with o.apache.tools.ant.module.STACK_TRACE
     private static final Pattern STACK_TRACE = Pattern.compile(
     "(?:\t|\\[catch\\] )at ((?:[a-zA-Z_$][a-zA-Z0-9_$]*\\.)*)[a-zA-Z_$][a-zA-Z0-9_$]*\\.[a-zA-Z_$<][a-zA-Z0-9_$>]*\\(([a-zA-Z_$][a-zA-Z0-9_$]*\\.java):([0-9]+)\\)"); // NOI18N
     
@@ -126,6 +127,7 @@ public final class JavaAntLogger extends AntLogger {
         "java", // NOI18N
         // #44328: unit tests run a different task:
         "junit", // NOI18N
+        "testng", // NOI18N
         // Nice to handle stack traces from e.g. NB's own build system too!
         "exec", // NOI18N
         // #63065: Mobility execution
@@ -294,17 +296,9 @@ public final class JavaAntLogger extends AntLogger {
             while (tok.hasMoreTokens()) {
                 String binrootS = tok.nextToken();
                 File f = FileUtil.normalizeFile(new File(binrootS));
-                URL binroot;
-                try {
-                    binroot = f.toURI().toURL();
-                } catch (MalformedURLException e) {
-                    throw new AssertionError(e);
-                }
-                if (FileUtil.isArchiveFile(binroot)) {
-                    URL root = FileUtil.getArchiveRoot(binroot);
-                    if (root != null) {
-                        binroot = root;
-                    }
+                URL binroot = FileUtil.urlForArchiveOrDir(f);
+                if (binroot == null) {
+                    continue;
                 }
                 FileObject[] someRoots = SourceForBinaryQuery.findSourceRoots(binroot).getRoots();
                 data.classpathSourceRoots.addAll(Arrays.asList(someRoots));
