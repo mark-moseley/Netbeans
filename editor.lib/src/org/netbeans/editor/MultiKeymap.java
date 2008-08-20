@@ -409,6 +409,16 @@ public class MultiKeymap implements Keymap {
         
         // Reset global context if a valid action is found
         if (ret != null && !(ret instanceof KeymapSetContextAction) && (ret != EMPTY_ACTION)) {
+            StringBuilder command = new StringBuilder();
+            List<? extends KeyStroke> list = (List<? extends KeyStroke>)getGlobalContextList();
+            if (list != null) {
+                for(KeyStroke ks : list) {
+                    command.append(getKeyText(ks)).append(" "); //NOI18N
+                }
+            }
+            command.append(getKeyText(key));
+            ret.putValue(Action.ACTION_COMMAND_KEY, command.toString());
+
             resetGlobalContext();
         }
 
@@ -486,7 +496,7 @@ public class MultiKeymap implements Keymap {
         }
     }
 
-    public String toString() {
+    public @Override String toString() {
         return "MK: name=" + getName(); // NOI18N
     }
 
