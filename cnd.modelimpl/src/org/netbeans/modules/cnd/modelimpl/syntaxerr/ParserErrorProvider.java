@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,33 +31,60 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.cnd.modelimpl.syntaxerr;
 
-package org.netbeans.modules.cnd.apt.debug;
+import org.netbeans.modules.cnd.modelimpl.syntaxerr.spi.ParserErrorFilter;
+import antlr.RecognitionException;
+import java.util.ArrayList;
+import org.netbeans.modules.cnd.modelimpl.csm.core.*;
+import java.util.Collection;
+import java.util.Iterator;
+import org.netbeans.modules.cnd.api.model.syntaxerr.CsmErrorInfo;
+import org.netbeans.modules.cnd.api.model.syntaxerr.CsmErrorProvider;
+import org.netbeans.modules.cnd.modelimpl.syntaxerr.spi.ReadOnlyTokenBuffer;
 
 /**
- * A common place for APT tracing flags that are used by several classes
- * @author Vladimir Voskresensky
+ * Error provider based on parser errors
+ * @author Vladimir Kvashin
  */
-public class DebugUtils {
+public class ParserErrorProvider extends CsmErrorProvider {
 
-    private DebugUtils() {
+    private static final boolean ENABLE = getBoolean("cnd.parser.error.provider", true);
+
+    @Override
+    protected boolean validate(Request request) {
+        return ENABLE && super.validate(request) && !disableAsLibraryHeaderFile(request.getFile());
     }
 
-    public static boolean getBoolean(String name, boolean result) {
+    @Override
+    protected  void doGetErrors(CsmErrorProvider.Request request, CsmErrorProvider.Response response) {
+        Collection<CsmErrorInfo> errorInfos = new ArrayList<CsmErrorInfo>();
+        Collection<RecognitionException> recognitionExceptions = new ArrayList<RecognitionException>();
+        ReadOnlyTokenBuffer buffer = ((FileImpl) request.getFile()).getErrors(recognitionExceptions);
+        if (buffer != null) {
+            ParserErrorFilter.getDefault().filter(recognitionExceptions, errorInfos, buffer, request.getFile());
+            for (Iterator<CsmErrorInfo> iter = errorInfos.iterator(); iter.hasNext() && ! request.isCancelled(); ) {
+                response.addError(iter.next());
+            }
+        }
+    }
+
+    private static boolean getBoolean(String name, boolean result) {
         String text = System.getProperty(name);
-        if( text != null ) {
+        if (text != null) {
             result = Boolean.parseBoolean(text);
         }
         return result;
-    } 
-    
-    public static final boolean STANDALONE;
-    static {
-        STANDALONE = initStandalone();
     }
-    
-    private static boolean initStandalone() {
-        return ! DebugUtils.class.getClassLoader().getClass().getName().startsWith("org.netbeans."); // NOI18N
-    }    
+
+    public String getName() {
+        return "syntax-error"; //NOI18N
+    }
+
+
 }

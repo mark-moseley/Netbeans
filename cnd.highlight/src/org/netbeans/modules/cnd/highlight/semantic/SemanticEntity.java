@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,57 +31,28 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.highlight.semantic.options;
+package org.netbeans.modules.cnd.highlight.semantic;
 
-import java.util.prefs.Preferences;
-import org.openide.util.NbPreferences;
+import org.netbeans.modules.cnd.modelutil.NamedEntity;
+import java.util.List;
+import javax.swing.text.AttributeSet;
+import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmOffsetable;
+import org.netbeans.modules.cnd.modelutil.FontColorProvider;
 
 /**
  *
  * @author Sergey Grinev
  */
-public class SemanticHighlightingOptions {
-
-    private SemanticHighlightingOptions() {}
-    
-    private static class Instantiator {
-        public static SemanticHighlightingOptions instance = new SemanticHighlightingOptions();
-    }
-    
-    public static SemanticHighlightingOptions instance() {
-        return Instantiator.instance;
-    }
-
-    private final Preferences preferences = NbPreferences.forModule(SemanticHighlightingOptions.class);
-
-    private static final String ENABLE_MARK_OCCURRENCES = "EnableMarkOccurrences"; // NOI18N
-    private static final String KEEP_MARKS = "KeepMarks"; // NOI18N
-
-    public static final boolean SEMANTIC_ADVANCED = Boolean.getBoolean("cnd.semantic.advanced"); // NOI18N
-
-    private boolean getOption(String key, boolean defaultValue) {
-        return preferences.getBoolean(key, defaultValue);
-    }
-
-    private void setOption(String key, boolean value) {
-        preferences.putBoolean(key, value);
-    }
-    
-    public boolean getEnableMarkOccurrences() {
-        return getOption(ENABLE_MARK_OCCURRENCES, true);
-    }
-
-    public void setEnableMarkOccurrences(boolean value) {
-        setOption(ENABLE_MARK_OCCURRENCES, value);
-    }
-
-    public boolean getKeepMarks() {
-        return getOption(KEEP_MARKS, true);
-    }
-
-    public void setKeepMarks(boolean value) {
-        setOption(KEEP_MARKS, value);
-    }
+public interface SemanticEntity extends NamedEntity {
+    List<? extends CsmOffsetable> getBlocks(CsmFile csmFile);
+    ReferenceCollector getCollector();
+    void updateFontColors(FontColorProvider provider);
+    public AttributeSet getAttributes(CsmOffsetable obj);
 }
