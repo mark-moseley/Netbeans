@@ -40,21 +40,27 @@
  */
 package org.netbeans.modules.cnd.highlight.error;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import javax.swing.text.Document;
-import javax.swing.text.StyledDocument;
-import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmInclude;
-import org.openide.text.NbDocument;
-import org.netbeans.editor.BaseDocument;
 import javax.swing.text.Position;
-import org.openide.text.Annotation;
-import org.openide.util.NbBundle;
+import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.cnd.api.model.syntaxerr.CsmErrorInfo;
+import org.netbeans.modules.cnd.api.model.syntaxerr.CsmErrorProvider;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceRepository.Interrupter;
+import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.netbeans.spi.editor.errorstripe.UpToDateStatus;
+import org.netbeans.spi.editor.hints.ErrorDescription;
+import org.netbeans.spi.editor.hints.ErrorDescriptionFactory;
+import org.netbeans.spi.editor.hints.HintsController;
+import org.openide.loaders.DataObject;
+import org.openide.text.PositionBounds;
+import org.openide.text.PositionRef;
+import org.openide.text.CloneableEditorSupport;
+import org.openide.util.Exceptions;
 
 /**
  *
@@ -62,9 +68,21 @@ import org.openide.util.NbBundle;
  */
 public class HighlightProvider  {
     
+    /** for test purposes only! */
+    public interface Hook {
+        void highlightingDone(String absoluteFileName);
+    }
+    
+    private Hook hook;
+    
     public static final boolean TRACE_ANNOTATIONS = Boolean.getBoolean("cnd.highlight.trace.annotations"); // NOI18N
     
     private static final HighlightProvider instance = new HighlightProvider();
+    
+    /** for test purposes only! */
+    public synchronized  void setHook(Hook hook) {
+        this.hook = hook;
+    }
     
     public static HighlightProvider getInstance(){
         return instance;
@@ -74,150 +92,103 @@ public class HighlightProvider  {
     private HighlightProvider() {
     }
     
-    /* package */ void update(CsmFile file, Document doc) {
+    /* package */ void update(CsmFile file, Document doc, DataObject dao, Interrupter interrupter) {
         assert doc!=null || file==null;
         if (doc instanceof BaseDocument){
-            addAnnotations((BaseDocument)doc, file);
-        }
-    }
-    
-    /* package */ void clear(CsmFile file, Document doc) {
-        assert doc!=null || file==null;
-        if (doc instanceof BaseDocument){
-            removeAnnotations((BaseDocument)doc, file);
-        }
-    }
-    
-    private boolean isNeededUpdateAnnotations(BaseDocument doc, CsmFile file) {
-        if (doc == null || file == null) {
-            return false;
-        }
-        List<Annotation> fileAnnotations = annotations.get(file);
-        List<Integer> positions  = new ArrayList<Integer>();
-        List<String> names  = new ArrayList<String>();
-        if (fileAnnotations != null){
-            for (Iterator<Annotation> it = fileAnnotations.iterator(); it.hasNext();){
-                MyAnnotation annotation = (MyAnnotation)it.next();
-                positions.add(new Integer(annotation.getOffset()));
-                names.add(annotation.getName());
+            addAnnotations((BaseDocument)doc, file, dao, interrupter);
+            Hook theHook = this.hook;
+            if( theHook != null ) {
+                theHook.highlightingDone(file.getAbsolutePath().toString());
             }
         }
-        int i = 0;
-        for (Iterator<CsmInclude> it = file.getIncludes().iterator(); it.hasNext();){
-            CsmInclude incl = it.next();
-            if (incl.getIncludeFile() == null){
-                int offset = incl.getStartPosition().getOffset();
-                if (i < positions.size()){
-                    if ((positions.get(i)).intValue() != offset) {
-                        return true;
+    }
+    
+    /* package */ void clear(Document doc) {
+        assert doc!=null;
+        if (doc instanceof BaseDocument){
+            removeAnnotations(doc);
+            CppUpToDateStatusProvider.get((BaseDocument) doc).setUpToDate(UpToDateStatus.UP_TO_DATE_OK);
+        }
+    }
+    
+    private static org.netbeans.spi.editor.hints.Severity getSeverity(CsmErrorInfo info) {
+        switch( info.getSeverity() ) {
+            case ERROR:     return org.netbeans.spi.editor.hints.Severity.ERROR;
+            case WARNING:   return org.netbeans.spi.editor.hints.Severity.WARNING;
+            default:        throw new IllegalArgumentException("Unexpected severity: " + info.getSeverity()); //NOI18N
+        }
+    }
+    
+    private void addAnnotations(final BaseDocument doc, final CsmFile file, final DataObject dao, Interrupter interrupter) {
+
+        CppUpToDateStatusProvider.get(doc).setUpToDate(UpToDateStatus.UP_TO_DATE_PROCESSING);
+        final List<ErrorDescription> descriptions = new ArrayList<ErrorDescription>();
+        if (TRACE_ANNOTATIONS) System.err.printf("\nSetting annotations for %s\n", file);
+
+        CsmErrorProvider.Response response = new CsmErrorProvider.Response() {
+            private int lastSize = descriptions.size();
+            public void addError(CsmErrorInfo info) {
+                PositionBounds pb = createPositionBounds(dao, info.getStartOffset(), info.getEndOffset());
+                ErrorDescription desc = null;
+                if( pb != null ) {
+                    try {
+                        desc = ErrorDescriptionFactory.createErrorDescription(
+                                getSeverity(info), info.getMessage(), doc, pb.getBegin().getPosition(), pb.getEnd().getPosition());
+                    } catch (IOException ioe) {
+                        Exceptions.printStackTrace(ioe);
                     }
-                    String name = getIncludeText(incl);
-                    if (!name.equals(names.get(i))){
-                        return true;
-                    }
+                    descriptions.add(desc);
+                    if (TRACE_ANNOTATIONS) System.err.printf("\tadded to a bag %s\n", desc.toString());
                 } else {
-                    return true;
-                }
-                i++;
-            }
-        }
-        if (i < positions.size()){
-            return true;
-        }
-        return false;
-    }
-    
-    private void addAnnotations(BaseDocument doc, CsmFile file) {
-        if (!isNeededUpdateAnnotations(doc, file)) {
-            return;
-        }
-        List<Annotation> fileAnnotations = annotations.get(file);
-        if (fileAnnotations != null){
-            if (TRACE_ANNOTATIONS)  System.out.println("Update annotations: "+file.getName()); // NOI18N
-            for (Iterator<Annotation> it = fileAnnotations.iterator(); it.hasNext();){
-                MyAnnotation annotation = (MyAnnotation)it.next();
-                NbDocument.removeAnnotation((StyledDocument)doc, annotation);
-            }
-        } else {
-            if (TRACE_ANNOTATIONS)  System.out.println("Add annotations: "+file.getName()); // NOI18N
-        }
-        fileAnnotations = new ArrayList<Annotation>();
-        for (Iterator<CsmInclude> it = file.getIncludes().iterator(); it.hasNext();){
-            Annotation annotation =  createAnnotation(it.next(), doc);
-            if (annotation != null){
-                fileAnnotations.add(annotation);
-            }
-        }
-        if (fileAnnotations.size()>0){
-            annotations.put(file,fileAnnotations);
-        } else {
-            annotations.remove(file);
-        }
-    }
-    
-    private void removeAnnotations(BaseDocument doc, CsmFile file) {
-        List<Annotation> fileAnnotations = annotations.get(file);
-        if (fileAnnotations != null){
-            if (TRACE_ANNOTATIONS)  System.out.println("Clear annotations: "+file.getName()); // NOI18N
-            annotations.remove(file);
-            if (doc != null) {
-                for (Annotation annotation : fileAnnotations){
-                    if (annotation != null) {
-                        NbDocument.removeAnnotation((StyledDocument)doc, annotation);
-                    }
+                    if (TRACE_ANNOTATIONS) System.err.printf("\tCan't create PositionBounds for %s\n", info);
                 }
             }
-        }
+            public void done() {
+                if( descriptions.size() > lastSize ) {
+                    lastSize = descriptions.size();
+                    if (TRACE_ANNOTATIONS) System.err.printf("Showing %d errors\n", descriptions.size());
+                    HintsController.setErrors(doc, HighlightProvider.class.getName(), descriptions);
+                }
+            }
+        };
+        removeAnnotations(doc);
+        CsmErrorProvider.getDefault().getErrors(new RequestImpl(file,interrupter), response);
+        CppUpToDateStatusProvider.get(doc).setUpToDate(UpToDateStatus.UP_TO_DATE_OK);
+        
     }
     
-    private Annotation createAnnotation(CsmInclude incl, BaseDocument doc){
-        CsmFile file = incl.getIncludeFile();
-        if (file == null){
-            Position position = new MyPosition(incl);
-            Annotation annotation = new MyAnnotation(position.getOffset(), getIncludeText(incl));
-            NbDocument.addAnnotation((StyledDocument)doc, position, -1, annotation);
-            return annotation;
+    private static PositionBounds createPositionBounds(DataObject dao, int start, int end) {
+        CloneableEditorSupport ces = CsmUtilities.findCloneableEditorSupport(dao);
+        if (ces != null) {
+            PositionRef posBeg = ces.createPositionRef(start, Position.Bias.Forward);
+            PositionRef posEnd = ces.createPositionRef(end, Position.Bias.Backward);
+            return new PositionBounds(posBeg, posEnd);
         }
         return null;
     }
     
-    private String getIncludeText(CsmInclude incl){
-        if (incl.isSystem()){
-            return "<"+incl.getIncludeName()+">"; // NOI18N
-        }
-        return "\""+incl.getIncludeName()+"\""; // NOI18N
+    private void removeAnnotations(Document doc) {
+        HintsController.setErrors(doc, HighlightProvider.class.getName(), Collections.<ErrorDescription>emptyList());
     }
-    
-    public static class MyPosition implements Position {
-        private int offset;
-        public MyPosition(CsmInclude incl){
-            offset = incl.getStartPosition().getOffset();
+
+    // package-local for test purposes
+    static class RequestImpl implements CsmErrorProvider.Request {
+
+        private final CsmFile file;
+        private Interrupter interrupter;
+
+        public RequestImpl(CsmFile file, Interrupter interrupter) {
+            this.file = file;
+            this.interrupter = interrupter;
         }
-        public int getOffset() {
-            return offset;
+
+        public CsmFile getFile() {
+            return file;
         }
-    }
-    
-    public static class MyAnnotation extends Annotation {
-        private int offset;
-        private String name;
-        public MyAnnotation(int offset, String name){
-            this.offset = offset;
-            this.name = name;
-        }
-        public int getOffset() {
-            return offset;
-        }
-        public String getName() {
-            return name;
-        }
-        public String getAnnotationType() {
-            return "org-netbeans-modules-cnd-cpp-parser_annotation_err"; // NOI18N
-        }
-        public String getShortDescription() {
-            return NbBundle.getMessage(HighlightProvider.class, "CppParserAnnotationInclide", name);
+
+        public boolean isCancelled() {
+            return interrupter.cancelled();
         }
     }
     
-    private Map<CsmFile,List<Annotation>> annotations = Collections.synchronizedMap(new HashMap<CsmFile,List<Annotation>>());
 }
