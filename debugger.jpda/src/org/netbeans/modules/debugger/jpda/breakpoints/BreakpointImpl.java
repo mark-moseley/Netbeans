@@ -42,6 +42,7 @@
 package org.netbeans.modules.debugger.jpda.breakpoints;
 
 import com.sun.jdi.IncompatibleThreadStateException;
+import com.sun.jdi.ObjectCollectedException;
 import com.sun.jdi.ReferenceType;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
@@ -61,6 +62,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JCheckBox;
 import javax.swing.JPanel;
@@ -77,7 +79,6 @@ import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.api.debugger.jpda.event.JPDABreakpointEvent;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.Session;
-import org.netbeans.api.debugger.DebuggerManager;
 
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
 import org.netbeans.modules.debugger.jpda.expr.Expression;
@@ -105,7 +106,6 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
     private JPDADebuggerImpl    debugger;
     private JPDABreakpoint      breakpoint;
     private BreakpointsReader   reader;
-    private final Session       session;
     private Expression          compiledCondition;
     private List<EventRequest>  requests = new ArrayList<EventRequest>();
     private int                 hitCountFilter = 0;
@@ -114,7 +114,6 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
         this.debugger = debugger;
         this.reader = reader;
         breakpoint = p;
-        this.session = session;
     }
 
     /**
@@ -282,7 +281,7 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
     protected boolean perform (
         Event event,
         String condition,
-        ThreadReference thread,
+        ThreadReference threadReference,
         ReferenceType referenceType,
         Value value
     ) {
@@ -302,9 +301,14 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
         }
         //PATCH 48174
         try {
-            getDebugger().setAltCSF(thread.frame(0));
+            getDebugger().setAltCSF(threadReference.frame(0));
         } catch (com.sun.jdi.IncompatibleThreadStateException e) {
-            ErrorManager.getDefault().notify(e);
+            String msg = "Thread '" + threadReference.name() +
+                    "': status = " + threadReference.status() +
+                    ", is suspended = " + threadReference.isSuspended() +
+                    ", suspend count = " + threadReference.suspendCount() +
+                    ", is at breakpoint = " + threadReference.isAtBreakpoint();
+            Logger.getLogger(BreakpointImpl.class.getName()).log(Level.INFO, msg, e);
         } catch (java.lang.IndexOutOfBoundsException e) {
             // No frame in case of Thread and "Main" class breakpoints, PATCH 56540 
         } 
@@ -312,7 +316,7 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
         if (getBreakpoint() instanceof MethodBreakpoint &&
                 (((MethodBreakpoint) getBreakpoint()).getBreakpointType()
                  & MethodBreakpoint.TYPE_METHOD_EXIT) != 0) {
-            JPDAThreadImpl jt = (JPDAThreadImpl) getDebugger().getThread(thread);
+            JPDAThreadImpl jt = (JPDAThreadImpl) getDebugger().getThread(threadReference);
             if (value != null) {
                 ReturnVariableImpl retVariable = new ReturnVariableImpl(getDebugger(), value, "", jt.getMethodName());
                 jt.setReturnVariable(retVariable);
@@ -329,7 +333,7 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
                 getBreakpoint (),
                 debugger,
                 JPDABreakpointEvent.CONDITION_NONE,
-                debugger.getThread (thread), 
+                debugger.getThread (threadReference), 
                 referenceType, 
                 variable
             );
@@ -342,7 +346,7 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
         } else {
             resume = evaluateCondition (
                 condition, 
-                thread,
+                threadReference,
                 referenceType,
                 variable
             );
@@ -351,11 +355,10 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
         }
         getDebugger().setAltCSF(null);
         if (!resume) {
-            resume = checkWhetherResumeToFinishStep(thread);
-            if (!resume) {
-                DebuggerManager.getDebuggerManager().setCurrentSession(session);
-                getDebugger ().setStoppedState (thread);
-            }
+            resume = checkWhetherResumeToFinishStep(threadReference);
+        }
+        if (!resume) {
+            ((JPDAThreadImpl) getDebugger().getThread(threadReference)).setCurrentBreakpoint(breakpoint);
         }
         //S ystem.out.println("BreakpointImpl.perform end");
         return resume; 
@@ -377,8 +380,15 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
                         activeStepRequests.remove(i);
                         continue;
                     }
-                    if (step.thread().status() == ThreadReference.THREAD_STATUS_ZOMBIE) {
+                    int stepThreadStatus;
+                    try {
+                        stepThreadStatus = step.thread().status();
+                    } catch (ObjectCollectedException ocex) {
+                        stepThreadStatus = ThreadReference.THREAD_STATUS_ZOMBIE;
+                    }
+                    if (stepThreadStatus == ThreadReference.THREAD_STATUS_ZOMBIE) {
                         thread.virtualMachine().eventRequestManager().deleteEventRequest(step);
+                        debugger.getOperator().unregister(step);
                         activeStepRequests.remove(i);
                         continue;
                     }
@@ -435,7 +445,8 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
                     debugger.addPropertyChangeListener(new PropertyChangeListener() {
                         public void propertyChange(PropertyChangeEvent pe) {
                             if (pe.getPropertyName().equals(debugger.PROP_STATE)) {
-                                if (pe.getNewValue().equals(debugger.STATE_RUNNING)) {
+                                if (pe.getNewValue().equals(debugger.STATE_RUNNING) ||
+                                    pe.getNewValue().equals(debugger.STATE_DISCONNECTED)) {
                                     debugger.removePropertyChangeListener(this);
                                     tiPanelRef[0].dismiss();
                                 }
@@ -473,6 +484,7 @@ public abstract class BreakpointImpl implements Executor, PropertyChangeListener
                         // the step requests to prevent confusion
                         for (StepRequest step : activeStepRequests) {
                             thread.virtualMachine().eventRequestManager().deleteEventRequest(step);
+                            debugger.getOperator().unregister(step);
                         }
                     }
                     return yes;
