@@ -79,11 +79,16 @@ class CheckedInResponse implements Response {
             //System.err.println("Repository path is: " + repositoryPath);
             String entriesLine = dis.readLine();
             //System.err.println("New entries line is: " + entriesLine);
+            
+            String absPath = services.convertPathname(localPath, repositoryPath);            
+            if (services.getGlobalOptions().isExcluded(new File(absPath))) {
+                return;
+            }            
+            
             // we set the date the file was last modified in the Entry line
             // so that we can easily determine whether the file has been
             // untouched
-            final File theFile = new File(services.convertPathname(localPath,
-                                                                   repositoryPath));
+            final File theFile = new File(absPath);
             final Date date = new Date(theFile.lastModified());
             final Entry entry = new Entry(entriesLine);
             entry.setConflict(getDateFormatter().format(date));
@@ -117,8 +122,7 @@ class CheckedInResponse implements Response {
      */
     protected DateFormat getDateFormatter() {
         if (dateFormatter == null) {
-            dateFormatter = new SimpleDateFormat(Entry.getLastModifiedDateFormatter().toPattern(), Locale.US);
-            dateFormatter.setTimeZone(Entry.getTimeZone());
+            dateFormatter = Entry.getLastModifiedDateFormatter();
         }
         return dateFormatter;
     }
