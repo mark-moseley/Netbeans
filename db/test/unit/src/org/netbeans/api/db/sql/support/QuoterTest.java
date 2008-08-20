@@ -27,8 +27,7 @@
  */
 package org.netbeans.api.db.sql.support;
 
-import org.netbeans.api.db.sql.support.SQLIdentifiers;
-import org.netbeans.modules.db.util.DBTestBase;
+import org.netbeans.modules.db.test.DDLTestBase;
 
 /**
  * @author <a href="mailto:david@vancouvering.com">David Van Couvering</a>
@@ -36,7 +35,7 @@ import org.netbeans.modules.db.util.DBTestBase;
  * This class is a set of tests to make sure we're quoting identifiers
  * correctly
  */
-public class QuoterTest extends DBTestBase {
+public class QuoterTest extends DDLTestBase {
     
     private SQLIdentifiers.Quoter quoter;
     
@@ -124,6 +123,18 @@ public class QuoterTest extends DBTestBase {
         } catch ( NullPointerException npe ) {
             // expected
         }
+        try {
+            quoter.quoteAlways(null);
+            fail("Expected a NullPointerException");
+        } catch ( NullPointerException npe ) {
+            // expected
+        }
+        try {
+            quoter.unquote(null);
+            fail("Expected a NullPointerException");
+        } catch ( NullPointerException npe ) {
+            // expected
+        }
     }
     
     public void testFirstCharIsUnderbar() throws Exception {
@@ -144,5 +155,14 @@ public class QuoterTest extends DBTestBase {
         String result = quoter.quoteIfNeeded(identifier);
         
         assertEquals(expResult, result);
+    }
+
+    public void testUnquote() {
+        assertEquals("", quoter.unquote(""));
+        assertEquals("", quoter.unquote("\"\""));
+        assertEquals("id", quoter.unquote("id"));
+        assertEquals("id", quoter.unquote("\"id"));
+        assertEquals("id", quoter.unquote("id\""));
+        assertEquals("id", quoter.unquote("\"id"));
     }
 }
