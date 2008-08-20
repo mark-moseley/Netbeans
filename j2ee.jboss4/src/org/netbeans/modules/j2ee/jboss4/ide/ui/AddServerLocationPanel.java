@@ -56,16 +56,13 @@ import org.openide.util.NbBundle;
  * @author Ivan Sidorkin
  */
 public class AddServerLocationPanel implements WizardDescriptor.Panel, ChangeListener {
-    private final static String PROP_ERROR_MESSAGE = "WizardPanel_errorMessage"; // NOI18N
+    private final static String PROP_ERROR_MESSAGE = WizardDescriptor.PROP_ERROR_MESSAGE; // NOI18N
     
     private JBInstantiatingIterator instantiatingIterator;
     
     private AddServerLocationVisualPanel component;
     private WizardDescriptor wizard;
     private transient Set listeners = new HashSet(1);
-    
-    
-    
     
     public AddServerLocationPanel(JBInstantiatingIterator instantiatingIterator){
         this.instantiatingIterator = instantiatingIterator;
@@ -127,10 +124,13 @@ public class AddServerLocationPanel implements WizardDescriptor.Panel, ChangeLis
     }
     
     public void readSettings(Object settings) {
-        if (wizard == null)
-            wizard = (WizardDescriptor)settings;
+        if (wizard == null) {
+            wizard = (WizardDescriptor) settings;
+        }
     }
     
     public void storeSettings(Object settings) {
+        instantiatingIterator.setInstallLocation(
+                ((AddServerLocationVisualPanel) getComponent()).getInstallLocation());
     }
 }
