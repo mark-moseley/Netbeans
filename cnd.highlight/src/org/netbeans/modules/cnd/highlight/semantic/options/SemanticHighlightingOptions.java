@@ -42,6 +42,7 @@
 package org.netbeans.modules.cnd.highlight.semantic.options;
 
 import java.util.prefs.Preferences;
+import org.netbeans.modules.cnd.apt.debug.DebugUtils;
 import org.openide.util.NbPreferences;
 
 /**
@@ -51,73 +52,53 @@ import org.openide.util.NbPreferences;
 public class SemanticHighlightingOptions {
 
     private SemanticHighlightingOptions() {}
-
-    private static final Preferences preferences = NbPreferences.forModule(SemanticHighlightingOptions.class);
-    private static final String ENABLE_MARK_OCCURENCES = "EnableMarkOccurrences";
-    private static final String KEEP_MARKS = "KeepMarks";
-    private static final String ENABLE_MACROS = "Macros";
-    private static final String DIFFER_SYSTEM_MACROS = "SysMacros";
-    private static final String ENABLE_CLASS_FIELDS = "ClassFields";
-    private static final String ENABLE_FUNCTION_NAMES = "FunctionNames";
-    public static final boolean SEMANTIC_ADVANCED = Boolean.getBoolean("cnd.semantic.advanced"); // NOI18N
     
-    private static boolean getOption(String key, boolean defaultValue) {
+    private static class Instantiator {
+        public static SemanticHighlightingOptions instance = new SemanticHighlightingOptions();
+    }
+    
+    public static SemanticHighlightingOptions instance() {
+        return Instantiator.instance;
+    }
+
+    private final Preferences preferences = NbPreferences.forModule(SemanticHighlightingOptions.class);
+
+    private static final String ENABLE_MARK_OCCURRENCES = "EnableMarkOccurrences"; // NOI18N
+    private static final String KEEP_MARKS = "KeepMarks"; // NOI18N
+
+    public static final boolean SEMANTIC_ADVANCED = Boolean.getBoolean("cnd.semantic.advanced"); // NOI18N
+
+    public static final boolean RELEASE_MODE = DebugUtils.isReleaseMode();
+
+    private boolean getOption(String key, boolean defaultValue) {
         return preferences.getBoolean(key, defaultValue);
     }
 
-    private static void setOption(String key, boolean value) {
+    private void setOption(String key, boolean value) {
         preferences.putBoolean(key, value);
     }
     
-    // 6.1 options
+    public boolean isEnabled(String key) {
+        return getOption(key, true);
+    }
     
-    public static boolean getEnableMarkOccurences() {
-        return getOption(ENABLE_MARK_OCCURENCES, true);
+    public void setEnabled(String key, boolean value) {
+        setOption(key, value);
+    }
+    
+    public boolean getEnableMarkOccurrences() {
+        return getOption(ENABLE_MARK_OCCURRENCES, true);
     }
 
-    public static void setEnableMarkOccurences(boolean value) {
-        setOption(ENABLE_MARK_OCCURENCES, value);
+    public void setEnableMarkOccurrences(boolean value) {
+        setOption(ENABLE_MARK_OCCURRENCES, value);
     }
 
-    public static boolean getKeepMarks() {
+    public boolean getKeepMarks() {
         return getOption(KEEP_MARKS, true);
     }
 
-    public static void setKeepMarks(boolean value) {
+    public void setKeepMarks(boolean value) {
         setOption(KEEP_MARKS, value);
-    }
-
-    public static boolean getEnableMacros() {
-        return getOption(ENABLE_MACROS, true);
-    }
-
-    public static void setEnableMacros(boolean value) {
-        setOption(ENABLE_MACROS, value);
-    }
-
-    public static boolean getDifferSystemMacros() {
-        return getOption(DIFFER_SYSTEM_MACROS, true);
-    }
-
-    public static void setDifferSystemMacros(boolean value) {
-        setOption(DIFFER_SYSTEM_MACROS, value);
-    }
-
-    // prototype options
-    
-    public static boolean getEnableClassFields() {
-        return SEMANTIC_ADVANCED && getOption(ENABLE_CLASS_FIELDS, true);
-    }
-
-    public static void setEnableClassFields(boolean value) {
-        setOption(ENABLE_CLASS_FIELDS, value);
-    }
-
-    public static boolean getEnableFunctionNames() {
-        return SEMANTIC_ADVANCED && getOption(ENABLE_FUNCTION_NAMES, true);
-    }
-
-    public static void setEnableFunctionNames(boolean value) {
-        setOption(ENABLE_FUNCTION_NAMES, value);
     }
 }
