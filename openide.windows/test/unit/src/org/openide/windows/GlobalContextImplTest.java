@@ -41,12 +41,12 @@
 
 package org.openide.windows;
 
+import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import junit.framework.Test;
@@ -138,10 +138,14 @@ implements org.openide.util.LookupListener {
     }
     
     public void testRequestVisibleBlinksTheActionMapForAWhile () throws Exception {
-        doRequestVisibleBlinksTheActionMapForAWhile(new TopComponent());
+        doRequestVisibleBlinksTheActionMapForAWhile(new TopComponent(), true);
     }
-    
-    private void doRequestVisibleBlinksTheActionMapForAWhile(TopComponent my) throws Exception {
+
+    public void testSetParentMapBlinks () throws Exception {
+        doRequestVisibleBlinksTheActionMapForAWhile(new TopComponent(), false);
+    }
+
+    private void doRequestVisibleBlinksTheActionMapForAWhile(TopComponent my, boolean requestVisible) throws Exception {
         final org.openide.nodes.Node n = new org.openide.nodes.AbstractNode (org.openide.nodes.Children.LEAF);
         tc.setActivatedNodes(new Node[] { n });
         
@@ -152,6 +156,7 @@ implements org.openide.util.LookupListener {
             ArrayList<ActionMap> maps = new ArrayList<ActionMap> ();
             
             public void resultChanged (org.openide.util.LookupEvent ev) {
+                assertTrue("Changes are comming from AWT thread only", EventQueue.isDispatchThread());
                 assertEquals ("Still only one", 1, res.allItems ().size ());
                 Lookup.Item<ActionMap> i = res.allItems ().iterator ().next ();
                 assertNotNull (i);
@@ -169,25 +174,31 @@ implements org.openide.util.LookupListener {
         assertEquals ("One action map", 1, myListener.res.allItems ().size ());
         myListener.assertNode ();
         
+        ActionMap m1, m2;
         myListener.res.addLookupListener (myListener);
-                
-        my.requestVisible ();
-        
-        if (myListener.maps.size () != 2) {
-            fail ("Expected two changes in the ActionMaps: " + myListener.maps);
+        try {
+            if (requestVisible) {
+                my.requestVisible ();
+            } else {
+                my.getActionMap().setParent(new ActionMap());
+            }
+            waitEQ();
+            if (myListener.maps.size () != 2) {
+                fail ("Expected two changes in the ActionMaps: " + myListener.maps);
+            }
+
+            myListener.assertNode ();
+
+            m1 = myListener.maps.get(0);
+            m2 = myListener.maps.get(1);
+
+            assertNull ("Our action is not in first map", m1.get (KEY));
+            assertEquals ("Our action is in second map", sampleAction, m2.get (KEY));
+
+            assertActionMap ();
+        } finally {
+            myListener.res.removeLookupListener(myListener);
         }
-
-        myListener.assertNode ();
-
-        ActionMap m1 = myListener.maps.get(0);
-        ActionMap m2 = myListener.maps.get(1);
-        
-        assertNull ("Our action is not in first map", m1.get (KEY));
-        assertEquals ("Our action is in second map", sampleAction, m2.get (KEY));
-
-        assertActionMap ();
-        
-        myListener.res.removeLookupListener(myListener);
 
         my.close();
         
@@ -224,7 +235,11 @@ implements org.openide.util.LookupListener {
     }
     
     public void testRequestVisibleBlinksTheActionMapForAWhileWithOwnComponentAndAction() throws Exception {
-        doRequestVisibleBlinksTheActionMapForAWhile(new OwnTopComponent());
+        doRequestVisibleBlinksTheActionMapForAWhile(new OwnTopComponent(), true);
+    }
+
+    public void testActionMapSetParentWithOwnComponentAndAction() throws Exception {
+        doRequestVisibleBlinksTheActionMapForAWhile(new OwnTopComponent(), false);
     }
     
     public void testComponentChangeActionMapIsPropagatedToGlobalLookup() throws Exception {
@@ -260,6 +275,13 @@ implements org.openide.util.LookupListener {
     
     public void resultChanged(org.openide.util.LookupEvent ev) {
         cnt++;
+    }
+
+    private void waitEQ() throws Exception {
+        EventQueue.invokeAndWait(new Runnable() {
+            public void run() {
+            }
+        });
     }
 
     private static class AbstractActionImpl extends AbstractAction {
