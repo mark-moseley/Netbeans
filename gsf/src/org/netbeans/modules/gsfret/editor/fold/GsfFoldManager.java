@@ -48,37 +48,37 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.prefs.Preferences;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
-import javax.swing.text.JTextComponent;
 import javax.swing.text.Position;
 import org.netbeans.api.editor.fold.Fold;
 import org.netbeans.api.editor.fold.FoldType;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.api.gsf.StructureScanner;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.gsf.api.StructureScanner;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.modules.gsfret.editor.semantic.ScanningCancellableTask;
 import org.netbeans.spi.editor.fold.FoldHierarchyTransaction;
 import org.netbeans.spi.editor.fold.FoldManager;
 import org.netbeans.spi.editor.fold.FoldOperation;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
-import org.netbeans.editor.SettingsChangeEvent;
-import org.netbeans.editor.SettingsUtil;
-import org.netbeans.modules.gsf.GsfEditorOptionsFactory;
-import org.netbeans.modules.gsf.GsfOptions;
-import org.openide.loaders.DataObject;
+import org.netbeans.modules.gsf.Language;
+import org.netbeans.modules.gsf.LanguageRegistry;
+import org.netbeans.modules.gsf.api.DataLoadersBridge;
 
 /**
  * This file is originally from Retouche, the Java Support 
@@ -117,6 +117,36 @@ public class GsfFoldManager implements FoldManager {
 
     public static final FoldTemplate JAVADOC_FOLD_TEMPLATE
         = new FoldTemplate(JAVADOC_FOLD_TYPE, JAVADOC_FOLD_DESCRIPTION, 3, 2);
+
+    
+    /** Collapse methods by default
+     * NOTE: This must be kept in sync with string literal in editor/options
+     */
+    public static final String CODE_FOLDING_COLLAPSE_METHOD = "code-folding-collapse-method"; //NOI18N
+    
+    /**
+     * Collapse inner classes by default 
+     * NOTE: This must be kept in sync with string literal in editor/options
+     */
+    public static final String CODE_FOLDING_COLLAPSE_INNERCLASS = "code-folding-collapse-innerclass"; //NOI18N
+    
+    /**
+     * Collapse import section default
+     * NOTE: This must be kept in sync with string literal in editor/options
+     */
+    public static final String CODE_FOLDING_COLLAPSE_IMPORT = "code-folding-collapse-import"; //NOI18N
+    
+    /**
+     * Collapse javadoc comment by default
+     * NOTE: This must be kept in sync with string literal in editor/options
+     */
+    public static final String CODE_FOLDING_COLLAPSE_JAVADOC = "code-folding-collapse-javadoc"; //NOI18N
+
+    /**
+     * Collapse initial comment by default
+     * NOTE: This must be kept in sync with string literal in editor/options
+     */
+    public static final String CODE_FOLDING_COLLAPSE_INITIAL_COMMENT = "code-folding-collapse-initial-comment"; //NOI18N
 
     
     protected static final class FoldTemplate {
@@ -159,12 +189,13 @@ public class GsfFoldManager implements FoldManager {
     private FileObject    file;
     private JavaElementFoldTask task;
     
-    // Folding presets
-    private boolean foldImportsPreset;
-    private boolean foldInnerClassesPreset;
-    private boolean foldJavadocsPreset;
-    private boolean foldCodeBlocksPreset;
-    private boolean foldInitialCommentsPreset;
+//    // Folding presets
+//    private boolean foldImportsPreset;
+//    private boolean foldInnerClassesPreset;
+//    private boolean foldJavadocsPreset;
+//    private boolean foldCodeBlocksPreset;
+//    private boolean foldInitialCommentsPreset;
+    private Preferences prefs;
     
     /** Creates a new instance of GsfFoldManager */
     public GsfFoldManager() {
@@ -173,16 +204,17 @@ public class GsfFoldManager implements FoldManager {
     public void init(FoldOperation operation) {
         this.operation = operation;
         
-        settingsChange(null);
+        String mimeType = DocumentUtilities.getMimeType(operation.getHierarchy().getComponent());
+        prefs = MimeLookup.getLookup(mimeType).lookup(Preferences.class);
     }
 
     public synchronized void initFolds(FoldHierarchyTransaction transaction) {
         Document doc = operation.getHierarchy().getComponent().getDocument();
-        DataObject od = (DataObject) doc.getProperty(Document.StreamDescriptionProperty);
+        file = DataLoadersBridge.getDefault().getFileObject(doc);
         
-        if (od != null) {
+        if (file != null) {
             currentFolds = new HashMap<FoldInfo, Fold>();
-            task = JavaElementFoldTask.getTask(od.getPrimaryFile());
+            task = JavaElementFoldTask.getTask(file);
             task.setGsfFoldManager(GsfFoldManager.this);
         }
     }
@@ -225,18 +257,17 @@ public class GsfFoldManager implements FoldManager {
         initialCommentFold = null;
     }
     
-    public void settingsChange(SettingsChangeEvent evt) {
-        // Get folding presets
-        foldInitialCommentsPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_INITIAL_COMMENT);
-        foldImportsPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_IMPORT);
-        foldCodeBlocksPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_METHOD);
-        foldInnerClassesPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_INNERCLASS);
-        foldJavadocsPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_JAVADOC);
-    }
+//    public void settingsChange(SettingsChangeEvent evt) {
+//        // Get folding presets
+//        foldInitialCommentsPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_INITIAL_COMMENT);
+//        foldImportsPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_IMPORT);
+//        foldCodeBlocksPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_METHOD);
+//        foldInnerClassesPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_INNERCLASS);
+//        foldJavadocsPreset = getSetting(GsfOptions.CODE_FOLDING_COLLAPSE_JAVADOC);
+//    }
     
-    private boolean getSetting(String settingName){
-        JTextComponent tc = operation.getHierarchy().getComponent();
-        return SettingsUtil.getBoolean(org.netbeans.editor.Utilities.getKitClass(tc), settingName, false);
+    private boolean getSetting(String settingName) {
+        return prefs.getBoolean(settingName, false);
     }
     
     static final class JavaElementFoldTask extends ScanningCancellableTask<CompilationInfo> {
@@ -263,33 +294,33 @@ public class GsfFoldManager implements FoldManager {
         public void run(final CompilationInfo info) {
             resume();
             
-            GsfFoldManager manager;
+            GsfFoldManager fm;
             
             //the synchronized section should be as limited as possible here
             //in particular, "scan" should not be called in the synchronized section
             //or a deadlock could appear: sy(this)+document read lock against
             //document write lock and this.cancel/sy(this)
             synchronized (this) {
-                manager = this.manager != null ? this.manager.get() : null;
+                fm = this.manager != null ? this.manager.get() : null;
             }
             
-            if (manager == null) {
+            if (fm == null) {
                 return;
             }
             
             long startTime = System.currentTimeMillis();
 
             List<FoldInfo> folds = new ArrayList();
-            boolean success = gsfFoldScan(manager, info, folds);
+            boolean success = gsfFoldScan(fm, info, folds);
             if (!success || isCancelled()) {
                 return;
             }
             
-            SwingUtilities.invokeLater(manager.new CommitFolds(folds));
+            SwingUtilities.invokeLater(fm.new CommitFolds(folds));
             
             long endTime = System.currentTimeMillis();
             
-            Logger.getLogger("TIMER").log(Level.FINE, "Folds - 1",
+            Logger.getLogger("TIMER").log(Level.FINE, "Folds - 1", //NOI18N
                     new Object[] {info.getFileObject(), endTime - startTime});
         }
         
@@ -299,17 +330,17 @@ public class GsfFoldManager implements FoldManager {
          * @return true If folds were found, false if cancelled
          */
         private boolean gsfFoldScan(GsfFoldManager manager, CompilationInfo info, List<FoldInfo> folds) {
-            BaseDocument doc = null;
-            try {
-                doc = (BaseDocument)info.getDocument();
-            } catch (IOException ioe) {
-                org.openide.ErrorManager.getDefault().notify(ioe);
-            }
+            BaseDocument doc = (BaseDocument)info.getDocument();
             if (doc == null) {
                 return false;
             }
-            if (info.getParserResult() != null && info.getParserResult().getRoot() != null) {
-               scan(manager, info, folds, doc);
+            
+            Set<String> mimeTypes = info.getEmbeddedMimeTypes();
+            for (String mimeType : mimeTypes) {
+                Language language = LanguageRegistry.getInstance().getLanguageByMimeType(mimeType);
+                if (language != null) {
+                    scan(manager, info, folds, doc, language);
+                }
             }
 
             if (isCancelled()) {
@@ -325,6 +356,9 @@ public class GsfFoldManager implements FoldManager {
         private boolean checkInitialFold(GsfFoldManager manager, CompilationInfo info, List<FoldInfo> folds) {
             try {
                 TokenHierarchy<?> th = info.getTokenHierarchy();
+                if (th == null) {
+                    return false;
+                }
                 TokenSequence<?> ts = th.tokenSequence();
                 
                 while (ts.moveNext()) {
@@ -335,7 +369,7 @@ public class GsfFoldManager implements FoldManager {
                         Document doc   = manager.operation.getHierarchy().getComponent().getDocument();
                         int startOffset = ts.offset();
                         int endOffset =  startOffset + token.length();
-                        boolean collapsed = manager.foldInitialCommentsPreset;
+                        boolean collapsed = manager.getSetting(CODE_FOLDING_COLLAPSE_INITIAL_COMMENT); //foldInitialCommentsPreset;
                         
                         if (manager.initialCommentFold != null) {
                             collapsed = manager.initialCommentFold.isCollapsed();
@@ -383,40 +417,40 @@ public class GsfFoldManager implements FoldManager {
             return true;
         }
         
-        private void scan(GsfFoldManager manager, CompilationInfo info, List<FoldInfo> folds, BaseDocument doc) {
-            addTree(manager, folds, info, doc);
+        private void scan(GsfFoldManager manager, CompilationInfo info, List<FoldInfo> folds, BaseDocument doc, Language language) {
+            addTree(manager, folds, info, doc, language);
         }
         
         private void addTree(GsfFoldManager manager, List<FoldInfo> result, CompilationInfo info,
-           BaseDocument doc) {
-            StructureScanner scanner = info.getLanguage().getStructure();
+           BaseDocument doc, Language language) {
+            StructureScanner scanner = language.getStructure();
             if (scanner != null) {
-                 Map<String,List<OffsetRange>> folds = scanner.folds(info);
+                Map<String,List<OffsetRange>> folds = scanner.folds(info);
                 if (isCancelled()) {
                     return;
                 }
-                List<OffsetRange> ranges = folds.get("codeblocks");
+                List<OffsetRange> ranges = folds.get("codeblocks"); //NOI18N
                 if (ranges != null) {
                     for (OffsetRange range : ranges) {
-                        addFold(range, result, doc, manager.foldCodeBlocksPreset, CODE_BLOCK_FOLD_TEMPLATE);
+                        addFold(range, result, doc, manager.getSetting(CODE_FOLDING_COLLAPSE_METHOD), CODE_BLOCK_FOLD_TEMPLATE); //foldCodeBlocksPreset
                     }
                 }
-                ranges = folds.get("comments");
+                ranges = folds.get("comments"); //NOI18N
                 if (ranges != null) {
                     for (OffsetRange range : ranges) {
-                        addFold(range, result, doc, manager.foldInitialCommentsPreset, JAVADOC_FOLD_TEMPLATE);
+                        addFold(range, result, doc, manager.getSetting(CODE_FOLDING_COLLAPSE_JAVADOC), JAVADOC_FOLD_TEMPLATE);
                     }
                 }
-                ranges = folds.get("initial-comment");
+                ranges = folds.get("initial-comment"); //NOI18N
                 if (ranges != null) {
                     for (OffsetRange range : ranges) {
-                        addFold(range, result, doc, manager.foldInitialCommentsPreset, INITIAL_COMMENT_FOLD_TEMPLATE);
+                        addFold(range, result, doc, manager.getSetting(CODE_FOLDING_COLLAPSE_INITIAL_COMMENT), INITIAL_COMMENT_FOLD_TEMPLATE); //foldInitialCommentsPreset
                     }
                 }
-                ranges = folds.get("imports");
+                ranges = folds.get("imports"); //NOI18N
                 if (ranges != null) {
                     for (OffsetRange range : ranges) {
-                        addFold(range, result, doc, manager.foldInitialCommentsPreset, IMPORTS_FOLD_TEMPLATE);
+                        addFold(range, result, doc, manager.getSetting(CODE_FOLDING_COLLAPSE_IMPORT), IMPORTS_FOLD_TEMPLATE);
                     }
                 }
             }
