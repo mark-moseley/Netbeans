@@ -53,7 +53,6 @@ import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.spi.editor.hints.ChangeInfo;
 import org.netbeans.spi.editor.hints.Fix;
-import org.openide.ErrorManager;
 import org.openide.util.NbBundle;
 
 
@@ -88,6 +87,9 @@ final class ChangeTypeFix implements Fix {
                 Tree[] leaf = new Tree[1];
 
                 ChangeType.computeType(working, position, tm, expression, expressionType, leaf);
+
+                //anonymous class?
+                expressionType[0] = Utilities.convertIfAnonymous(expressionType[0]);
 
                 if (leaf[0] instanceof VariableTree) {
                     VariableTree oldVariableTree = ((VariableTree)leaf[0]);
