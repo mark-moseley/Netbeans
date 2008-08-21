@@ -4,6 +4,10 @@
     <folder name="Loaders">
         <folder name="application">
             <folder name="x-httpd-eruby">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
+                <folder name="Factories">
+                    <file name="org-netbeans-modules-ruby-rhtml-loaders-RhtmlDataLoader.instance"/>
+                </folder>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/ruby/rhtml/resources/rhtml16.gif"/>
                 <attr name="iconBase" stringvalue="org/netbeans/modules/ruby/rhtml/resources/rhtml16.gif"/>
                 <folder name="Actions">
@@ -69,6 +73,7 @@
                 <attr name="position" intvalue="100"/>
                 <attr name="templateCategory" stringvalue="ruby"/>
                 <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/ruby/rhtml/resources/templatedesc.html"/>
                 <attr name="template" boolvalue="true"/>
             </file>
             <file name="_view.erb" url="RhtmlTemplate.rhtml">
@@ -76,6 +81,7 @@
                 <attr name="position" intvalue="102"/>
                 <attr name="templateCategory" stringvalue="ruby"/>
                 <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/ruby/rhtml/resources/templatedesc.html"/>
                 <attr name="template" boolvalue="true"/>
             </file>
         </folder>
@@ -86,22 +92,15 @@
             <folder name="x-httpd-eruby">
                 <file name="org-netbeans-modules-ruby-rhtml-RhtmlIndentTaskFactory.instance"/>
                 <file name="org-netbeans-modules-ruby-rhtml-EmbeddedSectionsHighlighting$Factory.instance"/>
+                <file name="org-netbeans-modules-gsfret-editor-semantic-HighlightsLayerFactoryImpl.instance"/>
 
                 <file name="language.instance">
                     <attr name="instanceCreate" methodvalue="org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId.language"/>
                     <attr name="instanceOf" stringvalue="org.netbeans.api.lexer.Language"/>
                 </file>
 
-<!--
-                <file name="org-netbeans-modules-gsfret-editor-semantic-HighlightsLayerFactoryImpl.instance" />
--->
-                <attr name="createDataObject" boolvalue="false"/>
-                <file name="language.nbs" url="RHTML.nbs">
-                    <attr name="icon" stringvalue="org/netbeans/modules/ruby/rhtml/resources/rhtml16.gif"/>
-                </file>
-                
                 <folder name="CompletionProviders">
-                    <file name="org-netbeans-modules-editor-html-HTMLCompletionProvider.instance"/>
+                    <file name="org-netbeans-modules-html-editor-HTMLCompletionProvider.instance"/>
                     <file name="org-netbeans-modules-gsfret-editor-completion-GsfCompletionProvider.instance"/>
                     <!-- This doesn't work right because most of the templates don't start with characters
                          that are identifiers
@@ -140,9 +139,16 @@
                     </folder>
                 </folder>
 
-                <file name="Settings.settings" url="RhtmlOptions.settings"/>
+                <folder name="Preferences">
+                    <folder name="Defaults">
+                        <file name="org-netbeans-modules-ruby-rhtml-editor-preferences.xml" url="editor-preferences.xml"/>
+                    </folder>
+                </folder>
+                
                 <file name="EditorKit.instance">
                     <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.rhtml.editor.RhtmlKit"/>
+                    <attr name="instanceOf" stringvalue="javax.swing.text.EditorKit,org.netbeans.modules.ruby.rhtml.editor.RhtmlKit"/>
+                    <attr name="beaninfo" boolvalue="false"/>
                 </file>
             
                 <folder name="CodeTemplates">
@@ -179,6 +185,18 @@
                         <attr name="position" intvalue="1960"/>
                     </file>                    
                 </folder>
+                
+                <folder name="text">
+                    <folder name="html">
+                        <folder name="CodeTemplates">
+                            <folder name="Defaults">
+                                <file name="codetemplates.shadow">
+                                    <attr name="originalFile" stringvalue="Editors/application/x-httpd-eruby"/>
+                                </file>
+                            </folder>
+                        </folder>
+                    </folder>
+                </folder>
             </folder>
         </folder>
     </folder>
@@ -203,57 +221,13 @@
     <folder name="GsfPlugins">
         <folder name="application">
             <folder name="x-httpd-eruby">
-                <attr name="displayName" stringvalue="RHTML"/>
-                <!-- Use Schliemann instead of the custom GSF editor kit -->
                 <attr name="useCustomEditorKit" boolvalue="true"/>
-                
                 <file name="language.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.gsf.GsfLanguage"/>
                     <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.rhtml.RhtmlLanguage"/>
                 </file>
-                
-                <file name="parser.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.gsf.Parser"/>
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.rhtml.RhtmlParser"/>
-                </file>
-
-                <file name="renamer.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.gsf.InstantRenamer"/>
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.RenameHandler"/>
-                </file>
-
-                <file name="completion.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.gsf.Completable"/>
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.rhtml.RhtmlCompleter"/>
-                </file>
-                
-                <file name="declarationfinder.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.gsf.DeclarationFinder"/>
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.rhtml.RhtmlFinder"/>
-                </file>
-                
-                <file name="bracket.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.gsf.BracketCompletion"/>
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.BracketCompleter"/>
-                </file>
-                
-                <!--
-                Navigator handled by Schliemann
                 <file name="structure.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.gsf.StructureScanner"/>
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.StructureAnalyzer"/>
-                </file>
-
-                Don't index rhtml files - there's usually nothing interesting (new classes, methods) there
-                <file name="indexer.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.api.gsf.Indexer"/>
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.RubyIndexer"/>
-                </file>
-                <folder name="extensions">
-                    <file name="rhtml"/>
-                    <file name="erb"/>
-                </folder>
-                -->
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.RubyStructureAnalyzer"/>
+                </file> 
             </folder>
         </folder>
     </folder>
