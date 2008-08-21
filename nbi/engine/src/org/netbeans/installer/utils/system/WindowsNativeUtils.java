@@ -62,6 +62,7 @@ import org.netbeans.installer.utils.system.windows.SystemApplication;
 import org.netbeans.installer.utils.system.windows.FileExtension;
 import org.netbeans.installer.utils.system.windows.WindowsRegistry;
 import org.netbeans.installer.utils.helper.FilesList;
+import org.netbeans.installer.utils.helper.Platform;
 import org.netbeans.installer.utils.system.launchers.Launcher;
 import org.netbeans.installer.utils.progress.Progress;
 import org.netbeans.installer.utils.system.cleaner.OnExitCleanerHandler;
@@ -81,6 +82,8 @@ public class WindowsNativeUtils extends NativeUtils {
             NATIVE_JNILIB_RESOURCE_SUFFIX + "windows/windows-x86.dll"; //NOI18N
     public static final String LIBRARY_PATH_X64 =
             NATIVE_JNILIB_RESOURCE_SUFFIX + "windows/windows-x64.dll"; //NOI18N
+    public static final String LIBRARY_PATH_IA64 =
+            NATIVE_JNILIB_RESOURCE_SUFFIX + "windows/windows-ia64.dll"; //NOI18N
     
     private static final String CLEANER_RESOURCE =
             NATIVE_CLEANER_RESOURCE_SUFFIX +
@@ -210,13 +213,25 @@ public class WindowsNativeUtils extends NativeUtils {
     // constructor //////////////////////////////////////////////////////////////////
     WindowsNativeUtils() {
         if (SystemUtils.isCurrentJava64Bit()) {
-            loadNativeLibrary(LIBRARY_PATH_X64);
+            if(System.getProperty("os.arch").equals("ia64)")) {
+                loadNativeLibrary(LIBRARY_PATH_IA64);
+            } else {
+                loadNativeLibrary(LIBRARY_PATH_X64);
+            }
         } else {
             loadNativeLibrary(LIBRARY_PATH_X86);
         }
         //initializeForbiddenFiles(FORBIDDEN_DELETING_FILES_WINDOWS);
         initializeForbiddenFiles();
         initializeRegistryKeys();
+    }
+    @Override
+    protected Platform getPlatform() {
+        return SystemUtils.isCurrentJava64Bit() ? 
+                            (System.getProperty("os.arch").equals("ia64)") ? 
+                               Platform.WINDOWS_IA64 : 
+                               Platform.WINDOWS_X64) : 
+                            Platform.WINDOWS_X86;
     }
     
     private void initializeRegistryKeys() {
@@ -740,7 +755,7 @@ public class WindowsNativeUtils extends NativeUtils {
             return null;
         }
     }
-    
+    @Override
     public boolean checkFileAccess(File file, boolean isReadNotModify) throws NativeException {
         int result = 0;
         try {
@@ -918,12 +933,10 @@ public class WindowsNativeUtils extends NativeUtils {
     }
     
     private void changeDefaultApplication(SystemApplicationKey app, FileExtensionKey fe, Properties props) throws NativeException {
-        if(app.isUseByDefault()) {
+        if(app.isUseByDefault() == null || app.isUseByDefault().booleanValue() == true) {
             String name = fe.getDotName();
             String extKey = fe.getKey();
-            String appLocation = app.getLocation();
-            String appKey = app.getKey();
-            String command = app.getCommand();
+            String appKey = app.getKey();            
             
             if(!registry.keyExists(clSection, clKey +  extKey + SHELL_OPEN_COMMAND)) {
                 registry.createKey(clSection, clKey +  extKey + SHELL_OPEN_COMMAND);
@@ -940,22 +953,20 @@ public class WindowsNativeUtils extends NativeUtils {
                 s = registry.getStringValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME);
             }
             
-            registry.setStringValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME, appKey);
-            if(s!=null) {
-                setExtProperty(props, name, EXT_HKCU_DEFAULTAPP_PROPERTY,s);
+            if (app.isUseByDefault() != null || s == null) {
+                registry.setStringValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME, appKey);
+                if (s != null) {
+                    setExtProperty(props, name, EXT_HKCU_DEFAULTAPP_PROPERTY, s);
+                }
             }
-            
         }
     }
     
     private void rollbackDefaultApplication(SystemApplicationKey app, FileExtensionKey fe, Properties props) throws NativeException {
         String property;
-        if(app.isUseByDefault()) {
+        if(app.isUseByDefault() == null || app.isUseByDefault().booleanValue() == true) {
             String name = fe.getDotName();
-            String extKey = fe.getKey();
-            String appLocation = app.getLocation();
-            String appKey = app.getKey();
-            String command = app.getCommand();
+            String extKey = fe.getKey();            
             property = getExtProperty(props, name, EXT_HKCRSHELL_OPEN_COMMAND_PROPERTY);
             if(property!=null) {
                 String s = SHELL_OPEN_COMMAND;
@@ -970,7 +981,7 @@ public class WindowsNativeUtils extends NativeUtils {
             if(registry.keyExists(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name)) {
                 if(property!=null) {
                     registry.setStringValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME, property);
-                } else {
+                } else if(app.isUseByDefault()!=null) {
                     registry.deleteValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME);
                 }
             }
@@ -1129,7 +1140,6 @@ public class WindowsNativeUtils extends NativeUtils {
         String appLocation = app.getLocation();
         String appKey = app.getKey();
         String appFriendlyName = app.getFriendlyName();
-        String command = app.getCommand();
         String name = key.getDotName();
         if(!registry.keyExists(clSection, clKey + APPLICATIONS_KEY_NAME,appKey)) {
             registry.createKey(clSection, clKey + APPLICATIONS_KEY_NAME,appKey);

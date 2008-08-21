@@ -75,7 +75,7 @@
         <write-jar-content-list 
             dir="${build.classes.dir}" 
             output="${build.classes.dir}/${jar.contents.list}"
-            mask="(^native/.*|^org/.*|^com/apple/.*|^data/|^data/engine(_[a-zA-Z]+)*\.properties)"/>
+            mask="${jar.contents.mask}"/>
     </target>
     
     <target name="copy-unix-launcher">
@@ -128,6 +128,8 @@
         <copy file="${native.dirname}/${native.jnilib.dir.windows}/${native.dist.dir}/${native.jnilib.file.windows.i386}" 
               todir="${build.classes.dir}/${native.dirname}/${native.jnilib.dir.windows}"/>
         <copy file="${native.dirname}/${native.jnilib.dir.windows}/${native.dist.dir}/${native.jnilib.file.windows.amd64}" 
+              todir="${build.classes.dir}/${native.dirname}/${native.jnilib.dir.windows}"/>
+        <copy file="${native.dirname}/${native.jnilib.dir.windows}/${native.dist.dir}/${native.jnilib.file.windows.ia64}" 
               todir="${build.classes.dir}/${native.dirname}/${native.jnilib.dir.windows}"/>
         <copy file="${native.dirname}/${native.jnilib.dir.linux}/${native.dist.dir}/${native.jnilib.file.linux.i386}" 
               todir="${build.classes.dir}/${native.dirname}/${native.jnilib.dir.linux}"/>
