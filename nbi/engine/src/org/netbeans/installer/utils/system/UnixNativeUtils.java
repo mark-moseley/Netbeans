@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -62,6 +63,7 @@ import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.exceptions.NativeException;
 import org.netbeans.installer.utils.helper.ApplicationDescriptor;
 import org.netbeans.installer.utils.helper.Pair;
+import org.netbeans.installer.utils.helper.Platform;
 import org.netbeans.installer.utils.system.cleaner.ProcessOnExitCleanerHandler;
 import org.netbeans.installer.utils.system.launchers.Launcher;
 import org.netbeans.installer.utils.progress.Progress;
@@ -118,7 +120,16 @@ public class UnixNativeUtils extends NativeUtils {
 
     public static final String XDG_DATA_DIRS_ENV_VARIABLE =
             "XDG_DATA_DIRS"; // NOI18N
-
+    
+    public static final String XDG_DESKTOP_DIR_ENV_VARIABLE =
+            "XDG_DESKTOP_DIR";
+    public static final String XDG_USERDIRS_DIRS = 
+            ".config/user-dirs.dirs";//NOI18N
+    public static final String XDG_USERDIRS_CONF = 
+            ".config/user-dirs.conf";//NOI18N    
+    public static final String XDG_USERDIRS_GLOBAL_CONF = 
+            "/etc/xdg/user-dirs.conf";//NOI18N
+    
     public static final String DEFAULT_XDG_DATA_HOME =
             ".local/share"; // NOI18N
 
@@ -128,6 +139,36 @@ public class UnixNativeUtils extends NativeUtils {
     public UnixNativeUtils() {
         initializeForbiddenFiles();
     }
+    @Override
+    protected Platform getPlatform() {
+        final String osName = System.getProperty("os.name");
+        if (osName.endsWith("BSD")) {
+            if (osName.equals("FreeBSD")) {
+                if(System.getProperty("os.arch").contains("ppc")) {
+                    return SystemUtils.isCurrentJava64Bit() ? Platform.FREEBSD_PPC: Platform.FREEBSD_PPC64;
+                } else {
+                    return SystemUtils.isCurrentJava64Bit() ? Platform.FREEBSD_X64 : Platform.FREEBSD_X86;
+                }
+            } else {
+                if(System.getProperty("os.arch").contains("ppc")) {
+                    return SystemUtils.isCurrentJava64Bit() ? Platform.BSD_PPC64 : Platform.BSD_PPC;
+                } else {
+                    return SystemUtils.isCurrentJava64Bit() ? Platform.BSD_X64 : Platform.BSD_X86;
+                }
+            }
+        } else if(osName.equals("AIX")) {
+            if(System.getProperty("os.arch").contains("ppc")) {
+                return SystemUtils.isCurrentJava64Bit() ? Platform.AIX_PPC64 : Platform.AIX_PPC;
+            } else { 
+                return Platform.AIX;
+            }
+        } else if(osName.equals("HP-UX")) {
+            return Platform.HPUX;
+        } else {
+            return Platform.UNIX;
+        }
+    }
+    
     public boolean isCurrentUserAdmin() throws NativeException{
         if(isUserAdminSet) {
             return isUserAdmin;
@@ -186,7 +227,7 @@ public class UnixNativeUtils extends NativeUtils {
             }
             allUsersLocation = new File(firstPath);
         }
-
+        
         LogManager.log(
                 "XDG_DATA_HOME = " + currentUserLocation); // NOI18N
         LogManager.log(
@@ -213,9 +254,9 @@ public class UnixNativeUtils extends NativeUtils {
         switch (locationType) {
             case CURRENT_USER_DESKTOP:
             case ALL_USERS_DESKTOP:
-                shortcutFile = new File(
-                        SystemUtils.getUserHomeDirectory(),
-                        "Desktop/" + fileName);
+                final File desktopLocation = getDesktopFolder();
+                LogManager.log("... desktop folder : " + desktopLocation);
+                shortcutFile = new File(desktopLocation, fileName);
                 break;
             case CURRENT_USER_START_MENU:
                 shortcutFile = new File(
@@ -235,6 +276,100 @@ public class UnixNativeUtils extends NativeUtils {
                 "shortcut file: " + shortcutFile); // NOI18N
 
         return shortcutFile;
+    }
+    
+    private File getDesktopFolder() {
+        // TODO
+        // If using XDG, desktop folder can be obtained simpler using '/usr/bin/xdg-user-dir DESKTOP' command
+        // See also http://www.netbeans.org/issues/show_bug.cgi?id=144646
+        final String desktopDir = System.getenv(XDG_DESKTOP_DIR_ENV_VARIABLE);
+        final File globalConfigFile = new File(XDG_USERDIRS_GLOBAL_CONF);
+        final File userHome       = SystemUtils.getUserHomeDirectory();
+        final File userDirsFile   = new File(userHome, XDG_USERDIRS_DIRS);
+        final File userConfigFile = new File(userHome, XDG_USERDIRS_CONF);
+        LogManager.log("... getting desktop folder");
+        if (desktopDir != null && !desktopDir.equals("")) {
+            LogManager.log("XDG_DESKTOP_DIR = " + desktopDir);
+            File f = new File(desktopDir);
+            if (f.exists()) {
+                LogManager.log("... desktop dir : " + f);
+                return f;
+            } else {
+                LogManager.log("... XDG_DESKTOP_DIR is defined but does not exist:" + desktopDir);
+            }
+        } else if (System.getenv("XDG_SESSION_COOKIE") == null) {
+            LogManager.log("... XDG_SESSION_COOKIE environment variable is not defined");
+        } else if (!FileUtils.exists(globalConfigFile)) {
+            LogManager.log("... global XDG config file does not exist");
+        } else if (!FileUtils.exists(userDirsFile)) {
+            LogManager.log("... user XDG config file does not exist");
+        } else if (!FileUtils.canRead(userDirsFile)) {
+            LogManager.log("... cannot read user XDG config file");
+        } else {
+            try {
+                boolean useXdgDirs = false;
+                for (File configFile : new File[]{userConfigFile, globalConfigFile}) {
+                    if (!FileUtils.exists(configFile)) {
+                        continue;
+                    }
+                    for (String s : FileUtils.readStringList(configFile)) {
+                        final Matcher matcher = Pattern.compile("enabled=(.*)").matcher(s);
+                        if (matcher.find()) {
+                            if (!Boolean.parseBoolean(matcher.group(1).toLowerCase(Locale.ENGLISH))) {
+                                LogManager.log("... XDG dirs are disabled");
+                                break;
+                            } else {
+                                LogManager.log("... XDG dirs are enabled");
+                                useXdgDirs = true;
+                            }
+                        }
+                    }
+                }
+                
+                if (useXdgDirs) {
+                    String encoding = StringUtils.EMPTY_STRING;// by default
+                    for (File configFile : new File[]{userConfigFile, globalConfigFile}) {
+                        if (!FileUtils.exists(configFile)) {
+                            continue;
+                        }
+                        for (String s : FileUtils.readStringList(configFile)) {
+                            final Matcher matcher = Pattern.compile("filename_encoding=(.*)").matcher(s);
+                            if (matcher.find()) {
+                                encoding = matcher.group(1);
+                                if (encoding.equals("locale")) {
+                                    // http://src.opensolaris.org/source/xref/jds/spec-files/trunk/SUNWxdg-user-dirs.spec
+                                    encoding = null;
+                                }
+                                break;
+                            }
+                        }
+                        if (encoding == null || !encoding.equals(StringUtils.EMPTY_STRING)) {
+                            break;
+                        } else {
+                            encoding = StringUtils.ENCODING_UTF8;
+                        }
+                    }
+                    LogManager.log("... using encoding for config file reading : " + encoding );
+                    List<String> content = (encoding == null) ? FileUtils.readStringList(userDirsFile) : FileUtils.readStringList(userDirsFile, encoding);
+
+                    for (String s : content) {
+                        final Matcher matcher = Pattern.compile(XDG_DESKTOP_DIR_ENV_VARIABLE + "=\"(.*)\"").matcher(s);
+                        if (matcher.find()) {                            
+                            File f = new File(matcher.group(1).replace("$HOME", 
+                                    userHome.getAbsolutePath()));
+                            if (FileUtils.exists(f)) {
+                                return f;
+                            } else {
+                                LogManager.log("... custom desktop directory defined but does not exist: " + f);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                LogManager.log(e);
+            }
+        }
+        return new File(userHome, "Desktop");
     }
 
     private List <String> getDesktopEntry(FileShortcut shortcut) {
