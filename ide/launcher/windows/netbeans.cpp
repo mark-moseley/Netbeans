@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -47,6 +47,7 @@
 #include <process.h>
 #include <commdlg.h>
 #include <tchar.h>
+#include <winuser.h>
 
 // #define DEBUG 1
 
@@ -80,7 +81,11 @@ int WINAPI
         
         for (int i = 1; i < argc; i++) {
             char buf[10240];
-            sprintf(buf, "\"%s\" ", argv[i]);
+            char *arg = argv[i];
+            int len = strlen(arg);
+            if (arg[len-1] == '\"')
+                arg[len-1] = '\0';
+            sprintf(buf, "\"%s\" ", arg);
             strcat(cmdline, buf);
         }
 #endif    
@@ -189,7 +194,7 @@ int WINAPI
     if (!CreateProcess (NULL, cmdline2,
                         NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS,
                         NULL, 
-                        _T(topdir), // lpCurrentDirectory
+                        NULL, // lpCurrentDirectory
                         &start,
                         &pi)) {
         sprintf (buf, "Cannot start %s", appname);
@@ -584,7 +589,7 @@ void ErrorExit(LPTSTR lpszMessage, LPTSTR lpszFunction)
 }
     
 // Seaches if -Xmx is specified in existing arguments
-// If it isn't it adds it - 20% of available RAM-200MB but min is 96M and max 512M
+// If it isn't it adds it - 20% of available RAM but min is 96M and max 512M
 void adjustHeapSize() {
 
     MEMORYSTATUS ms;
@@ -593,17 +598,14 @@ void adjustHeapSize() {
     if (strstr(options, "-J-Xmx") == NULL) {
         // find how much memory we have and add -Xmx
         GlobalMemoryStatus(&ms);
-        DWORDLONG memory = ((ms.dwTotalPhys / 1024 / 1024) - 200) / 5;
+        DWORDLONG memory = (ms.dwTotalPhys / 1024 / 1024) / 5;
         if (memory < 96) {
             memory = 96;
-         }
+        }
         else if (memory > 512) {
             memory = 512;
         }
         sprintf(buf, " -J-Xmx%ldm", memory);
         strcat(options, buf);
-        if (memory >= 256) {
-            strcat(options, " -J-XX:+UseConcMarkSweepGC -J-XX:+CMSClassUnloadingEnabled -J-XX:+CMSPermGenSweepingEnabled");
-        }
     }
 }
