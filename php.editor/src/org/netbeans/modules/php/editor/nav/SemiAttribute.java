@@ -301,6 +301,7 @@ public class SemiAttribute extends DefaultVisitor {
         
         if (node.getSuperClass() != null) {
             ce.superClass = (ClassElement) lookup(node.getSuperClass().getName(), Kind.CLASS);
+            node2Element.put(node.getSuperClass(), ce.superClass);
         }
                 
         scopes.push(ce.enclosedElements);
@@ -472,7 +473,7 @@ public class SemiAttribute extends DefaultVisitor {
         PHPIndex index = PHPIndex.get(i);
         
         try {
-            for (String s : index.getAllIncludes(file.getURL().getPath())) {//XXX: getPath?
+            for (String s : index.getAllIncludes(xxx(info), file.getURL().getPath())) {//XXX: getPath?
                 files.add(FileUtil.toFileObject(FileUtil.normalizeFile(new File(s))));//TODO: normalization will slow down things - try to do better
             }
         } catch (IOException e) {
@@ -498,10 +499,10 @@ public class SemiAttribute extends DefaultVisitor {
 
                     if (!ce.isInitialized()) {
                         //HACK: should create correct hierarchy, not use All* methods:
-                        for (IndexedFunction m : index.getAllMethods(null, f.getName(), "", NameKind.PREFIX)) {
+                        for (IndexedFunction m : index.getAllMethods(null, f.getName(), "", NameKind.PREFIX, PHPIndex.ANY_ATTR)) {
                             ce.enclosedElements.enterWrite(m.getName(), Kind.FUNC, m);
                         }
-                        for (IndexedConstant m : index.getAllProperties(null, f.getName(), "", NameKind.PREFIX)) {
+                        for (IndexedConstant m : index.getAllProperties(null, f.getName(), "", NameKind.PREFIX, PHPIndex.ANY_ATTR)) {
                             ce.enclosedElements.enterWrite(m.getName(), Kind.CONST, m);
                         }
                         
