@@ -364,7 +364,9 @@ public abstract class RecursiveMethodInstrumentor extends ClassManager {
 
     /** Create a single-class packet of instrumented methods or classes in response to a class load event. */
     protected Object[] createInstrumentedMethodPack(DynamicClassInfo clazz) {
-        if (nInstrMethods == 0) {
+        // if there is no method to instrument _and_ no profiling point for this class
+        // return immediately
+        if (nInstrMethods == 0 && getRuntimeProfilingPoints(engineSettings.getRuntimeProfilingPoints(), clazz).length == 0) {
             return null;
         }
 
@@ -443,7 +445,15 @@ public abstract class RecursiveMethodInstrumentor extends ClassManager {
 
     protected boolean matchesWildcard(String wildcard, String loadedClassName) {
         //    System.err.println("Matches wildcard: "+loadedClassName+", wild: "+wildcard + " : " + (loadedClassName.startsWith(wildcard) && (loadedClassName.indexOf('/', wildcard.length()) == -1)));
-        return loadedClassName.startsWith(wildcard) && (loadedClassName.indexOf('/', wildcard.length()) == -1); // NOI18N
+        boolean packageWildcard = false;
+        if (wildcard.endsWith("*")) { // package wild card - instrument all classes including subpackages
+            wildcard = wildcard.substring(0,wildcard.length() - 1);
+            packageWildcard = true;
+        }
+        if (!loadedClassName.startsWith(wildcard)) {
+            return false;
+        }
+        return packageWildcard || (loadedClassName.indexOf('/', wildcard.length()) == -1); // NOI18N
     }
 
     //---------------------------- Private implementation of instrumentation data packing ---------------------------
