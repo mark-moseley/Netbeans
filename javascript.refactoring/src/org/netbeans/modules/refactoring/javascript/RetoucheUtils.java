@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.refactoring.ruby;
+package org.netbeans.modules.refactoring.javascript;
 
 import java.awt.Color;
 import java.io.CharConversionException;
@@ -55,11 +55,7 @@ import java.util.Set;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.Document;
 import javax.swing.text.StyleConstants;
-import org.jruby.ast.AliasNode;
-import org.jruby.ast.Colon2Node;
-import org.jruby.ast.IScopingNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.types.INameNode;
+import org.mozilla.javascript.Node;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.settings.FontColorSettings;
@@ -74,25 +70,19 @@ import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.napi.gsfret.source.Source;
 import org.netbeans.napi.gsfret.source.SourceUtils;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.gsf.Language;
 import org.netbeans.modules.gsf.LanguageRegistry;
-import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.RubyIndex;
-import org.netbeans.modules.ruby.RubyMimeResolver;
-import org.netbeans.modules.ruby.RubyUtils;
-import org.netbeans.modules.ruby.elements.IndexedMethod;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.netbeans.modules.ruby.rubyproject.RubyProject;
+import org.netbeans.modules.javascript.editing.AstUtilities;
+import org.netbeans.modules.javascript.editing.lexer.JsTokenId;
 import org.netbeans.modules.gsfpath.spi.classpath.support.ClassPathSupport;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
@@ -104,16 +94,20 @@ import org.openide.util.Utilities;
 import org.openide.xml.XMLUtil;
 
 /**
- * Various utilies related to Ruby refactoring; the generic ones are based
+ * Various utilies related to Js refactoring; the generic ones are based
  * on the ones from the Java refactoring module.
  * 
  * @author Jan Becicka
  * @author Tor Norbye
  */
 public class RetoucheUtils {
+    public static boolean isJsFile(FileObject fo) {
+        return LanguageRegistry.getInstance().isRelevantFor(fo, JsTokenId.JAVASCRIPT_MIME_TYPE);
+    }
+    
     // XXX Should this be unused now?
     public static Source createSource(ClasspathInfo cpInfo, FileObject fo) {
-        if (RubyUtils.isRubyOrRhtmlFile(fo)) {
+        if (isJsFile(fo)) {
             return Source.create(cpInfo, fo);
         }
         
@@ -156,32 +150,28 @@ public class RetoucheUtils {
         return doc;
     }
     
+    
     /** Compute the names (full and simple, e.g. Foo::Bar and Bar) for the given node, if any, and return as 
      * a String[2] = {name,simpleName} */
     public static String[] getNodeNames(Node node) {
         String name = null;
         String simpleName = null;
-       
-        if (node instanceof Colon2Node) {
-            Colon2Node c2n = (Colon2Node)node;
-            simpleName = c2n.getName();
-            name = AstUtilities.getFqn(c2n);
-        } else if (node instanceof AliasNode) {
-            name = ((AliasNode)node).getNewName();
-        }
-        
-        if (name == null && node instanceof INameNode) {
-            name = ((INameNode)node).getName();
-        }
-        if (name == null && node instanceof IScopingNode) {
-            if (((IScopingNode)node).getCPath() instanceof Colon2Node) {
-                Colon2Node c2n = (Colon2Node)((IScopingNode)node).getCPath();
-                simpleName = c2n.getName();
-                name = AstUtilities.getFqn(c2n);
-            } else {
-                name = AstUtilities.getClassOrModuleName((IScopingNode)node);
+        int type = node.getType();
+        if (type == org.mozilla.javascript.Token.CALL) {
+            name = AstUtilities.getCallName(node, true);
+            simpleName = AstUtilities.getCallName(node, false);
+        } else if (node instanceof Node.StringNode) {
+            name = node.getString();
+        } else if (node.getType() == org.mozilla.javascript.Token.FUNCTION) {
+            name = AstUtilities.getFunctionFqn(node, null);
+            if (name != null && name.indexOf('.') != -1) {
+                name = name.substring(name.indexOf('.')+1);
             }
+        } else {
+            return new String[] { null, null};
         }
+        // TODO - FUNCTION - also get full name!
+        
         if (simpleName == null) {
             simpleName = name;
         }
@@ -220,19 +210,19 @@ public class RetoucheUtils {
         }
     }
 
-    /** Return the most distant method in the hierarchy that is overriding the given method, or null */
-    public static IndexedMethod getOverridingMethod(RubyElementCtx element, CompilationInfo info) {
-        RubyIndex index = RubyIndex.get(info.getIndex(RubyMimeResolver.RUBY_MIME_TYPE));
-        String fqn = AstUtilities.getFqnName(element.getPath());
-
-        return index.getOverridingMethod(fqn, element.getName());
-    }
+//    /** Return the most distant method in the hierarchy that is overriding the given method, or null */
+//    public static IndexedMethod getOverridingMethod(JsElementCtx element, CompilationInfo info) {
+//        JsIndex index = JsIndex.get(info.getIndex());
+//        String fqn = AstUtilities.getFqnName(element.getPath());
+//
+//        return index.getOverridingMethod(fqn, element.getName());
+//    }
 
     public static String getHtml(String text) {
         StringBuffer buf = new StringBuffer();
-        // TODO - check whether we need ruby highlighting or rhtml highlighting
-        TokenHierarchy tokenH = TokenHierarchy.create(text, RubyTokenId.language());
-        Lookup lookup = MimeLookup.getLookup(MimePath.get(RubyMimeResolver.RUBY_MIME_TYPE));
+        // TODO - check whether we need Js highlighting or rhtml highlighting
+        TokenHierarchy tokenH = TokenHierarchy.create(text, JsTokenId.language());
+        Lookup lookup = MimeLookup.getLookup(MimePath.get(JsTokenId.JAVASCRIPT_MIME_TYPE));
         FontColorSettings settings = lookup.lookup(FontColorSettings.class);
         @SuppressWarnings("unchecked")
         TokenSequence<? extends TokenId> tok = tokenH.tokenSequence();
@@ -317,7 +307,8 @@ public class RetoucheUtils {
         Project[] opened = OpenProjects.getDefault().getOpenProjects();
         for (int i = 0; i<opened.length; i++) {
             if (p==opened[i]) {
-                SourceGroup[] gr = ProjectUtils.getSources(p).getSourceGroups(RubyProject.SOURCES_TYPE_RUBY);
+                //SourceGroup[] gr = ProjectUtils.getSources(p).getSourceGroups(JsProject.SOURCES_TYPE_Js);
+                SourceGroup[] gr = ProjectUtils.getSources(p).getSourceGroups(Sources.TYPE_GENERIC);
                 for (int j = 0; j < gr.length; j++) {
                     if (fo==gr[j].getRootFolder()) {
                         return true;
@@ -345,7 +336,7 @@ public class RetoucheUtils {
     }
     
     public static boolean isRefactorable(FileObject file) {
-        return RubyUtils.isRubyOrRhtmlFile(file) && isFileInOpenProject(file) && isOnSourceClasspath(file);
+        return isJsFile(file) && isFileInOpenProject(file) && isOnSourceClasspath(file);
     }
     
     public static String getPackageName(FileObject folder) {
@@ -410,7 +401,7 @@ public class RetoucheUtils {
         return ClassPath.getClassPath(result, ClassPath.SOURCE).findOwnerRoot(result);
     }
     
-    public static ElementKind getElementKind(RubyElementCtx tph) {
+    public static ElementKind getElementKind(JsElementCtx tph) {
         return tph.getKind();
     }
     
@@ -430,7 +421,8 @@ public class RetoucheUtils {
                 if (ownerRoot != null) {
                     URL sourceRoot = URLMapper.findURL(ownerRoot, URLMapper.INTERNAL);
                     dependentRoots.addAll(SourceUtils.getDependentRoots(sourceRoot));
-                    for (SourceGroup root:ProjectUtils.getSources(p).getSourceGroups(RubyProject.SOURCES_TYPE_RUBY)) {
+                    //for (SourceGroup root:ProjectUtils.getSources(p).getSourceGroups(JsProject.SOURCES_TYPE_Js)) {
+                    for (SourceGroup root:ProjectUtils.getSources(p).getSourceGroups(Sources.TYPE_GENERIC)) {
                         dependentRoots.add(URLMapper.findURL(root.getRootFolder(), URLMapper.INTERNAL));
                     }
                 } else {
@@ -453,17 +445,14 @@ public class RetoucheUtils {
         return cpInfo;
     }
     
-    public static ClasspathInfo getClasspathInfoFor(RubyElementCtx ctx) {
+    public static ClasspathInfo getClasspathInfoFor(JsElementCtx ctx) {
         return getClasspathInfoFor(ctx.getFileObject());
     }
     
-    public static List<FileObject> getRubyFilesInProject(FileObject fileInProject) {
-        List<FileObject> list = new ArrayList<FileObject>(100);
+    public static List<FileObject> getJsFilesInProject(FileObject fileInProject) {
         ClasspathInfo cpInfo = RetoucheUtils.getClasspathInfoFor(fileInProject);
-        if (cpInfo == null) {
-            return list;
-        }
         ClassPath cp = cpInfo.getClassPath(ClasspathInfo.PathKind.SOURCE);
+        List<FileObject> list = new ArrayList<FileObject>(100);
         for (ClassPath.Entry entry : cp.entries()) {
             FileObject root = entry.getRoot();
             String name = root.getName();
@@ -471,18 +460,18 @@ public class RetoucheUtils {
             if (name.equals("vendor") || name.equals("script")) { // NOI18N
                 continue;
             }
-            addRubyFiles(list, root);
+            addJsFiles(list, root);
         }
         
         return list;
     }
     
-    private static void addRubyFiles(List<FileObject> list, FileObject f) {
+    private static void addJsFiles(List<FileObject> list, FileObject f) {
         if (f.isFolder()) {
             for (FileObject child : f.getChildren()) {
-                addRubyFiles(list, child);
+                addJsFiles(list, child);
             }
-        } else if (RubyUtils.isRubyOrRhtmlFile(f)) {
+        } else if (isJsFile(f)) {
             list.add(f);
         }
     }
