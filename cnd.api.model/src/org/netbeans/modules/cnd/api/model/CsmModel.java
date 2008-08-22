@@ -42,6 +42,7 @@
 package org.netbeans.modules.cnd.api.model;
 
 import java.util.Collection;
+import org.openide.util.Cancellable;
 
 /**
  * Source model
@@ -56,18 +57,6 @@ public interface CsmModel {
 
     Collection<CsmProject> projects();
 
-    void addModelListener(CsmModelListener listener);
-
-    void removeModelListener(CsmModelListener listener);
-    
-    void addProgressListener(CsmProgressListener listener);
-    
-    void removeProgressListener(CsmProgressListener listener);
-    
-    void addModelStateListener(CsmModelStateListener listener);
-    
-    void removeModelStateListener(CsmModelStateListener listener);
-    
     /**
      * Code model calls can be very expensive.
      * Therefore one can never call code model from event dispatching thread.
@@ -81,7 +70,7 @@ public interface CsmModel {
      *
      * @param task task to run
      */
-    void enqueue(Runnable task);
+    Cancellable enqueue(Runnable task);
 
     /**
      * Code model calls can be very expensive. 
@@ -99,7 +88,7 @@ public interface CsmModel {
      * @param task task to run
      * @param name name that would be added to the thread name
      */
-    void enqueue(Runnable task, CharSequence name);
+    Cancellable enqueue(Runnable task, CharSequence name);
     
     /**
      * Find project that contains file.
