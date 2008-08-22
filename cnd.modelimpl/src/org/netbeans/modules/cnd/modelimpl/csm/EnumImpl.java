@@ -65,12 +65,12 @@ public class EnumImpl extends ClassEnumBase<CsmEnum>  implements CsmEnum, CsmMem
         super(findName(ast), file, ast);
     }
     
-    @Override
-    protected void init(CsmScope scope, AST ast) {
-	super.init(scope, ast);
+    private void init(CsmScope scope, AST ast) {
+	initScope(scope, ast);
+        initQualifiedName(scope, ast);
         RepositoryUtils.hang(this); // "hang" now and then "put" in "register()"
         initEnumeratorList(ast);
-        register(scope);
+        register(scope, true);
     }
     
     public static EnumImpl create(AST ast, CsmScope scope, CsmFile file) {
