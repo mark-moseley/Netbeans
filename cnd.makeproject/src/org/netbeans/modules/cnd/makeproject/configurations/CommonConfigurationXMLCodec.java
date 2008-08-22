@@ -62,7 +62,10 @@ import org.netbeans.modules.cnd.api.xml.XMLDecoder;
 import org.netbeans.modules.cnd.api.xml.XMLEncoder;
 import org.netbeans.modules.cnd.api.xml.XMLEncoderStream;
 import org.netbeans.modules.cnd.makeproject.api.configurations.FortranCompilerConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.PackagingConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.RequiredProjectsConfiguration;
+import org.netbeans.modules.cnd.makeproject.packaging.FileElement;
+import org.netbeans.modules.cnd.makeproject.packaging.InfoElement;
 
 /**
  * Common subclass to ConfigurationXMLCodec and AuxConfigurationXMLCodec
@@ -70,6 +73,35 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.RequiredProjectsC
 
 /**
  * Change History:
+ * V48 - 08.08.22 - NB 6.5
+ *   PACK_TOPDIR_ELEMENT
+ * V47 - 08.01.08 - NB 6.5
+ *   Packaging persistance:
+ *   ADDITIONAL_OPTIONS_ELEMENT
+ *   VALUE_ATTR
+ *   MANDATORY_ATTR
+ *   TO_ATTR
+ *   FROM_ATTR
+ *   PERM_ATTR
+ *   OWNER_ATTR
+ *   GROUP_ATTR
+ *   VERBOSE_ELEMENT
+ *   PACK_ELEMENT
+ *   PACK_TYPE_ELEMENT
+ *   PACK_FILES_LIST_ELEMENT
+ *   PACK_FILE_LIST_ELEMENT
+ *   PACK_INFOS_LIST_ELEMENT
+ *   PACK_INFO_LIST_ELEMENT
+ * V46 - 06.17.08 - NB 6.5
+ *   [Remote] Development Server
+ * V45 - 01.12-08
+ *  Encoding
+ * V44 - 3.08.08 - NB 6.1
+ *   ???
+ * V43 - 3.06.08 - NB 6.1
+ *   Storing compiler flavor as name|flavor
+ * V42 - 2.26.08 - NB 6.1
+ *   Now storing required tools (c, cpp, ...) only if different from default vaue 
  * V41:
  *   Added SOURCE_ROOT_LIST_ELEMENT
  * V40:
@@ -104,7 +136,7 @@ public abstract class CommonConfigurationXMLCodec
     extends XMLDecoder
     implements XMLEncoder {
 
-    public final static int CURRENT_VERSION = 41;
+    public final static int CURRENT_VERSION = 48;
 
     // Generic
     protected final static String PROJECT_DESCRIPTOR_ELEMENT = "projectDescriptor"; // NOI18N
@@ -122,8 +154,10 @@ public abstract class CommonConfigurationXMLCodec
     protected final static String PROJECT_MAKEFILE_ELEMENT = "projectmakefile"; // NOI18N
     protected final static String REQUIRED_PROJECTS_ELEMENT = "requiredProjects"; // NOI18N
     protected final static String SOURCE_ROOT_LIST_ELEMENT = "sourceRootList"; // NOI18N
+    protected final static String SOURCE_ENCODING_ELEMENT = "sourceEncoding"; // NOI18N
     // Tools Set (Compiler set and platform)
     protected final static String TOOLS_SET_ELEMENT = "toolsSet"; // NOI18N
+    protected final static String DEVELOPMENT_SERVER_ELEMENT = "developmentServer"; // NOI18N
     protected final static String COMPILER_SET_ELEMENT = "compilerSet"; // NOI18N
     protected final static String C_REQUIRED_ELEMENT = "cRequired"; // NOI18N
     protected final static String CPP_REQUIRED_ELEMENT = "cppRequired"; // NOI18N
@@ -144,6 +178,7 @@ public abstract class CommonConfigurationXMLCodec
     // Common
     protected final static String COMMANDLINE_TOOL_ELEMENT = "commandlineTool"; // NOI18N
     protected final static String ADDITIONAL_DEP_ELEMENT = "additionalDep"; // NOI18N
+    protected final static String ADDITIONAL_OPTIONS_ELEMENT = "additionalOptions"; // NOI18N
     protected final static String OUTPUT_ELEMENT = "output"; // NOI18N
     protected final static String INHERIT_INC_VALUES_ELEMENT = "inheritIncValues"; // NOI18N
     protected final static String INHERIT_PRE_VALUES_ELEMENT = "inheritPreValues"; // NOI18N
@@ -219,10 +254,26 @@ public abstract class CommonConfigurationXMLCodec
     protected final static String SET_ATTR = "set"; // NOI18N
     protected final static String DISPLAY_NAME_ATTR = "displayName"; // NOI18N
     protected final static String PROJECT_FILES_ATTR = "projectFiles"; // NOI18N
+    protected final static String VALUE_ATTR = "value"; // NOI18N
+    protected final static String MANDATORY_ATTR = "mandatory"; // NOI18N
+    protected final static String TO_ATTR = "to"; // NOI18N
+    protected final static String FROM_ATTR = "from"; // NOI18N
+    protected final static String PERM_ATTR = "perm"; // NOI18N
+    protected final static String OWNER_ATTR = "owner"; // NOI18N
+    protected final static String GROUP_ATTR = "group"; // NOI18N
 
     protected final static String TRUE_VALUE = "true"; // NOI18N
     protected final static String FALSE_VALUE = "false"; // NOI18N
     protected final static String LIST_ELEMENT = "Elem"; // NOI18N
+    protected final static String VERBOSE_ELEMENT = "verbose"; // NOI18N
+    
+    protected final static String PACK_ELEMENT = "packaging"; // NOI18N
+    protected final static String PACK_TYPE_ELEMENT = "packType"; // NOI18N
+    protected final static String PACK_FILES_LIST_ELEMENT = "packFileList"; // NOI18N
+    protected final static String PACK_FILE_LIST_ELEMENT = "packFileListElem"; // NOI18N
+    protected final static String PACK_INFOS_LIST_ELEMENT = "packInfoList"; // NOI18NP
+    protected final static String PACK_INFO_LIST_ELEMENT = "packInfoListElem"; // NOI18NP
+    protected final static String PACK_TOPDIR_ELEMENT = "packTopDir"; // NOI18N
 
 
     private ConfigurationDescriptor projectDescriptor;
@@ -240,6 +291,7 @@ public abstract class CommonConfigurationXMLCodec
 	    if (publicLocation) {
 		writeLogicalFolders(xes);
                 writeSourceRoots(xes);
+                writeSourceEncoding(xes);
 	    }
 	    xes.element(PROJECT_MAKEFILE_ELEMENT, ((MakeConfigurationDescriptor)projectDescriptor).getProjectMakefileName());
 	    if (!publicLocation) {
@@ -270,6 +322,7 @@ public abstract class CommonConfigurationXMLCodec
 		    writeCompiledProjectConfBlock(xes, makeConfiguration);
 		if (makeConfiguration.isMakefileConfiguration())
 		    writeMakefileProjectConfBlock(xes, makeConfiguration);
+                writePackaging(xes, makeConfiguration.getPackagingConfiguration());
 		ConfigurationAuxObject[] profileAuxObjects = confs.getConf(i).getAuxObjects();
 		for (int j = 0; j < profileAuxObjects.length; j++) {
 		    ConfigurationAuxObject auxObject = profileAuxObjects[j];
@@ -296,11 +349,14 @@ public abstract class CommonConfigurationXMLCodec
     
     private void writeToolsSetBlock(XMLEncoderStream xes, MakeConfiguration makeConfiguration) {
 	xes.elementOpen(TOOLS_SET_ELEMENT);
-        xes.element(COMPILER_SET_ELEMENT, "" + makeConfiguration.getCompilerSet().getOption());
-        xes.element(COMPILER_SET_ELEMENT+"2", "" + makeConfiguration.getCompilerSet2().getOption());
-        xes.element(C_REQUIRED_ELEMENT, "" + makeConfiguration.getCRequired().getValue());
-        xes.element(CPP_REQUIRED_ELEMENT, "" + makeConfiguration.getCppRequired().getValue());
-        xes.element(FORTRAN_REQUIRED_ELEMENT, "" + makeConfiguration.getFortranRequired().getValue());
+	xes.element(DEVELOPMENT_SERVER_ELEMENT, makeConfiguration.getDevelopmentHost().getName());
+        xes.element(COMPILER_SET_ELEMENT, "" + makeConfiguration.getCompilerSet().getNameAndFlavor());
+        if (makeConfiguration.getCRequired().getValue() != makeConfiguration.getCRequired().getDefault())
+            xes.element(C_REQUIRED_ELEMENT, "" + makeConfiguration.getCRequired().getValue());
+        if (makeConfiguration.getCppRequired().getValue() != makeConfiguration.getCppRequired().getDefault())
+            xes.element(CPP_REQUIRED_ELEMENT, "" + makeConfiguration.getCppRequired().getValue());
+        if (makeConfiguration.getFortranRequired().getValue() != makeConfiguration.getFortranRequired().getDefault())
+            xes.element(FORTRAN_REQUIRED_ELEMENT, "" + makeConfiguration.getFortranRequired().getValue());
 	xes.element(PLATFORM_ELEMENT, "" + makeConfiguration.getPlatform().getValue()); // NOI18N
         if (makeConfiguration.getDependencyChecking().getModified())
             xes.element(DEPENDENCY_CHECKING, "" + makeConfiguration.getDependencyChecking().getValue()); // NOI18N
@@ -375,6 +431,10 @@ public abstract class CommonConfigurationXMLCodec
             }
             xes.elementClose(SOURCE_ROOT_LIST_ELEMENT);
         }
+    }
+    
+    private void writeSourceEncoding(XMLEncoderStream xes) {
+        xes.element(SOURCE_ENCODING_ELEMENT, ((MakeConfigurationDescriptor)projectDescriptor).getSourceEncoding());
     }
     
     public static void writeCCompilerConfiguration(XMLEncoderStream xes, CCompilerConfiguration cCompilerConfiguration) {
@@ -546,6 +606,53 @@ public abstract class CommonConfigurationXMLCodec
 	xes.elementClose(REQUIRED_PROJECTS_ELEMENT);
     }
 
+    
+    private static void writePackaging(XMLEncoderStream xes, PackagingConfiguration packagingConfiguration) {
+        if (!packagingConfiguration.isModified()) {
+            return;
+        }
+	xes.elementOpen(PACK_ELEMENT);
+        xes.element(PACK_TYPE_ELEMENT, "" + packagingConfiguration.getType().getValue()); // NOI18N
+	if (packagingConfiguration.getVerbose().getModified())
+	    xes.element(VERBOSE_ELEMENT, "" + packagingConfiguration.getVerbose().getValue()); // NOI18N
+	if (packagingConfiguration.getOutput().getModified())
+	    xes.element(OUTPUT_ELEMENT, packagingConfiguration.getOutput().getValue());
+	if (packagingConfiguration.getTool().getModified())
+	    xes.element(COMMANDLINE_TOOL_ELEMENT, packagingConfiguration.getTool().getValue());
+	if (packagingConfiguration.getOptions().getModified())
+	    xes.element(ADDITIONAL_OPTIONS_ELEMENT, packagingConfiguration.getOptions().getValue());
+        if (packagingConfiguration.getTopDir().getModified())
+	    xes.element(PACK_TOPDIR_ELEMENT, packagingConfiguration.getTopDir().getValue());
+	xes.elementOpen(PACK_FILES_LIST_ELEMENT);
+        List<FileElement> filesList = packagingConfiguration.getFiles().getValue();
+        for (FileElement elem : filesList) {
+            xes.element(PACK_FILE_LIST_ELEMENT,
+                    new AttrValuePair[] {
+                        new AttrValuePair(TYPE_ATTR, "" + elem.getType().toString()), // NOI18N
+                        new AttrValuePair(TO_ATTR, "" + elem.getTo()), // NOI18N
+                        new AttrValuePair(FROM_ATTR, "" + elem.getFrom()), // NOI18N
+                        new AttrValuePair(PERM_ATTR, "" + elem.getPermission()), // NOI18N
+                        new AttrValuePair(OWNER_ATTR, "" + elem.getOwner()), // NOI18N
+                        new AttrValuePair(GROUP_ATTR, "" + elem.getGroup()), // NOI18N
+            });
+        }
+	xes.elementClose(PACK_FILES_LIST_ELEMENT);
+        if (packagingConfiguration.getType().getValue() == PackagingConfiguration.TYPE_SVR4_PACKAGE) {
+            xes.elementOpen(PACK_INFOS_LIST_ELEMENT);
+            List<InfoElement> infoList = packagingConfiguration.getHeader().getValue();
+            for (InfoElement elem : infoList) {
+                xes.element(PACK_INFO_LIST_ELEMENT,
+                        new AttrValuePair[] {
+                            new AttrValuePair(NAME_ATTR, "" + elem.getName()), // NOI18N
+                            new AttrValuePair(VALUE_ATTR, "" + elem.getValue()), // NOI18N
+                            new AttrValuePair(MANDATORY_ATTR, "" + elem.isMandatory()), // NOI18N
+                });
+            }
+            xes.elementClose(PACK_INFOS_LIST_ELEMENT);
+        }
+	xes.elementClose(PACK_ELEMENT);
+    }
+    
     public static void writeMakeArtifact(XMLEncoderStream xes, MakeArtifact makeArtifact) {
 	xes.elementOpen(MAKE_ARTIFACT_ELEMENT,
 		new AttrValuePair[] {
