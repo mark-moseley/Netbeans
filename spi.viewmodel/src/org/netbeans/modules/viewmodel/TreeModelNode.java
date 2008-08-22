@@ -43,12 +43,9 @@ package org.netbeans.modules.viewmodel;
 
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
 import java.beans.PropertyEditor;
-import java.lang.IllegalAccessException;
 import java.lang.ref.WeakReference;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,7 +62,7 @@ import javax.swing.SwingUtilities;
 import org.netbeans.spi.viewmodel.ColumnModel;
 import org.netbeans.spi.viewmodel.ModelEvent;
 import org.netbeans.spi.viewmodel.Models;
-import org.netbeans.spi.viewmodel.TreeModel;
+import org.netbeans.spi.viewmodel.Models.TreeFeatures;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.openide.ErrorManager;
 
@@ -268,6 +265,9 @@ public class TreeModelNode extends AbstractNode {
             Throwable t = ErrorManager.getDefault().annotate(e, "Model: "+model);
             ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, t);
         }
+        if (model.getRoot() == object) {
+            treeModelRoot.destroy();
+        }
     }
 
     
@@ -318,6 +318,7 @@ public class TreeModelNode extends AbstractNode {
             refresh();
             return ;
         }
+        boolean refreshed = false;
         if ((ModelEvent.NodeChanged.DISPLAY_NAME_MASK & changeMask) != 0) {
             try {
                 String name = model.getDisplayName (object);
@@ -334,7 +335,9 @@ public class TreeModelNode extends AbstractNode {
                 Throwable t = ErrorManager.getDefault().annotate(e, "Model: "+model);
                 ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, t);
             }
-        } else if ((ModelEvent.NodeChanged.ICON_MASK & changeMask) != 0) {
+            refreshed = true;
+        }
+        if ((ModelEvent.NodeChanged.ICON_MASK & changeMask) != 0) {
             try {
                 String iconBase = model.getIconBaseWithExtension (object);
                 if (iconBase != null)
@@ -345,23 +348,36 @@ public class TreeModelNode extends AbstractNode {
                 Throwable t = ErrorManager.getDefault().annotate(e, "Model: "+model);
                 ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, t);
             }
-        } else if ((ModelEvent.NodeChanged.SHORT_DESCRIPTION_MASK & changeMask) != 0) {
+            refreshed = true;
+        }
+        if ((ModelEvent.NodeChanged.SHORT_DESCRIPTION_MASK & changeMask) != 0) {
             fireShortDescriptionChange(null, null);
-        } else if ((ModelEvent.NodeChanged.CHILDREN_MASK & changeMask) != 0) {
+            refreshed = true;
+        }
+        if ((ModelEvent.NodeChanged.CHILDREN_MASK & changeMask) != 0) {
             getRequestProcessor ().post (new Runnable () {
                 public void run () {
                     refreshTheChildren(false);
                 }
             });
-        } else {
+            refreshed = true;
+        }
+        if ((ModelEvent.NodeChanged.EXPANSION_MASK & changeMask) != 0) {
+            SwingUtilities.invokeLater (new Runnable () {
+                public void run () {
+                    expandIfSetToExpanded();
+                }
+            });
+        }
+        if (!refreshed) {
             refresh();
         }
     }
     
     private static RequestProcessor requestProcessor;
-    public static RequestProcessor getRequestProcessor () {
+    static RequestProcessor getRequestProcessor () {
         if (requestProcessor == null)
-            requestProcessor = new RequestProcessor ("TreeModel");
+            requestProcessor = new RequestProcessor ("TreeModel", 1);
         return requestProcessor;
     }
 
@@ -646,10 +662,39 @@ public class TreeModelNode extends AbstractNode {
     }
      */
     
+    private final void expandIfSetToExpanded() {
+        try {
+            DefaultTreeExpansionManager.get(model).setChildrenToActOn(getTreeDepth());
+            if (model.isExpanded (object)) {
+                TreeFeatures treeTable = treeModelRoot.getTreeFeatures ();
+                if (treeTable != null) {
+                    treeTable.expandNode (object);
+                }
+            }
+        } catch (UnknownTypeException ex) {
+        }
+    }
+
+    private Integer depth;
+
+    private Integer getTreeDepth() {
+        Node p = getParentNode();
+        if (p == null) {
+            return 0;
+        } else if (depth != null) {
+            return depth;
+        } else {
+            int d = 1;
+            while ((p = p.getParentNode()) != null) d++;
+            depth = new Integer(d);
+            return depth;
+        }
+    }
+
     // innerclasses ............................................................
     
     /** Special locals subnodes (children) */
-    private static final class TreeModelChildren extends Children.Keys<Object>
+    static final class TreeModelChildren extends Children.Keys<Object>
                                                  implements LazyEvaluator.Evaluable {
             
         private boolean             initialezed = false;
@@ -802,18 +847,39 @@ public class TreeModelNode extends AbstractNode {
                 public void run () {
                     int i, k = ch.length;
                     for (i = 0; i < k; i++)
-                        try {
-                            if (model.isExpanded (ch [i])) {
-                                TreeTable treeTable = treeModelRoot.getTreeTable ();
-                                if (treeTable.isExpanded(object)) {
-                                    // Expand the child only if the parent is expanded
-                                    treeTable.expandNode (ch [i]);
-                                }
-                            }
-                        } catch (UnknownTypeException ex) {
-                        }
+                        expandIfSetToExpanded(ch[i]);
                 }
             });
+        }
+        
+        private final void expandIfSetToExpanded(Object child) {
+            try {
+                DefaultTreeExpansionManager.get(model).setChildrenToActOn(getTreeDepth());
+                if (model.isExpanded (child)) {
+                    TreeFeatures treeTable = treeModelRoot.getTreeFeatures ();
+                    if (treeTable != null && treeTable.isExpanded(object)) {
+                        // Expand the child only if the parent is expanded
+                        treeTable.expandNode (child);
+                    }
+                }
+            } catch (UnknownTypeException ex) {
+            }
+        }
+        
+        private Integer depth;
+        
+        Integer getTreeDepth() {
+            Node p = getNode();
+            if (p == null) {
+                return 0;
+            } else if (depth != null) {
+                return depth;
+            } else {
+                int d = 1;
+                while ((p = p.getParentNode()) != null) d++;
+                depth = new Integer(d);
+                return depth;
+            }
         }
         
         private void applyWaitChildren() {
@@ -940,7 +1006,6 @@ public class TreeModelNode extends AbstractNode {
                 //System.out.println("\nTreeModelNode.evaluateLazily("+TreeModelNode.this.getDisplayName()+", "+id+"): value = "+value+", fire = "+fire);
                 if (fire) {
                     firePropertyChange (id, null, value);
-                    refreshTheChildren(true);
                 }
                 
             }
@@ -963,7 +1028,6 @@ public class TreeModelNode extends AbstractNode {
             treeModelRoot.getValuesEvaluator().evaluate(this);
             
             Object ret = null;
-            boolean refreshChildren = false;
             
             synchronized (evaluated) {
                 if (evaluated[0] != 1) {
@@ -973,8 +1037,6 @@ public class TreeModelNode extends AbstractNode {
                     if (evaluated[0] != 1) {
                         evaluated[0] = -1; // timeout
                         ret = EVALUATING_STR;
-                    } else {
-                        refreshChildren = true;
                     }
                 }
             }
@@ -984,13 +1046,6 @@ public class TreeModelNode extends AbstractNode {
                 }
             }
             
-            if (refreshChildren) {
-                RequestProcessor.getDefault().post(new Runnable() {
-                    public void run() {
-                        refreshTheChildren(true);
-                    }
-                });
-            }
             if (ret == EVALUATING_STR &&
                     getValueType() != null && getValueType() != String.class) {
                 ret = null; // Must not provide String when the property type is different.
@@ -1044,8 +1099,14 @@ public class TreeModelNode extends AbstractNode {
         IllegalArgumentException, java.lang.reflect.InvocationTargetException {
             try {
                 model.setValueAt (object, id, v);
+                v = model.getValueAt(object, id); // Store the new value
                 synchronized (properties) {
-                    properties.put (id, v);
+                    if (v instanceof String) {
+                        properties.put (id, removeHTML ((String) v));
+                        properties.put (id + "#html", htmlValue ((String) v));
+                    } else {
+                        properties.put (id, v);
+                    }
                 }
                 firePropertyChange (id, null, null);
             } catch (UnknownTypeException e) {
