@@ -47,6 +47,7 @@ import org.netbeans.modules.vmd.midp.components.general.ClassCode;
 import org.netbeans.modules.vmd.midp.components.resources.ResourceCD;
 import javax.swing.*;
 import java.util.*;
+import org.netbeans.modules.vmd.api.model.DesignDocument;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorMessageAwareness;
 
 /**
@@ -83,6 +84,10 @@ public abstract class PropertyEditorResourceElement extends JPanel {
     public void setPropertyEditorMessageAwareness(PropertyEditorMessageAwareness messageAwareness) {
     }
     
+    //executed in the write transaction on the end of the saving of changes
+    public void postSaveValue(DesignComponent parentComponent) {
+    }
+    
     // icon path
     public String getIconPath() {
         return ResourceCD.ICON_PATH;
@@ -105,10 +110,34 @@ public abstract class PropertyEditorResourceElement extends JPanel {
             listener.elementChanged(new PropertyEditorResourceElementEvent(componentID, propertyName, propertyValue));
         }
     }
+    
+    /**
+     * When property editor sets to null
+     * @param component Design component of the property Editor
+     */
+    public void nullValueSet(DesignComponent component) {
+    }
+    
+    /**
+     *It is invokes at the end of the customEditorResetToDefaultValue of the DesignpropertyEditor
+     * @param component Design component of the property Editor
+     */
+    public void preResetToDefaultValue(DesignComponent component) {
+    }
 
     public static boolean isPropertyValueAUserCodeType(PropertyValue propertyValue) {
         return propertyValue != null && propertyValue.getKind() == PropertyValue.Kind.USERCODE;
     }
+    
+    /** This method should help to get references to the DesignDocument. User should
+     * take care of passing DesignDocument references to this class by overiding and
+     * invoking this method where appropriate.
+     * 
+     * @param document - DesignDocument combined with this resource element.
+     */
+    public void setDesignDocument(DesignDocument document) {
+    }
+    
 
     public static class DesignComponentWrapper {
 
