@@ -38,14 +38,33 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.wsitmodelext.addressing;
 
-import org.netbeans.modules.websvc.wsitmodelext.policy.OptionalAttributeAllowed;
-import org.netbeans.modules.xml.wsdl.model.ExtensibilityElement;
+package org.netbeans.modules.websvc.wsitmodelext.addressing.impl;
+
+import org.netbeans.modules.websvc.wsitmodelext.addressing.Addressing13WsdlAddressing;
+import org.netbeans.modules.websvc.wsitmodelext.policy.PolicyQName;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
+import org.netbeans.modules.xml.wsdl.model.WSDLModel;
+import org.w3c.dom.Element;
 
 /**
  *
  * @author Martin Grebac
  */
-public interface Addressing10WsdlUsingAddressing extends ExtensibilityElement, OptionalAttributeAllowed {
+public class Addressing13WsdlAddressingImpl extends Addressing13ComponentImpl implements Addressing13WsdlAddressing {
+    
+    /**
+     * Creates a new instance of Addressing13WsdlAddressingImpl
+     */
+    public Addressing13WsdlAddressingImpl(WSDLModel model, Element e) {
+        super(model, e);
+    }
+
+    public void setOptional(boolean optional) {
+        setAnyAttribute(PolicyQName.OPTIONAL.getQName(ConfigVersion.CONFIG_1_3), Boolean.toString(optional));
+    }
+
+    public boolean isOptional() {
+        return Boolean.parseBoolean(getAnyAttribute(PolicyQName.OPTIONAL.getQName(ConfigVersion.CONFIG_1_3)));
+    }
 }

@@ -41,10 +41,10 @@
 
 package org.netbeans.modules.websvc.wsitmodelext.addressing.impl;
 
-import org.netbeans.modules.websvc.wsitmodelext.addressing.Addressing10WsdlQName;
 import org.netbeans.modules.websvc.wsitmodelext.addressing.Addressing10WsdlUsingAddressing;
+import org.netbeans.modules.websvc.wsitmodelext.policy.PolicyQName;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
-import org.netbeans.modules.xml.wsdl.model.visitor.WSDLVisitor;
 import org.w3c.dom.Element;
 
 /**
@@ -52,21 +52,20 @@ import org.w3c.dom.Element;
  * @author Martin Grebac
  */
 public class Addressing10WsdlUsingAddressingImpl extends Addressing10ComponentImpl implements Addressing10WsdlUsingAddressing {
-    
+
     /**
      * Creates a new instance of Addressing10WsdlUsingAddressingImpl
      */
     public Addressing10WsdlUsingAddressingImpl(WSDLModel model, Element e) {
         super(model, e);
     }
-    
-    public Addressing10WsdlUsingAddressingImpl(WSDLModel model){
-        this(model, createPrefixedElement(Addressing10WsdlQName.USINGADDRESSING.getQName(), model));
+
+    public void setOptional(boolean optional) {
+        setAnyAttribute(PolicyQName.OPTIONAL.getQName(ConfigVersion.CONFIG_1_0), Boolean.toString(optional));
     }
 
-    @Override
-    public void accept(WSDLVisitor visitor) {
-        visitor.visit(this);
+    public boolean isOptional() {
+        return Boolean.parseBoolean(getAnyAttribute(PolicyQName.OPTIONAL.getQName(ConfigVersion.CONFIG_1_0)));
     }
     
 }

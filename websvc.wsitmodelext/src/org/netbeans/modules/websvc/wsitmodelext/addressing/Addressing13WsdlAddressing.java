@@ -47,5 +47,5 @@ import org.netbeans.modules.xml.wsdl.model.ExtensibilityElement;
  *
  * @author Martin Grebac
  */
-public interface Addressing10WsdlUsingAddressing extends ExtensibilityElement, OptionalAttributeAllowed {
+public interface Addressing13WsdlAddressing extends ExtensibilityElement, OptionalAttributeAllowed {
 }
