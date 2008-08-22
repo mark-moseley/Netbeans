@@ -57,8 +57,8 @@ import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.api.project.NativeProject;
 import org.netbeans.modules.cnd.api.project.NativeProjectItemsListener;
 import org.netbeans.modules.cnd.loaders.HDataLoader;
-import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManagerEvents;
 import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
@@ -68,10 +68,10 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ItemConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfigurationDescriptor;
-import org.netbeans.modules.cnd.makeproject.api.configurations.OptionsConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.VectorConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.CCCompilerConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
+import org.netbeans.modules.cnd.makeproject.api.configurations.DevelopmentHostConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Folder;
 import org.netbeans.modules.cnd.makeproject.api.configurations.FolderConfiguration;
 import org.netbeans.modules.cnd.makeproject.ui.MakeLogicalViewProvider;
@@ -82,12 +82,17 @@ import org.openide.util.RequestProcessor;
 final public class NativeProjectProvider implements NativeProject, PropertyChangeListener {
     private Project project;
     private ConfigurationDescriptorProvider projectDescriptorProvider;
-    private Set<NativeProjectItemsListener> listeners = new HashSet<NativeProjectItemsListener>();
+    private final Set<NativeProjectItemsListener> listeners = new HashSet<NativeProjectItemsListener>();
     
     
     public NativeProjectProvider(Project project, ConfigurationDescriptorProvider projectDescriptorProvider) {
         this.project = project;
         this.projectDescriptorProvider = projectDescriptorProvider;
+    }
+
+    public void runOnCodeModelReadiness(Runnable task) {
+        DevelopmentHostConfiguration host = ((MakeConfiguration)getMakeConfigurationDescriptor().getConfs().getActive()).getDevelopmentHost();
+        CompilerSetManagerEvents.get(host.getName()).runOnCodeModelReadiness(task);
     }
     
     private void addMyListeners() {
@@ -122,9 +127,10 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
     public List<String> getSourceRoots() {
 	MakeConfigurationDescriptor descriptor = getMakeConfigurationDescriptor();
 	if (descriptor != null) {
-            List<String> res = new ArrayList<String>(1);
-            res.add(descriptor.getBaseDir());
-            return res;
+            return descriptor.getAbsoluteSourceRoots();
+//            List<String> res = new ArrayList<String>(1);
+//            res.add(descriptor.getBaseDir());
+//            return res;
 	}
 	return Collections.<String>emptyList();
     }
@@ -348,16 +354,27 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         
         if (!newConf.isDefault())
             return;
+
+        ConfigurationDescriptorProvider.recordMetrics(ConfigurationDescriptorProvider.USG_PROJECT_CONFIG_CND, getMakeConfigurationDescriptor());
         
         if (oldConf == null) {
             // What else can we do?
             firePropertiesChanged(getMakeConfigurationDescriptor().getProjectItems(), true, true, true);
+            MakeLogicalViewProvider.checkForChangedItems(getMakeConfigurationDescriptor().getProject(), null, null);
+            return;
+        }
+        
+        // Check compiler collection. Fire if different (IZ 131825)
+        if (!oldMConf.getCompilerSet().getName().equals(newMConf.getCompilerSet().getName()) || 
+                !oldMConf.getDevelopmentHost().getName().equals(newMConf.getDevelopmentHost().getName())) {
+            fireFilesPropertiesChanged(); // firePropertiesChanged(getAllFiles(), true);
+            MakeLogicalViewProvider.checkForChangedItems(getMakeConfigurationDescriptor().getProject(), null, null);
             return;
         }
         
         // Check all items
         Item[] items = getMakeConfigurationDescriptor().getProjectItems();
-        Project project = getMakeConfigurationDescriptor().getProject();
+        Project proj = getMakeConfigurationDescriptor().getProject();
         for (int i = 0; i < items.length; i++) {
             ItemConfiguration oldItemConf = items[i].getItemConfiguration(oldMConf); //ItemConfiguration)oldMConf.getAuxObject(ItemConfiguration.getId(items[i].getPath()));
             ItemConfiguration newItemConf = items[i].getItemConfiguration(newMConf); //ItemConfiguration)newMConf.getAuxObject(ItemConfiguration.getId(items[i].getPath()));
@@ -376,7 +393,7 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
                     // included
                     added.add(items[i]);
                 }
-                MakeLogicalViewProvider.checkForChangedItems(project, null, items[i]);
+                MakeLogicalViewProvider.checkForChangedItems(proj, null, items[i]);
             }
             
             if (newItemConf.getExcluded().getValue()){
@@ -430,11 +447,11 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         boolean projectChanged = false;
         VectorConfiguration cIncludeDirectories;
         BooleanConfiguration cInheritIncludes;
-        OptionsConfiguration cPpreprocessorOption;
+        VectorConfiguration cPpreprocessorOption;
         BooleanConfiguration cInheritMacros;
         VectorConfiguration ccIncludeDirectories;
         BooleanConfiguration ccInheritIncludes;
-        OptionsConfiguration ccPreprocessorOption;
+        VectorConfiguration ccPreprocessorOption;
         BooleanConfiguration ccInheritMacros;
         Item[] items;
         
@@ -569,7 +586,10 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         ArrayList vec = new ArrayList();
         MakeConfiguration makeConfiguration = getMakeConfiguration();
         if (makeConfiguration != null) {
-            CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(makeConfiguration.getCompilerSet().getValue());
+            CompilerSet compilerSet = makeConfiguration.getCompilerSet().getCompilerSet();
+            if (compilerSet == null) {
+                return vec;
+            }
             BasicCompiler compiler = (BasicCompiler)compilerSet.getTool(Tool.CCCompiler);
             if (compiler != null) {
                 vec.addAll(compiler.getSystemIncludeDirectories());
@@ -615,7 +635,10 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         ArrayList vec = new ArrayList();
         MakeConfiguration makeConfiguration = getMakeConfiguration();
         if (makeConfiguration != null) {
-            CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(makeConfiguration.getCompilerSet().getValue());
+            CompilerSet compilerSet = makeConfiguration.getCompilerSet().getCompilerSet();
+            if (compilerSet == null) {
+                return vec;
+            }
             BasicCompiler compiler = (BasicCompiler)compilerSet.getTool(Tool.CCCompiler);
             if (compiler != null) {
                 vec.addAll(compiler.getSystemPreprocessorSymbols());
@@ -637,7 +660,7 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         MakeConfiguration makeConfiguration = getMakeConfiguration();
         if (makeConfiguration != null) {
             CCCompilerConfiguration cccCompilerConfiguration = makeConfiguration.getCCCompilerConfiguration();
-            vec.addAll(cccCompilerConfiguration.getPreprocessorConfiguration().getValuesAsList());
+            vec.addAll(cccCompilerConfiguration.getPreprocessorConfiguration().getValue());
         }
         return vec;
     }
