@@ -44,9 +44,9 @@ import java.io.File;
 import junit.framework.*;
 import org.netbeans.modules.websvc.wsitconf.util.TestCatalogModel;
 import org.netbeans.modules.websvc.wsitconf.util.TestUtil;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import org.netbeans.modules.xml.wsdl.model.Binding;
 import org.netbeans.modules.xml.wsdl.model.Definitions;
-import org.netbeans.modules.xml.wsdl.model.WSDLComponentFactory;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 
 /**
@@ -68,47 +68,56 @@ public class RMTest extends TestCase {
     }
 
     public void testRM() throws Exception {
+        
+        File f = new File("RMTest.wsdl");
+        if (f.exists()) {
+            f.delete();
+        }
+
         TestCatalogModel.getDefault().setDocumentPooling(true);
         WSDLModel model = TestUtil.loadWSDLModel("../wsdlmodelext/resources/policy.xml");
-        WSDLComponentFactory fact = model.getFactory();
-        
-        model.startTransaction();
 
-        Definitions d = model.getDefinitions();
-        Binding b = (Binding) d.getBindings().toArray()[0];
-        
-        assertFalse("RM enabled indicated on empty WSDL", RMModelHelper.isRMEnabled(b));
+        for (ConfigVersion cfgV : ConfigVersion.values()) {
 
-        RMModelHelper.enableRM(b);
-        assertTrue("RM not enabled correctly", RMModelHelper.isRMEnabled(b));
+            model.startTransaction();
 
-        assertNull("Inactivity timeout set even when not specified", RMModelHelper.getInactivityTimeout(b));
-        RMModelHelper.setInactivityTimeout(b, "112233");
-        assertEquals("Inactivity Timeout Value Not Saved/Read Correctly", "112233", RMModelHelper.getInactivityTimeout(b));
+            Definitions d = model.getDefinitions();
+            Binding b = (Binding) d.getBindings().toArray()[0];
 
-        assertFalse("Flow Control enabled indicated", RMMSModelHelper.isFlowControlEnabled(b));
-        RMMSModelHelper.enableFlowControl(b);
-        RMMSModelHelper.disableFlowControl(b);
-        RMMSModelHelper.enableFlowControl(b);
-        assertTrue("Flow Control disabled indicated", RMMSModelHelper.isFlowControlEnabled(b));
+            assertFalse("RM enabled indicated on empty WSDL", RMModelHelper.getInstance(cfgV).isRMEnabled(b));
 
-        assertNull("Max Receive Buffer Size set even when not specified", RMMSModelHelper.getMaxReceiveBufferSize(b));
-        RMMSModelHelper.setMaxReceiveBufferSize(b, "2233");
-        assertEquals("Max Receive Buffer Size Value Not Saved/Read Correctly", "2233", RMMSModelHelper.getMaxReceiveBufferSize(b));
+            RMModelHelper.getInstance(cfgV).enableRM(b, true);
+            assertTrue("RM not enabled correctly", RMModelHelper.getInstance(cfgV).isRMEnabled(b));
+            assertTrue("Addressing not enabled for RM", AddressingModelHelper.isAddressingEnabled(b));
+            
+            assertNull("Inactivity timeout set even when not specified", RMModelHelper.getInstance(cfgV).getInactivityTimeout(b));
+            RMModelHelper.getInstance(cfgV).setInactivityTimeout(b, "112233");
+            assertEquals("Inactivity Timeout Value Not Saved/Read Correctly", "112233", RMModelHelper.getInstance(cfgV).getInactivityTimeout(b));
 
-        assertFalse("Ordered enabled indicated", RMSunModelHelper.isOrderedEnabled(b));
-        RMSunModelHelper.enableOrdered(b);
-        assertTrue("Ordered disabled indicated", RMSunModelHelper.isOrderedEnabled(b));
-        RMSunModelHelper.disableOrdered(b);
-        assertFalse("Ordered enabled indicated", RMSunModelHelper.isOrderedEnabled(b));
-        
-        RMModelHelper.disableRM(b);
-        assertFalse("RM not disabled correctly", RMModelHelper.isRMEnabled(b));
-        assertNull("RM not disabled correctly", RMModelHelper.getInactivityTimeout(b));
-        
-        model.endTransaction();
+            assertFalse("Flow Control enabled indicated", RMModelHelper.isFlowControl(b));
+            RMModelHelper.getInstance(cfgV).enableFlowControl(b, true);
+            RMModelHelper.getInstance(cfgV).enableFlowControl(b, false);
+            RMModelHelper.getInstance(cfgV).enableFlowControl(b, true);
+            assertTrue("Flow Control disabled indicated", RMModelHelper.isFlowControl(b));
 
-        TestUtil.dumpToFile(model.getBaseDocument(), new File("C:\\RMService.wsdl"));
+            assertNull("Max Receive Buffer Size set even when not specified", RMModelHelper.getMaxReceiveBufferSize(b));
+            RMModelHelper.setMaxReceiveBufferSize(b, "2233");
+            assertEquals("Max Receive Buffer Size Value Not Saved/Read Correctly", "2233", RMModelHelper.getMaxReceiveBufferSize(b));
+
+            assertFalse("Ordered enabled indicated", RMModelHelper.getInstance(cfgV).isOrderedEnabled(b));
+            RMModelHelper.getInstance(cfgV).enableOrdered(b, true);
+            assertTrue("Ordered disabled indicated", RMModelHelper.getInstance(cfgV).isOrderedEnabled(b));
+            RMModelHelper.getInstance(cfgV).enableOrdered(b, false);
+            assertFalse("Ordered enabled indicated", RMModelHelper.getInstance(cfgV).isOrderedEnabled(b));
+
+            RMModelHelper.getInstance(cfgV).enableRM(b, false);
+            assertFalse("RM not disabled correctly", RMModelHelper.getInstance(cfgV).isRMEnabled(b));
+            assertNull("RM not disabled correctly", RMModelHelper.getInstance(cfgV).getInactivityTimeout(b));
+
+            model.endTransaction();
+        }
+
+        TestUtil.dumpToFile(model.getBaseDocument(), f);
     }
 
     public String getTestResourcePath() {
