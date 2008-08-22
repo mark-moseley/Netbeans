@@ -52,15 +52,15 @@ import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
-import javax.swing.text.JTextComponent;
 import org.netbeans.api.editor.EditorRegistry;
-import org.netbeans.api.gsf.DeclarationFinder;
-import org.netbeans.api.gsf.DeclarationFinder.AlternativeLocation;
-import org.netbeans.api.gsf.DeclarationFinder.DeclarationLocation;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsf.Completable;
+import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.gsf.api.DeclarationFinder;
+import org.netbeans.modules.gsf.api.DeclarationFinder.AlternativeLocation;
+import org.netbeans.modules.gsf.api.DeclarationFinder.DeclarationLocation;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsf.api.CodeCompletionHandler;
+import org.netbeans.modules.gsf.api.ElementHandle;
 import org.netbeans.napi.gsfret.source.CompilationController;
 import org.netbeans.napi.gsfret.source.Phase;
 import org.netbeans.napi.gsfret.source.Source;
@@ -68,12 +68,12 @@ import org.netbeans.napi.gsfret.source.UiUtils;
 import org.netbeans.modules.gsf.GsfHtmlFormatter;
 import org.netbeans.modules.gsf.Language;
 import org.netbeans.modules.gsf.LanguageRegistry;
+import org.netbeans.modules.gsf.api.DataLoadersBridge;
 import org.netbeans.modules.gsfret.editor.completion.GsfCompletionProvider;
 import org.netbeans.napi.gsfret.source.SourceUtils;
 import org.openide.awt.HtmlBrowser;
 import org.openide.awt.StatusDisplayer;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
@@ -117,6 +117,9 @@ public class GoToSupport {
             }
 
             Source js = Source.forFileObject(fo);
+            if (js == null) {
+                return null;
+            }
             final String[] result = new String[1];
 
             js.runUserActionTask(new CancellableTask<CompilationController>() {
@@ -129,8 +132,15 @@ public class GoToSupport {
                             return;
                         }
 
-                        Language language = controller.getLanguage();
-
+                        List<Language> list = LanguageRegistry.getInstance().getEmbeddedLanguages((BaseDocument) doc,offset);
+                        Language language = null;
+                        for (Language l : list) {
+                            if (l.getDeclarationFinder() != null) {
+                                language = l;
+                                break;
+                            }
+                        }
+                        
                         if (language != null) {
                             DeclarationFinder finder = language.getDeclarationFinder();
 
@@ -142,9 +152,9 @@ public class GoToSupport {
                                     finder.findDeclaration(controller, offset);
 
                                 if (tooltip) {
-                                    Completable completer = language.getCompletionProvider();
+                                    CodeCompletionHandler completer = language.getCompletionProvider();
                                     if (location != DeclarationLocation.NONE && completer != null) {
-                                        Element element = location.getElement();
+                                        ElementHandle element = location.getElement();
                                         if (element != null) {
                                             String documentation = completer.document(controller, element);
                                             if (documentation != null) {
@@ -156,8 +166,14 @@ public class GoToSupport {
                                     return;
                                 } else if (location != DeclarationLocation.NONE) {
                                     URL url = location.getUrl();
+                                    String invalid = location.getInvalidMessage();
                                     if (url != null) {
                                         HtmlBrowser.URLDisplayer.getDefault().showURL(url);
+                                    } else if (invalid != null) {
+                                        // TODO - show in the editor as an error instead?
+                                        StatusDisplayer.getDefault().setStatusText(invalid);
+                                        Toolkit.getDefaultToolkit().beep();
+                                        return;
                                     } else {
                                         
                                         if (!IM_FEELING_LUCKY && location.getAlternativeLocations().size() > 0 &&
@@ -253,13 +269,11 @@ public class GoToSupport {
     }
     
     private static FileObject getFileObject(Document doc) {
-        DataObject od = (DataObject)doc.getProperty(Document.StreamDescriptionProperty);
-
-        return (od != null) ? od.getPrimaryFile() : null;
+        return DataLoadersBridge.getDefault().getFileObject(doc);
     }
 
     public int[] getHyperlinkSpan(Document doc, int offset) {
-        return GoToSupport.getIdentifierSpan(doc, offset);
+        return getIdentifierSpan(doc, offset);
     }
 
     public static int[] getIdentifierSpan(Document doc, int offset) {
@@ -270,17 +284,21 @@ public class GoToSupport {
             return null;
         }
 
-        Language language = LanguageRegistry.getInstance().getLanguageByMimeType(fo.getMIMEType());
+        List<Language> list = LanguageRegistry.getInstance().getEmbeddedLanguages((BaseDocument) doc,offset);
+        Language language = null;
+        for (Language l : list) {
+            if (l.getDeclarationFinder() != null) {
+                language = l;
+                break;
+            }
+        }
 
         if (language == null) {
             return null;
         }
 
         DeclarationFinder finder = language.getDeclarationFinder();
-
-        if (finder == null) {
-            return null;
-        }
+        assert finder != null;
 
         OffsetRange range = finder.getReferenceSpan(doc, offset);
         if (range != OffsetRange.NONE) {
