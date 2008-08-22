@@ -40,21 +40,13 @@
  */
 package org.netbeans.modules.debugger.jpda.actions;
 
-import com.sun.jdi.ReferenceType;
-import com.sun.jdi.VirtualMachine;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
-import javax.swing.SwingUtilities;
-import org.netbeans.api.debugger.ActionsManager;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
-import org.netbeans.modules.debugger.jpda.EditorContextBridge;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
-import org.netbeans.spi.debugger.jpda.EditorContext;
 
 
 /**
@@ -64,14 +56,11 @@ import org.netbeans.spi.debugger.jpda.EditorContext;
  *
  * @author  Jan Jancura
  */
-public class StepIntoActionProvider extends JPDADebuggerActionProvider {
-    
-    public static final String SS_STEP_OUT = "SS_ACTION_STEPOUT";
-    public static final String ACTION_SMART_STEP_INTO = "smartStepInto";
+public class StepIntoNextMethodActionProvider extends JPDADebuggerActionProvider {
 
     private StepIntoNextMethod stepInto;
-
-    public StepIntoActionProvider (ContextProvider contextProvider) {
+    
+    public StepIntoNextMethodActionProvider (ContextProvider contextProvider) {
         super (
             (JPDADebuggerImpl) contextProvider.lookupFirst 
                 (null, JPDADebugger.class)
@@ -85,32 +74,25 @@ public class StepIntoActionProvider extends JPDADebuggerActionProvider {
     
     public Set getActions () {
         return new HashSet<Object>(Arrays.asList (new Object[] {
-            ActionsManager.ACTION_STEP_INTO,
+            "stepIntoNextMethod", // [TODO] add constatnt
         }));
     }
     
     public void doAction (Object action) {
-        runAction(action);
+        stepInto.runAction();
     }
     
     @Override
-    public void postAction(final Object action, final Runnable actionPerformedNotifier) {
+    public void postAction(Object action, final Runnable actionPerformedNotifier) {
         doLazyAction(new Runnable() {
             public void run() {
                 try {
-                    runAction(action);
+                    stepInto.runAction();
                 } finally {
                     actionPerformedNotifier.run();
                 }
             }
         });
-    }
-    
-    public void runAction(Object action) {
-        if (ActionsManager.ACTION_STEP_INTO.equals(action) && doMethodSelection()) {
-            return; // action performed
-        }
-        stepInto.runAction();
     }
     
     protected void checkEnabled (int debuggerState) {
@@ -122,45 +104,5 @@ public class StepIntoActionProvider extends JPDADebuggerActionProvider {
                 (getDebuggerImpl ().getCurrentThread () != null)
             );
     }
-    
-    // other methods ...........................................................
-    
-    public boolean doMethodSelection () {
-        final String[] methodPtr = new String[1];
-        final String[] urlPtr = new String[1];
-        final int[] linePtr = new int[1];
-        final int[] offsetPtr = new int[1];
-        try {
-            SwingUtilities.invokeAndWait(new Runnable() {
-                public void run() {
-                    EditorContext context = EditorContextBridge.getContext();
-                    methodPtr[0] = context.getSelectedMethodName ();
-                    linePtr[0] = context.getCurrentLineNumber();
-                    offsetPtr[0] = EditorContextBridge.getCurrentOffset();
-                    urlPtr[0] = context.getCurrentURL();
-                }
-            });
-        } catch (InvocationTargetException ex) {
-            return false;
-        } catch (InterruptedException ex) {
-            return false;
-        }
-        final int methodLine = linePtr[0];
-        final int methodOffset = offsetPtr[0];
-        final String url = urlPtr[0];
-        if (methodLine < 0 || url == null || !url.endsWith (".java")) {
-            return false;
-        }
-        String className = debugger.getCurrentThread().getClassName();
-        VirtualMachine vm = debugger.getVirtualMachine();
-        if (vm == null) return false;
-        final List<ReferenceType> classes = vm.classesByName(className);
-        if (!classes.isEmpty()) {
-            MethodChooser chooser = new MethodChooser(debugger, url, classes.get(0), methodLine, methodOffset);
-            return chooser.run();
-        } else {
-            return false;
-        }
-    }
-    
+
 }
