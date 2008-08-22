@@ -74,14 +74,10 @@ public class OutputProcessor implements OutputListener {
     private final int lineno;
     private final FileLocator fileLocator;
 
-    OutputProcessor(String file, int lineno, FileLocator fileLocator) {
-        if (lineno < 0) {
-            lineno = 0;
-        }
-
+    public OutputProcessor(String file, int lineno, FileLocator fileLocator) {
         // TODO : columns?
         this.file = file;
-        this.lineno = lineno;
+        this.lineno = lineno < 0 ? 0 : lineno;
         this.fileLocator = fileLocator;
     }
 
@@ -146,15 +142,21 @@ public class OutputProcessor implements OutputListener {
                         line = 1;
                     }
 
-                    Line.Set lines = lc.getLineSet();
-                    int nOfLines = lines.getLines().size();
-                    if (line > nOfLines) {
-                        line = nOfLines;
-                    }
-                    Line l = lines.getCurrent(line - 1);
-                    if (l != null) {
-                        l.show(Line.SHOW_GOTO);
-                        return true;
+                    // XXX .size() call is super-slow for large files, see issue
+                    // #126531. So we fallback to catching IOOBE
+//                    int nOfLines = lines.getLines().size();
+//                    if (line > nOfLines) {
+//                        line = nOfLines;
+//                    }
+                    try {
+                        Line.Set lines = lc.getLineSet();
+                        Line l = lines.getCurrent(line - 1);
+                        if (l != null) {
+                            l.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.FOCUS);
+                            return true;
+                        }
+                    } catch (IndexOutOfBoundsException ioobe) {
+                        // OK, since .size() cannot be used, see above
                     }
                 }
             }
