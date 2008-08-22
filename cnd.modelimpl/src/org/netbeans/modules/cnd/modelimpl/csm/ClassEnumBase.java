@@ -48,11 +48,15 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import org.netbeans.modules.cnd.api.model.*;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.netbeans.modules.cnd.modelimpl.parser.CsmAST;
+import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.modelimpl.textcache.QualifiedNameCache;
@@ -82,23 +86,63 @@ public abstract class ClassEnumBase<T> extends OffsetableDeclarationBase<T> impl
     private final List<CsmUID<CsmTypedef>> enclosingTypdefs = Collections.synchronizedList(new ArrayList<CsmUID<CsmTypedef>>());
     
     protected ClassEnumBase(String name, CsmFile file, AST ast) {
-        super(ast, file);
+        super(file, getStartOffset(ast), getEndOffset(ast));
         this.name = (name == null) ? CharSequenceKey.empty() : NameCache.getManager().getString(name);
     }
-    
+
+    protected static int getEndOffset(AST node) {
+        if (node != null) {
+            AST rcurly = AstUtil.findChildOfType(node, CPPTokenTypes.RCURLY);
+            if (rcurly instanceof CsmAST) {
+                return ((CsmAST)rcurly).getEndOffset();
+            } else {
+                return OffsetableBase.getEndOffset(node);
+            }
+        }
+        return 0;
+    }
+
     public CharSequence getName() {
         return name;
     }
+
+    protected ClassImpl.ClassMemberForwardDeclaration isClassDefinition(){
+        CsmScope scope = getScope();
+        if (name != null && name.toString().indexOf("::") > 0) { // NOI18N
+            String n = name.toString();
+            String prefix = n.substring(0,n.indexOf("::")); // NOI18N
+            String suffix = n.substring(n.indexOf("::")+2); // NOI18N
+            if (CsmKindUtilities.isNamespace(scope)) {
+                CsmNamespace ns = (CsmNamespace) scope;
+                String qn;
+                if (ns.isGlobal()) {
+                    qn = prefix;
+                } else {
+                    qn = ns.getQualifiedName().toString()+"::"+prefix; // NOI18N
+                }
+                CsmClassifier cls = ns.getProject().findClassifier(qn);
+                if (cls != null) {
+                    scope = (CsmScope) cls;
+                    if (CsmKindUtilities.isClass(cls)){
+                        CsmClass container = (CsmClass) cls;
+                        Iterator<CsmMember> it = CsmSelect.getDefault().getClassMembers(container,
+                                CsmSelect.getDefault().getFilterBuilder().createNameFilter(suffix, true, true, false));
+                        if (it.hasNext()){
+                            CsmMember m = it.next();
+                            if (m instanceof ClassImpl.ClassMemberForwardDeclaration) {
+                                return (ClassImpl.ClassMemberForwardDeclaration) m;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
     
-    /**
-     * Initialization method. 
-     * Should be called immediately after object creation. 
-     *
-     * Descendants may override it; in this case it's a descendant's responsibility
-     * to call super.init()
-     */
-    protected void init(CsmScope scope, AST ast) {
-	if (scope instanceof CsmIdentifiable) {
+    /** Initializes scope */
+    protected final void initScope(CsmScope scope, AST ast) {
+	if (CsmKindUtilities.isIdentifiable(scope)) {
             this.scopeUID = UIDCsmConverter.scopeToUID(scope);
             assert (this.scopeUID != null || scope == null) : "null UID for class scope " + scope;
             this.scopeRef = null;
@@ -106,7 +150,10 @@ public abstract class ClassEnumBase<T> extends OffsetableDeclarationBase<T> impl
 	    // in the case of classes/enums inside bodies
 	    this.scopeRef = scope;
 	}
-	
+    }
+
+    /** Initializes qualified name */
+    protected final void initQualifiedName(CsmScope scope, AST ast) {
 	CharSequence qualifiedNamePostfix = getQualifiedNamePostfix();
         if(  CsmKindUtilities.isNamespace(scope) ) {
             qualifiedName = Utils.getQualifiedName(qualifiedNamePostfix.toString(), (CsmNamespace) scope);
@@ -124,24 +171,30 @@ public abstract class ClassEnumBase<T> extends OffsetableDeclarationBase<T> impl
     
     abstract public Kind getKind();
     
-    protected void register(CsmScope scope) {
+    protected void register(CsmScope scope, boolean registerUnnamedInNamespace) {
         
         RepositoryUtils.put(this);
-        
+        boolean registerInNamespace = registerUnnamedInNamespace;
         if( ProjectBase.canRegisterDeclaration(this) ) {
             registerInProject();
-	    
-	    
-	    if( getContainingClass() == null ) {
-		if(  CsmKindUtilities.isNamespace(scope) ) {
-		    ((NamespaceImpl) scope).addDeclaration(this);
-		}
-	    }
+	    registerInNamespace = true;
+        }
+        if (registerInNamespace) {
+            if (getContainingClass() == null) {
+                if (CsmKindUtilities.isNamespace(scope)) {
+                    ((NamespaceImpl) scope).addDeclaration(this);
+                }
+            }
         }
     }
     
     private void registerInProject() {
-        ((ProjectBase) getContainingFile().getProject()).registerDeclaration(this);
+        ClassImpl.ClassMemberForwardDeclaration fd = isClassDefinition();
+        if (fd != null && CsmKindUtilities.isClass(this))  {
+            fd.setCsmClass((CsmClass)this);
+            return;
+        }
+       ((ProjectBase) getContainingFile().getProject()).registerDeclaration(this);
     }
     
     private void unregisterInProject() {
@@ -181,8 +234,8 @@ public abstract class ClassEnumBase<T> extends OffsetableDeclarationBase<T> impl
         
     private void onDispose() {
         if (TraceFlags.RESTORE_CONTAINER_FROM_UID) {
-            // restore container from it's UID
-            this.scopeRef = UIDCsmConverter.UIDtoScope(this.scopeUID);
+            // restore container from it's UID if not directly initialized
+            this.scopeRef = this.scopeRef != null ? this.scopeRef : UIDCsmConverter.UIDtoScope(this.scopeUID);
             assert (this.scopeRef != null || this.scopeUID == null) : "empty scope for UID " + this.scopeUID;
         }
     }
