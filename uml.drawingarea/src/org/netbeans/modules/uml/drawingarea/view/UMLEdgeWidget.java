@@ -60,6 +60,7 @@ import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramEdgeWriter;
 import org.netbeans.modules.uml.drawingarea.persistence.data.EdgeInfo;
 import org.netbeans.modules.uml.drawingarea.persistence.EdgeWriter;
 import org.netbeans.modules.uml.drawingarea.persistence.PersistenceUtil;
+import org.netbeans.modules.uml.drawingarea.ui.addins.diagramcreator.SQDDiagramEngineExtension;
 import org.openide.util.Lookup;
 
 /**
@@ -76,6 +77,9 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
     protected static final String OPERATION = "Operation"; //NOI18N
     public final static AnchorShape ARROW_END = AnchorShapeFactory.createArrowAnchorShape(50, 10);
     public static final String LABEL_TYPE = "LABEL_TYPE"; //NOI18N
+    
+    //key to specify that a proxy pres elt should be created while loading the diagram. Eg: Nested Link
+    public static final String PROXY_PRESENTATION_ELEMENT = "PROXY_PRESENTATION_ELEMENT";  //NOI18N
 
     public UMLEdgeWidget(Scene scene)
     {
@@ -98,6 +102,24 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
         return manager;
     }
 
+    @Override
+    public void setControlPoints(Collection<Point> controlPoints, boolean sceneLocations) {
+        if (scene != null && scene.getEngine() instanceof SQDDiagramEngineExtension)
+        {
+            super.setControlPoints(controlPoints, sceneLocations);
+        }
+        else 
+        {
+            int ctrlPtCount = this.getControlPoints().size();
+            super.setControlPoints(controlPoints, sceneLocations);
+            //Mark the diagram dirty after setting control points
+            if (scene != null && ctrlPtCount != this.getControlPoints().size()) 
+            {
+                ((DesignerScene) scene).getDiagram().setDirty(true);
+            }
+        }
+    }
+
     public void save(EdgeWriter edgeWriter)
     {
         IElement modElt = PersistenceUtil.getModelElement(this);
@@ -117,7 +139,7 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
         
         edgeWriter.setSrcAnchorID(PersistenceUtil.findAnchor(this.getSourceAnchor()));
         edgeWriter.setTargetAnchorID(PersistenceUtil.findAnchor(this.getTargetAnchor()));
-
+        
         edgeWriter.beginGraphEdge();
         LabelManager manager = getLabelManager();
         if (manager != null)
@@ -141,7 +163,7 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
                 }
                 else
                 {
-                    System.out.println(" not a label... ");
+//                    System.out.println(" not a label... ");
                 }
             }
             edgeWriter.endContained();
@@ -163,7 +185,7 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
                 if (!(nodesList.contains(edgeReader.getSourcePE())) 
                         || !(nodesList.contains(edgeReader.getTargetPE())))
                 {
-                    System.out.println(" invalid edge...");
+//                    System.out.println(" invalid edge...");
                     return;
                 }
             }
@@ -190,14 +212,7 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
                     else if (labelTypeStr.endsWith(LabelManager.LabelType.EDGE.toString()))
                         labelType = LabelManager.LabelType.EDGE;
                 }
-                if (labelType != null)
-                {                        
-                    manager.showLabel(edgeLabel.getLabel(), labelType);
-                }
-                else
-                {
-                     manager.showLabel(edgeLabel.getLabel());
-                }
+                    manager.showLabel(edgeLabel.getLabel(), labelType, edgeLabel.getPosition());
             }
         }
     }
@@ -239,7 +254,7 @@ public abstract class UMLEdgeWidget extends ConnectionWidget implements DiagramE
         }
     }
 
-    protected IPresentationElement getObject()
+    public IPresentationElement getObject()
     {
         return (IPresentationElement) scene.findObject(this);
     }
