@@ -42,6 +42,7 @@
 package org.netbeans.api.java.source;
 
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.Trees;
@@ -50,8 +51,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
@@ -60,11 +59,9 @@ import javax.swing.text.Document;
 import javax.tools.Diagnostic;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.modules.java.source.parsing.FileObjects;
-import org.openide.cookies.EditorCookie;
+import org.netbeans.modules.java.source.usages.Pair;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
 
 /** Asorted information about the JavaSource.
  *
@@ -102,10 +99,39 @@ public class CompilationInfo {
         checkConfinement();
         return this.impl.getPhase();
     }
-       
+    
+    /**
+     * Returns tree which was reparsed by an incremental reparse.
+     * When the source file wasn't parsed yet or the parse was a full parse
+     * this method returns null.
+     * <p class="nonnormative">
+     * Currently the leaf tree is a MethodTree but this may change in the future.
+     * Client of this method is responsible to check the corresponding TreeKind
+     * to find out if it may perform on the changed subtree or it needs to
+     * reprocess the whole tree.
+     * </p>
+     * @return {@link TreePath} or null
+     * @since 0.31
+     */
+    public TreePath getChangedTree () {
+        checkConfinement();
+        if (JavaSource.Phase.PARSED.compareTo (impl.getPhase())>0) {
+            return null;
+        }
+        final Pair<JavaSource.DocPositionRegion,MethodTree> changedTree = impl.getChangedTree();
+        if (changedTree == null) {
+            return null;
+        }
+        final CompilationUnitTree cu = impl.getCompilationUnit();
+        if (cu == null) {
+            return null;
+        }
+        return TreePath.getPath(cu, changedTree.second);
+    }       
+    
     /**
      * Returns the javac tree representing the source file.
-     * @return {@link CompilationUnitTree} the compilation unit cantaining the top level classes contained in the,
+     * @return {@link CompilationUnitTree} the compilation unit containing the top level classes contained in the,
      * java source file. 
      * @throws java.lang.IllegalStateException  when the phase is less than {@link JavaSource.Phase#PARSED}
      */
@@ -245,7 +271,7 @@ public class CompilationInfo {
     
     /**Return {@link PositionConverter} binding virtual Java source and the real source.
      * Please note that this method is needed only for clients that need to work
-     * in non-Java files (eg. JSP files) or in dialogs, like code completion.
+     * in non-Java files (e.g. JSP files) or in dialogs, like code completion.
      * Most clients do not need to use {@link PositionConverter}.
      * 
      * @return PositionConverter binding the virtual Java source and the real source.
@@ -264,28 +290,7 @@ public class CompilationInfo {
      */
     public Document getDocument() throws IOException { //XXX cleanup: IOException is no longer required? Used by PositionEstimator, DiffFacility
         checkConfinement();
-        final PositionConverter binding = this.impl.getPositionConverter();
-        FileObject fo;
-        if (binding == null || (fo=binding.getFileObject()) == null) {
-            return null;
-        }
-        if (!fo.isValid()) {
-            return null;
-        }
-        try {
-            DataObject od = DataObject.find(fo);            
-            EditorCookie ec = od.getCookie(EditorCookie.class);
-            if (ec != null) {
-                return  ec.getDocument();
-            } else {
-                return null;
-            }
-        } catch (DataObjectNotFoundException e) {
-            //may happen when the underlying FileObject has just been deleted
-            //should be safe to ignore
-            Logger.getLogger(CompilationInfo.class.getName()).log(Level.FINE, null, e);
-            return null;
-        }
+        return this.impl.getDocument();
     }
     
     
