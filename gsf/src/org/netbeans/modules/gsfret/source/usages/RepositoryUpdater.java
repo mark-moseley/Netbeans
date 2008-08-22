@@ -41,15 +41,18 @@
 
 package org.netbeans.modules.gsfret.source.usages;
 
+import java.awt.Toolkit;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.net.URL;
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -57,29 +60,28 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.RandomAccess;
 import java.util.Set;
 import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TooManyListenersException;
+import java.util.WeakHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import org.netbeans.api.gsf.Error;
-import org.netbeans.api.gsf.Severity;
-import org.netbeans.api.gsf.Indexer;
-import org.netbeans.api.gsf.ParseEvent;
-import org.netbeans.api.gsf.ParseListener;
-import org.netbeans.api.gsf.ParserFile;
-import org.netbeans.api.gsf.ParserResult;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsfpath.classpath.ClassPath;
-import org.netbeans.api.gsfpath.queries.SourceLevelQuery;
+import org.apache.lucene.document.DateTools;
+import org.netbeans.modules.gsf.api.Error;
+import org.netbeans.modules.gsf.api.Severity;
+import org.netbeans.modules.gsf.api.Indexer;
+import org.netbeans.modules.gsf.api.ParseEvent;
+import org.netbeans.modules.gsf.api.ParseListener;
+import org.netbeans.modules.gsf.api.ParserFile;
+import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
+import org.netbeans.modules.gsfpath.api.queries.SourceLevelQuery;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.queries.VisibilityQuery;
@@ -92,19 +94,19 @@ import org.netbeans.modules.gsf.Language;
 import org.netbeans.modules.gsf.LanguageRegistry;
 import org.netbeans.modules.gsfret.source.GlobalSourcePath;
 import org.netbeans.modules.gsfret.source.SourceAccessor;
-import org.netbeans.modules.gsfret.source.SourceAccessor;
 import org.netbeans.modules.gsfret.source.parsing.FileObjects;
 import org.netbeans.modules.gsfret.source.util.LowMemoryEvent;
 import org.netbeans.modules.gsfret.source.util.LowMemoryListener;
 import org.netbeans.modules.gsfret.source.util.LowMemoryNotifier;
-import org.netbeans.spi.gsfpath.classpath.ClassPathFactory;
+import org.netbeans.modules.gsfpath.spi.classpath.ClassPathFactory;
+import org.netbeans.modules.gsfpath.spi.classpath.support.ClassPathSupport;
+import org.openide.LifecycleManager;
 import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
@@ -136,16 +138,36 @@ import org.openide.util.Utilities;
  */
 public class RepositoryUpdater implements PropertyChangeListener, FileChangeListener {
     // Flag for controlling last-minute workaround for issue #120231
-    private static final boolean CLOSE_INDICES = Boolean.getBoolean("gsf.closeindices");
+//    private static final boolean CLOSE_INDICES = Boolean.getBoolean("gsf.closeindices");
     
     private static final boolean PREINDEXING = Boolean.getBoolean("gsf.preindexing");
-    
+    static boolean haveIndexed = false;
+
     private static final Logger LOGGER = Logger.getLogger(RepositoryUpdater.class.getName());
+    private static final Logger BUG_LOGGER = Logger.getLogger("ruby.indexerbug");
     private static final Set<String> ignoredDirectories = parseSet("org.netbeans.javacore.ignoreDirectories", "SCCS CVS .svn"); // NOI18N
     private static final boolean noscan = Boolean.getBoolean("netbeans.javacore.noscan");   //NOI18N
     private static final boolean PERF_TEST = Boolean.getBoolean("perf.refactoring.test");
     //private static final String PACKAGE_INFO = "package-info.java";  //NOI18N
     
+    private static final long STARTED = System.currentTimeMillis();
+    private static String getElapsedTime() {
+        StringBuilder sb = new StringBuilder();
+        long now = System.currentTimeMillis();
+        long elapsed = now-STARTED;
+        long seconds = elapsed/1000;
+        long minutes = seconds/60;
+        if (seconds > 400) {
+            seconds -= minutes*60;
+            sb.append(minutes + " minutes, " + seconds + " seconds");
+        } else {
+            sb.append(seconds + " seconds");
+        }
+        sb.append(": ");
+        return sb.toString();
+    }
+    
+    // TODO - make delay configurable?
     private static final int DELAY = Utilities.isWindows() ? 2000 : 1000;
     
     private static RepositoryUpdater instance;
@@ -161,14 +183,16 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
     private Work currentWork;
     private boolean dirty;
     private int noSubmited;
+    private final AtomicBoolean closed;
     
     //Preprocessor support
     //private final Map<URL, JavaFileFilterImplementation> filters = Collections.synchronizedMap(new HashMap<URL, JavaFileFilterImplementation>());
-    private final FilterListener filterListener = new FilterListener ();    
+    //private final FilterListener filterListener = new FilterListener ();
     
     /** Creates a new instance of RepositoryUpdater */
     private RepositoryUpdater() {
         try {
+            this.closed = new AtomicBoolean (false);
             this.scannedRoots = Collections.synchronizedSet(new HashSet<URL>());
             this.scannedBinaries = Collections.synchronizedSet(new HashSet<URL>());            
             this.deps = Collections.synchronizedMap(new HashMap<URL,List<URL>>());
@@ -199,6 +223,7 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
     }
     
     public void close () {                
+        this.closed.set(true);
         this.cp.removePropertyChangeListener(this);
         this.unregisterFileSystemListener();
         this.delay.cancel();
@@ -319,7 +344,12 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
         final FileObject fo = fe.getFile();        
         final boolean isFolder = fo.isFolder();
         try {
-            if ((isRelevantSource(fo) || isFolder) && VisibilityQuery.getDefault().isVisible(fo)) {
+            boolean relevantSource = isRelevantSource(fo);
+            if (!relevantSource && "content/unknown".equals(fo.getMIMEType())) { // NOI18N
+                // When deleted, file objects lose their mimetypes...
+                relevantSource = true;
+            }
+            if ((relevantSource || isFolder) && VisibilityQuery.getDefault().isVisible(fo)) {
                 final URL root = getOwningSourceRoot (fo);
                 if (root != null) {                
                     submit(Work.delete(fo,root,isFolder));
@@ -418,47 +448,17 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                 this.noSubmited++;
             }
             final CompileWorker cw = new CompileWorker (work);
-            SourceAccessor.INSTANCE.runSpecialTask (cw, Source.Priority.MAX);
+            SourceAccessor.getINSTANCE().runSpecialTask (cw, Source.Priority.MAX);
         }
     }
     
     
     private void registerFileSystemListener  () {
-        final File[] roots = File.listRoots();
-        final Set<FileSystem> fss = new HashSet<FileSystem> ();
-        for (File root : roots) {
-            final FileObject fo = FileUtil.toFileObject (root);
-            if (fo != null) {                
-                try {
-                    final FileSystem fs = fo.getFileSystem();
-                    if (!fss.contains(fs)) {
-                        fs.addFileChangeListener (this);
-                        fss.add(fs);
-                    }
-                } catch (FileStateInvalidException e) {
-                    Exceptions.printStackTrace(e);
-                }
-            }
-        }
+        FileUtil.addFileChangeListener(this);
     }
     
     private void unregisterFileSystemListener () {
-        final File[] roots = File.listRoots();
-        final Set<FileSystem> fss = new HashSet<FileSystem> ();
-        for (File root : roots) {
-            final FileObject fo = FileUtil.toFileObject (root);
-            if (fo != null) {                
-                try {
-                    final FileSystem fs = fo.getFileSystem();
-                    if (!fss.contains(fs)) {
-                        fs.removeFileChangeListener (this);
-                        fss.add(fs);
-                    }
-                } catch (FileStateInvalidException e) {
-                    Exceptions.printStackTrace(e);
-                }
-            }
-        }
+        FileUtil.removeFileChangeListener(this);
     }
     
     private URL getOwningSourceRoot (final FileObject fo) {
@@ -674,13 +674,17 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
         }
         
         public void run (final CompilationInfo nullInfo) throws IOException {
-            ClassIndexManager.getDefault().writeLock (new ClassIndexManager.ExceptionAction<Void> () {
+            ClassIndexManager./*getDefault().*/writeLock (new ClassIndexManager.ExceptionAction<Void> () {
                 
                 @SuppressWarnings("fallthrough")
                 public Void run () throws IOException {
+                    
                     boolean continuation = false;
                     try {
                     final WorkType type = work.getType();                        
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +  "CompilerWorker.run - type=" + type);
+}
                     switch (type) {
                         case FILTER_CHANGED:                            
                             try {
@@ -692,12 +696,18 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                                 }
                                 state = Utilities.topologicalSort(roots, depGraph);                                                                             
                                 for (java.util.ListIterator<URL> it = state.listIterator(state.size()); it.hasPrevious(); ) {                
+                                    if (closed.get()) {
+                                        return null;
+                                    }
                                     final URL rootURL = it.previous();
                                     it.remove();
                                     updateFolder (rootURL,rootURL, true, handle);
                                 }                                
                             } catch (final TopologicalSortException tse) {
                                     final IllegalStateException ise = new IllegalStateException ();                                
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +  "CompilerWorker *** IllegalStateException ", tse);
+}
                                     throw (IllegalStateException) ise.initCause(tse);
                             }
                             break;
@@ -706,6 +716,9 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                             assert handle == null;
                             handle = ProgressHandleFactory.createHandle(NbBundle.getMessage(RepositoryUpdater.class,"MSG_BackgroundCompileStart"));
                             handle.start();
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() + "CompilerWorker.run.COMPILE_BATCH - created and started handle " + handle);
+}
                             boolean completed = false;
                             try {
                                 oldRoots = new HashSet<URL> (scannedRoots);
@@ -721,18 +734,48 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                                         newBinaries.add (binRoot);
                                     }
                                 }
+
                                 final Map<URL,List<URL>> depGraph = new HashMap<URL,List<URL>> ();
                                 for (ClassPath.Entry entry : entries) {
+                                    if (closed.get()) {
+                                        return null;
+                                    }
                                     final URL rootURL = entry.getURL();
                                     findDependencies (rootURL, new Stack<URL>(), depGraph, newBinaries, true);
                                 }                                
+                                
+                                if (PREINDEXING && depGraph.size() > 0) {
+                                    for (Language language : LanguageRegistry.getInstance()) {
+                                        Collection<FileObject> coreLibraries = language.getGsfLanguage().getCoreLibraries();
+                                        Indexer indexer = language.getIndexer();
+                                        if (indexer == null) {
+                                            continue;
+                                        }
+                                        if (coreLibraries != null) {
+                                            for (FileObject libFo : coreLibraries) {
+                                                URL binRoot = libFo.getURL();
+                                                if (indexer.acceptQueryPath(binRoot.toExternalForm())) {
+                                                    //newBinaries.add(binRoot);
+                                                    depGraph.put(binRoot, Collections.<URL>emptyList());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
                                 CompileWorker.this.state = Utilities.topologicalSort(depGraph.keySet(), depGraph);
                                 deps.putAll(depGraph);
                                 completed = true;
                             } catch (final TopologicalSortException tse) {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE_BATCH - THREW EXCEPTION!", tse);
+}
                                 final IllegalStateException ise = new IllegalStateException ();                                
                                 throw (IllegalStateException) ise.initCause(tse);
                             } finally {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE_BATCH - completed=" + completed);
+}
                                 if (!completed) {
                                     resetDirty();
                                 }
@@ -740,14 +783,23 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                         }
                         case COMPILE_CONT:
                             boolean completed = false;
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE_CONT - about to scan roots");
+}
                             try {
                                 if (!scanRoots()) {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE_BATCH -failed - doing continuation!");
+}
                                     CompileWorker.this.work = new Work (WorkType.COMPILE_CONT,null);
-                                    SourceAccessor.INSTANCE.runSpecialTask (CompileWorker.this, Source.Priority.MAX);
+                                    SourceAccessor.getINSTANCE().runSpecialTask (CompileWorker.this, Source.Priority.MAX);
                                     continuation = true;
                                     return null;
                                 }
                                 while (isDirty()) {
+                                    if (closed.get()) {
+                                        return null;
+                                    }
                                     assert CompileWorker.this.state.isEmpty();                                    
                                     final List<ClassPath.Entry> entries = new LinkedList<ClassPath.Entry>();
                                     entries.addAll (cp.entries());
@@ -765,6 +817,9 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                                     }
                                     final Map<URL,List<URL>> depGraph = new HashMap<URL,List<URL>> ();
                                     for (ClassPath.Entry entry : entries) {
+                                        if (closed.get()) {
+                                            return null;
+                                        }
                                         final URL rootURL = entry.getURL();
                                         findDependencies (rootURL, new Stack<URL>(), depGraph, newBinaries, true);
                                     }
@@ -773,41 +828,53 @@ public class RepositoryUpdater implements PropertyChangeListener, FileChangeList
                                         deps.putAll(depGraph);
                                     } catch (final TopologicalSortException tse) {
                                         final IllegalStateException ise = new IllegalStateException ();
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker *** IllegalStateException ", ise);
+}
                                         throw (IllegalStateException) ise.initCause(tse);
                                     }
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE_BATCH - tryihng scanRoots again - state=" + state + ",newBinaries=" + newBinaries + ", oldBinaries=" + oldBinaries);
+}
                                     if (!scanRoots ()) {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE_BATCH - scanRoots failed AGAIN!");
+}
                                         CompileWorker.this.work = new Work (WorkType.COMPILE_CONT,null);
-                                        SourceAccessor.INSTANCE.runSpecialTask (CompileWorker.this, Source.Priority.MAX);
+                                        SourceAccessor.getINSTANCE().runSpecialTask (CompileWorker.this, Source.Priority.MAX);
                                         continuation = true;
                                         return null;
                                     }
                                 }
                                 completed = true;
                             } finally {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE_BATCH - finally: completed=" + completed + ", continuation=" + continuation);
+}
                                 if (!completed && !continuation) {
                                     resetDirty ();
                                 }
                             }                            
-                            final ClassIndexManager cim = ClassIndexManager.getDefault();
+//                            final ClassIndexManager cim = ClassIndexManager.getDefault();
                             scannedRoots.removeAll(oldRoots);
                             deps.keySet().remove(oldRoots);
-if (CLOSE_INDICES) {    // HACK - see #120231                        
-                            for (URL oldRoot : oldRoots) {
-                                cim.removeRoot(oldRoot);
-//                                JavaFileFilterImplementation filter = filters.remove(oldRoot);
-//                                if (filter != null && !filters.values().contains(filter)) {
-//                                    filter.removeChangeListener(filterListener);
-//                                }
-                            }
-}
+//if (CLOSE_INDICES) {    // HACK - see #120231                        
+//                            for (URL oldRoot : oldRoots) {
+//                                cim.removeRoot(oldRoot);
+////                                JavaFileFilterImplementation filter = filters.remove(oldRoot);
+////                                if (filter != null && !filters.values().contains(filter)) {
+////                                    filter.removeChangeListener(filterListener);
+////                                }
+//                            }
+//}
                             scannedBinaries.removeAll (oldBinaries);
 //                            final CachingArchiveProvider cap = CachingArchiveProvider.getDefault();
-if (CLOSE_INDICES) {                            
-                            for (URL oldRoot : oldBinaries) {
-                                cim.removeRoot(oldRoot);
-//                                cap.removeArchive(oldRoot);
-                            }
-}
+//if (CLOSE_INDICES) {                            
+//                            for (URL oldRoot : oldBinaries) {
+//                                cim.removeRoot(oldRoot);
+////                                cap.removeArchive(oldRoot);
+//                            }
+//}
                             break;
                         case COMPILE:
                         {
@@ -815,16 +882,34 @@ if (CLOSE_INDICES) {
                                 final SingleRootWork sw = (SingleRootWork) work;
                                 final URL file = sw.getFile();
                                 final URL root = sw.getRoot ();
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE; file=" + file +", root=" + root);
+}
                                 if (sw.isFolder()) {
                                     handle = ProgressHandleFactory.createHandle(NbBundle.getMessage(RepositoryUpdater.class,"MSG_Updating"));
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE - created handle - " + handle);
+}
                                     handle.start();
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE - started handle - " + handle);
+}
                                     try {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE - updating file " + file + ", root=" + root);
+}
                                         updateFolder (file, root, false, handle);
                                     } finally {
                                         handle.finish();
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE - finished handle - " + handle);
+}
                                     }
                                 }
                                 else {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE - updating file");
+}
                                     updateFile (file,root);
                                 }
                             //} catch (Abort abort) {
@@ -835,6 +920,9 @@ if (CLOSE_INDICES) {
                         }
                         case DELETE:
                         {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.DELETE");
+}
                             final SingleRootWork sw = (SingleRootWork) work;
                             final URL file = sw.getFile();
                             final URL root = sw.getRoot ();
@@ -843,6 +931,9 @@ if (CLOSE_INDICES) {
                         }
                         case UPDATE_BINARY:
                         {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.BINARY");
+}
                             SingleRootWork sw = (SingleRootWork) work;
                             final URL file = sw.getFile();
                             final URL root = sw.getRoot();
@@ -852,21 +943,63 @@ if (CLOSE_INDICES) {
                     }                                                
                     return null;                    
                 } finally {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.finally: continuation=" + continuation);
+}
                     if (!continuation) {
                         synchronized (RepositoryUpdater.this) {
                             RepositoryUpdater.this.noSubmited--;
                             if (RepositoryUpdater.this.noSubmited == 0) {
                                 RepositoryUpdater.this.notifyAll();
+                                
+                                if (PREINDEXING) {
+                                    if (haveIndexed) {
+                                        LifecycleManager.getDefault().saveAll();
+                                        LifecycleManager.getDefault().exit();
+                                    }
+                                }
                             }
                         }
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.finally.after submission noSubmitted=" + RepositoryUpdater.this.noSubmited);
+}
                         work.finished ();
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.finally.finished -- handle=" + handle);
+}
                         if (handle != null) {
                             handle.finish ();
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.run.COMPILE_BATCH - finished handle " + handle);
+}
                         }
                     }
                 }
             }});
         }
+        
+        private Map<FileObject, WeakReference<ClassPath>> sourceClassPathsCache =
+                new WeakHashMap<FileObject, WeakReference<ClassPath>>();
+
+        private ClassPath getBootClassPaths(FileObject file, String type/*, FileObject systemRoot*/) {
+            // Default provider - do this for things like Ruby library files
+            synchronized (this) {
+                ClassPath cp = null;
+                if (!file.isFolder()) {
+                    //file = systemRoot;
+                    assert false : file;
+                }
+                if (file.isFolder()) {
+                    Reference ref = (Reference) this.sourceClassPathsCache.get (file);
+                    if (ref == null || (cp = (ClassPath)ref.get()) == null ) {
+                        cp = ClassPathSupport.createClassPath(new FileObject[] {file});
+                        this.sourceClassPathsCache.put(file, new WeakReference<ClassPath>(cp));
+                    }
+                }
+                return cp;                                        
+            }
+        }
+        
         
         private void findDependencies (final URL rootURL, final Stack<URL> cycleDetector, final Map<URL,List<URL>> depGraph,
             final Set<URL> binaries, final boolean useInitialState) {           
@@ -882,7 +1015,6 @@ if (CLOSE_INDICES) {
                 return;
             }
             
-            // BEGIN TOR MODIFICATIONS
             // I don't want to start asking for the ClassPath of directories in the libraries
             // since these start yielding Java jars etc.
             if (true) {
@@ -896,12 +1028,15 @@ if (CLOSE_INDICES) {
                 //}
                 return;
             }
-            // END TOR MODIFICATIONS
             
             cycleDetector.push (rootURL);
             final ClassPath bootPath = ClassPath.getClassPath(rootFo, ClassPath.BOOT);
             final ClassPath compilePath = ClassPath.getClassPath(rootFo, ClassPath.COMPILE);
             final ClassPath[] pathsToResolve = new ClassPath[] {bootPath,compilePath};
+//            ClassPath libraryPath = LanguageRegistry.getInstance().getLibraryPaths();
+//            final ClassPath[] pathsToResolve =  libraryPath != null ?
+//                new ClassPath[] {bootPath, compilePath, libraryPath} :
+//                new ClassPath[] {bootPath,compilePath};
             final List<URL> deps = new LinkedList<URL> ();
             for (int i=0; i< pathsToResolve.length; i++) {
                 final ClassPath pathToResolve = pathsToResolve[i];
@@ -941,24 +1076,36 @@ if (CLOSE_INDICES) {
                 if (this.canceled.getAndSet(false)) {                    
                     return false;
                 }
+                if (closed.get()) {
+                    return true;
+                }
                 final URL rootURL = it.next();
                 try {
                     it.remove();
-                    final ClassIndexImpl ci = ClassIndexManager.getDefault().createUsagesQuery(rootURL,false);                                        
-                    RepositoryUpdater.this.scannedBinaries.add (rootURL);                    
-                    long startT = System.currentTimeMillis();
-                    ci.getBinaryAnalyser().analyse(rootURL, handle);
-                    long endT = System.currentTimeMillis();
-                    if (PERF_TEST) {
-                        try {
-                            Class c = Class.forName("org.netbeans.performance.test.utilities.LoggingScanClasspath",true,Thread.currentThread().getContextClassLoader()); // NOI18N
-                            java.lang.reflect.Method m = c.getMethod("reportScanOfFile", new Class[] {String.class, Long.class}); // NOI18N
-                            m.invoke(c.newInstance(), new Object[] {rootURL.toExternalForm(), new Long(endT - startT)});
-                        } catch (Exception e) {
-                                Exceptions.printStackTrace(e);
-                        }                            
+                    String urlString = rootURL.toExternalForm();
+                    for (IndexerEntry entry : getIndexers()) {
+                        Language language = entry.getLanguage();
+                        if (entry.indexer.acceptQueryPath(urlString)) {
+                            final ClassIndexImpl ci = ClassIndexManager.get(language).createUsagesQuery(rootURL,false);                                        
+                        }
                     }
+                    RepositoryUpdater.this.scannedBinaries.add (rootURL);                    
+//                    long startT = System.currentTimeMillis();
+//                    ci.getBinaryAnalyser().analyse(rootURL, handle);
+//                    long endT = System.currentTimeMillis();
+//                    if (PERF_TEST) {
+//                        try {
+//                            Class c = Class.forName("org.netbeans.performance.test.utilities.LoggingScanClasspath",true,Thread.currentThread().getContextClassLoader()); // NOI18N
+//                            java.lang.reflect.Method m = c.getMethod("reportScanOfFile", new Class[] {String.class, Long.class}); // NOI18N
+//                            m.invoke(c.newInstance(), new Object[] {rootURL.toExternalForm(), new Long(endT - startT)});
+//                        } catch (Exception e) {
+//                                Exceptions.printStackTrace(e);
+//                        }                            
+//                    }
                 } catch (Throwable e) {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker *** caught exception " , e);
+}
                     if (e instanceof ThreadDeath) {
                         throw (ThreadDeath) e;
                     }
@@ -971,6 +1118,9 @@ if (CLOSE_INDICES) {
             for (java.util.ListIterator<URL> it = this.state.listIterator(this.state.size()); it.hasPrevious(); ) {
                 if (this.canceled.getAndSet(false)) {                    
                     return false;
+                }
+                if (closed.get()) {
+                    return true;
                 }
                 try {
                     final URL rootURL = it.previous();
@@ -990,10 +1140,18 @@ if (CLOSE_INDICES) {
                         }
                         if (PREINDEXING) {
                             // How do I obtain the data folder for this puppy?
-                            Index.preindex(rootURL);
+                            for (Language language : LanguageRegistry.getInstance()) {
+                                if (language.getIndexer() != null) {
+                                    Index.preindex(language, rootURL);
+                                }
+                            }
+                            haveIndexed = true;
                         }
                     }
                 } catch (Throwable e) {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker *** caught exception 3 " , e);
+}
                     if (e instanceof ThreadDeath) {
                         throw (ThreadDeath) e;
                     }
@@ -1003,6 +1161,16 @@ if (CLOSE_INDICES) {
                 }
             }
             return true;
+        }
+
+        private boolean isBoot(ClassPath bootPath, FileObject rootFo) {
+            for (FileObject fo : bootPath.getRoots()) {
+                if (fo == rootFo) {
+                    return true;
+                }
+            }
+
+            return false;
         }
         
         private void updateFolder(final URL folder, final URL root, boolean clean, final ProgressHandle handle) throws IOException {
@@ -1014,15 +1182,26 @@ if (CLOSE_INDICES) {
                 LOGGER.warning("Source root has to be a folder: " +  FileUtil.getFileDisplayName(rootFo)); // NOI18N
                 return;
             }            
-            final ClassPath sourcePath = ClassPath.getClassPath(rootFo,ClassPath.SOURCE);
-            final ClassPath bootPath = ClassPath.getClassPath(rootFo, ClassPath.BOOT);
-            final ClassPath compilePath = ClassPath.getClassPath(rootFo, ClassPath.COMPILE);            
+            ClassPath sourcePath = ClassPath.getClassPath(rootFo,ClassPath.SOURCE);
+            ClassPath bootPath = ClassPath.getClassPath(rootFo, ClassPath.BOOT);
+            ClassPath compilePath = ClassPath.getClassPath(rootFo, ClassPath.COMPILE);            
             final boolean isInitialCompilation = folder.equals(root);            
             if (sourcePath == null || bootPath == null || compilePath == null) {
-                LOGGER.warning("Ignoring root with no ClassPath: " + FileUtil.getFileDisplayName(rootFo));    // NOI18N
-                return;
+                //LOGGER.warning("Ignoring root with no ClassPath: " + FileUtil.getFileDisplayName(rootFo));    // NOI18N
+                //return;
+                ClassPath cp = getBootClassPaths(rootFo, ClassPath.SOURCE);
+                if (sourcePath == null) {
+                    sourcePath = cp;
+                }
+                if (bootPath == null) {
+                    bootPath = cp;
+                }
+                if (compilePath == null) {
+                    compilePath = cp;
+                }
             }            
-            boolean isBoot = isInitialCompilation && ClassIndexManager.getDefault().isBootRoot(root);
+            //boolean isBoot = isInitialCompilation && ClassIndexManager.isBootRoot(root);
+            boolean isBoot = isInitialCompilation && isBoot(bootPath, rootFo);
             if (!isBoot) {
                 String urlString = root.toExternalForm();
                 if (urlString.indexOf("/vendor/") != -1) {
@@ -1051,10 +1230,7 @@ if (CLOSE_INDICES) {
                     }
                 }
                 final File folderFile = isInitialCompilation ? rootFile : FileUtil.normalizeFile(new File (URI.create(folder.toExternalForm())));
-                if (handle != null) {
-                    final String message = NbBundle.getMessage(RepositoryUpdater.class,"MSG_Scannig",rootFile.getAbsolutePath());
-                    handle.setDisplayName(message);
-                }
+                
 //                //Preprocessor support
                 Object filter = null;
 //                JavaFileFilterImplementation filter = filters.get(root);
@@ -1068,15 +1244,9 @@ if (CLOSE_INDICES) {
 //                    }
 //                }
                 List<ParserFile> toCompile = new LinkedList<ParserFile>();
-                // TODO - remove these
-                final File classCache = Index.getClassFolder(rootFile);
-                final Map <String,List<File>> resources = getAllClassFiles(classCache, FileObjects.getRelativePath(rootFile,folderFile),true);
+                final Map <String,List<File>> resources = Collections.emptyMap();
                 final LazyFileList children = new LazyFileList(folderFile);
-                ClassIndexImpl uqImpl = ClassIndexManager.getDefault().createUsagesQuery(root, true);
-                assert uqImpl != null;
-                SourceAnalyser sa = uqImpl.getSourceAnalyser();
-                assert sa != null;
-
+                
                 // If this is a boot class path, don't update it
                 boolean isRootFolder = isBoot;
                 // Known Rails user-project exceptions (not recorded as boot roots since 
@@ -1085,14 +1255,66 @@ if (CLOSE_INDICES) {
                     // lib? Won't that mess up my user projects?
                     isRootFolder = true;
                 }
+
+                boolean checkUpToDate = false;
                 if (isRootFolder) {
                     if (folderFile.exists() && folderFile.canRead()) {
-                         if (sa.isUpToDate(null,folderFile.lastModified())) {
-                             return;
-                         }
+                        checkUpToDate = true;
                     }
-                }                boolean invalidIndex = isInitialCompilation && !sa.isValid();
-                Set<File> rs = new HashSet<File> ();
+                }
+                boolean allUpToDate = checkUpToDate;
+
+                Map<Language,Map<String,String>> timeStamps = new HashMap<Language,Map<String,String>>();
+
+                boolean invalidIndex = false;
+                String rootString = root.toExternalForm();
+                for (IndexerEntry entry : getIndexers()) {
+                    Language language = entry.getLanguage();
+                    if (!entry.indexer.acceptQueryPath(rootString)) {
+                        continue;
+                    }
+
+                    ClassIndexImpl uqImpl = ClassIndexManager.get(language).createUsagesQuery(root, true);
+                    assert uqImpl != null;
+                    SourceAnalyser sa = uqImpl.getSourceAnalyser();
+                    assert sa != null;
+                    if (checkUpToDate && !sa.isUpToDate(null, folderFile.lastModified())) {
+                        allUpToDate = false;
+                    } else if (isInitialCompilation) {
+                        if (!sa.isValid()) {
+                            invalidIndex = true;
+                            allUpToDate = false;
+                        } else { //if (!isBoot) {
+                            final ClassIndexImpl ci = ClassIndexManager.get(language).getUsagesQuery(root);   
+                            if (ci != null) {
+                                // I should only do this if allUpToDate is false!
+                                Map<String,String> ts = ci.getTimeStamps();
+                                if (ts != null && ts.size() > 0) {
+                                    timeStamps.put(language, ts);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (allUpToDate) {
+                    return;
+                }
+                
+                if (handle != null) {
+                    final String message = NbBundle.getMessage(RepositoryUpdater.class,"MSG_Scannig",rootFile.getAbsolutePath());
+                    handle.setDisplayName(message);
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.updateFolder - updating handle " + handle + " to " + message + " + folderFile");
+}
+                }
+
+                if (timeStamps.size() == 0) {
+                    timeStamps = null;
+                }
+                
+                
+//                Set<File> rs = new HashSet<File> ();
                 ClassPath.Entry entry = null;
                 final ClasspathInfo cpInfo;
                 if (!this.ignoreExcludes.contains(root)) {
@@ -1101,7 +1323,7 @@ if (CLOSE_INDICES) {
                 }
                 else {
                     cpInfo = ClasspathInfoAccessor.INSTANCE.create(bootPath,compilePath,sourcePath, filter, true,true);
-                }                
+                }
                 
 //                Set<ElementHandle<TypeElement>> removed = isInitialCompilation ? null : new HashSet<ElementHandle<TypeElement>> ();
 //                Set<ElementHandle<TypeElement>> added =   isInitialCompilation ? null : new HashSet<ElementHandle<TypeElement>> ();
@@ -1131,8 +1353,8 @@ Set added = null;
 //                                            rsf = false;
 //                                        }
 //                                        else {
-                                            String className = FileObjects.getBinaryName(toDelete,classCache);
-                                            sa.delete(className);
+//                                            String className = FileObjects.getBinaryName(toDelete,classCache);
+//                                            sa.delete(toDelete);
 //                                            if (removed != null) {
 //                                                removed.add(ElementHandleAccessor.INSTANCE.create(ElementKind.OTHER, className));
 //                                            }
@@ -1149,36 +1371,50 @@ Set added = null;
                 }
                 for (List<File> files : resources.values()) {
                     for (File toDelete : files) {
-                        if (!rs.contains(toDelete)) {
+  //                      if (!rs.contains(toDelete)) {
                             toDelete.delete();
                             if (toDelete.getName().endsWith(FileObjects.SIG)) {
-                                String className = FileObjects.getBinaryName(toDelete,classCache);                        
-                                sa.delete(className);
+                                //String className = FileObjects.getBinaryName(toDelete,classCache);                        
+                                //sa.delete(className);
+//                                sa.delete(toDelete);
 //                                if (removed != null) {
 //                                    removed.add(ElementHandleAccessor.INSTANCE.create(ElementKind.OTHER, className));
 //                                }
                             }
-                        }
+//                        }
                     }
                 }
                 if (!toCompile.isEmpty()) {
                     if (handle != null) {
-                        // BEGIN TOR MODIFICATIONS
                         // Show message for "indexing" rather than compiling since I'm not keeping trees around etc - it's
                         // all used to populate Lucene at this point.
                         //final String message = NbBundle.getMessage(RepositoryUpdater.class,"MSG_BackgroundCompile",rootFile.getAbsolutePath());
                         String path = rootFile.getAbsolutePath();
                         // Shorten path by prefix to ruby location if possible
-                        int rubyIndex = path.indexOf("jruby-1.1RC1");
-                        if (rubyIndex != -1) {
-                            path = path.substring(rubyIndex);
-                        }
                         final String message = NbBundle.getMessage(RepositoryUpdater.class,"MSG_Analyzing",path);
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker.updateFolder2 - updating handle " + handle + " to " + message);
+}
                         handle.setDisplayName(message);
                     }
-                    batchCompile(toCompile, rootFo, cpInfo, sa, dirtyCrossFiles, added, handle);
+
+                    CachingIndexer cachingIndexer = CachingIndexer.get(root, toCompile.size());
+                    
+                    Map<Language,List<File>> seenTimestampedFiles = new HashMap<Language, List<File>>();
+
+                    batchCompile(toCompile, rootFo, cpInfo, cachingIndexer, root, dirtyCrossFiles, added, timeStamps, seenTimestampedFiles);
+
+                    if (timeStamps != null) {
+                        deleteRemovedFiles(cachingIndexer, timeStamps, seenTimestampedFiles);
+                    }
+
+                    if (cachingIndexer != null) {
+                        cachingIndexer.flush();
+                    }
                 }
-                sa.store();
+// store is a noop anyway                
+//                sa.store();
+                
 //                if (added != null) {
 //                    assert removed != null;
 //                    Set<ElementHandle<TypeElement>> _at = new HashSet<ElementHandle<TypeElement>> (added);      //Added
@@ -1196,6 +1432,68 @@ Set added = null;
                 }
             }
         }
+
+        /** Delete any files from the index that we no longer see on disk. */
+        private void deleteRemovedFiles(CachingIndexer cachingIndexer, Map<Language, Map<String, String>> timeStamps, Map<Language, List<File>> seenTimestampedFiles) {
+            for (Language language : timeStamps.keySet()) {
+                List<File> seen = seenTimestampedFiles.get(language);
+                int seenCount = seen != null ? seen.size() : 0;
+                Map<String,String> stamps = timeStamps.get(language);
+                int indexedCount = stamps != null ? stamps.keySet().size() : 0;
+                if (seenCount != indexedCount) {
+                    // We only count files that we've timestamped, thus we can
+                    // never get a greater seen count than the number of files in
+                    // the index.
+                    assert seenCount < indexedCount;
+
+                    // Now we have to figure out which files were deleted. Those
+                    // are the files we have in the index that weren't encountered
+                    // on disk.
+
+                    // First translate the files into URLs such that we can do proper
+                    // comparisons
+                    //List<String> seenUrls = new ArrayList<String>(seenCount);
+                    Set<String> seenUrls = new HashSet<String>(2*seenCount);
+                    if (seen != null) {
+                        assert stamps != null;
+                        for (File f : seen) {
+                            Indexer indexer = language.getIndexer();
+                            assert indexer != null;
+                            String url = indexer.getPersistentUrl(f);
+                            seenUrls.add(url);
+                        }
+
+                    }
+
+                    Set<String> removed = new HashSet<String>(stamps.keySet());
+                    removed.removeAll(seenUrls);
+
+                    for (String url : removed) {
+                        try {
+                            cachingIndexer.remove(language, url);
+                        } catch (IOException ex) {
+                            Exceptions.printStackTrace(ex);
+                        }
+                    }
+                }
+            }
+        }
+        
+        private List<Language> getApplicableIndexers(String mimeType) {
+            List<Language> languages = null;
+            for (Language language : LanguageRegistry.getInstance().getApplicableLanguages(mimeType)) {
+                if (language.getIndexer() == null) {
+                    continue;
+                }
+                
+                if (languages == null) {
+                    languages = new ArrayList<Language>(5);
+                }
+                languages.add(language);
+            }
+            
+            return languages != null ? languages : Collections.<Language>emptyList();
+        }
         
         private void updateFile (final URL file, final URL root) throws IOException {
             final FileObject fo = URLMapper.findFileObject(file);
@@ -1203,19 +1501,28 @@ Set added = null;
                 return;
             }
 
-            Language language = LanguageRegistry.getInstance().getLanguageByMimeType(fo.getMIMEType());
-            if (language == null) {
-                return;
+        List<Language> languages = getApplicableIndexers(fo.getMIMEType());
+        if (languages.size() > 0) {
+            final File rootFile = FileUtil.normalizeFile(new File (URI.create(root.toExternalForm())));
+            final File fileFile = FileUtil.toFile(fo);
+            ParserFile active = FileObjects.fileFileObject(fileFile, rootFile, false, null/*filter*/);
+            ParserFile[] activeList = new ParserFile[]{active};
+            ClasspathInfo cpInfo = ClasspathInfoAccessor.INSTANCE.create (fo, null/*filter*/, true, false);
+            ClassPath.Entry entry = getClassPathEntry (cpInfo.getClassPath(ClasspathInfo.PathKind.SOURCE),root);
+            boolean scan = (entry == null || entry.includes(fo));
+            String sourceLevel = scan ? SourceLevelQuery.getSourceLevel(fo) : null;
+            String rootString = root.toExternalForm();
+            assert "file".equals(root.getProtocol()) : "Unexpected protocol of URL: " + root;   //NOI18N
+        for (Language language : languages) {
+            if (language.getIndexer() != null && !language.getIndexer().acceptQueryPath(rootString)) {
+                // TODO - shouldn't I also skip this for-iteration if indexer is null?
+                continue;
             }
             
-            assert "file".equals(root.getProtocol()) : "Unexpected protocol of URL: " + root;   //NOI18N
-            final ClassIndexImpl uqImpl = ClassIndexManager.getDefault().createUsagesQuery(root, true);
+            final ClassIndexImpl uqImpl = ClassIndexManager.get(language).createUsagesQuery(root, true);
             if (uqImpl != null) {
                 uqImpl.setDirty(null);
 //                final JavaFileFilterImplementation filter = JavaFileFilterQuery.getFilter(fo);
-                ClasspathInfo cpInfo = ClasspathInfoAccessor.INSTANCE.create (fo, null/*filter*/, true, false);
-                final File rootFile = FileUtil.normalizeFile(new File (URI.create(root.toExternalForm())));
-                final File fileFile = FileUtil.toFile(fo);
                 //final File classCache = Index.getClassFolder (rootFile);
                 //final Map <String,List<File>> resources = getAllClassFiles (classCache, FileObjects.getRelativePath(rootFile, fileFile.getParentFile()),false);
 //                String offset = FileObjects.getRelativePath (rootFile,fileFile);
@@ -1242,30 +1549,25 @@ Set added = null;
 //                else {
 //                    sa.delete(FileObjects.convertFolder2Package(offset, '/'));  //NOI18N
 //                }
-                ClassPath.Entry entry = getClassPathEntry (cpInfo.getClassPath(ClasspathInfo.PathKind.SOURCE),root);
-                if (entry == null || entry.includes(fo)) {
-                    String sourceLevel = SourceLevelQuery.getSourceLevel(fo);
+                if (scan) {
                     final CompilerListener listener = new CompilerListener ();
                     //final JavaFileManager fm = ClasspathInfoAccessor.INSTANCE.getFileManager(cpInfo);                
                     //JavaFileObject active = FileObjects.fileFileObject(fileFile, rootFile, filter);
-                    ParserFile active = FileObjects.fileFileObject(fileFile, rootFile, false, null/*filter*/);
-                    //JavacTaskImpl jt = JavaSourceAccessor.INSTANCE.createJavacTask(cpInfo, listener, sourceLevel);
-                    ParserTaskImpl jt = SourceAccessor.INSTANCE.createParserTask(language, cpInfo, sourceLevel);
+                    //JavacTaskImpl jt = JavaSourceAccessor.getINSTANCE().createJavacTask(cpInfo, listener, sourceLevel);
+                    ParserTaskImpl jt = SourceAccessor.getINSTANCE().createParserTask(language, cpInfo, sourceLevel);
                     //jt.setTaskListener(listener);
                     jt.setParseListener(listener);
                     //Iterable<? extends CompilationUnitTree> trees = jt.parse(new JavaFileObject[] {active});
-                    Iterable<ParserResult> trees = jt.parse(new ParserFile[] { active });
+                    Iterable<ParserResult> trees = jt.parse(activeList);
                     //jt.enter();            
                     //jt.analyze ();
                     //dumpClasses(listener.getEnteredTypes(), fm, root.toExternalForm(), null, ...
                     //sa.analyse (trees, jt, fm, active, added);
-                    sa.analyse (trees, jt, /*fm,*/ active);
-
-                    GsfTaskProvider.refresh(fo);
+                    sa.analyse (language, trees);
                     
                     listener.cleanDiagnostics();                    
                 }
-                sa.store();
+//                sa.store();
 //                Set<ElementHandle<TypeElement>> _at = new HashSet<ElementHandle<TypeElement>> (added);      //Added
 //                Set<ElementHandle<TypeElement>> _rt = new HashSet<ElementHandle<TypeElement>> (removed);    //Removed
 //                _at.removeAll(removed);
@@ -1275,6 +1577,10 @@ Set added = null;
 //                        _rt.isEmpty() ? null : new ClassIndexImplEvent(uqImpl,_rt), 
 //                        added.isEmpty() ? null : new ClassIndexImplEvent(uqImpl,added));                
             }
+          }
+          
+          GsfTaskProvider.refresh(fo);
+        }
         }
         
         private void delete (final URL file, final URL root, final boolean folder) throws IOException {
@@ -1284,68 +1590,91 @@ Set added = null;
             final File fileFile = FileUtil.normalizeFile(new File (URI.create(file.toExternalForm())));
             final String offset = FileObjects.getRelativePath (rootFile,fileFile);
             assert offset != null && offset.length() > 0 : String.format("File %s not under root %s ", fileFile.getAbsolutePath(), rootFile.getAbsolutePath());  // NOI18N                        
-            final File classCache = Index.getClassFolder (rootFile);
-            File[] affectedFiles = null;
-            if (folder) {
-                final File container = new File (classCache, offset);
-                affectedFiles = container.listFiles();
+
+            boolean platform = false;
+            ParserFile parserFile = FileObjects.fileFileObject(fileFile, rootFile, platform, null);
+            
+        for (Language language : LanguageRegistry.getInstance()) {
+            // I have to iterate over all indexer languages here - I can't call
+            // getApplicableIndexers() since I don't have the mime type for 
+            // deleted files (and asking for it just returns content/unknown)
+            if (language.getIndexer() == null) {
+                continue;
             }
-            else {
-                int slashIndex = offset.lastIndexOf (File.separatorChar);
-                int dotIndex = offset.lastIndexOf('.');     //NOI18N
-                final File container = slashIndex == -1 ? classCache : new File (classCache,offset.substring(0,slashIndex));
-                final String name = offset.substring(slashIndex+1, dotIndex);
-                final String[] patterns = new String[] {
-                  name + '.',
-                  name + '$'
-                };
-                final File[] content  = container.listFiles();
-                if (content != null) {
-                    final List<File> result = new ArrayList<File>(content.length);
-                    for (File f : content) {
-                        final String fname = f.getName();
-                        if (fname.startsWith(patterns[0]) || fname.startsWith(patterns[1])) {
-                            result.add(f);
-                        }
-                    }
-                    affectedFiles = result.toArray(new File[result.size()]);
-                }
+            if (!language.getIndexer().acceptQueryPath(root.toExternalForm())) {
+                continue;
             }
-            if (affectedFiles != null && affectedFiles.length > 0) {
-//                Set<ElementHandle<TypeElement>> removed = new HashSet<ElementHandle<TypeElement>>();
-                final ClassIndexImpl uqImpl = ClassIndexManager.getDefault().createUsagesQuery(root, true);
-                assert uqImpl != null;                
-                final SourceAnalyser sa = uqImpl.getSourceAnalyser();
-                assert sa != null;
-                for (File f : affectedFiles) {
-                    if (f.getName().endsWith(FileObjects.RS)) {
-//                        List<File> rsFiles = new LinkedList<File>();
-//                        readRSFile(f, classCache, rsFiles);
-//                        for (File rsf : rsFiles) {
-//                            String className = FileObjects.getBinaryName (rsf,classCache);                                                                        
-//                            sa.delete (className);
-//                            removed.add(ElementHandleAccessor.INSTANCE.create(ElementKind.OTHER, className));
-//                            rsf.delete();
+            final ClassIndexImpl uqImpl = ClassIndexManager.get(language).createUsagesQuery(root, true);
+            assert uqImpl != null;                
+            final SourceAnalyser sa = uqImpl.getSourceAnalyser();
+            assert sa != null;
+            sa.delete(parserFile, language);
+        }
+//            
+//            
+//            final File classCache = Index.getClassFolder (rootFile);
+//            File[] affectedFiles = null;
+//            if (folder) {
+//                final File container = new File (classCache, offset);
+//                affectedFiles = container.listFiles();
+//            }
+//            else {
+//                int slashIndex = offset.lastIndexOf (File.separatorChar);
+//                int dotIndex = offset.lastIndexOf('.');     //NOI18N
+//                final File container = slashIndex == -1 ? classCache : new File (classCache,offset.substring(0,slashIndex));
+//                final String name = offset.substring(slashIndex+1, dotIndex);
+//                final String[] patterns = new String[] {
+//                  name + '.',
+//                  name + '$'
+//                };
+//                final File[] content  = container.listFiles();
+//                if (content != null) {
+//                    final List<File> result = new ArrayList<File>(content.length);
+//                    for (File f : content) {
+//                        final String fname = f.getName();
+//                        if (fname.startsWith(patterns[0]) || fname.startsWith(patterns[1])) {
+//                            result.add(f);
 //                        }
-                    }
-                    else {
-                        String className = FileObjects.getBinaryName (f,classCache);                                                                        
-                        sa.delete (className);
-//                        removed.add(ElementHandleAccessor.INSTANCE.create(ElementKind.OTHER, className));
-                    }
-                    f.delete();                    
-                }
-                sa.store();                
-//                uqImpl.typesEvent(null,new ClassIndexImplEvent(uqImpl, removed), null);
-            }
+//                    }
+//                    affectedFiles = result.toArray(new File[result.size()]);
+//                }
+//            }
+//            if (affectedFiles != null && affectedFiles.length > 0) {
+////                Set<ElementHandle<TypeElement>> removed = new HashSet<ElementHandle<TypeElement>>();
+//                final ClassIndexImpl uqImpl = ClassIndexManager.getDefault().createUsagesQuery(root, true);
+//                assert uqImpl != null;                
+//                final SourceAnalyser sa = uqImpl.getSourceAnalyser();
+//                assert sa != null;
+//                for (File f : affectedFiles) {
+////                    if (f.getName().endsWith(FileObjects.RS)) {
+////                        List<File> rsFiles = new LinkedList<File>();
+////                        readRSFile(f, classCache, rsFiles);
+////                        for (File rsf : rsFiles) {
+////                            String className = FileObjects.getBinaryName (rsf,classCache);                                                                        
+////                            sa.delete (className);
+////                            removed.add(ElementHandleAccessor.INSTANCE.create(ElementKind.OTHER, className));
+////                            rsf.delete();
+////                        }
+////                    }
+////                    else {
+////                        String className = FileObjects.getBinaryName (f,classCache);                                                                        
+////                        sa.delete (className);
+//                    sa.delete(f);
+////                        removed.add(ElementHandleAccessor.INSTANCE.create(ElementKind.OTHER, className));
+////                    }
+//                    f.delete();                    
+//                }
+//                sa.store();                
+////                uqImpl.typesEvent(null,new ClassIndexImplEvent(uqImpl, removed), null);
+//            }
         }
         
         private void updateBinary (final URL file, final URL root) throws IOException {            
-//            CachingArchiveProvider.getDefault().clearArchive(root);                       
-            File cacheFolder = Index.getClassFolder(root);
-            FileObjects.deleteRecursively(cacheFolder);
-            final BinaryAnalyser ba = ClassIndexManager.getDefault().createUsagesQuery(root, false).getBinaryAnalyser();
-            ba.analyse(root, handle);
+////            CachingArchiveProvider.getDefault().clearArchive(root);                       
+//            File cacheFolder = Index.getClassFolder(root);
+//            FileObjects.deleteRecursively(cacheFolder);
+//            final BinaryAnalyser ba = ClassIndexManager.getDefault().createUsagesQuery(root, false).getBinaryAnalyser();
+//            ba.analyse(root, handle);
         }                
     }        
     
@@ -1405,7 +1734,10 @@ Set added = null;
 //                } else {
                     // Normal path
                     
-                    this.toDo.addAll (java.util.Arrays.asList(root.listFiles()));
+                    File[] files = root.listFiles();
+                    if (files != null && files.length > 0) {
+                        this.toDo.addAll(java.util.Arrays.asList(files));
+                    }
 //                }
             }
 
@@ -1415,6 +1747,7 @@ Set added = null;
                     final String name = f.getName();
                     if (f.isDirectory() && !ignoredDirectories.contains(name)/* && Utilities.isJavaIdentifier(name)*/) {
                         File[] content = f.listFiles();
+                        if (content != null) {
                             for (int i=0,j=0;i<content.length;i++) {
                                 f = content[i];
                                 if (f.isFile()) {
@@ -1424,6 +1757,7 @@ Set added = null;
                                     this.toDo.add(f);
                                 }
                             }
+                        }
                     }                    
                     else { // XXX How do I decide if it's a reasonable name?
 //                        System.out.println("Should we scan " + name + "?");
@@ -1440,6 +1774,9 @@ Set added = null;
             }
 
             public void remove() {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker throwing exception 1 ");
+}
                 throw new UnsupportedOperationException ();
             }
 
@@ -1599,35 +1936,38 @@ Set added = null;
         }
     }
     
-    public static void batchCompile (final List<ParserFile> toCompile, final FileObject rootFo, final ClasspathInfo cpInfo, final SourceAnalyser sa,
-        final Set<URI> dirtyFiles, final Set/*<? super ElementHandle<TypeElement>>*/ added, ProgressHandle handle) throws IOException {
+    public static void batchCompile (final List<ParserFile> toCompile, final FileObject rootFo, 
+             ClasspathInfo cpInfo, CachingIndexer cachingIndexer, URL root,
+        final Set<URI> dirtyFiles, final Set/*<? super ElementHandle<TypeElement>>*/ added,
+                        Map<Language,Map<String,String>> timeStamps, Map<Language,List<File>> seenTimestampedFiles) throws IOException {
         assert toCompile != null;
         assert rootFo != null;
         assert cpInfo != null;
         ParserFile active = null;
         //final JavaFileManager fileManager = ClasspathInfoAccessor.INSTANCE.getFileManager(cpInfo);
         final CompilerListener listener = new CompilerListener ();        
+
+        // Compute applicable indexers: Reduce the number of indexers to be queried during file interrogation
+        List<IndexerEntry> applicableIndexers = new ArrayList<IndexerEntry>(indexers.size());
+        String urlString = root.toExternalForm();
+        for (IndexerEntry entry : getIndexers()) {
+            if (!entry.indexer.acceptQueryPath(urlString)) {
+                continue;
+            }
+            applicableIndexers.add(entry);
+        }
+        
         LowMemoryNotifier.getDefault().addLowMemoryListener(listener);
         try {
-            ParserTaskImpl jt = null;
-            
             try {
                 List<ParserFile> bigFiles = new LinkedList<ParserFile>();
                 int state = 0; // TODO: Document what these states mean
                 boolean isBigFile = false;
-                final String sourceLevel = SourceLevelQuery.getSourceLevel(rootFo);
-                int fileNumber = 0;
-                int fileCount = toCompile.size();
-                if (fileCount > 0) {
-                    handle.switchToDeterminate(fileCount);
-                }       
+                //final String sourceLevel = SourceLevelQuery.getSourceLevel(rootFo);
+          allFiles:
                 while (!toCompile.isEmpty() || !bigFiles.isEmpty() || active != null) {
                     try {
                         if (listener.lowMemory.getAndSet(false)) {
-                            if (jt != null) {
-                                jt.finish();
-                            }
-                            jt = null;
                             if (state == 1) {
                                 break;
                             } else {
@@ -1645,57 +1985,79 @@ Set added = null;
                                 isBigFile = true;
                             }
                         }
-                        
-                        if (handle != null && active != null) {
-                            if (fileCount > 0 && fileNumber <= fileCount) {
-                                handle.progress(fileNumber);
-                            }
-                            fileNumber++;
-                        }
 
+                        // See 131671 for example -- this may be a file like
+                        // ".#foo.rb" which is technically a Ruby file, but a shortlived
+                        // one that we don't want to bother with. .# files tend to be
+                        // shortlived backup files.
+                        if (active.getNameExt().startsWith(".#")) { // NOI18N
+                            state  = 0;
+                            active = null;
+                            continue;
+                        }
+                        
                         // Change from what's going on in the Retouche updater:
                         // We could have many language implementations that want to index this root;
                         // we need to iterate through them and let each one of them index if they
                         // want to.
-                        List<IndexerEntry> indexers = getIndexers();
-                        assert indexers instanceof RandomAccess;
                         // We're gonna do this for every file in the filesystem - do cheaper iteration
                         // using indices rather than iterators
-                        Language language = null;
-                        for (int in = 0; in < indexers.size(); in++) {
-                            IndexerEntry entry = indexers.get(in);
+                        for (int in = 0; in < applicableIndexers.size(); in++) {
+                            IndexerEntry entry = applicableIndexers.get(in);
                             Indexer indexer = entry.getIndexer();
                             if (!indexer.isIndexable(active)) {
                                 continue;
                             }
 
-                            language = entry.getLanguage();
+                            Language language = entry.getLanguage();
+                            if (timeStamps != null) {
+                                Map<String,String> ts = timeStamps.get(language);
+                                if (ts != null) {
+                                    File file = active.getFile();
+                                    String url = indexer.getPersistentUrl(file);
+                                    String timeStampString = ts.get(url);
+                                    if (timeStampString != null) {
 
-                            // Cache parser tasks per indexer
-                            jt = entry.getParserTask();
+                                        // Keep track of timestamped files we've seen such
+                                        // that I can delete entries that have been deleted
+                                        // outside of the IDE.
+                                        List<File> list = seenTimestampedFiles.get(language);
+                                        if (list == null) {
+                                            list = new ArrayList<File>(toCompile.size());
+                                            seenTimestampedFiles.put(language, list);
+                                        }
+                                        list.add(file);
 
-                            if (jt == null) {
-                                jt = SourceAccessor.INSTANCE.createParserTask(language, cpInfo/*, listener*/, sourceLevel);
-                                jt.setParseListener(listener);
-                                entry.setParserTask(jt);
-                                LOGGER.fine("Created new ParserTask for: " + FileUtil.getFileDisplayName(rootFo));    //NOI18N
+                                        try {
+                                            long timeStamp = DateTools.stringToTime(timeStampString);
+                                            if (file.lastModified() <= timeStamp) {
+                                                continue;
+                                            }
+                                        } catch (ParseException ex) {
+                                            Exceptions.printStackTrace(ex);
+                                        }
+                                    }
+                                }
                             }
-                        }   
-                        
-                        // Not an interesting source - such as a .zip file, a .gif file etc.
-                        if (language == null) {
-                            state  = 0;
-                            active = null;
-                            listener.cleanDiagnostics();
-                            continue;
+
+                            ParserTaskImpl jt = new ParserTaskImpl(language);
+                            jt.setParseListener(listener);
+                            Iterable<ParserResult> trees = jt.parse(new ParserFile[] { active });
+                            if (trees != null) {
+                                if (cachingIndexer != null) {
+                                    cachingIndexer.index(language, active.getFile(), trees);
+                                } else {
+                                    ClassIndexImpl uqImpl = ClassIndexManager.get(language).createUsagesQuery(root, true);
+                                    assert uqImpl != null;
+                                    SourceAnalyser sa = uqImpl.getSourceAnalyser();
+                                    if (sa != null) {
+                                        sa.analyse(language, trees);
+                                    }
+                                }
+                            }
                         }
-                        
-                        Iterable<ParserResult> trees = jt.parse(new ParserFile[] { active });
                         if (listener.lowMemory.getAndSet(false)) {
-                            jt.finish();
-                            jt = null;
                             listener.cleanDiagnostics();
-                            trees = null;
                             if (state == 1) {
                                 if (isBigFile) {
                                     break;
@@ -1710,105 +2072,32 @@ Set added = null;
                             System.gc();
                             continue;
                         }
-//                        Iterable<? extends TypeElement> types = jt.enterTrees(trees);
-//                        dumpClasses (listener.getEnteredTypes(),fileManager,
-//                                rootFo.getURL().toExternalForm(), dirtyFiles,
-//                                com.sun.tools.javac.code.Types.instance(jt.getContext()),
-//                                com.sun.tools.javac.util.Name.Table.instance(jt.getContext()));
-//                        if (listener.lowMemory.getAndSet(false)) {
-//                            jt.finish();
-//                            jt = null;
-//                            listener.cleanDiagnostics();
-//                            trees = null;
-//                            types = null;
-//                            if (state == 1) {
-//                                if (isBigFile) {
-//                                    break;
-//                                } else {
-//                                    bigFiles.add(active);
-//                                    active = null;
-//                                    state = 0;
-//                                }
-//                            } else {
-//                                state = 1;
-//                            }
-//                            System.gc();
-//                            continue;
-//                        }                        
-//                        final JavaCompiler jc = JavaCompiler.instance(jt.getContext());
-//                        final JavaFileObject finalActive = active;
-//                        Filter f = new Filter() {
-//                            public void process(Env<AttrContext> env) {
-//                                try {
-//                                    jc.attribute(env);
-//                                } catch (Throwable t) {
-//                                    if (finalActive.toUri().getPath().contains("org/openide/loaders/OpenSupport.java")) {
-//                                        Exceptions.printStackTrace(t);
-//                                    }
-//                                }
-//                            }
-//                        };
-//                        f.run(jc.todo, types);
-//                        dumpClasses (listener.getEnteredTypes(), fileManager,
-//                                rootFo.getURL().toExternalForm(), dirtyFiles,
-//                                com.sun.tools.javac.code.Types.instance(jt.getContext()),
-//                                com.sun.tools.javac.util.Name.Table.instance(jt.getContext()));
-//                        if (listener.lowMemory.getAndSet(false)) {
-//                            jt.finish();
-//                            jt = null;
-//                            listener.cleanDiagnostics();
-//                            trees = null;
-//                            types = null;
-//                            if (state == 1) {
-//                                if (isBigFile) {
-//                                    break;
-//                                } else {
-//                                    bigFiles.add(active);
-//                                    active = null;
-//                                    state = 0;
-//                                }
-//                            } else {
-//                                state = 1;
-//                            }
-//                            System.gc();
-//                            continue;
-//                        }
-                        if (sa != null && trees != null) {
-                            //sa.analyse(trees,jt, ClasspathInfoAccessor.INSTANCE.getFileManager(cpInfo), active, added);
-                            sa.analyse(trees, jt,/* ClasspathInfoAccessor.INSTANCE.getFileManager(cpInfo),*/ active);
-                        }
                         if (!listener.errors.isEmpty()) {
                             //Log.instance(jt.getContext()).nerrors = 0;
                             listener.cleanDiagnostics();
                         }
                         active = null;
                         state  = 0;
-                    } catch (Exception a) {
-                        //coupling error
-                        //TODO: check if the source sig file ~ the source java file:
-                        //couplingAbort(a, active);
-                        if (jt != null) {
-                            jt.finish();
-                        }
-                        jt = null;
-                        listener.cleanDiagnostics();
-                        active = null;
-                        state = 0;
                     } catch (Throwable t) {
+if (BUG_LOGGER.isLoggable(Level.FINE)) {
+    BUG_LOGGER.log(Level.FINE, getElapsedTime() +"CompilerWorker *** caught exception 4 " , t);
+}
+                        if (PREINDEXING) {
+                            Exceptions.attachMessage(t, "Parsing " + active.getFile().getPath());
+                            Exceptions.printStackTrace(t);
+                            Toolkit.getDefaultToolkit().beep();
+                            //System.exit(-1);
+                        }                        
                         if (t instanceof ThreadDeath) {
                             throw (ThreadDeath) t;
                         }
                         else {
-                            if (jt != null) {
-                                jt.finish();
-                            }
                             String activeURI;
                             if (active != null) {
                                 activeURI = active.getNameExt();
                             } else {
                                 activeURI = "unknown";
                             }
-                            jt = null;
                             active = null;                            
                             listener.cleanDiagnostics();
                             //if (!(t instanceof Abort)) { // a javac Throwable                                
@@ -1831,12 +2120,8 @@ Set added = null;
                     LOGGER.warning("Not enough memory to compile folder: " + FileUtil.getFileDisplayName(rootFo));    // NOI18N
                 }
             } finally {
-                if (jt != null) {
-                    jt.finish();
-                }
             }
         } finally {
-            clearIndexerParserTasks();
             LowMemoryNotifier.getDefault().removeLowMemoryListener(listener);
         }
     }
@@ -1848,86 +2133,6 @@ Set added = null;
             result.add(st.nextToken());
         }
         return result;
-    }
-    
-    
-    public static Map<String,List<File>> getAllClassFiles (final File root, final String offset, boolean recursive) {
-        assert root != null;
-        Map<String,List<File>> result = new HashMap<String,List<File>> ();
-        String rootName = root.getAbsolutePath();
-        int len = rootName.length();
-        if (rootName.charAt(len-1)!=File.separatorChar) {
-            len++;
-        }
-        File folder = root;
-        if (offset.length() > 0) {
-            folder = new File (folder,offset);  //NOI18N
-            if (!folder.exists() || !folder.isDirectory()) {
-                return result;
-            }
-        }
-        getAllClassFilesImpl (folder, root,len,result, recursive);
-        return result;
-    }
-        
-    private static void getAllClassFilesImpl (final File folder, final File root, final int oi, final Map<String,List<File>> result, final boolean recursive) {
-        final File[] content = folder.listFiles();
-        if (content == null) {
-            LOGGER.info("IO error while listing folder: " + folder.getAbsolutePath() +" isDirectory: " + folder.isDirectory() +" canRead: " + folder.canRead());    //NOI18N
-            return;
-        }
-        for (File f: content) {
-            if (f.isDirectory() && recursive) {
-                getAllClassFilesImpl(f, root, oi,result, recursive);                    
-            }
-            else {
-                String path = f.getAbsolutePath();
-                int extIndex = path.lastIndexOf('.');  //NO18N
-                if (extIndex+1+FileObjects.RS.length() == path.length() && path.endsWith(FileObjects.RS)) {
-                    path = path.substring (oi,extIndex);
-                    List<File> files = result.get (path);
-                    if (files == null) {
-                        files = new LinkedList<File>();
-                        result.put (path,files);
-                    }
-                    files.add(0,f); //the rs file has to be the first
-                    try {
-                        readRSFile (f,root, files);
-                    } catch (IOException ioe) {
-                        //The signature file is broken, report it but don't stop scanning
-                        Exceptions.printStackTrace(ioe);
-                    }
-                }
-                else if (extIndex+1+FileObjects.SIG.length() == path.length() && path.endsWith(FileObjects.SIG)) {
-                    int index = path.indexOf('$',oi);  //NOI18N                    
-                    if (index == -1) {
-                        path = path.substring (oi,extIndex);
-                    }
-                    else {
-                        path = path.substring (oi,index);
-                    }                    
-                    List<File> files = result.get (path);
-                    if (files == null) {
-                        files = new LinkedList<File>();
-                        result.put (path,files);
-                    }
-                    files.add (f);
-                }
-            }
-        }
-    }
-        
-    private static void readRSFile (final File f, final File root, final List<? super File> files) throws IOException {
-        BufferedReader in = new BufferedReader (new FileReader (f));
-        try {
-            String binaryName;
-            while ((binaryName=in.readLine())!=null) {
-                File sf = new File (root, FileObjects.convertPackage2Folder(binaryName)+'.'+FileObjects.SIG);
-                files.add(sf);                                        
-            }
-        } finally {
-            in.close();
-        }
     }
     
     
@@ -1943,9 +2148,9 @@ Set added = null;
     }
     
     
-    private class FilterListener implements ChangeListener {
-            
-        public void stateChanged(ChangeEvent event) {
+//    private class FilterListener implements ChangeListener {
+//
+//        public void stateChanged(ChangeEvent event) {
 //            Object source = event.getSource();
 //            if (source instanceof JavaFileFilterImplementation) {
 //                List<URL> dirtyRoots = new LinkedList<URL> ();
@@ -1958,8 +2163,8 @@ Set added = null;
 //                }
 //                submit(Work.filterChange(dirtyRoots));
 //            }
-        }
-    }
+//        }
+//    }
     
     public static synchronized RepositoryUpdater getDefault () {
         if (instance == null) {
@@ -1968,7 +2173,6 @@ Set added = null;
         return instance;
     }        
   
-    // BEGIN TOR MODIFICATIONS
     // There could be multiple indexers (for different languages) that want
     // to index a given file. I will iterate over the indexers and let each
     // indexer have a chance to index every file. To do this I compute
@@ -1992,16 +2196,9 @@ Set added = null;
         return indexers;
     }
     
-    private static void clearIndexerParserTasks() {
-        for (IndexerEntry entry : getIndexers()) {
-            entry.setParserTask(null);
-        }
-    }
-    
     private static class IndexerEntry {
         private Language language;
         private Indexer indexer;
-        private ParserTaskImpl task;
         
         IndexerEntry(Language language, Indexer indexer) {
             this.language = language;
@@ -2015,15 +2212,5 @@ Set added = null;
         Language getLanguage() {
             return language;
         }
-        
-        ParserTaskImpl getParserTask() {
-            return task;
-        }
-        
-        void setParserTask(ParserTaskImpl task) {
-            this.task = task;
-        }
     } 
-    
-    // END TOR MODIFICATIONS
 }
