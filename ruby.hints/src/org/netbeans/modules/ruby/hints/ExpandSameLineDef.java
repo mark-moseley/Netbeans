@@ -27,7 +27,6 @@
  */
 package org.netbeans.modules.ruby.hints;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -36,26 +35,27 @@ import java.util.Set;
 import java.util.prefs.Preferences;
 import javax.swing.JComponent;
 import javax.swing.text.BadLocationException;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.NodeTypes;
-import org.jruby.lexer.yacc.ISourcePosition;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.jruby.nb.lexer.yacc.ISourcePosition;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.EditList;
+import org.netbeans.modules.gsf.api.HintFix;
+import org.netbeans.modules.gsf.api.HintSeverity;
+import org.netbeans.modules.gsf.api.PreviewableFix;
+import org.netbeans.modules.gsf.api.RuleContext;
 import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.hints.spi.AstRule;
-import org.netbeans.modules.ruby.hints.spi.Description;
-import org.netbeans.modules.ruby.hints.spi.EditList;
-import org.netbeans.modules.ruby.hints.spi.Fix;
-import org.netbeans.modules.ruby.hints.spi.HintSeverity;
-import org.netbeans.modules.ruby.hints.spi.PreviewableFix;
-import org.netbeans.modules.ruby.hints.spi.RuleContext;
+import org.netbeans.modules.ruby.RubyFormatter;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyRuleContext;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.netbeans.modules.ruby.lexer.RubyTokenId;
 import org.openide.util.Exceptions;
@@ -86,34 +86,34 @@ import org.openide.util.NbBundle;
  * 
  * @author Tor Norbye
  */
-public class ExpandSameLineDef implements AstRule {
+public class ExpandSameLineDef extends RubyAstRule {
     public ExpandSameLineDef() {
     }
 
-    public boolean appliesTo(CompilationInfo info) {
+    public boolean appliesTo(RuleContext context) {
+        CompilationInfo info = context.compilationInfo;
         // Skip for RHTML files for now - isn't implemented properly
         return info.getFileObject().getMIMEType().equals("text/x-ruby");
     }
 
-    public Set<Integer> getKinds() {
-        Set<Integer> integers = new HashSet<Integer>();
-        integers.add(NodeTypes.CLASSNODE);
-        integers.add(NodeTypes.DEFNNODE);
-        integers.add(NodeTypes.DEFSNODE);
-        return integers;
+    public Set<NodeType> getKinds() {
+        Set<NodeType> types = new HashSet<NodeType>();
+        types.add(NodeType.CLASSNODE);
+        types.add(NodeType.DEFNNODE);
+        types.add(NodeType.DEFSNODE);
+        return types;
     }
 
-    public void run(RuleContext context, List<Description> result) {
+    public void run(RubyRuleContext context, List<Hint> result) {
         Node node = context.node;
         AstPath path = context.path;
         CompilationInfo info = context.compilationInfo;
+        BaseDocument doc = context.doc;
 
         // Look for use of deprecated fields
-        if (node.nodeId == NodeTypes.DEFNNODE || node.nodeId == NodeTypes.DEFSNODE || node.nodeId == NodeTypes.CLASSNODE) {
+        if (node.nodeId == NodeType.DEFNNODE || node.nodeId == NodeType.DEFSNODE || node.nodeId == NodeType.CLASSNODE) {
             ISourcePosition pos = node.getPosition();
             try {
-                BaseDocument doc = (BaseDocument)info.getDocument();
-                
                 if (doc == null) {
                     // Run on a file that was just closed
                     return;
@@ -130,21 +130,17 @@ public class ExpandSameLineDef implements AstRule {
                     if (path.leaf() != node) {
                         path = new AstPath(root, node);
                     }
-                    List<Fix> fixList = Collections.<Fix>singletonList(new ExpandLineFix(info, path));
+                    List<HintFix> fixList = Collections.<HintFix>singletonList(new ExpandLineFix(context, path));
 
                     OffsetRange range = new OffsetRange(pos.getStartOffset(), pos.getEndOffset());
-                    Description desc = new Description(this, getDisplayName(), info.getFileObject(), range, fixList, 150);
+                    Hint desc = new Hint(this, getDisplayName(), info.getFileObject(), range, fixList, 150);
                     result.add(desc);
                     
                     // Exit; don't process children such that a def inside a class all
                     // on the same line only produces a single suggestion for the outer block
                     return;
                 }
-            }
-            catch (BadLocationException ex){
-                Exceptions.printStackTrace(ex);
-            }
-            catch (IOException ex){
+            } catch (BadLocationException ex){
                 Exceptions.printStackTrace(ex);
             }
         }
@@ -169,28 +165,29 @@ public class ExpandSameLineDef implements AstRule {
 
     private static class ExpandLineFix implements PreviewableFix {
 
-        private CompilationInfo info;
+        private final RubyRuleContext context;
+        private final AstPath path;
 
-        private AstPath path;
-
-        ExpandLineFix(CompilationInfo info, AstPath path) {
-            this.info = info;
+        ExpandLineFix(RubyRuleContext context, AstPath path) {
+            this.context = context;
             this.path = path;
         }
 
         public String getDescription() {
-            String code = path.leaf().nodeId == NodeTypes.DEFNNODE ? "def" : "class";
+            String code = path.leaf().nodeId == NodeType.DEFNNODE ? "def" : "class";
             return NbBundle.getMessage(ExpandSameLineDef.class, "ExpandLineFix", code);
         }
         
         private void findLineBreaks(Node node, Set<Integer> offsets) {
-            if (node.nodeId == NodeTypes.NEWLINENODE) {
+            if (node.nodeId == NodeType.NEWLINENODE) {
                 offsets.add(node.getPosition().getStartOffset());
             }
-            @SuppressWarnings(value = "unchecked")
             List<Node> list = node.childNodes();
 
             for (Node child : list) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 findLineBreaks(child, offsets);
             }
         }
@@ -213,7 +210,7 @@ public class ExpandSameLineDef implements AstRule {
         }
 
         public EditList getEditList() throws Exception {
-            BaseDocument doc = (BaseDocument)info.getDocument();
+            BaseDocument doc = context.doc;
             ISourcePosition pos = path.leaf().getPosition();
             int startOffset = pos.getStartOffset();
             int endOffset = pos.getEndOffset();
@@ -288,7 +285,7 @@ public class ExpandSameLineDef implements AstRule {
                         newlines.add(offset);
                     }
                     
-                    edits.format();
+                    edits.setFormatter(new RubyFormatter(), true);
                 } catch (BadLocationException ble) {
                     Exceptions.printStackTrace(ble);
                 }

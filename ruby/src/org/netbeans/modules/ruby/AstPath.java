@@ -46,8 +46,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 
-import org.jruby.ast.Node;
-import org.jruby.lexer.yacc.ISourcePosition;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.jruby.nb.lexer.yacc.ISourcePosition;
+import org.netbeans.modules.gsf.api.annotations.CheckForNull;
 
 
 /**
@@ -107,7 +111,7 @@ public class AstPath implements Iterable<Node> {
      * @param nodeType The nodeType to check
      * @return true if the given nodeType is found in the path
      */
-    public boolean contains(int nodeType) {
+    public boolean contains(NodeType nodeType) {
         for (int i = 0, n = path.size(); i < n; i++) {
             if (path.get(i).nodeId == nodeType) {
                 return true;
@@ -124,17 +128,21 @@ public class AstPath implements Iterable<Node> {
     @SuppressWarnings("unchecked")
     public Node findPathTo(Node node, int offset) {
         Node result = find(node, offset);
-        path.add(node);
+        if (result != null) {
+            path.add(node);
 
-        // Reverse the list such that node is on top
-        // When I get time rewrite the find method to build the list that way in the first place
-        Collections.reverse(path);
+            // Reverse the list such that node is on top
+            // When I get time rewrite the find method to build the list that way in the first place
+            Collections.reverse(path);
+        }
 
         return result;
     }
 
-    @SuppressWarnings("unchecked")
     private Node find(Node node, int offset) {
+        if (node.isInvisible()) {
+            return null;
+        }
         ISourcePosition pos = node.getPosition();
         int begin = pos.getStartOffset();
         int end = pos.getEndOffset();
@@ -143,6 +151,9 @@ public class AstPath implements Iterable<Node> {
             List<Node> children = (List<Node>)node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 Node found = find(child, offset);
 
                 if (found != null) {
@@ -155,8 +166,21 @@ public class AstPath implements Iterable<Node> {
             return node;
         } else {
             List<Node> children = (List<Node>)node.childNodes();
+            if (children == null) {
+                Logger logger = Logger.getLogger(AstPath.class.getName());
+                logger.log(Level.WARNING, "JRuby AST node " + node + " of type " + node.getClass().getName() + " has null as children");
+            }
 
             for (Node child : children) {
+                if (child == null) {
+                    Logger logger = Logger.getLogger(AstPath.class.getName());
+                    logger.log(Level.WARNING, "JRuby AST node " + node + " of type " + node.getClass().getName() + " has a null child");
+                    continue;
+                }
+                if (child.isInvisible()) {
+                    continue;
+                }
+
                 Node found = find(child, offset);
 
                 if (found != null) {
@@ -173,7 +197,6 @@ public class AstPath implements Iterable<Node> {
     /**
      * Find the path to the given node in the AST
      */
-    @SuppressWarnings("unchecked")
     public boolean find(Node node, Node target) {
         if (node == target) {
             return true;
@@ -182,6 +205,9 @@ public class AstPath implements Iterable<Node> {
         List<Node> children = (List<Node>)node.childNodes();
 
         for (Node child : children) {
+            if (child.isInvisible()) {
+                continue;
+            }
             boolean found = find(child, target);
 
             if (found) {
@@ -213,6 +239,7 @@ public class AstPath implements Iterable<Node> {
         return sb.toString();
     }
 
+    @CheckForNull
     public Node leaf() {
         if (path.size() == 0) {
             return null;

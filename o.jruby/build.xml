@@ -2,8 +2,8 @@
 <!-- You may freely edit this file. See harness/README in the NetBeans platform -->
 <!-- for some information on what you could do (e.g. targets to override). -->
 <!-- If you delete this file and reopen the project it will be recreated. -->
-<project name="org.jruby" default="netbeans" basedir=".">
-    <description>Builds, tests, and runs the project org.jruby</description>
+<project name="o.jruby" default="netbeans" basedir=".">
+    <description>Builds, tests, and runs the project o.jruby</description>
     <import file="../nbbuild/templates/projectized.xml"/>
 
     <target name="init" depends="projectized.init">
@@ -16,18 +16,48 @@
         <mkdir dir="${patched_source}"/>
         -->
         <unzip dest="${patched_source}">
-			<fileset dir="external/">
-				<include name="jruby-src-${jruby_src_version}.zip"/>
-			</fileset>
-	</unzip>
+            <fileset dir="external/">
+                <include name="jruby-src-${jruby_src_version}.zip"/>
+            </fileset>
+        </unzip>
+
         <!-- I don't need the bsf stuff -->
         <delete dir="${src.dir}/org/jruby/javasupport/bsf"/>
+
+        <!-- Repackage the sources as org.jruby.nb such that we have no class name
+             conflicts if people try to have JRuby as a scripting engine -->
+        <move file="${src.dir}/org/jruby" tofile="${src.dir}/org/nb"/>
+        <mkdir dir="${src.dir}/org/jruby"/>
+        <move file="${src.dir}/org/nb" tofile="${src.dir}/org/jruby/nb"/>
+        <replace dir="${patched_source}">
+            <include name="**"/>
+            <exclude name="**/*.jar"/>
+            <replacefilter token="org.jruby" value="org.jruby.nb"/>
+            <replacefilter token="org-jruby" value="org-jruby-nb"/>
+            <replacefilter token="org/jruby" value="org/jruby/nb"/>
+
+            <replacefilter token="org.jruby.nb.util.ByteList" value="org.jruby.util.ByteList"/>
+            <replacefilter token="org.jruby.nb.ext.posix" value="org.jruby.ext.posix"/>
+        </replace>
+        <replace dir="${src.dir}/org/jruby/nb/util">
+            <include name="*.java"/>
+            <!-- No imports in the same package (no longer same package) -->
+            <replacefilter token=" ByteList" value=" org.jruby.util.ByteList"/>
+            <replacefilter token="(ByteList" value="(org.jruby.util.ByteList"/>
+            <!--<replacefilter token="<ByteList" value="<org.jruby.util.ByteList"/>-->
+        </replace>
+        <replace dir="${src.dir}/org/jruby/nb/util">
+            <include name="*.java"/>
+            <!-- No imports in the same package (no longer same package) -->
+            <replacetoken><![CDATA[<ByteList]]></replacetoken>
+            <replacevalue><![CDATA[<org.jruby.util.ByteList]]></replacevalue>
+        </replace>
 
         <!-- Insert module description bundle etc. -->
         <copy todir="${src.dir}" overwrite="true">
             <fileset dir="src" />
         </copy>
-
+        
         <echo>Patching ${src.dir}</echo>
         <!--
         <patch dir="${src.dir}" patchfile="jruby.diff" strip="2" ignorewhitespace="true" reverse="false"/>
@@ -35,30 +65,33 @@
         <copy todir="${src.dir}" overwrite="true">
             <fileset dir="patched_files" />
         </copy>
-
+<!-- The jruby.properties are now just patched in from patched_files (hardcoded buildstamp)
         <tstamp><format property="build.date" pattern="yyyy-MM-dd"/></tstamp>
         <copy todir="${src.dir}/org/jruby" overwrite="true">
             <fileset file="${patched_source}/jruby-${jruby_src_version}/src/jruby.properties" />
             <filterset>
                 <filter token="os.arch" value="${os.arch}"/>
                 <filter token="java.specification.version" value="${java.specification.version}"/>
-                <!--
+                <!- -
                 Defined in jruby-1.0.3/default.build.properties
                 <filter token="javac.version" value="${javac.version}"/>
-                -->
+                - ->
                 <filter token="javac.version" value="1.4"/>
                 <filter token="build.date" value="${build.date}"/>
             </filterset>
         </copy>
         <delete file="${patched_source}/jruby-${jruby_src_version}/src/jruby.properties" />
-    </target>    
+-->
+    </target>
 
     <target name="release" depends="init">
         <mkdir dir="${cluster}/modules/ext"/>
         <copy todir="${cluster}/modules/ext">
             <fileset dir="${libs.dir}">
                 <include name="asm*.jar"/>
-                <include name="backport*.jar"/>
+                <include name="joni*.jar"/>
+                <include name="jna-posix*.jar"/>
+                <include name="joda*.jar"/>
                 <include name="jline*.jar"/>
             </fileset>
         </copy>

@@ -43,8 +43,8 @@ package org.netbeans.modules.ruby.rubyproject;
 
 import java.io.File;
 import javax.swing.JTextArea;
-import org.jruby.Ruby;
-import org.jruby.RubyArray;
+import org.jruby.nb.Ruby;
+import org.jruby.nb.RubyArray;
 import org.netbeans.api.ruby.platform.TestUtil;
 
 public final class IrbTopComponentTest extends RubyProjectTestBase {
@@ -59,7 +59,7 @@ public final class IrbTopComponentTest extends RubyProjectTestBase {
         File lib = new File(TestUtil.getXTestJRubyHome(), "lib/ruby/1.8");
         RubyArray loadPath = (RubyArray) runtime.getLoadService().getLoadPath();
         loadPath.add(lib.getAbsolutePath());
-        runtime.evalScript("require 'irb'; require 'irb/completion'");
+        runtime.evalScriptlet("require 'irb'; require 'irb/completion'");
     }
 
 }

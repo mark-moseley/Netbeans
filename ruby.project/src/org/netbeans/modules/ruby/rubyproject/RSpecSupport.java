@@ -47,6 +47,7 @@ import org.netbeans.api.project.Project;
 
 import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.modules.ruby.RubyUtils;
 import org.netbeans.modules.ruby.platform.RubyExecution;
 import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
 import org.netbeans.modules.ruby.platform.execution.FileLocator;
@@ -77,20 +78,27 @@ public class RSpecSupport {
         this.project = project;
     }
 
-    private String getVersion(final String gemName) {
-        GemManager gemManager = RubyPlatform.gemManagerFor(project);
-        return gemManager == null ? null : gemManager.getVersion(gemName);
+    static boolean hasRSpecInstalled(final RubyPlatform platform) {
+        return getLatestVersion(platform.getGemManager()) != null;
+    }
+    
+    private static String getLatestVersion(final GemManager gemManager) {
+        return gemManager == null ? null : gemManager.getLatestVersion(RSPEC_GEM_NAME);
+    }
+    
+    private String getLatestVersion() {
+        return getLatestVersion(RubyPlatform.gemManagerFor(project));
     }
     
     public boolean isRSpecInstalled() {
-        if (getVersion(RSPEC_GEM_NAME) != null) { // NOI18N
+        if (getLatestVersion() != null) {
             return true;
         }
 
         // Rails plugin
         if (project != null) {
             FileObject projectDir = project.getProjectDirectory();
-            if ((projectDir != null) && (projectDir.getFileObject(PLUGIN_SPEC_PATH) != null)) { // NOI18N
+            if ((projectDir != null) && (projectDir.getFileObject(PLUGIN_SPEC_PATH) != null)) {
 
                 return true;
             }
@@ -100,6 +108,7 @@ public class RSpecSupport {
     }
 
     public static boolean isSpecFile(FileObject fo) {
+//        return RubyUtils.isSpecFile(fo);
         if (!fo.getMIMEType().equals(RubyInstallation.RUBY_MIME_TYPE)) {
             return false;
         }
@@ -112,7 +121,7 @@ public class RSpecSupport {
 
         GemManager gemManager = RubyPlatform.gemManagerFor(project);
 
-        String version = gemManager.getVersion(RSPEC_GEM_NAME); // NOI18N
+        String version = getLatestVersion();
 
         if (version != null) {
             String libGemDir = gemManager.getGemHome();
@@ -136,7 +145,7 @@ public class RSpecSupport {
         if (project != null) {
             FileObject projectDir = project.getProjectDirectory();
             if (projectDir != null) {
-                FileObject rspec = projectDir.getFileObject(PLUGIN_SPEC_PATH); // NOI18N
+                FileObject rspec = projectDir.getFileObject(PLUGIN_SPEC_PATH);
 
                 if (rspec != null) {
                     return FileUtil.toFile(rspec).getAbsolutePath();
@@ -196,10 +205,10 @@ public class RSpecSupport {
             // First look for a NetBeans-specific options file, in case you want different
             // options when running under the IDE (for example, no --color since the 
             // color escape codes don't work under our terminal)
-            FileObject specOpts = projectDir.getFileObject(NETBEANS_SPEC_OPTS); // NOI18N
+            FileObject specOpts = projectDir.getFileObject(NETBEANS_SPEC_OPTS);
 
             if (specOpts == null) {
-                specOpts = projectDir.getFileObject(SPEC_OPTS); // NOI18N
+                specOpts = projectDir.getFileObject(SPEC_OPTS);
             }
 
             if (specOpts != null) {
@@ -237,14 +246,12 @@ public class RSpecSupport {
                 desc = descProvider.getScriptDescriptor(pwd, null/*specFile?*/, target, displayName, project.getLookup(), debug, extraRecognizers);
                 
                 // Override args
-                desc.additionalArgs(additionalArgs.toArray(
-                            new String[additionalArgs.size()])); // NOI18N
+                desc.additionalArgs(additionalArgs.toArray(new String[additionalArgs.size()]));
             }
         } else {
             desc = new ExecutionDescriptor(platform, displayName, pwd, spec);
 
-            desc. additionalArgs(additionalArgs.toArray(
-                        new String[additionalArgs.size()])); // NOI18N
+            desc. additionalArgs(additionalArgs.toArray(new String[additionalArgs.size()]));
             desc.debug(debug);
             desc.allowInput();
             desc.fileLocator(fileLocator);

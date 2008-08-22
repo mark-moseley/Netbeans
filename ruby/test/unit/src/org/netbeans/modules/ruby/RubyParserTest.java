@@ -41,20 +41,10 @@
 
 package org.netbeans.modules.ruby;
 
-import java.util.List;
-import junit.framework.TestCase;
-import org.jruby.ast.Node;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.ElementHandle;
-import org.netbeans.api.gsf.OccurrencesFinder;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.api.gsf.ParseListener;
-import org.netbeans.api.gsf.ParserFile;
-import org.netbeans.api.gsf.ParserResult;
-import org.netbeans.api.gsf.PositionManager;
-import org.netbeans.api.gsf.SemanticAnalyzer;
-import org.netbeans.api.gsf.SourceFileReader;
-import org.netbeans.modules.ruby.RubyParser.Sanitize;
+import org.jruby.nb.ast.Node;
+import org.netbeans.modules.gsf.GsfTestCompilationInfo;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.OffsetRange;
 
 /**
  *
@@ -66,10 +56,12 @@ public class RubyParserTest extends RubyTestBase {
         super(testName);
     }
 
+    @Override
     protected void setUp() throws Exception {
         super.setUp();
     }
 
+    @Override
     protected void tearDown() throws Exception {
         super.tearDown();
     }
@@ -88,7 +80,7 @@ public class RubyParserTest extends RubyTestBase {
             assertTrue(lineOffset != -1);
 
             caretOffset = lineOffset + caretDelta;
-            ((TestCompilationInfo)info).setCaretOffset(caretOffset);
+            ((GsfTestCompilationInfo)info).setCaretOffset(caretOffset);
         }
 
         Node root = AstUtilities.getRoot(info);
@@ -96,7 +88,7 @@ public class RubyParserTest extends RubyTestBase {
         
         // Ensure that we find the node we're looking for
         if (nodeName != null) {
-            RubyParseResult rpr = (RubyParseResult)info.getParserResult();
+            RubyParseResult rpr = AstUtilities.getParseResult(info);
             OffsetRange range = rpr.getSanitizedRange();
             if (range.containsInclusive(caretOffset)) {
                 caretOffset = range.getStart();
@@ -120,7 +112,7 @@ public class RubyParserTest extends RubyTestBase {
     }
 
     public void testPartial2() throws Exception {
-        checkParseTree("testfiles/broken2.rb", "Foo.new.^", "CallNode");
+        checkParseTree("testfiles/broken2.rb", "Foo.new.^", "CallNoArgNode");
     }
 
     public void testPartial3() throws Exception {

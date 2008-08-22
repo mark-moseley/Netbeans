@@ -5,12 +5,13 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
-import org.jruby.ast.DefnNode;
-import org.jruby.ast.DefsNode;
-import org.jruby.ast.MethodDefNode;
-import org.jruby.ast.Node;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Modifier;
+import org.jruby.nb.ast.DefnNode;
+import org.jruby.nb.ast.DefsNode;
+import org.jruby.nb.ast.MethodDefNode;
+import org.jruby.nb.ast.Node;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.modules.gsf.api.Modifier;
 import org.netbeans.modules.ruby.AstUtilities;
 
 
@@ -18,11 +19,10 @@ public class AstMethodElement extends AstElement implements MethodElement {
     private List<String> parameters;
     private Modifier access = Modifier.PUBLIC;
 
-    public AstMethodElement(Node node) {
-        super(node);
+    public AstMethodElement(CompilationInfo info, Node node) {
+        super(info, node);
     }
 
-    @SuppressWarnings("unchecked")
     public List<String> getParameters() {
         if (parameters == null) {
             parameters = AstUtilities.getDefArgs((MethodDefNode)node, false);

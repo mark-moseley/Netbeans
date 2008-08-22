@@ -2,20 +2,21 @@ package org.netbeans.modules.ruby.elements;
 
 import java.util.Collections;
 import java.util.Set;
-import org.jruby.ast.Node;
+import org.jruby.nb.ast.Node;
 
-import org.jruby.ast.SymbolNode;
-import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Modifier;
+import org.jruby.nb.ast.SymbolNode;
+import org.jruby.nb.ast.types.INameNode;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.modules.gsf.api.Modifier;
 
 
 public class AstAttributeElement extends AstElement {
     SymbolNode symbolNode;
     Node creationNode;
 
-    public AstAttributeElement(SymbolNode node, Node creationNode) {
-        super(node);
+    public AstAttributeElement(CompilationInfo info, SymbolNode node, Node creationNode) {
+        super(info, node);
         this.symbolNode = node;
         this.creationNode = creationNode;
     }
@@ -24,8 +25,8 @@ public class AstAttributeElement extends AstElement {
         if (creationNode == null || !(creationNode instanceof INameNode)) {
             return false;
         } else {
-            String name = ((INameNode)creationNode).getName();
-            return name.indexOf("writer") == -1 && name.indexOf("accessor") == -1; // NOI18N
+            String n = ((INameNode)creationNode).getName();
+            return n.indexOf("writer") == -1 && n.indexOf("accessor") == -1; // NOI18N
         }
     }
     
@@ -38,6 +39,7 @@ public class AstAttributeElement extends AstElement {
         return symbolNode.getName();
     }
 
+    @Override
     public Set<Modifier> getModifiers() {
         // TODO compute!
         return Collections.emptySet();

@@ -27,23 +27,26 @@
  */
 package org.netbeans.modules.ruby.hints;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import javax.swing.text.BadLocationException;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.Error;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.nb.common.IRubyWarnings.ID;
+import org.jruby.nb.lexer.yacc.SyntaxException.PID;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
-import org.netbeans.modules.ruby.hints.spi.Description;
-import org.netbeans.modules.ruby.hints.spi.EditList;
-import org.netbeans.modules.ruby.hints.spi.ErrorRule;
-import org.netbeans.modules.ruby.hints.spi.Fix;
-import org.netbeans.modules.ruby.hints.spi.HintSeverity;
-import org.netbeans.modules.ruby.hints.spi.PreviewableFix;
-import org.netbeans.modules.ruby.hints.spi.RuleContext;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.EditList;
+import org.netbeans.modules.gsf.api.HintFix;
+import org.netbeans.modules.gsf.api.HintSeverity;
+import org.netbeans.modules.gsf.api.PreviewableFix;
+import org.netbeans.modules.gsf.api.RuleContext;
+import org.netbeans.modules.ruby.RubyParser.RubyError;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyErrorRule;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyRuleContext;
+import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
@@ -52,38 +55,51 @@ import org.openide.util.NbBundle;
  * 
  * @author Tor Norbye
  */
-public class CommonSyntaxErrors implements ErrorRule {
+public class CommonSyntaxErrors extends RubyErrorRule {
 
-    public Set<String> getCodes() {
+    public Set<ID> getCodes() {
         // Add more as necessary
-        return Collections.singleton("Syntax error, unexpected '=' "); // NOI18N
+        //return Collections.singleton("Syntax error, unexpected '=' "); // NOI18N
+        return Collections.singleton(ID.SYNTAX_ERROR);
     }
 
-    public void run(RuleContext context, Error error, List<Description> result) {
+    public void run(RubyRuleContext context, RubyError error, List<Hint> result) {
         CompilationInfo info = context.compilationInfo;
 
+        PID pid = (PID) error.getParameters()[0];
+        if (pid != PID.GRAMMAR_ERROR) {
+            return;
+        }
+
+        String message = error.getDisplayName();
+        if (message.indexOf("'='") == -1) { // NOI18N
+            return;
+        } 
+        
         // See if it's a "begin"
         try {
             // TODO - if we get many codes, switch on these here!
-            BaseDocument doc = (BaseDocument) info.getDocument();
-            int offset = error.getStartPosition().getOffset();
-            if ((offset < doc.getLength()-"begin".length()) && // NOI18N
-                    "begin".equals(doc.getText(offset, "begin".length()))) { // NOI18N
-                OffsetRange range = new OffsetRange(offset-1, offset+"=begin".length());
-                Fix fix = new FixDocIndent(info, offset-1);
-                List<Fix> fixList = Collections.singletonList(fix);
+            BaseDocument doc = context.doc;
+            int astOffset = error.getStartPosition();
+            int lexOffset = LexUtilities.getLexerOffset(info, astOffset);
+            if (lexOffset == -1) {
+                return;
+            }
+            if ((lexOffset < doc.getLength()-"begin".length()) && // NOI18N
+                    "begin".equals(doc.getText(lexOffset, "begin".length()))) { // NOI18N
+                OffsetRange range = new OffsetRange(lexOffset-1, lexOffset+"=begin".length());
+                HintFix fix = new FixDocIndent(context, lexOffset-1);
+                List<HintFix> fixList = Collections.singletonList(fix);
                 String displayName = NbBundle.getMessage(CommonSyntaxErrors.class, "DontIndentDocs");
-                Description desc = new Description(this, displayName, info.getFileObject(), range, fixList, 500);
+                Hint desc = new Hint(this, displayName, info.getFileObject(), range, fixList, 500);
                 result.add(desc);
             }
         } catch (BadLocationException ex) {
             Exceptions.printStackTrace(ex);
-        } catch (IOException ioe) {
-            Exceptions.printStackTrace(ioe);
         }
     }
 
-    public boolean appliesTo(CompilationInfo compilationInfo) {
+    public boolean appliesTo(RuleContext context) {
         return true;
     }
 
@@ -92,11 +108,11 @@ public class CommonSyntaxErrors implements ErrorRule {
     }
 
     private class FixDocIndent implements PreviewableFix {
-        private CompilationInfo info;
-        private int equalOffset;
+        private final RubyRuleContext context;
+        private final int equalOffset;
         
-        private FixDocIndent(CompilationInfo info, int equalOffset) {
-            this.info = info;
+        private FixDocIndent(RubyRuleContext context, int equalOffset) {
+            this.context = context;
             this.equalOffset = equalOffset;
         }
 
@@ -109,8 +125,7 @@ public class CommonSyntaxErrors implements ErrorRule {
         }
         
         public EditList getEditList() throws Exception {
-            // Move code - but I've gotta make sure I create a new line if necessary
-            BaseDocument doc = (BaseDocument) info.getDocument();
+            BaseDocument doc = context.doc;
 
             if (equalOffset > doc.getLength()) {
                 return null; // recent edits

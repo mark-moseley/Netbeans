@@ -4,18 +4,18 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
-import org.jruby.ast.ClassVarDeclNode;
-import org.jruby.ast.ClassVarNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Modifier;
+import org.jruby.nb.ast.ClassVarDeclNode;
+import org.jruby.nb.ast.ClassVarNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.types.INameNode;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.modules.gsf.api.Modifier;
 
 
 public class AstFieldElement extends AstElement {
-    public AstFieldElement(Node node) {
-        super(node);
+    public AstFieldElement(CompilationInfo info, Node node) {
+        super(info, node);
     }
 
     @Override
@@ -42,6 +42,7 @@ public class AstFieldElement extends AstElement {
         return name;
     }
 
+    @Override
     public Set<Modifier> getModifiers() {
         if (modifiers == null) {
             // TODO - find access level!

@@ -40,7 +40,7 @@
 package org.netbeans.modules.ruby;
 
 import java.util.List;
-import org.jruby.ast.Node;
+import org.jruby.nb.ast.Node;
 
 /**
  * A walker to iterate over a JRuby parse tree
@@ -74,12 +74,14 @@ public class ParseTreeWalker {
      */
     public boolean walk(Node root) {
         if (!visitor.visit(root)) {
-            @SuppressWarnings(value = "unchecked")
             List<Node> list = root.childNodes();
 
             //for (Node child : list) {
             for (int i = 0, n = list.size(); i < n; i++) {
                 Node child = list.get(i);
+                if (child.isInvisible()) {
+                    continue;
+                }
                 if (walk(child)) {
                     return true;
                 }

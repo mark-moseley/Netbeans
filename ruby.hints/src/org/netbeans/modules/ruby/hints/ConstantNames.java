@@ -32,17 +32,18 @@ import java.util.List;
 import java.util.Set;
 import java.util.prefs.Preferences;
 import javax.swing.JComponent;
-import org.jruby.ast.ConstDeclNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.nb.ast.ConstDeclNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.HintFix;
+import org.netbeans.modules.gsf.api.HintSeverity;
+import org.netbeans.modules.gsf.api.RuleContext;
 import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.hints.spi.AstRule;
-import org.netbeans.modules.ruby.hints.spi.Description;
-import org.netbeans.modules.ruby.hints.spi.Fix;
-import org.netbeans.modules.ruby.hints.spi.HintSeverity;
-import org.netbeans.modules.ruby.hints.spi.RuleContext;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyRuleContext;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.util.NbBundle;
 
@@ -51,23 +52,23 @@ import org.openide.util.NbBundle;
  * 
  * @author Tor Norbye
  */
-public class ConstantNames implements AstRule {
+public class ConstantNames extends RubyAstRule {
     public ConstantNames() {
     }
 
-    public boolean appliesTo(CompilationInfo info) {
+    public boolean appliesTo(RuleContext context) {
         return true;
     }
 
-    public Set<Integer> getKinds() {
-        return Collections.singleton(NodeTypes.CONSTDECLNODE);
+    public Set<NodeType> getKinds() {
+        return Collections.singleton(NodeType.CONSTDECLNODE);
     }
     
-    public void run(RuleContext context, List<Description> result) {
+    public void run(RubyRuleContext context, List<Hint> result) {
         Node node = context.node;
         CompilationInfo info = context.compilationInfo;
 
-        assert (node.nodeId == NodeTypes.CONSTDECLNODE);
+        assert (node.nodeId == NodeType.CONSTDECLNODE);
         String name = ((ConstDeclNode)node).getName();
 
         for (int i = 0; i < name.length(); i++) {
@@ -76,8 +77,8 @@ public class ConstantNames implements AstRule {
                 OffsetRange range = AstUtilities.getNameRange(node);
                 range = LexUtilities.getLexerOffsets(info, range);
                 if (range != OffsetRange.NONE) {
-                    List<Fix> fixList = Collections.emptyList();
-                    Description desc = new Description(this, displayName, info.getFileObject(), range, fixList, 1600);
+                    List<HintFix> fixList = Collections.emptyList();
+                    Hint desc = new Hint(this, displayName, info.getFileObject(), range, fixList, 1600);
                     result.add(desc);
                 }
                 return;

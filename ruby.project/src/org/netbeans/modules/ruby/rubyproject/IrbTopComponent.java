@@ -13,25 +13,25 @@ import javax.swing.BorderFactory;
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
-import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
-import org.jruby.Ruby;
-import org.jruby.RubyInstanceConfig;
+import org.jruby.nb.Ruby;
+import org.jruby.nb.RubyInstanceConfig;
 import java.io.Serializable;
 import javax.swing.UIManager;
 import javax.swing.text.Caret;
 import javax.swing.text.JTextComponent;
-import org.jruby.demo.TextAreaReadline;
+import org.jruby.nb.internal.runtime.ValueAccessor;
+import org.jruby.nb.demo.TextAreaReadline;
 import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.openide.ErrorManager;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Task;
 import org.openide.util.TaskListener;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
-import org.openide.util.Utilities;
 
 /**
  * IRB window.
@@ -65,7 +65,7 @@ final class IrbTopComponent extends TopComponent {
         initComponents();
         setName(NbBundle.getMessage(IrbTopComponent.class, "CTL_IrbTopComponent"));
         setToolTipText(NbBundle.getMessage(IrbTopComponent.class, "HINT_IrbTopComponent"));
-        setIcon(Utilities.loadImage(ICON_PATH, true));
+        setIcon(ImageUtilities.loadImage(ICON_PATH, true));
     }
 
     /** This method is called from within the constructor to
@@ -309,20 +309,22 @@ final class IrbTopComponent extends TopComponent {
         final PipedInputStream pipeIn = new PipedInputStream();
         final RubyInstanceConfig config = new RubyInstanceConfig() {{
             setInput(pipeIn);
-            setOutput(new PrintStream(tar));
-            setError(new PrintStream(tar));
+            setOutput(new PrintStream(tar.getOutputStream()));
+            setError(new PrintStream(tar.getOutputStream()));
             setObjectSpaceEnabled(false);
+            //setArgv(args);
         }};
         final Ruby runtime = Ruby.newInstance(config);
 
-        runtime.getLoadService().init(new ArrayList(0));
+        runtime.getGlobalVariables().defineReadonly("$$", new ValueAccessor(runtime.newFixnum(System.identityHashCode(runtime))));
+        runtime.getLoadService().init(new ArrayList());
 
         tar.hookIntoRuntime(runtime);
         return runtime;
     }
     
     private static void startIRB(final Ruby runtime) {
-        runtime.evalScript("require 'irb'; require 'irb/completion'; IRB.start"); // NOI18N
+        runtime.evalScriptlet("require 'irb'; require 'irb/completion'; IRB.start"); // NOI18N
     }
 
     @Override

@@ -41,25 +41,25 @@
 package org.netbeans.modules.ruby;
 
 import java.util.List;
-import org.jruby.ast.ArgsCatNode;
-import org.jruby.ast.ArgsNode;
-import org.jruby.ast.ArgumentNode;
-import org.jruby.ast.ArrayNode;
-import org.jruby.ast.CallNode;
-import org.jruby.ast.DefnNode;
-import org.jruby.ast.DefsNode;
-import org.jruby.ast.FCallNode;
-import org.jruby.ast.ListNode;
-import org.jruby.ast.LocalAsgnNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.SplatNode;
-import org.jruby.ast.VCallNode;
+import org.jruby.nb.ast.ArgsCatNode;
+import org.jruby.nb.ast.ArgsNode;
+import org.jruby.nb.ast.ArgumentNode;
+import org.jruby.nb.ast.ArrayNode;
+import org.jruby.nb.ast.CallNode;
+import org.jruby.nb.ast.DefnNode;
+import org.jruby.nb.ast.DefsNode;
+import org.jruby.nb.ast.FCallNode;
+import org.jruby.nb.ast.ListNode;
+import org.jruby.nb.ast.LocalAsgnNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.SplatNode;
+import org.jruby.nb.ast.VCallNode;
 
 
 /**
  * The arity of a method is the number of arguments it takes.
  *
- * JRuby already has an Arity class (org.jruby.runtime.Arity), but
+ * JRuby already has an Arity class (org.jruby.nb.runtime.Arity), but
  * it doesn't have all we need - such as a maximum number of arguments.
  *
  * @todo I handle optional arguments and splats (*), but what about blocks?
@@ -123,7 +123,6 @@ public final class Arity {
         return getCallArity(call).min > 0;
     }
     
-    @SuppressWarnings(value = "unchecked")
     private void initializeFromCall(Node node) {
         if (node instanceof FCallNode) {
             Node argsNode = ((FCallNode)node).getArgsNode();
@@ -169,12 +168,18 @@ public final class Arity {
             List<Node> children = node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 initializeFromCall(child);
             }
         } else if (node instanceof ListNode) {
             List<Node> children = node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 if (AstUtilities.isCall(child)) {
                     min++;
 
@@ -205,7 +210,6 @@ public final class Arity {
         }
     }
 
-    @SuppressWarnings(value = "unchecked")
     public static Arity getDefArity(Node method) {
         assert method instanceof DefsNode || method instanceof DefnNode;
 
@@ -228,7 +232,6 @@ public final class Arity {
         }
     }
 
-    @SuppressWarnings(value = "unchecked")
     private void initializeFromDef(Node node) {
         if (node instanceof ArgsNode) {
             ArgsNode argsNode = (ArgsNode)node;
@@ -262,6 +265,9 @@ public final class Arity {
             List<Node> children = node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 initializeFromDef(child);
             }
         }
