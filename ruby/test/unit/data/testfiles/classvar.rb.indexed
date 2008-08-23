@@ -1,22 +1,13 @@
 
 
 Document 0
-Delete:  source : <TESTURL>/classvar.rb
-
-Indexed:
-
-Not Indexed:
-
-
-Document 1
-Delete:
-Indexed:
+Searchable Keys:
   class : Migration
   class-ig : migration
   field : myfield
   field : verbose|STATIC
   fqn : Migration
-  source : <TESTURL>/classvar.rb
+  global : $global
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |CLASS|
