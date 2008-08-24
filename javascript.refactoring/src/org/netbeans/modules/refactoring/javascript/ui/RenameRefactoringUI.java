@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.refactoring.ruby.ui;
+package org.netbeans.modules.refactoring.javascript.ui;
 
 import java.io.IOException;
 import java.text.MessageFormat;
@@ -49,8 +49,8 @@ import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.RenameRefactoring;
-import org.netbeans.modules.refactoring.ruby.RetoucheUtils;
-import org.netbeans.modules.refactoring.ruby.RubyElementCtx;
+import org.netbeans.modules.refactoring.javascript.RetoucheUtils;
+import org.netbeans.modules.refactoring.javascript.JsElementCtx;
 import org.netbeans.modules.refactoring.spi.ui.CustomRefactoringPanel;
 import org.netbeans.modules.refactoring.spi.ui.RefactoringUI;
 import org.netbeans.modules.refactoring.spi.ui.RefactoringUIBypass;
@@ -76,13 +76,13 @@ public class RenameRefactoringUI implements RefactoringUI, RefactoringUIBypass {
     private String newName;
     private RenamePanel panel;
     private boolean fromListener = false;
-    private RubyElementCtx jmiObject; // TODO rename
+    private JsElementCtx jmiObject; // TODO rename
     private FileObject byPassFolder;
     private boolean byPassPakageRename;
     private boolean pkgRename = true;
     private String stripPrefix;
     
-    public RenameRefactoringUI(RubyElementCtx handle, CompilationInfo info) {
+    public RenameRefactoringUI(JsElementCtx handle, CompilationInfo info) {
         this.jmiObject = handle;
         stripPrefix = handle.getStripPrefix();
         this.refactoring = new RenameRefactoring(Lookups.singleton(handle));
@@ -102,7 +102,7 @@ public class RenameRefactoringUI implements RefactoringUI, RefactoringUIBypass {
         this.refactoring.getContext().add(UI.Constants.REQUEST_PREVIEW);        
     }
     
-    public RenameRefactoringUI(FileObject file, RubyElementCtx handle, CompilationInfo info) {
+    public RenameRefactoringUI(FileObject file, JsElementCtx handle, CompilationInfo info) {
         if (handle!=null) {
             jmiObject = handle;
             this.refactoring = new RenameRefactoring(Lookups.fixed(file, handle));
@@ -139,7 +139,7 @@ public class RenameRefactoringUI implements RefactoringUI, RefactoringUIBypass {
     }
     
     
-    RenameRefactoringUI(FileObject jmiObject, String newName, RubyElementCtx handle, CompilationInfo info) {
+    RenameRefactoringUI(FileObject jmiObject, String newName, JsElementCtx handle, CompilationInfo info) {
         if (handle!=null) {
             this.refactoring = new RenameRefactoring(Lookups.fixed(jmiObject, handle));
         } else {

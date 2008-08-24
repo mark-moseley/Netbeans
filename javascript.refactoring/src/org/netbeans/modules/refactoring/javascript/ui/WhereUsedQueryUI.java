@@ -38,21 +38,21 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.refactoring.ruby.ui;
+package org.netbeans.modules.refactoring.javascript.ui;
 
 import java.text.MessageFormat;
 import java.util.ResourceBundle;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.WhereUsedQuery;
-import org.netbeans.modules.refactoring.ruby.RetoucheUtils;
-import org.netbeans.modules.refactoring.ruby.RubyElementCtx;
-import org.netbeans.modules.refactoring.ruby.api.WhereUsedQueryConstants;
+import org.netbeans.modules.refactoring.javascript.RetoucheUtils;
+import org.netbeans.modules.refactoring.javascript.JsElementCtx;
+import org.netbeans.modules.refactoring.javascript.api.WhereUsedQueryConstants;
 import org.netbeans.modules.refactoring.spi.ui.CustomRefactoringPanel;
 import org.netbeans.modules.refactoring.spi.ui.RefactoringUI;
-import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.lookup.Lookups;
@@ -66,11 +66,11 @@ public class WhereUsedQueryUI implements RefactoringUI {
     private WhereUsedQuery query = null;
     private final String name;
     private WhereUsedPanel panel;
-    private final RubyElementCtx element;
+    private final JsElementCtx element;
     private ElementKind kind;
     private AbstractRefactoring delegate;
 
-    public WhereUsedQueryUI(RubyElementCtx jmiObject, CompilationInfo info) {
+    public WhereUsedQueryUI(JsElementCtx jmiObject, CompilationInfo info) {
         this.query = new WhereUsedQuery(Lookups.singleton(jmiObject));
         ClasspathInfo classpathInfoFor = RetoucheUtils.getClasspathInfoFor(jmiObject);
         if (classpathInfoFor != null) {
@@ -81,7 +81,7 @@ public class WhereUsedQueryUI implements RefactoringUI {
         kind = jmiObject.getKind();
     }
     
-    public WhereUsedQueryUI(RubyElementCtx jmiObject, String name, AbstractRefactoring delegate) {
+    public WhereUsedQueryUI(JsElementCtx jmiObject, String name, AbstractRefactoring delegate) {
         this.delegate = delegate;
         //this.query.getContext().add(info.getClasspathInfo());
         this.element = jmiObject;
