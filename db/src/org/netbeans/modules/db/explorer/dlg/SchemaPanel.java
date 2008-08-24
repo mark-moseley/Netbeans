@@ -53,7 +53,6 @@ import org.netbeans.api.progress.ProgressHandleFactory;
 import org.openide.util.NbBundle;
 
 import org.netbeans.modules.db.explorer.DatabaseConnection;
-import org.openide.util.RequestProcessor;
 
 public class SchemaPanel extends javax.swing.JPanel {
 
@@ -214,19 +213,13 @@ public class SchemaPanel extends javax.swing.JPanel {
         Connection con = dbcon.getConnection();
         try {
             if (con == null || con.isClosed())
-                dbcon.connect();
+                dbcon.connectAsync();
             else {
-                RequestProcessor.getDefault().post(new Runnable() {
-                    public void run() {
-                        mediator.fireConnectionStarted();
-                        mediator.retrieveSchemas(SchemaPanel.this, dbcon, dbcon.getUser());
-                        mediator.fireConnectionFinished();
-                    }
-                });
+                mediator.retrieveSchemasAsync(SchemaPanel.this, dbcon, dbcon.getUser());
             }
         } catch (SQLException exc) {
             //isClosed() method failed, try to connect
-            dbcon.connect();
+            dbcon.connectAsync();
         }
     }//GEN-LAST:event_schemaButtonActionPerformed
 
@@ -305,17 +298,28 @@ public class SchemaPanel extends javax.swing.JPanel {
         });
     }
 
+    /**
+     * Terminates the use of the progress bar.
+     */
+    public void terminateProgress()
+    {
+        stopProgress(false);
+    }
+    
     private void stopProgress(final boolean connected) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                progressHandle.finish();
-                progressContainerPanel.remove(progressComponent);
-                // without this, the removed progress component remains painted on its parent... why?
-                progressContainerPanel.repaint();
-                if (connected) {
-                    progressMessageLabel.setText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ConnectionProgress_Established"));
-                } else {
-                    progressMessageLabel.setText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ConnectionProgress_Failed"));
+                if (progressHandle != null)
+                {
+                    progressHandle.finish();
+                    progressContainerPanel.remove(progressComponent);
+                    // without this, the removed progress component remains painted on its parent... why?
+                    progressContainerPanel.repaint();
+                    if (connected) {
+                        progressMessageLabel.setText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ConnectionProgress_Established"));
+                    } else {
+                        progressMessageLabel.setText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ConnectionProgress_Failed"));
+                    }
                 }
                 schemaButton.setEnabled(true);
             }
