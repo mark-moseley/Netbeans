@@ -50,8 +50,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsfpath.classpath.ClassPath;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
+import org.netbeans.modules.gsf.Language;
+import org.netbeans.modules.gsf.LanguageRegistry;
 import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.netbeans.napi.gsfret.source.CompilationController;
 import org.netbeans.napi.gsfret.source.ModificationResult;
@@ -61,6 +63,7 @@ import org.netbeans.modules.refactoring.spi.*;
 import org.netbeans.modules.refactoring.api.*;
 import org.netbeans.modules.refactoring.ruby.RetoucheUtils;
 import org.netbeans.modules.refactoring.ruby.RubyElementCtx;
+import org.netbeans.modules.ruby.RubyMimeResolver;
 import org.netbeans.modules.ruby.RubyUtils;
 import org.openide.filesystems.FileObject;
 
@@ -141,7 +144,9 @@ public abstract class RubyRefactoringPlugin extends ProgressProviderAdapter impl
         if (cpInfo==null) {
             Logger.getLogger(getClass().getName()).log(Level.INFO, "Missing scope (ClasspathInfo), using default scope (all open projects)");
             cpInfo = RetoucheUtils.getClasspathInfoFor((FileObject)null);
-            refactoring.getContext().add(cpInfo);
+            if (cpInfo != null) {
+                refactoring.getContext().add(cpInfo);
+            }
         }
         return cpInfo;
     }
@@ -197,7 +202,7 @@ public abstract class RubyRefactoringPlugin extends ProgressProviderAdapter impl
             for (FileObject file : files) {
                 if (RubyUtils.isRubyFile(file)) {
                     rubyFiles.add(file);
-                } else if (RubyUtils.isRhtmlFile(file)) {
+                } else if (RubyUtils.isRhtmlOrYamlFile(file)) {
                     rhtmlFiles.add(file);
                 }
             }
