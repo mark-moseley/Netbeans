@@ -51,16 +51,21 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import org.netbeans.modules.welcome.content.Constants;
 import java.awt.Image;
+import java.awt.event.FocusListener;
+import java.awt.event.KeyListener;
 import java.awt.event.MouseListener;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JScrollPane;
 import org.netbeans.modules.welcome.WelcomeOptions;
+import org.netbeans.modules.welcome.content.BackgroundPanel;
 import org.netbeans.modules.welcome.content.Utils;
 import org.openide.util.Utilities;
 
@@ -68,7 +73,7 @@ import org.openide.util.Utilities;
  *
  * @author S. Aubrecht
  */
-class Tabs extends JPanel implements Constants {
+class Tabs extends BackgroundPanel implements Constants {
 
     private JScrollPane leftComp;
     private JScrollPane rightComp;
@@ -76,22 +81,19 @@ class Tabs extends JPanel implements Constants {
     private JComponent rightTab;
     private JPanel tabContent;
     
-    private Image imgStripWest;
-    private Image imgStripCenter;
-    private Image imgStripEast;
-    
     public Tabs( String leftTabTitle, JComponent leftTab, 
             String rightTabTitle, final JComponent rightTab) {
         
         super( new BorderLayout() );
-        setOpaque( false );
-
+        
         this.leftTab = leftTab;
         this.rightTab = rightTab;
-        
-        this.imgStripCenter = Utilities.loadImage( IMAGE_STRIP_BOTTOM_CENTER );
-        this.imgStripWest = Utilities.loadImage( IMAGE_STRIP_BOTTOM_WEST );
-        this.imgStripEast = Utilities.loadImage( IMAGE_STRIP_BOTTOM_EAST );
+
+        // vlv: print
+        leftTab.putClientProperty("print.printable", Boolean.TRUE); // NOI18N
+        leftTab.putClientProperty("print.name", leftTabTitle); // NOI18N
+        rightTab.putClientProperty("print.printable", Boolean.TRUE); // NOI18N
+        rightTab.putClientProperty("print.name", rightTabTitle); // NOI18N
         
         final Tab leftButton = new Tab( leftTabTitle, true );
         final Tab rightButton = new Tab( rightTabTitle, false );
@@ -117,8 +119,7 @@ class Tabs extends JPanel implements Constants {
         
         add( buttons, BorderLayout.NORTH );
         
-        tabContent = new JPanel( new CardLayout() );
-        tabContent.setOpaque( false );
+        tabContent = new BackgroundPanel( new CardLayout() );
 
         add( tabContent, BorderLayout.CENTER );
         int activeTabIndex = WelcomeOptions.getDefault().getLastActiveTab();
@@ -138,8 +139,9 @@ class Tabs extends JPanel implements Constants {
 
         if( null == compToShow ) {
             compToShow = new JScrollPane( showLeftTab ? leftTab : rightTab );
-            compToShow.setOpaque( false );
-            compToShow.getViewport().setOpaque( false );
+            compToShow.setOpaque( true );
+            compToShow.getViewport().setOpaque( true );
+            compToShow.getViewport().setBackground(Utils.getColor(COLOR_SCREEN_BACKGROUND));
             compToShow.setBorder( BorderFactory.createEmptyBorder() );
 
             if( showLeftTab ) {
@@ -155,6 +157,7 @@ class Tabs extends JPanel implements Constants {
             compToHide.setVisible( false );
         
         compToShow.setVisible( true );
+        compToShow.requestFocusInWindow();
         
         invalidate();
         revalidate();
@@ -190,14 +193,33 @@ class Tabs extends JPanel implements Constants {
             }
             lbl = new JLabel(title);
             lbl.setOpaque( false );
-            add( lbl, new GridBagConstraints(0,0,1,1,1.0,1.0,
+            add( lbl, new GridBagConstraints(0,0,1,1,0.0,0.0,
                     GridBagConstraints.CENTER,GridBagConstraints.BOTH,new Insets(5,5,4,0),0,0) );
             lbl.setFont( TAB_FONT );
             lbl.setForeground( Utils.getColor( isSelected
                     ? COLOR_TAB_SEL_FOREGROUND 
                     : COLOR_TAB_UNSEL_FOREGROUND ) );
             lbl.setHorizontalAlignment( JLabel.CENTER );
+            lbl.setFocusable(true);
             
+            lbl.addKeyListener( new KeyListener() {
+
+                public void keyTyped(KeyEvent e) {
+                }
+
+                public void keyPressed(KeyEvent e) {
+                    if( e.getKeyCode() == KeyEvent.VK_SPACE || e.getKeyCode() == KeyEvent.VK_ENTER ) {
+                        setSelected( !isSelected );
+                        if( null != actionListener ) {
+                            actionListener.actionPerformed( new ActionEvent( Tab.this, 0, "clicked") );
+                        }
+                    }
+                }
+
+                public void keyReleased(KeyEvent e) {
+                }
+            });
+
             addMouseListener( new MouseListener() {
                 public void mouseClicked(MouseEvent e) {
                     setSelected( !isSelected );
@@ -229,6 +251,19 @@ class Tabs extends JPanel implements Constants {
                             : COLOR_TAB_UNSEL_FOREGROUND ) );
                 }
             });
+            
+            lbl.addFocusListener( new FocusListener() {
+
+                public void focusGained(FocusEvent e) {
+                    lbl.setForeground( Utils.getColor( MOUSE_OVER_LINK_COLOR  )  );
+                }
+
+                public void focusLost(FocusEvent e) {
+                    lbl.setForeground( Utils.getColor( isSelected
+                            ? COLOR_TAB_SEL_FOREGROUND 
+                            : COLOR_TAB_UNSEL_FOREGROUND ) );
+                }
+            });
         }
         
         public void addActionListener( ActionListener l ) {
@@ -238,9 +273,13 @@ class Tabs extends JPanel implements Constants {
         
         public void setSelected( boolean sel ) {
             this.isSelected = sel;
-            lbl.setForeground( Utils.getColor( isSelected
-                    ? COLOR_TAB_SEL_FOREGROUND 
-                    : COLOR_TAB_UNSEL_FOREGROUND ) );
+            lbl.setForeground( Utils.getColor( lbl.isFocusOwner() 
+                    ? MOUSE_OVER_LINK_COLOR
+                    : isSelected
+                        ? COLOR_TAB_SEL_FOREGROUND 
+                        : COLOR_TAB_UNSEL_FOREGROUND ) );
+            
+            lbl.setFocusable(!sel);
             repaint();
         }
 
