@@ -41,6 +41,9 @@
 
 package org.netbeans.lib.html.lexer;
 
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.html.lexer.HTMLTokenId;
@@ -71,8 +74,33 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
     
     private final TokenFactory<HTMLTokenId> tokenFactory;
     
+    class CompoundState {
+        private int lexerState;
+        private int lexerSubState;
+        private int lexerEmbeddingState;
+        private String attributeName;
+
+        public CompoundState(int lexerState, int lexerSubState, int lexerEmbeddingState, String attributeName) {
+            this.lexerState = lexerState;
+            this.lexerSubState = lexerSubState;
+            this.lexerEmbeddingState = lexerEmbeddingState;
+            this.attributeName = attributeName;
+        }
+
+        @Override
+        public String toString() {
+           // return "state=" + (lexerSubState * 1000000 + lexerState * 1000 + lexerEmbeddingState) + "," + attributeName.toString();
+           int state = lexerSubState * 1000000 + lexerState * 1000 + lexerEmbeddingState;
+           return Integer.toString(state) + "," + attributeName.toString();
+        }
+    }
+    
     public Object state() {
-        return lexerSubState * 1000000 + lexerState * 1000 + lexerEmbeddingState;
+        if (attributeName != null) {
+            return new CompoundState(lexerState, lexerSubState, lexerEmbeddingState, attributeName);
+        } else {
+            return lexerSubState * 1000000 + lexerState * 1000 + lexerEmbeddingState;
+        }
     }
     
     //script and style tag names
@@ -86,6 +114,7 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
      */
     private int lexerSubState = INIT;
     private int lexerState    = INIT;
+    private String attributeName;
     
     /** indicated whether we are in a script */
     private int lexerEmbeddingState = INIT;
@@ -142,6 +171,32 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
     
     private static final int ISI_SGML_DECL_WS = 41; //after whitespace in SGML declaration
         
+    static final Set<String> EVENT_HANDLER_NAMES = new HashSet<String>();
+    static {
+        // See http://www.w3.org/TR/html401/interact/scripts.html
+        EVENT_HANDLER_NAMES.add("onload"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onunload"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onclick"); // NOI18N
+        EVENT_HANDLER_NAMES.add("ondblclick"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onmousedown"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onmouseup"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onmouseover"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onmousemove"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onmouseout"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onfocus"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onblur"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onkeypress"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onkeydown"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onkeyup"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onsubmit"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onreset"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onselect"); // NOI18N
+        EVENT_HANDLER_NAMES.add("onchange"); // NOI18N
+        
+        // IMPORTANT - if you add any that DON'T start with "o" here,
+        // make sure you update the optimized firstchar look in isJavaScriptArgument
+    }
+    
     public HTMLLexer(LexerRestartInfo<HTMLTokenId> info) {
         this.input = info.input();
         this.tokenFactory = info.tokenFactory();
@@ -150,11 +205,20 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
             this.lexerState = INIT;
             this.lexerEmbeddingState = INIT;
         } else {
-            int encoded = ((Integer) info.state()).intValue();
-            this.lexerSubState = encoded / 1000000;
-            int remainder = encoded % 1000000;
-            this.lexerState    = remainder / 1000;
-            this.lexerEmbeddingState = remainder % 1000;
+            Object state = info.state();
+            if (state instanceof CompoundState) {
+                CompoundState cs = (CompoundState)state;
+                lexerState = cs.lexerState;
+                lexerSubState = cs.lexerSubState;
+                lexerEmbeddingState = cs.lexerEmbeddingState;
+                attributeName = cs.attributeName;
+            } else {
+                int encoded = ((Integer) info.state()).intValue();
+                this.lexerSubState = encoded / 1000000;
+                int remainder = encoded % 1000000;
+                this.lexerState    = remainder / 1000;
+                this.lexerEmbeddingState = remainder % 1000;
+            }
         }
     }
     
@@ -165,11 +229,6 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
     private final boolean isName( int character ) {
         return Character.isLetterOrDigit(character) ||
                 character == '-' || character == '_' || character == '.' || character == ':';
-        //        return( (ch >= 'a' && ch <= 'z') ||
-        //                (ch >= 'A' && ch <= 'Z') ||
-        //                (ch >= '0' && ch <= '9') ||
-        //                ch == '-' || ch == '_' || ch == '.' || ch == ':' );
-        
     }
     
     /**
@@ -183,8 +242,16 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
     
     private final boolean isWS( int character ) {
         return Character.isWhitespace(character);
-        //        return ( ch == '\u0020' || ch == '\u0009' || ch == '\u000c'
-        //              || ch == '\u200b' || ch == '\n' || ch == '\r' );
+    }
+
+    private boolean isJavascriptEventHandlerName(String attributeName) {
+        if(attributeName.length() > 0) {
+            char firstChar = attributeName.charAt(0);
+            if(firstChar == 'o' || firstChar == 'O') {
+                return EVENT_HANDLER_NAMES.contains(attributeName.toLowerCase(Locale.ENGLISH));
+            }
+        }
+        return false;
     }
     
     private boolean followsCloseTag(String closeTagName) {
@@ -489,6 +556,7 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
                     lexerState = ISP_ARG_X;
                     if(input.readLength() > 1) { //lexer restart check, token already returned before last EOF
                         input.backup(1);
+                        attributeName = input.readText().toString();
                         return token(HTMLTokenId.ARGUMENT);
                     }
                     break;
@@ -570,6 +638,11 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
                     lexerState = ISP_TAG_X;
                     if(input.readLength() > 1) { //lexer restart check, token already returned before last EOF
                         input.backup(1);
+                        if (attributeName != null && isJavascriptEventHandlerName(attributeName)) {
+                            attributeName = null;
+                            return token(HTMLTokenId.VALUE_JAVASCRIPT);
+                        }
+                        attributeName = null;
                         return token(HTMLTokenId.VALUE);
                     }
                     break;
@@ -578,6 +651,11 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
                     switch( actChar ) {
                         case '\'':
                             lexerState = ISP_TAG_X;
+                            if (attributeName != null && isJavascriptEventHandlerName(attributeName)) {
+                                attributeName = null;
+                                return token(HTMLTokenId.VALUE_JAVASCRIPT);
+                            }
+                            attributeName = null;
                             return token(HTMLTokenId.VALUE);
                             
 //                        Workaround for [Issue 117450]  Provide unified LexerInput across multiple joined embedded sections
@@ -602,6 +680,11 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
                     switch( actChar ) {
                         case '"':
                             lexerState = ISP_TAG_X;
+                            if (attributeName != null && isJavascriptEventHandlerName(attributeName)) {
+                                attributeName = null;
+                                return token(HTMLTokenId.VALUE_JAVASCRIPT);
+                            }
+                            attributeName = null;
                             return token(HTMLTokenId.VALUE);
 
 //                        Workaround for [Issue 117450]  Provide unified LexerInput across multiple joined embedded sections
@@ -868,6 +951,14 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
                 return token(HTMLTokenId.BLOCK_COMMENT);
                 
             case ISI_TAG:
+                lexerState = ISP_TAG_X;
+                //test if the tagname is SCRIPT
+                if(SCRIPT.equalsIgnoreCase(input.readText().toString())) { //NOI18N
+                    lexerEmbeddingState = ISI_SCRIPT;
+                }
+                if(STYLE.equalsIgnoreCase(input.readText().toString())) { //NOI18N
+                    lexerEmbeddingState = ISI_STYLE;
+                }
                 return token(HTMLTokenId.TAG_OPEN);
             case ISI_ENDTAG:
                 return token(HTMLTokenId.TAG_CLOSE);
@@ -893,10 +984,14 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
             case ISI_VAL:
             case ISI_VAL_QUOT:
             case ISI_VAL_DQUOT:
+                if (attributeName != null && isJavascriptEventHandlerName(attributeName)) {
+                    return token(HTMLTokenId.VALUE_JAVASCRIPT);
+                }
                 return token(HTMLTokenId.VALUE);
                 
             case ISI_SGML_DECL:
             case ISA_SGML_DECL_DASH:
+            case ISI_SGML_DECL_WS:  
                 return token(HTMLTokenId.DECLARATION);
                 
             case ISI_SGML_COMMENT:
@@ -920,6 +1015,12 @@ public final class HTMLLexer implements Lexer<HTMLTokenId> {
                 
         }
         
+        assert input.readLength() == 0 : "Returning null even if some chars still needs to be tokenized! " +
+            "lexer state=" + lexerState + "; " +
+            "lexer substate=" + lexerSubState + "; " + 
+            "lexer embedding state=" + lexerEmbeddingState + "; " +
+            "readtext='" + input.readText() + "'";
+   
         return null;
     }
     
