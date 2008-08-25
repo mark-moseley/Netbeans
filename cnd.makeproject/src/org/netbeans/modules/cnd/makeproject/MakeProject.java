@@ -45,24 +45,28 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
 import java.io.IOException;
+import java.text.MessageFormat;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Enumeration;
+import java.util.TreeSet;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
-import org.netbeans.modules.cnd.api.compilers.CompilerSet;
-import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.remote.RemoteProject;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
-import org.netbeans.modules.cnd.loaders.TemplateExtensionUtils;
+import org.netbeans.modules.cnd.loaders.CCDataLoader;
+import org.netbeans.modules.cnd.loaders.CDataLoader;
+import org.netbeans.modules.cnd.loaders.HDataLoader;
 import org.netbeans.modules.cnd.makeproject.api.MakeArtifact;
 import org.netbeans.modules.cnd.makeproject.api.MakeArtifactProvider;
-import org.netbeans.modules.cnd.makeproject.api.configurations.CompilerSetConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
@@ -86,9 +90,12 @@ import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.PrivilegedTemplates;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.netbeans.spi.project.ui.RecommendedTemplates;
-import org.openide.ErrorManager;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.loaders.DataLoaderPool;
+import org.openide.loaders.ExtensionList;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
@@ -106,6 +113,11 @@ import org.w3c.dom.Text;
 public final class MakeProject implements Project, AntProjectListener {
 
     private static final Icon MAKE_PROJECT_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/makeProject.gif")); // NOI18N
+    private static final String HEADER_EXTENSIONS = "header-extensions"; // NOI18N
+    private static final String C_EXTENSIONS = "c-extensions"; // NOI18N
+    private static final String CPP_EXTENSIONS = "cpp-extensions"; // NOI18N
+    private static final String MAKE_PROJECT_TYPE = "make-project-type"; // NOI18N
+    private static MakeTemplateListener templateListener = null;
     private final AntProjectHelper helper;
     private final PropertyEvaluator eval;
     private final ReferenceHelper refHelper;
@@ -114,6 +126,9 @@ public final class MakeProject implements Project, AntProjectListener {
     private ConfigurationDescriptorProvider projectDescriptorProvider;
     private int projectType = -1;
     private MakeProject thisMP;
+    private Set<String> headerExtensions = MakeProject.createExtensionSet();
+    private Set<String> cExtensions = MakeProject.createExtensionSet();
+    private Set<String> cppExtensions = MakeProject.createExtensionSet();
 
     MakeProject(AntProjectHelper helper) throws IOException {
         this.helper = helper;
@@ -128,14 +143,35 @@ public final class MakeProject implements Project, AntProjectListener {
 
         // Find the project type from project.xml
         Element data = helper.getPrimaryConfigurationData(true);
-        NodeList nl = data.getElementsByTagName("make-project-type"); // NOI18N
+        NodeList nl = data.getElementsByTagName(MAKE_PROJECT_TYPE);
         if (nl.getLength() == 1) {
             nl = nl.item(0).getChildNodes();
-            String typeTxt = (String) nl.item(0).getNodeValue();
+            String typeTxt = nl.item(0).getNodeValue();
             projectType = new Integer(typeTxt).intValue();
+        }
+        
+        readProjectExtension(data, HEADER_EXTENSIONS, headerExtensions);
+        readProjectExtension(data, C_EXTENSIONS, cExtensions);
+        readProjectExtension(data, CPP_EXTENSIONS, cppExtensions);
+
+        if (templateListener == null) {
+            DataLoaderPool.getDefault().addOperationListener(templateListener = new MakeTemplateListener());
         }
     }
 
+    private void readProjectExtension(Element data, String key, Set<String> set){
+        NodeList nl = data.getElementsByTagName(key);
+        if (nl.getLength() == 1) {
+            nl = nl.item(0).getChildNodes();
+            if (nl.getLength() == 1) {
+                String extensions = nl.item(0).getNodeValue();
+                for (String e : extensions.split(",")) { // NOI18N
+                    set.add(e);
+                }
+            }
+        }
+    }
+    
     public FileObject getProjectDirectory() {
         return helper.getProjectDirectory();
     }
@@ -168,10 +204,31 @@ public final class MakeProject implements Project, AntProjectListener {
 
     private Lookup createLookup(AuxiliaryConfiguration aux) {
         SubprojectProvider spp = new MakeSubprojectProvider(); //refHelper.createSubprojectProvider();
-        return Lookups.fixed(new Object[]{new Info(), aux, helper.createCacheDirectoryProvider(), spp, new MakeActionProvider(this), new MakeLogicalViewProvider(this, spp), new MakeCustomizerProvider(this, projectDescriptorProvider), new MakeArtifactProviderImpl(), new //new CustomActionsHookImpl(),
-        ProjectXmlSavedHookImpl(), new ProjectOpenedHookImpl(), new MakeSharabilityQuery(FileUtil.toFile(getProjectDirectory())), new MakeSources(this, helper), new AntProjectHelperProvider(), projectDescriptorProvider, new MakeProjectConfigurationProvider(this, projectDescriptorProvider), new NativeProjectProvider(this, projectDescriptorProvider), new RecommendedTemplatesImpl(), new MakeProjectOperations(this), new FolderSearchInfo(projectDescriptorProvider), new MakeProjectType
-
-        ()});
+        return Lookups.fixed(new Object[]{
+            new Info(),
+            aux,
+            helper.createCacheDirectoryProvider(),
+            spp,
+            new MakeActionProvider(this),
+            new MakeLogicalViewProvider(this, spp),
+            new MakeCustomizerProvider(this, projectDescriptorProvider),
+            new MakeArtifactProviderImpl(),
+            new //new CustomActionsHookImpl(),
+            ProjectXmlSavedHookImpl(),
+            new ProjectOpenedHookImpl(),
+            new MakeSharabilityQuery(FileUtil.toFile(getProjectDirectory())),
+            new MakeSources(this, helper),
+            new AntProjectHelperProvider(),
+            projectDescriptorProvider,
+            new MakeProjectConfigurationProvider(this, projectDescriptorProvider),
+            new NativeProjectProvider(this, projectDescriptorProvider),
+            new RecommendedTemplatesImpl(),
+            new MakeProjectOperations(this),
+            new FolderSearchInfo(projectDescriptorProvider),
+            new MakeProjectType(),
+            new MakeProjectEncodingQueryImpl(projectDescriptorProvider),
+            new RemoteProjectImpl()
+        });
     }
 
     public void configurationXmlChanged(AntProjectEvent ev) {
@@ -186,6 +243,158 @@ public final class MakeProject implements Project, AntProjectListener {
     public void propertiesChanged(AntProjectEvent ev) {
         // currently ignored (probably better to listen to evaluator() if you need to)
     }
+    
+    /**
+     * Check needed header extensions and store list in the NB/project properties.
+     * @param needAdd list of needed extensions of header files.
+     */
+    public void addAdditionalHeaderExtensions(Collection<String> needAdd) {
+        Set<String> headerExtension = MakeProject.getHeaderSuffixes();
+        Set<String> sourceExtension = MakeProject.getSourceSuffixes();
+        Set<String> usedExtension = MakeProject.createExtensionSet();
+        for(String extension : needAdd){
+            if (extension.length()>0) {
+                if (!headerExtension.contains(extension) && !sourceExtension.contains(extension)){
+                    usedExtension.add(extension);
+                }
+            }
+        }
+        if (usedExtension.size()>0 && addNewExtensionDialog(usedExtension, "H")) { // NOI18N
+            // add unknown extensin to HDataLoader
+            HDataLoader.getInstance().addExtensions(usedExtension);
+            headerExtensions.addAll(usedExtension);
+            saveAdditionalExtensions();
+        }
+    }
+    
+    private Set<String> getUnknownExtensions(Set<String> inLoader, Set<String> inProject){
+        Set<String> unknown = MakeProject.createExtensionSet();
+        for(String extension : inProject){
+            if (extension.length()>0) {
+                if (!inLoader.contains(extension)){
+                    unknown.add(extension);
+                }
+            }
+        }
+        return unknown;
+    }
+    
+    private void checkNeededExtensions(){
+        Set<String> unknown = getUnknownExtensions(MakeProject.getCSuffixes(), cExtensions);
+        if (unknown.size()>0 && addNewExtensionDialog(unknown,"C")){ // NOI18N
+            CDataLoader.getInstance().addExtensions(unknown);
+        }
+        unknown = getUnknownExtensions(MakeProject.getCppSuffixes(), cppExtensions);
+        if (unknown.size()>0 && addNewExtensionDialog(unknown,"CPP")){ // NOI18N
+            CCDataLoader.getInstance().addExtensions(unknown);
+        }
+        unknown = getUnknownExtensions(MakeProject.getHeaderSuffixes(), headerExtensions);
+        if (unknown.size()>0 && addNewExtensionDialog(unknown,"H")){ // NOI18N
+            HDataLoader.getInstance().addExtensions(unknown);
+        }
+    }
+    
+    public void updateExtensions(Set<String> cSet,Set<String> cppSet,Set<String> hSet){
+        cExtensions.clear();
+        cExtensions.addAll(cSet);
+        cppExtensions.clear();
+        cppExtensions.addAll(cppSet);
+        headerExtensions.clear();
+        headerExtensions.addAll(hSet);
+        saveAdditionalExtensions();
+    }
+    
+    private void saveAdditionalExtensions(){
+        Element data = helper.getPrimaryConfigurationData(true);
+        saveAdditionalHeaderExtensions(data, MakeProject.C_EXTENSIONS, cExtensions);
+        saveAdditionalHeaderExtensions(data, MakeProject.CPP_EXTENSIONS, cppExtensions);
+        saveAdditionalHeaderExtensions(data, MakeProject.HEADER_EXTENSIONS, headerExtensions);
+        helper.putPrimaryConfigurationData(data, true);
+    }
+
+    private void saveAdditionalHeaderExtensions(Element data, String key, Set<String> set){
+        Element element;
+        NodeList nodeList = data.getElementsByTagName(key);
+        if (nodeList.getLength() == 1) {
+            element = (Element) nodeList.item(0);
+            NodeList deadKids = element.getChildNodes();
+            while (deadKids.getLength() > 0) {
+                 element.removeChild(deadKids.item(0));
+            }
+         } else {
+             element = data.getOwnerDocument().createElementNS(MakeProjectType.PROJECT_CONFIGURATION_NAMESPACE, key);
+             data.appendChild(element);
+         }
+        StringBuilder buf = new StringBuilder();
+        for(String e : set){
+            if (buf.length()>0) {
+                buf.append(',');
+            }
+            buf.append(e);
+        }
+        element.appendChild(data.getOwnerDocument().createTextNode(buf.toString()));
+    }
+
+    private boolean addNewExtensionDialog(Set<String> usedExtension, String type) {
+        String message = getString("ADD_EXTENSION_QUESTION"+type+(usedExtension.size()==1?"":"S")); // NOI18N
+        StringBuilder extensions = new StringBuilder();
+        for(String ext : usedExtension){
+            if (extensions.length()>0){
+                extensions.append(',');
+            }
+            extensions.append(ext);
+        }
+        NotifyDescriptor d = new NotifyDescriptor.Confirmation(
+                MessageFormat.format(message, new Object[]{extensions.toString()}),
+                getString("ADD_EXTENSION_DIALOG_TITLE"+type+(usedExtension.size()==1?"":"S")), // NOI18N
+                NotifyDescriptor.YES_NO_OPTION); 
+        return DialogDisplayer.getDefault().notify(d) == NotifyDescriptor.YES_OPTION;
+    }
+
+    public static Set<String> createExtensionSet(){
+        if (IpeUtils.isSystemCaseInsensitive()) {
+            return new TreeSet<String>(String.CASE_INSENSITIVE_ORDER);
+        } else {
+            return new TreeSet<String>();
+        }
+    }
+    
+    private static Set<String> getSourceSuffixes() {
+        Set<String> suffixes = createExtensionSet(); 
+        addSuffices(suffixes, CCDataLoader.getInstance().getExtensions());
+        addSuffices(suffixes, CDataLoader.getInstance().getExtensions());
+        return suffixes;
+    }
+
+    private static Set<String> getCSuffixes() {
+        Set<String> suffixes = createExtensionSet(); 
+        addSuffices(suffixes, CDataLoader.getInstance().getExtensions());
+        return suffixes;
+    }
+
+    private static Set<String> getCppSuffixes() {
+        Set<String> suffixes = createExtensionSet(); 
+        addSuffices(suffixes, CCDataLoader.getInstance().getExtensions());
+        return suffixes;
+    }
+    
+    private static Set<String> getHeaderSuffixes() {
+        Set<String> suffixes = createExtensionSet(); 
+        addSuffices(suffixes, HDataLoader.getInstance().getExtensions());
+        return suffixes;
+    }
+    
+    private static void addSuffices(Set<String> suffixes, ExtensionList list) {
+        for (Enumeration e = list.extensions(); e != null &&  e.hasMoreElements();) {
+            String ex = (String) e.nextElement();
+            suffixes.add(ex);
+        }
+    }
+
+    private static String getString(String s) {
+        return NbBundle.getMessage(MakeProject.class, s);
+    }
+
     // Package private methods -------------------------------------------------
 
     final class AntProjectHelperProvider {
@@ -197,10 +406,48 @@ public final class MakeProject implements Project, AntProjectListener {
 
     private static final class RecommendedTemplatesImpl implements RecommendedTemplates, PrivilegedTemplates {
 
-        private static final String[] RECOMMENDED_TYPES = new String[]{"c-types", "cpp-types", "shell-types", "makefile-types", "c-types", "simple-files"}; // NOI18N
-        private static final String[] RECOMMENDED_TYPES_FORTRAN = new String[]{"c-types", "cpp-types", "shell-types", "makefile-types", "c-types", "simple-files", "fortran-types"}; // NOI18N
-        private static final String[] PRIVILEGED_NAMES = new String[]{"Templates/cFiles/main.c", "Templates/cFiles/file.c", "Templates/cFiles/file.h", "Templates/cppFiles/main.cc", "Templates/cppFiles/file.cc", "Templates/cppFiles/file.h", "Templates/MakeTemplates/ComplexMakefile", "Templates/MakeTemplates/SimpleMakefile/ExecutableMakefile", "Templates/MakeTemplates/SimpleMakefile/SharedLibMakefile", "Templates/MakeTemplates/SimpleMakefile/StaticLibMakefile"}; // NOI18N
-        private static final String[] PRIVILEGED_NAMES_FORTRAN = new String[]{"Templates/cFiles/main.c", "Templates/cFiles/file.c", "Templates/cFiles/file.h", "Templates/cppFiles/main.cc", "Templates/cppFiles/file.cc", "Templates/cppFiles/file.h", "Templates/fortranFiles/fortranEmptyFile.f90", "Templates/fortranFiles/fortranFixedFormatFile.f", "Templates/fortranFiles/fortranFreeFormatFile.f90", "Templates/MakeTemplates/ComplexMakefile", "Templates/MakeTemplates/SimpleMakefile/ExecutableMakefile", "Templates/MakeTemplates/SimpleMakefile/SharedLibMakefile", "Templates/MakeTemplates/SimpleMakefile/StaticLibMakefile"}; // NOI18N
+        private static final String[] RECOMMENDED_TYPES = new String[]{
+            "c-types", // NOI18N
+            "cpp-types", // NOI18N
+            "shell-types", // NOI18N
+            "makefile-types", // NOI18N
+            "c-types", // NOI18N
+            "simple-files", // NOI18N
+            "asm-types"}; // NOI18N
+        private static final String[] RECOMMENDED_TYPES_FORTRAN = new String[]{
+            "c-types", // NOI18N
+            "cpp-types", // NOI18N
+            "shell-types", // NOI18N
+            "makefile-types", // NOI18N
+            "c-types", // NOI18N
+            "simple-files", // NOI18N
+            "fortran-types", // NOI18N
+            "asm-types"}; // NOI18N
+        private static final String[] PRIVILEGED_NAMES = new String[]{
+            "Templates/cFiles/main.c", // NOI18N
+            "Templates/cFiles/file.c", // NOI18N
+            "Templates/cFiles/file.h", // NOI18N
+            "Templates/cppFiles/class.cc", // NOI18N
+            "Templates/cppFiles/main.cc", // NOI18N
+            "Templates/cppFiles/file.cc", // NOI18N
+            "Templates/cppFiles/file.h", // NOI18N
+            "Templates/MakeTemplates/ComplexMakefile", // NOI18N
+            "Templates/MakeTemplates/SimpleMakefile/ExecutableMakefile", // NOI18N
+            "Templates/MakeTemplates/SimpleMakefile/SharedLibMakefile", // NOI18N
+            "Templates/MakeTemplates/SimpleMakefile/StaticLibMakefile"}; // NOI18N
+        private static final String[] PRIVILEGED_NAMES_FORTRAN = new String[]{
+            "Templates/cFiles/main.c", // NOI18N
+            "Templates/cFiles/file.c", // NOI18N
+            "Templates/cFiles/file.h", // NOI18N
+            "Templates/cppFiles/class.cc", // NOI18N
+            "Templates/cppFiles/main.cc", // NOI18N
+            "Templates/cppFiles/file.cc", // NOI18N
+            "Templates/cppFiles/file.h", // NOI18N
+            "Templates/fortranFiles/fortranFreeFormatFile.f90", // NOI18N
+            "Templates/MakeTemplates/ComplexMakefile", // NOI18N
+            "Templates/MakeTemplates/SimpleMakefile/ExecutableMakefile", // NOI18N
+            "Templates/MakeTemplates/SimpleMakefile/SharedLibMakefile", // NOI18N
+            "Templates/MakeTemplates/SimpleMakefile/StaticLibMakefile"}; // NOI18N
 
         public String[] getRecommendedTypes() {
             if (CppSettings.getDefault().isFortranEnabled()) {
@@ -212,17 +459,10 @@ public final class MakeProject implements Project, AntProjectListener {
 
         public String[] getPrivilegedTemplates() {
             if (CppSettings.getDefault().isFortranEnabled()) {
-                return checkNames(PRIVILEGED_NAMES_FORTRAN);
+                return PRIVILEGED_NAMES_FORTRAN;
             } else {
-                return checkNames(PRIVILEGED_NAMES);
+                return PRIVILEGED_NAMES;
             }
-        }
-
-        private String[] checkNames(String[] templates){
-            for(int i = 0; i < templates.length; i++){
-                templates[i] = TemplateExtensionUtils.checkTemplate(templates[i]);
-            }
-            return templates;
         }
     }
 
@@ -451,7 +691,8 @@ public final class MakeProject implements Project, AntProjectListener {
         }
 
         protected void projectOpened() {
-
+            
+            checkNeededExtensions();
             if (openedTasks != null) {
                 for (Runnable runnable : openedTasks) {
                     runnable.run();
@@ -460,41 +701,41 @@ public final class MakeProject implements Project, AntProjectListener {
                 openedTasks = null;
             }
 
-            /* Don't do this for two reasons: semantically it is wrong (IZ 115314) and it is dangerous (IZ 118575)
-            ConfigurationDescriptor projectDescriptor = null;
-            int count = 15;
-
-            // The code to wait on projectDescriptor is due to a synchronization problem in makeproject.
-            // If it gets fixed then projectDescriptorProvider.getConfigurationDescriptor() will never
-            // return null and we can remove this change.
-            while (projectDescriptor == null && count-- > 0) {
-                projectDescriptor = projectDescriptorProvider.getConfigurationDescriptor();
-                if (projectDescriptor == null) {
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException ex) {
-                        return;
-                    }
-                }
-            }
-            if (projectDescriptor == null) {
-                ErrorManager.getDefault().log(ErrorManager.WARNING, "Skipping project open validation"); // NOI18N
-                return;
-            }
-
-            Configuration[] confs = projectDescriptor.getConfs().getConfs();
-            for (int i = 0; i < confs.length; i++) {
-                MakeConfiguration makeConfiguration = (MakeConfiguration) confs[i];
-                CompilerSetConfiguration csconf = makeConfiguration.getCompilerSet();
-                if (!csconf.isValid()) {
-                    CompilerSet cs = CompilerSet.getCompilerSet(csconf.getOldName());
-                    CompilerSetManager.getDefault().add(cs);
-                    if (cs.isValid()) {
-                        csconf.setValue(cs.getName());
-                    }
-                }
-            }
-             */
+//            /* Don't do this for two reasons: semantically it is wrong (IZ 115314) and it is dangerous (IZ 118575)
+//            ConfigurationDescriptor projectDescriptor = null;
+//            int count = 15;
+//
+//            // The code to wait on projectDescriptor is due to a synchronization problem in makeproject.
+//            // If it gets fixed then projectDescriptorProvider.getConfigurationDescriptor() will never
+//            // return null and we can remove this change.
+//            while (projectDescriptor == null && count-- > 0) {
+//                projectDescriptor = projectDescriptorProvider.getConfigurationDescriptor();
+//                if (projectDescriptor == null) {
+//                    try {
+//                        Thread.sleep(100);
+//                    } catch (InterruptedException ex) {
+//                        return;
+//                    }
+//                }
+//            }
+//            if (projectDescriptor == null) {
+//                ErrorManager.getDefault().log(ErrorManager.WARNING, "Skipping project open validation"); // NOI18N
+//                return;
+//            }
+//
+//            Configuration[] confs = projectDescriptor.getConfs().getConfs();
+//            for (int i = 0; i < confs.length; i++) {
+//                MakeConfiguration makeConfiguration = (MakeConfiguration) confs[i];
+//                CompilerSetConfiguration csconf = makeConfiguration.getCompilerSet();
+//                if (!csconf.isValid()) {
+//                    CompilerSet cs = CompilerSet.getCompilerSet(csconf.getOldName());
+//                    CompilerSetManager.getDefault(makeConfiguration.getDevelopmentHost().getName()).add(cs);
+//                    if (cs.isValid()) {
+//                        csconf.setValue(cs.getName());
+//                    }
+//                }
+//            }
+//             */
         }
 
         protected void projectClosed() {
@@ -514,17 +755,16 @@ public final class MakeProject implements Project, AntProjectListener {
             MakeConfigurationDescriptor projectDescriptor = (MakeConfigurationDescriptor) projectDescriptorProvider.getConfigurationDescriptor();
             Configuration[] confs = projectDescriptor.getConfs().getConfs();
 
-            String projectLocation = null;
-            int configurationType = 0;
-            String configurationName = null;
-            boolean active = false;
-            ;
-            String workingDirectory = null;
-            String buildCommand = null;
-            String cleanCommand = null;
-            String output = null;
+//            String projectLocation = null;
+//            int configurationType = 0;
+//            String configurationName = null;
+//            boolean active = false;
+//            String workingDirectory = null;
+//            String buildCommand = null;
+//            String cleanCommand = null;
+//            String output = null;
 
-            projectLocation = FileUtil.toFile(helper.getProjectDirectory()).getPath();
+//            projectLocation = FileUtil.toFile(helper.getProjectDirectory()).getPath();
             for (int i = 0; i < confs.length; i++) {
                 MakeConfiguration makeConfiguration = (MakeConfiguration) confs[i];
                 artifacts.add(new MakeArtifact(projectDescriptor, makeConfiguration));
@@ -551,4 +791,14 @@ public final class MakeProject implements Project, AntProjectListener {
             return rootFolder.getAllItemsAsDataObjectSet(false, "text/").iterator(); // NOI18N
         }
     }
+
+    class RemoteProjectImpl implements RemoteProject {
+
+        public String getDevelopmentHost() {
+            MakeConfigurationDescriptor projectDescriptor = (MakeConfigurationDescriptor) projectDescriptorProvider.getConfigurationDescriptor();
+            MakeConfiguration conf = (MakeConfiguration)projectDescriptor.getConfs().getActive();
+            return conf.getDevelopmentHost().getName();
+        }
+
     }
+}
