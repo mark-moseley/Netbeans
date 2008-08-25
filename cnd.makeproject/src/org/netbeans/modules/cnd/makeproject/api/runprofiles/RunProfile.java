@@ -53,17 +53,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.Vector;
-import org.netbeans.modules.cnd.api.utils.FileChooser;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationAuxObject;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.runprofiles.RunProfileXMLCodec;
 import org.netbeans.modules.cnd.makeproject.runprofiles.ui.EnvPanel;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.api.utils.Path;
 import org.netbeans.modules.cnd.api.xml.XMLDecoder;
 import org.netbeans.modules.cnd.api.xml.XMLEncoder;
 import org.netbeans.modules.cnd.makeproject.api.configurations.IntConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
+import org.netbeans.modules.cnd.makeproject.configurations.ui.ListenableIntNodeProp;
 import org.netbeans.modules.cnd.makeproject.configurations.ui.IntNodeProp;
-import org.netbeans.modules.cnd.settings.CppSettings;
 import org.openide.explorer.propertysheet.ExPropertyEditor;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.modules.InstalledFileLocator;
@@ -73,6 +75,8 @@ import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
 public class RunProfile implements ConfigurationAuxObject {
+    private static final boolean NO_EXEPTION = Boolean.getBoolean("org.netbeans.modules.cnd.makeproject.api.runprofiles");
+
     public static final String PROFILE_ID = "runprofile"; // NOI18N
     
     /** Property name: runargs (args, cd, etc.) have changed */
@@ -122,14 +126,23 @@ public class RunProfile implements ConfigurationAuxObject {
     private IntConfiguration terminalType;
     private HashMap termPaths;
     private HashMap termOptions;
+    private final int platform;
     
+    // constructor for SS compatibility, only for localhost usage
+    @Deprecated
     public RunProfile(String baseDir) {
+        this(baseDir, Platform.getDefaultPlatform());
+    }
+    
+    public RunProfile(String baseDir, int platform) {
+        this.platform = platform;
         this.baseDir = baseDir;
         this.pcs = null;
         initialize();
     }
     
     public RunProfile(String baseDir, PropertyChangeSupport pcs) {
+        platform = Platform.getDefaultPlatform(); //TODO: it's not always right
         this.baseDir = baseDir;
         this.pcs = pcs;
         initialize();
@@ -157,8 +170,15 @@ public class RunProfile implements ConfigurationAuxObject {
         if (file != null && file.exists()) {
             return file.getAbsolutePath();
         } else {
-            throw new IllegalStateException(getString("Err_MissingDorunScript")); // NOI18N
+            if (!NO_EXEPTION) {
+                throw new IllegalStateException(getString("Err_MissingDorunScript")); // NOI18N
+            }
+            return null;
         }
+    }
+    
+    private boolean isWindows() {
+        return platform == PlatformTypes.PLATFORM_WINDOWS;
     }
     
     private String[] setTerminalTypeNames() {
@@ -168,7 +188,7 @@ public class RunProfile implements ConfigurationAuxObject {
         String termPath;
         
         list.add(def);
-        if (Utilities.isWindows()) {
+        if (isWindows()) {
             String term = getString("TerminalType_CommandWindow"); // NOI18N
             list.add(term);
             termPaths.put(term, "start"); // NOI18N
@@ -178,9 +198,9 @@ public class RunProfile implements ConfigurationAuxObject {
         } else {
             // Start with the user's $PATH. Append various other directories and look
             // for gnome-terminal, konsole, and xterm.
-            String path = CppSettings.getDefault().getPath() + 
+            String path = Path.getPathAsString() + 
                 ":/usr/X11/bin:/usr/X/bin:/usr/X11R6/bin:/opt/gnome/bin" + // NOI18N
-                ":/usr/gnome/bin:/opt/kde/bin:/opt/kde3/bin/usr/kde/bin:/usr/openwin/bin"; // NOI18N
+                ":/usr/gnome/bin:/opt/kde/bin:/opt/kde3/bin:/usr/kde/bin:/usr/openwin/bin"; // NOI18N
             
             termPath = searchPath(path, "gnome-terminal", "/usr/bin"); // NOI18N
             if (termPath != null) {
@@ -188,12 +208,11 @@ public class RunProfile implements ConfigurationAuxObject {
                 list.add(name); 
                 termPaths.put(name, termPath);
                 termPaths.put(def, termPath);
-                termOptions.put(name, "--disable-factory --hide-menubar " + "--title=\"{1} {2}\" " + // NOI18N
-                        "-e \"\\\"" + dorun + "\\\" -p \\\"" + getString("LBL_RunPrompt") + "\\\" " + // NOI18N
-                        "-f \\\"{0}\\\" {1} {2}\""); // NOI18N
-                termOptions.put(def,  "--disable-factory --hide-menubar " + "--title=\"{1} {2}\" " + // NOI18N
-                        "-e \"\\\"" + dorun + "\\\" -p \\\"" + getString("LBL_RunPrompt") + "\\\" " + // NOI18N
-                        "-f \\\"{0}\\\" {1} {2}\""); // NOI18N
+                String opts = "--disable-factory --hide-menubar " + "--title=\"{1} {3}\" " + // NOI18N
+                        "-x \"" + dorun + "\" -p \"" + getString("LBL_RunPrompt") + "\" " + // NOI18N
+                        "-f \"{0}\" {1} {2}"; // NOI18N
+                termOptions.put(name, opts);
+                termOptions.put(def,  opts);
             }
             termPath = searchPath(path, "konsole"); // NOI18N
             if (termPath != null) {
@@ -408,15 +427,13 @@ public class RunProfile implements ConfigurationAuxObject {
     public void setRunDir(String runDir) {
         if (runDir == null)
             runDir = ""; // NOI18N
-        if (this.runDir == runDir)
-            return;
         if (this.runDir != null && this.runDir.equals(runDir)) {
             return;
         }
-        String oldRunDir = this.runDir;
         this.runDir = runDir;
-        if (pcs != null)
+        if (pcs != null) {
             pcs.firePropertyChange(PROP_RUNDIR_CHANGED, null, this);
+        }
         needSave = true;
     }
     
@@ -489,7 +506,7 @@ public class RunProfile implements ConfigurationAuxObject {
         this.consoleType = consoleType;
     }
     
-    public int getDefaultConsoleType() {
+    public static int getDefaultConsoleType() {
         return CONSOLE_TYPE_EXTERNAL;
     }
     
@@ -620,8 +637,9 @@ public class RunProfile implements ConfigurationAuxObject {
      * Clones the profile.
      * All fields are cloned except for 'parent'.
      */
+    @Override
     public Object clone() {
-        RunProfile p = new RunProfile(getBaseDir());
+        RunProfile p = new RunProfile(getBaseDir(), this.platform);
         //p.setParent(getParent());
         p.setCloneOf(this);
         p.setDefault(isDefault());
@@ -635,13 +653,17 @@ public class RunProfile implements ConfigurationAuxObject {
         return p;
     }
     
-    public Sheet getSheet() {
-        return createSheet();
+    public Sheet getSheet(boolean isRemote) {
+        return createSheet(isRemote);
     }
     
-    private Sheet createSheet() {
+    public Sheet getSheet() {
+        return createSheet(false);
+    }
+    
+    private Sheet createSheet(boolean isRemote) {
         Sheet sheet = new Sheet();
-        
+
         Sheet.Set set = new Sheet.Set();
         set.setName("General"); // NOI18N
         set.setDisplayName(getString("GeneralName"));
@@ -650,13 +672,36 @@ public class RunProfile implements ConfigurationAuxObject {
         set.put(new RunDirectoryNodeProp());
         set.put(new EnvNodeProp());
         set.put(new BuildFirstNodeProp());
-        set.put(new IntNodeProp(getConsoleType(), true, null,
-                getString("ConsoleType_LBL"), getString("ConsoleType_HINT"))); // NOI18N
-        set.put(new IntNodeProp(getTerminalType(), true, null,
-                getString("TerminalType_LBL"), getString("TerminalType_HINT"))); // NOI18N
+        ListenableIntNodeProp consoleTypeNP = new ListenableIntNodeProp(getConsoleType(), true, null,
+                getString("ConsoleType_LBL"), getString("ConsoleType_HINT")); // NOI18N
+        set.put(consoleTypeNP);
+        final IntNodeProp terminalTypeNP = new IntNodeProp(getTerminalType(), true, null,
+                getString("TerminalType_LBL"), getString("TerminalType_HINT")); // NOI18N
+        set.put(terminalTypeNP);
+        if (isRemote) {
+            terminalTypeNP.setCanWrite(false);
+            consoleTypeNP.setCanWrite(false);
+        } else {
+
+            consoleTypeNP.addPropertyChangeListener(new PropertyChangeListener() {
+
+                public void propertyChange(PropertyChangeEvent evt) {
+                    String value = (String) evt.getNewValue();
+                    updateTerminalTypeState(terminalTypeNP, value);
+                }
+            });
+            // because IntNodeProb has "setValue(String)" and "Integer getValue()"...
+            updateTerminalTypeState(terminalTypeNP, consoleTypeNames[(Integer) consoleTypeNP.getValue()]);
+        }
         sheet.put(set);
-        
+
+
         return sheet;
+    }
+
+    private static void updateTerminalTypeState(IntNodeProp terminalTypeNP, String value) {
+        terminalTypeNP.setCanWrite( consoleTypeNames[CONSOLE_TYPE_EXTERNAL].equals(value) ||
+                consoleTypeNames[CONSOLE_TYPE_DEFAULT].equals(value) && getDefaultConsoleType() == CONSOLE_TYPE_EXTERNAL) ;
     }
     
     private static String getString(String s) {
@@ -693,6 +738,7 @@ public class RunProfile implements ConfigurationAuxObject {
             setRunDir(path);
         }
         
+        @Override
         public PropertyEditor getPropertyEditor() {
             String seed;
             String runDir2 = getRunDir();
@@ -714,61 +760,38 @@ public class RunProfile implements ConfigurationAuxObject {
             this.seed = seed;
         }
         
+        @Override
         public void setAsText(String text) {
             setRunDir(text);
         }
         
+        @Override
         public String getAsText() {
             return getRunDir();
         }
         
+        @Override
         public Object getValue() {
             return getRunDir();
         }
         
+        @Override
         public void setValue(Object v) {
             setRunDir((String)v);
         }
         
+        @Override
         public boolean supportsCustomEditor() {
             return true;
         }
         
+        @Override
         public java.awt.Component getCustomEditor() {
-            return new DirPanel(seed, this, propenv);
+            return new DirectoryChooserPanel(seed, this, propenv);
         }
         
         public void attachEnv(PropertyEnv propenv) {
             this.propenv = propenv;
-        }
-    }
-    
-    class DirPanel extends FileChooser implements PropertyChangeListener {
-        PropertyEditorSupport editor;
-        
-        public DirPanel(String seed, PropertyEditorSupport editor, PropertyEnv propenv) {
-            super(
-		java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/api/Bundle").getString("Run_Directory"),
-		java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/api/Bundle").getString("SelectLabel"),
-		FileChooser.DIRECTORIES_ONLY,
-		null,
-		seed,
-		true
-		);
-            setControlButtonsAreShown(false);
-            
-            this.editor = editor;
-            
-            propenv.setState(PropertyEnv.STATE_NEEDS_VALIDATION);
-            propenv.addPropertyChangeListener(this);
-        }
-        
-        public void propertyChange(PropertyChangeEvent evt) {
-            if (PropertyEnv.PROP_STATE.equals(evt.getPropertyName()) && evt.getNewValue() == PropertyEnv.STATE_VALID) {
-                File file = getSelectedFile();
-                if (file != null)
-                    editor.setValue(file.getPath());
-            }
         }
     }
     
@@ -799,10 +822,12 @@ public class RunProfile implements ConfigurationAuxObject {
             getEnvironment().assign((Env)v);
         }
         
+        @Override
         public PropertyEditor getPropertyEditor() {
             return new EnvEditor(getEnvironment().cloneEnv());
         }
         
+        @Override
         public Object getValue(String attributeName) {
             if (attributeName.equals("canEditAsText")) // NOI18N
                 return Boolean.FALSE;
@@ -818,17 +843,21 @@ public class RunProfile implements ConfigurationAuxObject {
             this.env = env;
         }
         
+        @Override
         public void setAsText(String text) {
         }
         
+        @Override
         public String getAsText() {
             return env.toString();
         }
         
+        @Override
         public java.awt.Component getCustomEditor() {
             return new EnvPanel(env, this, propenv);
         }
         
+        @Override
         public boolean supportsCustomEditor() {
             return true;
         }
