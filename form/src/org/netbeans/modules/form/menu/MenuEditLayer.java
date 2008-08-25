@@ -88,7 +88,6 @@ import javax.swing.event.MouseInputAdapter;
 import javax.swing.plaf.PopupMenuUI;
 import org.netbeans.modules.form.*;
 import org.netbeans.modules.form.actions.PropertyAction;
-import org.netbeans.modules.form.assistant.AssistantMessages;
 import org.netbeans.modules.form.editors.IconEditor.NbImageIcon;
 import org.netbeans.modules.form.palette.PaletteItem;
 import org.netbeans.modules.form.palette.PaletteUtils;
@@ -113,8 +112,8 @@ public class MenuEditLayer extends JPanel {
     private static final boolean USE_NEW_ITEM_COLOR_SWITCHING = false;
     
     /* === public and package level fields. these should probably become getters and setters  ===*/
-    public VisualDesignerPopupFactory hackedPopupFactory = null;
-    public FormDesigner formDesigner;
+    VisualDesignerPopupFactory hackedPopupFactory = null;
+    FormDesigner formDesigner;
     JLayeredPane layers;
     JComponent glassLayer;
     DropTargetLayer dropTargetLayer;
@@ -432,13 +431,13 @@ public class MenuEditLayer extends JPanel {
                 }
                 
             };
-            formDesigner.addPropertyChangeListener("activatedNodes",selectionListener);
+            formDesigner.addPropertyChangeListener("activatedNodes", selectionListener); // NOI18N
         }
     }
     
     private void unconfigureSelectionListener() {
         if(selectionListener != null) {
-            formDesigner.removePropertyChangeListener(selectionListener);
+            formDesigner.removePropertyChangeListener("activatedNodes", selectionListener); // NOI18N
             selectionListener = null;
         }
     }
@@ -724,12 +723,13 @@ public class MenuEditLayer extends JPanel {
     JComponent getMenuParent(JComponent menu) {
         RADComponent targetRad = formDesigner.getMetaComponent(menu);
         RADComponent parentRad = targetRad.getParentComponent();
-        Object possibleParent = formDesigner.getComponent(parentRad);
-        if(possibleParent instanceof JComponent) {
-            return (JComponent) possibleParent;
-        } else {
-            return null;
+        if (parentRad != null) {
+            Object possibleParent = formDesigner.getComponent(parentRad);
+            if(possibleParent instanceof JComponent) {
+                return (JComponent) possibleParent;
+            }
         }
+        return null;
     }
     
    
@@ -1098,7 +1098,14 @@ public class MenuEditLayer extends JPanel {
                 payloadParentRad.remove(payloadRad);
                 formDesigner.getFormModel().fireComponentRemoved(payloadRad, payloadParentRad, index, false);
             }
-
+            
+            // only Menu component can be added into MenuBar, 
+            // reset parent for the other components (issue #143248 fix)
+            if (payloadRad != null 
+                    && !javax.swing.JMenu.class.isAssignableFrom(payloadRad.getBeanClass()) 
+                    && target instanceof JMenu && targetParent instanceof JMenuBar) {
+                targetParent = null;
+            }
                 
             //if dragged component into a toplevel menu
             if(targetParent == null && target instanceof JMenu && target.getParent() instanceof JMenuBar) {
@@ -1403,7 +1410,8 @@ public class MenuEditLayer extends JPanel {
             // open top level menus when clicking them
             RADComponent rad = formDesigner.getHandleLayer().getMetaComponentAt(e.getPoint(), HandleLayer.COMP_DEEPEST);
             if(rad != null) {
-                JComponent c = (JComponent) formDesigner.getComponent(rad);
+                Object o = formDesigner.getComponent(rad);
+                JComponent c = (o instanceof JComponent) ? (JComponent)o : null;
                 if(c != null && isTopLevelMenu(c)) {
                     if(e.getClickCount() > 1) {
                         isEditing = true;
