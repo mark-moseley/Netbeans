@@ -47,6 +47,7 @@ import java.awt.KeyboardFocusManager;
 import java.awt.Window;
 import java.io.*;
 import java.util.*;
+import java.util.logging.Level;
 import java.util.regex.Pattern;
 
 import org.netbeans.api.project.FileOwnerQuery;
@@ -250,6 +251,32 @@ public class Utils {
         return new Context(filtered, roots, exclusions);
     }
 
+    /**
+     * Returns the widest possible versioned context for the given file, the outter boundary is the file's Project.
+     * 
+     * @param file a file
+     * @return Context a context 
+     */
+    public static Context getProjectContext(Project project, File file) {
+        Context context = Utils.getProjectsContext(new Project[] { project });
+        if (context.getRootFiles().length == 0) {
+            // the project itself is not versioned, try to search in the broadest context possible
+            FileStatusCache cache = CvsVersioningSystem.getInstance().getStatusCache();
+            for (;;) {
+                File parent = file.getParentFile();
+                assert parent != null;
+                if ((cache.getStatus(parent).getStatus() & FileInformation.STATUS_IN_REPOSITORY) == 0) {
+                    Set<File> files = new HashSet<File>(1);
+                    files.add(file);
+                    context = new Context(files, files, Collections.emptySet());
+                    break;
+                }
+                file = parent;
+            }
+        }
+        return context;
+    }
+    
     public static File [] toFileArray(Collection fileObjects) {
         Set files = new HashSet(fileObjects.size()*4/3+1);
         for (Iterator i = fileObjects.iterator(); i.hasNext();) {
@@ -446,9 +473,15 @@ public class Utils {
     }
 
     public static boolean containsMetadata(File folder) {
+        CvsVersioningSystem.LOG.log(Level.FINER, " containsMetadata {0}", new Object[] { folder });
+        long t = System.currentTimeMillis();
         File repository = new File(folder, CvsVersioningSystem.FILENAME_CVS_REPOSITORY);
         File entries = new File(folder, CvsVersioningSystem.FILENAME_CVS_ENTRIES);
-        return repository.canRead() && entries.canRead();
+        boolean ret = repository.canRead() && entries.canRead();
+        if(CvsVersioningSystem.LOG.isLoggable(Level.FINER)) {
+            CvsVersioningSystem.LOG.log(Level.FINER, " containsMetadata returns {0} after {1} millis", new Object[] { ret, System.currentTimeMillis() - t });
+        }
+        return ret;
     }
 
     /**
