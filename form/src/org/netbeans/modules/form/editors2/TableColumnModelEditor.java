@@ -42,6 +42,9 @@
 package org.netbeans.modules.form.editors2;
 
 import java.awt.Component;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Rectangle;
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
 import java.io.IOException;
@@ -71,7 +74,7 @@ public class TableColumnModelEditor extends PropertyEditorSupport
         implements NamedPropertyEditor, FormCodeAwareEditor, XMLPropertyEditor {
 
     /** Property being edited. */
-    private FormProperty property;    
+    private RADProperty property;
     
     /**
      * Retruns display name of this property editor. 
@@ -89,7 +92,7 @@ public class TableColumnModelEditor extends PropertyEditorSupport
      * @param property property being edited.
      */
     public void setContext(FormModel formModel, FormProperty property) {
-        this.property = property;
+        this.property = (RADProperty)property;
     }
 
     /**
@@ -122,8 +125,24 @@ public class TableColumnModelEditor extends PropertyEditorSupport
         return label;
     }
 
+    @Override
+    public String getAsText() {
+        return null;
+    }
+
+    @Override
+    public boolean isPaintable() {
+        return true;
+    }
+
+    @Override
+    public void paintValue(Graphics g, Rectangle rectangle) {
+        String msg = NbBundle.getMessage(TableColumnModelEditor.class, "TableColumnModelEditor_TableColumnModel"); // NOI18N
+        FontMetrics fm = g.getFontMetrics();
+        g.drawString(msg, rectangle.x, rectangle.y + (rectangle.height - fm.getHeight())/2 + fm.getAscent());
+    }
+
     public String getSourceCode() {
-        RADProperty property = (RADProperty)this.property;
         RADComponent comp = property.getRADComponent();
         CodeVariable var = comp.getCodeExpression().getVariable();
         String varName = (var == null) ? null : var.getName();
@@ -190,7 +209,6 @@ public class TableColumnModelEditor extends PropertyEditorSupport
     private static final String XML_TABLE_COLUMN_MODEL = "TableColumnModel"; // NOI18N
     private static final String ATTR_SELECTION_MODEL = "selectionModel"; // NOI18N
     private static final String XML_COLUMN = "Column"; // NOI18N
-    private static final String ATTR_INDEX = "index"; // NOI18N
     private static final String ATTR_RESIZABLE = "resizable"; // NOI18N
     private static final String ATTR_WIDTH_MIN = "minWidth"; // NOI18N
     private static final String ATTR_WIDTH_PREF = "prefWidth"; // NOI18N
@@ -200,6 +218,8 @@ public class TableColumnModelEditor extends PropertyEditorSupport
     private static final String XML_RENDERER = "Renderer"; // NOI18N
     private static final String ATTR_PROP_EDITOR = "editor"; // NOI18N
     private static final String ATTR_VALUE = "value"; // NOI18N
+    private static final String ATTR_RESOURCE_KEY = "resourceKey"; // NOI18N
+    private static final String ATTR_NO_RESOURCE = "noResource"; // NOI18N
 
     public void readFromXML(Node element) throws IOException {
         org.w3c.dom.NamedNodeMap attributes = element.getAttributes();
@@ -212,7 +232,7 @@ public class TableColumnModelEditor extends PropertyEditorSupport
         for (int i=0; i<nodes.getLength(); i++) {
             Node node = nodes.item(i);
             if (XML_COLUMN.equals(node.getNodeName())) {
-                FormTableColumn column = new FormTableColumn(property);
+                FormTableColumn column = new FormTableColumn(property, model.getColumns().size());
                 
                 org.w3c.dom.NamedNodeMap colAttrs = node.getAttributes();
                 String resizableTxt = colAttrs.getNamedItem(ATTR_RESIZABLE).getNodeValue();
@@ -250,15 +270,21 @@ public class TableColumnModelEditor extends PropertyEditorSupport
     private void loadProperty(FormProperty property, Node node) {
         org.w3c.dom.NamedNodeMap attributes = node.getAttributes();
         Node valueNode = attributes.getNamedItem(ATTR_VALUE);
+        Node noResourceNode = attributes.getNamedItem(ATTR_NO_RESOURCE);
+        Node resourceKeyNode = attributes.getNamedItem(ATTR_RESOURCE_KEY);
+        FormModel formModel = property.getPropertyContext().getFormModel();
         try {
-            if (valueNode != null) {
+            if (resourceKeyNode != null) {
+                String resourceKey = resourceKeyNode.getNodeValue();
+                Object value = ResourceSupport.findResource(formModel, resourceKey, property.getValueType());
+                property.setValue(value);
+            } else if (valueNode != null) {
                 property.setValue(valueNode.getNodeValue());
             } else {
                 NodeList nodes = node.getChildNodes();
                 for (int i=0; i<nodes.getLength(); i++) {
                     Node subNode = nodes.item(i);
                     if (subNode.getNodeType() == Node.ELEMENT_NODE) {
-                        FormModel formModel = property.getPropertyContext().getFormModel();
                         String propEdName = attributes.getNamedItem(ATTR_PROP_EDITOR).getNodeValue();
                         XMLPropertyEditor xmlPropEd = null;
                         if (propEdName.equals(RADConnectionPropertyEditor.class.getName())) {
@@ -281,6 +307,11 @@ public class TableColumnModelEditor extends PropertyEditorSupport
                         }
                         break;
                     }
+                }
+            }
+            if (noResourceNode != null) {
+                if (Boolean.parseBoolean(noResourceNode.getNodeValue())) {
+                    ResourceSupport.setExcludedProperty(property, true);
                 }
             }
         } catch (Exception ex) {
@@ -322,16 +353,33 @@ public class TableColumnModelEditor extends PropertyEditorSupport
         if (property.isChanged()) {
             PropertyEditor editor = property.getCurrentEditor();
             if (editor instanceof XMLPropertyEditor) {
-                element.setAttribute(ATTR_PROP_EDITOR, editor.getClass().getName());
-                Node node = ((XMLPropertyEditor)editor).storeToXML(doc);
-                element.appendChild(node);
+                try {
+                    editor.setValue(property.getValue());
+                    element.setAttribute(ATTR_PROP_EDITOR, editor.getClass().getName());
+                    Node node = ((XMLPropertyEditor)editor).storeToXML(doc);
+                    if (node != null) {
+                        element.appendChild(node);
+                    }
+                } catch (IllegalAccessException iaex) {
+                    Logger.getLogger(getClass().getName()).log(Level.INFO, iaex.getMessage(), iaex);
+                } catch (InvocationTargetException itex) {
+                    Logger.getLogger(getClass().getName()).log(Level.INFO, itex.getMessage(), itex);
+                }
             } else {
                 try {
                     Object value = property.getValue();
-                    if (value instanceof String) {
-                        element.setAttribute(ATTR_VALUE, (String)value);
+                    String resourceKey = null;
+                    if (value instanceof ResourceValue) {
+                        resourceKey = ((ResourceValue)value).getKey();
                     } else {
-                        System.err.println("Unable to store " + property); // NOI18N
+                        if (value instanceof String) {
+                            element.setAttribute(ATTR_VALUE, (String)value);
+                        } else {
+                            System.err.println("Unable to store " + property); // NOI18N
+                        }
+                    }
+                    if (resourceKey != null) {
+                        element.setAttribute(ATTR_RESOURCE_KEY, resourceKey);
                     }
                 } catch (IllegalAccessException iaex) {
                     Logger.getLogger(getClass().getName()).log(Level.INFO, iaex.getMessage(), iaex);
@@ -339,6 +387,11 @@ public class TableColumnModelEditor extends PropertyEditorSupport
                     Logger.getLogger(getClass().getName()).log(Level.INFO, itex.getMessage(), itex);
                 }
             }
+        }
+        boolean noResource = ResourceSupport.isResourceableProperty(property)
+            && ResourceSupport.isExcludedProperty(property);
+        if (noResource) {
+            element.setAttribute(ATTR_NO_RESOURCE, Boolean.TRUE.toString());
         }
     }
 
@@ -460,14 +513,14 @@ public class TableColumnModelEditor extends PropertyEditorSupport
         private Property editor;
         private Property renderer;
 
-        public FormTableColumn(FormProperty prop) {
+        public FormTableColumn(RADProperty prop, int index) {
             minWidth = -1;
             prefWidth = -1;
             maxWidth = -1;
             resizable = true;
-            title = new Property(prop, "title", String.class, null, null); // NOI18N
-            editor = new Property(prop, "editor", TableCellEditor.class, null, null); // NOI18N
-            renderer = new Property(prop, "renderer", TableCellRenderer.class, null, null); // NOI18N
+            title = new Property(prop, "title"+index, String.class, null, null); // NOI18N
+            editor = new Property(prop, "editor"+index, TableCellEditor.class, null, null); // NOI18N
+            renderer = new Property(prop, "renderer"+index, TableCellRenderer.class, null, null); // NOI18N
         }
 
         public int getMinWidth() {
@@ -518,9 +571,9 @@ public class TableColumnModelEditor extends PropertyEditorSupport
     static class Property extends FormProperty {
         private Object value;
 
-        Property(FormProperty prop, String name, Class type, String displayName, String description) {
-            // PENDING override getContextPath
+        Property(RADProperty prop, String name, Class type, String displayName, String description) {
             super(new FormPropertyContext.SubProperty(prop), name, type, displayName, description);
+            prop.getRADComponent().setPropertyListener(this);
         }
 
         public Object getTargetValue() throws IllegalAccessException, InvocationTargetException {
