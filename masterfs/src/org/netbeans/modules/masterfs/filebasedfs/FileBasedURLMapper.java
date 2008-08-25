@@ -49,14 +49,14 @@ import org.openide.filesystems.URLMapper;
 
 import java.io.File;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObjectFactory;
-import org.netbeans.modules.masterfs.filebasedfs.fileobjects.FolderObj;
 import org.netbeans.modules.masterfs.filebasedfs.fileobjects.RootObj;
 import org.openide.util.Exceptions;
 
 //TODO: JDK problems with URL, URI, File conversion for UNC
+import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 /*
 There must be consistently called conversion from FileUtil and URLMapper.
 new File (URI.create (fo.getURL ().toExternalForm ())) is typical scenario that leads to this
@@ -107,37 +107,31 @@ public final class FileBasedURLMapper extends URLMapper {
 
     public final FileObject[] getFileObjects(final URL url) {
         if (!"file".equals(url.getProtocol())) return null;  //NOI18N
+        // return null for UNC root
+        if(url.getPath().equals("//") || url.getPath().equals("////")) {  //NOI18N
+            return null;
+        }
         //TODO: review and simplify         
         FileObject retVal = null;
         File file;
         try {
-            final String host = url.getHost();
-            final String f = url.getFile();
-            //TODO: UNC workaround     
-            //TODO: string concatenation
-            if (host != null && host.trim().length() != 0) {
-                file = new File("////" + host + f);//NOI18N    
-            } else {
-                if (f.startsWith("//")) {
-                    file = new File(f);
-                } else {
-                    file = new File(new URI(url.toExternalForm()));
-                }
-            }
+            file = FileUtil.normalizeFile(new File(url.toURI()));
         } catch (URISyntaxException e) {
-            file = new File(url.getFile());
-            if (!file.exists()) {
-                final StringBuffer sb = new StringBuffer();
-                sb.append(e.getLocalizedMessage()).append(" [").append(url.toExternalForm()).append(']');//NOI18N
-                Exceptions.printStackTrace(new IllegalArgumentException(sb.toString()));
-                return null;
-            }
+            StringBuilder sb = new StringBuilder();            
+            sb.append(e.getLocalizedMessage()).append(" [").append(url.toExternalForm()).append(']');//NOI18N
+            IllegalArgumentException iax = new IllegalArgumentException(sb.toString());
+            if (Utilities.isWindows() && url.getAuthority() != null) {
+                Exceptions.attachLocalizedMessage(iax,NbBundle.getMessage(FileBasedURLMapper.class, "MSG_UNC_PATH"));//NOI18N
+            }            
+            Exceptions.printStackTrace(iax);
+            return null;
+        } catch (IllegalArgumentException iax) {
+            // catch possible IAE from File constructor and re-throw with URL
+            Exceptions.printStackTrace(Exceptions.attachMessage(iax, "URL="+url));  //NOI18N
+            return null;
         }
-        final FileBasedFileSystem instance = FileBasedFileSystem.getInstance(file);
-        if (instance != null) {
-            retVal = instance.getFactory().findFileObject(file, instance, FileObjectFactory.Caller.ToFileObject);
-        }
-
+        
+        retVal = FileBasedFileSystem.getFileObject(file, FileObjectFactory.Caller.ToFileObject);
         return new FileObject[]{retVal};
     }
 
