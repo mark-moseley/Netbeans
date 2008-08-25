@@ -41,9 +41,10 @@
 
 package org.netbeans.modules.project.libraries.ui;
 
-import org.netbeans.api.project.libraries.*;
-import org.netbeans.modules.project.libraries.ui.*;
 import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URI;
+import org.netbeans.modules.project.libraries.ui.*;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +54,8 @@ import org.netbeans.modules.project.libraries.LibraryAccessor;
 import org.netbeans.spi.project.libraries.ArealLibraryProvider;
 import org.netbeans.spi.project.libraries.LibraryStorageArea;
 import org.netbeans.spi.project.libraries.support.LibrariesSupport;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 
@@ -81,7 +84,7 @@ class AllLibrariesCustomizer extends javax.swing.JPanel {
             if (man.getLocation() == null) {
                 continue;
             }
-            items.add(LibrariesSupport.convertURLToFile(man.getLocation()).getPath());
+            items.add(LibrariesSupport.convertURIToFilePath(URI.create(man.getLocation().toExternalForm())));
         }
         libraryManagerComboBox.setModel(new DefaultComboBoxModel(items.toArray(new String[items.size()])));
     }
@@ -141,7 +144,14 @@ class AllLibrariesCustomizer extends javax.swing.JPanel {
         } else if (index == 0) {
             librariesCustomizer.setLibraryStorageArea(null);
         } else if (index > 0) {
-            URL u = LibrariesSupport.convertFileToURL(new File ((String)libraryManagerComboBox.getModel().getSelectedItem()));
+            URL u = null;
+            try {
+                //#131452 prevent space in path problem when converting to URL.
+                File loc = FileUtil.normalizeFile(new File((String) libraryManagerComboBox.getModel().getSelectedItem()));
+                u = loc.toURI().to`URL();
+            } catch (MalformedURLException ex) {
+                Exceptions.printStackTrace(ex);
+            }
             librariesCustomizer.setLibraryStorageArea(findLibraryStorageArea(u));
         }
     }//GEN-LAST:event_libraryManagerComboBoxActionPerformed
