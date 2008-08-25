@@ -51,7 +51,7 @@ import junit.framework.Test;
 import junit.textui.TestRunner;
 import org.netbeans.api.progress.aggregate.AggregateProgressFactory;
 import org.netbeans.api.progress.aggregate.ProgressContributor;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.modules.dbschema.SchemaElement;
 import org.netbeans.modules.dbschema.SchemaElementUtil;
 import org.netbeans.modules.j2ee.persistence.wizard.fromdb.DBSchemaTableProvider;
@@ -82,20 +82,23 @@ public class GenerateEntityClassesTest extends DDTestCase {
     }
 
     
+    @Override
     protected void setUp() throws Exception {
         super.setUp();
         System.out.println("########  "+getName()+"  #######");
     }
     
+    @Override
     protected void tearDown() throws Exception {
     }
     
     public static Test suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new GenerateEntityClassesTest("testOpenProject"));
-        suite.addTest(new GenerateEntityClassesTest("testGenerateBeans"));
-        
-        return suite;
+        NbModuleSuite.Configuration conf = NbModuleSuite.createConfiguration(GenerateEntityClassesTest.class);
+        conf = addServerTests(Server.GLASSFISH,conf,"testOpenProject");
+        if (isRegistered(Server.GLASSFISH))
+            conf = addServerTests(conf, "testGenerateBeans");
+        conf = conf.enableModules(".*").clusters(".*");
+        return NbModuleSuite.create(conf);
     }
     
     /** Use for execution inside IDE */
