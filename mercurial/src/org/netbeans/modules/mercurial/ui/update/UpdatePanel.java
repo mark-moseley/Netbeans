@@ -38,9 +38,8 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.mercurial.ui.merge;
+package org.netbeans.modules.mercurial.ui.update;
 
-import org.netbeans.modules.mercurial.ui.update.*;
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -64,11 +63,11 @@ import org.netbeans.modules.mercurial.util.HgCommand;
  *
  * @author  Padraig O'Briain
  */
-public class MergeRevisionsPanel extends javax.swing.JPanel {
+public class UpdatePanel extends javax.swing.JPanel {
 
     private File                            repository;
     private RequestProcessor.Task           refreshViewTask;
-    private static final RequestProcessor   rp = new RequestProcessor("MercurialMerge", 1);  // NOI18N
+    private static final RequestProcessor   rp = new RequestProcessor("MercurialUpdate", 1);  // NOI18N
     private Thread                          refreshViewThread;
     private HgLogMessage[] messages;
     private int fetchRevisionLimit = Mercurial.HG_NUMBER_TO_FETCH_DEFAULT;
@@ -76,7 +75,7 @@ public class MergeRevisionsPanel extends javax.swing.JPanel {
     private File [] roots;
 
     /** Creates new form ReverModificationsPanel */
-     public MergeRevisionsPanel(File repo,File [] roots) {
+     public UpdatePanel(File repo, File [] roots) {
         repository = repo;
         this.roots = roots;
         refreshViewTask = rp.create(new RefreshViewTask());
@@ -98,6 +97,10 @@ public class MergeRevisionsPanel extends javax.swing.JPanel {
         return revStr;
     }
 
+    public boolean isForcedUpdateRequested() {
+        return forcedUpdateChxBox.isSelected();
+    }
+
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
@@ -109,11 +112,13 @@ public class MergeRevisionsPanel extends javax.swing.JPanel {
         revisionsLabel = new javax.swing.JLabel();
         revisionsComboBox = new javax.swing.JComboBox();
         jLabel1 = new javax.swing.JLabel();
-        changesetPanel1 = new org.netbeans.modules.mercurial.ui.repository.ChangesetPanel();
         jLabel2 = new javax.swing.JLabel();
+        jPanel1 = new javax.swing.JPanel();
+        forcedUpdateChxBox = new javax.swing.JCheckBox();
+        changesetPanel1 = new org.netbeans.modules.mercurial.ui.repository.ChangesetPanel();
 
         revisionsLabel.setLabelFor(revisionsComboBox);
-        org.openide.awt.Mnemonics.setLocalizedText(revisionsLabel, org.openide.util.NbBundle.getMessage(MergeRevisionsPanel.class, "MSG_MERGE_CHOOSE_REVISION")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(revisionsLabel, org.openide.util.NbBundle.getMessage(UpdatePanel.class, "UpdatePanel.revisionsLabel.text")); // NOI18N
 
         revisionsComboBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -121,47 +126,63 @@ public class MergeRevisionsPanel extends javax.swing.JPanel {
             }
         });
 
-        jLabel1.setText(org.openide.util.NbBundle.getMessage(MergeRevisionsPanel.class, "infoLabel.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(UpdatePanel.class, "UpdatePanel.infoLabel.text")); // NOI18N
 
         jLabel2.setForeground(new java.awt.Color(153, 153, 153));
-        jLabel2.setText(org.openide.util.NbBundle.getMessage(MergeRevisionsPanel.class, "infolabel2.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel2, org.openide.util.NbBundle.getMessage(UpdatePanel.class, "UpdatePanel.infoLabel2.text")); // NOI18N
+
+        jPanel1.setBorder(javax.swing.BorderFactory.createTitledBorder(org.openide.util.NbBundle.getMessage(UpdatePanel.class, "UpdatePanel.jPanel1.border.title"))); // NOI18N
+
+        org.openide.awt.Mnemonics.setLocalizedText(forcedUpdateChxBox, org.openide.util.NbBundle.getMessage(UpdatePanel.class, "UpdatePanel.forcedUpdateChxBox.text")); // NOI18N
+
+        org.jdesktop.layout.GroupLayout jPanel1Layout = new org.jdesktop.layout.GroupLayout(jPanel1);
+        jPanel1.setLayout(jPanel1Layout);
+        jPanel1Layout.setHorizontalGroup(
+            jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel1Layout.createSequentialGroup()
+                .addContainerGap()
+                .add(forcedUpdateChxBox)
+                .addContainerGap(66, Short.MAX_VALUE))
+        );
+        jPanel1Layout.setVerticalGroup(
+            jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel1Layout.createSequentialGroup()
+                .add(forcedUpdateChxBox)
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
+                .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(jLabel2)
+                    .add(jLabel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 568, Short.MAX_VALUE)
                     .add(layout.createSequentialGroup()
-                        .add(34, 34, 34)
+                        .add(30, 30, 30)
                         .add(revisionsLabel)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(revisionsComboBox, 0, 257, Short.MAX_VALUE))
-                    .add(layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(jLabel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 424, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                    .add(layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(jLabel2))
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(changesetPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 425, Short.MAX_VALUE)))
+                        .add(revisionsComboBox, 0, 384, Short.MAX_VALUE))
+                    .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .add(changesetPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 568, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
-                .addContainerGap()
-                .add(jLabel1)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jLabel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 25, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .add(4, 4, 4)
                 .add(jLabel2)
                 .add(17, 17, 17)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(revisionsLabel)
-                    .add(revisionsComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 21, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                    .add(revisionsComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 27, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(revisionsLabel))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(changesetPanel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 152, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jPanel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -203,7 +224,7 @@ private void revisionsComboBoxActionPerformed(java.awt.event.ActionEvent evt) {/
         }
         return bGetMore;
     }
-
+    
     /**
      * Must NOT be run from AWT.
      */
@@ -272,8 +293,10 @@ private void revisionsComboBoxActionPerformed(java.awt.event.ActionEvent evt) {/
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private org.netbeans.modules.mercurial.ui.repository.ChangesetPanel changesetPanel1;
+    private javax.swing.JCheckBox forcedUpdateChxBox;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
+    private javax.swing.JPanel jPanel1;
     private javax.swing.JComboBox revisionsComboBox;
     private javax.swing.JLabel revisionsLabel;
     // End of variables declaration//GEN-END:variables

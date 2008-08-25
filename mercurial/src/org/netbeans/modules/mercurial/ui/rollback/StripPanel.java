@@ -38,9 +38,8 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.mercurial.ui.merge;
+package org.netbeans.modules.mercurial.ui.rollback;
 
-import org.netbeans.modules.mercurial.ui.update.*;
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -64,11 +63,11 @@ import org.netbeans.modules.mercurial.util.HgCommand;
  *
  * @author  Padraig O'Briain
  */
-public class MergeRevisionsPanel extends javax.swing.JPanel {
+public class StripPanel extends javax.swing.JPanel {
 
     private File                            repository;
     private RequestProcessor.Task           refreshViewTask;
-    private static final RequestProcessor   rp = new RequestProcessor("MercurialMerge", 1);  // NOI18N
+    private static final RequestProcessor   rp = new RequestProcessor("MercurialStrip", 1);  // NOI18N
     private Thread                          refreshViewThread;
     private HgLogMessage[] messages;
     private int fetchRevisionLimit = Mercurial.HG_NUMBER_TO_FETCH_DEFAULT;
@@ -76,9 +75,9 @@ public class MergeRevisionsPanel extends javax.swing.JPanel {
     private File [] roots;
 
     /** Creates new form ReverModificationsPanel */
-     public MergeRevisionsPanel(File repo,File [] roots) {
+     public StripPanel(File repo, File [] roots) {
+         this.roots = roots;
         repository = repo;
-        this.roots = roots;
         refreshViewTask = rp.create(new RefreshViewTask());
         initComponents();
         revisionsComboBox.setMaximumRowCount(Mercurial.HG_MAX_REVISION_COMBO_SIZE);
@@ -88,14 +87,18 @@ public class MergeRevisionsPanel extends javax.swing.JPanel {
     public String getSelectedRevision() {
         String revStr = (String) revisionsComboBox.getSelectedItem();
         if(revStr != null){
-            if (revStr.equals(NbBundle.getMessage(RevertModificationsPanel.class, "MSG_Revision_Default")) || // NOI18N
-                revStr.equals(NbBundle.getMessage(RevertModificationsPanel.class, "MSG_Fetching_Revisions"))) { // NOI18N
+            if (revStr.equals(NbBundle.getMessage(StripPanel.class, "MSG_Revision_Default")) || // NOI18N
+                revStr.equals(NbBundle.getMessage(StripPanel.class, "MSG_Fetching_Revisions"))) { // NOI18N
                 revStr = null;
             } else {
                 revStr = revStr.substring(0, revStr.indexOf(" ")); // NOI18N
             }
         }
         return revStr;
+    }
+
+    public boolean isBackupRequested() {
+        return doBackupChxBox.isSelected();
     }
 
     /** This method is called from within the constructor to
@@ -106,14 +109,32 @@ public class MergeRevisionsPanel extends javax.swing.JPanel {
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
+        jPanel2 = new javax.swing.JPanel();
+        doForcedMultiHeadStripChxBox = new javax.swing.JCheckBox();
         revisionsLabel = new javax.swing.JLabel();
         revisionsComboBox = new javax.swing.JComboBox();
         jLabel1 = new javax.swing.JLabel();
-        changesetPanel1 = new org.netbeans.modules.mercurial.ui.repository.ChangesetPanel();
         jLabel2 = new javax.swing.JLabel();
+        jPanel1 = new javax.swing.JPanel();
+        doBackupChxBox = new javax.swing.JCheckBox();
+        jPanel3 = new javax.swing.JPanel();
+        changesetPanel1 = new org.netbeans.modules.mercurial.ui.repository.ChangesetPanel();
+
+        org.jdesktop.layout.GroupLayout jPanel2Layout = new org.jdesktop.layout.GroupLayout(jPanel2);
+        jPanel2.setLayout(jPanel2Layout);
+        jPanel2Layout.setHorizontalGroup(
+            jPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(0, 100, Short.MAX_VALUE)
+        );
+        jPanel2Layout.setVerticalGroup(
+            jPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(0, 100, Short.MAX_VALUE)
+        );
+
+        org.openide.awt.Mnemonics.setLocalizedText(doForcedMultiHeadStripChxBox, org.openide.util.NbBundle.getMessage(StripPanel.class, "StripPanel.doForcedMultiHeadStripChxBox.text")); // NOI18N
 
         revisionsLabel.setLabelFor(revisionsComboBox);
-        org.openide.awt.Mnemonics.setLocalizedText(revisionsLabel, org.openide.util.NbBundle.getMessage(MergeRevisionsPanel.class, "MSG_MERGE_CHOOSE_REVISION")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(revisionsLabel, org.openide.util.NbBundle.getMessage(StripPanel.class, "StripPanel.revisionsLabel.text")); // NOI18N
 
         revisionsComboBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -121,48 +142,88 @@ public class MergeRevisionsPanel extends javax.swing.JPanel {
             }
         });
 
-        jLabel1.setText(org.openide.util.NbBundle.getMessage(MergeRevisionsPanel.class, "infoLabel.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(StripPanel.class, "StripPanel.infoLabel.text")); // NOI18N
 
         jLabel2.setForeground(new java.awt.Color(153, 153, 153));
-        jLabel2.setText(org.openide.util.NbBundle.getMessage(MergeRevisionsPanel.class, "infolabel2.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel2, org.openide.util.NbBundle.getMessage(StripPanel.class, "StripPanel.infoLabel2.text")); // NOI18N
+
+        jPanel1.setBorder(javax.swing.BorderFactory.createTitledBorder(org.openide.util.NbBundle.getMessage(StripPanel.class, "StripPanel.jPanel1.border.title"))); // NOI18N
+
+        doBackupChxBox.setSelected(true);
+        org.openide.awt.Mnemonics.setLocalizedText(doBackupChxBox, org.openide.util.NbBundle.getMessage(StripPanel.class, "StripPanel.doBackupChxBox.text")); // NOI18N
+
+        org.jdesktop.layout.GroupLayout jPanel1Layout = new org.jdesktop.layout.GroupLayout(jPanel1);
+        jPanel1.setLayout(jPanel1Layout);
+        jPanel1Layout.setHorizontalGroup(
+            jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel1Layout.createSequentialGroup()
+                .addContainerGap()
+                .add(doBackupChxBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 327, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(65, Short.MAX_VALUE))
+        );
+        jPanel1Layout.setVerticalGroup(
+            jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel1Layout.createSequentialGroup()
+                .add(doBackupChxBox)
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+
+        doBackupChxBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(StripPanel.class, "ACSD_doBackupChxBox")); // NOI18N
+
+        org.jdesktop.layout.GroupLayout jPanel3Layout = new org.jdesktop.layout.GroupLayout(jPanel3);
+        jPanel3.setLayout(jPanel3Layout);
+        jPanel3Layout.setHorizontalGroup(
+            jPanel3Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(0, 0, Short.MAX_VALUE)
+        );
+        jPanel3Layout.setVerticalGroup(
+            jPanel3Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(0, 307, Short.MAX_VALUE)
+        );
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
+                .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(layout.createSequentialGroup()
-                        .add(34, 34, 34)
-                        .add(revisionsLabel)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(revisionsComboBox, 0, 257, Short.MAX_VALUE))
-                    .add(layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(jLabel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 424, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                    .add(layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(jLabel2))
+                    .add(jLabel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 421, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(changesetPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 425, Short.MAX_VALUE)))
-                .addContainerGap())
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
+                            .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
+                                .add(26, 26, 26)
+                                .add(revisionsLabel)
+                                .add(18, 18, 18)
+                                .add(revisionsComboBox, 0, 228, Short.MAX_VALUE))
+                            .add(org.jdesktop.layout.GroupLayout.LEADING, jLabel2, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 421, Short.MAX_VALUE)
+                            .add(org.jdesktop.layout.GroupLayout.LEADING, changesetPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .add(org.jdesktop.layout.GroupLayout.LEADING, jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)))
+                .add(15, 15, 15)
+                .add(jPanel3, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
-                .addContainerGap()
-                .add(jLabel1)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jLabel2)
-                .add(17, 17, 17)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(revisionsLabel)
-                    .add(revisionsComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 21, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(changesetPanel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 152, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(layout.createSequentialGroup()
+                        .add(jLabel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 25, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .add(4, 4, 4)
+                        .add(jLabel2)
+                        .add(16, 16, 16)
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                            .add(revisionsComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 29, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                            .add(revisionsLabel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 16, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(changesetPanel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 152, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(jPanel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 54, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                    .add(jPanel3, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap())
         );
+
+        revisionsComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(StripPanel.class, "ACSD_revisionsComboBox")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
 private void revisionsComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_revisionsComboBoxActionPerformed
@@ -209,10 +270,10 @@ private void revisionsComboBoxActionPerformed(java.awt.event.ActionEvent evt) {/
      */
     private void setupModels() {
         // XXX attach Cancelable hook
-        final ProgressHandle ph = ProgressHandleFactory.createHandle(NbBundle.getMessage(RevertModificationsPanel.class, "MSG_Refreshing_Update_Versions")); // NOI18N
+        final ProgressHandle ph = ProgressHandleFactory.createHandle(NbBundle.getMessage(StripPanel.class, "MSG_Refreshing_Strip_Versions")); // NOI18N
         try {
             Set<String>  initialRevsSet = new LinkedHashSet<String>();
-            initialRevsSet.add(NbBundle.getMessage(RevertModificationsPanel.class, "MSG_Fetching_Revisions")); // NOI18N
+            initialRevsSet.add(NbBundle.getMessage(StripPanel.class, "MSG_Fetching_Revisions")); // NOI18N
             ComboBoxModel targetsModel = new DefaultComboBoxModel(new Vector<String>(initialRevsSet));
             revisionsComboBox.setModel(targetsModel);
             refreshViewThread = Thread.currentThread();
@@ -241,7 +302,7 @@ private void revisionsComboBoxActionPerformed(java.awt.event.ActionEvent evt) {/
         int size;
         if( messages == null){
             size = 0;
-            targetRevsSet.add(NbBundle.getMessage(Update.class, "MSG_Revision_Default")); // NOI18N
+            targetRevsSet.add(NbBundle.getMessage(StripPanel.class, "MSG_Revision_Default")); // NOI18N
         }else{
             size = messages.length;
             int i = 0 ;
@@ -272,8 +333,13 @@ private void revisionsComboBoxActionPerformed(java.awt.event.ActionEvent evt) {/
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private org.netbeans.modules.mercurial.ui.repository.ChangesetPanel changesetPanel1;
+    private javax.swing.JCheckBox doBackupChxBox;
+    private javax.swing.JCheckBox doForcedMultiHeadStripChxBox;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
+    private javax.swing.JPanel jPanel1;
+    private javax.swing.JPanel jPanel2;
+    private javax.swing.JPanel jPanel3;
     private javax.swing.JComboBox revisionsComboBox;
     private javax.swing.JLabel revisionsLabel;
     // End of variables declaration//GEN-END:variables
