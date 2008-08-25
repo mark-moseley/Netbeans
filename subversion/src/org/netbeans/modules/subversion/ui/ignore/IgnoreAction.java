@@ -95,7 +95,7 @@ public class IgnoreAction extends ContextAction {
         if (files.length == 0) return UNDEFINED; 
         FileStatusCache cache = Subversion.getInstance().getStatusCache();
         for (int i = 0; i < files.length; i++) {
-            if (files[i].getName().equals(".svn") || files[i].getName().equals("_svn")) { // NOI18N
+            if (files[i].getName().equals(SvnUtils.SVN_ADMIN_DIR)) { // NOI18N
                 actionStatus = UNDEFINED;
                 break;
             }
@@ -229,7 +229,7 @@ public class IgnoreAction extends ContextAction {
         // technically, this block need not be synchronized but we want to have svn:ignore property set correctly at all times
         synchronized(IgnoreAction.class) {                        
             List<String> patterns = Subversion.getInstance().getClient(true).getIgnoredPatterns(parent);
-            if (patterns.contains(file.getName()) == false) {
+            if (patterns != null && patterns.contains(file.getName()) == false) {
                 patterns.add(file.getName());
                 Subversion.getInstance().getClient(true).setIgnoredPatterns(parent, patterns);
             }            
