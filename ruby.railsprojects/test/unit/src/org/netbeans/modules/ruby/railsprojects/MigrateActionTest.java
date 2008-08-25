@@ -128,7 +128,7 @@ public class MigrateActionTest extends RailsProjectTestBase {
     public void testMigrations109892() throws Exception {
         RailsProject p = constructRailsProject("testfiles/migrations1.txt");
         assertNotNull(p);
-        
+
         checkMenu(this, "testfiles/migrations1.txt", p);
     }
 
@@ -136,15 +136,15 @@ public class MigrateActionTest extends RailsProjectTestBase {
         String name = "testfiles/mephisto.txt";
         RailsProject p = constructRailsProject(name);
         assertNotNull(p);
-        
+
         checkMenu(this, name, p);
     }
-    
+
     public void testEmpty1() throws Exception {
         String name = "testfiles/empty.txt";
         RailsProject p = constructRailsProject(name);
         assertNotNull(p);
-        
+
         checkMenu(this, name, p);
     }
 
@@ -152,7 +152,7 @@ public class MigrateActionTest extends RailsProjectTestBase {
         String name = "testfiles/empty2.txt";
         RailsProject p = constructRailsProject(name);
         assertNotNull(p);
-        
+
         checkMenu(this, name, p);
     }
 
@@ -160,7 +160,7 @@ public class MigrateActionTest extends RailsProjectTestBase {
         String name = "testfiles/lotsofitems.txt";
         RailsProject p = constructRailsProject(name);
         assertNotNull(p);
-        
+
         checkMenu(this, name, p);
     }
 
@@ -168,7 +168,61 @@ public class MigrateActionTest extends RailsProjectTestBase {
         String name = "testfiles/short.txt";
         RailsProject p = constructRailsProject(name);
         assertNotNull(p);
+
+        checkMenu(this, name, p);
+    }
+
+    public void testMigrateUTC() throws Exception {
+        String name = "testfiles/migrate-utc.txt";
+        RailsProject p = constructRailsProject(name);
+        assertNotNull(p);
+
+        checkMenu(this, name, p);
+    }
+
+    public void testMigrateUTCMixed() throws Exception {
+        String name = "testfiles/migrate-utc-mixed.txt";
+        RailsProject p = constructRailsProject(name);
+        assertNotNull(p);
+
+        checkMenu(this, name, p);
+    }
+
+    public void testMigrateUTCMany() throws Exception {
+        String name = "testfiles/migrate-utc-many.txt";
+        RailsProject p = constructRailsProject(name);
+        assertNotNull(p);
         
         checkMenu(this, name, p);
+    }
+
+    public void testGetMigrationVersion() {
+        String sequential = "001_create_users.rb";
+        assertEquals(Long.valueOf("1"), MigrateAction.getMigrationVersion(sequential));
+
+        String sequential2 = "999_create_users.rb";
+        assertEquals(Long.valueOf("999"), MigrateAction.getMigrationVersion(sequential2));
+
+        String timestamp = "20080825092811_create_users.rb";
+        assertEquals(Long.valueOf("20080825092811"), MigrateAction.getMigrationVersion(timestamp));
+
+        String notMigration = "just_some_file.rb";
+        assertNull(MigrateAction.getMigrationVersion(notMigration));
+
+    }
+
+    public void testGetMigrationDescription() {
+        String sequential = "001_create_users.rb";
+        assertEquals("CreateUsers.rb", MigrateAction.getMigrationDescription(sequential));
+
+        String sequential2 = "999_create_users.rb";
+        assertEquals("CreateUsers.rb", MigrateAction.getMigrationDescription(sequential2));
+
+        String timestamp = "20080825092811_create_users_and_groups.rb";
+        assertEquals("CreateUsersAndGroups.rb", MigrateAction.getMigrationDescription(timestamp));
+
+        String notMigration = "just_some_file.rb";
+        assertNull(MigrateAction.getMigrationDescription(notMigration));
+
     }
 }
