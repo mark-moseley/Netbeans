@@ -584,6 +584,38 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
         return supe;
     }
 
+    @Override
+    void checkCookieSet(Class<?> clazz) {
+        if (getPrimaryFile().hasExt(XML_EXT)) {
+            // #24683 fix: do not return any cookie until the .settings file is written
+            // successfully; PROP_COOKIE is fired when cookies are available.
+            String filename = getPrimaryFile().getPath();
+            if (createdIDOs.contains(filename)) return;
+
+            Object res = getCookieFromEP(clazz);
+            if (res != null) {
+//                getCookieSet().assign(clazz, res);
+            }
+        }
+    }
+    
+    private Lookup lkp;
+    private static Object INIT_LOOKUP = new Object();
+    @Override
+    public Lookup getLookup() {
+        synchronized(INIT_LOOKUP) {
+            if (lkp != null) {
+                return lkp;
+            }
+            if (getPrimaryFile().hasExt(XML_EXT)) {
+                lkp = new ProxyLookup(getCookieSet().getLookup(), getCookiesLookup());
+            } else {
+                lkp = getCookieSet().getLookup();
+            }
+            return lkp;
+        }
+    }
+
     private Lookup.Result cookieResult = null;
     private Lookup.Result nodeResult = null;
     private Lookup cookiesLkp = null;
@@ -621,7 +653,7 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
         
         return cookiesLkp;        
     }
-
+    
     private void initNodeResult() {
         if (nodeResult != null && nodeLsnr != null) {
             nodeResult.removeLookupListener(nodeLsnr);
@@ -1115,15 +1147,27 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
         private static String getClassName(FileObject fo) {
             // first of all try "instanceClass" property of the primary file
             Object attr = fo.getAttribute (EA_INSTANCE_CLASS);
+            if (attr instanceof Class) {
+                return ((Class)attr).getName();
+            }
             if (attr instanceof String) {
                 return Utilities.translate((String) attr);
             } else if (attr != null) {
                 err.warning(
                     "instanceClass was a " + attr.getClass().getName()); // NOI18N
             }
+            
+            attr = fo.getAttribute ("class:" + EA_INSTANCE_CREATE);
+            if (attr instanceof Class) {
+                return ((Class)attr).getName();
+            }
 
             attr = fo.getAttribute (EA_INSTANCE_CREATE);
             if (attr != null) {
+                err.warning("Instance file " + fo + " uses " + EA_INSTANCE_CREATE + // NOI18N
+                        " attribute, but doesn't define " + EA_INSTANCE_CLASS + " attribute. " + // NOI18N
+                        "Please add " + EA_INSTANCE_CLASS + " attr to avoid multiple instances creation," + // NOI18N
+                        "see details at http://www.netbeans.org/issues/show_bug.cgi?id=131951"); // NOI18N
                 return attr.getClass().getName();
             }
 
@@ -1155,6 +1199,7 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
         /** Uses cache to remember list of classes to them this object is
         * assignable.
         */
+        @Override
         public Class instanceClass() throws IOException, ClassNotFoundException {
             return super.instanceClass (customClassLoader);
         }
@@ -1162,6 +1207,7 @@ public class InstanceDataObject extends MultiDataObject implements InstanceCooki
         /** Uses the cache to answer this question without loading the class itself, if the
         * cache exists.
         */
+        @Override
         public boolean instanceOf (Class type) {
             // try the life object if any
             FileObject fo = entry ().getFile ();
