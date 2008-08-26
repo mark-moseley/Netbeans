@@ -41,16 +41,20 @@
 
 package org.netbeans.modules.cnd.makeproject;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.URL;
 import java.util.Iterator;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ui.OpenProjects;
-//import org.netbeans.modules.cnd.makeproject.api.ProjectGenerator;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfigurationDescriptor;
@@ -58,7 +62,6 @@ import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
@@ -129,7 +132,7 @@ public class MakeProjectGenerator {
 	}
 
         FileObject dirFO = createProjectDir (projectNameFile);
-        AntProjectHelper h = createProject(dirFO, projectName, makefileName, confs, null, null);
+        AntProjectHelper h = createProject(dirFO, projectName, makefileName, confs, null, null, true);
         MakeProject p = (MakeProject)ProjectManager.getDefault().findProject(dirFO);
         ProjectManager.getDefault().saveProject(p);
 
@@ -150,7 +153,7 @@ public class MakeProjectGenerator {
      */
     public static AntProjectHelper createProject(File dir, String name, String makefileName, Configuration[] confs, Iterator sourceFolders, Iterator importantItems) throws IOException {
         FileObject dirFO = createProjectDir (dir);
-        AntProjectHelper h = createProject(dirFO, name, makefileName, confs, sourceFolders, importantItems); //NOI18N
+        AntProjectHelper h = createProject(dirFO, name, makefileName, confs, sourceFolders, importantItems, false); //NOI18N
         MakeProject p = (MakeProject)ProjectManager.getDefault().findProject(dirFO);
         ProjectManager.getDefault().saveProject(p);
         //FileObject srcFolder = dirFO.createFolder("src"); // NOI18N
@@ -200,7 +203,7 @@ public class MakeProjectGenerator {
     }
     */
 
-    private static AntProjectHelper createProject(FileObject dirFO, String name, String makefileName, Configuration[] confs, final Iterator sourceFolders, final Iterator importantItems) throws IOException {
+    private static AntProjectHelper createProject(FileObject dirFO, String name, String makefileName, Configuration[] confs, final Iterator sourceFolders, final Iterator importantItems, boolean saveNow) throws IOException {
         AntProjectHelper h = ProjectGenerator.createProject(dirFO, MakeProjectType.TYPE);
         Element data = h.getPrimaryConfigurationData(true);
         Document doc = data.getOwnerDocument();
@@ -216,19 +219,19 @@ public class MakeProjectGenerator {
         h.putPrimaryConfigurationData(data, true);
 
         EditableProperties ep = h.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-	//ep.setProperty("make.configurations", "");
+        //ep.setProperty("make.configurations", "");
         h.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         ep = h.getProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH);
         //ep.setProperty("application.args", ""); // NOI18N
         h.putProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH, ep);
 
-	// Create new project descriptor with default configurations and save it to disk.
-	final MakeConfigurationDescriptor projectDescriptor = new MakeConfigurationDescriptor(FileUtil.toFile(dirFO).getPath());
-        projectDescriptor.setProjectMakefileName(makefileName);
-	projectDescriptor.init(confs);
-        
+        // Create new project descriptor with default configurations and save it to disk.
+        final MakeConfigurationDescriptor projectDescriptor = new MakeConfigurationDescriptor(FileUtil.toFile(dirFO).getPath());
+            projectDescriptor.setProjectMakefileName(makefileName);
+        projectDescriptor.init(confs);
+
         Project project = projectDescriptor.getProject();
-        if (project instanceof MakeProject){
+        if (project instanceof MakeProject && !saveNow) { // How can it not be an instance of MakeProject???
             MakeProject makeProject = (MakeProject) project;
             makeProject.addOpenedTask(new Runnable(){
                 public void run() {
@@ -240,36 +243,57 @@ public class MakeProjectGenerator {
             projectDescriptor.initLogicalFolders(sourceFolders, sourceFolders == null, importantItems); // FIXUP: need a better check whether logical folder should be ccreated or not.
             projectDescriptor.save();
         }
-	// create Makefile
-	copyURLFile("nbresloc:/org/netbeans/modules/cnd/makeproject/resources/MasterMakefile",  // NOI18N
+        // create Makefile
+        copyURLFile("nbresloc:/org/netbeans/modules/cnd/makeproject/resources/MasterMakefile",  // NOI18N
 	    projectDescriptor.getBaseDir() + File.separator + projectDescriptor.getProjectMakefileName());
         return h;
     }
 
     private static void copyURLFile(String fromURL, String toFile) throws IOException {
-	InputStream is = null;
-	try {
-	    URL url = new URL(fromURL);
-	    is = url.openStream();
-	}
-	catch (Exception e) {
-	    ; // FIXUP
-	}
-	if (is != null) {
-	    FileOutputStream os = new FileOutputStream(toFile);
-	    FileUtil.copy(is, os);
-	}
+        InputStream is = null;
+        try {
+            URL url = new URL(fromURL);
+            is = url.openStream();
+        }
+        catch (Exception e) {
+            // FIXUP
+        }
+        if (is != null) {
+            FileOutputStream os = new FileOutputStream(toFile);
+            copy(is, os);
+        }
+    }
+
+    /**
+     * Replacement for FileUtil.copy(). The problem with FU.c is that on Windows it terminates lines with
+     * <CRLF> rather than <LF>. Now that we do remote development, this means that if a remote project is
+     * created on Windows to be built by Sun Studio's dmake, then the <CRLF> breaks the build (this is
+     * probably true with Solaris "make" as well).
+     *
+     * @param is The InputStream
+     * @param os The Output Stream
+     * @throws java.io.IOException
+     */
+    private static void copy(InputStream is, OutputStream os) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(is));
+        BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os));
+        String line;
+
+        while ((line = br.readLine()) != null) {
+            bw.write(line + "\n"); // NOI18N
+        }
+        bw.flush();
     }
 
     private static FileObject createProjectDir (File dir) throws IOException {
         FileObject dirFO;
         if(!dir.exists()) {
             //Refresh before mkdir not to depend on window focus
-            refreshFileSystem (dir);
+            // refreshFileSystem (dir); // See 136445
             if (!dir.mkdirs()) {
                 throw new IOException ("Can not create project folder."); // NOI18N
             }
-            refreshFileSystem (dir);
+            // refreshFileSystem (dir); // See 136445
         }        
         dirFO = FileUtil.toFileObject(dir);
         assert dirFO != null : "No such dir on disk: " + dir; // NOI18N
@@ -313,15 +337,11 @@ public class MakeProjectGenerator {
     }
 
 
-    private static void refreshFileSystem (final File dir) throws FileStateInvalidException {
-        File rootF = dir;
-        while (rootF.getParentFile() != null) {
-            rootF = rootF.getParentFile();
-        }
-        FileObject dirFO = FileUtil.toFileObject(rootF);
-        assert dirFO != null : "At least disk roots must be mounted! " + rootF; // NOI18N
-        dirFO.getFileSystem().refresh(false);
-    }
+//    private static void refreshFileSystem (final File dir) throws FileStateInvalidException {
+//        File rootF = dir;
+//        while (rootF.getParentFile() != null /*UNC*/&& rootF.getParentFile().exists()) {
+//            rootF = rootF.getParentFile();
+//    }
 }
 
 
