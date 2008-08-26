@@ -41,18 +41,11 @@
 package org.netbeans.modules.mercurial.ui.update;
 
 import java.awt.Dialog;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.net.MalformedURLException;
 import javax.swing.JButton;
-import javax.swing.JRadioButton;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
-import org.openide.ErrorManager;
 import org.openide.util.HelpCtx;
 import java.io.File;
 
@@ -86,16 +79,22 @@ public class RevertModifications implements PropertyChangeListener {
     public boolean showDialog() {
         File[] revertFiles = panel.getRevertFiles();
         DialogDescriptor dialogDescriptor;
+
+        String title;
         if (revertFiles.length == 1) {
-            dialogDescriptor = new DialogDescriptor(panel, org.openide.util.NbBundle.getMessage(RevertModifications.class, "CTL_RevertDialog", revertFiles[0].getName())); // NOI18N
+            title = org.openide.util.NbBundle.getMessage(RevertModifications.class, "CTL_RevertDialog", revertFiles[0].getName()); // NOI18N
         } else {
-            dialogDescriptor = new DialogDescriptor(panel, org.openide.util.NbBundle.getMessage(RevertModifications.class, "CTL_MultiRevertDialog")); // NOI18N 
+            title = org.openide.util.NbBundle.getMessage(RevertModifications.class, "CTL_MultiRevertDialog"); // NOI18N
         }
-        dialogDescriptor.setOptions(new Object[] {okButton, cancelButton});
-        
-        dialogDescriptor.setModal(true);
-        dialogDescriptor.setHelpCtx(new HelpCtx(this.getClass()));
-        dialogDescriptor.setValid(false);
+        dialogDescriptor =
+            new DialogDescriptor(panel,
+                title,
+                true,
+                new Object[] {okButton, cancelButton},
+                okButton, 
+                DialogDescriptor.DEFAULT_ALIGN,
+                new HelpCtx(this.getClass()),
+                null);
         
         Dialog dialog = DialogDisplayer.getDefault().createDialog(dialogDescriptor);     
         if (revertFiles.length == 1) {
@@ -120,4 +119,10 @@ public class RevertModifications implements PropertyChangeListener {
         if (panel == null) return null;
         return panel.getSelectedRevision();
     }
+    
+    public boolean isBackupRequested() {
+        if (panel == null) return false;
+        return panel.isBackupRequested();
+    }
+
 }
