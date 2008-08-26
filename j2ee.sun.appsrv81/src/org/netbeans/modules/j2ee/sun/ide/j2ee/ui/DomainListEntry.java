@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,42 +31,65 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 
 package org.netbeans.modules.j2ee.sun.ide.j2ee.ui;
 
-import org.openide.NotifyDescriptor;
+import java.io.File;
+import java.io.IOException;
 import org.openide.util.NbBundle;
 
 /**
  *
- * @author ludo
+ * @author vkraemer
  */
-public class MasterPasswordInputDialog extends NotifyDescriptor {
+class DomainListEntry {
+    private String hostPort;
+    private File domainDir;
+    private File location;
 
-    /**
-     * The text field used to enter the input.
-     */
-    protected MasterPasswordInputPanel panel=new MasterPasswordInputPanel();
-    static protected final String title =
-            NbBundle.getMessage(MasterPasswordInputDialog.class, "MasterPasswordInputDialog_title");
-    
-    /** Construct dialog with the specified title and label text.
-     * @param text label text
-     * @param title title of the dialog
-     */
-    public MasterPasswordInputDialog() {
-        super(null, title, NotifyDescriptor.OK_CANCEL_OPTION, NotifyDescriptor.PLAIN_MESSAGE, null, null);
-        super.setMessage(panel);
+    public DomainListEntry(String hostPort, File domainDir, File location) {
+        this.hostPort = hostPort;
+        this.domainDir = domainDir;
+        this.location = location;
     }
     
-    /**
-     * Get the text which the user typed into the input line.
-     * @return the text entered by the user
-     */
-    public String getInputText() {
-        return panel.getMasterPassword();
+    @Override
+    public String toString() {
+        String abbrevDomainDir = stripCommonPrefix(location,domainDir);
+        return  NbBundle.getMessage(DomainListEntry.class,
+            "LBL_domainListEntry", new Object[] {hostPort,abbrevDomainDir});
+    }
+    
+    File getDomainDir() {
+        return domainDir;
+    }
+
+    private String stripCommonPrefix(File pattern, File value) {
+        String cpath1;
+        String cpath2;
+        try {
+            cpath1 = pattern.getCanonicalPath();
+            cpath2 = value.getCanonicalPath();
+        } catch (IOException ioe) {
+            return value.toString();
+        }
+        int len1 = cpath1.length();
+        int len2 = cpath2.length();
+        int i;
+        for (i = 0; i < len1 && i < len2; i++) {
+            if (cpath1.charAt(i) != cpath2.charAt(i)) {
+                break;
+            }
+        }
+        String prefix = "";
+        if (i > 0)
+            prefix = "...";
+        return prefix+cpath2.substring(i);
     }
     
 }
