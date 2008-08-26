@@ -41,47 +41,39 @@
 
 package org.netbeans.modules.project.ui.actions;
 
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
+import java.awt.EventQueue;
 import javax.swing.Action;
-import javax.swing.JMenuItem;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.project.ui.OpenProjectList;
-import org.netbeans.modules.project.ui.ProjectUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.openide.util.WeakListeners;
-import org.openide.util.actions.Presenter;
 
 /** Action for removing project from the open projects tab
  */
-public class CloseProject extends ProjectAction implements PropertyChangeListener, Presenter.Popup {
+public class CloseProject extends ProjectAction {
     
     private static final String namePattern = NbBundle.getMessage( CloseProject.class, "LBL_CloseProjectAction_Name" ); // NOI18N
     private static final String namePatternPopup = NbBundle.getMessage( CloseProject.class, "LBL_CloseProjectAction_Popup_Name" ); // NOI18N
     
-    private String popupName;
     
-    private PropertyChangeListener wpcl;
-   
-    /** Creates a new instance of BrowserAction */
+    /** Creates a new instance of CloseProject */
     public CloseProject() {
         this( null );        
     }
     
     public CloseProject( Lookup context ) {
-        super( (String)null, namePattern, null, context );        
-        wpcl = WeakListeners.propertyChange( this, OpenProjectList.getDefault() );
-        OpenProjectList.getDefault().addPropertyChangeListener( wpcl );
+        super( (String)null, namePattern, namePatternPopup, null, context );        
         refresh( getLookup() );
     }
         
+    @Override
     protected void actionPerformed( Lookup context ) {
         Project[] projects = ActionsUtil.getProjectsFromLookup( context, null );        
         // show all modified documents, if an user cancel it then no project is closed        
         OpenProjectList.getDefault().close( projects, true );
     }
     
+    @Override
     public void refresh( Lookup context ) {
         
         super.refresh( context );
@@ -89,34 +81,29 @@ public class CloseProject extends ProjectAction implements PropertyChangeListene
         Project[] projects = ActionsUtil.getProjectsFromLookup( context, null );
         // XXX make it work better for mutliple open projects
         if ( projects.length == 0 || !OpenProjectList.getDefault().isOpen( projects[0] ) ) {
-            setEnabled( false );
-            // setDisplayName( ActionsUtil.formatProjectSensitiveName( namePattern, new Project[0] ) );
-            popupName = ActionsUtil.formatProjectSensitiveName( namePatternPopup, new Project[0] );
+            enable( false );
         }
         else {
-            setEnabled( true );
-            // setDisplayName( ActionsUtil.formatProjectSensitiveName( namePattern, projects ) );
-            popupName = ActionsUtil.formatProjectSensitiveName( namePatternPopup, projects );
+            enable( true );
         }        
     }
     
+    private void enable(final boolean enable) {
+        if (!EventQueue.isDispatchThread()) {
+            EventQueue.invokeLater(new Runnable() {
+                public void run() {
+                    setEnabled(enable);
+                }
+            });
+        } else {
+            setEnabled(enable);
+        }
+    }
+    
+    @Override
     public Action createContextAwareInstance( Lookup actionContext ) {
         return new CloseProject( actionContext );
     }
     
-    public void propertyChange( PropertyChangeEvent evt ) {
-        refresh( getLookup() );
-    }
-    
-    // Implementation of Presenter.Popup ---------------------------------------
-    
-    public JMenuItem getPopupPresenter() {
-        JMenuItem popupPresenter = new JMenuItem( this );
-
-        popupPresenter.setIcon( null );
-        popupPresenter.setText( popupName );
-        
-        return popupPresenter;
-    }
     
 }
