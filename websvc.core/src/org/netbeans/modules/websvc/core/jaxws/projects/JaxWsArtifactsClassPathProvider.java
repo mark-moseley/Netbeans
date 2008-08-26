@@ -44,11 +44,11 @@ package org.netbeans.modules.websvc.core.jaxws.projects;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
@@ -56,8 +56,12 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
+import org.netbeans.modules.websvc.wsstack.jaxws.JaxWsStackProvider;
+import org.netbeans.modules.websvc.wsstack.api.WSTool;
+import org.netbeans.modules.websvc.wsstack.jaxws.JaxWs;
 import org.netbeans.spi.java.classpath.ClassPathProvider;
 import org.netbeans.spi.java.classpath.PathResourceImplementation;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
@@ -136,36 +140,43 @@ public class JaxWsArtifactsClassPathProvider implements ClassPathProvider {
     }
     
     private ClassPath getBootClassPath() {
-        Set<File> cp = new HashSet<File>();
+        Set<URL> cp = new HashSet<URL>();
         J2eeModuleProvider javaeeModule = project.getLookup().lookup(J2eeModuleProvider.class);
         if (javaeeModule != null) {
             //javaee project type (web, ejb, appclient)
             //=> get required JAX-WS jars form the server
             String serverInstanceID = javaeeModule.getServerInstanceID();
-            J2eePlatform javaeeplatform = Deployment.getDefault().getJ2eePlatform(serverInstanceID);
-            if (javaeeplatform.isToolSupported(J2eePlatform.TOOL_WSIMPORT)) {
-                cp.addAll(Arrays.asList(javaeeplatform.getToolClasspathEntries(J2eePlatform.TOOL_WSIMPORT)));
-}
-            if (javaeeplatform.isToolSupported(J2eePlatform.TOOL_WSGEN)) {
-                cp.addAll(Arrays.asList(javaeeplatform.getToolClasspathEntries(J2eePlatform.TOOL_WSGEN)));
+            if (serverInstanceID != null) {
+                try {
+                    J2eePlatform javaeeplatform = Deployment.getDefault().getServerInstance(serverInstanceID).getJ2eePlatform();
+                    WSTool wsTool = JaxWsStackProvider.getJaxWsStackTool(javaeeplatform, JaxWs.Tool.WSIMPORT);
+                    if (wsTool != null) {
+                        URL[] libraries = wsTool.getLibraries();
+                        for (URL lib:libraries) {
+                            cp.add(FileUtil.getArchiveRoot(lib));
+                        }
+                    }
+                } catch (InstanceRemovedException ex) {
+                    Logger.getLogger(getClass().getName()).log(Level.INFO, "Failed to find J2eePlatform", ex);
+                }
             }
         } else {
             //javase project type
             //=> use JAX-WS API jars supplied with the IDE
             File f = InstalledFileLocator.getDefault().locate("modules/ext/jaxws21/api", null, false); //NOI18N
-            cp.addAll(Arrays.asList(f.listFiles()));
-        }
-        List<PathResourceImplementation> path = new LinkedList<PathResourceImplementation>();
-        URL url = null;
-        for (File f : cp) {
-            try {
-                url = f.toURI().toURL();
-                path.add(ClassPathSupport.createResource(url));
-            } catch (MalformedURLException ex) {
-                LOG.severe(ex.getMessage());
+            File[] files = f.listFiles();
+            for (File file:files) {
+                try {
+                    cp.add(FileUtil.getArchiveRoot(file.toURI().toURL()));
+                } catch (MalformedURLException ex) {
+                    LOG.severe(ex.getMessage());
+                }
             }
         }
-        url = null;
+        List<PathResourceImplementation> path = new LinkedList<PathResourceImplementation>();
+        for (URL url : cp) {
+            path.add(ClassPathSupport.createResource(url));
+        }
         return ClassPathSupport.createClassPath(path);
     }
 }
