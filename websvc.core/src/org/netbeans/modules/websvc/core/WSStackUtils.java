@@ -38,112 +38,97 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+/*
+ * PlatformUtil.java
+ *
+ * Created on April 18, 2006, 2:19 PM
+ *
+ * To change this template, choose Tools | Template Manager
+ * and open the template in the editor.
+ */
 
 package org.netbeans.modules.websvc.core;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.j2ee.api.ejbjar.Car;
-import org.netbeans.modules.j2ee.api.ejbjar.EjbJar;
+import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.api.project.SourceGroup;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
-import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.modules.websvc.wsstack.api.WSStack;
 import org.netbeans.modules.websvc.wsstack.jaxws.JaxWs;
 import org.netbeans.modules.websvc.wsstack.jaxws.JaxWsStackProvider;
+import org.openide.filesystems.FileObject;
 
 /**
  *
- * @author radko, mkuchtiak
+ * @author mkuchtiak
  */
-public class ProjectInfo {
+public class WSStackUtils {
+    Project project;
+    J2eePlatform j2eePlatform;
     
-    private Project project;
-    private int projectType;
-    
-    public static final int JSE_PROJECT_TYPE = 0;
-    public static final int WEB_PROJECT_TYPE = 1;
-    public static final int EJB_PROJECT_TYPE = 2;
-    public static final int CAR_PROJECT_TYPE = 3;
-    
-    private boolean jsr109Supported = false;
-//    private boolean jsr109oldSupported = false;
-    private boolean wsgenSupported = false;
-    private boolean wsimportSupported = false;
-    private ServerType serverType;
-    
-    /** Creates a new instance of ProjectInfo */
-    
-    public ProjectInfo(Project project) {
-        this.project=project;
-        J2eeModuleProvider javaeeModule = project.getLookup().lookup(J2eeModuleProvider.class);
-        if (javaeeModule != null) {
-            String serverInstanceId = javaeeModule.getServerInstanceID();
-            if (serverInstanceId != null) {
+    /** Creates a new instance of WSStackUtils */
+    public WSStackUtils(Project project) {
+        this.project = project;
+        this.j2eePlatform = getJ2eePlatform(project);
+    }
+
+    private J2eePlatform getJ2eePlatform(Project project){
+        J2eeModuleProvider provider = (J2eeModuleProvider) project.getLookup().lookup(J2eeModuleProvider.class);
+        if(provider != null){
+            String serverInstanceID = provider.getServerInstanceID();
+            if(serverInstanceID != null && serverInstanceID.length() > 0) {
                 try {
-                    J2eePlatform j2eePlatform = Deployment.getDefault().getServerInstance(serverInstanceId).getJ2eePlatform();               
-                    WSStack<JaxWs> wsStack = JaxWsStackProvider.getJaxWsStack(j2eePlatform);
-                    if (wsStack != null) {
-                        jsr109Supported = wsStack.isFeatureSupported(JaxWs.Feature.JSR109);
-                        //jsr109oldSupported = j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSCOMPILE);
-                        //wsgenSupported = j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSGEN);
-                        wsgenSupported = true;
-                        wsimportSupported = true;
-                        serverType = getServerType(project);
-                    }
+                    return Deployment.getDefault().getServerInstance(serverInstanceID).getJ2eePlatform();
                 } catch (InstanceRemovedException ex) {
                     Logger.getLogger(getClass().getName()).log(Level.INFO, "Failed to find J2eePlatform", ex);
                 }
             }
         }
-        
-        WebModule wm = WebModule.getWebModule(project.getProjectDirectory());
-        EjbJar em = EjbJar.getEjbJar(project.getProjectDirectory());
-        Car car = Car.getCar(project.getProjectDirectory());
-        if (em != null)
-            projectType = EJB_PROJECT_TYPE;
-        else if (wm != null)
-            projectType = WEB_PROJECT_TYPE;
-        else if (car != null)
-            projectType = CAR_PROJECT_TYPE;
-        else
-            projectType = JSE_PROJECT_TYPE;
+        return null;
     }
     
-    public int getProjectType() {
-        return projectType;
+     public boolean isWsitSupported() {
+        if (j2eePlatform != null) {
+            WSStack<JaxWs> wsStack = JaxWsStackProvider.getJaxWsStack(j2eePlatform);
+            return wsStack != null && wsStack.isFeatureSupported(JaxWs.Feature.WSIT);
+        }
+        return false;
+     }
+
+     public boolean isJsr109Supported() {
+        if(j2eePlatform != null){
+            WSStack<JaxWs> wsStack = JaxWsStackProvider.getJaxWsStack(j2eePlatform);
+            return wsStack != null && wsStack.isFeatureSupported(JaxWs.Feature.JSR109);
+        }
+        return false;
     }
     
-    public Project getProject() {
-        return project;
+    public boolean isJsr109OldSupported() {
+        if(j2eePlatform != null && getServerType(project) == ServerType.GLASSFISH) {
+            return true;       
+//            WSStack wsStack = getWsStack(WSStack.STACK_JAX_RPC);
+//            return wsStack != null && wsStack.getSupportedTools().contains(WSStack.TOOL_WSCOMPILE);
+        }
+        return false;
     }
     
-    public boolean isJsr109Supported() {
-        return jsr109Supported;
+    public boolean hasJAXWSLibrary() {
+        SourceGroup[] sgs = ProjectUtils.getSources(project).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
+        ClassPath classPath = ClassPath.getClassPath(sgs[0].getRootFolder(),ClassPath.COMPILE);
+        FileObject wsimportFO = classPath.findResource("com/sun/tools/ws/ant/WsImport.class"); // NOI18N
+        return wsimportFO != null;
     }
     
-//    public boolean isJsr109oldSupported() {
-//        return jsr109oldSupported;
-//    }
-    
-    public boolean isWsgenSupported() {
-        return wsgenSupported;
-    }
-    
-    public boolean isWsimportSupported() {
-        return wsimportSupported;
-    }
-    
-    public ServerType getServerType() {
-        return serverType;
-    }
-    
-    private ServerType getServerType(Project project) {
+    public static ServerType getServerType(Project project) {
         J2eeModuleProvider j2eeModuleProvider = project.getLookup().lookup(J2eeModuleProvider.class);
-        if (j2eeModuleProvider.getServerInstanceID() == null) {
+        if (j2eeModuleProvider == null || j2eeModuleProvider.getServerInstanceID() == null) {
             return ServerType.NOT_SPECIFIED;
         }
         String serverId = j2eeModuleProvider.getServerID();
@@ -157,5 +142,17 @@ public class ProjectInfo {
         else if (serverId.startsWith("WebSphere")) return ServerType.WEBSPHERE; //NOI18N
         else return ServerType.UNKNOWN;
     }
+    
+    public ServerType getServerType() {
+        return getServerType(project);
+    }
+    
+    public WSStack getWsStack(Class stackDescriptor) {
+        if (j2eePlatform != null) {
+            return WSStack.findWSStack(j2eePlatform.getLookup(), stackDescriptor);
+        }
+        return null;
+    }
 }
+
 
