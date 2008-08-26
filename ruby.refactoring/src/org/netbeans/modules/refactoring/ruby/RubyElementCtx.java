@@ -31,25 +31,24 @@ package org.netbeans.modules.refactoring.ruby;
 import java.util.Iterator;
 import javax.swing.text.Document;
 
-import org.jruby.ast.ArgumentNode;
-import org.jruby.ast.ClassNode;
-import org.jruby.ast.ClassVarAsgnNode;
-import org.jruby.ast.ClassVarDeclNode;
-import org.jruby.ast.ClassVarNode;
-import org.jruby.ast.ConstNode;
-import org.jruby.ast.GlobalAsgnNode;
-import org.jruby.ast.GlobalVarNode;
-import org.jruby.ast.IScopingNode;
-import org.jruby.ast.InstAsgnNode;
-import org.jruby.ast.InstVarNode;
-import org.jruby.ast.MethodDefNode;
-import org.jruby.ast.ModuleNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.SClassNode;
-import org.jruby.ast.SymbolNode;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementKind;
+import org.jruby.nb.ast.ArgumentNode;
+import org.jruby.nb.ast.ClassNode;
+import org.jruby.nb.ast.ClassVarAsgnNode;
+import org.jruby.nb.ast.ClassVarDeclNode;
+import org.jruby.nb.ast.ClassVarNode;
+import org.jruby.nb.ast.ConstNode;
+import org.jruby.nb.ast.GlobalAsgnNode;
+import org.jruby.nb.ast.GlobalVarNode;
+import org.jruby.nb.ast.IScopingNode;
+import org.jruby.nb.ast.InstAsgnNode;
+import org.jruby.nb.ast.InstVarNode;
+import org.jruby.nb.ast.MethodDefNode;
+import org.jruby.nb.ast.ModuleNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.jruby.nb.ast.SClassNode;
+import org.jruby.nb.ast.SymbolNode;
+import org.netbeans.modules.gsf.api.ElementKind;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.editor.BaseDocument;
@@ -58,9 +57,11 @@ import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstUtilities;
 import org.netbeans.modules.ruby.RubyIndex;
+import org.netbeans.modules.ruby.RubyMimeResolver;
 import org.netbeans.modules.ruby.RubyUtils;
-import org.netbeans.modules.ruby.TypeAnalyzer;
+import org.netbeans.modules.ruby.RubyTypeAnalyzer;
 import org.netbeans.modules.ruby.elements.AstElement;
+import org.netbeans.modules.ruby.elements.Element;
 import org.netbeans.modules.ruby.elements.IndexedElement;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.netbeans.modules.ruby.lexer.Call;
@@ -110,31 +111,34 @@ public class RubyElementCtx {
         path = new AstPath(root, astOffset);
 
         Node leaf = path.leaf();
+        if (leaf == null) {
+            return;
+        }
 
         Iterator<Node> it = path.leafToRoot();
     FindNode:
         while (it.hasNext()) {
             leaf = it.next();
             switch (leaf.nodeId) {
-            case NodeTypes.ARGUMENTNODE:
-            case NodeTypes.LOCALVARNODE:
-            case NodeTypes.LOCALASGNNODE:
-            case NodeTypes.DVARNODE:
-            case NodeTypes.DASGNNODE:
-            case NodeTypes.SYMBOLNODE:
-            case NodeTypes.FCALLNODE:
-            case NodeTypes.VCALLNODE:
-            case NodeTypes.CALLNODE:
-            case NodeTypes.GLOBALVARNODE:
-            case NodeTypes.GLOBALASGNNODE:
-            case NodeTypes.INSTVARNODE:
-            case NodeTypes.INSTASGNNODE:
-            case NodeTypes.CLASSVARNODE:
-            case NodeTypes.CLASSVARASGNNODE:
-            case NodeTypes.CLASSVARDECLNODE:
-            case NodeTypes.COLON2NODE:
-            case NodeTypes.CONSTNODE:
-            case NodeTypes.CONSTDECLNODE:
+            case ARGUMENTNODE:
+            case LOCALVARNODE:
+            case LOCALASGNNODE:
+            case DVARNODE:
+            case DASGNNODE:
+            case SYMBOLNODE:
+            case FCALLNODE:
+            case VCALLNODE:
+            case CALLNODE:
+            case GLOBALVARNODE:
+            case GLOBALASGNNODE:
+            case INSTVARNODE:
+            case INSTASGNNODE:
+            case CLASSVARNODE:
+            case CLASSVARASGNNODE:
+            case CLASSVARDECLNODE:
+            case COLON2NODE:
+            case CONSTNODE:
+            case CONSTDECLNODE:
                 break FindNode;
             }
             if (!it.hasNext()) {
@@ -142,24 +146,24 @@ public class RubyElementCtx {
                 break;
             }
         }
-        Element element = AstElement.create(leaf);
+        Element element = AstElement.create(info, leaf);
 
         initialize(root, leaf, element, info.getFileObject(), info);
     }
 
     /** Create a new element holder representing the given node in the same context as the given existing context */
     public RubyElementCtx(RubyElementCtx ctx, Node node) {
-        Element element = AstElement.create(node);
+        Element element = AstElement.create(info, node);
 
         initialize(ctx.getRoot(), node, element, ctx.getFileObject(), ctx.getInfo());
     }
 
-    public RubyElementCtx(IndexedElement element, CompilationInfo info) {
-        Node[] rootRet = new Node[1];
-        Node node = AstUtilities.getForeignNode(element, rootRet);
-        Node root = rootRet[0];
+    public RubyElementCtx(IndexedElement element) {
+        CompilationInfo[] infoHolder = new CompilationInfo[1];
+        Node node = AstUtilities.getForeignNode(element, infoHolder);
+        CompilationInfo info = infoHolder[0];
 
-        Element e = AstElement.create(node);
+        Element e = AstElement.create(info, node);
 
         FileObject fo = element.getFileObject();
         document = RetoucheUtils.getDocument(null, fo);
@@ -199,30 +203,30 @@ public class RubyElementCtx {
     public ElementKind getKind() {
         if (kind == null) {
             switch (node.nodeId) {
-            case NodeTypes.DEFNNODE:
-            case NodeTypes.DEFSNODE:
+            case DEFNNODE:
+            case DEFSNODE:
                 kind = AstUtilities.isConstructorMethod((MethodDefNode)node)
                     ? ElementKind.CONSTRUCTOR : ElementKind.METHOD;
                 break;
-            case NodeTypes.FCALLNODE:
-            case NodeTypes.VCALLNODE:
-            case NodeTypes.CALLNODE:
+            case FCALLNODE:
+            case VCALLNODE:
+            case CALLNODE:
                 kind = ElementKind.METHOD;
                 break;
-            case NodeTypes.CLASSNODE:
-            case NodeTypes.SCLASSNODE:
+            case CLASSNODE:
+            case SCLASSNODE:
                 kind = ElementKind.CLASS;
                 break;
-            case NodeTypes.MODULENODE:
+            case MODULENODE:
                 kind = ElementKind.MODULE;
                 break;
-            case NodeTypes.LOCALVARNODE:
-            case NodeTypes.LOCALASGNNODE:
-            case NodeTypes.DVARNODE:
-            case NodeTypes.DASGNNODE:
+            case LOCALVARNODE:
+            case LOCALASGNNODE:
+            case DVARNODE:
+            case DASGNNODE:
                 kind = ElementKind.VARIABLE;
                 break;
-            case NodeTypes.ARGUMENTNODE: {
+            case ARGUMENTNODE: {
                 AstPath path = getPath();
 
                 if (path.leafParent() instanceof MethodDefNode) {
@@ -234,7 +238,7 @@ public class RubyElementCtx {
                 }
                 break;
             }
-            case NodeTypes.SYMBOLNODE:
+            case SYMBOLNODE:
                 // Ugh - how do I know what it's referring to - a method? a class? a constant? etc.
                 if (Character.isUpperCase(((SymbolNode)node).getName().charAt(0))) {
                     kind = ElementKind.CLASS; // Or module? Or constants? How do we know?
@@ -243,12 +247,12 @@ public class RubyElementCtx {
                     kind = ElementKind.METHOD;
                 }
                 break;
-            case NodeTypes.ALIASNODE:
+            case ALIASNODE:
                 // XXX ugh - how do I know what the alias is referring to? For now just guess METHOD, the most common usage
                 kind = ElementKind.METHOD;
                 break;
-            case NodeTypes.COLON2NODE:
-            case NodeTypes.CONSTNODE: {
+            case COLON2NODE:
+            case CONSTNODE: {
                 Node n = getPath().leafParent();
 
                 if (n instanceof ClassNode || n instanceof SClassNode) {
@@ -268,18 +272,18 @@ public class RubyElementCtx {
                 }
                 break;
             }
-            case NodeTypes.CONSTDECLNODE:
+            case CONSTDECLNODE:
                 kind = ElementKind.CONSTANT;
                 break;
-            case NodeTypes.GLOBALVARNODE:
-            case NodeTypes.GLOBALASGNNODE:
+            case GLOBALVARNODE:
+            case GLOBALASGNNODE:
                 kind = ElementKind.GLOBAL;
                 break;
-            case NodeTypes.INSTVARNODE:
-            case NodeTypes.INSTASGNNODE:
-            case NodeTypes.CLASSVARNODE:
-            case NodeTypes.CLASSVARASGNNODE:
-            case NodeTypes.CLASSVARDECLNODE:
+            case INSTVARNODE:
+            case INSTASGNNODE:
+            case CLASSVARNODE:
+            case CLASSVARASGNNODE:
+            case CLASSVARDECLNODE:
                 kind = ElementKind.FIELD;
                 break;
             }
@@ -332,6 +336,11 @@ public class RubyElementCtx {
         }
 
         return simpleName;
+    }
+
+    public void setNames(String name, String simpleName) {
+        this.name = name;
+        this.simpleName = simpleName;
     }
 
     public Arity getArity() {
@@ -390,13 +399,13 @@ public class RubyElementCtx {
                     if (method != null) {
                         // TODO - if the lhs is "foo.bar." I need to split this
                         // up and do it a bit more cleverly
-                        TypeAnalyzer analyzer =
-                            new TypeAnalyzer(null, method, node, astOffset, lexOffset, doc, null);
+                        RubyTypeAnalyzer analyzer =
+                            new RubyTypeAnalyzer(null, method, node, astOffset, lexOffset, doc, null);
                         type = analyzer.getType(lhs);
                     }
                 } else if (call == Call.LOCAL) {
                     // Look in the index to see which method it's coming from... 
-                    RubyIndex index = RubyIndex.get(info.getIndex());
+                    RubyIndex index = RubyIndex.get(info.getIndex(RubyMimeResolver.RUBY_MIME_TYPE));
                     String fqn = AstUtilities.getFqnName(getPath());
 
                     if ((fqn == null) || (fqn.length() == 0)) {
