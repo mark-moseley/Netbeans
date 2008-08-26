@@ -70,3 +70,35 @@ void usingCout() {
     using S1::myCout;
     myCout;
 }
+
+void usingS1AccessNestedTypesOfTemplatedClass {
+    S1::myType::reference ref1;
+    using namespace S1;
+    myType::reference ref2;
+}
+
+// IZ#144982: std class members are not resolved in litesql
+namespace XXX {
+    struct string {
+        int size();
+    };
+}
+
+namespace YYY {
+    using namespace XXX;
+}
+
+namespace YYY {
+    int foo() {
+        string s;
+        s.size();
+    }
+}
+
+namespace ZZZ {
+    using namespace YYY;
+    int bar() {
+        string s;
+        s.size();
+    }
+}
