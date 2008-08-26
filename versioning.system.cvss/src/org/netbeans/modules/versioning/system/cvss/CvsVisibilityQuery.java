@@ -40,7 +40,7 @@
  */
 package org.netbeans.modules.versioning.system.cvss;
 
-import org.netbeans.spi.queries.VisibilityQueryImplementation;
+import org.netbeans.spi.queries.VisibilityQueryImplementation2;
 import org.netbeans.modules.versioning.util.Utils;
 import org.netbeans.modules.versioning.util.VersioningEvent;
 import org.netbeans.modules.versioning.util.VersioningListener;
@@ -53,13 +53,14 @@ import javax.swing.event.ChangeEvent;
 import java.util.*;
 import java.io.File;
 import java.io.IOException;
+import java.util.logging.Level;
 
 /**
  * Hides folders that have 'Localy removed' status.
  * 
  * @author Maros Sandor
  */
-public class CvsVisibilityQuery implements VisibilityQueryImplementation, VersioningListener {
+public class CvsVisibilityQuery implements VisibilityQueryImplementation2, VersioningListener {
 
     private static CvsVisibilityQuery instance;
     private static final String MARKER_CVS_REMOVED = "CVS/.nb-removed";
@@ -78,9 +79,23 @@ public class CvsVisibilityQuery implements VisibilityQueryImplementation, Versio
     }
 
     public boolean isVisible(FileObject fileObject) {
-        if (fileObject.isData()) return true;
-        File file = FileUtil.toFile(fileObject);
-        return file == null || !isHiddenFolder(file);
+        long t = System.currentTimeMillis();
+        CvsVersioningSystem.LOG.log(Level.FINE, "isVisible {0}", new Object[] { fileObject });
+        boolean ret = true;
+        try {
+            if (fileObject.isData()) return ret;
+            File file = FileUtil.toFile(fileObject);
+            ret = isVisible(file);
+            return ret;
+        } finally {
+            if(CvsVersioningSystem.LOG.isLoggable(Level.FINE)) {
+                CvsVersioningSystem.LOG.log(Level.FINE, "isVisible returns {0} in {1} millis", new Object[] { ret, System.currentTimeMillis() - t });
+            }
+        }
+    }
+    
+    public boolean isVisible(File file) {
+        return file == null || file.isFile() || !isHiddenFolder(file);
     }
 
     public synchronized void addChangeListener(ChangeListener l) {
