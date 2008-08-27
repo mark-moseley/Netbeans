@@ -74,9 +74,9 @@ import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.VariableTree;
+import com.sun.source.tree.WildcardTree;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
-import com.sun.source.util.TreePathScanner;
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -85,11 +85,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -105,10 +103,12 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
 import javax.swing.SwingUtilities;
 import javax.swing.text.Document;
+import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.api.java.source.support.CancellableTreePathScanner;
 import org.netbeans.api.lexer.Token;
+import org.netbeans.modules.java.editor.javadoc.JavadocImports;
 import org.netbeans.modules.java.editor.semantic.ColoringAttributes.Coloring;
 import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
 import org.netbeans.spi.editor.hints.ErrorDescription;
@@ -116,7 +116,6 @@ import org.netbeans.spi.editor.hints.ErrorDescriptionFactory;
 import org.netbeans.spi.editor.hints.Fix;
 import org.netbeans.spi.editor.hints.HintsController;
 import org.netbeans.spi.editor.hints.LazyFixList;
-import org.netbeans.spi.editor.hints.Severity;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
@@ -127,7 +126,7 @@ import org.openide.util.NbBundle;
  *
  * @author Jan Lahoda
  */
-public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo> {
+public class SemanticHighlighter implements CancellableTask<CompilationInfo> {
     
     public static List<TreePathHandle> computeUnusedImports(CompilationInfo info) throws IOException {
         SemanticHighlighter sh = new SemanticHighlighter(info.getFileObject());
@@ -151,13 +150,20 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
     }
     
     private FileObject file;
+    private SemanticHighlighterFactory fact;
+    private AtomicBoolean cancel = new AtomicBoolean();
     
     SemanticHighlighter(FileObject file) {
+        this(file, null);
+    }
+    
+    SemanticHighlighter(FileObject file, SemanticHighlighterFactory fact) {
         this.file = file;
+        this.fact = fact;
     }
 
-    public @Override void run(CompilationInfo info) throws IOException {
-        resume();
+    public void run(CompilationInfo info) throws IOException {
+        cancel.set(false);
         
         Document doc = info.getDocument();
 
@@ -166,7 +172,13 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             return ;
         }
 
-        process(info, doc);
+        if (process(info, doc) && fact != null) {
+            fact.rescheduleImpl(file);
+        }
+    }
+    
+    public void cancel() {
+        cancel.set(true);
     }
     
     private static class FixAllImportsFixList implements LazyFixList {
@@ -210,8 +222,8 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
         }
     }
     
-    void process(CompilationInfo info, final Document doc) {
-        process(info, doc, ERROR_DESCRIPTION_SETTER);
+    boolean process(CompilationInfo info, final Document doc) {
+        return process(info, doc, ERROR_DESCRIPTION_SETTER);
     }
     
     static Coloring collection2Coloring(Collection<ColoringAttributes> attr) {
@@ -224,8 +236,8 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
         return c;
     }
     
-    void process(CompilationInfo info, final Document doc, ErrorDescriptionSetter setter) {
-        DetectorVisitor v = new DetectorVisitor(info, doc, canceled);
+    boolean process(CompilationInfo info, final Document doc, ErrorDescriptionSetter setter) {
+        DetectorVisitor v = new DetectorVisitor(info, doc, cancel);
         
         long start = System.currentTimeMillis();
         
@@ -234,10 +246,10 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
 
         CompilationUnitTree cu = info.getCompilationUnit();
         
-        scan(v, cu, null);
+        v.scan(cu, null);
         
-        if (isCancelled())
-            return ;
+        if (cancel.get())
+            return true;
         
         boolean computeUnusedImports = "text/x-java".equals(FileUtil.getMIMEType(info.getFileObject()));
         
@@ -249,10 +261,10 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             Coloring unused = ColoringAttributes.add(ColoringAttributes.empty(), ColoringAttributes.UNUSED);
 
             for (TreePath tree : v.import2Highlight.values()) {
-                if (isCancelled()) {
-                    return;
+                if (cancel.get()) {
+                    return true;
                 }
-                
+
                 //XXX: finish
                 final int startPos = (int) info.getTrees().getSourcePositions().getStartPosition(cu, tree.getLeaf());
                 final int endPos = (int) info.getTrees().getSourcePositions().getEndPosition(cu, tree.getLeaf());
@@ -268,7 +280,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
                 allUnusedImports.add(handle);
                 if (RemoveUnusedImportFix.isEnabled()) {
                     errors.add(ErrorDescriptionFactory.createErrorDescription(
-                            Severity.VERIFIER,
+                            RemoveUnusedImportFix.getSeverity(),
                             NbBundle.getMessage(SemanticHighlighter.class, "LBL_UnusedImport"),
                             new FixAllImportsFixList(removeImport, removeAllUnusedImports, allUnusedImports),
                             doc,
@@ -283,8 +295,8 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
         Set<Token> addedTokens = new HashSet<Token>();
         
         for (Element decl : v.type2Uses.keySet()) {
-            if (isCancelled())
-                return ;
+            if (cancel.get())
+                return true;
             
             List<Use> uses = v.type2Uses.get(decl);
             
@@ -326,8 +338,8 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             }
         }
         
-        if (isCancelled())
-            return ;
+        if (cancel.get())
+            return true;
         
         if (computeUnusedImports) {
             setter.setErrors(doc, errors, allUnusedImports);
@@ -338,6 +350,8 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
         
         Logger.getLogger("TIMER").log(Level.FINE, "Semantic",
             new Object[] {((DataObject) doc.getProperty(Document.StreamDescriptionProperty)).getPrimaryFile(), System.currentTimeMillis() - start});
+        
+        return false;
     }
     
         
@@ -387,6 +401,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             this.spec = spec;
         }
         
+        @Override
         public String toString() {
             return "Use: " + type;
         }
@@ -409,8 +424,11 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
         private long memberSelectBypass = -1;
         
         private SourcePositions sourcePositions;
+        private ExecutableElement recursionDetector;
         
         private DetectorVisitor(org.netbeans.api.java.source.CompilationInfo info, final Document doc, AtomicBoolean cancel) {
+            super(cancel);
+            
             this.info = info;
             this.doc  = doc;
             type2Uses = new HashMap<Element, List<Use>>();
@@ -440,14 +458,20 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             }
             
             scan(tree.getVariable(), EnumSet.of(UseTypes.WRITE));
-            scan(tree.getExpression(), null);
+            scan(tree.getExpression(), EnumSet.of(UseTypes.READ));
             
             return null;
         }
 
         @Override
         public Void visitCompoundAssignment(CompoundAssignmentTree tree, EnumSet<UseTypes> d) {
-            handlePossibleIdentifier(new TreePath(getCurrentPath(), tree.getVariable()), EnumSet.of(UseTypes.WRITE));
+            Set<UseTypes> useTypes = EnumSet.of(UseTypes.WRITE);
+            
+            if (d != null) {
+                useTypes.addAll(d);
+            }
+            
+            handlePossibleIdentifier(new TreePath(getCurrentPath(), tree.getVariable()), useTypes);
             
             Tree expr = tree.getExpression();
             
@@ -457,7 +481,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             }
             
             scan(tree.getVariable(), EnumSet.of(UseTypes.WRITE));
-            scan(tree.getExpression(), null);
+            scan(tree.getExpression(), EnumSet.of(UseTypes.READ));
             
             return null;
         }
@@ -468,7 +492,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
                 handlePossibleIdentifier(new TreePath(getCurrentPath(), tree.getExpression()), EnumSet.of(UseTypes.READ));
             }
             
-            super.visitReturn(tree, null);
+            super.visitReturn(tree, EnumSet.of(UseTypes.READ));
             return null;
         }
         
@@ -662,7 +686,20 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             typeUsed(decl, expr);
         }
         
+        private void handleJavadoc(Element classMember) {
+            if (classMember == null) {
+                return;
+            }
+            for (Element el : JavadocImports.computeReferencedElements(info, classMember)) {
+                typeUsed(el, null);
+            }
+        }
+        
         private void addUse(Element decl, Collection<UseTypes> useTypes, TreePath t, Collection<ColoringAttributes> c) {
+            if (decl == recursionDetector) {
+                useTypes.remove(UseTypes.EXECUTE); //recursive execution is not use
+            }
+            
             List<Use> uses = type2Uses.get(decl);
             
             if (uses == null) {
@@ -678,8 +715,14 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
         public Void visitTypeCast(TypeCastTree tree, EnumSet<UseTypes> d) {
             Tree expr = tree.getExpression();
             
-            if (expr instanceof IdentifierTree) {
+            if (expr.getKind() == Kind.IDENTIFIER) {
                 handlePossibleIdentifier(new TreePath(getCurrentPath(), expr), EnumSet.of(UseTypes.READ));
+            }
+            
+            Tree cast = tree.getType();
+            
+            if (cast.getKind() == Kind.IDENTIFIER) {
+                handlePossibleIdentifier(new TreePath(getCurrentPath(), cast), EnumSet.of(UseTypes.READ));
             }
             
             super.visitTypeCast(tree, d);
@@ -776,7 +819,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
                 }
             }
             
-            scan(tree.getArguments(), null);
+            scan(tree.getArguments(), EnumSet.of(UseTypes.READ));
             
 //            super.visitMethodInvocation(tree, null);
             return null;
@@ -837,6 +880,8 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             
             Element el = info.getTrees().getElement(getCurrentPath());
             
+            handleJavadoc(el);
+            
             if (el != null && (el.getModifiers().contains(Modifier.ABSTRACT) || el.getModifiers().contains(Modifier.NATIVE) || !el.getModifiers().contains(Modifier.PRIVATE))) {
                 paramsUseTypes = EnumSet.of(UseTypes.WRITE, UseTypes.READ);
             } else {
@@ -876,7 +921,12 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             
             scan(tree.getParameters(), paramsUseTypes);
             scan(tree.getThrows(), null);
+
+            recursionDetector = (el != null && el.getKind() == ElementKind.METHOD) ? (ExecutableElement) el : null;
+            
             scan(tree.getBody(), null);
+
+            recursionDetector = null;
         
             return null;
         }
@@ -899,7 +949,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
                 handlePossibleIdentifier(new TreePath(getCurrentPath(), expr), EnumSet.of(UseTypes.READ));
             }
             
-            super.visitParenthesized(tree, null);
+            super.visitParenthesized(tree, d);
             return null;
         }
 
@@ -965,11 +1015,13 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
                     MemberSelectTree qualIdent = (MemberSelectTree) tree.getQualifiedIdentifier();
                     Element decl = info.getTrees().getElement(new TreePath(new TreePath(getCurrentPath(), qualIdent), qualIdent.getExpression()));
 
-                    if (decl != null && decl.asType().getKind() != TypeKind.ERROR) { //unresolvable imports should not be marked as unused
+                    if (   decl != null
+                        && decl.asType().getKind() != TypeKind.ERROR //unresolvable imports should not be marked as unused
+                        && (decl.getKind().isClass() || decl.getKind().isInterface())) {
                         Name simpleName = isStar(tree) ? null : qualIdent.getIdentifier();
                         boolean assign = false;
 
-                        for (Element e : decl.getEnclosedElements()) {
+                        for (Element e : info.getElements().getAllMembers((TypeElement) decl)) {
                             if (simpleName != null && !e.getSimpleName().equals(simpleName)) {
                                 continue;
                             }
@@ -1016,18 +1068,21 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             
             Collection<UseTypes> uses = null;
             
+            Element e = info.getTrees().getElement(getCurrentPath());
             if (tree.getInitializer() != null) {
                 uses = EnumSet.of(UseTypes.DECLARATION, UseTypes.WRITE);
                 if (tree.getInitializer().getKind() == Kind.IDENTIFIER)
                     handlePossibleIdentifier(new TreePath(getCurrentPath(), tree.getInitializer()), EnumSet.of(UseTypes.READ));
             } else {
-                Element e = info.getTrees().getElement(getCurrentPath());
-                
                 if (e != null && e.getKind() == ElementKind.FIELD) {
                     uses = EnumSet.of(UseTypes.DECLARATION, UseTypes.WRITE);
                 } else {
                     uses = EnumSet.of(UseTypes.DECLARATION);
                 }
+            }
+            
+            if (e != null && e.getKind().isField()) {
+                handleJavadoc(e);
             }
             
             if (d != null) {
@@ -1055,7 +1110,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             
             tl.moveNext();
             
-            scan(tree.getInitializer(), null);
+            scan(tree.getInitializer(), EnumSet.of(UseTypes.READ));
             
             return null;
         }
@@ -1108,8 +1163,22 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
 
         @Override
         public Void visitParameterizedType(ParameterizedTypeTree tree, EnumSet<UseTypes> d) {
-            if (getCurrentPath().getParentPath().getLeaf().getKind() != Kind.NEW_CLASS &&
-                    getCurrentPath().getParentPath().getParentPath().getLeaf().getKind() != Kind.NEW_CLASS) {
+            boolean alreadyHandled = false;
+            
+            if (getCurrentPath().getParentPath().getLeaf().getKind() == Kind.NEW_CLASS) {
+                NewClassTree nct = (NewClassTree) getCurrentPath().getParentPath().getLeaf();
+                
+                alreadyHandled = nct.getTypeArguments().contains(tree) || nct.getIdentifier() == tree;
+            }
+            
+            if (getCurrentPath().getParentPath().getParentPath().getLeaf().getKind() == Kind.NEW_CLASS) {
+                NewClassTree nct = (NewClassTree) getCurrentPath().getParentPath().getParentPath().getLeaf();
+                Tree leafToTest = getCurrentPath().getParentPath().getLeaf();
+
+                alreadyHandled = nct.getTypeArguments().contains(leafToTest) || nct.getIdentifier() == leafToTest;
+            }
+            
+            if (!alreadyHandled) {
                 //NewClass has already been handled as part of visitNewClass:
                 TreePath tp = new TreePath(getCurrentPath(), tree.getType());
                 handlePossibleIdentifier(tp, EnumSet.of(UseTypes.CLASS_USE));
@@ -1144,7 +1213,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
                 handlePossibleIdentifier(tp, EnumSet.of(UseTypes.READ));
             }
             
-            super.visitBinary(tree, null);
+            super.visitBinary(tree, EnumSet.of(UseTypes.READ));
             return null;
         }
 
@@ -1175,6 +1244,9 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             
             handlePossibleIdentifier(getCurrentPath(), EnumSet.of(UseTypes.DECLARATION));
             
+            Element el = info.getTrees().getElement(getCurrentPath());
+            handleJavadoc(el);
+            
             scan(tree.getModifiers(), null);
             
 //            System.err.println("tree.getModifiers()=" + tree.getModifiers());
@@ -1187,7 +1259,15 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             scan(tree.getTypeParameters(), null);
             scan(tree.getExtendsClause(), null);
             scan(tree.getImplementsClause(), null);
+
+            ExecutableElement prevRecursionDetector = recursionDetector;
+
+            recursionDetector = null;
+            
             scan(tree.getMembers(), null);
+
+            recursionDetector = prevRecursionDetector;
+            
             //XXX: end ???
             
             return null;
@@ -1256,7 +1336,7 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             if (tree.getDetail() != null && tree.getDetail().getKind() == Kind.IDENTIFIER)
                 handlePossibleIdentifier(new TreePath(getCurrentPath(), tree.getDetail()), EnumSet.of(UseTypes.READ));
             
-            return super.visitAssert(tree, null);
+            return super.visitAssert(tree, EnumSet.of(UseTypes.READ));
         }
         
         @Override
@@ -1297,9 +1377,17 @@ public class SemanticHighlighter extends ScanningCancellableTask<CompilationInfo
             
             return super.visitForLoop(node, p);
         }
+
+        @Override
+        public Void visitWildcard(WildcardTree node, EnumSet<UseTypes> p) {
+            if (node.getBound() != null && node.getBound().getKind() == Kind.IDENTIFIER) {
+                handlePossibleIdentifier(new TreePath(getCurrentPath(), node.getBound()), EnumSet.of(UseTypes.CLASS_USE));
+            }
+            return super.visitWildcard(node, p);
+        }
         
         private void typeUsed(Element decl, TreePath expr) {
-            if (decl != null && expr.getLeaf().getKind() == Kind.IDENTIFIER) {
+            if (decl != null && (expr == null || expr.getLeaf().getKind() == Kind.IDENTIFIER || expr.getLeaf().getKind() == Kind.PARAMETERIZED_TYPE)) {
                 ImportTree imp = decl.getKind() != ElementKind.METHOD ? element2Import.remove(decl) : method2Import.remove(decl.getSimpleName().toString());
 
                 if (imp != null) {
