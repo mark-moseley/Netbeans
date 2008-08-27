@@ -82,6 +82,7 @@ class InstallPanelVisual extends javax.swing.JPanel {
     private final TomcatVersion tomcatVersion;
     
     private String errorMessage;
+    private boolean infoMessage;
     
     private String serverPort;
     private String shutdownPort;
@@ -431,6 +432,10 @@ class InstallPanelVisual extends javax.swing.JPanel {
                 : "<html>" + errorMessage.replaceAll("<",  "&lt;").replaceAll(">",  "&gt;") + "</html>"; // NIO18N
     }
     
+    public boolean isInfoMessage() {
+        return infoMessage;
+    }
+    
     boolean isServerXmlValid(File file) {
         try {
             Server server = Server.createGraph(file);
@@ -457,6 +462,7 @@ class InstallPanelVisual extends javax.swing.JPanel {
         String homeDir = jTextFieldHomeDir.getText();
         if (homeDir.length() == 0) {
             errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_SpecifyHomeDir");
+            infoMessage = true;
             return false;
         }
         if (!new File(homeDir, "bin/bootstrap.jar").exists()) { // NOI18N
@@ -473,7 +479,12 @@ class InstallPanelVisual extends javax.swing.JPanel {
             return false;
         }
 
-        if ((!jCheckBoxShared.isEnabled() || !jCheckBoxShared.isSelected()) && !isServerXmlValid(new File(homeDir, SERVER_XML))) {
+        File serverFile = new File(homeDir, SERVER_XML);
+        if (!serverFile.canRead()) {
+            errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_NonReadableHomeServerXml");
+            return false;            
+        }
+        if ((!jCheckBoxShared.isEnabled() || !jCheckBoxShared.isSelected()) && !isServerXmlValid(serverFile)) {
             errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_CorruptedHomeServerXml");
             return false;
         }
@@ -505,6 +516,7 @@ class InstallPanelVisual extends javax.swing.JPanel {
             String base = jTextFieldBaseDir.getText();
             if (base.length() == 0) {
                 errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_SpecifyBaseDir");
+                infoMessage = true;
                 return false;
             }
             File baseDir = new File(base);
@@ -517,14 +529,23 @@ class InstallPanelVisual extends javax.swing.JPanel {
                 return false;
             }
             if (files.length > 0) {
+                if (!serverXml.canRead()) {
+                    errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_NonReadableBaseServerXml");
+                    return false;
+                }
                 // check CATALINA_BASE/conf/server.xml, if base dir not empty
                 if (!isServerXmlValid(serverXml)) {
                     errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_CorruptedBaseServerXml");
                     return false;
                 }
             } else {
+                File serverFile = new File(jTextFieldHomeDir.getText(), SERVER_XML);
+                if (!serverFile.canRead()) {
+                    errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_NonReadableHomeServerXml");
+                    return false;                    
+                }
                 // otherwise check CATALINA_HOME/conf/server.xml which we will copy to base dir
-                if (!isServerXmlValid(new File(jTextFieldHomeDir.getText(), SERVER_XML))) {
+                if (!isServerXmlValid(serverFile)) {
                     errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_CorruptedHomeServerXml");
                     return false;
                 }
@@ -537,15 +558,18 @@ class InstallPanelVisual extends javax.swing.JPanel {
         if (createUserCheckBox.isSelected()) {
             if (jTextFieldUsername.getText().length() == 0) {
                 errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_UsernameEmpty");
+                infoMessage = true;
                 return false;
             }
             if (jTextFieldPassword.getPassword().length == 0) {
                 errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_PasswordEmpty");
+                infoMessage = true;
                 return false;
             }
         } else {
             if (jTextFieldUsername.getText().length() == 0) {
                 errorMessage = NbBundle.getMessage(InstallPanelVisual.class, "MSG_UsernameEmptyWarning");
+                infoMessage = true;
             }
             File tomcatUsersXml = new File(getBaseDir(), "conf/tomcat-users.xml");
             try {
@@ -580,6 +604,7 @@ class InstallPanelVisual extends javax.swing.JPanel {
     
     public boolean isValid() {
         errorMessage = null;
+        infoMessage = false;
         return isHomeValid() && isBaseValid() && !isAlreadyRegistered() && isUsernamePasswordValid();
     }
     
