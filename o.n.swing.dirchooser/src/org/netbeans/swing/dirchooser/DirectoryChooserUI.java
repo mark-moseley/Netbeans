@@ -45,8 +45,6 @@ package org.netbeans.swing.dirchooser;
 
 import java.util.logging.Level;
 import javax.swing.*;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.Timer;
 import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeSelectionEvent;
@@ -97,13 +95,14 @@ import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 
+
 /**
  * An implementation of a customized filechooser.
  *
  * @author Soot Phengsy, inspired by Jeff Dinkins' Swing version
  */
 public class DirectoryChooserUI extends BasicFileChooserUI {
-    
+
     private static final Dimension horizontalStrut1 = new Dimension(25, 1);
     private static final Dimension verticalStrut1  = new Dimension(1, 4);
     private static final Dimension verticalStrut2  = new Dimension(1, 6);
@@ -112,9 +111,8 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
     private static Dimension MIN_SIZE = new Dimension(425, 245);
     private static Dimension TREE_PREF_SIZE = new Dimension(380, 230);
     private static final int ACCESSORY_WIDTH = 250;
-
-    /** icon representing netbeans project folder */
-    private static Icon projectIcon;
+    
+    private static final Logger LOG = Logger.getLogger(DirectoryChooserUI.class.getName());
     
     private JPanel centerPanel;
     
@@ -155,6 +153,8 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
     private String upFolderAccessibleName = null;
     
     private String newFolderToolTipText = null;
+    
+    private String homeFolderTooltipText = null;
     
     private Action newFolderAction = new NewDirectoryAction();
     
@@ -230,6 +230,13 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
         }
         
         createPopup();
+    }
+
+    @Override
+    public String getDialogTitle(JFileChooser fc) {
+        String title = super.getDialogTitle(fc);
+        fc.getAccessibleContext().setAccessibleDescription(title);
+        return title;
     }
     
     private void updateUseShellFolder() {
@@ -471,7 +478,7 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
         treePanel.add(topComboWrapper, BorderLayout.NORTH);
         treePanel.add(treeViewPanel, BorderLayout.CENTER);
         centerPanel.add(treePanel, BorderLayout.CENTER);
-        // #97049: control width of accessory panel, don't allow to jump (change width)
+        // control width of accessory panel, don't allow to jump (change width)
         JPanel wrapAccessory = new JPanel() {
             private Dimension prefSize = new Dimension(ACCESSORY_WIDTH, 0);
             private Dimension minSize = new Dimension(ACCESSORY_WIDTH, 0);
@@ -485,7 +492,18 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
             }
             public Dimension getPreferredSize () {
                 if (fc.getAccessory() != null) {
-                    prefSize.height = getAccessoryPanel().getPreferredSize().height;
+                    Dimension origPref = getAccessoryPanel().getPreferredSize();
+                    LOG.fine("AccessoryWrapper.getPreferredSize: orig pref size: " + origPref);
+                    
+                    prefSize.height = origPref.height;
+                    
+                    prefSize.width = Math.max(prefSize.width, origPref.width);
+                    int centerW = centerPanel.getWidth();
+                    if (centerW != 0 && prefSize.width > centerW / 2) {
+                        prefSize.width = centerW / 2;
+                    }
+                    LOG.fine("AccessoryWrapper.getPreferredSize: resulting pref size: " + prefSize);
+                    
                     return prefSize;
                 }
                 return super.getPreferredSize();
@@ -603,6 +621,16 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
             }
             homeButton.setIcon(homeIcon);
             homeButton.setText(null);
+            
+            String tooltip = homeButton.getToolTipText();
+            if (tooltip == null) {
+                tooltip = homeFolderTooltipText;
+                if (tooltip == null) {
+                    tooltip = NbBundle.getMessage(DirectoryChooserUI.class,
+                            "TLTP_HomeFolder");
+                }
+                homeButton.setToolTipText( tooltip );
+            }
 
             topPanel.add(homeButton);
         }
@@ -649,14 +677,32 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
                 dirHandler.preprocessMouseEvent(e);
                 super.processMouseEvent(e);
             }
-            
+
+            // For speed (#127170):
             @Override
-            /* #106223: Always compute row height from cell renderer, don't allow fixed
-             * row height */
-            public int getRowHeight() {
-                return 0;
+            public boolean isLargeModel() {
+                return true;
             }
-            
+
+            // To work with different font sizes (#106223); see: http://www.javalobby.org/java/forums/t19562.html
+            private boolean firstPaint = true;
+            @Override
+            public void setFont(Font f) {
+                firstPaint = true;
+                super.setFont(f);
+            }
+            @Override
+            public void paint(Graphics g) {
+                if (firstPaint) {
+                    g.setFont(getFont());
+                    setRowHeight(Math.max(/* icon height plus insets? */17, g.getFontMetrics().getHeight()));
+                    firstPaint = false;
+                    // Setting the fixed height will generate another paint request, no need to complete this one
+                    return;
+                }
+                super.paint(g);
+            }
+
         };
         // #105642: start with right content in tree 
         File curDir = fileChooser.getCurrentDirectory();
@@ -1074,6 +1120,7 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
         upFolderAccessibleName = UIManager.getString("FileChooser.upFolderAccessibleName",l);
         
         newFolderToolTipText = UIManager.getString("FileChooser.newFolderToolTipText",l);
+        homeFolderTooltipText = UIManager.getString("FileChooser.homeFolderToolTipText",l);
         
     }
     
@@ -1558,15 +1605,6 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
         }
     }
     
-    private Icon getNbProjectIcon () {
-        if (projectIcon == null) {
-            projectIcon = new ImageIcon(Utilities.loadImage(
-                    "org/netbeans/swing/dirchooser/resources/main_project_16.png"));
-        }
-        return projectIcon;
-    }
-    
-    
     /*************** HELPER CLASSES ***************/
     
     private class IconIndenter implements Icon {
@@ -1575,6 +1613,9 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
         int depth = 0;
         
         public void paintIcon(Component c, Graphics g, int x, int y) {
+            if (icon == null) {
+                return;
+            }
             if (c.getComponentOrientation().isLeftToRight()) {
                 icon.paintIcon(c, g, x+depth*space, y);
             } else {
@@ -1583,11 +1624,11 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
         }
         
         public int getIconWidth() {
-            return icon.getIconWidth() + depth*space;
+            return icon != null ? icon.getIconWidth() + depth*space : null;
         }
         
         public int getIconHeight() {
-            return icon.getIconHeight();
+            return icon != null ? icon.getIconHeight() : null;
         }
         
     }
@@ -1611,12 +1652,7 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
             }
             File directory = (File)value;
             setText(getFileChooser().getName(directory));
-            Icon icon;
-            if (DirectoryNode.isNetBeansProject(directory)) {
-                icon = getNbProjectIcon();
-            } else {
-                icon = getFileChooser().getIcon(directory);
-            }
+            Icon icon = getFileChooser().getIcon(directory);
             indenter.icon = icon;
             indenter.depth = directoryComboBoxModel.getDepth(index);
             setIcon(indenter);
@@ -1694,9 +1730,17 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
             File f = sf;
             Vector<File> path = new Vector<File>(10);
 
-            do {
+            
+            /*
+             * Fix for IZ#122534 :
+             * NullPointerException at 
+             * org.netbeans.swing.dirchooser.DirectoryChooserUI$DirectoryComboBoxModel.addItem
+             * 
+             */
+            while( f!= null) {
                 path.addElement(f);
-            } while ((f = f.getParentFile()) != null);
+                f = f.getParentFile();
+            }
 
             int pathCount = path.size();
             // Insert chain at appropriate place in vector
@@ -2165,8 +2209,71 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
                     addNewDirectory = false;
                 }
             }
+            // Fix for IZ#123815 : Cannot refresh the tree content
+            refreshNode( path , node );
         }
         public void treeCollapsed(TreeExpansionEvent event) {
+        }
+        
+        // Fix for IZ#123815 : Cannot refresh the tree content
+        private void refreshNode( TreePath path, DirectoryNode node ){
+            File folder = node.getFile();
+            
+            // Additional fixes for IZ#116859 [60cat] Node update bug in the "open project" panel while deleting directories
+            if ( !folder.exists() ){
+                TreePath parentPath = path.getParentPath();
+                boolean refreshTree = false;
+                
+                if(tree.isExpanded(path)) {
+                    tree.collapsePath(path);
+                    refreshTree = true;
+                }
+                model.removeNodeFromParent( node );
+                if ( refreshTree ){
+                    tree.expandPath( parentPath );
+                }
+            }
+            
+            int count = node.getChildCount();
+            Map<String,DirectoryNode> currentFiles = 
+                new HashMap<String,DirectoryNode>( ); 
+            for( int i=0; i< count ; i++ ){
+                TreeNode child = node.getChildAt(i);
+                if ( child instanceof DirectoryNode ){
+                    File file = ((DirectoryNode)child).getFile();
+                    currentFiles.put( file.getName() , (DirectoryNode)child);
+                }
+            }
+            
+            HashSet<String> realDirs = new HashSet<String>();
+            
+            File[] files =  folder.listFiles(); 
+            files = files == null ? new File[0] : files;
+            for (File file : files) {
+                if ( !file.isDirectory() ){
+                    continue;
+                }
+                String name = file.getName();
+                realDirs.add( name );
+            }
+            
+            Set<String> realCloned = new HashSet<String>( realDirs );
+            if ( realCloned.removeAll( currentFiles.keySet()) ){
+                // Handle added folders
+                for ( String name : realCloned ){
+                    DirectoryNode added = new DirectoryNode( new File( folder, name ) );
+                    model.insertNodeInto( added, node, node.getChildCount());
+                }
+            }
+            Set<String> currentNames = new HashSet<String>( currentFiles.keySet());
+            if ( currentNames.removeAll( realDirs )){
+                // Handle deleted folders
+                for ( String name : currentNames ){
+                    DirectoryNode removed = currentFiles.get( name );
+                    model.removeNodeFromParent( removed );
+                }
+            }
+            
         }
     }
     
@@ -2204,10 +2311,6 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
                 int row,
                 boolean hasFocus) {
             
-            if (!tree.isFocusOwner()) {
-                isSelected = false;
-            }
-            
             Component stringDisplayer = renderer.getTreeCellRendererComponent(tree,
                     value,
                     isSelected,
@@ -2233,9 +2336,6 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
         }
         
         private Icon getNodeIcon(DirectoryNode node) {
-            if (node.isNetBeansProject()) {
-                return getNbProjectIcon();
-            }
             File file = node.getFile();
             if(file.exists()) {
                 return fileChooser.getIcon(file);
@@ -2283,4 +2383,3 @@ public class DirectoryChooserUI extends BasicFileChooserUI {
         }
     }
 }
-
