@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,6 +43,7 @@ package org.netbeans.modules.autoupdate.services;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import org.netbeans.api.autoupdate.*;
 import java.util.List;
@@ -50,16 +51,18 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.autoupdate.OperationContainer.OperationInfo;
-import org.netbeans.modules.autoupdate.updateprovider.InstalledModuleProvider;
+import org.openide.modules.Dependency;
 import org.openide.modules.ModuleInfo;
 
 /**
  *
- * @author Radek Matous
+ * @author Radek Matous, Jiri Rechtacek
  */
 public final class OperationContainerImpl<Support> {
     private OperationContainer<Support> container;
+    private boolean upToDate = false;
     private OperationContainerImpl () {}
+    private static final Logger LOGGER = Logger.getLogger (OperationContainerImpl.class.getName ());    
     private List<OperationInfo<Support>> operations = new ArrayList<OperationInfo<Support>>();
     private Collection<OperationInfo<Support>> affectedEagers = new HashSet<OperationInfo<Support>> ();
     public static OperationContainerImpl<InstallSupport> createForInstall () {
@@ -95,7 +98,7 @@ public final class OperationContainerImpl<Support> {
     public static OperationContainerImpl<OperationSupport> createForUninstallNativeComponent () {
         return new OperationContainerImpl<OperationSupport> (OperationType.CUSTOM_INSTALL);
     }
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked"})
     public OperationInfo<Support> add (UpdateUnit updateUnit, UpdateElement updateElement) throws IllegalArgumentException {
         OperationInfo<Support> retval = null;
         boolean isValid = isValid (updateUnit, updateElement);
@@ -103,7 +106,7 @@ public final class OperationContainerImpl<Support> {
             throw new IllegalArgumentException ("Invalid " + updateElement.getCodeName () + " for operation " + type);
         }
         if (UpdateUnitFactory.getDefault().isScheduledForRestart (updateElement)) {
-            Logger.getLogger(this.getClass ().getName ()).log (Level.INFO, updateElement + " is scheduled for restart IDE.");
+            LOGGER.log (Level.INFO, updateElement + " is scheduled for restart IDE.");
             throw new IllegalArgumentException (updateElement + " is scheduled for restart IDE.");
         }
         if (isValid) {
@@ -134,7 +137,7 @@ public final class OperationContainerImpl<Support> {
         synchronized(this) {
             if (!contains (updateUnit, updateElement)) {
                 retval = Trampoline.API.createOperationInfo (new OperationInfoImpl<Support> (updateUnit, updateElement));
-                operations.add (retval);
+                changeState (operations.add (retval));
             }
         }
         return retval;
@@ -154,7 +157,7 @@ public final class OperationContainerImpl<Support> {
     public void setOperationContainer (OperationContainer<Support> container) {
         this.container = container;
     }
-    
+
     private OperationInfo<Support> find (UpdateElement updateElement) {
         OperationInfo<Support> toRemove = null;
         for (OperationInfo<Support> info : listAll ()) {
@@ -182,11 +185,17 @@ public final class OperationContainerImpl<Support> {
     }
     
     synchronized public List<OperationInfo<Support>> listAllWithPossibleEager () {
+        if (upToDate) {
+            return new ArrayList<OperationInfo<Support>>(operations);
+        }
+        clearCache ();
         // handle eager modules
-        if (type == OperationType.INSTALL) {
-            Collection<UpdateElement> all = new HashSet<UpdateElement> ();
+        if (type == OperationType.INSTALL || type == OperationType.UPDATE) {
+            Collection<UpdateElement> all = new HashSet<UpdateElement> (operations.size ());
+            Collection<ModuleInfo> allModuleInfos = new HashSet<ModuleInfo> (operations.size ());
             for (OperationInfo<?> i : operations) {
                 all.add (i.getUpdateElement ());
+                allModuleInfos.add (((ModuleUpdateElementImpl) Trampoline.API.impl(i.getUpdateElement ())).getModuleInfo ());
             }
             for (UpdateElement eagerEl : UpdateManagerImpl.getInstance ().getAvailableEagers ()) {
                 UpdateElementImpl impl = Trampoline.API.impl (eagerEl);
@@ -194,9 +203,15 @@ public final class OperationContainerImpl<Support> {
                 ModuleUpdateElementImpl eagerImpl = (ModuleUpdateElementImpl) impl;
                 ModuleInfo mi = eagerImpl.getModuleInfo ();
                 
-                Set<ModuleInfo> installed = new HashSet<ModuleInfo> (InstalledModuleProvider.getInstalledModules ().values ());
-                Set<UpdateElement> reqs = Utilities.findRequiredModules (mi.getDependencies (), installed);
+                Set<UpdateElement> reqs = new HashSet<UpdateElement> ();
+                for (Dependency dep : mi.getDependencies ()) {
+                    UpdateElement req = Utilities.handleDependency (dep, Collections.singleton (mi), new HashSet<Dependency> ());
+                    if (req != null) {
+                        reqs.add (req);
+                    }
+                }
                 if (! reqs.isEmpty() && all.containsAll (reqs) && ! all.contains (eagerEl)) {
+                    // adds affectedEager into list of elements for the operation
                     OperationInfo<Support> i = add (eagerEl.getUpdateUnit (), eagerEl);
                     if (i != null) {
                         affectedEagers.add (i);
@@ -204,6 +219,21 @@ public final class OperationContainerImpl<Support> {
                 }
             }
         }
+        if (LOGGER.isLoggable (Level.FINE)) {
+            LOGGER.log (Level.FINE, "== do listAllWithPossibleEager for " + type + " operation ==");
+            for (OperationInfo info : operations) {
+                LOGGER.log (Level.FINE, "--> " + info.getUpdateElement ());
+            }
+            if (affectedEagers != null) {
+                LOGGER.log (Level.FINE, "   == includes affected eagers for " + type + " operation ==");
+                for (OperationInfo eagerInfo : affectedEagers) {
+                    LOGGER.log (Level.FINE, "   --> " + eagerInfo.getUpdateElement ());
+                }
+                LOGGER.log (Level.FINE, "   == done eagers. ==");
+            }
+            LOGGER.log (Level.FINE, "== done. ==");
+        }
+        upToDate = true;
         return new ArrayList<OperationInfo<Support>>(operations);
     }
     
@@ -254,20 +284,34 @@ public final class OperationContainerImpl<Support> {
     
     public synchronized void remove (OperationInfo op) {
         synchronized(this) {
-            operations.remove (op);
-            operations.removeAll (affectedEagers);
+            changeState (operations.remove (op));
+            changeState (operations.removeAll (affectedEagers));
             affectedEagers.clear ();
         }
     }
     public synchronized void removeAll () {
         synchronized(this) {
+            changeState (true);
             operations.clear ();
-            affectedEagers.clear ();
         }
     }
+    
+    private void clearCache () {
+        affectedEagers.clear ();
+        OperationValidator.clearMaps ();
+    }
+    
+    private void changeState (boolean changed) {
+        if (changed) {
+            clearCache ();
+        }
+        upToDate = upToDate && ! changed;
+    }
+    
     public class OperationInfoImpl<Support> {
         private final UpdateElement updateElement;
         private final UpdateUnit uUnit;
+        private Set<String> brokenDeps = null;
         private OperationInfoImpl (UpdateUnit uUnit, UpdateElement updateElement) {
             this.updateElement = updateElement;
             this.uUnit = uUnit;
@@ -286,41 +330,25 @@ public final class OperationContainerImpl<Support> {
                 assert infos != null : "ModuleInfo for UpdateElement " + oii.getUpdateElement () + " found.";
                 moduleInfos.addAll (infos);
             }
-            return OperationValidator.getRequiredElements (type, getUpdateElement (), moduleInfos);
+            brokenDeps = new HashSet<String> ();
+            return OperationValidator.getRequiredElements (type, getUpdateElement (), moduleInfos, brokenDeps);
         }
-        /*
-        public Set<Dependency> getBrokenDependencies(){
-            return Utilities.findBrokenDependencies(getUpdateElement());
-        }*/
-        public Set<String> getBrokenDependencies (){
+
+        public Set<String> getBrokenDependencies () {
+            if (! upToDate) {
+                brokenDeps = null;
+            }
+            if (brokenDeps != null) {
+                return brokenDeps;
+            }
             List<ModuleInfo> moduleInfos = new ArrayList<ModuleInfo>();
             for (OperationContainer.OperationInfo oii : listAll ()) {
                 UpdateElementImpl impl = Trampoline.API.impl (oii.getUpdateElement ());
-                List<ModuleInfo> infos = impl.getModuleInfos ();
+                Collection<ModuleInfo> infos = impl.getModuleInfos ();
                 assert infos != null : "ModuleInfo for UpdateElement " + oii.getUpdateElement () + " found.";
                 moduleInfos.addAll (infos);
             }
-            
-            
-            Set<String> broken = null;
-            switch (type) {
-            case ENABLE :
-                broken = Utilities.getBrokenDependenciesInInstalledModules (getUpdateElement ());
-                break;
-            case UNINSTALL :
-            case DIRECT_UNINSTALL :
-            case CUSTOM_UNINSTALL :
-            case DISABLE :
-            case DIRECT_DISABLE :
-            case INSTALL :
-            case UPDATE :
-            case CUSTOM_INSTALL:
-                broken = Utilities.getBrokenDependencies (getUpdateElement (), moduleInfos);
-                break;
-            default:
-                assert false : "Unknown type of operation " + type;
-            }
-            return broken;
+            return OperationValidator.getBrokenDependencies (type, getUpdateElement (), moduleInfos);
         }
     }
     

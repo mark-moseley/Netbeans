@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -92,7 +92,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<InstallSupport> createForInstall() {
         OperationContainer<InstallSupport> retval =
                 new OperationContainer<InstallSupport>(OperationContainerImpl.createForInstall(), new InstallSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;
     }
 
@@ -103,7 +103,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForDirectInstall() {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport> (OperationContainerImpl.createForDirectInstall(), new OperationSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;
     }    
     
@@ -114,7 +114,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<InstallSupport> createForUpdate() {
         OperationContainer<InstallSupport> retval =
                 new OperationContainer<InstallSupport>(OperationContainerImpl.createForUpdate(), new InstallSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;
     }
     
@@ -125,7 +125,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForDirectUpdate() {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport>(OperationContainerImpl.createForDirectUpdate(), new OperationSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;
     }    
     
@@ -136,7 +136,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForUninstall() {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport>(OperationContainerImpl.createForUninstall(), new OperationSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;
     }
     
@@ -147,7 +147,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForDirectUninstall() {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport>(OperationContainerImpl.createForDirectUninstall(), new OperationSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;
     }
     
@@ -158,7 +158,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForEnable() {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport>(OperationContainerImpl.createForEnable(), new OperationSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;        
     }
     
@@ -169,7 +169,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForDisable() {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport>(OperationContainerImpl.createForDisable(), new OperationSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;
     }
 
@@ -180,7 +180,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForDirectDisable() {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport>(OperationContainerImpl.createForDirectDisable(), new OperationSupport());
-        retval.getSupport().setContainer(retval);
+        retval.getSupportInner ().setContainer(retval);
         return retval;
     }
     
@@ -191,7 +191,7 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForCustomInstallComponent () {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport> (OperationContainerImpl.createForInstallNativeComponent (), new OperationSupport());
-        retval.getSupport ().setContainer (retval);
+        retval.getSupportInner ().setContainer (retval);
         return retval;
     }
 
@@ -202,20 +202,32 @@ public final class OperationContainer<Support> {
     public static OperationContainer<OperationSupport> createForCustomUninstallComponent () {
         OperationContainer<OperationSupport> retval =
                 new OperationContainer<OperationSupport> (OperationContainerImpl.createForUninstallNativeComponent (), new OperationSupport());
-        retval.getSupport ().setContainer (retval);
+        retval.getSupportInner ().setContainer (retval);
         return retval;
     }
     
     /**
-     * @return either {@link OperationSupport} or {@link InstallSupport} depending on type parameter of <code>OperationContainer&lt;Support&gt;</code>      
+     * @return either {@link OperationSupport} or {@link InstallSupport} depending on type parameter of <code>OperationContainer&lt;Support&gt;</code> or
+     * <code>null</code> if the <code>OperationContainer</code> is empty or contains any invalid elements
+     * @see #listAll
+     * @see #listInvalid
      * <br><p>See the difference between {@link #createForInstall} and {@link #createForDirectInstall} for example</p>
      */                        
     public Support getSupport() {
-        if (!init) {
-            init = true;
+        if (upToDate) {
             return support;
+        } else {
+            if (listAll().size() > 0 && listInvalid().size() == 0) {
+                upToDate = true;
+                return support;
+            } else {
+                return null;
+            }
         }
-        return (listAll().size() > 0 && listInvalid().size() == 0) ? support : null;
+    }
+    
+    Support getSupportInner () {
+        return support;
     }
     
     /**
@@ -259,7 +271,7 @@ public final class OperationContainer<Support> {
      * <code>null</code> if the <code>UpdateElement</code> is already present in the container
      */
     public OperationInfo<Support> add(UpdateUnit updateUnit,UpdateElement updateElement) {
-        //UpdateUnit updateUnit = UpdateManagerImpl.getInstance().getUpdateUnit(updateElement.getCodeName());
+        upToDate = false;
         return impl.add (updateUnit, updateElement);
     }
     
@@ -270,6 +282,7 @@ public final class OperationContainer<Support> {
      * <code>null</code> if the <code>UpdateElement</code> is already present in the container
      */
     public OperationInfo<Support> add(UpdateElement updateElement) {
+        upToDate = false;
         UpdateUnit updateUnit = updateElement.getUpdateUnit ();
         return impl.add (updateUnit, updateElement);
     }
@@ -292,6 +305,7 @@ public final class OperationContainer<Support> {
      * @return <tt>true</tt> if succesfully added
      */
     public boolean remove(UpdateElement updateElement) {
+        upToDate = false;
         return impl.remove(updateElement);
     }
     
@@ -327,6 +341,7 @@ public final class OperationContainer<Support> {
      * @param op
      */
     public void remove(OperationInfo<Support> op) {
+        upToDate = false;
         impl.remove (op);
     }
     
@@ -335,12 +350,13 @@ public final class OperationContainer<Support> {
      * Removes all content
      */
     public void removeAll() {
+        upToDate = false;
         impl.removeAll ();
     }
     
     /**
      * Provides additional information
-     * @param Support the type of support for performing chosen operation like 
+     * @param <Support> the type of support for performing chosen operation like 
      */
     public static final class OperationInfo<Support> {
         OperationContainerImpl<Support>.OperationInfoImpl<Support> impl;
@@ -361,6 +377,11 @@ public final class OperationContainer<Support> {
          * @see ModuleInfo#getCodeNameBase()
          */
         public Set<String> getBrokenDependencies(){return impl.getBrokenDependencies();}
+        
+        @Override
+        public String toString () {
+            return "OperationInfo: " + impl.getUpdateElement ().toString (); // NOI18N
+        }
     }
 
     //end of API - next just impl details
@@ -373,5 +394,5 @@ public final class OperationContainer<Support> {
     
     OperationContainerImpl<Support> impl;
     private Support support;
-    private boolean init = false;
+    private boolean upToDate = false;
 }

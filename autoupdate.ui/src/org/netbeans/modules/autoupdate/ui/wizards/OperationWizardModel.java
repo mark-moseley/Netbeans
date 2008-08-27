@@ -45,6 +45,8 @@ import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -53,6 +55,7 @@ import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JButton;
+import javax.swing.SwingUtilities;
 import org.netbeans.api.autoupdate.OperationContainer;
 import org.netbeans.api.autoupdate.OperationContainer.OperationInfo;
 import org.netbeans.api.autoupdate.OperationException;
@@ -74,14 +77,15 @@ public abstract class OperationWizardModel {
     private Set<UpdateElement> requiredElements = null;
     private Set<UpdateElement> customHandledElements = null;
     private Set<UpdateElement> allElements = null;
+    private HashMap<UpdateElement, Collection<UpdateElement>> required2primary = new HashMap<UpdateElement, Collection<UpdateElement>> ();
     private JButton originalCancel = null;
     private JButton originalNext = null;
     private JButton originalFinish = null;
     private boolean reconized = false;
     static Dimension PREFFERED_DIMENSION = new Dimension (530, 400);
-    private static int MAX_TO_REPORT = 10;
-    static String MORE_BROKEN_PLUGINS = "OperationWizardModel_MoreBrokenPlugins"; // NOTICES
-    
+    private static int MAX_TO_REPORT = 3;
+    static String MORE_BROKEN_PLUGINS = "OperationWizardModel_MoreBrokenPlugins"; // NOI18N
+    private TreeMap<String, Set<UpdateElement>> dep2plugins = null;
     abstract OperationType getOperation ();
     abstract OperationContainer getBaseContainer ();
     abstract OperationContainer<OperationSupport> getCustomHandledContainer ();
@@ -106,7 +110,7 @@ public abstract class OperationWizardModel {
     public Set<UpdateElement> getPrimaryUpdateElements () {
         if (primaryElements == null) {
             primaryElements = new HashSet<UpdateElement> ();
-            for (OperationInfo<?> info : getStandardInfos ()) {
+            for (OperationInfo<?> info : getBaseInfos ()) {
                 primaryElements.add (info.getUpdateElement ());
             }
         }
@@ -120,9 +124,34 @@ public abstract class OperationWizardModel {
     public Set<UpdateElement> getRequiredUpdateElements () {
         if (requiredElements == null) {
             requiredElements = new HashSet<UpdateElement> ();
+            dep2plugins = new TreeMap<String, Set<UpdateElement>> ();
             
-            for (OperationInfo<?> info : getStandardInfos ()) {
-                requiredElements.addAll (info.getRequiredElements ());
+            for (OperationInfo<?> info : getBaseInfos ()) {
+                Set<UpdateElement> reqs = info.getRequiredElements ();
+                Set<String> broken = info.getBrokenDependencies ();
+                if (! broken.isEmpty()) {
+                    for (String brokenDep : broken) {
+                        // pay special attention to missing JDK
+                        if (brokenDep.toLowerCase ().startsWith ("package")) {
+                            brokenDep = "package";
+                        }
+                        if (dep2plugins.get (brokenDep) == null) {
+                            dep2plugins.put (brokenDep, new HashSet<UpdateElement> ());
+                        }
+                        dep2plugins.get (brokenDep).add (info.getUpdateElement ());
+                    }
+                    if (dep2plugins.keySet ().size () >= MAX_TO_REPORT) {
+                        dep2plugins.put (MORE_BROKEN_PLUGINS, null);
+                        break;
+                    }
+                }
+                for (UpdateElement el : reqs) {
+                    if (required2primary.get (el) == null) {
+                        required2primary.put (el, new HashSet<UpdateElement> ());
+                    }
+                    required2primary.get (el).add (info.getUpdateElement ());
+                }
+                requiredElements.addAll (reqs);
             }
             
             Collection<UpdateElement> pending = new HashSet<UpdateElement> ();
@@ -148,7 +177,7 @@ public abstract class OperationWizardModel {
     }
     
     public boolean hasBrokenDependencies () {
-        return ! getBrokenDependencies ().isEmpty ();
+        return ! getBrokenDependency2Plugins ().isEmpty ();
     }
     
     public boolean hasCustomComponents () {
@@ -175,34 +204,46 @@ public abstract class OperationWizardModel {
         return getCustomHandledContainer ().listAll ();
     }
     
-    @SuppressWarnings("unchecked")
-    private List<OperationInfo> getStandardInfos () {
-        List<OperationInfo> infos = new ArrayList<OperationInfo> ();
-        if (OperationType.LOCAL_DOWNLOAD == getOperation ()) {
-            infos.addAll (Containers.forAvailableNbms ().listAll ());
-            infos.addAll (Containers.forUpdateNbms ().listAll ());
-        } else {
-            infos.addAll (getBaseContainer ().listAll ());
-        }
-        return infos;
+    @SuppressWarnings({"unchecked"})
+    private List<OperationInfo> getBaseInfos () {
+        return getBaseContainer ().listAll ();
     }
     
-    public SortedMap<String, Set<String>> getBrokenDependencies () {
-        SortedMap<String, Set<String>> brokenDeps = new TreeMap<String, Set<String>> ();
+    public SortedMap<String, Set<UpdateElement>> getBrokenDependency2Plugins () {
+        if (dep2plugins != null) {
+            return dep2plugins;
+        }
+        
+        dep2plugins = new TreeMap<String, Set<UpdateElement>> ();
 
-        int brokenPlugins = 0;
-        for (OperationInfo<?> info : getStandardInfos ()) {
+        for (OperationInfo<?> info : getBaseInfos ()) {
             Set<String> broken = info.getBrokenDependencies ();
             if (! broken.isEmpty()) {
-                brokenDeps.put (info.getUpdateElement ().getDisplayName (),
-                        new HashSet<String> (broken));
-                if (++brokenPlugins >= MAX_TO_REPORT) {
-                    brokenDeps.put (MORE_BROKEN_PLUGINS, null);
+                for (String brokenDep : broken) {
+                    // pay special attention to missing JDK
+                    if (brokenDep.toLowerCase ().startsWith ("package")) {
+                        brokenDep = "package";
+                    }
+                    if (dep2plugins.get (brokenDep) == null) {
+                        dep2plugins.put (brokenDep, new HashSet<UpdateElement> ());
+                    }
+                    dep2plugins.get (brokenDep).add (info.getUpdateElement ());
+                }
+                if (dep2plugins.keySet ().size () >= MAX_TO_REPORT) {
+                    dep2plugins.put (MORE_BROKEN_PLUGINS, null);
                     break;
                 }
             }
         }
-        return brokenDeps;
+        return dep2plugins;
+    }
+    
+    public Collection<UpdateElement> findPrimaryPlugins (UpdateElement el) {
+        Collection<UpdateElement> res = new HashSet<UpdateElement> (Collections.singleton (el));
+        if (required2primary.containsKey (el)) {
+            res = required2primary.get (el);
+        }
+        return res;
     }
     
     public Set<UpdateElement> getAllUpdateElements () {
@@ -240,17 +281,25 @@ public abstract class OperationWizardModel {
     }
     
     // XXX Hack in WizardDescriptor
-    public void modifyOptionsForFailed (WizardDescriptor wd) {
+    public void modifyOptionsForFailed (final WizardDescriptor wd) {
         recognizeButtons (wd);
-        wd.setOptions (new JButton [] { getOriginalCancel (wd) });
+        SwingUtilities.invokeLater (new Runnable () {
+            public void run () {
+                wd.setOptions (new JButton [] { getOriginalCancel (wd) });
+            }
+        });
     }
     
     // XXX Hack in WizardDescriptor
-    public void modifyOptionsForDoClose (WizardDescriptor wd, boolean canCancel) {
+    public void modifyOptionsForDoClose (final WizardDescriptor wd, final boolean canCancel) {
         recognizeButtons (wd);
-        JButton b = getOriginalFinish (wd);
+        final JButton b = getOriginalFinish (wd);
         Mnemonics.setLocalizedText (b, getBundle ("InstallUnitWizardModel_Buttons_Close"));
-        wd.setOptions (canCancel ? new JButton [] { b, getOriginalCancel (wd) } : new JButton [] { b });
+        SwingUtilities.invokeLater (new Runnable () {
+            public void run () {
+                wd.setOptions (canCancel ? new JButton [] { b, getOriginalCancel (wd) } : new JButton [] { b });
+            }
+        });
     }
     
     // XXX Hack in WizardDescriptor
@@ -261,12 +310,16 @@ public abstract class OperationWizardModel {
                 "InstallUnitWizardModel_Buttons_MnemonicNext", getBundle ("InstallUnitWizardModel_Buttons_Next")));
     }
     
-    public void modifyOptionsForContinue (WizardDescriptor wd, boolean canFinish) {
+    public void modifyOptionsForContinue (final WizardDescriptor wd, boolean canFinish) {
         if (canFinish) {
             recognizeButtons (wd);
-            JButton b = getOriginalFinish (wd);
+            final JButton b = getOriginalFinish (wd);
             Mnemonics.setLocalizedText (b, getBundle ("InstallUnitWizardModel_Buttons_Close"));
-            wd.setOptions (new JButton [] {b});
+            SwingUtilities.invokeLater (new Runnable () {
+                public void run () {
+                    wd.setOptions (new JButton [] {b});
+                }
+            });
         } else {
             recognizeButtons (wd);
             removeFinish (wd);
@@ -313,10 +366,10 @@ public abstract class OperationWizardModel {
     }
     
     // XXX Hack in WizardDescriptor
-    public void modifyOptionsForDisabledCancel (WizardDescriptor wd) {
+    public void modifyOptionsForDisabledCancel (final WizardDescriptor wd) {
         recognizeButtons (wd);
         Object [] options = wd.getOptions ();
-        List<JButton> newOptionsL = new ArrayList<JButton> ();
+        final List<JButton> newOptionsL = new ArrayList<JButton> ();
         List<Object> optionsL = Arrays.asList (options);
         for (Object o : optionsL) {
             assert o instanceof JButton : o + " instanceof JButton";
@@ -331,7 +384,11 @@ public abstract class OperationWizardModel {
                 }
             }
         }
-        wd.setOptions (newOptionsL.toArray ());
+        SwingUtilities.invokeLater (new Runnable () {
+            public void run () {
+                wd.setOptions (newOptionsL.toArray ());
+            }
+        });
     }
     
     public void doCleanup (boolean cancel) throws OperationException {
@@ -339,18 +396,11 @@ public abstract class OperationWizardModel {
         getCustomHandledContainer ().removeAll ();
     }
     
-    @SuppressWarnings("unchecked")
-    private Set<OperationInfo> listAll () {
-        Set<OperationInfo> infos = new HashSet<OperationInfo> ();
-        infos.addAll (getStandardInfos ());
-        infos.addAll (getCustomHandledInfos ());
-        return infos;
-    }
-    
     private void recognizeButtons (WizardDescriptor wd) {
         if (! reconized) {
             Object [] options = wd.getOptions ();
-            assert options != null && options.length >= 4;
+            assert options != null : "options: " + options;
+            assert options.length >= 4 : Arrays.asList (options) + " has lenght 4";
             assert options [1] instanceof JButton : options [1] + " instanceof JButton";
             originalNext = (JButton) options [1];
             assert options [2] instanceof JButton : options [2] + " instanceof JButton";
@@ -374,9 +424,9 @@ public abstract class OperationWizardModel {
         return originalFinish;
     }
     
-    private void removeFinish (WizardDescriptor wd) {
+    private void removeFinish (final WizardDescriptor wd) {
         Object [] options = wd.getOptions ();
-        List<JButton> newOptionsL = new ArrayList<JButton> ();
+        final List<JButton> newOptionsL = new ArrayList<JButton> ();
         List<Object> optionsL = Arrays.asList (options);
         for (Object o : optionsL) {
             assert o instanceof JButton : o + " instanceof JButton";
@@ -387,7 +437,11 @@ public abstract class OperationWizardModel {
                 }
             }
         }
-        wd.setOptions (newOptionsL.toArray ());
+        SwingUtilities.invokeLater (new Runnable () {
+            public void run () {
+                wd.setOptions (newOptionsL.toArray ());
+            }
+        });
     }
     
     private void addRequiredElements (Set<UpdateElement> elems) {
