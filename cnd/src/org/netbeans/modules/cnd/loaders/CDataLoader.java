@@ -48,27 +48,25 @@ import org.openide.loaders.DataObjectExistsException;
 import org.openide.loaders.MultiDataObject;
 import org.openide.util.NbBundle;
 import org.openide.util.SharedClassObject;
-
-import org.netbeans.modules.cnd.MIMENames;
+import org.netbeans.modules.cnd.utils.MIMENames;
+import org.netbeans.modules.cnd.editor.filecreation.ExtensionsSettings;
+import org.openide.loaders.ExtensionList;
 
 /**
  *
  * @author Alexander Simon
  */
-public class CDataLoader extends CndAbstractDataLoader {
+public class CDataLoader extends CndAbstractDataLoaderExt {
     
     private static CDataLoader instance;
 
     /** Serial version number */
     static final long serialVersionUID = 6801389470714975685L;
 
-    /** The suffix list for C primary files */
-    private static final String[] cExtensions = { "c", "i", "m" }; // NOI18N
-
     protected CDataLoader() {
 	super("org.netbeans.modules.cnd.loaders.CDataObject"); // NOI18N
         instance = this;
-        createExtentions(cExtensions);
+        //createExtentions(cExtensions);
     }
 
     public static CDataLoader getInstance(){
@@ -92,34 +90,13 @@ public class CDataLoader extends CndAbstractDataLoader {
         return new CDataObject(primaryFile, this);
     }
 
-    public String getDefaultExtension() {
-        String l = (String)getProperty (PROP_DEFAULT_EXTENSIONS);
-        if (l == null) {
-            l = cExtensions[0];
-            putProperty (PROP_DEFAULT_EXTENSIONS, l, false);
-        }
-        return l;
+    // CndHandlableExtensions
+    
+    public String getDisplayNameForExtensionList() {
+	return NbBundle.getMessage(CDataLoader.class, "CDataLoader_Name_ForExtList"); // NOI18N
     }
 
-    public void setDefaultExtension(String defaultExtension) {
-        String oldExtension = getDefaultExtension();
-        if (!defaultExtension.equals(oldExtension) && getExtensions().isRegistered("a."+defaultExtension)){ // NOI18N
-            TemplateExtensionUtils.renameCExtension(defaultExtension);
-            putProperty (PROP_DEFAULT_EXTENSIONS, defaultExtension, true);
-        }
+    public String getSettingsName() {
+        return ExtensionsSettings.C_FILE;  
     }
-
-    @Override
-    public void writeExternal (java.io.ObjectOutput oo) throws IOException {
-        super.writeExternal (oo);
-        oo.writeObject (getProperty (PROP_DEFAULT_EXTENSIONS));
-    }
-
-    @Override
-    public void readExternal (java.io.ObjectInput oi)  throws IOException, ClassNotFoundException {
-        super.readExternal (oi);
-        setDefaultExtension((String)oi.readObject ());
-    }
-
-    public static final String PROP_DEFAULT_EXTENSIONS = "defaultExtension"; // NOI18N
 }

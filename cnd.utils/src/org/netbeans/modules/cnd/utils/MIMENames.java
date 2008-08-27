@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,52 +38,62 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.cnd.refactoring.actions;
 
-import java.awt.event.ActionEvent;
-import javax.swing.Action;
-import javax.swing.text.JTextComponent;
-import org.netbeans.editor.BaseAction;
-import org.netbeans.modules.cnd.utils.MIMENames;
-import org.netbeans.modules.cnd.editor.spi.cplusplus.CndEditorActionsProvider;
+package org.netbeans.modules.cnd.utils;
 
 /**
- * action for in-place rename
- * (copy of  org.netbeans.modules.java.editor.rename.InstantRenameAction)
- * 
- * @author Jan Lahoda
- * @author Vladimir Voskresensky
- */
-public class InstantRenameAction extends BaseAction {
-    
-    /** Creates a new instance of InstantRenameAction */
-    public InstantRenameAction() {
-        super("in-place-refactoring", MAGIC_POSITION_RESET | UNDO_MERGE_RESET); // NOI18N
-    }
-    
-    public void actionPerformed(ActionEvent evt, final JTextComponent target) {
-        InstantRenamePerformer.invokeInstantRename(target);
-    }
-    
-    @Override
-    protected Class getShortDescriptionBundleClass() {
-        return InstantRenameAction.class;
-    }
-    
-    public static class EditorActionProvider extends CndEditorActionsProvider {
+ * MIME names.
+ * We need these both in the loaders code and in the editor code
+ * so we have a common definition here.
+*/
+public class MIMENames {
 
-        public EditorActionProvider() {
-            
-        }
-        
-        @Override
-        public Action[] getActions(String mime) {
-            if (MIMENames.C_MIME_TYPE.equals(mime) ||
-                    MIMENames.CPLUSPLUS_MIME_TYPE.equals(mime)) {
-                return new Action[] { new InstantRenameAction() };
-            } else {
-                return new Action[0];
-            }
-        }
-    }    
+    /** C++ */
+    public static final String CPLUSPLUS_MIME_TYPE = "text/x-c++"; //NOI18N
+
+    /** C */
+    public static final String C_MIME_TYPE = "text/x-c"; //NOI18N
+
+    /** Fortran */
+    public static final String FORTRAN_MIME_TYPE = "text/x-fortran"; //NOI18N
+
+    /** Makefiles */
+    public static final String MAKEFILE_MIME_TYPE = "text/x-make"; //NOI18N
+
+    /** Shell */
+    public static final String SHELL_MIME_TYPE = "text/sh"; //NOI18N
+
+
+    /** Visu x designer */
+    public static final String VISU_MIME_TYPE = "text/x-visu"; //NOI18N
+
+    /** Lex files */
+    public static final String LEX_MIME_TYPE = "text/x-lex"; //NOI18N
+
+    /** Yacc files */
+    public static final String YACC_MIME_TYPE = "text/x-yacc"; //NOI18N
+
+    /** SPARC Assembly files */
+    public static final String ASM_MIME_TYPE = "text/x-asm"; //NOI18N
+
+    /** ELF Executable files */
+    public static final String ELF_EXE_MIME_TYPE = "application/x-executable+elf"; //NOI18N
+
+    /** Generic Executable files */
+    public static final String EXE_MIME_TYPE = "application/x-exe"; //NOI18N
+    
+    /** Generic Executable files */
+    public static final String DLL_MIME_TYPE = "application/x-exe+dll"; //NOI18N
+
+    /** ELF Core files */
+    public static final String ELF_CORE_MIME_TYPE = "application/x-core+elf"; //NOI18N
+
+    /** ELF Shared Object files */
+    public static final String ELF_SHOBJ_MIME_TYPE = "application/x-shobj+elf"; //NOI18N
+
+    /** ELF Object files */
+    public static final String ELF_OBJECT_MIME_TYPE = "application/x-object+elf"; //NOI18N
+
+    /** Generic ELF files (shouldn't be recognized anymore) */
+    public static final String ELF_GENERIC_MIME_TYPE = "application/x-elf"; //NOI18N
 }

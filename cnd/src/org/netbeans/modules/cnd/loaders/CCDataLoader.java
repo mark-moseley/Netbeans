@@ -45,32 +45,28 @@ import java.io.IOException;
 
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObjectExistsException;
+import org.openide.loaders.ExtensionList;
 import org.openide.loaders.MultiDataObject;
 import org.openide.util.NbBundle;
 import org.openide.util.SharedClassObject;
-
-import org.netbeans.modules.cnd.MIMENames;
-import org.openide.util.io.SafeException;
+import org.netbeans.modules.cnd.utils.MIMENames;
+import org.netbeans.modules.cnd.editor.filecreation.ExtensionsSettings;
 
 /**
  *
  * @author Alexander Simon
  */
-public class CCDataLoader extends CndAbstractDataLoader {
+public class CCDataLoader extends CndAbstractDataLoaderExt {
     
     private static CCDataLoader instance;
 
     /** Serial version number */
     static final long serialVersionUID = 6801389470714975684L;
 
-    /** The suffix list for C++ primary files */
-    private static final String[] cppExtensions =
-				{ "cc", "cpp", "c++", "cxx", "C", "mm" }; // NOI18N
-
     protected CCDataLoader() {
 	super("org.netbeans.modules.cnd.loaders.CCDataObject"); // NOI18N
         instance = this;
-        createExtentions(cppExtensions);
+        //createExtentions(cppExtensions);
     }
 
     public static CCDataLoader getInstance(){
@@ -94,34 +90,11 @@ public class CCDataLoader extends CndAbstractDataLoader {
         return new CCDataObject(primaryFile, this);
     }
 
-    public String getDefaultExtension() {
-        String l = (String)getProperty (PROP_DEFAULT_EXTENSIONS);
-        if (l == null) {
-            l = cppExtensions[0];
-            putProperty (PROP_DEFAULT_EXTENSIONS, l, false);
-        }
-        return l;
+    public String getDisplayNameForExtensionList() {
+	return NbBundle.getMessage(CCDataLoader.class, "CCDataLoader_Name_ForExtList"); // NOI18N
     }
 
-    public void setDefaultExtension(String defaultExtension) {
-        String oldExtension = getDefaultExtension();
-        if (!defaultExtension.equals(oldExtension) && getExtensions().isRegistered("a."+defaultExtension)){ // NOI18N
-            TemplateExtensionUtils.renameCppExtension(defaultExtension);
-            putProperty (PROP_DEFAULT_EXTENSIONS, defaultExtension, true);
-        }
+    public String getSettingsName() {
+        return ExtensionsSettings.CPP_FILE;
     }
-
-    @Override
-    public void writeExternal (java.io.ObjectOutput oo) throws IOException {
-        super.writeExternal (oo);
-        oo.writeObject (getProperty (PROP_DEFAULT_EXTENSIONS));
-    }
-
-    @Override
-    public void readExternal (java.io.ObjectInput oi)  throws IOException, ClassNotFoundException {
-        super.readExternal (oi);
-        setDefaultExtension((String)oi.readObject ());
-    }
-
-    public static final String PROP_DEFAULT_EXTENSIONS = "defaultExtension"; // NOI18N
 }

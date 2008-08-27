@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,52 +38,21 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.cnd.refactoring.actions;
 
-import java.awt.event.ActionEvent;
-import javax.swing.Action;
-import javax.swing.text.JTextComponent;
-import org.netbeans.editor.BaseAction;
+package org.netbeans.modules.cnd.editor.cplusplus;
+
+import org.netbeans.editor.Formatter;
+import org.netbeans.editor.ext.ExtFormatter;
 import org.netbeans.modules.cnd.utils.MIMENames;
-import org.netbeans.modules.cnd.editor.spi.cplusplus.CndEditorActionsProvider;
 
-/**
- * action for in-place rename
- * (copy of  org.netbeans.modules.java.editor.rename.InstantRenameAction)
- * 
- * @author Jan Lahoda
- * @author Vladimir Voskresensky
- */
-public class InstantRenameAction extends BaseAction {
-    
-    /** Creates a new instance of InstantRenameAction */
-    public InstantRenameAction() {
-        super("in-place-refactoring", MAGIC_POSITION_RESET | UNDO_MERGE_RESET); // NOI18N
-    }
-    
-    public void actionPerformed(ActionEvent evt, final JTextComponent target) {
-        InstantRenamePerformer.invokeInstantRename(target);
-    }
-    
-    @Override
-    protected Class getShortDescriptionBundleClass() {
-        return InstantRenameAction.class;
-    }
-    
-    public static class EditorActionProvider extends CndEditorActionsProvider {
+/** C++ indentation engine that delegates to C++ formatter */
+public class CCIndentEngine extends BaseIndentEngine {
 
-        public EditorActionProvider() {
-            
-        }
-        
-        @Override
-        public Action[] getActions(String mime) {
-            if (MIMENames.C_MIME_TYPE.equals(mime) ||
-                    MIMENames.CPLUSPLUS_MIME_TYPE.equals(mime)) {
-                return new Action[] { new InstantRenameAction() };
-            } else {
-                return new Action[0];
-            }
-        }
-    }    
+    public CCIndentEngine() {
+        setAcceptedMimeTypes(new String[] { MIMENames.CPLUSPLUS_MIME_TYPE });
+    }
+
+    protected ExtFormatter createFormatter() {
+	return (CCFormatter) Formatter.getFormatter(CCKit.class);
+    }
 }

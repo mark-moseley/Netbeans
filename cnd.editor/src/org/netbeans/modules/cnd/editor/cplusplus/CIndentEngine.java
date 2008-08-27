@@ -39,61 +39,23 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd;
+package org.netbeans.modules.cnd.editor.cplusplus;
 
-/**
- * MIME names.
- * We need these both in the loaders code and in the editor code
- * so we have a common definition here.
-*/
-public class MIMENames {
+import org.netbeans.editor.Formatter;
+import org.netbeans.editor.ext.ExtFormatter;
+import org.netbeans.modules.cnd.utils.MIMENames;
 
-    /** C++ */
-    public static final String CPLUSPLUS_MIME_TYPE = "text/x-c++"; //NOI18N
-
-    /** C */
-    public static final String C_MIME_TYPE = "text/x-c"; //NOI18N
-
-    /** Fortran */
-    public static final String FORTRAN_MIME_TYPE = "text/x-fortran"; //NOI18N
-
-    /** Makefiles */
-    public static final String MAKEFILE_MIME_TYPE = "text/x-make"; //NOI18N
-
-    /** Shell */
-    public static final String SHELL_MIME_TYPE = "text/sh"; //NOI18N
-
-
-    /** Visu x designer */
-    public static final String VISU_MIME_TYPE = "text/x-visu"; //NOI18N
-
-    /** Lex files */
-    public static final String LEX_MIME_TYPE = "text/x-lex"; //NOI18N
-
-    /** Yacc files */
-    public static final String YACC_MIME_TYPE = "text/x-yacc"; //NOI18N
-
-    /** SPARC Assembly files */
-    public static final String ASM_MIME_TYPE = "text/x-sparc-asm"; //NOI18N
-
-    /** ELF Executable files */
-    public static final String ELF_EXE_MIME_TYPE = "application/x-executable+elf"; //NOI18N
-
-    /** Generic Executable files */
-    public static final String EXE_MIME_TYPE = "application/x-exe"; //NOI18N
+/** C indentation engine that delegates to java formatter */
+public class CIndentEngine extends BaseIndentEngine {
     
-    /** Generic Executable files */
-    public static final String DLL_MIME_TYPE = "application/x-exe+dll"; //NOI18N
+   public CIndentEngine() {
+        setAcceptedMimeTypes(new String[] { MIMENames.C_MIME_TYPE });
+    }
+    
+    @Override
+    protected ExtFormatter createFormatter() {
+        return (CCFormatter) Formatter.getFormatter(CKit.class);
+    }
 
-    /** ELF Core files */
-    public static final String ELF_CORE_MIME_TYPE = "application/x-core+elf"; //NOI18N
-
-    /** ELF Shared Object files */
-    public static final String ELF_SHOBJ_MIME_TYPE = "application/x-shobj+elf"; //NOI18N
-
-    /** ELF Object files */
-    public static final String ELF_OBJECT_MIME_TYPE = "application/x-object+elf"; //NOI18N
-
-    /** Generic ELF files (shouldn't be recognized anymore) */
-    public static final String ELF_GENERIC_MIME_TYPE = "application/x-elf"; //NOI18N
 }
+
