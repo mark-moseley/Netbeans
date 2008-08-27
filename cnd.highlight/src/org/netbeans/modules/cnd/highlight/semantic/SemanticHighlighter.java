@@ -41,28 +41,20 @@
 package org.netbeans.modules.cnd.highlight.semantic;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
-import javax.swing.text.AttributeSet;
 import javax.swing.text.Document;
-import javax.swing.text.StyleConstants;
-import org.netbeans.api.editor.settings.AttributesUtilities;
-import org.netbeans.api.editor.settings.EditorStyleConstants;
-import org.netbeans.api.editor.settings.FontColorSettings;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmFunction;
-import org.netbeans.modules.cnd.api.model.CsmFunctionDefinition;
-import org.netbeans.modules.cnd.api.model.CsmMacro;
-import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
-import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
-import org.netbeans.modules.cnd.api.model.services.CsmFileInfoQuery;
 import org.netbeans.modules.cnd.api.model.services.CsmFileReferences;
-import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
+import org.netbeans.modules.cnd.api.model.services.CsmFileReferences.Visitor;
+import org.netbeans.modules.cnd.api.model.services.CsmReferenceContext;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
-import org.netbeans.modules.cnd.highlight.semantic.options.SemanticHighlightingOptions;
-import org.netbeans.modules.cnd.model.tasks.CsmFileTaskFactory.PhaseRunner;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceRepository.Interrupter;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.netbeans.modules.cnd.modelutil.FontColorProvider;
+import org.netbeans.modules.cnd.modelutil.NamedEntityOptions;
 import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
 
 /**
@@ -72,34 +64,16 @@ import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
  *
  * @author Sergey Grinev
  */
-public class SemanticHighlighter extends HighlighterBase {
-
-    private final static String COLORS_INACTIVE = "cc-highlighting-inactive"; // NOI18N
-    private final static String COLORS_MACRO = "cc-highlighting-macros-user"; // NOI18N
-    private final static String COLORS_SYSMACRO = "cc-highlighting-macros-system"; // NOI18N
-    private final static String COLORS_FIELDS = "cc-highlighting-class-fields"; // NOI18N
-    private AttributeSet inactiveColors;
-    private AttributeSet macroColors; //= AttributesUtilities.createImmutable(StyleConstants.Foreground, new Color(0, 105, 0));
-    private AttributeSet sysMacroColors; //= AttributesUtilities.createImmutable(StyleConstants.Foreground, new Color(150, 105, 0));
-    private AttributeSet fieldsColors; //= AttributesUtilities.createImmutable(StyleConstants.Foreground, new Color(175, 175, 0));
-    private AttributeSet functionsColors; // = AttributesUtilities.createImmutable(StyleConstants.Bold, Boolean.TRUE);
-    private final AttributeSet cleanUp = AttributesUtilities.createImmutable(
-            StyleConstants.Underline, null,
-            StyleConstants.StrikeThrough, null,
-            StyleConstants.Background, null,
-            EditorStyleConstants.WaveUnderlineColor, null);
+public final class SemanticHighlighter extends HighlighterBase {
 
     public SemanticHighlighter(Document doc) {
-        super(doc);
+        super(doc); 
+        init(doc);
     }
 
-    protected void initFontColors(FontColorSettings fcs) {
-        inactiveColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_INACTIVE), cleanUp);
-        macroColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_MACRO), cleanUp);
-        sysMacroColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_SYSMACRO), cleanUp);
-        if (SemanticHighlightingOptions.SEMANTIC_ADVANCED) {
-            fieldsColors = AttributesUtilities.createComposite(fcs.getTokenFontColors(COLORS_FIELDS), cleanUp);
-            functionsColors = AttributesUtilities.createImmutable(StyleConstants.Bold, Boolean.TRUE);
+    protected void updateFontColors(FontColorProvider provider) {
+        for (SemanticEntity semanticEntity : SemanticEntitiesProvider.instance().get()) {
+            semanticEntity.updateFontColors(provider);
         }
     }
 
@@ -107,7 +81,7 @@ public class SemanticHighlighter extends HighlighterBase {
         if (doc == null) {
             return null;
         }
-        
+
         OffsetsBag bag = (OffsetsBag) doc.getProperty(SemanticHighlighter.class);
 
         if (bag == null) {
@@ -117,125 +91,84 @@ public class SemanticHighlighter extends HighlighterBase {
         return bag;
     }
 
-    private void update() {
+    private static final boolean SHOW_TIMES = Boolean.getBoolean("cnd.highlighting.times");
+
+    private void update(final Interrupter interruptor) {
         BaseDocument doc = getDocument();
         if (doc != null) {
             OffsetsBag newBag = new OffsetsBag(doc);
             newBag.clear();
             final CsmFile csmFile = CsmUtilities.getCsmFile(doc, false);
+            long start = System.currentTimeMillis();
             if (csmFile != null && csmFile.isParsed()) {
-                for (CsmOffsetable block : getInactiveCodeBlocks(csmFile)) {
-                    newBag.addHighlight(block.getStartOffset(), block.getEndOffset(), inactiveColors);
-                }
-
-                // All highlighting would be stationed here till we'll have general csmfileAction infrastructure
-                if (SemanticHighlightingOptions.getEnableMacros()) {
-                    boolean diffSystem = SemanticHighlightingOptions.getDifferSystemMacros();
-                    for (CsmReference block : getMacroBlocks(csmFile)) {
-                        CsmMacro macro = (CsmMacro) block.getReferencedObject();
-                        newBag.addHighlight(block.getStartOffset(), block.getEndOffset(), !diffSystem || macro == null || !macro.isSystem() ? macroColors : sysMacroColors);
+                if (SHOW_TIMES) System.err.println("#@# Semantic Highlighting update() have started for file " + csmFile.getAbsolutePath());
+                final List<SemanticEntity> entities = new ArrayList<SemanticEntity>(SemanticEntitiesProvider.instance().get());
+                final List<ReferenceCollector> collectors = new ArrayList<ReferenceCollector>(entities.size());
+                // the following loop deals with entities without collectors
+                // and gathers collectors for the next step
+                for (Iterator<SemanticEntity> i = entities.iterator(); i.hasNext(); ) {
+                    SemanticEntity se = i.next();
+                    if (NamedEntityOptions.instance().isEnabled(se)) {
+                        ReferenceCollector collector = se.getCollector();
+                        if (collector != null) {
+                            // remember the collector for future use
+                            collectors.add(collector);
+                        } else {
+                            // this is simple entity without collector,
+                            // let's add its blocks right now
+                            addHighlights(newBag, se.getBlocks(csmFile), se);
+                            i.remove();
+                        }
+                    } else {
+                        // skip disabled entity
+                        i.remove();
                     }
                 }
-
-                if (SemanticHighlightingOptions.getEnableClassFields()) {
-                    for (CsmOffsetable block : getFieldsBlocks(csmFile)) {
-                        newBag.addHighlight(block.getStartOffset(), block.getEndOffset(), fieldsColors);
+                // to show inactive code and macros first
+                getHighlightsBag(doc).setHighlights(newBag);
+                // here we invoke the collectors
+                if (!entities.isEmpty()) {
+                    CsmFileReferences.getDefault().accept(csmFile, new Visitor() {
+                        public void visit(CsmReferenceContext context) {
+                            CsmReference ref = context.getReference();
+                            for (ReferenceCollector c : collectors) {
+                                if (interruptor.cancelled()) {
+                                    break;
+                                }
+                                c.visit(ref, csmFile);
+                            }
+                        }
+                    });
+                    // here we apply highlighting to discovered blocks
+                    for (int i = 0; i < entities.size(); ++i) {
+                        addHighlights(newBag, collectors.get(i).getReferences(), entities.get(i));
                     }
                 }
-
-                if (SemanticHighlightingOptions.getEnableFunctionNames()) {
-                    for (CsmOffsetable block : getFunctionNames(csmFile)) {
-                        newBag.addHighlight(block.getStartOffset(), block.getEndOffset(), functionsColors);
-                    }
-                }
+                if (SHOW_TIMES) System.err.println("#@# Semantic Highlighting update() done in "+ (System.currentTimeMillis() - start) +"ms for file " + csmFile.getAbsolutePath());
             }
             getHighlightsBag(doc).setHighlights(newBag);
         }
     }
 
-    /*package*/ static List<CsmOffsetable> getInactiveCodeBlocks(CsmFile file) {
-        return CsmFileInfoQuery.getDefault().getUnusedCodeBlocks(file);
+    private void addHighlights(OffsetsBag bag, List<? extends CsmOffsetable> blocks, SemanticEntity entity) {
+        for (CsmOffsetable block : blocks) {
+            bag.addHighlight(block.getStartOffset(), block.getEndOffset(), entity.getAttributes(block));
+        }
     }
 
-    /*package*/ static List<CsmReference> getMacroBlocks(CsmFile file) {
-        return CsmFileInfoQuery.getDefault().getMacroUsages(file);
-    }
-
-    /*package*/ static List<? extends CsmOffsetable> getFieldsBlocks(CsmFile file) {
-        return getBlocksFromReferences(file, new Validator() {
-
-            public boolean validate(CsmReference ref) {
-                CsmObject obj = ref.getReferencedObject();
-                return obj != null && CsmKindUtilities.isField(obj);
-            }
-        });
-    }
-
-    /*package*/ static List<CsmReference> getFunctionNames(final CsmFile csmFile) {
-        return getBlocksFromReferences(csmFile, new Validator() {
-
-            public boolean validate(CsmReference ref) {
-                CsmObject csmObject = ref.getReferencedObject();
-                if (CsmKindUtilities.isFunctionDeclaration(csmObject)) {
-                    // check if we are in the function declaration
-                    CsmOffsetableDeclaration decl = (CsmOffsetableDeclaration) csmObject;
-                    if (decl.getContainingFile().equals(csmFile) &&
-                            decl.getStartOffset() <= ref.getStartOffset() &&
-                            decl.getEndOffset() >= ref.getEndOffset()) {
-                        return true;
-                    }
-                    // check if we are in function definition name => go to declaration
-                    // else it is more useful to jump to definition of function
-                    CsmFunctionDefinition definition = ((CsmFunction) csmObject).getDefinition();
-                    if (definition != null) {
-                        if (csmFile.equals(definition.getContainingFile()) &&
-                                definition.getStartOffset() <= ref.getStartOffset() &&
-                                ref.getStartOffset() <= definition.getBody().getStartOffset()) {
-                            // it is ok to jump to declaration
-                            return true;
-                        }
-                    }
-                } else if (CsmKindUtilities.isFunctionDefinition(csmObject)) {
-                    CsmFunctionDefinition definition = (CsmFunctionDefinition) csmObject;
-                    if (csmFile.equals(definition.getContainingFile()) &&
-                            definition.getStartOffset() <= ref.getStartOffset() &&
-                            ref.getStartOffset() <= definition.getBody().getStartOffset()) {
-                        // it is ok to jump to declaration
-                        return true;
-                    }
-                }
-                return false;
-            }
-        });
-    }
-
-    private static List<CsmReference> getBlocksFromReferences(CsmFile file, final Validator validator) {
-        final List<CsmReference> out = new ArrayList<CsmReference>();
-        CsmFileReferences.getDefault().accept(file,
-                new CsmFileReferences.Visitor() {
-
-                    public void visit(CsmReference ref) {
-                        if (validator.validate(ref)) {
-                            out.add(ref);
-                        }
-                    }
-                });
-        return out;
-    }
-
-    private interface Validator {
-
-        boolean validate(CsmReference ref);
-    }
-    // Runnable
+    // PhaseRunner
     public void run(Phase phase) {
         if (phase == Phase.PARSED || phase == Phase.INIT) {
+            MyInterruptor interruptor = new MyInterruptor();
             try {
-                update();
+                addCancelListener(interruptor);
+                update(interruptor);
             } catch (AssertionError ex) {
                 ex.printStackTrace();
             } catch (Exception ex) {
                 ex.printStackTrace();
+            } finally {
+                removeCancelListener(interruptor);
             }
         } else if (phase == Phase.CLEANUP) {
             BaseDocument doc = getDocument();
@@ -244,5 +177,13 @@ public class SemanticHighlighter extends HighlighterBase {
                 getHighlightsBag(doc).clear();
             }
         }
+    }
+    
+    public boolean isValid() {
+        return true;
+    }
+
+    public boolean isHighPriority() {
+        return false;
     }
 }
