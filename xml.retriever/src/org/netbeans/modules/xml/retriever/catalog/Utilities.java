@@ -348,6 +348,10 @@ public class Utilities {
             File[] children = startFile.listFiles();
             if(children != null){
                 for(File child: children){
+                    //exclude "build" dir since that is generated one.
+                    //cannot think of a better solution.
+                    if(child.getName().endsWith("build")) //NOI18N
+                        continue;
                     getFilesWithExtension(child, fileExtension, curList);
                 }
             }
@@ -427,7 +431,6 @@ public class Utilities {
             return null;
         ucn.connect();
         
-        int fileLen = ucn.getContentLength();
         byte buffer[] = new byte[1024];
         BufferedInputStream bis = new BufferedInputStream(ucn.getInputStream());
         saveFile.getParentFile().mkdirs();
@@ -438,19 +441,17 @@ public class Utilities {
             bis.close();
             throw ex;
         }
-        int curLen = 0;
-        while( curLen < fileLen){
+        
+        int len = 1024;
+        while((len = bis.read(buffer, 0, 1024)) > 0) {
             try {
                 if(Thread.currentThread().isInterrupted())
                     break;
-                Thread.sleep(100);
+                Thread.sleep(10);
             } catch (InterruptedException ex) {}
             try{
-                int readLen = bis.available();
-                int len = bis.read(buffer, 0, (readLen>buffer.length)?buffer.length:readLen);
                 bos.write(buffer, 0, len);
-                curLen += len;
-            }catch (IOException e){
+            } catch (IOException e){
                 expn = e;
                 break;
             }
@@ -629,15 +630,12 @@ public class Utilities {
         }
         Lookup proxyLookup = Lookups.proxy(
                 new Lookup.Provider() {
-            private Lookup lookup;
             public Lookup getLookup() {
-                if(lookup != null)
-                    return lookup;
                 Document document = null;
                 try {
                     document = _getDocument(dobj);
                     if (document != null) {
-                        lookup = Lookups.fixed(new Object[] {
+                        return Lookups.fixed(new Object[] {
                             dobj.getPrimaryFile(),
                             document,
                             dobj,
@@ -645,7 +643,7 @@ public class Utilities {
                             catalogModel
                         });
                     } else {
-                        lookup = Lookups.fixed(new Object[] {
+                        return Lookups.fixed(new Object[] {
                             dobj.getPrimaryFile(),
                             dobj,
                             catalogModel
@@ -658,7 +656,6 @@ public class Utilities {
                         catalogModel
                     });
                 }
-                return lookup;
             }
         }
         );
