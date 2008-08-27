@@ -40,25 +40,18 @@
  */
 package org.netbeans.modules.refactoring.java.plugins;
 
-import com.sun.source.tree.*;
-import com.sun.source.util.TreePath;
 import java.io.IOException;
 import java.util.*;
-import java.util.Collections;
 import java.util.Set;
 import javax.lang.model.element.*;
-import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.source.*;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.api.ProgressEvent;
 import org.netbeans.modules.refactoring.java.RetoucheUtils;
 import org.netbeans.modules.refactoring.java.api.InnerToOuterRefactoring;
-import org.netbeans.modules.refactoring.java.api.JavaRefactoringUtils;
-import org.netbeans.modules.refactoring.java.api.JavaRefactoringUtils;
 import org.netbeans.modules.refactoring.java.spi.JavaRefactoringPlugin;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.openide.filesystems.FileObject;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -95,6 +88,7 @@ public class InnerToOuterRefactoringPlugin extends JavaRefactoringPlugin {
     @Override
     protected Problem preCheck(CompilationController info) throws IOException {
         // fire operation start on the registered progress listeners (4 steps)
+        Thread.dumpStack();
         fireProgressListenerStart(refactoring.PRE_CHECK, 4);
         Problem preCheckProblem = null;
         info.toPhase(JavaSource.Phase.RESOLVED);
@@ -132,6 +126,11 @@ public class InnerToOuterRefactoringPlugin extends JavaRefactoringPlugin {
         // #1 - check if the class is an inner class
         //            RefObject declCls = (RefObject) sourceType.refImmediateComposite();
         if (el instanceof TypeElement) {
+            if (((TypeElement)el).getNestingKind() == NestingKind.ANONYMOUS) {
+                // fatal error -> return
+                preCheckProblem = new Problem(true, NbBundle.getMessage(InnerToOuterRefactoringPlugin.class, "ERR_InnerToOuter_Anonymous")); // NOI18N
+                return preCheckProblem;
+            }
             if (!((TypeElement)el).getNestingKind().isNested()) {
                 // fatal error -> return
                 preCheckProblem = new Problem(true, NbBundle.getMessage(InnerToOuterRefactoringPlugin.class, "ERR_InnerToOuter_MustBeInnerClass")); // NOI18N
@@ -179,6 +178,7 @@ public class InnerToOuterRefactoringPlugin extends JavaRefactoringPlugin {
 
     @Override
     public Problem fastCheckParameters() {
+        Thread.dumpStack();
         Problem result = null;
         
         String newName = refactoring.getClassName();
@@ -210,12 +210,13 @@ public class InnerToOuterRefactoringPlugin extends JavaRefactoringPlugin {
     }
     
     public Problem prepare(RefactoringElementsBag refactoringElements) {
+        Thread.dumpStack();
         Set<FileObject> a = getRelevantFiles();
         fireProgressListenerStart(ProgressEvent.START, a.size());
         final InnerToOuterTransformer innerToOuter = new InnerToOuterTransformer(refactoring);
         TransformTask transform = new TransformTask(innerToOuter, refactoring.getSourceType());
-        createAndAddElements(a, transform, refactoringElements, refactoring);
+        Problem problem = createAndAddElements(a, transform, refactoringElements, refactoring);
         fireProgressListenerStop();
-        return innerToOuter.getProblem();
+        return problem != null ? problem : innerToOuter.getProblem();
     }
 }
