@@ -1394,7 +1394,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
     }
 
     @Override
-    public void layout() {
+    public void layout(boolean save) {
         revalidateSceneWithWait();
         ArrayList<LifelineWidget> lifelines=new ArrayList<LifelineWidget>();
         Collection<IPresentationElement> pesTmp=getScene().getNodes();
@@ -1718,8 +1718,11 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             }
             else
             {
-                Rectangle tmp=llW.getLine().convertLocalToScene(llW.getLine().getBounds());
-                tmpBot=tmp.y+100;
+                if(llW.getLine().getBounds()!=null)
+                {
+                    Rectangle tmp=llW.getLine().convertLocalToScene(llW.getLine().getBounds());
+                    tmpBot=tmp.y+100;
+                }
             }
             if(tmpBot>maxY)maxY=tmpBot;
         }
