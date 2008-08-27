@@ -70,7 +70,9 @@ import org.netbeans.modules.uml.core.eventframework.EventBlocker;
 import org.netbeans.modules.uml.core.metamodel.core.constructs.IAliasedType;
 import org.netbeans.modules.uml.core.metamodel.core.constructs.IClass;
 import org.netbeans.modules.uml.core.metamodel.core.constructs.IDataType;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.Abstraction;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.CreationFactory;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.Dependency;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.ElementCollector;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.FactoryRetriever;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.ICreationFactory;
@@ -81,8 +83,12 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPackage;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IVersionableElement;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.Permission;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.RelationProxy;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.RelationValidator;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.TypedFactoryRetriever;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.UMLXMLManip;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.Usage;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.IDerivationClassifier;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.IRelationFactory;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.RelationFactory;
@@ -92,13 +98,16 @@ import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IClassifier;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IDerivation;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IGeneralization;
+import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IImplementation;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IInterface;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.INavigableEnd;
+import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.Implementation;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IOperation;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IParameter;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IParameterableElement;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IUMLBinding;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.Parameter;
+import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.Realization;
 import org.netbeans.modules.uml.core.metamodel.structure.IProject;
 import org.netbeans.modules.uml.core.preferenceframework.IPreferenceAccessor;
 import org.netbeans.modules.uml.core.preferenceframework.PreferenceAccessor;
@@ -145,9 +154,6 @@ import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.core.support.umlutils.ElementLocator;
 import org.netbeans.modules.uml.core.support.umlutils.IElementLocator;
 import org.netbeans.modules.uml.core.workspacemanagement.IWSProject;
-import org.netbeans.modules.uml.ui.controls.drawingarea.DiagramAreaEnumerations;
-import org.netbeans.modules.uml.ui.controls.drawingarea.ElementBroadcastAction;
-import org.netbeans.modules.uml.ui.controls.drawingarea.IElementBroadcastAction;
 import org.netbeans.modules.uml.ui.controls.newdialog.INewDialogProjectDetails;
 import org.netbeans.modules.uml.ui.controls.newdialog.NewDialogProjectDetails;
 import org.netbeans.modules.uml.ui.controls.projecttree.IProjectTreeControl;
@@ -480,6 +486,8 @@ public class UMLParsingIntegrator
             reportHeapExceeded() ;
         }
 	
+        m_FragDocument = null;
+        m_Packages = null;
 	XMLManip.clearCachedXPaths();
         
         return m_Cancelled ? true : false;
@@ -907,7 +915,26 @@ public class UMLParsingIntegrator
             String query = ".//"; // NOI18N
             query += elementName;
             query += "/ancestor::*[2]"; // NOI18N
-            List nodes = childInDestinationNamespace.selectNodes(query);
+  
+            Element destination = (childInDestinationNamespace instanceof Element) 
+                                  ? (Element) childInDestinationNamespace 
+                                    : null;
+            String destNodeName = "";
+            if (destination != null) 
+            {
+                destNodeName = destination.getQualifiedName();
+            }
+            List nodes;
+            if (destination != null && isNodeContainer(destNodeName)) 
+            {
+                nodes = new ArrayList();
+                nodes.add(childInDestinationNamespace);
+            }
+            else
+            {
+                nodes = childInDestinationNamespace.selectNodes(query);
+            }
+            //List nodes = childInDestinationNamespace.selectNodes(query);
             if (nodes != null)
             {
                 int num = nodes.size();
@@ -916,7 +943,17 @@ public class UMLParsingIntegrator
                     Node node = (Node) nodes.get(x);
                     if (node != null)
                     {
-                        Node foundNode = findElement(node, elementBeingInjected);
+                        //Node foundNode = findElement(node, elementBeingInjected);
+                        Node foundNode;
+                        if (destination != null && isNodeContainer(destNodeName)) 
+                        {
+                            foundNode = elementBeingInjected;
+                        }
+                        else 
+                        {
+                            foundNode = findElement(node, elementBeingInjected);
+                        }
+
                         if (foundNode != null)
                         {
                             // Now get the owned element and move it to the foundNode
@@ -983,13 +1020,18 @@ public class UMLParsingIntegrator
             query += attrName;
             query += "]";
             
-            ensureXMLAttrValues(query, childInDestinationNamespace, elementBeingInjected, attrName);
-            
-            // Make sure to check the current element as well
-            
             Element element = (childInDestinationNamespace instanceof Element) ? (Element) childInDestinationNamespace : null;
-            ;
-            
+            String destNodeName = "";
+            if (element != null) 
+            {
+                destNodeName = element.getQualifiedName();
+            }
+            if ( ! (element != null && isNodeContainer(destNodeName))) 
+            {
+                ensureXMLAttrValues(query, childInDestinationNamespace, elementBeingInjected, attrName);
+            }
+
+            // Make sure to check the current element as well
             if (element != null)
             {
                 Attribute attr = element.attribute(attrName);
@@ -1122,19 +1164,30 @@ public class UMLParsingIntegrator
                     int count = m_ItemsToSink.size();
                     
                     // Create a broadcast to update the open diagrams
-                    IElementBroadcastAction elementAction = new ElementBroadcastAction();
-                    elementAction.setKind(DiagramAreaEnumerations.EBK_DEEP_SYNC);
+//                    IElementBroadcastAction elementAction = new ElementBroadcastAction();
+//                    elementAction.setKind(DiagramAreaEnumerations.EBK_DEEP_SYNC);
                     
                     for (int i = 0; i < count; ++i)
                     {
                         IElement element = fact.createTypeAndFill(m_ItemsToSink.get(i));
-                        // Add this model element to our broadcast
-                        elementAction.add(element);
+//                         // Add this model element to our broadcast
+//                        elementAction.add(element);
                         reinitializePresentationElement(element);
+                        
+                        for(IPresentationElement presentation : element.getPresentationElements())
+                        {
+                            proxyMan.refresh(presentation,true);
+                        }
                     }
-                    
-                    proxyMan.broadcastToAllOpenDiagrams(elementAction);
+
+//                    proxyMan.broadcastToAllOpenDiagrams(elementAction);
                     m_ItemsToSink.clear();
+
+                    for(IPresentationElement pe : m_PresElemsToSink) 
+                    {
+                        proxyMan.refresh(pe, true);
+                    }
+                    m_PresElemsToSink.clear();
                 }
             }
         }
@@ -1152,10 +1205,11 @@ public class UMLParsingIntegrator
         while(iter.hasNext() == true)
         {
             IPresentationElement curElement = iter.next();
-            if (curElement instanceof org.netbeans.modules.uml.ui.support.applicationmanager.IGraphPresentation)
-            {
-                ((org.netbeans.modules.uml.ui.support.applicationmanager.IGraphPresentation)curElement).setModelElement(null);
-            }
+            // TODO: meteora
+//            if (curElement instanceof org.netbeans.modules.uml.ui.support.applicationmanager.IGraphPresentation)
+//            {
+//                ((org.netbeans.modules.uml.ui.support.applicationmanager.IGraphPresentation)curElement).setModelElement(null);
+//            }
         }
     }
     
@@ -1183,6 +1237,21 @@ public class UMLParsingIntegrator
         m_ItemsToSink.add(node);
     }
     
+    private void addPresElemsToResync(IElement elem) 
+    {
+        if (elem != null) 
+        {
+            List<IPresentationElement> presentations = elem.getPresentationElements();
+            if (presentations != null) 
+            {
+                for(IPresentationElement presentation : presentations)
+                {
+                    m_PresElemsToSink.add(presentation);
+                }
+            }
+        }
+    }
+
     public void handlePresentationElements(Node childInDestinationNamespace, Node elementBeingInjected)
     {
         if (childInDestinationNamespace != null && elementBeingInjected != null)
@@ -1352,8 +1421,6 @@ public class UMLParsingIntegrator
                             TypedFactoryRetriever < IElement > fact = new TypedFactoryRetriever < IElement > ();
                             IElement nodeInNamespace = fact.createTypeAndFill(destinationNestedClass);
                             removeClientDependencies(nodeInNamespace);
-                            removeNonNavigableAssoc(nodeInNamespace);
-                            removeGeneralizations(nodeInNamespace);
                             markSpecializationsForRedefinitionAnalysis(nodeInNamespace);  
                         
                             String destName = UMLXMLManip.getAttributeValue(destinationNestedClass, "name"); // NOI18N
@@ -1362,10 +1429,23 @@ public class UMLParsingIntegrator
                             
                             if (injectNestedClass != null)
                             {
+                                copyAttr(destinationNestedClass, injectNestedClass, "clientDependency");
+                                copyAttr(destinationNestedClass, injectNestedClass, "associationEnd");
+                                handleImplementations(destinationNestedClass, injectNestedClass);
+                                if (nodeInNamespace instanceof IClassifier) 
+                                {
+                                    handleGeneralizations(destinationNestedClass, injectNestedClass);
+                                }
+
                                 String finalXMIID = null;
                                 finalXMIID = replaceReferences(destinationNestedClass, injectNestedClass, finalXMIID);
                                 
                                 handleNested(destinationNestedClass, injectNestedClass);
+                            } 
+                            else 
+                            {
+                                removeNonNavigableAssoc(nodeInNamespace);
+                                removeImplementations(nodeInNamespace);
                             }
                         }
                     }
@@ -1568,6 +1648,19 @@ public class UMLParsingIntegrator
         }
     }
     
+    private void copyAttr(Node childInDestinationNamespace, 
+                              Node elementBeingInjected, 
+                              String attrName)
+    {
+        String attrValue 
+            = XMLManip.getAttributeValue(childInDestinationNamespace, 
+                                         attrName); // NOI18N                
+        if (attrValue != null)
+        {
+            XMLManip.setAttributeValue(elementBeingInjected, attrName, attrValue); // NOI18N
+        }
+    }
+        
     public boolean replaceElement(Node childInDestinationNamespace, Node elementBeingInjected)
     {
         boolean replaced = false;
@@ -1585,8 +1678,13 @@ public class UMLParsingIntegrator
                 TypedFactoryRetriever < IElement > fact = new TypedFactoryRetriever < IElement > ();
                 IElement nodeInNamespace = fact.createTypeAndFill(childInDestinationNamespace);
                 removeClientDependencies(nodeInNamespace);
-                removeNonNavigableAssoc(nodeInNamespace);
-                removeGeneralizations(nodeInNamespace);
+                copyAttr(childInDestinationNamespace, elementBeingInjected, "clientDependency");
+                handleImplementations(childInDestinationNamespace, elementBeingInjected);
+                copyAttr(childInDestinationNamespace, elementBeingInjected, "associationEnd");
+                if (nodeInNamespace instanceof IClassifier) 
+                {
+                    handleGeneralizations(childInDestinationNamespace, elementBeingInjected);
+                }
                 markSpecializationsForRedefinitionAnalysis(nodeInNamespace); 
  
                 finalXMIID = replaceReferences(childInDestinationNamespace, elementBeingInjected, finalXMIID);
@@ -1848,16 +1946,42 @@ public class UMLParsingIntegrator
         if ((parent != null) && (elementBeingInjected != null))
         {
             ok = true;
-            String childName =
+            Node childInDestinationNamespace = null;
+
+            // look up by MarkerId             
+            String markerID = XMLManip.retrieveNodeTextValue(elementBeingInjected, 
+                "./UML:Element.ownedElement/UML:TaggedValue[@name='MarkerID']/UML:TaggedValue.dataValue");
+            if (markerID != null) 
+            {
+                Node guess = parent.getDocument().elementByID(markerID);  
+                if (guess != null && (guess instanceof Element) && (elementBeingInjected instanceof Element)) 
+                {
+                    String gType = ((Element)guess).getQualifiedName();
+                    String injType = ((Element)elementBeingInjected).getQualifiedName();
+                    if ( (  gType != null 
+                            && ( gType.equals("UML:Class") || gType.equals("UML:Interface") || gType.equals("UML:Enumeration")))
+                         && (injType != null
+                             && ( injType.equals("UML:Class") || injType.equals("UML:Interface") || injType.equals("UML:Enumeration"))))
+                    {
+                        childInDestinationNamespace = guess;  
+                    }
+                }                  
+            }
+
+            Element injected = (Element) elementBeingInjected;
+            String injectNodeName = injected.getQualifiedName();
+            if (childInDestinationNamespace == null) 
+            {
+                // now let's try by name
+                String childName =
                     XMLManip.getAttributeValue(elementBeingInjected, "name");
             
-            ETList<Node> temp = namedNodes.get(childName);
-            
-            if (temp != null)
-            {
-                Element injected = (Element) elementBeingInjected;
-                String injectNodeName = injected.getQualifiedName();
-                Node childInDestinationNamespace = getElementOfType(temp, injectNodeName);
+                ETList<Node> temp = namedNodes.get(childName);            
+                if (temp != null)
+                {
+                    childInDestinationNamespace = getElementOfType(temp, injectNodeName);
+                }
+            }
                 
                 if ((childInDestinationNamespace != null) &&
                         !m_CancelDueToConflict)
@@ -1901,7 +2025,7 @@ public class UMLParsingIntegrator
                     //ok = false;
                     ok = true;
                 }
-            }
+            
         }
         
         return ok;
@@ -2479,8 +2603,16 @@ public class UMLParsingIntegrator
         
         try
         {
-            IGeneralization gen = m_Factory.createGeneralization(superClass, subClass);
-            redef.add(gen);
+            RelationProxy p = new RelationProxy();
+            p.setFrom(subClass);
+            p.setTo(superClass);
+            p.setConnectionElementType("Generalization");
+            boolean relOk = new RelationValidator().validateRels(p);
+            if (relOk) 
+            {
+                IGeneralization gen = m_Factory.createGeneralization(superClass, subClass);
+                redef.add(gen);
+            }
         }
         catch (Exception e)
         {
@@ -3106,13 +3238,11 @@ public class UMLParsingIntegrator
         return foundElement;
     }
     
+    /*
     public void establishGeneralization(Node clazz, IClassifier clazzObj, INamespace classSpace, String typeName)
     {
         try
         {
-            
-            INamedElement named = resolveType(clazz, clazzObj, classSpace, typeName, true);
-            IClassifier superClass = (named instanceof IClassifier) ? (IClassifier) named : null;
             if (superClass != null)
             {
                 establishGeneralization(clazzObj, superClass);
@@ -3123,11 +3253,34 @@ public class UMLParsingIntegrator
             sendExceptionMessage(e);
         }
     }
+    */
     
     public void analyzeForInterfaces(Node clazz, IClassifier clazzObj, INamespace classSpace)
     {
         try
         {
+            HashMap<IClassifier, IImplementation> oldImpls = new  HashMap<IClassifier, IImplementation>();
+            if (clazzObj != null)
+            {
+                ETList < IImplementation > implList = clazzObj.getImplementations();
+                if (implList != null)
+                {
+                    for (IImplementation impl : implList)
+                    {
+                        if (impl != null)
+                        {
+                            if (impl.getContract() != null) 
+                            {
+                                oldImpls.put(impl.getContract(), impl);
+                            }
+                            else 
+                            {
+                                impl.delete();
+                            }
+                        }
+                    }
+                }
+            }
             // Get all of this Classes attributes and resolve their types...
             Node genTDesc = clazz.selectSingleNode("./TokenDescriptors/TRealization");
             if (genTDesc != null)
@@ -3145,10 +3298,18 @@ public class UMLParsingIntegrator
                             IClassifier supplier = this.ensureDerivation(spDerivationElement, clazz, clazzObj, classSpace);
                             if (supplier != null)
                             {
-                                String typeName = supplier.getName();
-                                establishDependency(clazzObj, supplier,
-                                        classSpace, "Implementation",
-                                        typeName);
+                                if (oldImpls.get(supplier) != null) 
+                                {
+                                    redef.add(oldImpls.get(supplier));
+                                    oldImpls.remove(supplier);
+                                }
+                                else 
+                                {
+                                    String typeName = supplier.getName();
+                                    establishDependency(clazzObj, supplier,
+                                                        classSpace, "Implementation",
+                                                        typeName);
+                                }
                             }
                         }
                     }
@@ -3167,8 +3328,21 @@ public class UMLParsingIntegrator
                             {
                                 String typeName = XMLManip.getAttributeValue(inter, "value");
                                 if (typeName.length() > 0)
-                                {
-                                    establishDependency(clazz, clazzObj, classSpace, typeName, true, "Implementation");
+                                {                                    
+                                    INamedElement supplier = resolveType(clazz, clazzObj, classSpace, typeName, true);
+                                    if (supplier instanceof IClassifier) 
+                                    {
+                                        if (oldImpls.get((IClassifier)supplier) != null) 
+                                        {
+                                            redef.add(clazzObj);
+                                            oldImpls.remove((IClassifier)supplier);
+                                        }
+                                        else 
+                                        {
+                                            establishDependency(clazzObj, supplier, classSpace, 
+                                                                "Implementation", typeName);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -3178,6 +3352,12 @@ public class UMLParsingIntegrator
                     // clutter the Class node
                     genTDesc.detach();
                 }
+            }
+            Collection<IImplementation> impls = oldImpls.values();
+            for(IImplementation impl : impls) 
+            {
+                addPresElemsToResync(impl);
+                impl.delete();     
             }
         }
         catch (Exception e)
@@ -3224,9 +3404,31 @@ public class UMLParsingIntegrator
     
     public void analyzeForGeneralizations(Node clazz, IClassifier clazzObj, INamespace classSpace)
     {
-
         try
         {
+            HashMap<IClassifier, IGeneralization> oldGens = new  HashMap<IClassifier, IGeneralization>();
+            if (clazzObj != null)
+            {
+                ETList < IGeneralization > genList = clazzObj.getGeneralizations();
+                if (genList != null)
+                {
+                    for (IGeneralization gen : genList)
+                    {
+                        if (gen != null)
+                        {
+                            if (gen.getGeneral() != null) 
+                            {
+                                oldGens.put(gen.getGeneral(), gen);
+                            }
+                            else 
+                            {
+                                gen.delete();
+                            }
+                        }
+                    }
+                }
+            }
+
             // Get all of this Classes attributes and resolve their types...
             Node genTDesc = clazz.selectSingleNode("./TokenDescriptors/TGeneralization");
             if (genTDesc != null)
@@ -3245,7 +3447,15 @@ public class UMLParsingIntegrator
                             IClassifier spDerivationClassifier = this.ensureDerivation(spDerivationElement, clazz, clazzObj, classSpace);
                             if (spDerivationClassifier != null)
                             {
-                                establishGeneralization(clazzObj, spDerivationClassifier);
+                                if (oldGens.get(spDerivationClassifier) != null) 
+                                {
+                                    redef.add(oldGens.get(spDerivationClassifier));
+                                    oldGens.remove(spDerivationClassifier);
+                                } 
+                                else
+                                {
+                                    establishGeneralization(clazzObj, spDerivationClassifier);
+                                }
                             }
                         }
                     }
@@ -3265,7 +3475,20 @@ public class UMLParsingIntegrator
                                 String typeName = XMLManip.getAttributeValue(gen, "value");
                                 if (typeName != null)
                                 {
-                                    establishGeneralization(clazz, clazzObj, classSpace, typeName);
+                                    INamedElement named = resolveType(clazz, clazzObj, classSpace, typeName, true);
+                                    if (named instanceof IClassifier) 
+                                    {
+                                        IClassifier superClass = (IClassifier) named;
+                                        if (oldGens.get(superClass) != null) 
+                                        {
+                                            redef.add(oldGens.get(superClass));
+                                            oldGens.remove(superClass);
+                                        } 
+                                        else
+                                        {
+                                            establishGeneralization(clazzObj, superClass);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -3275,6 +3498,12 @@ public class UMLParsingIntegrator
                     // clutter the Class node
                     genTDesc.detach();
                 }
+            }
+            Collection<IGeneralization> gens  = oldGens.values();
+            for(IGeneralization gen : gens) 
+            {
+                addPresElemsToResync(gen);
+                gen.delete();
             }
         }
         catch (Exception e)
@@ -3588,6 +3817,24 @@ public class UMLParsingIntegrator
         }
     }
     
+    protected void processEnumLiteralArguments(Node node)
+    {
+        try
+        {
+            Node argsNode = node.selectSingleNode("./TokenDescriptors/TDescriptor[@type='JavaEnumLiteralArguments']");
+            if (argsNode != null)
+            {
+                String argsStr = XMLManip.getAttributeValue(argsNode, "value");
+                addTaggedValue(node, "JavaEnumLiteralArguments", argsStr, false);
+                argsNode.detach();
+            }
+        }
+        catch (Exception e)
+        {
+            sendExceptionMessage(e);
+        }
+    }
+
     protected void analyzeInterfaceTypes(Node classNode)
     {
         try
@@ -3965,7 +4212,7 @@ public class UMLParsingIntegrator
         }
     }
     
-    protected void establishAssociation(Node attr, Node clazz, IClassifier clazzObj, INamespace classSpace, String typeName)
+    protected void establishAssociation(Node attr, Node clazz, IClassifier clazzObj, INamespace classSpace, String typeName, HashMap<String, IAssociationEnd> oldAssociations)
     {
         try
         {
@@ -3973,16 +4220,43 @@ public class UMLParsingIntegrator
             String typeID = null;
             boolean needsResolution = true;
             
+            String attrName = (attr != null 
+                               ? XMLManip.getAttributeValue(attr, "name") // NOI18N
+                               : null);
+            IClassifier thisAttrAssocClass = null;
+            IAssociationEnd otherEnd = null;
+            boolean deleted = false;
+            if (attrName != null) 
+            {                            
+                otherEnd = oldAssociations.get(attrName);
+                if (otherEnd != null) 
+                {
+                    thisAttrAssocClass = otherEnd.getParticipant();
+                }
+            }
+
             ETPairT < INamedElement, String > result = getTypeID(typeName, clazz, classSpace);
             
             typeID = result.getParamTwo();
-            
+
             if (typeID.length() > 0)
             {
-                // We've found a type resolution, so we'll retrieve the
-                // Class that this resolves to and create an association
-                boolean isCreated = createAssociation(attr, clazzObj, typeID);
-                needsResolution = !isCreated;
+                String otherEndTypeID = (thisAttrAssocClass != null 
+                                         ? thisAttrAssocClass.getXMIID() 
+                                         : null);
+                if (! typeID.equals(otherEndTypeID)) 
+                {
+                    if (otherEnd != null) 
+                    {
+                        otherEnd.getAssociation().delete();
+                        oldAssociations.remove(attrName);
+                        deleted = true;
+                    }
+                    // We've found a type resolution, so we'll retrieve the
+                    // Class that this resolves to and create an association
+                    boolean isCreated = createAssociation(attr, clazzObj, typeID);
+                    needsResolution = !isCreated;
+                }
             }
             
             if (needsResolution)
@@ -3992,7 +4266,18 @@ public class UMLParsingIntegrator
                 
                 if (classifier != null)
                 {
-                    createAssociation(attr, clazzObj, classifier);
+                    if ( ! classifier.equals(thisAttrAssocClass)) 
+                    {
+                        if (! deleted && otherEnd != null) 
+                        {
+                            otherEnd.getAssociation().delete();
+                        }
+                        createAssociation(attr, clazzObj, classifier);
+                    }
+                    if (! deleted && otherEnd != null) 
+                    {
+                        oldAssociations.remove(attrName);
+                    }                                        
                 }
                 else
                 {
@@ -4264,6 +4549,7 @@ public class UMLParsingIntegrator
                 setDefaultValue(pNavEnd, attr);
                 setMultiplicity(pNavEnd, attr);
                 setVisibility(pNavEnd, attr);
+                setModifiers(pNavEnd, attr);
             }
             //NameNavigableEnd(assoc, to, attr));
         }
@@ -4340,7 +4626,7 @@ public class UMLParsingIntegrator
                         // First check if the type is been specified as a data type
                         // either a primitive or user defined data type.
                         boolean isAssociation = pLanguage.isDataType(typeName);
-                       if (isAssociation == false)
+                        if (isAssociation == false)
                         {
                             ArrayList < ETPairT < Node, String > > symbolList = m_SymbolTable.get(typeName);
                             // 103234 in case of RE part of existing project, search type in entire project
@@ -4361,19 +4647,12 @@ public class UMLParsingIntegrator
                             }
 			    else 
 			    { 
-				ETList < INamedElement > list = 
-                                    m_Locator.findByNameInMembersAndImports(m_Namespace, typeName);
-				if (list != null && list.size() > 0) 
-				{ 
-				    for(INamedElement el : list) 
-				    {
-					if (! (el instanceof IDataType)) 
-					{
-					    isAllowed = true;
-					    break;
-					}
-				    }
-				}
+                                INamedElement supplier = retrieveType(owner, m_Namespace, typeName, false);
+                                if (supplier instanceof IClassifier 
+                                    && ! (supplier instanceof IDataType)) 
+                                {
+                                    isAllowed = true;
+                                }
                             }                          
                         }
                     }
@@ -4617,6 +4896,36 @@ public class UMLParsingIntegrator
         
         try
         {
+            HashMap<String, IAssociationEnd> oldAssociations = new HashMap<String, IAssociationEnd>();
+            List<IAssociationEnd> ends = clazzObj.getAssociationEnds();
+            if (ends != null) 
+            {
+                for(IAssociationEnd thisEnd : ends) 
+                {
+                    if (thisEnd != null) 
+                    {
+                        List<IAssociationEnd> otherEnds = thisEnd.getOtherEnd();
+                        if (otherEnds != null && otherEnds.size() == 1) 
+                        {
+                            IAssociationEnd otherEnd = otherEnds.get(0);
+                            if (otherEnd.getIsNavigable()) 
+                            {
+                                String name = otherEnd.getName();
+                                if (name != null) 
+                                {
+                                    oldAssociations.put(name, otherEnd);
+                                }
+                                else 
+                                {
+                                    addPresElemsToResync(otherEnd.getAssociation());
+                                    otherEnd.getAssociation().delete();
+                                }
+                            }
+                        }
+                    }
+                }  
+            }
+
             // Get all of this Classes attributes and resolve their types...
             List attrs = clazz.selectNodes(
                     "./UML:Element.ownedElement/UML:Attribute");
@@ -4637,15 +4946,43 @@ public class UMLParsingIntegrator
                             
                             if (spDerivationElement != null)
                             {
+                                String attrName = XMLManip.getAttributeValue(attr, "name"); //NOI18N
+                                IClassifier thisAttrAssocClass = null;
+                                IAssociationEnd otherEnd = null;
+                                if (attrName != null) 
+                                {                            
+                                    otherEnd = oldAssociations.get(attrName);
+                                    if (otherEnd != null) 
+                                    {
+                                        thisAttrAssocClass = otherEnd.getParticipant();
+                                    }
+                                }
+
                                 IClassifier spDerivationClassifier =
                                         ensureDerivation(
                                         spDerivationElement,
                                         clazz, clazzObj, classSpace);
                                 
                                 if (spDerivationClassifier != null)
-                                {
-                                    establishAssociation(
+                                {                                    
+                                    if (! spDerivationClassifier.equals(thisAttrAssocClass)) 
+                                    {
+                                        if (otherEnd != null) 
+                                        {
+                                            oldAssociations.remove(attrName);
+                                            addPresElemsToResync(otherEnd.getAssociation());
+                                            otherEnd.getAssociation().delete();
+                                        }
+                                        establishAssociation(
                                             attr, clazzObj, spDerivationClassifier);
+                                    }
+                                    else 
+                                    {
+                                        if (otherEnd != null) 
+                                        {
+                                            oldAssociations.remove(attrName);
+                                        }
+                                    }
                                 }
                             }
                             
@@ -4676,7 +5013,7 @@ public class UMLParsingIntegrator
                                     {
                                         establishAssociation(
                                                 attr, clazz, clazzObj,
-                                                classSpace, typeName);
+                                                classSpace, typeName, oldAssociations);
                                     }
                                     
                                     else if (actualType != null &&
@@ -4694,6 +5031,15 @@ public class UMLParsingIntegrator
                             }
                         }
                     }
+                }
+            }
+            Collection<IAssociationEnd> oldEnds = oldAssociations.values();
+            for(IAssociationEnd anEnd : oldEnds) 
+            {
+                if (anEnd != null) 
+                {
+                    addPresElemsToResync(anEnd.getAssociation());
+                    anEnd.getAssociation().delete();
                 }
             }
         }
@@ -4721,12 +5067,14 @@ public class UMLParsingIntegrator
             
             if (element != null)
             {
+                UMLXMLManip.replaceReferencesIndexCreate(m_FragDocument);
                 Element docElement = m_FragDocument.getRootElement();
                 
                 if (docElement != null)
                 {
                     injectElementsIntoNamespace(element, docElement);
                 }
+                UMLXMLManip.replaceReferencesIndexDrop(m_FragDocument);
             }
         }
         
@@ -5555,7 +5903,7 @@ public class UMLParsingIntegrator
             }
             else
             {
-                descriptors = node.selectNodes("./TokenDescriptors/TDescriptor[not( @type='Comment' or @type='Class Dependency')]");
+                descriptors = node.selectNodes("./TokenDescriptors/TDescriptor[not( @type='Comment' or @type='Class Dependency' or @type='Marker-id')]");
             }
             if (descriptors != null)
             {
@@ -5845,6 +6193,31 @@ public class UMLParsingIntegrator
         }
     }
     
+    protected void setModifiers(INamedElement pElement, Node pAttr)
+    {
+        try
+        {
+            String[] modifierAttrs = {"isTransient", "isStatic", "isVolatile", "isFinal"}; // NOI18N
+            for(String modAttr : modifierAttrs) 
+            {
+                boolean isSet = XMLManip.getAttributeBooleanValue(pAttr, modAttr);
+                if (isSet)
+                {
+                    Node pNode = pElement.getNode();
+                    if (pNode != null)
+                    {
+                        XMLManip.setAttributeValue(pNode, modAttr, "true") ; // NOI18N
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            // I just want to forward the error to the listener.
+            sendExceptionMessage(e);
+        }
+    }
+    
     protected void setProjectBaseDirectory()
     {
         try
@@ -6122,6 +6495,43 @@ public class UMLParsingIntegrator
                     for (int index = 0; index < max; index++)
                     {
                         IDependency pDep = pDependencies.get(index);
+                        if(pDep!=null 
+                           && ( ! ( pDep instanceof Dependency
+                                  || pDep instanceof Realization                                 
+                                  || pDep instanceof Abstraction
+                                  || pDep instanceof Usage 
+                                  || pDep instanceof Permission)
+                              )
+                           )
+                        {
+                            pNamedElement.removeClientDependency(pDep);
+                            pDep.delete();
+                        }                                                
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            // I just want to forward the error to the listener.
+            sendExceptionMessage(e);
+        }
+    }
+    
+    protected void removeImplementations(IElement pElement)
+    {
+        try
+        {
+            IClassifier pNamedElement = (pElement instanceof IClassifier) ? (IClassifier) pElement : null;
+            if (pNamedElement != null)
+            {
+                ETList < IImplementation > pDependencies = pNamedElement.getImplementations();
+                if (pDependencies != null)
+                {
+                    int max = pDependencies.size();
+                    for (int index = 0; index < max; index++)
+                    {
+                        IImplementation pDep = pDependencies.get(index);
                         if(pDep!=null)
                         {
                             pDep.delete();
@@ -6137,7 +6547,7 @@ public class UMLParsingIntegrator
             sendExceptionMessage(e);
         }
     }
-    
+
     //JM: Fix for Issue#87116
     protected void removeGeneralizations(IElement pElement)
     {
@@ -6159,6 +6569,49 @@ public class UMLParsingIntegrator
                         }
                         
                     }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            // I just want to forward the error to the listener.
+            sendExceptionMessage(e);
+        }
+    }
+    
+    protected void handleGeneralizations(Node childInDestinationNamespace, Node elementBeingInjected)
+    {
+        try
+        {
+            String query = "./UML:Classifier.generalization"; // NOI18N
+            Node genNode = childInDestinationNamespace.selectSingleNode(query);
+            if (genNode != null) 
+            {
+                genNode.detach();
+                ((Element)elementBeingInjected).add(genNode);
+            }
+        }
+        catch (Exception e)
+        {
+            // I just want to forward the error to the listener.
+            sendExceptionMessage(e);
+        }
+    }
+
+    protected void handleImplementations(Node childInDestinationNamespace, Node elementBeingInjected)
+    {
+        try
+        {
+            Node destinationOwnedElement = childInDestinationNamespace.selectSingleNode("UML:Element.ownedElement"); // NOI18N
+            Node injectOwnedElement = elementBeingInjected.selectSingleNode("UML:Element.ownedElement"); // NOI18N
+            String query = "./UML:Implementation"; // NOI18N
+            List<Node> implNodes = destinationOwnedElement.selectNodes(query);
+            if (implNodes != null) 
+            {
+                for(Node impl : implNodes) 
+                {
+                    impl.detach();
+                    ((Element)injectOwnedElement).add(impl);
                 }
             }
         }
@@ -6909,6 +7362,7 @@ public class UMLParsingIntegrator
                     establishXMIID(curElement);
                     XMLManip.setAttributeValue(curElement, "enumeration", enumerationID);
                     processComment(curElement);
+                    processEnumLiteralArguments(curElement);
                 }
                 
                 scrubOperations(pClazz, clazzObj, classSpace);
@@ -7954,6 +8408,7 @@ public class UMLParsingIntegrator
     private boolean logEnabled = false;
     private ITaskSupervisor supervisor;
     private ETList < Node > m_ItemsToSink = new ETArrayList < Node > ();
+    private List<IPresentationElement> m_PresElemsToSink = new ArrayList<IPresentationElement> ();
     private Document m_FragDocument = null;
     private IElementLocator m_Locator = null;
     private IRelationFactory m_Factory = null;
