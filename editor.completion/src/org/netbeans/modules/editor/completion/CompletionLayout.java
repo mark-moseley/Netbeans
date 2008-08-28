@@ -133,8 +133,8 @@ public final class CompletionLayout {
     }
 
     public void showCompletion(List data, String title, int anchorOffset,
-    ListSelectionListener listSelectionListener, String shortcutHint, int selectedIndex) {
-        completionPopup.show(data, title, anchorOffset, listSelectionListener, shortcutHint, selectedIndex);
+    ListSelectionListener listSelectionListener, String additionalItemsText, String shortcutHint, int selectedIndex) {
+        completionPopup.show(data, title, anchorOffset, listSelectionListener, additionalItemsText, shortcutHint, selectedIndex);
         if (!visiblePopups.contains(completionPopup))
             visiblePopups.push(completionPopup);
     }
@@ -274,7 +274,13 @@ public final class CompletionLayout {
             
             Rectangle occupiedBounds = popup.getAnchorOffsetBounds();
             occupiedBounds = tipPopup.unionBounds(completionPopup.unionBounds(occupiedBounds));
-            docPopup.showAlongOccupiedBounds(occupiedBounds);
+
+            if(CompletionSettings.getInstance().documentationPopupNextToCC()) {
+                docPopup.showAlongOrNextOccupiedBounds(completionPopup.getPopupBounds(), occupiedBounds);
+            } else {
+                docPopup.showAlongOccupiedBounds(occupiedBounds);
+            }
+
 
         } else if (popup == tipPopup) { // tooltip popup
             popup.showAlongAnchorBounds(); // show possibly above the caret
@@ -294,7 +300,7 @@ public final class CompletionLayout {
         private CompletionScrollPane completionScrollPane;
         
         public void show(List data, String title, int anchorOffset,
-        ListSelectionListener listSelectionListener, String shortcutHint, int selectedIndex) {
+        ListSelectionListener listSelectionListener, String additionalItemsText, String shortcutHint, int selectedIndex) {
             
 	    JTextComponent editorComponent = getEditorComponent();
 	    if (editorComponent == null) {
@@ -314,6 +320,7 @@ public final class CompletionLayout {
                 completionScrollPane = new CompletionScrollPane(
                     editorComponent, listSelectionListener,
                     new MouseAdapter() {
+                        @Override
                         public void mouseClicked(MouseEvent evt) {
 			    JTextComponent c = getEditorComponent();
                             if (SwingUtilities.isLeftMouseButton(evt)) {
@@ -345,7 +352,7 @@ public final class CompletionLayout {
                             BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 1, 1, 1, Color.gray), BorderFactory.createEmptyBorder(2, 2, 2, 2))));
                     label.setFont(label.getFont().deriveFont((float)label.getFont().getSize() - 2));
                     label.setHorizontalAlignment(SwingConstants.RIGHT);
-                    label.setText(NbBundle.getMessage(CompletionLayout.class, "TXT_completion_shortcut_tips", shortcutHint)); //NOI18N
+                    label.setText(NbBundle.getMessage(CompletionLayout.class, "TXT_completion_shortcut_tips", additionalItemsText, shortcutHint)); //NOI18N
                     panel.add(label, BorderLayout.SOUTH);
                     setContentComponent(panel);
                 } else {
@@ -375,7 +382,7 @@ public final class CompletionLayout {
                 
             } // otherwise present popup size will be retained
         }
-
+        
         public CompletionItem getSelectedCompletionItem() {
             return isVisible() ? completionScrollPane.getSelectedCompletionItem() : null;
         }
@@ -399,6 +406,7 @@ public final class CompletionLayout {
             }
         }
 
+        @Override
         protected int getAnchorHorizontalShift() {
             return COMPLETION_ANCHOR_HORIZONTAL_SHIFT;
         }
@@ -430,7 +438,17 @@ public final class CompletionLayout {
                 getLayout().updateLayout(this);
             } // otherwise leave present doc displayed
         }
-
+        
+        @Override
+        protected boolean isFocusable() {
+            return true; // lets have documentation popup focusable, for copying
+        }
+        
+        @Override
+        protected JComponent getFocusListeningComponent() {
+            return (JComponent) getDocumentationScrollPane().getViewport().getView();
+        }
+        
         public void processKeyEvent(KeyEvent evt) {
             if (isVisible()) {
                 Object actionMapKey = getDocumentationScrollPane().getInputMap().get(
