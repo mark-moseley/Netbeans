@@ -40,20 +40,35 @@
  */
 package org.netbeans.modules.j2ee.websphere6.ui.wizard;
 
+import java.awt.Component;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.*;
-import java.awt.*;
-import java.awt.event.*;
-import javax.swing.*;
-import javax.swing.event.*;
-import javax.swing.filechooser.*;
-
-import org.openide.*;
-import org.openide.util.*;
+import java.util.Vector;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
+import javax.swing.filechooser.FileFilter;
+import org.netbeans.modules.j2ee.websphere6.WSVersion;
+import org.openide.WizardDescriptor;
+import org.openide.util.HelpCtx;
+import org.openide.util.NbBundle;
 
 /**
  * The first panel of the custom wizard used to register new server instance.
@@ -63,14 +78,9 @@ import org.openide.util.*;
  * @author Kirill Sorokin
  * @author Arathi
  */
-public class ServerLocationPanel extends JPanel
-        implements WizardDescriptor.Panel {
-    /**
-     * Since the WizardDescriptor does not expose the property name for the
-     * error message label, we have to keep it here also
-     */
-    private final static String PROP_ERROR_MESSAGE =
-            "WizardPanel_errorMessage";                                // NOI18N
+public class ServerLocationPanel extends JPanel implements WizardDescriptor.Panel {
+    
+    private static final Logger LOGGER = Logger.getLogger(ServerLocationPanel.class.getName());
     
     /**
      * The parent wizard descriptor handle
@@ -100,9 +110,9 @@ public class ServerLocationPanel extends JPanel
         
         // set the required properties, so that the panel appear correct in
         // the steps
-        putClientProperty("WizardPanel_contentData", steps);           // NOI18N
-        putClientProperty("WizardPanel_contentSelectedIndex",          // NOI18N
-                new Integer(index));
+        putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);           // NOI18N
+        putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX,          // NOI18N
+                Integer.valueOf(index));
         
         // register the supplied listener
         addChangeListener(listener);
@@ -140,16 +150,37 @@ public class ServerLocationPanel extends JPanel
      * @return true if the entered installation directory is valid, false
      *      otherwise
      */
+    @Override
     public boolean isValid() {
         // clear the error message
-        wizardDescriptor.putProperty(PROP_ERROR_MESSAGE, "");
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, null);
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_INFO_MESSAGE, null);
         
         // check for the validity of the entered installation directory
         // if it's invalid, return false
-        if (!isValidServerRoot(locationField.getText())) {
-            wizardDescriptor.putProperty(PROP_ERROR_MESSAGE,
+        String location = locationField.getText();
+        if (location.trim().length() < 1) {
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_INFO_MESSAGE,
                     NbBundle.getMessage(ServerLocationPanel.class,
-                    "ERR_INVALID_SERVER_ROOT"));                       // NOI18N
+                    "ERR_SPECIFY_SERVER_ROOT"));    // NOI18N
+            return false;
+        }
+        
+        if (!isValidServerRoot(locationField.getText())) {
+            WSVersion version = instantiatingIterator.getVersion();
+            String strVersion = ""; // NOI18N
+            switch (version) {
+                case VERSION_60:
+                    strVersion = "V6.0"; // NOI18N
+                    break;
+                case VERSION_61:
+                    strVersion = "V6.1"; // NOI18N
+                    break;
+            }
+            
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE,
+                    NbBundle.getMessage(ServerLocationPanel.class,
+                    "ERR_INVALID_SERVER_ROOT", strVersion));    // NOI18N
             return false;
         }
         
@@ -189,7 +220,7 @@ public class ServerLocationPanel extends JPanel
         locationLabel.setText(NbBundle.getMessage(ServerLocationPanel.class,
                 "LBL_SERVER_LOCATION"));                               // NOI18N
         locationLabel.setDisplayedMnemonic(NbBundle.getMessage(ServerLocationPanel.class,
-                "MNE_SERVER_LOCATION").charAt(0));
+                "MNE_SERVER_LOCATION").charAt(0));    // NOI18N
         locationLabel.setLabelFor(locationField);
         gridBagConstraints = new GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -199,24 +230,26 @@ public class ServerLocationPanel extends JPanel
         
         // add server installation directory field
         locationField.addKeyListener(new LocationKeyListener());
-        if(System.getProperty("websphere.home")==null ||
-                System.getProperty("websphere.home").equals("")) {
-            String home = System.getProperty("user.home");
-            if(home!=null) {
+        if(System.getProperty("websphere.home") == null ||      // NOI18N
+                System.getProperty("websphere.home").equals("")) {      // NOI18N
+            String home = System.getProperty("user.home");      // NOI18N
+            if (home != null) {
                 try{
-                    File f = new File(home + File.separator + ".WASRegistry");
-                    BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(
+                    File f = new File(home + File.separator + ".WASRegistry");    // NOI18N
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(
                             new FileInputStream(f)));
-                    String string;
-                    while((string=reader.readLine())!=null) {
-                        if(string.length()>1 && new File(string).exists()) {
-                            System.setProperty("websphere.home",string);
+                    try {
+                        String string;
+                        while ((string = reader.readLine()) != null) {
+                            if (string.length() > 1 && new File(string).exists()) {
+                                System.setProperty("websphere.home", string);    // NOI18N
+                            }
                         }
+                    } finally {
+                        reader.close();
                     }
-                } catch (IOException e){
-                    e=null;
-                    //either the file does not exist or not available. Do nothing
+                } catch (IOException e) {
+                    LOGGER.log(Level.FINE, null, e);
                 }
             }
         }
@@ -292,7 +325,8 @@ public class ServerLocationPanel extends JPanel
         
         // wait for the user to choose the directory and if he clicked the OK
         // button store the selected directory in the server location field
-        if (fileChooser.showOpenDialog(this) == fileChooser.APPROVE_OPTION) {
+        if (fileChooser.showOpenDialog(SwingUtilities.getWindowAncestor(this))
+                == JFileChooser.APPROVE_OPTION) {
             locationField.setText(fileChooser.getSelectedFile().getPath());
             fireChangeEvent();
         }
@@ -309,13 +343,13 @@ public class ServerLocationPanel extends JPanel
         // the directory as the server's installation one
         
 	// This is for WAS 6.1
-        String dbDir = "derby";
-        String jsr88Jar = "plugins/com.ibm.ws.runtime_6.1.0.jar";                                 
+        String dbDir = "derby";    // NOI18N
+        String jsr88Jar = "plugins/com.ibm.ws.runtime_6.1.0.jar";    // NOI18N
         
 	// This is for WAS 6.0
-        if ((new File(path + File.separator + "cloudscape").exists())) {
-            dbDir = "cloudscape";
-	    jsr88Jar = "lib/wjmxapp.jar";
+        if ((new File(path + File.separator + "cloudscape").exists())) {   // NOI18N
+            dbDir = "cloudscape";    // NOI18N
+	    jsr88Jar = "lib/wjmxapp.jar";    // NOI18N
 	}
             
         String[] children = {
@@ -447,6 +481,7 @@ public class ServerLocationPanel extends JPanel
         /**
          * This method is called when a user presses a key on the keyboard
          */
+        @Override
         public void keyTyped(KeyEvent event) {
             fireChangeEvent();
         }
@@ -454,6 +489,7 @@ public class ServerLocationPanel extends JPanel
         /**
          * This method is called when a user releases a key on the keyboard
          */
+        @Override
         public void keyReleased(KeyEvent event) {
             fireChangeEvent();
         }
