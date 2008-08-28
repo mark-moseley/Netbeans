@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.project.ant;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
@@ -51,21 +52,20 @@ import org.netbeans.spi.project.support.ant.AntBasedTestUtil;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.AntProjectHelperTest;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.test.TestFileUtils;
+import org.openide.util.Exceptions;
 import org.openide.util.test.MockLookup;
 
-/**
- *
- * @author Jan Lahoda
- */
 public class AntBasedProjectFactorySingletonTest extends NbTestCase {
-    
+
     public AntBasedProjectFactorySingletonTest(String testName) {
         super(testName);
     }
 
     private FileObject scratch;
     private FileObject projdir;
-    
+
+    @Override
     protected void setUp() throws Exception {
         scratch = TestUtil.makeScratchDir(this);
         projdir = scratch.createFolder("proj");
@@ -82,39 +82,44 @@ public class AntBasedProjectFactorySingletonTest extends NbTestCase {
         AntBasedProjectFactorySingleton factory = new AntBasedProjectFactorySingleton();
         AntBasedProjectType type1 = AntBasedTestUtil.testAntBasedProjectType();
         AntBasedProjectType type2 = AntBasedTestUtil.testAntBasedProjectType();
-        
         MockLookup.setInstances(factory, type1, type2);
-        
         Method getAntBasedProjectTypeMethod = AntProjectHelper.class.getDeclaredMethod("getType", new Class[0]);
-        
         getAntBasedProjectTypeMethod.setAccessible(true);
-        
         Project p = ProjectManager.getDefault().findProject(projdir);
         AntProjectHelper helper = p.getLookup().lookup(AntProjectHelper.class);
-        
         assertTrue(getAntBasedProjectTypeMethod.invoke(helper) == type2);
-        
         MockLookup.setInstances(factory, type1);
-        
         p = ProjectManager.getDefault().findProject(projdir);
         helper = p.getLookup().lookup(AntProjectHelper.class);
-        
         assertTrue(getAntBasedProjectTypeMethod.invoke(helper) == type1);
-        
         MockLookup.setInstances(factory, type2);
-        
         p = ProjectManager.getDefault().findProject(projdir);
         helper = p.getLookup().lookup(AntProjectHelper.class);
-        
         assertTrue(getAntBasedProjectTypeMethod.invoke(helper) == type2);
-        
         MockLookup.setInstances(factory);
-        
         assertNull(ProjectManager.getDefault().findProject(projdir));
-
         MockLookup.setInstances(factory, type1, type2);
-        
         assertTrue(getAntBasedProjectTypeMethod.invoke(helper) == type2);
     }
-    
+
+    public void testDoNotLoadInvalidProject() throws Exception {
+        String content = TestFileUtils.readFile(projdir.getFileObject("nbproject/project.xml"));
+        TestFileUtils.writeFile(projdir, "nbproject/project.xml", content.replace("</project>", "<bogus/>\n</project>"));
+        AntBasedProjectFactorySingleton factory = new AntBasedProjectFactorySingleton();
+        AntBasedProjectType type1 = AntBasedTestUtil.testAntBasedProjectType();
+        MockLookup.setInstances(factory, type1);
+        try {
+            ProjectManager.getDefault().findProject(projdir);
+            fail("should not have successfully loaded an invalid project.xml");
+        } catch (IOException x) {
+            assertTrue(x.toString(), x.getMessage().contains("bogus"));
+            // #142079: use simplified error message.
+            String loc = Exceptions.findLocalizedMessage(x);
+            assertNotNull(loc);
+            assertTrue(loc, loc.contains("bogus"));
+            assertTrue(loc, loc.contains("project.xml"));
+            // Probably should not assert exact string, as this is dependent on parser.
+        }
+    }
+
 }
