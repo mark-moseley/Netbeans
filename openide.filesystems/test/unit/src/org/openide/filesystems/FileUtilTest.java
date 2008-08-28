@@ -43,9 +43,10 @@ package org.openide.filesystems;
 
 import java.io.File;
 import java.net.URL;
-import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
+import org.openide.filesystems.test.TestFileUtils;
 import org.openide.util.Utilities;
+import org.openide.util.test.MockLookup;
 
 /**
  * @author Jesse Glick
@@ -64,23 +65,105 @@ public class FileUtilTest extends NbTestCase {
         assertTrue(root.isDirectory());
         LocalFileSystem lfs = new LocalFileSystem();
         lfs.setRootDirectory(root);
-        LFS_ROOT = lfs.getRoot();
-        MockServices.setServices(TestUM.class);
+        final FileObject LFS_ROOT = lfs.getRoot();
+        MockLookup.setInstances(new URLMapper() {
+            public URL getURL(FileObject fo, int type) {
+                return null;
+            }
+            public FileObject[] getFileObjects(URL url) {
+                if (url.toExternalForm().equals("file:/")) {
+                    return new FileObject[] {LFS_ROOT};
+                } else {
+                    return null;
+                }
+            }
+        });
+        URLMapper.reset();
         assertEquals(LFS_ROOT, FileUtil.toFileObject(root));
     }
 
-    private static FileObject LFS_ROOT;
-    public static class TestUM extends URLMapper {
-        public URL getURL(FileObject fo, int type) {
-            throw new UnsupportedOperationException();
-        }
-        public FileObject[] getFileObjects(URL url) {
-            if (url.toExternalForm().equals("file:/")) {
-                return new FileObject[] {LFS_ROOT};
-            } else {
+    public void testArchiveConversion() throws Exception {
+        final LocalFileSystem lfs = new LocalFileSystem();
+        clearWorkDir();
+        lfs.setRootDirectory(getWorkDir());
+        MockLookup.setInstances(new URLMapper() {
+            String rootURL = lfs.getRoot().getURL().toString();
+            @Override
+            public FileObject[] getFileObjects(URL url) {
+                String u = url.toString();
+                FileObject f = null;
+                if (u.startsWith(rootURL)) {
+                    f = lfs.findResource(u.substring(rootURL.length()));
+                }
+                return f != null ? new FileObject[] {f} : null;
+            }
+            @Override
+            public URL getURL(FileObject fo, int type) {
                 return null;
             }
-        }
+        });
+        URLMapper.reset();
+
+        TestFileUtils.writeFile(lfs.getRoot(), "README", "A random file with some stuff in it.");
+        assertCorrectURL("README", null, null); // not an archive
+        TestFileUtils.writeFile(lfs.getRoot(), "README.txt", "A random file with some stuff in it.");
+        assertCorrectURL("README.txt", null, null); // not an archive either
+        TestFileUtils.writeFile(lfs.getRoot(), "empty.zip", "");
+        assertCorrectURL("empty.zip", "jar:", "empty.zip!/");
+        TestFileUtils.writeZipFile(lfs.getRoot(), "normal.zip", "something:text inside a ZIP entry");
+        assertCorrectURL("normal.zip", "jar:", "normal.zip!/");
+        assertCorrectURL("nonexistent.zip", "jar:", "nonexistent.zip!/");
+        lfs.getRoot().createFolder("folder");
+        assertCorrectURL("folder", "", "folder/");
+        lfs.getRoot().createFolder("some.folder");
+        assertCorrectURL("some.folder", "", "some.folder/");
+        assertCorrectURL("nonexistent", "", "nonexistent/");
+        assertCorrectURL("non existent.zip", "jar:", "non%20existent.zip!/");
+        assertCorrectURL("non existent", "", "non%20existent/");
+
+        assertCorrectFile("folder", "", "folder/");
+        assertCorrectFile("stuff.zip", "jar:", "stuff.zip!/");
+        assertCorrectFile(null, "jar:", "stuff.zip!/subentry/");
+        assertCorrectFile(null, "http:", "");
+        // Impossible to even construct such a URL: assertCorrectFolder("stuff.zip", "jar:", "stuff.zip");
+        assertCorrectFile("stuff.zip", "", "stuff.zip");
+        assertCorrectFile("folder", "", "folder");
+        assertCorrectFile("fol der", "", "fol%20der/");
+        assertCorrectFile("stu ff.zip", "jar:", "stu%20ff.zip!/");
+        assertCorrectFile("stu ff.zip", "", "stu%20ff.zip");
+        assertCorrectFile("fol der", "", "fol%20der");
+    }
+    private void assertCorrectURL(String filename, String expectedURLPrefix, String expectedURLSuffix) throws Exception {
+        File d = getWorkDir();
+        assertEquals(expectedURLSuffix == null ? null : new URL(expectedURLPrefix + d.toURI() + expectedURLSuffix),
+                FileUtil.urlForArchiveOrDir(new File(d, filename)));
+    }
+    private void assertCorrectFile(String expectedFilename, String urlPrefix, String urlSuffix) throws Exception {
+        assertEquals(expectedFilename == null ? null : new File(getWorkDir(), expectedFilename),
+                FileUtil.archiveOrDirForURL(new URL(urlPrefix + getWorkDir().toURI() + urlSuffix)));
     }
 
+    /** Tests translation from jar resource url to jar archive url. */
+    public void testGetArchiveFile() throws Exception {
+        String urls[][] = {
+            // resource url, expected jar url
+            {"jar:file:/a.jar!/META-INF/MANIFEST.MF", "file:/a.jar"}, // unix root
+            {"jar:file:/a/b/c/a.jar!/META-INF/MANIFEST.MF", "file:/a/b/c/a.jar"}, // unix
+            {"jar:file:/C:/a.jar!/META-INF/MANIFEST.MF", "file:/C:/a.jar"}, // windows root
+            {"jar:file:/C:/a/b/c/a.jar!/META-INF/MANIFEST.MF", "file:/C:/a/b/c/a.jar"}, // windows
+            {"jar:file://computerName/sharedFolder/a.jar!/META-INF/MANIFEST.MF", "file:////computerName/sharedFolder/a.jar"}, // windows UNC root malformed
+            {"jar:file://computerName/sharedFolder/a/b/c/a.jar!/META-INF/MANIFEST.MF", "file:////computerName/sharedFolder/a/b/c/a.jar"}, // windows UNC malformed
+            {"jar:file:////computerName/sharedFolder/a.jar!/META-INF/MANIFEST.MF", "file:////computerName/sharedFolder/a.jar"}, // windows UNC root
+            {"jar:file:////computerName/sharedFolder/a/b/c/a.jar!/META-INF/MANIFEST.MF", "file:////computerName/sharedFolder/a/b/c/a.jar"} // windows UNC
+        };
+        for (int i = 0; i < urls.length; i++) {
+            assertEquals("FileUtil.getArchiveFile failed.", new URL(urls[i][1]), FileUtil.getArchiveFile(new URL(urls[i][0])));
+        }
+    }
+    
+    /** Tests whether java.io.File(".") is normalized. */
+    public void testNormalizeFile137407() {
+        File file = new File(".");
+        assertTrue("java.io.File(\".\") not normalized.", FileUtil.normalizeFile(FileUtil.normalizeFile(file)).equals(FileUtil.normalizeFile(file)));
+    }
 }
