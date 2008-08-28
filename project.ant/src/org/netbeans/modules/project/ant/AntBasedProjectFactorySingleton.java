@@ -42,7 +42,9 @@
 package org.netbeans.modules.project.ant;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -163,18 +165,44 @@ public final class AntBasedProjectFactorySingleton implements ProjectFactory {
             return null;
         }
         Document projectXml;
+        Element projectEl;
         try {
             projectXml = XMLUtil.parse(new InputSource(projectDiskFile.toURI().toString()), false, true, Util.defaultErrorHandler(), null);
+            projectEl = projectXml.getDocumentElement();
+            if (!"project".equals(projectEl.getLocalName()) || !PROJECT_NS.equals(projectEl.getNamespaceURI())) { // NOI18N
+                return null;
+            }
+            try {
+                ProjectXMLCatalogReader.validate(projectEl);
+            } catch (SAXException x) {
+                Element corrected = ProjectXMLCatalogReader.autocorrect(projectEl, x);
+                if (corrected != null) {
+                    projectXml.replaceChild(corrected, projectEl);
+                    projectEl = corrected;
+                    // Try to correct on disk if possible.
+                    // (If not, any changes from the IDE will write out a corrected file anyway.)
+                    if (projectDiskFile.canWrite()) {
+                        OutputStream os = new FileOutputStream(projectDiskFile);
+                        try {
+                            XMLUtil.write(projectXml, os, "UTF-8");
+                        } finally {
+                            os.close();
+                        }
+                    }
+                } else {
+                    throw x;
+                }
+            }
         } catch (SAXException e) {
             IOException ioe = (IOException) new IOException(projectDiskFile + ": " + e.toString()).initCause(e);
+            String msg = e.getMessage().
+                    // org/apache/xerces/impl/msg/XMLSchemaMessages.properties validation (3.X.4)
+                    replaceFirst("^cvc-[^:]+: ", ""). // NOI18N
+                    replaceAll("http://www.netbeans.org/ns/", ".../"); // NOI18N
             Exceptions.attachLocalizedMessage(ioe, NbBundle.getMessage(AntBasedProjectFactorySingleton.class,
                                                                         "AntBasedProjectFactorySingleton.parseError",
-                                                                        projectDiskFile.getAbsolutePath(), e.getMessage()));
+                                                                        projectDiskFile.getName(), msg));
             throw ioe;
-        }
-        Element projectEl = projectXml.getDocumentElement();
-        if (!"project".equals(projectEl.getLocalName()) || !PROJECT_NS.equals(projectEl.getNamespaceURI())) { // NOI18N
-            return null;
         }
         Element typeEl = Util.findElement(projectEl, "type", PROJECT_NS); // NOI18N
         if (typeEl == null) {
