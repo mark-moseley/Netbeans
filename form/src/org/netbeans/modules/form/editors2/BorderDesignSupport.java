@@ -108,9 +108,8 @@ public class BorderDesignSupport implements FormDesignValue
     // --------------------------
 
     public FormDesignValue copy(FormProperty formProperty) {
-        FormModel formModel = formProperty.getPropertyContext().getFormModel();
         try {
-            return new BorderDesignSupport(this, new FormPropertyContext.EmptyImpl()); //BorderEditor.createFormPropertyContext(formModel));    
+            return new BorderDesignSupport(this, new FormPropertyContext.SubProperty(formProperty));
         } catch (Exception ex) {
             ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
         }
@@ -294,6 +293,27 @@ public class BorderDesignSupport implements FormDesignValue
                 try {
                     defaultValue = getTargetValue();
                 } catch (Exception ex) {}
+            }
+        }
+        
+        @Override
+        public void setValue(Object value) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+            super.setValue(value);
+            if (MatteBorder.class.equals(getBorderClass())) {
+                // Issue 145316 - MatteBorder cannot have both titleIcon
+                // and matteColor specified.
+                String propName = null;
+                if ("matteColor".equals(getName())) { // NOI18N
+                    propName = "tileIcon"; // NOI18N
+                } else if ("tileIcon".equals(getName())) { // NOI18N
+                    propName = "matteColor"; // NOI18N
+                }
+                if (propName != null) {
+                    Node.Property prop = getPropertyOfName(propName);
+                    // Restore default value doesn't call setValue()
+                    // So, there is no danger of infinite loop
+                    prop.restoreDefaultValue();
+                }
             }
         }
 
