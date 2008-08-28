@@ -38,46 +38,99 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
 import java.io.File;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Vector;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
 import org.netbeans.modules.cnd.api.compilers.Tool;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager.CompilerDescriptor;
+import org.netbeans.modules.cnd.api.utils.RemoteUtils;
 import org.openide.filesystems.FileUtil;
 
-public class BasicCompiler extends Tool {
+public abstract class BasicCompiler extends Tool {
 
     /** Creates a new instance of GenericCompiler */
-    public BasicCompiler(CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        super(flavor, kind, name, displayName, path);
+    public BasicCompiler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+        super(hkey, flavor, kind, name, displayName, path);
+        if (!RemoteUtils.isLocalhost(hkey)) {
+            includeFilePrefix = System.getProperty("netbeans.user") + "/var/cache/cnd2/includes-cache/" + RemoteUtils.getHostName(getHostKey()) + "/"; //NOI18N
+        } else {
+            includeFilePrefix = null;
+        }
+    }
+    private String includeFilePrefix;
+
+    @Override
+    public String getIncludeFilePathPrefix() {
+        if (includeFilePrefix == null) {
+            if (RemoteUtils.isLocalhost(getHostKey())) {
+                includeFilePrefix = ""; // NOI18N
+                CompilerDescriptor c = getDescriptor();
+                if (c != null) {
+                    String path = getPath().replaceAll("\\\\", "/"); // NOI18N
+                    if (c.getRemoveIncludePathPrefix() != null) {
+                        int i = path.toLowerCase().indexOf("/bin"); // NOI18N
+                        if (i > 0) {
+                            includeFilePrefix = path.substring(0, i);
+                        }
+                    }
+                }
+            }
+        }
+        return includeFilePrefix;
     }
 
+    @Override
+    public abstract CompilerDescriptor getDescriptor();
+
     public String getDevelopmentModeOptions(int value) {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getDevelopmentModeFlags() != null && compiler.getDevelopmentModeFlags().length > value){
+            return compiler.getDevelopmentModeFlags()[value];
+        }
         return ""; // NOI18N
     }
 
     public String getWarningLevelOptions(int value) {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getWarningLevelFlags() != null && compiler.getWarningLevelFlags().length > value){
+            return compiler.getWarningLevelFlags()[value];
+        }
         return ""; // NOI18N
     }
 
     public String getSixtyfourBitsOption(int value) {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getArchitectureFlags() != null && compiler.getArchitectureFlags().length > value){
+            return compiler.getArchitectureFlags()[value];
+        }
         return ""; // NOI18N
     }
 
     public String getStripOption(boolean value) {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && value){
+            return compiler.getStripFlag();
+        }
+        return ""; // NOI18N
+    }
+
+    public String getDependencyGenerationOption() {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getDependencyGenerationFlags() != null) {
+            return compiler.getDependencyGenerationFlags();
+        }
         return ""; // NOI18N
     }
 
     public List getSystemPreprocessorSymbols() {
-        return new Vector(); // NOI18N
+        return new Vector();
     }
 
     public List getSystemIncludeDirectories() {
-        return new Vector(); // NOI18N
+        return new Vector();
     }
 
     /**
@@ -96,11 +149,16 @@ public class BasicCompiler extends Tool {
 
     protected void normalizePaths(List<String> paths) {
         for (int i = 0; i < paths.size(); i++) {
-            paths.set(i, FileUtil.normalizeFile(new File(paths.get(i))).getAbsolutePath());
+            paths.set(i, normalizePath(paths.get(i)));
         }
     }
 
     protected String normalizePath(String path) {
-        return FileUtil.normalizeFile(new File(path)).getAbsolutePath();
+        path = getIncludeFilePathPrefix() + path;
+        if (RemoteUtils.isLocalhost(getHostKey())) {
+            return FileUtil.normalizeFile(new File(path)).getAbsolutePath();
+        } else {
+            return path;
+        }
     }
 }
