@@ -87,7 +87,7 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
 	
         super(ast, file);
 	
-	if (container instanceof CsmIdentifiable) {
+	if (CsmKindUtilities.isIdentifiable(container)) {
 	    this.containerUID = UIDCsmConverter.identifiableToUID((CsmIdentifiable) container);
 	    assert (containerUID != null || container == null);
 	    this.containerRef = null;
@@ -144,13 +144,13 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
             ((MutableDeclarationsContainer) scope).removeDeclaration(this);
         }
         FileImpl file = (FileImpl) getContainingFile();
-        file.getProjectImpl().unregisterDeclaration(this);
+        file.getProjectImpl(true).unregisterDeclaration(this);
     }
     
-    private void onDispose() {
+    private synchronized void onDispose() {
         if (TraceFlags.RESTORE_CONTAINER_FROM_UID) {
-            // restore container from it's UID
-            this.containerRef = UIDCsmConverter.UIDtoIdentifiable(this.containerUID);
+            // restore container from it's UID when needed
+            this.containerRef = this.containerRef != null ? this.containerRef : UIDCsmConverter.UIDtoIdentifiable(this.containerUID);
             assert (this.containerRef != null || this.containerUID == null) : "null object for UID " + this.containerUID;
         }
     }
@@ -233,7 +233,7 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
         return type;
     }
 
-    private CsmObject _getContainer() {
+    private synchronized CsmObject _getContainer() {
         CsmObject container = this.containerRef;
         if (container == null) {
             container = UIDCsmConverter.UIDtoIdentifiable(this.containerUID);
