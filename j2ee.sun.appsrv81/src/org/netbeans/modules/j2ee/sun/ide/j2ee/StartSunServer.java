@@ -53,6 +53,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.enterprise.deploy.spi.status.ProgressEvent;
@@ -92,6 +93,7 @@ import org.netbeans.modules.j2ee.sun.ide.j2ee.ui.Util;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Utilities;
 import org.openide.windows.InputOutput;
+import org.netbeans.modules.glassfish.eecommon.api.ProgressEventSupport;
 
 /**
  * Life Cycle management for an instance
@@ -217,7 +219,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
     }
     public ProgressObject startProfiling(Target target, ProfilerServerSettings settings) {
         
-        pes.fireHandleProgressEvent(null, new Status(
+        pes.fireHandleProgressEvent(null, pes.createStatus(
                 ActionType.EXECUTE,
                 CommandType.START,
                 "",  // NOI18N
@@ -264,14 +266,14 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
         });
         // fail, if the server is waiting for a profiler...
         if (ProfilerSupport.getState() == ProfilerSupport.STATE_BLOCKING) {
-                pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                         ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorProfiledServer"), StateType.FAILED));  //NOI18N
                 cmd = CMD_NONE;
                 pes.clearProgressListener();
                 return this; //we failed to start the server.
         }
         resetProfiler();
-        pes.fireHandleProgressEvent(null, new Status(ActionType.EXECUTE,
+        pes.fireHandleProgressEvent(null, pes.createStatus(ActionType.EXECUTE,
                 ct, "",
                 StateType.RUNNING));
         debug=false;
@@ -307,7 +309,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
         if(currentMode==MODE_PROFILE && !running && !portInUse()){
             currentMode =MODE_RUN;
             // the profiler stopped the server already!!!
-            pes.fireHandleProgressEvent(null,  new Status(ActionType.EXECUTE, ct,
+            pes.fireHandleProgressEvent(null,  pes.createStatus(ActionType.EXECUTE, ct,
                     "", StateType.COMPLETED));                                  //NOI18N
             cmd = CMD_NONE;
             //pes.clearProgressListener();
@@ -316,7 +318,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
             if(currentMode==MODE_PROFILE) {
                 currentMode =MODE_RUN;
             }
-            pes.fireHandleProgressEvent(null, new Status(ActionType.EXECUTE,
+            pes.fireHandleProgressEvent(null, pes.createStatus(ActionType.EXECUTE,
                     ct, "", StateType.RUNNING));                                // NOI18N
             RequestProcessor.getDefault().post(this, 0, Thread.NORM_PRIORITY);
         }
@@ -360,7 +362,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
         }
         if (cmd == CMD_STOP || cmd == CMD_RESTART) {
             if (null == installRoot) {
-                pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                         ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorStoppingServer"), StateType.FAILED));
                 
                 cmd = CMD_NONE;
@@ -400,7 +402,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
             
             errorCode = exec(arr, CMD_STOP, null);
             if (errorCode != 0) {
-                pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                         ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorStoppingServer"), StateType.FAILED));
                 
                 cmd = CMD_NONE;
@@ -416,8 +418,18 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
         
         
         if (cmd == CMD_START || cmd == CMD_RESTART) {
+            int startupLimit = dmProps.getStartupTimeout() * 1000;
+            if (startupLimit < 1) {
+                // don't do any of this... just return a failed status.
+                pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
+                        ct, NbBundle.getMessage(StartSunServer.class, "LBL_ZeroTimeoutForStartingServer"), StateType.FAILED)); //NOI18N
+                cmd = CMD_NONE;
+                pes.clearProgressListener();
+                resetProfiler();
+                return; //we failed to start the server.            }
+            }
             if (null == installRoot) {
-                pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                         ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorStartingServer"), StateType.FAILED));//NOI18N
                 cmd = CMD_NONE;
                 pes.clearProgressListener();
@@ -453,7 +465,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
             try {
                 mpw = readMasterPasswordFile();
                 if (mpw == null) {
-                    pes.fireHandleProgressEvent(null, new Status(ActionType.EXECUTE,
+                    pes.fireHandleProgressEvent(null, pes.createStatus(ActionType.EXECUTE,
                             ct, NbBundle.getMessage(StartSunServer.class, "LBL_BadMasterPassword"), StateType.FAILED));//NOI18N
                     cmd = CMD_NONE;
                     pes.clearProgressListener();
@@ -462,7 +474,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                 }
             } catch (IllegalStateException ise) {
                 // the user cancelled... so give a diffeerent message
-                pes.fireHandleProgressEvent(null, new Status(ActionType.EXECUTE,
+                pes.fireHandleProgressEvent(null, pes.createStatus(ActionType.EXECUTE,
                         ct, NbBundle.getMessage(StartSunServer.class, "LBL_CancelMasterPassword"), StateType.FAILED));//NOI18N
                 cmd = CMD_NONE;
                 pes.clearProgressListener();
@@ -471,7 +483,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
             }
             File passWordFile =  Utils.createTempPasswordFile(sunDm.getPassword(), mpw);//NOI18N
             if (passWordFile==null){
-                pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                         ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorStartingServer"), StateType.FAILED));//NOI18N
                 cmd = CMD_NONE;
                 pes.clearProgressListener();
@@ -491,7 +503,8 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
             };
             
             //Starts JavaDB if it is not running:
-            if (ServerLocationManager.isJavaDBPresent(sunDm.getPlatformRoot())){
+            if ((ServerLocationManager.isJavaDBPresent(sunDm.getPlatformRoot())) 
+                    && (dmProps.isDatabaseStartEnabled())){
                 DerbySupport.ensureStarted();
             }
             
@@ -502,10 +515,10 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                 
                 if (((SunDeploymentManager)sunDm).isMaybeRunningButWrongUserName()==false){
                     
-                    pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                    pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                             ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorStartingServer"), StateType.FAILED));//NOI18N
                 } else{//eror dialog already showned to the user
-                    pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                    pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                             ct, NbBundle.getMessage(SunDeploymentManager.class,"ERR_AUTH_DIALOG_TITLE"), StateType.FAILED));//NOI18N
                     
                 }
@@ -519,7 +532,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
         
         
         if(currentMode==MODE_PROFILE){
-            pes.fireHandleProgressEvent(null,  new Status(ActionType.EXECUTE, ct, "", StateType.COMPLETED));//NOI18N
+            pes.fireHandleProgressEvent(null,  pes.createStatus(ActionType.EXECUTE, ct, "", StateType.COMPLETED));//NOI18N
             cmd = CMD_NONE;
             pes.clearProgressListener();
             
@@ -532,7 +545,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
         } catch (RuntimeException re) {
             ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, re);
         }
-        Status successful = new Status(ActionType.EXECUTE, ct, "", StateType.COMPLETED);
+        DeploymentStatus successful = pes.createStatus(ActionType.EXECUTE, ct, "", StateType.COMPLETED);
         if (cmd != CMD_STOP && !running) {
             viewLogFile();
             // wait a little bit more to make sure we are not started. Sometimes, the server is not fully initialized
@@ -550,7 +563,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                 }
             }
             // we tried, but we failed!!!
-            pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+            pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                     ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorStartingServer"), StateType.FAILED));
             cmd = CMD_NONE;
             pes.clearProgressListener();
@@ -577,7 +590,19 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
         int exitValue = -1;
         
         try {
-            final Process process = Runtime.getRuntime().exec(arr);
+            final Process process;
+            Locale current = Locale.getDefault();
+            String message = ""; // NOI18N
+            final int startupLimit = dmProps.getStartupTimeout() * 1000;
+            if (type == CMD_START && current.equals(new Locale("tr","TR"))) {
+                // the server is just plain broken when run in a Turkish locale
+                process = Runtime.getRuntime().exec(arr, new String[] {"LANG=en_US","LC_ALL=en_US"} );
+                message = NbBundle.getMessage(StartSunServer.class, "WARN_LOCALE_SWITCHED");
+                NotifyDescriptor nd = new NotifyDescriptor.Message(message);
+                DialogDisplayer.getDefault().notifyLater(nd);
+            } else {
+                process = Runtime.getRuntime().exec(arr);
+            }
                                     
             ByteArrayOutputStream eos = new ByteArrayOutputStream();
             
@@ -599,7 +624,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                 shouldStopDeploymentManagerSilently =false;
                 return 0;
             }
-            pes.fireHandleProgressEvent(null,  new Status(ActionType.EXECUTE,  ct, "" ,StateType.RUNNING));
+            pes.fireHandleProgressEvent(null,  pes.createStatus(ActionType.EXECUTE,  ct, message ,StateType.RUNNING));
             try {
                 if(currentMode==MODE_PROFILE){
                     // asadmin start-domain doesn't return when the profiler
@@ -611,10 +636,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                         Logger.getLogger(StartSunServer.class.getName()).log(Level.FINE,"",e);
                     }
                     
-                    int startupLimit = dmProps.getStartupTimeout();
-                    startupLimit *= 1000;
-                    startupLimit -= 3000;
-                    if (hasCommandSucceeded(startupLimit)){
+                    if (hasCommandSucceeded(startupLimit-3000)){
                         return 0;
                     } else {
                         if (null != io)
@@ -624,12 +646,11 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                 } else {
                     
                     // startup timeout support
-                    new Thread(new Runnable() {
+                    Thread tmp = new Thread(new Runnable() {
 
                         public void run() {
                             try {
-                                java.lang.Thread.sleep(dmProps.getStartupTimeout() *
-                                        1000);
+                                java.lang.Thread.sleep(startupLimit);
                             } catch (InterruptedException ex) {
                                 // do something here?
                             }
@@ -644,6 +665,11 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                     
                         
                     });
+                    
+                    if (null == tmp) {
+                        Logger.getLogger(StartSunServer.class.getName()).finer(
+                                "timeout support thread is null");
+                    }
 
                     // use the return value to determine if we want to make 
                     // sure the command has been successful...  
@@ -900,7 +926,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
 
         // fail, if the server is waiting for a profiler...
         if (ProfilerSupport.getState() == ProfilerSupport.STATE_BLOCKING) {
-                pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                         ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorProfiledServer"), StateType.FAILED));  //NOI18N
                 cmd = CMD_NONE;
                 pes.clearProgressListener();
@@ -911,7 +937,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                 // we need to fail here, now.
                 Asenv asenvContent = new Asenv(sunDm.getPlatformRoot());
                 String currentJdkRoot = asenvContent.get(Asenv.AS_JAVA);
-                pes.fireHandleProgressEvent(null,new Status(ActionType.EXECUTE,
+                pes.fireHandleProgressEvent(null,pes.createStatus(ActionType.EXECUTE,
                         ct, NbBundle.getMessage(StartSunServer.class, "LBL_ErrorStartingProfiledServer",currentJdkRoot ), StateType.FAILED));  //NOI18N
                 cmd = CMD_NONE;
                 pes.clearProgressListener();
@@ -937,7 +963,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
                 }
             }
         });
-        pes.fireHandleProgressEvent(null, new Status(ActionType.EXECUTE,ct, "",StateType.RUNNING));
+        pes.fireHandleProgressEvent(null, pes.createStatus(ActionType.EXECUTE,ct, "",StateType.RUNNING));
         RequestProcessor.getDefault().post(this, 0, Thread.NORM_PRIORITY);
         return this;
     }
@@ -1039,7 +1065,7 @@ public class StartSunServer extends StartServer implements ProgressObject, SunSe
             ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, re);
         }
         if (!running) {
-            pes.fireHandleProgressEvent(null, new Status(ActionType.EXECUTE,
+            pes.fireHandleProgressEvent(null, pes.createStatus(ActionType.EXECUTE,
                     CommandType.STOP, "",
                     StateType.COMPLETED));
             return this;
