@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
@@ -122,7 +123,7 @@ public class BinaryAnalyser implements LowMemoryListener {
     private static boolean FULL_INDEX = Boolean.getBoolean("org.netbeans.modules.java.source.usages.BinaryAnalyser.fullIndex");     //NOI18N
     
     private final Index index;
-    private final Map<Pair<String,String>,List<String>> refs = new HashMap<Pair<String,String>,List<String>>();
+    private final Map<Pair<String,String>,Object[]> refs = new HashMap<Pair<String,String>,Object[]>();
     private final Set<Pair<String,String>> toDelete = new HashSet<Pair<String,String>> ();
     private final AtomicBoolean lowMemory;
     private Continuation cont;
@@ -288,14 +289,20 @@ public class BinaryAnalyser implements LowMemoryListener {
                 String relativePath = FileObjects.convertFolder2Package (filePath.substring(rootPath.length(), endPos));
                 if (this.accepts(file.getName()) && !isUpToDate (relativePath, fileMTime)) {
                     this.toDelete.add(Pair.<String,String>of (relativePath,null));
-                    InputStream in = new BufferedInputStream (new FileInputStream (file));
                     try {
-                        analyse (in);
-                    } catch (InvalidClassFormatException icf) {
-                        LOGGER.warning("Invalid class file format: "+file.getAbsolutePath());      //NOI18N
-                    }
-                    finally {
-                        in.close();
+                        InputStream in = new BufferedInputStream(new FileInputStream(file));
+                        try {
+                            analyse(in);
+                        } catch (InvalidClassFormatException icf) {
+                            LOGGER.warning("Invalid class file format: " + file.getAbsolutePath());      //NOI18N
+
+                        } finally {
+                            in.close();
+                        }
+                    } catch (IOException ex) {
+                        //unreadable file?
+                        LOGGER.warning("Cannot read file: " + file.getAbsolutePath());      //NOI18N
+                        LOGGER.log(Level.FINE, null, ex);
                     }
                     if (this.lowMemory.getAndSet(false)) {
                         this.store();
@@ -592,13 +599,17 @@ public class BinaryAnalyser implements LowMemoryListener {
     
     private List<String> getClassReferences (final Pair<String,String> name) {
         assert name != null;
-        List<String> cr = this.refs.get (name);
+        Object[] cr = this.refs.get (name);
         if (cr == null) {
-            cr = new ArrayList<String> ();
+            cr = new Object[] {
+                new ArrayList<String> (),
+                null,
+                null
+            };
             this.refs.put (name, cr);
         }
-        return cr;
-    }            
+        return (ArrayList<String>) cr[0];
+    }
     
                 
     // Static private methods ---------------------------------------------------------          
@@ -627,21 +638,26 @@ public class BinaryAnalyser implements LowMemoryListener {
      * @param archiveUrl url of an archive
      */
     private static void prebuildArgs (final ZipFile archiveFile, final URL archiveUrl) {
-        final ZipEntry e = archiveFile.getEntry(FileObjects.convertPackage2Folder(javax.swing.JComponent.class.getName())+'.'+FileObjects.CLASS);   //NOI18N
-        if (e != null) {                                   //NOI18N
-            ClasspathInfo cpInfo = ClasspathInfo.create(ClassPathSupport.createClassPath(new URL[]{archiveUrl}),
-                ClassPathSupport.createClassPath(new URL[0]),
-                ClassPathSupport.createClassPath(new URL[0]));
-            final JavacTaskImpl jt = JavaSourceAccessor.INSTANCE.createJavacTask(cpInfo, null, null);            
-            TreeLoader.preRegister(jt.getContext(), cpInfo);
-            TypeElement jc = jt.getElements().getTypeElement(javax.swing.JComponent.class.getName());
-            if (jc != null) {
-                List<ExecutableElement> methods = ElementFilter.methodsIn(jc.getEnclosedElements());
-                for (ExecutableElement method : methods) {
-                    List<? extends VariableElement> params = method.getParameters();
-                    if (!params.isEmpty()) {
-                        params.get(0).getSimpleName();
-                        break;
+        final ZipEntry jce = archiveFile.getEntry(FileObjects.convertPackage2Folder(javax.swing.JComponent.class.getName())+'.'+FileObjects.CLASS);   //NOI18N
+        if (jce != null) {                                   //NOI18N
+            //On the IBM VMs the swing is in separate jar (graphics.jar) where no j.l package exists, don't prebuild such an archive.
+            //The param names will be created on deamand
+            final ZipEntry oe = archiveFile.getEntry(FileObjects.convertPackage2Folder(Object.class.getName())+'.'+FileObjects.CLASS);   //NOI18N
+            if (oe != null) {
+                ClasspathInfo cpInfo = ClasspathInfo.create(ClassPathSupport.createClassPath(new URL[]{archiveUrl}),
+                    ClassPathSupport.createClassPath(new URL[0]),
+                    ClassPathSupport.createClassPath(new URL[0]));
+                final JavacTaskImpl jt = JavaSourceAccessor.getINSTANCE().createJavacTask(cpInfo, null, null);            
+                TreeLoader.preRegister(jt.getContext(), cpInfo);
+                TypeElement jc = jt.getElements().getTypeElement(javax.swing.JComponent.class.getName());
+                if (jc != null) {
+                    List<ExecutableElement> methods = ElementFilter.methodsIn(jc.getEnclosedElements());
+                    for (ExecutableElement method : methods) {
+                        List<? extends VariableElement> params = method.getParameters();
+                        if (!params.isEmpty()) {
+                            params.get(0).getSimpleName();
+                            break;
+                        }
                     }
                 }
             }
