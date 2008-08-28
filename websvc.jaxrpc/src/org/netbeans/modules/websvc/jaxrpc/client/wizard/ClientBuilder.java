@@ -200,6 +200,17 @@ public class ClientBuilder {
         }
     }
 
+    private String uniqueClientName(final FileObject wsdlFolder, String origName) {
+        FileObject[] webServices = wsdlFolder.getChildren();
+        Set<String> serviceNames = new HashSet<String>(webServices.length);
+        for(FileObject service: webServices){
+            if(service.hasExt("wsdl") || service.hasExt("xml") && service.getName().
+                    endsWith(WsCompileConfigDataObject.WSCOMPILE_CONFIG_FILENAME_SUFFIX))
+            serviceNames.add(service.getName());
+        }
+        return uniqueServiceName(origName, serviceNames);
+    }
+
     public Set/*FileObject*/ generate(final ProgressHandle handle) {
         Set result = Collections.EMPTY_SET;
 
@@ -247,18 +258,18 @@ public class ClientBuilder {
             // 1. Copy wsdl file to wsdl folder -- DONE
             final FileObject wsdlFolder = projectSupport.getWsdlFolder(true);
 
-            // First ensure neither the target wsdl or -config.xml files exist.
-            FileObject target = wsdlFolder.getFileObject(wsdlSource.getName(), "wsdl"); //NOI18N
-            if (target != null) {
-                target.delete();
-            }
-            target = wsdlFolder.getFileObject(wsdlSource.getName() + WsCompileConfigDataObject.WSCOMPILE_CONFIG_FILENAME_SUFFIX, "xml"); // NOI18N
-            if (target != null) {
-                target.delete();
-            }
+//            // First ensure neither the target wsdl or -config.xml files exist.
+//            FileObject target = wsdlFolder.getFileObject(wsdlSource.getName(), "wsdl"); //NOI18N
+//            if (target != null) {
+//                target.delete();
+//            }
+//            target = wsdlFolder.getFileObject(wsdlSource.getName() + WsCompileConfigDataObject.WSCOMPILE_CONFIG_FILENAME_SUFFIX, "xml"); // NOI18N
+//            if (target != null) {
+//                target.delete();
+//            }
 
             // Now copy the wsdl file.
-            wsdlTarget = wsdlSource.copy(wsdlFolder, wsdlSource.getName(), "wsdl"); //NOI18N
+            wsdlTarget = wsdlSource.copy(wsdlFolder, uniqueClientName(wsdlFolder,wsdlSource.getName()), "wsdl"); //NOI18N
             if (handler.isServiceNameConflict()) {
                 handleServiceConflicts(wsdlTarget);
             }
@@ -494,7 +505,19 @@ public class ClientBuilder {
             features.toArray(wscompileFeatures);
             projectSupport.addServiceClient(wsdlTarget.getName(), packageName, sourceUrl, configFile, stubDescriptor, wscompileFeatures);
 
-            // 9. Execute wscompile script for the new client (mostly to populate for code completion.
+            // 9. Code Completion HACK to enable filesystems to fire events when new folder is created
+            // need to ask for children
+            FileObject projectDir = project.getProjectDirectory();
+            FileObject clientArtifactsFolder = projectDir.getFileObject("build/generated/wsclient"); //NOI18N
+            if (clientArtifactsFolder!=null) {
+                clientArtifactsFolder.getChildren(true);
+            } else {
+                try {
+                    FileUtil.createFolder(projectDir, "build/generated/wsclient"); //NOI18N
+                } catch (IOException ex) {}
+            }            
+
+            // 10. Execute wscompile script for the new client (mostly to populate for code completion.
             handle.progress(NbBundle.getMessage(ClientBuilder.class, "MSG_WizGenerateClient"), 80);
 
             String targetName = wsdlTarget.getName() + "-client-wscompile"; // NOI18N
