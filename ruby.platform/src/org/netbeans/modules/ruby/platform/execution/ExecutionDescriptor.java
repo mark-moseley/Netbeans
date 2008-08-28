@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,9 +42,12 @@ package org.netbeans.modules.ruby.platform.execution;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.ruby.platform.RubyExecution;
+import org.netbeans.modules.ruby.platform.gems.GemManager;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Utilities;
 
@@ -67,8 +70,11 @@ public class ExecutionDescriptor {
     private final RubyPlatform platform;
     private FileLocator fileLocator;
     String script;
+    private String scriptPrefix;
+    private Map<String, String> additionalEnv;
     private String[] additionalArgs;
     private String initialArgs;
+    private String jrubyProps;
     private FileObject fileObject;
     private String classPath;
     boolean showProgress = true;
@@ -77,10 +83,25 @@ public class ExecutionDescriptor {
     boolean debug;
     private boolean fastDebugRequired;
     private boolean appendJdkToPath;
-    List<OutputRecognizer> outputRecognizers = new ArrayList<OutputRecognizer>();
+    private String encoding;
+    private boolean useInterpreter;
+    List<OutputRecognizer> outputRecognizers;
+    /**
+     * Defines whether rerun should be allowed. <i>Currently needed
+     * only because rerunning rake test tasks in the test runner does not
+     * work reliably (might be causing #145228), likely will become obsolete
+     * once that issue has been solved</i>.
+     */
+    private boolean rerun = true;
+    /**
+     * The max time in ms for waiting a stream to become ready
+     * before considering the process to be stalling.
+     */
+    private int readMaxWaitTime = 50;
+
 
     public ExecutionDescriptor(final RubyPlatform platform) {
-        this.platform = platform;
+        this(platform, null, null);
     }
 
     public ExecutionDescriptor(final RubyPlatform platform, final String displayName, final File pwd) {
@@ -92,12 +113,27 @@ public class ExecutionDescriptor {
         this.displayName = displayName;
         this.pwd = pwd;
         this.script = script;
-        assert (pwd != null) && pwd.isDirectory() : pwd + " is a directory";
+        this.outputRecognizers = new ArrayList<OutputRecognizer>();
+        this.useInterpreter = true;
+        assert (pwd == null) || pwd.isDirectory() : pwd + " is a directory";
+        if (platform.hasRubyGemsInstalled()) {
+            Map<String, String> env = new HashMap<String, String>();
+            GemManager.adjustEnvironment(platform, env);
+            addAdditionalEnv(env);
+        }
+        if (platform.isJRuby()) {
+            Map<String, String> env = new HashMap<String, String>();
+            String home = platform.getHome().getAbsolutePath();
+            env.put("JRUBY_HOME", home); // NOI18N
+            env.put("JRUBY_BASE", home); // NOI18N
+            env.put("JAVA_HOME", RubyExecution.getJavaHome()); // NOI18N
+            addAdditionalEnv(env);
+        }
     }
     
     public ExecutionDescriptor cmd(final File cmd) {
         this.cmd = cmd;
-        assert (cmd != null) && cmd.isFile() : cmd + " is a file";
+        assert (cmd != null) && cmd.isFile() : cmd + " must be a file";
         return this;
     }
 
@@ -164,6 +200,11 @@ public class ExecutionDescriptor {
         return this;
     }
     
+    public ExecutionDescriptor jrubyProperties(final String jrubyProps) {
+        this.jrubyProps = jrubyProps;
+        return this;
+    }
+
     public ExecutionDescriptor addBinPath(boolean addBinPath) {
         this.addBinPath = addBinPath;
         return this;
@@ -201,7 +242,7 @@ public class ExecutionDescriptor {
         this.classPath = classPath;
         return this;
     }
-    
+
     String getDisplayName() {
         return debug ? displayName + " (debug)" : displayName; // NOI18N
     }
@@ -218,6 +259,14 @@ public class ExecutionDescriptor {
         return script;
     }
     
+    public void scriptPrefix(String sp) {
+        scriptPrefix = sp;
+    }
+
+    public String getScriptPrefix() {
+        return scriptPrefix;
+    }
+    
     /**
      * Arguments to be appended <em>AFTER</em> the target. Usually arguments and
      * options to the Ruby script (target, application, ..) itself.
@@ -232,6 +281,11 @@ public class ExecutionDescriptor {
      */
     public String[] getInitialArgs() {
         return initialArgs == null ? null : Utilities.parseParameters(initialArgs);
+    }
+    
+    /** Properties to be passed to the JVM running the JRuby process. */
+    public String[] getJRubyProps() {
+        return jrubyProps == null ? null : Utilities.parseParameters(jrubyProps);
     }
     
     public File getPwd() {
@@ -253,7 +307,15 @@ public class ExecutionDescriptor {
     public FileObject getFileObject() {
         return fileObject;
     }
-    
+
+    public void setEncoding(String encoding) {
+        this.encoding = encoding;
+    }
+
+    String getEncoding() {
+        return encoding;
+    }
+
     /**
      * Should the JDK be appended to the PATH?
      * @return True iff the JDK should be appended to the PATH.
@@ -261,4 +323,52 @@ public class ExecutionDescriptor {
     public boolean getAppendJdkToPath() {
         return appendJdkToPath;
     }
+
+    public void addAdditionalEnv(Map<String, String> additionalEnv) {
+        if (this.additionalEnv == null) {
+            this.additionalEnv = new HashMap<String, String>();
+        }
+        this.additionalEnv.putAll(additionalEnv);
+    }
+
+    public Map<String, String> getAdditionalEnvironment() {
+        return additionalEnv;
+    }
+
+    public boolean useInterpreter() {
+        return useInterpreter;
+    }
+
+    public void useInterpreter(final boolean useInterpreter) {
+        this.useInterpreter = useInterpreter;
+    }
+
+    /**
+     * @see #readMaxWaitTime
+     */
+    public int getReadMaxWaitTime() {
+        return readMaxWaitTime;
+    }
+
+    /**
+     * @see #readMaxWaitTime
+     */
+    public void setReadMaxWaitTime(int readMaxWaitTime) {
+        this.readMaxWaitTime = readMaxWaitTime;
+    }
+
+    /**
+     * @see #rerun
+     */
+    public boolean isRerun() {
+        return rerun;
+    }
+
+    /**
+     * @see #rerun
+     */
+    public void setRerun(boolean rerun) {
+        this.rerun = rerun;
+    }
+
 }
