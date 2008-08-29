@@ -74,14 +74,32 @@ public abstract class BasicVisualPanel extends JPanel {
     }
     
     /**
-     * Set an warning message but mark the panel as valid.
+     * Set a warning message but mark the panel as valid.
      */
     protected final void setWarning(String message) {
+        setWarning(message, true);
+    }
+    
+    /**
+     * Set a warning message and validity of the panel.
+     */
+    protected final void setWarning(String message, boolean valid) {
         if (message == null) {
             throw new NullPointerException();
         }
-        setMessage(message);
-        setValid(true);
+        settings.putProperty(WizardDescriptor.PROP_WARNING_MESSAGE, message);
+        setValid(valid);
+    }
+    
+    /**
+     * Set an info message and validity of the panel.
+     */
+    protected final void setInfo(String message, boolean valid) {
+        if (message == null) {
+            throw new NullPointerException();
+        }
+        settings.putProperty(WizardDescriptor.PROP_INFO_MESSAGE, message);
+        setValid(valid);
     }
     
     /**
@@ -102,7 +120,7 @@ public abstract class BasicVisualPanel extends JPanel {
     }
     
     private final void setMessage(String message) {
-        settings.putProperty("WizardPanel_errorMessage", message); // NOI18N
+        settings.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, message); // NOI18N
     }
     
     /**
@@ -121,20 +139,22 @@ public abstract class BasicVisualPanel extends JPanel {
             super(data.getSettings());
             this.data = data;
             String resource;
-            int wizardType = data.getWizardType();
             switch (data.getWizardType()) {
-                case NewNbModuleWizardIterator.TYPE_SUITE:
+                case SUITE:
                     resource = "emptySuite"; // NOI18N
                     break;
-                case NewNbModuleWizardIterator.TYPE_MODULE:
-                case NewNbModuleWizardIterator.TYPE_SUITE_COMPONENT:
+                case APPLICATION:
+                    resource = "emptyApplication"; // NOI18N
+                    break;
+                case MODULE:
+                case SUITE_COMPONENT:
                     resource = "emptyModule"; // NOI18N
                     break;
-                case NewNbModuleWizardIterator.TYPE_LIBRARY_MODULE:
+                case LIBRARY_MODULE:
                     resource = "libraryModule"; // NOI18N
                     break;
                 default:
-                    assert false : "Unknown wizard type = " + wizardType;
+                    assert false : "Unknown wizard type = " + data.getWizardType();
                     resource = "";
             }
             data.getSettings().putProperty("NewProjectWizard_Title", // NOI18N
@@ -146,15 +166,15 @@ public abstract class BasicVisualPanel extends JPanel {
         }
         
         protected boolean isSuiteWizard() {
-            return getData().getWizardType() == NewNbModuleWizardIterator.TYPE_SUITE;
+            return NewNbModuleWizardIterator.isSuiteWizard(getData().getWizardType());
         }
         
         protected boolean isSuiteComponentWizard() {
-            return getData().getWizardType() == NewNbModuleWizardIterator.TYPE_SUITE_COMPONENT;
+            return NewNbModuleWizardIterator.isSuiteComponentWizard(getData().getWizardType());
         }
 
         protected boolean isLibraryWizard() {
-            return getData().getWizardType() == NewNbModuleWizardIterator.TYPE_LIBRARY_MODULE;
+            return NewNbModuleWizardIterator.isLibraryWizard(getData().getWizardType());
         }
         
     }
