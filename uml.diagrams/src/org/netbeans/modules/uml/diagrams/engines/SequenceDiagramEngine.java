@@ -160,6 +160,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
     private PopupMenuProvider menuProvider = new DiagramPopupMenuProvider();
     private IInteraction interaction;
     private RelationshipDiscovery relDiscovery = null;
+    private boolean trackbarusage=true;
     
     public SequenceDiagramEngine(DesignerScene scene) {
         super(scene);
@@ -271,7 +272,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             newWidget.setPreferredLocation(newWidget.convertLocalToScene(location));
         
             //
-            if(element instanceof ILifeline)
+            if(element instanceof ILifeline && trackbarusage)
             {
                 //set properties if actor
                 ILifeline ll=(ILifeline) element;
@@ -281,6 +282,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
                     new AfterValidationExecutor(new AddCarFprPresentationElementAction((SQDDiagramTopComponent) tc,(LifelineWidget) newWidget, presentation), getScene());
                 }
             }
+            trackbarusage=true;
         }
         //
         if(element instanceof ICombinedFragment || element instanceof IInteraction)
@@ -1394,7 +1396,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
     }
 
     @Override
-    public void layout() {
+    public void layout(boolean save) {
         revalidateSceneWithWait();
         ArrayList<LifelineWidget> lifelines=new ArrayList<LifelineWidget>();
         Collection<IPresentationElement> pesTmp=getScene().getNodes();
@@ -1718,8 +1720,11 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             }
             else
             {
-                Rectangle tmp=llW.getLine().convertLocalToScene(llW.getLine().getBounds());
-                tmpBot=tmp.y+100;
+                if(llW.getLine().getBounds()!=null)
+                {
+                    Rectangle tmp=llW.getLine().convertLocalToScene(llW.getLine().getBounds());
+                    tmpBot=tmp.y+100;
+                }
             }
             if(tmpBot>maxY)maxY=tmpBot;
         }
@@ -1753,5 +1758,9 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         public void focusChanged(ObjectSceneEvent event, Object previousFocusedObject, Object newFocusedObject) {
         }
         
+    }
+
+    public void doNotUseTrackbar() {
+        this.trackbarusage=false;
     }
 }
