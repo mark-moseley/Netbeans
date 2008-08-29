@@ -107,8 +107,6 @@ import org.netbeans.modules.uml.diagrams.actions.sqd.LifelineMoveStrategy;
 import org.netbeans.modules.uml.diagrams.actions.sqd.MessageMoveProvider;
 import org.netbeans.modules.uml.diagrams.actions.sqd.MessageMoveStrategy;
 import org.netbeans.modules.uml.diagrams.actions.sqd.MessagesConnectProvider;
-import org.netbeans.modules.uml.diagrams.actions.sqd.SQDRelationshipDisovery;
-import org.netbeans.modules.uml.diagrams.actions.sqd.ToolbarTestMessageCreateAction;
 import org.netbeans.modules.uml.diagrams.anchors.TargetMessageAnchor;
 import org.netbeans.modules.uml.diagrams.edges.factories.MessageFactory;
 import org.netbeans.modules.uml.diagrams.edges.sqd.MessageLabelManager;
@@ -128,6 +126,7 @@ import org.netbeans.modules.uml.drawingarea.actions.AfterValidationExecutor;
 import org.netbeans.modules.uml.drawingarea.actions.DiagramPopupMenuProvider;
 import org.netbeans.modules.uml.drawingarea.actions.DiscoverRelationshipAction;
 import org.netbeans.modules.uml.drawingarea.actions.HierarchicalLayoutAction;
+import org.netbeans.modules.uml.drawingarea.actions.MoveNodeKeyAction;
 import org.netbeans.modules.uml.drawingarea.actions.NavigateLinkAction;
 import org.netbeans.modules.uml.drawingarea.actions.OrthogonalLayoutAction;
 import org.netbeans.modules.uml.drawingarea.actions.SQDMessageConnectProvider;
@@ -440,7 +439,8 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         IElement  element=node.getFirstSubject();
         if(node.getFirstSubject().getExpandedElementType().equals("Lifeline"))//works for both Lifeline and ActorLifeline
         {
-            WidgetAction lifelineMoveAction=new LifelineMoveAction(new LifelineMoveStrategy(), new LifelineMoveProvider(provider));        
+            WidgetAction lifelineMoveAction=new LifelineMoveAction(new LifelineMoveStrategy(), new LifelineMoveProvider(provider));
+            selectTool.addAction(new MoveNodeKeyAction(new LifelineMoveStrategy(), new LifelineMoveProvider(provider)));
             selectTool.addAction(lifelineMoveAction);
         }
         else if(widget instanceof CombinedFragmentWidget)//covers combinedfragments, references, interaction boundary
@@ -452,7 +452,9 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             }
             else 
             {
-                selectTool.addAction(ActionFactory.createMoveAction(provider, new CombinedFragmentMoveProvider(provider)));
+                CombinedFragmentMoveProvider cfMoveProvider = new CombinedFragmentMoveProvider(provider);
+                selectTool.addAction(ActionFactory.createMoveAction(provider, cfMoveProvider));
+                selectTool.addAction(new MoveNodeKeyAction(provider, cfMoveProvider));
             }
         }
         else
@@ -1394,7 +1396,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
     }
 
     @Override
-    public void layout() {
+    public void layout(boolean save) {
         revalidateSceneWithWait();
         ArrayList<LifelineWidget> lifelines=new ArrayList<LifelineWidget>();
         Collection<IPresentationElement> pesTmp=getScene().getNodes();
@@ -1718,8 +1720,11 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             }
             else
             {
-                Rectangle tmp=llW.getLine().convertLocalToScene(llW.getLine().getBounds());
-                tmpBot=tmp.y+100;
+                if(llW.getLine().getBounds()!=null)
+                {
+                    Rectangle tmp=llW.getLine().convertLocalToScene(llW.getLine().getBounds());
+                    tmpBot=tmp.y+100;
+                }
             }
             if(tmpBot>maxY)maxY=tmpBot;
         }
