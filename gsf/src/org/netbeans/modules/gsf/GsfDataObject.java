@@ -61,15 +61,30 @@ import org.openide.nodes.Node.Cookie;
 import org.openide.text.CloneableEditor;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.text.DataEditorSupport;
+import org.openide.util.Lookup;
 import org.openide.windows.CloneableOpenSupport;
 
 public class GsfDataObject extends MultiDataObject {
     
+    /** Used temporarily during file creation */
+    private static Language templateLanguage;
+
     private GenericEditorSupport jes;
     private Language language;
     
     public GsfDataObject(FileObject pf, MultiFileLoader loader, Language language) throws DataObjectExistsException {
         super(pf, loader);
+
+        // If the user creates a file with a filename where we can't figure out the language
+        // (e.g. the PHP New File wizard doesn't enforce a file extension, so if you create
+        // a file named "pie.class" (issue 124044) the data loader doesn't know which language
+        // to associate this with since it isn't a GSF file extension or mimetype). However
+        // during template creation we know the language anyway so we can use it. On subsequent
+        // IDE restarts the file won't be recognized so the user will have to rename or
+        // add a new file extension to file type mapping.
+        if (language == null) {
+            language = templateLanguage;
+        }
         this.language = language;
         getCookieSet().assign( SaveAsCapable.class, new SaveAsCapable() {
             public void saveAs( FileObject folder, String fileName ) throws IOException {
@@ -82,8 +97,13 @@ public class GsfDataObject extends MultiDataObject {
         return new GsfDataNode(this, language);
     }
 
+    @Override
+    public Lookup getLookup() {
+        return getCookieSet().getLookup();
+    }
+
     public @Override <T extends Cookie> T getCookie(Class<T> type) {
-        if (type.isAssignableFrom(GenericEditorSupport.class)) {
+        if (type.isAssignableFrom(GenericEditorSupport.class) && language != null) {
             return type.cast(createEditorSupport ());
         }
         return super.getCookie(type);
@@ -98,19 +118,21 @@ public class GsfDataObject extends MultiDataObject {
     }
 
     protected @Override DataObject handleCreateFromTemplate(DataFolder df, String name) throws IOException {
-        if (name == null) {
+        if (name == null && language != null && language.getGsfLanguage().getPreferredExtension() != null) {
             // special case: name is null (unspecified or from one-parameter createFromTemplate)
             name = FileUtil.findFreeFileName(df.getPrimaryFile(),
-                getPrimaryFile().getName(), language.getExtensions()[0]);
+                getPrimaryFile().getName(), language.getGsfLanguage().getPreferredExtension());
         } 
 //        else if (!language.getGsfLanguage().isIdentifierChar(c) Utilities.isJavaIdentifier(name)) {
 //            throw new IOException (NbBundle.getMessage(GsfDataObject.class, "FMT_Not_Valid_FileName", language.getDisplayName(), name));
 //        }
         //IndentFileEntry entry = (IndentFileEntry)getPrimaryEntry();
         //entry.initializeIndentEngine();
-        DataObject retValue = super.handleCreateFromTemplate(df, name);
-        FileObject fo = retValue.getPrimaryFile ();
-        assert fo != null;
+        try {
+            templateLanguage = language;
+            DataObject retValue = super.handleCreateFromTemplate(df, name);
+            FileObject fo = retValue.getPrimaryFile ();
+            assert fo != null;
 //        ClassPath cp = ClassPath.getClassPath(fo, ClassPath.SOURCE);
 //        String pkgName;
 //        if (cp != null) {
@@ -120,7 +142,10 @@ public class GsfDataObject extends MultiDataObject {
 //            pkgName = "";   //NOI18N
 //        }
 //        renameJDO (retValue, pkgName, name, this.getPrimaryFile().getName());
-        return retValue;
+            return retValue;
+        } finally {
+            templateLanguage = null;
+        }
     }            
     
     
@@ -210,54 +235,4 @@ public class GsfDataObject extends MultiDataObject {
             return super.close(ask);
         }
     }
-    
-    private static final class GsfEditor extends CloneableEditor {
-        
-        private static final long serialVersionUID = -1;
-        
-        public GsfEditor() {
-        }
-        
-        public GsfEditor(GenericEditorSupport sup) {
-            super(sup);
- //           initialize();
-        }
-        
-//        void associatePalette(GenericEditorSupport s) {
-//            DataObject dataObject = s.getDataObject();
-//            if (!(dataObject instanceof GsfDataObject)) {
-//                return;
-//            }
-//
-//            GsfDataObject gdo = (GsfDataObject)s.getDataObject();
-//            PaletteController pc = gdo.language.getPalette();
-//            if (pc == null) {
-//                return;
-//            }
-//
-//            Node nodes[] = { gdo.getNodeDelegate() };
-//            InstanceContent instanceContent = new InstanceContent();
-//            associateLookup(new ProxyLookup(new Lookup[] { new AbstractLookup(instanceContent), nodes[0].getLookup()}));
-//            instanceContent.add(getActionMap());
-//
-//            setActivatedNodes(nodes);
-//
-//            instanceContent.add(pc);
-//        }
-//        
-//        private void initialize() {
-//            associatePalette((GenericEditorSupport)cloneableEditorSupport());
-//        }
-//
-//        @Override
-//        public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-//            super.readExternal(in);
-//            //initialize();
-//        }
-    }
-
-//    private static ClassPath getClassPath( Document doc, String type ) {
-//        DataObject dObj = (DataObject)doc.getProperty(doc.StreamDescriptionProperty );
-//        return ClassPath.getClassPath( dObj.getPrimaryFile(), type );
-//    }
 }
