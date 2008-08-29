@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,7 +42,7 @@
 package org.netbeans.modules.ruby.rubyproject;
 
 import java.io.File;
-import org.netbeans.api.gsf.DeclarationFinder.DeclarationLocation;
+import org.netbeans.modules.gsf.api.DeclarationFinder.DeclarationLocation;
 import org.netbeans.spi.gototest.TestLocator;
 import org.netbeans.spi.gototest.TestLocator.LocationResult;
 import org.openide.filesystems.FileObject;
@@ -77,6 +77,10 @@ public class GotoTestTest extends RubyProjectTestBase {
         createFile(dir, "whatever/donkey.rb", "#foo");
         createFile(dir, "whatever/donkey_spec.rb", "#foo");
         
+        touch(dir, "app/controllers/donkey_controller.rb");
+        touch(dir, "spec/controllers/donkey_controller_spec.rb");
+        touch(dir, "test/functional/donkey_controller_test.rb");
+        
         gotoTest = new GotoTest();
     }
     
@@ -84,10 +88,14 @@ public class GotoTestTest extends RubyProjectTestBase {
         return project.getProjectDirectory().getFileObject(file);
     }
     
-    private void assertIsProjFile(String file, FileObject fo) {
-        String relative = getRelative(fo);
+    private void assertIsProjFile(String expectedRelPath, FileObject actualFO) {
+        String relative = getRelative(actualFO);
         
-        assertEquals(relative, file);
+        // slashify to the same format, so tests pass on all OSes
+        relative = relative.replace(File.separatorChar, '/');
+        expectedRelPath = expectedRelPath.replace(File.separatorChar, '/');
+        
+        assertEquals(expectedRelPath + " is a project file", relative, expectedRelPath);
     }
 
     private String getRelative(FileObject fo) {
@@ -139,6 +147,15 @@ public class GotoTestTest extends RubyProjectTestBase {
         DeclarationLocation loc = gotoTest.findTest(getProjFile("app/models/whatever.rb"), -1);
         assertNotSame(DeclarationLocation.NONE, loc);
         assertIsProjFile("spec/models/whatever_spec.rb", loc.getFileObject());
+        assertEquals(-1, loc.getOffset());
+    }
+
+    public void testGotoTestRspecRubyProject() {
+        assertNotNull(project);
+        
+        DeclarationLocation loc = gotoTest.findTest(getProjFile("lib/gibbon.rb"), -1);
+        assertNotSame(DeclarationLocation.NONE, loc);
+        assertIsProjFile("spec/gibbon_spec.rb", loc.getFileObject());
         assertEquals(-1, loc.getOffset());
     }
 
@@ -219,7 +236,7 @@ public class GotoTestTest extends RubyProjectTestBase {
     //    assertIsProjFile("test/world.rb", loc.getFileObject());
     //}
 
-    private String[] FILES = {
+    private final static String[] FILES = {
         "lib/foo.rb",
         "test/test_foo.rb",
         
@@ -359,12 +376,23 @@ public class GotoTestTest extends RubyProjectTestBase {
 
     public void testRSpecSingle2() {
         assertNotNull(project);
-        
+
         FileObject f = getProjFile("whatever/donkey.rb");
         assertNotNull(f);
         DeclarationLocation loc = gotoTest.findTest(f, -1);
         assertNotSame(DeclarationLocation.NONE, loc);
         assertIsProjFile("whatever/donkey_spec.rb", loc.getFileObject());
+        assertEquals(-1, loc.getOffset());
+    }
+
+    public void testRSpecVsTest() {
+        assertNotNull(project);
+
+        FileObject f = getProjFile("app/controllers/donkey_controller.rb");
+        assertNotNull(f);
+        DeclarationLocation loc = gotoTest.findTest(f, -1);
+        assertNotSame(DeclarationLocation.NONE, loc);
+        assertIsProjFile("test/functional/donkey_controller_test.rb", loc.getFileObject());
         assertEquals(-1, loc.getOffset());
     }
 }
