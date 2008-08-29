@@ -86,12 +86,7 @@ public class NavigatorModel implements CsmProgressListener, CsmModelListener {
     private Timer checkCursorTimer;
     private long lastCursorPos = -1;
     private long lastCursorPosWhenChecked = 0;
-    private Object lock = new Object(){
-        @Override
-        public String toString(){
-            return "NavigatorModel lock"; // NOI18N
-        }
-    };
+    private final Object lock = new String("NavigatorModel lock"); // NOI18N
     
     public NavigatorModel(DataObject cdo, NavigatorPanelUI ui, NavigatorComponent component) {
         this.cdo = cdo;
@@ -179,15 +174,16 @@ public class NavigatorModel implements CsmProgressListener, CsmModelListener {
                 busyListener.busyStart();
             }
             synchronized(lock) {
-                fileModel.setFile(csmFile);
-                final Children children = root.getChildren();
-                if (!Children.MUTEX.isReadAccess()){
-                     Children.MUTEX.writeAccess(new Runnable(){
-                        public void run() {
-                            children.remove(children.getNodes());
-                            children.add(fileModel.getNodes());
-                        }
-                    });
+                if (fileModel.setFile(csmFile)){
+                    final Children children = root.getChildren();
+                    if (!Children.MUTEX.isReadAccess()){
+                         Children.MUTEX.writeAccess(new Runnable(){
+                            public void run() {
+                                children.remove(children.getNodes());
+                                children.add(fileModel.getNodes());
+                            }
+                        });
+                    }
                 }
             }
         } finally {
