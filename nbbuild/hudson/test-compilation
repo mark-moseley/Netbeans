@@ -1,6 +1,6 @@
 #!/bin/sh
-ant -f nbbuild/build.xml cvs-clean || exit
-#ant -f nbbuild/build.xml checkout || exit
-ant -f nbbuild/build.xml build-nozip || exit
-ant -f xtest/build.xml || exit
-ant -f nbbuild/build.xml -Dtest.fail.on.error=false build-test-dist
+hg up -C .
+hg --config extensions.purge= clean --all || exit
+ant build || exit
+ant -Dtest.fail.on.error=false build-test-dist
+test -z "`hg st | tee /dev/stderr`" || exit
