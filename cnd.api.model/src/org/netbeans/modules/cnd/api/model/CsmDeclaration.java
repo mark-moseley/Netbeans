@@ -47,7 +47,7 @@ package org.netbeans.modules.cnd.api.model;
  */
 
 public interface CsmDeclaration<T> extends CsmQualifiedNamedElement, 
-        CsmScopeElement, CsmIdentifiable<T> {
+        CsmScopeElement, CsmIdentifiable<T>, CsmValidable {
 
     //TODO: fill in accordance to C++ standard
 
@@ -74,6 +74,7 @@ public interface CsmDeclaration<T> extends CsmQualifiedNamedElement,
         ASM,
         TEMPLATE_DECLARATION,
         NAMESPACE_DEFINITION,
+        TEMPLATE_PARAMETER,
         
         NAMESPACE_ALIAS,
         USING_DIRECTIVE,
