@@ -47,6 +47,7 @@ import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.event.Event;
 import com.sun.jdi.event.LocatableEvent;
+import com.sun.jdi.request.EventRequest;
 import com.sun.jdi.request.StepRequest;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -63,7 +64,7 @@ import org.netbeans.api.debugger.jpda.MethodBreakpoint;
 import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.modules.debugger.jpda.ExpressionPool;
 import org.netbeans.modules.debugger.jpda.JPDAStepImpl.MethodExitBreakpointListener;
-import org.netbeans.modules.debugger.jpda.JPDAStepImpl.SingleThreadedStepWatch;
+//import org.netbeans.modules.debugger.jpda.JPDAStepImpl.SingleThreadedStepWatch;
 import org.netbeans.modules.debugger.jpda.SourcePath;
 import org.netbeans.modules.debugger.jpda.breakpoints.MethodBreakpointImpl;
 import org.netbeans.spi.debugger.ContextProvider;
@@ -92,7 +93,7 @@ implements Executor {
     private StepRequest             stepRequest;
     private ContextProvider         lookupProvider;
     private MethodExitBreakpointListener lastMethodExitBreakpointListener;
-    private SingleThreadedStepWatch stepWatch;
+    //private SingleThreadedStepWatch stepWatch;
     private boolean smartSteppingStepOut;
 
     
@@ -117,7 +118,7 @@ implements Executor {
         );
         this.lookupProvider = lookupProvider;
         setProviderToDisableOnLazyAction(this);
-        Map properties = (Map) lookupProvider.lookupFirst (null, Map.class);
+        Map properties = lookupProvider.lookupFirst(null, Map.class);
         if (properties != null) {
             smartSteppingStepOut = properties.containsKey (StepIntoActionProvider.SS_STEP_OUT);
         }
@@ -192,8 +193,9 @@ implements Executor {
                     resumeThread.disableMethodInvokeUntilResumed();
                 }
                 // 3) resume JVM
+                resumeThread.setInStep(true, stepRequest);
                 if (suspendPolicy == JPDADebugger.SUSPEND_EVENT_THREAD) {
-                    stepWatch = new SingleThreadedStepWatch(getDebuggerImpl(), stepRequest);
+                    //stepWatch = new SingleThreadedStepWatch(getDebuggerImpl(), stepRequest);
                     getDebuggerImpl().resumeCurrentThread();
                     //resumeThread.resume();
                 } else {
@@ -253,15 +255,18 @@ implements Executor {
     public boolean exec (Event ev) {
         // TODO: fetch current engine from the Event
         // 1) init info about current state
-        if (stepWatch != null) {
+        StepRequest sr = (StepRequest) ev.request();
+        JPDAThreadImpl st = (JPDAThreadImpl) getDebuggerImpl().getThread(sr.thread());
+        st.setInStep(false, null);
+        /*if (stepWatch != null) {
             stepWatch.done();
             stepWatch = null;
-        }
+        }*/
         LocatableEvent event = (LocatableEvent) ev;
         String className = event.location ().declaringType ().name ();
         ThreadReference tr = event.thread ();
-        removeStepRequests (tr);
         setLastOperation(tr);
+        removeStepRequests (tr);
         synchronized (getDebuggerImpl ().LOCK) {
             //S ystem.out.println("/nStepAction.exec");
 
@@ -295,7 +300,7 @@ implements Executor {
                     return true;
                 }
             } catch (IncompatibleThreadStateException e) {
-                ErrorManager.getDefault().notify(e);
+                logger.fine("Incompatible Thread State: " + e.getLocalizedMessage());
             }
             
             // Stop execution here?
@@ -310,11 +315,6 @@ implements Executor {
                      (lookupProvider, t, getSmartSteppingFilterImpl ())
                 ) {
                     // YES!
-                    Session session = (Session) lookupProvider.lookupFirst(null, Session.class);
-                    if (session != null) {
-                        DebuggerManager.getDebuggerManager().setCurrentSession(session);
-                    }
-                    getDebuggerImpl ().setStoppedState (tr);
                     //S ystem.out.println("/nStepAction.exec end - do not resume");
                     return false; // do not resume
                 }
@@ -326,14 +326,38 @@ implements Executor {
             if (smartSteppingStepOut) {
                 getStepIntoActionProvider ().doAction(ActionsManager.ACTION_STEP_OUT);
             } else {
-                getStepIntoActionProvider ().doAction(ActionsManager.ACTION_STEP_INTO);
+                getStepIntoActionProvider ().doAction(StepIntoActionProvider.ACTION_SMART_STEP_INTO);
             }
             //S ystem.out.println("/nStepAction.exec end - resume");
             return true; // resume
         }
     }
+
+    public void removed(EventRequest eventRequest) {
+        StepRequest sr = (StepRequest) eventRequest;
+        JPDAThreadImpl st = (JPDAThreadImpl) getDebuggerImpl().getThread(sr.thread());
+        st.setInStep(false, null);
+        /*if (stepWatch != null) {
+            stepWatch.done();
+            stepWatch = null;
+        }*/
+        if (lastMethodExitBreakpointListener != null) {
+            lastMethodExitBreakpointListener.destroy();
+            lastMethodExitBreakpointListener = null;
+        }
+    }
     
     private void setLastOperation(ThreadReference tr) {
+        Variable returnValue = null;
+        if (lastMethodExitBreakpointListener != null) {
+            returnValue = lastMethodExitBreakpointListener.getReturnValue();
+            lastMethodExitBreakpointListener.destroy();
+            lastMethodExitBreakpointListener = null;
+        }
+        setLastOperation(tr, getDebuggerImpl(), returnValue);
+    }
+
+    public static void setLastOperation(ThreadReference tr, JPDADebuggerImpl debugger, Variable returnValue) {
         Location loc;
         try {
             loc = tr.frame(0).location();
@@ -343,9 +367,9 @@ implements Executor {
         }
         Session currentSession = DebuggerManager.getDebuggerManager().getCurrentSession();
         String language = currentSession == null ? null : currentSession.getCurrentLanguage();
-        SourcePath sourcePath = getDebuggerImpl().getEngineContext();
+        SourcePath sourcePath = debugger.getEngineContext();
         String url = sourcePath.getURL(loc, language);
-        ExpressionPool exprPool = getDebuggerImpl().getExpressionPool();
+        ExpressionPool exprPool = debugger.getExpressionPool();
         ExpressionPool.Expression expr = exprPool.getExpressionAt(loc, url);
         if (expr == null) {
             return ;
@@ -366,13 +390,8 @@ implements Executor {
         } else {
             return ;
         }
-        if (lastMethodExitBreakpointListener != null) {
-            Variable returnValue = lastMethodExitBreakpointListener.getReturnValue();
-            lastMethodExitBreakpointListener.destroy();
-            lastMethodExitBreakpointListener = null;
-            lastOperation.setReturnValue(returnValue);
-        }
-        JPDAThreadImpl jtr = (JPDAThreadImpl) getDebuggerImpl().getThread(tr);
+        lastOperation.setReturnValue(returnValue);
+        JPDAThreadImpl jtr = (JPDAThreadImpl) debugger.getThread(tr);
         jtr.addLastOperation(lastOperation);
         jtr.setCurrentOperation(lastOperation);
     }
@@ -403,8 +422,7 @@ implements Executor {
     
     private CompoundSmartSteppingListener getCompoundSmartSteppingListener () {
         if (compoundSmartSteppingListener == null)
-            compoundSmartSteppingListener = (CompoundSmartSteppingListener) lookupProvider.
-                lookupFirst (null, CompoundSmartSteppingListener.class);
+            compoundSmartSteppingListener = lookupProvider.lookupFirst(null, CompoundSmartSteppingListener.class);
         return compoundSmartSteppingListener;
     }
 }
