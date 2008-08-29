@@ -16,9 +16,9 @@
     <property name="appversion" value="Development Version"/>
     
     <!-- Tomcat properties   -->    
-    <property name="tomcat.install.dir" value="${install.dir}/apache-tomcat-6.0.16"/>
-    <property name="tomcat.version" value="6.0.16"/>
-    <property name="tomcat_location" value="${binary_cache_host}/tomcat/apache-tomcat-6.0.16.zip"/> 
+    <property name="tomcat.version" value="6.0.18"/>
+    <property name="tomcat.install.dir" value="${install.dir}/apache-tomcat-${tomcat.version}"/>
+    <property name="tomcat_location" value="${binary_cache_host}/tomcat/apache-tomcat-${tomcat.version}.zip"/> 
             
     <!-- GlassFish properties   -->   
     <property name="glassfish.install.dir" value="${install.dir}/glassfish-v2ur2"/>
@@ -33,7 +33,7 @@
     <property name="glassfish.v3.location.prefix" value="${gf_builds_host}/java/re/glassfish/10.0/promoted"/>
 
     <loadresource property="glassfish.v3.build.number">
-          <url url="${glassfish.v3.location.prefix}/m1-latest/bundles/"/>
+          <url url="${glassfish.v3.location.prefix}/prelude/b20/bundles"/>
           <filterchain>
 	    <striplinebreaks/>
             <tokenfilter>
@@ -43,11 +43,11 @@
     </loadresource>
 
     <property name="glassfish.v3.version"      value="b${glassfish.v3.build.number}"/>
-    <property name="glassfish.v3.install.dir"  value="${install.dir}/glassfish-v3-prelude-${glassfish.v3.version}"/>    
-    <property name="glassfish_v3_location"     value="${glassfish.v3.location.prefix}/${glassfish.v3.build.type}/${glassfish.v3.version}/bundles/multiplatform.zip"/>
+    <property name="glassfish.v3.install.dir"  value="${install.dir}/glassfish-v3-${glassfish.v3.build.type}-${glassfish.v3.version}"/>    
+    <property name="glassfish_v3_location"     value="${glassfish.v3.location.prefix}/${glassfish.v3.build.type}/${glassfish.v3.version}/bundles/glassfish-v3-${glassfish.v3.build.type}-${glassfish.v3.version}.zip"/>
     <!--<property name="glassfish_v3_location" value="file:${user.home}/releng/hudson/glassfish-v3-preview2-b10d.zip"/>-->
     <property name="glassfish_v3_location_ml"  value="${glassfish_v3_location}"/>
-    <property name="glassfish.v3.subdir"       value="glassfishv3-beta"/>
+    <property name="glassfish.v3.subdir"       value="glassfishv3-prelude"/>
     
     <!-- Open ESB Properties-->    
     <property name="openesb.install.dir" value="${glassfish.install.dir}/addons"/>
@@ -69,7 +69,6 @@
     <property name="mysql_10.5.location" value="${binary_cache_host}/mysql/${mysql_10.5.pkg.name}.dmg"/>
     <property name="mysql_10.4.location" value="${binary_cache_host}/mysql/${mysql_10.4.pkg.name}.dmg"/>
     <property name="mysql.install.dir" value="/usr/local/mysql"/>
-    <property name="mysql_prefPane.location" value="${binary_cache_host}/mysql/MySQL.prefPane-leopardfix.zip"/>
     <property name="mysql_connector.location" value="${binary_cache_host}/mysql/${mysql_connector.name}.jar"/>   
     <property name="mysql_license.name" value="NB_GF_MySQL.txt"/>   
     <property name="mysql_readme.name" value="NB_GF_MySQL_Bundle_Thirdparty_license_readme.txt"/>
