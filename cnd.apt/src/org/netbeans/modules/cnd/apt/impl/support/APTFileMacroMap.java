@@ -94,7 +94,7 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
     
     @Override
     public void define(Token name, Collection<Token> params, List<Token> value) {
-        if (sysMacroMap != null && sysMacroMap.isDefined(name) && false) { // disable for IZ#124635
+        if (false && sysMacroMap != null && sysMacroMap.isDefined(name)) { // disable for IZ#124635
             // TODO: report error about redefining system macros
         } else {
             super.define(name, params, value);
@@ -103,7 +103,7 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
     
     @Override
     public void undef(Token name) {
-        if (sysMacroMap != null && sysMacroMap.isDefined(name) && false) { // disable for IZ#124635
+        if (false && sysMacroMap != null && sysMacroMap.isDefined(name)) { // disable for IZ#124635
             // TODO: report error about undefined system macros
         }
         super.undef(name);
@@ -190,7 +190,7 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
     public boolean pushExpanding(Token token) {
         assert (token != null);
         if (!isExpanding(token)) {
-            expandingMacros.push(APTUtils.getTokenTextKey(token));
+            expandingMacros.push(token.getText());
             return true;
         }
         return false;
@@ -208,7 +208,7 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
     
     public boolean isExpanding(Token token) {
         try {
-            return expandingMacros.contains(APTUtils.getTokenTextKey(token));
+            return expandingMacros.contains(token.getText());
         } catch (ArrayIndexOutOfBoundsException ex) {
             assert (false) : "why ask empty stack?"; // NOI18N
         }
