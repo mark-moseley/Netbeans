@@ -36,54 +36,58 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.db.mysql.actions;
 
-import org.netbeans.modules.db.mysql.util.DatabaseUtils;
-import org.netbeans.modules.db.mysql.*;
 import org.netbeans.modules.db.mysql.DatabaseServer;
-import java.util.List;
-import java.util.logging.Logger;
-import org.netbeans.api.db.explorer.ConnectionManager;
-import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.modules.db.mysql.util.Utils;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.actions.CookieAction;
 
 /**
- * Connect to a database
+ * Disconnects a connected server
  * 
  * @author David Van Couvering
  */
-public class ConnectAction extends CookieAction {
-    private static final Logger LOGGER = Logger.getLogger(ConnectAction.class.getName());
-    private static final Class[] COOKIE_CLASSES = new Class[] {
-        Database.class
-    };
-
-    public ConnectAction() {
+public class DisconnectServerAction extends CookieAction {
+    private static final Class[] COOKIE_CLASSES = 
+            new Class[] { DatabaseServer.class };
+    
+    public DisconnectServerAction() {
         putValue("noIconInMenu", Boolean.TRUE);
-    }    
-        
+    }
+
+    @Override
     protected boolean asynchronous() {
         return false;
     }
 
     public String getName() {
-        return Utils.getBundle().getString("LBL_ConnectAction");
+        return Utils.getBundle().getString("LBL_DisconnectServerAction");
     }
 
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(ConnectAction.class);
+        return new HelpCtx(DisconnectServerAction.class);
     }
-    
+
     @Override
     public boolean enable(Node[] activatedNodes) {
-        return true;
+        if ( activatedNodes == null || activatedNodes.length == 0 ) {
+            return false;
+        }
+        
+        DatabaseServer server = activatedNodes[0].getCookie(DatabaseServer.class);
+        
+        return server != null && server.isConnected();
     }
 
+    @Override
+    protected void performAction(Node[] activatedNodes) {
+        DatabaseServer server = activatedNodes[0].getCookie(DatabaseServer.class);
 
+        server.disconnect();
+    }
+    
     @Override
     protected int mode() {
         return MODE_EXACTLY_ONE;
@@ -92,34 +96,5 @@ public class ConnectAction extends CookieAction {
     @Override
     protected Class<?>[] cookieClasses() {
         return COOKIE_CLASSES;
-    }
-
-    @Override
-    protected void performAction(Node[] activatedNodes) {
-        if ( activatedNodes == null || activatedNodes.length == 0 ) {
-            return;
-        }
-        Database model = activatedNodes[0].getCookie(Database.class);
-        DatabaseServer server = model.getServer();
-        
-        String dbname = model.getDbName();
-
-        List<DatabaseConnection> conns =
-                DatabaseUtils.findDatabaseConnections(
-                    server.getURL(dbname));
-
-        if ( conns.size() == 0 ) {
-            ConnectionManager.getDefault().
-                showAddConnectionDialogFromEventThread(
-                    DatabaseUtils.getJDBCDriver(),
-                    server.getURL(dbname),
-                    server.getUser(),
-                    null);
-        } else {
-            ConnectionManager.getDefault().showConnectionDialog(conns.get(0));
-        }
-
-        // Refresh in case the state of the server changed... (e.g. the connection was lost)
-        server.refreshDatabaseList();
     }
 }

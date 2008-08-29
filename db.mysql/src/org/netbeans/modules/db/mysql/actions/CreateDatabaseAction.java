@@ -39,30 +39,28 @@
 
 package org.netbeans.modules.db.mysql.actions;
 
-import org.netbeans.modules.db.mysql.util.DatabaseUtils;
-import org.netbeans.modules.db.mysql.*;
-import org.netbeans.modules.db.mysql.DatabaseServer;
-import java.util.List;
 import java.util.logging.Logger;
-import org.netbeans.api.db.explorer.ConnectionManager;
-import org.netbeans.api.db.explorer.DatabaseConnection;
+import org.netbeans.api.db.explorer.DatabaseException;
+import org.netbeans.modules.db.mysql.DatabaseServer;
+import org.netbeans.modules.db.mysql.ui.CreateDatabasePanel;
 import org.netbeans.modules.db.mysql.util.Utils;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.RequestProcessor;
 import org.openide.util.actions.CookieAction;
 
 /**
- * Connect to a database
- * 
+ *
  * @author David Van Couvering
  */
-public class ConnectAction extends CookieAction {
-    private static final Logger LOGGER = Logger.getLogger(ConnectAction.class.getName());
+public class CreateDatabaseAction extends CookieAction {
+    private static Logger LOGGER = Logger.getLogger(CreateDatabaseAction.class.getName());
+
     private static final Class[] COOKIE_CLASSES = new Class[] {
-        Database.class
+        DatabaseServer.class
     };
 
-    public ConnectAction() {
+    public CreateDatabaseAction() {
         putValue("noIconInMenu", Boolean.TRUE);
     }    
         
@@ -71,18 +69,28 @@ public class ConnectAction extends CookieAction {
     }
 
     public String getName() {
-        return Utils.getBundle().getString("LBL_ConnectAction");
+        return Utils.getBundle().getString("LBL_CreateDatabaseAction");
     }
 
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(ConnectAction.class);
-    }
-    
-    @Override
-    public boolean enable(Node[] activatedNodes) {
-        return true;
+        return new HelpCtx(CreateDatabaseAction.class);
     }
 
+    @Override
+    protected boolean enable(Node[] activatedNodes) {
+        if ( activatedNodes.length == 0 ) {
+            return false;
+        }
+        
+        Node node = activatedNodes[0];
+        
+        DatabaseServer server = node.getCookie(DatabaseServer.class);
+        if ( server != null && server.isConnected() ) {
+            return true;
+        }
+        
+        return false;
+    }
 
     @Override
     protected int mode() {
@@ -96,30 +104,20 @@ public class ConnectAction extends CookieAction {
 
     @Override
     protected void performAction(Node[] activatedNodes) {
-        if ( activatedNodes == null || activatedNodes.length == 0 ) {
-            return;
-        }
-        Database model = activatedNodes[0].getCookie(Database.class);
-        DatabaseServer server = model.getServer();
-        
-        String dbname = model.getDbName();
+        Node node = activatedNodes[0];
 
-        List<DatabaseConnection> conns =
-                DatabaseUtils.findDatabaseConnections(
-                    server.getURL(dbname));
+        final DatabaseServer server = node.getCookie(DatabaseServer.class);
 
-        if ( conns.size() == 0 ) {
-            ConnectionManager.getDefault().
-                showAddConnectionDialogFromEventThread(
-                    DatabaseUtils.getJDBCDriver(),
-                    server.getURL(dbname),
-                    server.getUser(),
-                    null);
-        } else {
-            ConnectionManager.getDefault().showConnectionDialog(conns.get(0));
-        }
+        // Run in background because it gets information from the server
+        RequestProcessor.getDefault().post(new Runnable() {
 
-        // Refresh in case the state of the server changed... (e.g. the connection was lost)
-        server.refreshDatabaseList();
+            public void run() {
+                try {
+                    CreateDatabasePanel.showCreateDatabaseDialog(server);
+                } catch (DatabaseException dbe) {
+                    Utils.displayErrorMessage(dbe.getMessage());
+                }
+            }            
+        });
     }
 }
