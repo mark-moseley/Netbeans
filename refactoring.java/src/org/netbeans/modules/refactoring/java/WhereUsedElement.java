@@ -43,23 +43,26 @@ package org.netbeans.modules.refactoring.java;
 import com.sun.source.tree.*;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
+import com.sun.source.util.Trees;
 import java.io.IOException;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.swing.text.Position.Bias;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.TreeUtilities;
 import org.netbeans.modules.refactoring.java.plugins.JavaWhereUsedQueryPlugin;
+import org.netbeans.modules.refactoring.java.ui.UIUtilities;
 import org.netbeans.modules.refactoring.spi.SimpleRefactoringElementImplementation;
 import org.netbeans.modules.refactoring.java.ui.tree.ElementGripFactory;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.text.PositionBounds;
-import org.openide.util.Lookup;
-import static org.netbeans.modules.refactoring.java.RetoucheUtils.*;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.text.PositionRef;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 import org.openide.util.lookup.Lookups;
 
 public class WhereUsedElement extends SimpleRefactoringElementImplementation {
@@ -112,12 +115,14 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         Tree t= tree.getLeaf();
         int start;
         int end;
+        boolean anonClassNameBug128074 = false;
         TreeUtilities treeUtils = compiler.getTreeUtilities();
         if (t.getKind() == Tree.Kind.CLASS) {
             int[] pos = treeUtils.findNameSpan((ClassTree)t);
             if (pos == null) {
                 //#121084 hotfix
                 //happens for anonymous innerclasses
+                anonClassNameBug128074 = true;
                 start = end = (int) sp.getStartPosition(unit, t);
             } else {
                 start = pos[0];
@@ -144,8 +149,23 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
                     end = pos[1];
                 }
             } else {
-                start = (int) sp.getStartPosition(unit, ident);
-                end = (int) sp.getEndPosition(unit, ident);
+                TreePath varTreePath = tree.getParentPath();
+                Tree varTree = varTreePath.getLeaf();
+                Trees trees = compiler.getTrees();
+                Element element = trees.getElement(varTreePath);
+                if (varTree.getKind() == Tree.Kind.VARIABLE && element.getKind() == ElementKind.ENUM_CONSTANT) {
+                    int[] pos = treeUtils.findNameSpan((VariableTree)varTree);
+                    if (pos == null) {
+                        //#121084 hotfix
+                        start = end = (int) sp.getStartPosition(unit, varTree);
+                    } else {
+                        start = pos[0];
+                        end = pos[1];
+                    }
+                } else {
+                    start = (int) sp.getStartPosition(unit, ident);
+                    end = (int) sp.getEndPosition(unit, ident);
+                }
             }
         } else if (t.getKind() == Tree.Kind.MEMBER_SELECT) {
             int[] pos = treeUtils.findNameSpan((MemberSelectTree) t);
@@ -190,7 +210,12 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         PositionRef ref2 = ces.createPositionRef(end, Bias.Forward);
         PositionBounds bounds = new PositionBounds(ref1, ref2);
         TreePath tr = getEnclosingTree(tree);
-        return new WhereUsedElement(bounds, sb.toString().trim(), compiler.getFileObject(), tr, compiler);
+        return new WhereUsedElement(
+                bounds,
+                start==end && anonClassNameBug128074 ? NbBundle.getMessage(UIUtilities.class, "LBL_AnonymousClass"):sb.toString().trim(),
+                compiler.getFileObject(),
+                tr,
+                compiler);
     }
     
     private static String trimStart(String s) {
