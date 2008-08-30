@@ -47,11 +47,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.netbeans.modules.cnd.api.model.CsmFile;
@@ -59,12 +58,14 @@ import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.apt.debug.DebugUtils;
 import org.netbeans.modules.cnd.apt.support.APTPreprocHandler;
 import org.netbeans.modules.cnd.apt.support.APTHandlersSupport;
+import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.utils.cache.APTStringManager;
 import org.netbeans.modules.cnd.utils.cache.FilePathCache;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
 import org.netbeans.modules.cnd.modelimpl.repository.FileContainerKey;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
+import org.netbeans.modules.cnd.modelimpl.uid.LazyCsmCollection;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
@@ -142,33 +143,49 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
         }
         CsmUID<CsmFile> fileUID = f.fileNew;
         FileImpl impl = (FileImpl) UIDCsmConverter.UIDtoFile(f.fileNew);
-        assert (impl != null) : "no file for UID " + fileUID;
+        if( impl == null ) {
+            DiagnosticExceptoins.register(new IllegalStateException("no file for UID " + fileUID)); // NOI18N
+        }
         return impl;
     }
-    
+
+    public void putPreprocConditionState(Entry entry, FilePreprocessorConditionState pcState) {
+        if (entry != null) {
+            MyFile f = ((MyFile) entry);
+//            if (pcState == null) {
+//                System.err.printf("Null pcState for %s\n", f.canonical);
+//            }
+            f.setPCState(pcState);
+        }
+    }
+
     public void putPreprocState(File file, APTPreprocHandler.State state) {
         MyFile f = getMyFile(file, true);
-        if (f == null){
+        putPreprocState(f, state);
+    }
+
+    public void putPreprocState(Entry entry, APTPreprocHandler.State state) {
+        if (entry == null) {
             return;
         }
-	if (f.state == null || !f.state.isValid()) {
-	    f.state = state;
+        MyFile f = (MyFile) entry;
+	if (f.getState() == null || !f.getState().isValid()) {
+	    f.setState(state);
 	} else {
-	    if (f.state.isCompileContext()) {
+	    if (f.getState().isCompileContext()) {
 		if (state.isCompileContext()) {
-		    f.state = state;
+		    f.setState(state);
 		} else {
 		    if (TRACE_PP_STATE_OUT) {
-			System.err.println("Do not reset correct state to incorrect " + file.getAbsolutePath());
+			System.err.println("Do not reset correct state to incorrect " + f.canonical);
 		    }
 		}
 	    } else {
-		f.state = state;
+		f.setState(state);
 	    }
 	}
 	if (TRACE_PP_STATE_OUT) {
-	    String path = getFileKey(file, false);
-	    System.err.println("\nPut state for file" + path + "\n");
+	    System.err.println("\nPut state for file" + f.canonical + "\n");
 	    System.err.println(state);
 	}
     }
@@ -178,9 +195,9 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
         if (f == null){
             return;
         }
-        synchronized (getLock(file)) {
-            if (f.state != null){
-                f.state = APTHandlersSupport.createInvalidPreprocState(f.state);
+        synchronized (f) {
+            if (f.getState() != null){
+                f.setState(APTHandlersSupport.createInvalidPreprocState(f.getState()));
             }
         }
         if (TRACE_PP_STATE_OUT) {
@@ -194,46 +211,55 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
         if (f == null){
             return null;
         }
-        return f.state;
+        return f.getState();
+    }
+
+    public FilePreprocessorConditionState getPreprocessorConditionState(File file) {
+        MyFile f = getMyFile(file, false);
+        return (f == null) ? null : f.getPCState();
+    }
+
+    public Entry getEntry(File file) {
+        return getMyFile(file, false);
+    }
+
+    public Object getLock(Entry entry) {
+        return (entry == null) ? lock : entry;
     }
 
     public Object getLock(File file) {
         MyFile f = getMyFile(file, false);
-        if (f == null){
-            return lock;
-        }
-        return f;
+        return getLock(f);
     }
     
     public void clearState(){
         List<MyFile> files;
         files = new ArrayList<MyFile>(myFiles.values());
         for (MyFile file : files){
-            file.state = null;
+            synchronized (getLock(file)) {
+                file.setState(null);
+            }
         }
 	put();
     }
     
-    public List<CsmFile> getFiles() {
-	List<CsmFile> res = new ArrayList<CsmFile>(myFiles.values().size());
-	getFiles2(res);
-	return res;
+    public Collection<CsmFile> getFiles() {
+	List<CsmUID<CsmFile>> uids = new ArrayList<CsmUID<CsmFile>>(myFiles.values().size());
+	getFiles2(uids);
+	return new LazyCsmCollection<CsmFile, CsmFile>(uids, TraceFlags.SAFE_UID_ACCESS);
     }
     
-    public List<FileImpl> getFileImpls() {
-	List<FileImpl> res = new ArrayList<FileImpl>(myFiles.values().size());
-	getFiles2(res);
-	return res;
+    public Collection<FileImpl> getFileImpls() {
+	List<CsmUID<CsmFile>> uids = new ArrayList<CsmUID<CsmFile>>(myFiles.values().size());
+	getFiles2(uids);
+	return new LazyCsmCollection<CsmFile, FileImpl>(uids, TraceFlags.SAFE_UID_ACCESS);
     }
     
-    public void getFiles2(List res) {
+    private void getFiles2(List<CsmUID<CsmFile>> res) {
         List<MyFile> files;
         files = new ArrayList<MyFile>(myFiles.values());
         for(MyFile f : files){
-            FileImpl file = null;
-            file = (FileImpl) UIDCsmConverter.UIDtoFile(f.fileNew);
-            assert (file != null) : "Failed to get FileImpl by UID " + f.fileNew;
-            res.add(file);
+            res.add(f.fileNew);
         }
     }
     
@@ -253,21 +279,6 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
         writeStringToMyFileMap(aStream, myFiles);
         writeStringToStringsArrMap(aStream, canonicFiles);
 	//trace(canonicFiles, "Wrote in write()");
-    }
-    
-    public void read(DataInput aStream) throws IOException {
-        UIDObjectFactory aFactory = UIDObjectFactory.getDefaultFactory();
-        HashMap<CharSequence,CsmUID<CsmFile>> files = new HashMap<CharSequence,CsmUID<CsmFile>>();
-        HashMap<CharSequence,APTPreprocHandler.State> handlers = new HashMap<CharSequence,APTPreprocHandler.State>();
-        aFactory.readStringToUIDMap(files, aStream, FilePathCache.getManager());
-        PersistentUtils.readStringToStateMap(handlers, aStream);
-        myFiles.clear();
-        System.err.println("NEED TO UPDATE DESERIALIZATION");
-        for(Map.Entry<CharSequence, CsmUID<CsmFile>> entry : files.entrySet()){
-            APTPreprocHandler.State state = handlers.get(entry.getValue());
-            MyFile file = new MyFile(entry.getValue(),state, entry.getKey());
-            myFiles.put(entry.getKey(),file);
-        }
     }
     
     public static String getFileKey(File file, boolean sharedText) {
@@ -391,10 +402,10 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
         output.writeInt(size);
         
         // write the map
-        final Set<Entry<CharSequence, MyFile>> entrySet = aMap.entrySet();
-        final Iterator <Entry<CharSequence, MyFile>> setIterator = entrySet.iterator();
+        final Set<Map.Entry<CharSequence, MyFile>> entrySet = aMap.entrySet();
+        final Iterator <Map.Entry<CharSequence, MyFile>> setIterator = entrySet.iterator();
         while (setIterator.hasNext()) {
-            final Entry<CharSequence, MyFile> anEntry = setIterator.next();
+            final Map.Entry<CharSequence, MyFile> anEntry = setIterator.next();
 
             output.writeUTF(anEntry.getKey().toString());
             assert anEntry.getValue() != null;
@@ -434,11 +445,11 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
         final int size = aMap.size();
         output.writeInt(size);
         
-        final Set<Entry<CharSequence, Object>> entrySet = aMap.entrySet();
-        final Iterator<Entry<CharSequence, Object>> setIterator = entrySet.iterator();
+        final Set<Map.Entry<CharSequence, Object>> entrySet = aMap.entrySet();
+        final Iterator<Map.Entry<CharSequence, Object>> setIterator = entrySet.iterator();
         
         while (setIterator.hasNext()) {
-            final Entry<CharSequence, Object> anEntry = setIterator.next();
+            final Map.Entry<CharSequence, Object> anEntry = setIterator.next();
             assert anEntry != null;
             
             final CharSequence key = anEntry.getKey();
@@ -499,17 +510,30 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
 	    }
         }
     }
-    
-    private static class MyFile implements Persistent, SelfPersistent {
+
+    public static interface Entry {
+        APTPreprocHandler.State getState();
+        FilePreprocessorConditionState getPCState();
+        int getModCount();
+    }
+
+    private static final class MyFile implements Persistent, SelfPersistent, Entry {
+
         private final CsmUID<CsmFile> fileNew;
         private final CharSequence canonical;
         private APTPreprocHandler.State state;
+        private FilePreprocessorConditionState pcState;
+        private int modCount;
         
         private MyFile (final DataInput input) throws IOException {
             fileNew = UIDObjectFactory.getDefaultFactory().readUID(input);
             canonical = input.readUTF();
+            modCount = input.readInt();
             if (input.readBoolean()){
                 state = PersistentUtils.readPreprocState(input);
+            }
+            if (input.readBoolean()){
+                pcState = new FilePreprocessorConditionState(input);
             }
         }
         
@@ -517,15 +541,48 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
             this.fileNew = fileNew;
             this.state = state;
             this.canonical = getCanonicalKey(fileKey);
+            this.modCount = 0;
         }
         
         public void write(final DataOutput output) throws IOException {
             UIDObjectFactory.getDefaultFactory().writeUID(fileNew, output);
             output.writeUTF(canonical.toString());
+            output.writeInt(modCount);
             output.writeBoolean(state != null);
             if (state != null) {
                 PersistentUtils.writePreprocState(state, output);
             }
+            output.writeBoolean(pcState != null);
+            if (pcState != null) {
+                pcState.write(output);
+            }
+        }
+
+        public final int getModCount() {
+            return modCount;
+        }
+
+        public final FilePreprocessorConditionState getPCState() {
+            return pcState;
+        }
+
+        public final void setPCState(FilePreprocessorConditionState newPCState) {
+            incrementModCount();
+            pcState = newPCState;
+        }
+
+        public final APTPreprocHandler.State getState() {
+            return state;
+        }
+
+        //package
+        final void setState(APTPreprocHandler.State state) {
+            incrementModCount();
+            this.state = state;
+        }
+
+        private void incrementModCount() {
+            modCount = (modCount == Integer.MAX_VALUE) ? 0 : modCount+1;
         }
     }
     
