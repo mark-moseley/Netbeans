@@ -50,22 +50,20 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
-import org.jruby.ast.Node;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.Index;
-import org.netbeans.api.gsf.Index.SearchScope;
-import org.netbeans.api.gsf.NameKind;
-import org.netbeans.api.gsf.TypeSearcher;
-import org.netbeans.api.gsf.TypeSearcher.GsfTypeDescriptor;
+import org.jruby.nb.ast.Node;
+import org.netbeans.modules.gsf.api.ElementHandle;
+import org.netbeans.modules.gsf.api.Index;
+import org.netbeans.modules.gsf.api.Index.SearchScope;
+import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.gsf.api.IndexSearcher;
+import org.netbeans.modules.gsf.api.IndexSearcher.Descriptor;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.ruby.elements.IndexedClass;
 import org.netbeans.modules.ruby.elements.IndexedElement;
-import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -79,7 +77,7 @@ import org.openide.util.NbBundle;
  * 
  * @author Tor Norbye
  */
-public class RubyTypeSearcher implements TypeSearcher {
+public class RubyTypeSearcher implements IndexSearcher {
     public RubyTypeSearcher() {
     }
     
@@ -118,10 +116,10 @@ public class RubyTypeSearcher implements TypeSearcher {
         return kind;
     }
     
-    public Set<? extends GsfTypeDescriptor> getDeclaredTypes(Index gsfIndex,
-                                                        String textForQuery,
-                                                        NameKind kind,
-                                                        EnumSet<SearchScope> scope, Helper helper) {
+    public Set<? extends Descriptor> getTypes(Index gsfIndex,
+                                            String textForQuery,
+                                            NameKind kind,
+                                            EnumSet<SearchScope> scope, Helper helper) {
         // In addition to just computing the declared types here, we perform some additional
         // "second guessing" of the query. In particular, we want to allow double colons
         // to be part of the query names (to specify full module names), but since colon is
@@ -217,8 +215,42 @@ public class RubyTypeSearcher implements TypeSearcher {
         
         return result;
     }
+
+    public Set<? extends Descriptor> getSymbols(Index gsfIndex, String textForQuery, NameKind kind, EnumSet<SearchScope> scope, Helper helper) {
+        if (textForQuery.indexOf("::") != -1 || textForQuery.indexOf("#") != -1) {
+            return getTypes(gsfIndex, textForQuery, kind, scope, helper);
+        }
+
+        RubyIndex index = RubyIndex.get(gsfIndex);
+        if (index == null) {
+            return Collections.emptySet();
+        }
+
+        kind = adjustKind(kind, textForQuery);
+
+        if (kind == NameKind.CASE_INSENSITIVE_PREFIX /*|| kind == NameKind.CASE_INSENSITIVE_REGEXP*/) {
+            textForQuery = textForQuery.toLowerCase();
+        }
+
+        if (textForQuery.length() > 0) {
+            Set<RubyTypeDescriptor> result = new HashSet<RubyTypeDescriptor>();
+            Set<IndexedClass> classes = index.getClasses(textForQuery, kind, true, false, false, scope, null);
+
+            Set<IndexedMethod> methods = index.getMethods(textForQuery, null, kind, scope);
+            for (IndexedClass cls : classes) {
+                result.add(new RubyTypeDescriptor(cls, helper));
+            }
+            for (IndexedMethod mtd : methods) {
+                result.add(new RubyTypeDescriptor(mtd, helper));
+            }
+            
+            return result;
+        }
+
+        return null;
+    }
     
-    private class RubyTypeDescriptor extends GsfTypeDescriptor {
+    private class RubyTypeDescriptor extends Descriptor {
         private final IndexedElement element;
         private String projectName;
         private Icon projectIcon;
@@ -236,8 +268,9 @@ public class RubyTypeSearcher implements TypeSearcher {
                 initProjectInfo();
             }
             //if (isLibrary) {
-            //    return new ImageIcon(org.openide.util.Utilities.loadImage(RUBY_KEYWORD));
+            //    return new ImageIcon(org.openide.util.ImageUtilities.loadImage(RUBY_KEYWORD));
             //}
+            //return helper.getIcon(element);
             return helper.getIcon(element);
         }
 
@@ -260,12 +293,14 @@ public class RubyTypeSearcher implements TypeSearcher {
                 if (p != null) {
                     RubyPlatform platform = RubyPlatform.platformFor(p);
                     if (platform != null) {
-                        String lib = platform.getLib();
+                        String lib = platform.getLibDir();
                         if (lib != null && f.getPath().startsWith(lib)) {
                             projectName = "Ruby Library";
                             isLibrary = true;
                         }
                     } else {
+                        // TODO - check to see if we're a library - and if so include the language icon
+                        
                         ProjectInformation pi = ProjectUtils.getInformation(p);
                         projectName = pi.getDisplayName();
                         projectIcon = pi.getIcon();
@@ -285,7 +320,7 @@ public class RubyTypeSearcher implements TypeSearcher {
                 initProjectInfo();
             }
             if (isLibrary) {
-                return new ImageIcon(org.openide.util.Utilities.loadImage(RUBY_KEYWORD));
+                return new ImageIcon(org.openide.util.ImageUtilities.loadImage(RUBY_KEYWORD));
             }
             return projectIcon;
         }
@@ -295,7 +330,7 @@ public class RubyTypeSearcher implements TypeSearcher {
         }
 
         public void open() {
-            Node node = AstUtilities.getForeignNode(element, null);
+            Node node = AstUtilities.getForeignNode(element, (Node[])null);
             
             if (node != null) {
                 NbUtilities.open(element.getFileObject(), node.getPosition().getStartOffset(), element.getName());
@@ -327,7 +362,6 @@ public class RubyTypeSearcher implements TypeSearcher {
                 fqn = null;
             }
             if (fqn != null || require != null) {
-                sb.append(" (");
                 if (fqn != null) {
                     sb.append(fqn);
                 }
@@ -339,14 +373,13 @@ public class RubyTypeSearcher implements TypeSearcher {
                     sb.append(require);
                     sb.append(".rb");
                 }
-                sb.append(")");
                 return sb.toString();
             } else {
                 return null;
             }
         }
 
-        public Element getElement() {
+        public ElementHandle getElement() {
             return element;
         }
 
@@ -361,7 +394,5 @@ public class RubyTypeSearcher implements TypeSearcher {
         public String getOuterName() {
             return null;
         }
-
     }
-
 }

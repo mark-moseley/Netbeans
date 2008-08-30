@@ -38,14 +38,14 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.javascript.editing;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.gsf.api.CodeCompletionHandler;
 import org.netbeans.modules.gsf.api.DeclarationFinder;
 import org.netbeans.modules.gsf.api.Formatter;
@@ -58,73 +58,102 @@ import org.netbeans.modules.gsf.api.Parser;
 import org.netbeans.modules.gsf.api.SemanticAnalyzer;
 import org.netbeans.modules.gsf.api.StructureScanner;
 import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
+import org.netbeans.modules.javascript.editing.lexer.JsTokenId;
+
+
+/*
+ * Language/lexing configuration for JavaScript
+ *
+ * @author Tor Norbye
+ */
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.modules.InstalledFileLocator;
 
+public class JsLanguage extends DefaultLanguageConfig {
 
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-public class RubyLanguage extends DefaultLanguageConfig {
-    public RubyLanguage() {
+    private FileObject jsStubsFO;
+
+    public JsLanguage() {
     }
 
     @Override
     public String getLineCommentPrefix() {
-        return RubyUtils.getLineCommentPrefix();
+        return JsUtils.getLineCommentPrefix();
     }
 
     @Override
     public boolean isIdentifierChar(char c) {
-        return RubyUtils.isIdentifierChar(c);
+        return JsUtils.isIdentifierChar(c);
     }
 
     @Override
     public Language getLexerLanguage() {
-        return RubyTokenId.language();
+        return JsTokenId.language();
     }
 
+    @Override
+    public Collection<FileObject> getCoreLibraries() {
+        return Collections.singletonList(getJsStubs());
+    }
+
+    // TODO - add classpath recognizer for these ? No, don't need go to declaration inside these files...
+    private FileObject getJsStubs() {
+        if (jsStubsFO == null) {
+            // Core classes: Stubs generated for the "builtin" Ruby libraries.
+            File clusterFile = InstalledFileLocator.getDefault().locate(
+                    "modules/org-netbeans-modules-javascript-editing.jar", null, false);
+
+            if (clusterFile != null) {
+                File jsStubs =
+                        new File(clusterFile.getParentFile().getParentFile().getAbsoluteFile(),
+                        "jsstubs"); // NOI18N
+                assert jsStubs.exists() && jsStubs.isDirectory() : "No stubs found";
+                jsStubsFO = FileUtil.toFileObject(jsStubs);
+            } else {
+                // During test?
+                // HACK - TODO use mock
+                String jsDir = System.getProperty("xtest.js.home");
+                if (jsDir == null) {
+                    throw new RuntimeException("xtest.js.home property has to be set when running within binary distribution");
+                }
+                File jsStubs = new File(jsDir + File.separator + "jsstubs");
+                if (jsStubs.exists()) {
+                    jsStubsFO = FileUtil.toFileObject(jsStubs);
+                }
+            }
+        }
+
+        return jsStubsFO;
+    }
+    
     @Override
     public String getDisplayName() {
-        return "Ruby";
+        return "JavaScript";
     }
-
+    
     @Override
     public String getPreferredExtension() {
-        return "rb"; // NOI18N
+        return "js"; // NOI18N
     }
-
+    
     @Override
     public Map<String,String> getSourceGroupNames() {
         Map<String,String> sourceGroups = new HashMap<String,String>();
         sourceGroups.put("RubyProject", "ruby"); // NOI18N
-        sourceGroups.put("WebProject", "ruby"); // NOI18N
         sourceGroups.put("RailsProject", "ruby"); // NOI18N
+
+        // It doesn't look like the WebProject has a dedicated source type for the web/ folder
+        sourceGroups.put("WebProject", "java"); // NOI18N
         
         return sourceGroups;
     }
-    
-    
-    @Override
-    public Collection<FileObject> getCoreLibraries() {
-        return Collections.singletonList(RubyPlatform.getRubyStubs());
-    }
 
+    // Service Registrations
+    
     @Override
-    public CodeCompletionHandler getCompletionHandler() {
-        return new RubyCodeCompleter();
-    }
-
-    @Override
-    public DeclarationFinder getDeclarationFinder() {
-        return new RubyDeclarationFinder();
+    public KeystrokeHandler getKeystrokeHandler() {
+        return new JsKeystrokeHandler();
     }
 
     @Override
@@ -134,42 +163,17 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public Formatter getFormatter() {
-        return new RubyFormatter();
-    }
-
-    @Override
-    public Indexer getIndexer() {
-        return new RubyIndexer();
-    }
-
-    @Override
-    public InstantRenamer getInstantRenamer() {
-        return new RubyRenameHandler();
-    }
-
-    @Override
-    public KeystrokeHandler getKeystrokeHandler() {
-        return new RubyKeystrokeHandler();
-    }
-
-    @Override
-    public boolean hasOccurrencesFinder() {
-        return true;
-    }
-
-    @Override
-    public OccurrencesFinder getOccurrencesFinder() {
-        return new RubyOccurrencesFinder();
+        return new JsFormatter();
     }
 
     @Override
     public Parser getParser() {
-        return new RubyParser();
+        return new JsParser();
     }
-
+    
     @Override
-    public SemanticAnalyzer getSemanticAnalyzer() {
-        return new RubySemanticAnalyzer();
+    public CodeCompletionHandler getCompletionHandler() {
+        return new JsCodeCompletion();
     }
 
     @Override
@@ -179,11 +183,41 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public StructureScanner getStructureScanner() {
-        return new RubyStructureAnalyzer();
+        return new JsAnalyzer();
+    }
+
+    @Override
+    public Indexer getIndexer() {
+        return new JsIndexer();
+    }
+
+    @Override
+    public DeclarationFinder getDeclarationFinder() {
+        return new JsDeclarationFinder();
+    }
+
+    @Override
+    public SemanticAnalyzer getSemanticAnalyzer() {
+        return new JsSemanticAnalyzer();
+    }
+
+    @Override
+    public boolean hasOccurrencesFinder() {
+        return true;
+    }
+
+    @Override
+    public OccurrencesFinder getOccurrencesFinder() {
+        return new JsOccurrenceFinder();
+    }
+
+    @Override
+    public InstantRenamer getInstantRenamer() {
+        return new JsRenameHandler();
     }
 
     @Override
     public IndexSearcher getIndexSearcher() {
-        return new RubyTypeSearcher();
+        return new JsTypeSearcher();
     }
 }

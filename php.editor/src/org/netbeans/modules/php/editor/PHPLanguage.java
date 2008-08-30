@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,18 +31,22 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.ruby;
 
+package org.netbeans.modules.php.editor;
+
+import java.io.File;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.gsf.api.CodeCompletionHandler;
 import org.netbeans.modules.gsf.api.DeclarationFinder;
 import org.netbeans.modules.gsf.api.Formatter;
+import org.netbeans.modules.gsf.api.HintsProvider;
 import org.netbeans.modules.gsf.api.IndexSearcher;
 import org.netbeans.modules.gsf.api.Indexer;
 import org.netbeans.modules.gsf.api.InstantRenamer;
@@ -58,118 +56,76 @@ import org.netbeans.modules.gsf.api.Parser;
 import org.netbeans.modules.gsf.api.SemanticAnalyzer;
 import org.netbeans.modules.gsf.api.StructureScanner;
 import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
+import org.netbeans.modules.php.editor.indent.PHPBracketCompleter;
+import org.netbeans.modules.php.editor.indent.PHPFormatter;
+import org.netbeans.modules.php.editor.index.PHPIndexer;
+import org.netbeans.modules.php.editor.lexer.PHPTokenId;
+import org.netbeans.modules.php.editor.nav.DeclarationFinderImpl;
+import org.netbeans.modules.php.editor.nav.InstantRenamerImpl;
+import org.netbeans.modules.php.editor.nav.OccurrencesFinderImpl;
+import org.netbeans.modules.php.editor.nav.PHPTypeSearcher;
+import org.netbeans.modules.php.editor.parser.GSFPHPParser;
+import org.netbeans.modules.php.editor.parser.PhpStructureScanner;
+import org.netbeans.modules.php.editor.parser.SemanticAnalysis;
+import org.netbeans.modules.php.editor.verification.PHPHintsProvider;
+import org.netbeans.modules.php.project.api.PhpSourcePath;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.modules.InstalledFileLocator;
 
-
-/*
- * Language/lexing configuration for Ruby
+/**
  *
- * @author Tor Norbye
+ * @author Petr Pisl
  */
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-public class RubyLanguage extends DefaultLanguageConfig {
-    public RubyLanguage() {
-    }
+public class PHPLanguage extends DefaultLanguageConfig {
 
+    public static final String PHP_MIME_TYPE = "text/x-php5"; // NOI18N
+    
     @Override
     public String getLineCommentPrefix() {
-        return RubyUtils.getLineCommentPrefix();
+        return "//";    //NOI18N
     }
 
     @Override
     public boolean isIdentifierChar(char c) {
-        return RubyUtils.isIdentifierChar(c);
+        return Character.isJavaIdentifierPart(c) || (c == '$') ;
     }
 
     @Override
     public Language getLexerLanguage() {
-        return RubyTokenId.language();
+        return PHPTokenId.language();
     }
 
     @Override
     public String getDisplayName() {
-        return "Ruby";
+        return "PHP";
     }
 
     @Override
     public String getPreferredExtension() {
-        return "rb"; // NOI18N
+        return "php"; // NOI18N
     }
+    
+    // Service Registrations
 
     @Override
-    public Map<String,String> getSourceGroupNames() {
-        Map<String,String> sourceGroups = new HashMap<String,String>();
-        sourceGroups.put("RubyProject", "ruby"); // NOI18N
-        sourceGroups.put("WebProject", "ruby"); // NOI18N
-        sourceGroups.put("RailsProject", "ruby"); // NOI18N
-        
-        return sourceGroups;
-    }
-    
-    
-    @Override
-    public Collection<FileObject> getCoreLibraries() {
-        return Collections.singletonList(RubyPlatform.getRubyStubs());
+    public Parser getParser() {
+        return new GSFPHPParser();
     }
 
     @Override
     public CodeCompletionHandler getCompletionHandler() {
-        return new RubyCodeCompleter();
-    }
-
-    @Override
-    public DeclarationFinder getDeclarationFinder() {
-        return new RubyDeclarationFinder();
-    }
-
-    @Override
-    public boolean hasFormatter() {
-        return true;
-    }
-
-    @Override
-    public Formatter getFormatter() {
-        return new RubyFormatter();
+        return new PHPCodeCompletion();
     }
 
     @Override
     public Indexer getIndexer() {
-        return new RubyIndexer();
-    }
-
-    @Override
-    public InstantRenamer getInstantRenamer() {
-        return new RubyRenameHandler();
-    }
-
-    @Override
-    public KeystrokeHandler getKeystrokeHandler() {
-        return new RubyKeystrokeHandler();
-    }
-
-    @Override
-    public boolean hasOccurrencesFinder() {
-        return true;
-    }
-
-    @Override
-    public OccurrencesFinder getOccurrencesFinder() {
-        return new RubyOccurrencesFinder();
-    }
-
-    @Override
-    public Parser getParser() {
-        return new RubyParser();
+        return new PHPIndexer();
     }
 
     @Override
     public SemanticAnalyzer getSemanticAnalyzer() {
-        return new RubySemanticAnalyzer();
+        return new SemanticAnalysis();
     }
 
     @Override
@@ -179,11 +135,61 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public StructureScanner getStructureScanner() {
-        return new RubyStructureAnalyzer();
+        return new PhpStructureScanner();
+    }
+
+    @Override
+    public DeclarationFinder getDeclarationFinder() {
+        return new DeclarationFinderImpl();
+    }
+
+    @Override
+    public boolean hasOccurrencesFinder() {
+        return true;
+    }
+
+    @Override
+    public OccurrencesFinder getOccurrencesFinder() {
+        return new OccurrencesFinderImpl();
+    }
+
+    @Override
+    public boolean hasFormatter() {
+        return true;
+    }
+
+    @Override
+    public Formatter getFormatter() {
+        return new PHPFormatter();
+    }
+
+    @Override
+    public KeystrokeHandler getKeystrokeHandler() {
+        return new PHPBracketCompleter();
+    }
+
+    @Override
+    public InstantRenamer getInstantRenamer() {
+        return new InstantRenamerImpl();
+    }
+
+    @Override
+    public boolean hasHintsProvider() {
+        return true;
+    }
+
+    @Override
+    public HintsProvider getHintsProvider() {
+        return new PHPHintsProvider();
+    }
+
+    @Override
+    public Collection<FileObject> getCoreLibraries() {
+        return PhpSourcePath.getPreindexedFolders();
     }
 
     @Override
     public IndexSearcher getIndexSearcher() {
-        return new RubyTypeSearcher();
+        return new PHPTypeSearcher();
     }
 }
