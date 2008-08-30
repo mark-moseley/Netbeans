@@ -44,6 +44,7 @@ package org.netbeans.core.startup;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -54,7 +55,6 @@ import java.text.DateFormat;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.MissingResourceException;
@@ -68,9 +68,10 @@ import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.StreamHandler;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import org.netbeans.TopSecurityManager;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
@@ -92,6 +93,32 @@ public final class TopLogging {
         System.setProperty("sun.awt.exception.handler", "org.netbeans.core.startup.TopLogging$AWTHandler"); // NOI18N
     }
 
+    private static final PrintStream DEBUG;
+    private static final Pattern unwantedMessages;
+    static {
+        PrintStream _D = null;
+        String uMS = System.getProperty("TopLogging.unwantedMessages"); // NOI18N
+        if (uMS != null || Boolean.getBoolean("TopLogging.DEBUG")) { // NOI18N
+            try {
+                File debugLog = new File(System.getProperty("java.io.tmpdir"), "TopLogging.log"); // NOI18N
+                System.err.println("Logging sent to: " + debugLog); // NOI18N
+                _D = new PrintStream(new FileOutputStream(debugLog), true);
+            } catch (FileNotFoundException x) {
+                x.printStackTrace();
+            }
+        }
+        DEBUG = _D;
+        Pattern uMP = null;
+        if (uMS != null) {
+            try {
+                uMP = Pattern.compile(uMS);
+                DEBUG.println("On the lookout for log messages matching: " + uMS); // NOI18N
+            } catch (PatternSyntaxException x) {
+                x.printStackTrace();
+            }
+        }
+        unwantedMessages = uMP;
+    }
 
     /** Initializes the logging configuration. Invoked by <code>LogManager.readConfiguration</code> method.
      */
@@ -135,11 +162,7 @@ public final class TopLogging {
         }
         logger.addHandler(new LookupDel());
 
-        /* TBD:
-        for (Handler h : Lookup.getDefault().lookupAll(Handler.class)) {
-            logger.addHandler(h);
-        }
-         */
+        StartLog.register();
     }
 
     /**
@@ -188,6 +211,11 @@ public final class TopLogging {
 
         if (!(System.err instanceof LgStream)) {
             System.setErr(new LgStream(Logger.getLogger("stderr"))); // NOI18N
+            if (DEBUG != null) DEBUG.println("initializing stderr"); // NOI18N
+        }
+        if (!(System.out instanceof LgStream)) {
+            System.setOut(new LgStream(Logger.getLogger("stderr"))); // NOI18N
+            if (DEBUG != null) DEBUG.println("initializing stdout"); // NOI18N
         }
     }
     
@@ -206,9 +234,14 @@ public final class TopLogging {
         ps.println("  Operating System        = " + System.getProperty("os.name", "unknown")
                    + " version " + System.getProperty("os.version", "unknown")
                    + " running on " +  System.getProperty("os.arch", "unknown"));
-        ps.println("  Java; VM; Vendor        = " + System.getProperty("java.version", "unknown") + "; " +
-                   System.getProperty("java.vm.name", "unknown") + " " + System.getProperty("java.vm.version", "") + "; " +
-                   System.getProperty("java.vendor", "unknown"));
+        ps.println("  Java; VM; Vendor        = "
+                + System.getProperty("java.version", "unknown") + "; "
+                + System.getProperty("java.vm.name", "unknown") + " "
+                + System.getProperty("java.vm.version", "") + "; "
+                + System.getProperty("java.vendor", "unknown"));
+        ps.println("  Runtime                 = "
+                + System.getProperty("java.runtime.name", "unknown") + " "
+                + System.getProperty("java.runtime.version", ""));
         ps.println("  Java Home               = " + System.getProperty("java.home", "unknown"));
         ps.print(  "  System Locale; Encoding = " + Locale.getDefault()); // NOI18N
         String branding = NbBundle.getBranding ();
@@ -304,6 +337,9 @@ public final class TopLogging {
                 File f1 = new File(dir, "messages.log.1");
                 File f2 = new File(dir, "messages.log.2");
 
+                if (f2.exists()) {
+                    f2.delete();
+                }
                 if (f1.exists()) {
                     f1.renameTo(f2);
                 }
@@ -371,6 +407,7 @@ public final class TopLogging {
     private static final class NonClose extends Handler
     implements Runnable {
         private static RequestProcessor RP = new RequestProcessor("Logging Flush"); // NOI18N
+        private static ThreadLocal<Boolean> FLUSHING = new ThreadLocal<Boolean>();
 
         private final Handler delegate;
         private RequestProcessor.Task flush;
@@ -385,7 +422,14 @@ public final class TopLogging {
 
         public void publish(LogRecord record) {
             delegate.publish(record);
-            flush.schedule(delay);
+            if (!Boolean.TRUE.equals(FLUSHING.get())) {
+                try {
+                    FLUSHING.set(true);
+                    flush.schedule(delay);
+                } finally {
+                    FLUSHING.set(false);
+                }
+            }
         }
 
         public void flush() {
@@ -498,11 +542,15 @@ public final class TopLogging {
         private static String lineSeparator = System.getProperty ("line.separator"); // NOI18N
         static java.util.logging.Formatter FORMATTER = new NbFormatter ();
 
-        
         public String format(java.util.logging.LogRecord record) {
             StringBuilder sb = new StringBuilder();
             print(sb, record, new HashSet<Throwable>());
-            return sb.toString();
+            String r = sb.toString();
+            if (DEBUG != null) DEBUG.print("received: " + r); // NOI18N
+            if (unwantedMessages != null && unwantedMessages.matcher(r).find()) {
+                new Exception().printStackTrace(DEBUG);
+            }
+            return r;
         }
 
 
@@ -646,7 +694,11 @@ public final class TopLogging {
             if (RP.isRequestProcessorThread()) {
                 return;
             }
-            sb.append(new String(buf, off, len));
+            String s = new String(buf, off, len);
+            if (unwantedMessages != null && unwantedMessages.matcher(s).find()) {
+                new Exception().printStackTrace(DEBUG);
+            }
+            sb.append(s);
             checkFlush();
         }
 
@@ -676,11 +728,37 @@ public final class TopLogging {
         
         
         private void checkFlush() {
-            flush.schedule(100);
+            //if (DEBUG != null) DEBUG.println("checking flush; buffer: " + sb); // NOI18N
+            try {
+                flush.schedule(100);
+            } catch (IllegalStateException ex) {
+                /* can happen during shutdown:
+                    Nested Exception is:
+                    java.lang.IllegalStateException: Timer already cancelled.
+                            at java.util.Timer.sched(Timer.java:354)
+                            at java.util.Timer.schedule(Timer.java:170)
+                            at org.openide.util.RequestProcessor$Task.schedule(RequestProcessor.java:621)
+                            at org.netbeans.core.startup.TopLogging$LgStream.checkFlush(TopLogging.java:679)
+                            at org.netbeans.core.startup.TopLogging$LgStream.write(TopLogging.java:650)
+                            at sun.nio.cs.StreamEncoder.writeBytes(StreamEncoder.java:202)
+                            at sun.nio.cs.StreamEncoder.implWrite(StreamEncoder.java:263)
+                            at sun.nio.cs.StreamEncoder.write(StreamEncoder.java:106)
+                            at java.io.OutputStreamWriter.write(OutputStreamWriter.java:190)
+                            at java.io.BufferedWriter.flushBuffer(BufferedWriter.java:111)
+                            at java.io.PrintStream.write(PrintStream.java:476)
+                            at java.io.PrintStream.print(PrintStream.java:619)
+                            at java.io.PrintStream.println(PrintStream.java:773)
+                            at java.lang.Throwable.printStackTrace(Throwable.java:461)
+                            at java.lang.Throwable.printStackTrace(Throwable.java:451)
+                            at org.netbeans.insane.impl.LiveEngine.trace(LiveEngine.java:180)
+                            at org.netbeans.insane.live.LiveReferences.fromRoots(LiveReferences.java:110)
+
+                 * just ignore it, we cannot print it at this situation anyway...                
+                 */
+            }
         }
         
         public void run() {
-            int lines = 0;
             for (;;) {
                 String toLog;
                 synchronized (sb) {
@@ -696,6 +774,7 @@ public final class TopLogging {
                         sb.delete(0, first + 1);
                     }
                 }
+                //if (DEBUG != null) DEBUG.println("delegating: " + toLog); // NOI18N
                 log.log(Level.INFO, toLog);
             }
         }
@@ -747,7 +826,8 @@ public final class TopLogging {
             if (t.getClass().getName().endsWith(".ExitSecurityException")) { // NOI18N
                 return;
             }
-            Logger.global.log(Level.SEVERE, null, t);
+            Logger g = Logger.getLogger("global");
+            g.log(Level.SEVERE, null, t);
         }
     } // end of AWTHandler
 
