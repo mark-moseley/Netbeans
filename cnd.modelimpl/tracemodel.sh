@@ -42,51 +42,70 @@
 XREF=""
 ERROR=""
 QUITE=""
+AWK=${AWK-"nawk"}
 
 function classpath() {
 
-    local nbdist=${NBDIST-"../../nbbuild/netbeans/"}
-    local cnddist=${CNDDIST-"../../nbbuild/netbeans/cnd1/"}
+    local nbdist=${NBDIST-"../nbbuild/netbeans"}
+    local cnddist=${CNDDIST-"${nbdist}/cnd2"}
 
     CP=""
 
     local ide
-    if [ -d "${nbdist}/ide6" ]; then
-	ide="${nbdist}/ide6"
+    if [ -d "${nbdist}/ide7" ]; then
+	ide="${nbdist}/ide7"
     else 
-	if [ -d "${nbdist}/ide7" ]; then
-	    ide="${nbdist}/ide7"
+	if [ -d "${nbdist}/ide8" ]; then
+	    ide="${nbdist}/ide8"
 	else 
-	    if [ -d "${nbdist}/ide8" ]; then
-		ide="${nbdist}/ide8"
+	    if [ -d "${nbdist}/ide9" ]; then
+		ide="${nbdist}/ide9"
 	    else 
-		echo "Can not find ide subdirectory in Netbeans"
-		return
+	    	if [ -d "${nbdist}/ide10" ]; then
+		    ide="${nbdist}/ide10"
+		else 
+		    echo "Can not find ide subdirectory in Netbeans"
+		    return
+		fi
 	    fi
 	fi
     fi
 
     local platform
-    if [ -d "${nbdist}/platform6" ]; then
-	platform="${nbdist}/platform6"
+    if [ -d "${nbdist}/platform7" ]; then
+	platform="${nbdist}/platform7"
     else 
-	if [ -d "${nbdist}/platform7" ]; then
-	    platform="${nbdist}/platform7"
-	else
-	    echo "Can not find platform subdirectory in Netbeans"
-	    return
+	if [ -d "${nbdist}/platform8" ]; then
+	    platform="${nbdist}/platform8"
+	else 
+	    if [ -d "${nbdist}/platform9" ]; then
+		platform="${nbdist}/platform9"
+	    else
+		echo "Can not find platform subdirectory in Netbeans"
+		return
+	    fi
 	fi
     fi
     
 
     CP=${CP}${path_sep}${ide}/modules/org-netbeans-modules-projectuiapi.jar
     CP=${CP}${path_sep}${ide}/modules/org-netbeans-modules-projectapi.jar
+    CP=${CP}${path_sep}${ide}/modules/org-netbeans-modules-project-ant.jar
+    CP=${CP}${path_sep}${ide}/modules/org-netbeans-modules-project-libraries.jar
+    CP=${CP}${path_sep}${ide}/modules/org-openidex-util.jar
+    CP=${CP}${path_sep}${ide}/modules/org-netbeans-modules-xml-catalog.jar
     CP=${CP}${path_sep}${platform}/lib/org-openide-util.jar
+    CP=${CP}${path_sep}${platform}/modules/org-openide-dialogs.jar
     CP=${CP}${path_sep}${platform}/modules/org-openide-nodes.jar
     CP=${CP}${path_sep}${platform}/core/org-openide-filesystems.jar
+    CP=${CP}${path_sep}${platform}/core/core.jar
     CP=${CP}${path_sep}${platform}/modules/org-openide-loaders.jar
     CP=${CP}${path_sep}${platform}/lib/org-openide-modules.jar
-
+    CP=${CP}${path_sep}${platform}/lib/boot.jar
+    CP=${CP}${path_sep}${platform}/modules/org-netbeans-api-progress.jar
+    CP=${CP}${path_sep}${platform}/modules/org-netbeans-modules-queries.jar
+    CP=${CP}${path_sep}${platform}/modules/org-netbeans-modules-masterfs.jar
+    CP=${CP}${path_sep}${platform}/modules/org-openide-text.jar
 
     CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-api-model.jar
     CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-modelimpl.jar
@@ -95,9 +114,11 @@ function classpath() {
     CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-api-project.jar
     CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-apt.jar
     CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-folding.jar
+    CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-makeproject.jar
     CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-repository-api.jar
     CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-repository.jar
     CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-utils.jar
+    CP=${CP}${path_sep}${cnddist}/modules/org-netbeans-modules-cnd-model-services.jar
 
     XREF_CP=""
     if [ -n "${XREF}" ]; then
@@ -157,7 +178,7 @@ function classpath() {
 function trace_classpath() {
     local paths=$@
     local ERROR=""
-    for F in `echo ${paths} | awk -F${path_sep} '{ for( i=1; i<=NF; i++ ) print $i }'`; do
+    for F in `echo ${paths} | ${AWK} -F${path_sep} '{ for( i=1; i<=NF; i++ ) print $i }'`; do
 	if [ ! -r ${F} ]; then
 	    echo "File ${F} doesn't exist"
 	    ERROR="y"
@@ -169,7 +190,7 @@ function trace_classpath() {
     else
 	#print classpath
 	echo "Using classpath:"
-	for F in `echo ${paths} | awk -F${path_sep} '{ for( i=1; i<=NF; i++ ) print $i }'`; do
+	for F in `echo ${paths} | ${AWK} -F${path_sep} '{ for( i=1; i<=NF; i++ ) print $i }'`; do
 	    echo $F
 	done
     fi
@@ -231,6 +252,11 @@ function params() {
                     PARAMS="${PARAMS} $1"
                     XREF="y"
                     ;;
+            --threads)
+                    shift
+                    echo "using $1 parser threads"
+                    DEFS="${DEFS} -Dcnd.modelimpl.parser.threads=$1"
+                    ;;
             --quite|--q*) 
                     QUITE="y"
                     ;;
@@ -245,12 +271,18 @@ function params() {
 
 function main() {
 
+    local nbdist=${NBDIST-"../nbbuild/netbeans"}
+    local cnddist=${CNDDIST-"${nbdist}/cnd2"}
+
     JAVA="${JAVA-`which java`}"
     DEFS=""
     PARAMS=""
     
     DBGPORT=${DBGPORT-5858}
 
+    DEFS="${DEFS} -Dnetbeans.dirs=${nbdist}:${cnddist}"
+    DEFS="${DEFS} -Dnetbeans.home=${nbdist}/platform9"
+    DEFS="${DEFS} -Dnetbeans.user=/tmp/${USER}/cnd-userdir"
     #DEFS="${DEFS} -Dcnd.modelimpl.trace=true"
     #DEFS="${DEFS} -Dparser.cache=true"
     DEFS="${DEFS} -Dparser.report.errors=true"
