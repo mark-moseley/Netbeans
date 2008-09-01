@@ -24,7 +24,6 @@ package org.netbeans.test.installer;
 
 import java.awt.event.KeyEvent;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -37,6 +36,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.JProgressBar;
 import javax.swing.JTextField;
+import junit.framework.TestCase;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JDialogOperator;
@@ -45,7 +45,7 @@ import org.netbeans.jemmy.operators.JLabelOperator;
 import org.netbeans.jemmy.operators.JListOperator;
 import org.netbeans.jemmy.operators.JProgressBarOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
-import org.netbeans.junit.NbTestCase;
+//import org.netbeans.junit.NbTestCase;
 
 /**
  *
@@ -57,9 +57,11 @@ public class Utils {
     public static final long MAX_INSTALATION_WAIT = 60000000;
     public static final int DELAY = 50;
     public static final String NEWLINE_REGEXP = "(?:\n\r|\r\n|\n|\r)";
+    public static final String LINE_SEPARATOR = System.getProperty("line.separator");
     private static final Pattern PATTERN = Pattern.compile("(20[0-9]{10})");
     public static final String NB_DIR_NAME = "NetBeans";
-    public static final String GF_DIR_NAME = "GlassFish";
+    public static final String GF2_DIR_NAME = "GlassFish2";
+    public static final String GF3_DIR_NAME = "GlassFish3";
     public static final String TOMACAT_DIR_NAME = "Tomcat";
     public static final String NEXT_BUTTON_LABEL = "Next >";
     public static final String FINISH_BUTTON_LABEL = "Finish";
@@ -247,7 +249,6 @@ public class Utils {
                 return "Timeout. Uninstaller extract process destroyed";
             } else if (errorLevel == 0) {
                 data.setUninstallerBundleFile(new File(pathToExtract + java.io.File.separator + "uninstall.jar"));
-                data.getInstallerFile().deleteOnExit();
                 return OK;
             } else {
                 return "ErrorLevel=>" + errorLevel;
@@ -270,28 +271,33 @@ public class Utils {
         return OK;
     }
 
-    public static void phaseOnePOne(NbTestCase thiz, TestData data, String installerType) {
+    public static void phaseOnePOne(TestCase thiz, TestData data, String installerType) {
         try {
-            data.setWorkDir(thiz.getWorkDir());
+            String wd = System.getenv("WORKSPACE");
+            TestCase.assertNotNull(wd);
+            data.setWorkDir(new File(wd));
         } catch (IOException ex) {
-            NbTestCase.fail("Can not get WorkDir");
+            TestCase.fail("Can not get WorkDir");
         }
 
         data.setInstallerType(installerType);
 
         System.setProperty("nbi.dont.use.system.exit", "true");
         System.setProperty("nbi.utils.log.to.console", "false");
+        System.setProperty("servicetag.allow.register", "false");
         System.setProperty("user.home", data.getWorkDirCanonicalPath());
-        //there is no build nuber for RC1
-        //NbTestCase.assertNotNull("Determine build number", Utils.determineBuildNumber(data));
-        data.setBuildNumber(null);
+        
+        if (Boolean.valueOf(System.getProperty("test.use.build.number"))) {
+            TestCase.assertNotNull("Determine build number", Utils.determineBuildNumber(data));
+        }
+        //data.setBuildNumber(null);
     }
 
     public static void phaseOnePTwo(TestData data) {
-        NbTestCase.assertEquals("Get installer", Utils.OK, Utils.getInstaller(data));
-        NbTestCase.assertEquals("Extract bundle", Utils.OK, Utils.extractBundle(data));
-        NbTestCase.assertEquals("Load class", Utils.OK, Utils.loadClasses(data));
-        NbTestCase.assertEquals("Run main method", Utils.OK, Utils.runInstaller(data));
+        TestCase.assertEquals("Get installer", Utils.OK, Utils.getInstaller(data));
+        TestCase.assertEquals("Extract bundle", Utils.OK, Utils.extractBundle(data));
+        TestCase.assertEquals("Load class", Utils.OK, Utils.loadClasses(data));
+        TestCase.assertEquals("Run main method", Utils.OK, Utils.runInstaller(data));
     }
 
     public static String runInstaller(final TestData data) {
@@ -360,6 +366,7 @@ public class Utils {
         JDialogOperator customizeInstallation = new JDialogOperator("Customize Installation");
         JListOperator featureList = new JListOperator(customizeInstallation);
         featureList.selectItem(name);
+
         featureList.pressKey(KeyEvent.VK_SPACE);
         new JButtonOperator(customizeInstallation, "OK").push();
     }
@@ -381,7 +388,7 @@ public class Utils {
         new JButtonOperator(new JFrameOperator(MAIN_FRAME_TITLE), FINISH_BUTTON_LABEL).push();
     }
 
-    public static void phaseOne(NbTestCase thiz, TestData data, String installerType) {
+    public static void phaseOne(TestCase thiz, TestData data, String installerType) {
         phaseOnePOne(thiz, data, installerType);
         data.setInstallerURL(constructURL(data));
         phaseOnePTwo(data);
@@ -396,13 +403,13 @@ public class Utils {
 
         Utils.waitSecond(data, 5);
 
-        NbTestCase.assertEquals("Installer Finshed", 0, ((Integer) System.getProperties().get("nbi.exit.code")).intValue());
+        TestCase.assertEquals("Installer Finshed", 0, ((Integer) System.getProperties().get("nbi.exit.code")).intValue());
 
-        NbTestCase.assertEquals("NetBeans dir created", OK, Utils.dirExist(NB_DIR_NAME, data));
+        TestCase.assertEquals("NetBeans dir created", OK, Utils.dirExist(NB_DIR_NAME, data));
 
-        NbTestCase.assertEquals("Extract uninstaller jar", OK, Utils.extractUninstallerJar(data));
-        NbTestCase.assertEquals("Load engine classes", OK, Utils.loadEngineClasses(data));
-        NbTestCase.assertEquals("Run uninstaller main class", OK, Utils.runUninstaller(data));
+        TestCase.assertEquals("Extract uninstaller jar", OK, Utils.extractUninstallerJar(data));
+        TestCase.assertEquals("Load engine classes", OK, Utils.loadEngineClasses(data));
+        TestCase.assertEquals("Run uninstaller main class", OK, Utils.runUninstaller(data));
 
         Utils.stepUninstall(data);
 
@@ -410,11 +417,12 @@ public class Utils {
 
         Utils.waitSecond(data, 5);
 
-        NbTestCase.assertEquals("Uninstaller Finshed", 0, ((Integer) System.getProperties().get("nbi.exit.code")).intValue());
+        TestCase.assertEquals("Uninstaller Finshed", 0, ((Integer) System.getProperties().get("nbi.exit.code")).intValue());
 
-        NbTestCase.assertFalse("NetBeans dir deleted", Utils.dirExist(NB_DIR_NAME, data).equals(OK));
-        NbTestCase.assertFalse("Tomcat dir deleted", Utils.dirExist(TOMACAT_DIR_NAME, data).equals(OK));
-        NbTestCase.assertFalse("GlassFish dir deleted", Utils.dirExist(GF_DIR_NAME, data).equals(OK));
+        TestCase.assertFalse("NetBeans dir deleted", Utils.dirExist(NB_DIR_NAME, data).equals(OK));
+        TestCase.assertFalse("Tomcat dir deleted", Utils.dirExist(TOMACAT_DIR_NAME, data).equals(OK));
+        TestCase.assertFalse("GlassFish2 dir deleted", Utils.dirExist(GF2_DIR_NAME, data).equals(OK));
+        TestCase.assertFalse("GlassFish3 dir deleted", Utils.dirExist(GF3_DIR_NAME, data).equals(OK));
     }
 
     public static void phaseTwo(TestData data) {
@@ -429,8 +437,11 @@ public class Utils {
     }
 
     public static void phaseThree(TestData data) {
-        //Choose GF dir
-        stepSetDir(data, "Install GlassFish", GF_DIR_NAME);
+        //Choose GF2 dir
+        stepSetDir(data, "Install GlassFish", GF2_DIR_NAME);
+        
+        //Choose GF3 dir
+        stepSetDir(data, "Install GlassFish", GF3_DIR_NAME);
 
         //Choose Tomcat dir
         stepSetDir(data, "Install Apache Tomcat", TOMACAT_DIR_NAME);
@@ -453,7 +464,7 @@ public class Utils {
 
         for (int attempt = 0; attempt < 5; attempt++) {
             try {
-                URL downloadPage = new URL(data.getNetbeansDownloadPage());
+                URL downloadPage = new URL(data.getNetbeansDownloadPage() + "/js/build_info.js");
                 InputStream in = downloadPage.openConnection(data.getProxy()).getInputStream();
                 StringBuilder pageContent = new StringBuilder();
 
@@ -463,7 +474,7 @@ public class Utils {
 
                     String readString = new String(buffer, 0, read);
                     for (String string : readString.split(NEWLINE_REGEXP)) {
-                        pageContent.append(string).append(File.separator);
+                        pageContent.append(string).append(LINE_SEPARATOR);
                     }
                     wait(data, 100);
                 }
@@ -489,7 +500,7 @@ public class Utils {
         }
         return null;
     }
-    
+
     public static String dirExist(String dirName, TestData data) {
         File dir = new File(data.getTestWorkDir() + File.separator + dirName);
         if (dir.exists() && dir.isDirectory()) {
@@ -517,13 +528,15 @@ public class Utils {
         }
 
         if (waitingTime >= Utils.MAX_INSTALATION_WAIT) {
-            NbTestCase.fail("Installation timeout");
+            TestCase.fail("Installation timeout");
         }
     }
 
     public static String constructURL(TestData data) {
-        String val = System.getProperty("installer.url.prefix");
-        String prefix = (data.getBuildNumber() != null) ? "http://bits.netbeans.org/netbeans/6.0/nightly/latest/bundles/netbeans-6.0-" + data.getBuildNumber() : val;
+        String prefix = System.getProperty("test.installer.url.prefix");
+        
+        String bundleNamePrefix = System.getProperty("test.installer.bundle.name.prefix");
+        //String prefix = (data.getBuildNumber() != null) ? "http://bits.netbeans.org/netbeans/6.0/nightly/latest/bundles/netbeans-6.0-" + data.getBuildNumber() : val;
 
         String bundleType = data.getInstallerType();
         if (bundleType == null || bundleType.equals("all")) {
@@ -532,6 +545,10 @@ public class Utils {
             bundleType = "-" + bundleType;
         }
 
-        return prefix + bundleType + "-" + data.getPlatformName() + "." + data.getPlatformExt();
+        String build_number = (Boolean.valueOf(System.getProperty("test.use.build.number"))) ? "-" + data.getBuildNumber() : "";
+        return prefix + "/" + "bundles" +
+                "/" + bundleNamePrefix +
+                build_number + bundleType + "-" +
+                data.getPlatformName() + "." + data.getPlatformExt();
     }
 }
