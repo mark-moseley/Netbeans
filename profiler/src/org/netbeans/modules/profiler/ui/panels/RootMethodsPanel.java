@@ -61,6 +61,8 @@ import java.util.Iterator;
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
+import org.netbeans.modules.profiler.NetBeansProfiler;
+import org.openide.util.HelpCtx;
 
 
 /**
@@ -68,7 +70,7 @@ import javax.swing.event.ListSelectionListener;
  * @author Ian Formanek
  * @author Misha Dmitriev
  */
-public final class RootMethodsPanel extends JPanel implements ActionListener, ListSelectionListener {
+public final class RootMethodsPanel extends JPanel implements ActionListener, ListSelectionListener, HelpCtx.Provider {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
     // -----
@@ -92,7 +94,13 @@ public final class RootMethodsPanel extends JPanel implements ActionListener, Li
                                                                                        "RootMethodsPanel_AddManuallyButtonAccessDescr"); //NOI18N
     private static final String REMOVE_BUTTON_ACCESS_DESCR = NbBundle.getMessage(RootMethodsPanel.class,
                                                                                  "RootMethodsPanel_RemoveButtonAccessDescr"); //NOI18N
+    private static final String INCORRECT_MANUAL_ROOT_MSG = NbBundle.getMessage(RootMethodsPanel.class,
+                                                                                 "RootMethodsPanel_IncorrectManualRootMsg"); //NOI18N
                                                                                                                               // -----
+    
+    private static final String HELP_CTX_KEY = "RootMethodsPanel.HelpCtx"; // NOI18N
+    private static final HelpCtx HELP_CTX = new HelpCtx(HELP_CTX_KEY);
+    
     private static RootMethodsPanel defaultInstance;
     private static MethodNameFormatterFactory formatterFactory = MethodNameFormatterFactory.getDefault(new DefaultMethodNameFormatter(DefaultMethodNameFormatter.VERBOSITY_FULLCLASSMETHOD));
 
@@ -119,6 +127,10 @@ public final class RootMethodsPanel extends JPanel implements ActionListener, Li
     }
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
+    
+    public HelpCtx getHelpCtx() {
+        return HELP_CTX;
+    }
 
     public static ClientUtils.SourceCodeSelection[] getSelectedRootMethods(ClientUtils.SourceCodeSelection[] roots,
                                                                            Project project) {
@@ -138,12 +150,12 @@ public final class RootMethodsPanel extends JPanel implements ActionListener, Li
         if (e.getSource() == addFromProjectButton) {
             RequestProcessor.getDefault().post(new Runnable() {
                     public void run() {
-                        final ClientUtils.SourceCodeSelection[] sel = SelectRootMethodsPanel.getDefault()
-                                                                                            .getRootMethods(project,
-                                                                                                            (ClientUtils.SourceCodeSelection[]) selectedRoots
-                                                                                                                                            .toArray(new ClientUtils.SourceCodeSelection[] {
-                                                                                                                                                         
-                                                                                                                                                     }));
+                        final ClientUtils.SourceCodeSelection[] sel = ProjectSelectRootMethodsPanel.getDefault()
+                                                                                                   .getRootMethods(project,
+                                                                                                                   (ClientUtils.SourceCodeSelection[]) selectedRoots
+                                                                                                                                                   .toArray(new ClientUtils.SourceCodeSelection[] {
+                                                                                                                                                                
+                                                                                                                                                            }));
 
                         if (sel != null) {
                             addNewRootMethods(sel, true);
@@ -152,14 +164,19 @@ public final class RootMethodsPanel extends JPanel implements ActionListener, Li
                 });
         } else if (e.getSource() == addManualButton) {
             final ClientUtils.SourceCodeSelection scs = ManualMethodSelect.selectMethod();
-
+            
             if (scs != null) {
-                if (!selectedRoots.contains(scs)) {
-                    selectedRoots.add(scs);
+                String newItem = null;
+                try {
+                    newItem = formatterFactory.getFormatter().formatMethodName(scs).toFormatted();
+                    if (!selectedRoots.contains(scs)) {
+                        selectedRoots.add(scs);
 
-                    String newItem = formatterFactory.getFormatter().formatMethodName(scs).toFormatted();
-                    rootsListModel.addElement(newItem);
-                    rootsList.setSelectedValue(newItem, true);
+                        rootsListModel.addElement(newItem);
+                        rootsList.setSelectedValue(newItem, true);
+                    }
+                } catch (Exception ex) {
+                    NetBeansProfiler.getDefaultNB().displayError(INCORRECT_MANUAL_ROOT_MSG);
                 }
             }
         } else if (e.getSource() == removeButton) {
