@@ -42,11 +42,13 @@
 package org.netbeans.modules.editor.completion;
 
 import java.awt.Dimension;
-import java.awt.GraphicsConfiguration;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.KeyEvent;
 import javax.swing.JComponent;
+import javax.swing.JPanel;
 import javax.swing.Popup;
 import javax.swing.PopupFactory;
 import javax.swing.SwingUtilities;
@@ -61,7 +63,7 @@ import org.openide.util.Utilities;
  *
  *  @author Dusan Balek, Miloslav Metelka
  */
-abstract class CompletionLayoutPopup {
+abstract class CompletionLayoutPopup implements FocusListener {
     
     private CompletionLayout layout;
     
@@ -78,11 +80,11 @@ abstract class CompletionLayoutPopup {
     
     private boolean displayAboveCaret;
     
-    private Rectangle screenBounds;
-    
     private boolean preferDisplayAboveCaret;
     
     private boolean showRetainedPreferredSize;
+    
+    private JComponent focusListeningComponent;
     
     public final boolean isVisible() {
         return (popup != null);
@@ -97,11 +99,31 @@ abstract class CompletionLayoutPopup {
             popup.hide();
             popup = null;
             popupBounds = null;
+            if(focusListeningComponent != null) {
+                focusListeningComponent.removeFocusListener(this);
+                focusListeningComponent = null;
+            }
             contentComponent = null;
             anchorOffset = -1;
             // Reset screen bounds as well to not cache too long
-            screenBounds = null;
+            ScreenBoundsProvider.clear();
         }
+    }
+    
+    /**
+     * Return true if this popup should be focusable (there is a focusable
+     * component in it). The popupFactory.getPopup() will use non-null parent
+     * editor pane in such case.
+     */
+    protected boolean isFocusable() {
+        return false; // By default not focusable
+    }
+    
+    /**
+     * Get the component to which the focus 
+     */
+    protected JComponent getFocusListeningComponent() {
+        return null;
     }
     
     public final boolean isDisplayAboveCaret() {
@@ -131,17 +153,6 @@ abstract class CompletionLayoutPopup {
         anchorOffsetBounds = null;
     }
     
-    final Rectangle getScreenBounds() {
-        if (screenBounds == null) {
-	    JTextComponent editorComponent = getEditorComponent();
-            GraphicsConfiguration configuration = editorComponent != null
-                    ? editorComponent.getGraphicsConfiguration() : null;
-            screenBounds = configuration != null
-                    ? configuration.getBounds() : new Rectangle();
-        }
-        return screenBounds;
-    }
-    
     final int getAnchorOffset() {
 	int offset = anchorOffset;
 	if (offset == -1) {
@@ -160,7 +171,36 @@ abstract class CompletionLayoutPopup {
     
     final Dimension getPreferredSize() {
         JComponent comp = getContentComponent();
-        return (comp == null) ? new Dimension(0,0) : comp.getPreferredSize();
+
+        if (comp == null)
+            return new Dimension(0, 0);
+        
+        int screenWidth = ScreenBoundsProvider.getScreenBounds(getEditorComponent()).width;
+        
+        Dimension maxSize = new Dimension((int) (screenWidth *
+                ScreenBoundsProvider.MAX_COMPL_COVERAGE),
+                comp.getMaximumSize().height); //set maximum part of screen covered
+        setMaxSize(comp, maxSize);
+        
+        // if there is space between right CC border and right screen edge,
+        // add this gap to maximum width
+        int gap = screenWidth - (getAnchorOffsetBounds().x + comp.getPreferredSize().width);
+        if(gap > 0) maxSize.width += gap;
+
+        setMaxSize(comp, maxSize);
+        return comp.getPreferredSize();
+    }
+    
+    /** 
+     * Sets maximum size for appropriate JComponent, depending on
+     * wheteher additional items are present
+     */
+    private final void setMaxSize(JComponent comp, Dimension maxSize) {
+        if (comp instanceof JPanel) {
+            comp.getComponent(0).setMaximumSize(maxSize); // JScrollPane
+        } else {
+            comp.setMaximumSize(maxSize);
+        }
     }
     
     final void resetPreferredSize() {
@@ -227,8 +267,8 @@ abstract class CompletionLayoutPopup {
      * @return rectangle with absolute screen bounds of the popup.
      */
     private Rectangle findPopupBounds(Rectangle occupiedBounds, boolean aboveOccupiedBounds) {
+        Rectangle screen = ScreenBoundsProvider.getScreenBounds(getEditorComponent());
         Dimension prefSize = getPreferredSize();
-        Rectangle screen = getScreenBounds();
         Rectangle popupBounds = new Rectangle();
         
         popupBounds.x = Math.min(occupiedBounds.x,
@@ -272,13 +312,25 @@ abstract class CompletionLayoutPopup {
         }
         contComp.setPreferredSize(newPrefSize);
         showRetainedPreferredSize = newPrefSize.equals(origPrefSize);
+        
+        focusListeningComponent = getFocusListeningComponent();
+        if(focusListeningComponent != null) {
+            focusListeningComponent.addFocusListener(this);
+        }
 
         PopupFactory factory = PopupFactory.getSharedInstance();
         // Lightweight completion popups don't work well on the Mac - trying
         // to click on its scrollbars etc. will cause the window to be hidden,
         // so force a heavyweight parent by passing in owner==null. (#96717)
+        
         JTextComponent owner = Utilities.isMac() ? null : layout.getEditorComponent();
-        popup = factory.getPopup(owner, contComp, popupBounds.x, popupBounds.y);
+        
+        // #76648: Autocomplete box is too close to text
+        if(displayAboveCaret && Utilities.isMac()) {
+            popupBounds.y -= 10;
+        }
+        
+        popup = factory.getPopup(isFocusable() ? null : owner, contComp, popupBounds.x, popupBounds.y);
         popup.show();
 
         this.popupBounds = popupBounds;
@@ -312,6 +364,55 @@ abstract class CompletionLayoutPopup {
         Rectangle bounds = findPopupBounds(occupiedBounds, aboveCaret);
         show(bounds, aboveCaret);
     }
+
+    /**
+     * Displays popup right, left of currently occupied bounds if possible,
+     * otherwise fallback to above/below
+     * @param occupiedBounds bounds of CC popup
+     * @param unionBounds bounds occupied by all popups
+     */
+    void showAlongOrNextOccupiedBounds(Rectangle occupiedBounds, Rectangle unionBounds) {
+        Rectangle screen = ScreenBoundsProvider.getScreenBounds(getEditorComponent());
+        Dimension prefSize = getPreferredSize();
+        Rectangle bounds = new Rectangle();
+        boolean aboveCaret;
+
+        if (isEnoughSpace(occupiedBounds, preferDisplayAboveCaret)) {
+            aboveCaret = preferDisplayAboveCaret;
+        } else
+            aboveCaret = false;
+
+        boolean left = false;
+        boolean right = false;
+
+        // Right of CC
+        if (occupiedBounds.x + occupiedBounds.width + prefSize.width < screen.width &&
+                occupiedBounds.y + prefSize.height < screen.height) {
+            bounds.x = occupiedBounds.x + occupiedBounds.width + CompletionLayout.POPUP_VERTICAL_GAP;
+            right = true;
+        }
+
+        // Left of CC
+        if (!right && occupiedBounds.x - prefSize.width > 0 && occupiedBounds.y + prefSize.height < screen.height) {
+            bounds.x = occupiedBounds.x - prefSize.width - CompletionLayout.POPUP_VERTICAL_GAP;
+            left = true;
+        }
+
+        if (right || left) {
+            bounds.width = prefSize.width;
+            bounds.height = Math.min(prefSize.height, screen.height);
+            if (aboveCaret) {
+                bounds.y = occupiedBounds.y + occupiedBounds.height - prefSize.height;
+            } else {
+                bounds.y = occupiedBounds.y;
+            }
+            show(bounds, aboveCaret);
+            return;
+        }
+
+        // Fallback to Above/Below
+        showAlongOccupiedBounds(unionBounds);
+    }
     
     void showAlongOccupiedBounds(Rectangle occupiedBounds, boolean aboveCaret) {
         Rectangle bounds = findPopupBounds(occupiedBounds, aboveCaret);
@@ -319,7 +420,7 @@ abstract class CompletionLayoutPopup {
     }
     
     boolean isMoreSpaceAbove(Rectangle bounds) {
-        Rectangle screen = getScreenBounds();
+        Rectangle screen = ScreenBoundsProvider.getScreenBounds(getEditorComponent());
         int above = bounds.y - screen.y;
         int below = (screen.y + screen.height) - (bounds.y + bounds.height);
         return (above > below);
@@ -345,14 +446,15 @@ abstract class CompletionLayoutPopup {
      *  on the requested side or false if not.
      */
     boolean isEnoughSpace(Rectangle occupiedBounds, boolean aboveOccupiedBounds) {
-        Rectangle screen = getScreenBounds();
+        Rectangle screen = ScreenBoundsProvider.getScreenBounds(getEditorComponent());
+        
         int freeHeight = aboveOccupiedBounds
             ? occupiedBounds.y - screen.y
             : (screen.y + screen.height) - (occupiedBounds.y + occupiedBounds.height);
         Dimension prefSize = getPreferredSize();
         return (prefSize.height < freeHeight);
     }
-    
+
     boolean isEnoughSpace(boolean aboveCaret) {
         return isEnoughSpace(getAnchorOffsetBounds(), aboveCaret);
     }
@@ -370,4 +472,11 @@ abstract class CompletionLayoutPopup {
     }
 
     public abstract void processKeyEvent(KeyEvent evt);
+
+    public void focusGained(FocusEvent e) {
+    }
+
+    public void focusLost(FocusEvent e) {
+    }
+    
 }
