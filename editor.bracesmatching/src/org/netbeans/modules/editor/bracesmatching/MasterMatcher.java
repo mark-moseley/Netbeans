@@ -48,11 +48,9 @@ import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.settings.AttributesUtilities;
 import org.netbeans.api.editor.settings.EditorStyleConstants;
 import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.spi.editor.bracesmatching.BracesMatcher;
-import org.netbeans.spi.editor.bracesmatching.BracesMatcherFactory;
 import org.netbeans.spi.editor.bracesmatching.BracesMatcherFactory;
 import org.netbeans.spi.editor.bracesmatching.MatcherContext;
 import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
@@ -293,11 +291,11 @@ public final class MasterMatcher {
     }
     
     // when navigating: set the dot after or before the matching area, depending on the caret bias
-    // when selecting: always select the inside between original and matching areas
-    //                 do not select the areas themselvs
+    // when selecting: see #123091 for details
     private static void navigateAreas(
         int [] origin, 
         int [] matches,
+        int caretOffset,
         Object caretBias,
         Caret caret,
         boolean select
@@ -322,8 +320,20 @@ public final class MasterMatcher {
             
             if (newDotBackwardIdx != -1) {
                 if (select) {
-                    caret.setDot(origin[0]);
-                    caret.moveDot(matches[2 * newDotBackwardIdx + 1]);
+                    int set, move;
+                    
+                    if (caretOffset < origin[1]) {
+                        set = origin[0];
+                        move = matches[2 * newDotBackwardIdx + 1];
+                    } else {
+                        set = origin[1];
+                        move = matches[2 * newDotBackwardIdx];
+                    }
+
+                    if (caret.getDot() == caret.getMark()) { // || (move <= caret.getMark() && caret.getMark() <= set)
+                        caret.setDot(set);
+                    }
+                    caret.moveDot(move);
                 } else {
                     if (B_BACKWARD.equalsIgnoreCase(caretBias.toString())) {
                         caret.setDot(matches[2 * newDotBackwardIdx + 1]);
@@ -333,8 +343,20 @@ public final class MasterMatcher {
                 }
             } else if (newDotForwardIdx != -1) {
                 if (select) {
-                    caret.setDot(origin[1]);
-                    caret.moveDot(matches[2 * newDotForwardIdx]);
+                    int set, move;
+
+                    if (caretOffset > origin[0]) {
+                        set = origin[1];
+                        move = matches[2 * newDotForwardIdx];
+                    } else {
+                        set = origin[0];
+                        move = matches[2 * newDotForwardIdx + 1];
+                    }
+                    
+                    if (caret.getDot() == caret.getMark()) { //  || (set <= caret.getMark() && caret.getMark() <= move)
+                        caret.setDot(set);
+                    }
+                    caret.moveDot(move);
                 } else {
                     if (B_BACKWARD.equalsIgnoreCase(caretBias.toString())) {
                         caret.setDot(matches[2 * newDotForwardIdx + 1]);
@@ -350,7 +372,7 @@ public final class MasterMatcher {
         MimePath mimePath = null;
 
         TokenHierarchy<? extends Document> th = TokenHierarchy.get(document);
-        if (th != null) {
+        if (th.isActive()) {
             List<TokenSequence<?>> sequences = th.embeddedTokenSequences(offset, backward);
             if (!sequences.isEmpty()) {
                 String path = sequences.get(sequences.size() - 1).languagePath().mimePath();
@@ -383,7 +405,7 @@ public final class MasterMatcher {
         private final int maxBwdLookahead;
         private final int maxFwdLookahead;
 
-        private boolean inDocumentRender = false;
+//        private boolean inDocumentRender = false;
         private volatile boolean canceled = false;
         
         private final List<Object []> highlightingJobs = new ArrayList<Object []>();
@@ -456,21 +478,30 @@ public final class MasterMatcher {
         // ------------------------------------------------
         
         public void run() {
-            // Read lock the document
-            if (!inDocumentRender) {
-                inDocumentRender = true;
-                THREAD_RESULTS.put(Thread.currentThread(), this);
-                try {
-                    document.render(this);
-                } catch (ThreadDeath t) {
-                    throw t;
-                } catch (Error t) {
-                    // ignore, can happen when the task is interrupted
-                } finally {
-                    THREAD_RESULTS.remove(Thread.currentThread());
-                }
-                return;
+            THREAD_RESULTS.put(Thread.currentThread(), this);
+            try {
+                _run();
+            } finally {
+                THREAD_RESULTS.remove(Thread.currentThread());
             }
+        }
+        
+        private void _run() {
+//            // Read lock the document
+//            if (!inDocumentRender) {
+//                inDocumentRender = true;
+//                THREAD_RESULTS.put(Thread.currentThread(), this);
+//                try {
+//                    document.render(this);
+//                } catch (ThreadDeath t) {
+//                    throw t;
+//                } catch (Error t) {
+//                    // ignore, can happen when the task is interrupted
+//                } finally {
+//                    THREAD_RESULTS.remove(Thread.currentThread());
+//                }
+//                return;
+//            }
 
             if (canceled) {
                 return;
@@ -495,12 +526,12 @@ public final class MasterMatcher {
 //                System.out.println("!!! ------------------- finding Origin ---------------------");
                 if (D_BACKWARD.equalsIgnoreCase(allowedDirection.toString())) {
                     origin = findOrigin(true, matcher);
-                    if (origin == null) {
+                    if (origin == null && !canceled) {
                         origin = findOrigin(false, matcher);
                     }
                 } else if (D_FORWARD.equalsIgnoreCase(allowedDirection.toString())) {
                     origin = findOrigin(false, matcher);
-                    if (origin == null) {
+                    if (origin == null && !canceled) {
                         origin = findOrigin(true, matcher);
                     }
                 }
@@ -511,7 +542,10 @@ public final class MasterMatcher {
                     matches = matcher[0].findMatches();
                 }
             } catch (BadLocationException ble) {
-                LOG.log(Level.WARNING, null, ble);
+                // since we are not running under document lock (see #131284) there can be exceptions
+                LOG.log(Level.FINE, null, ble);
+                return;
+                
             } catch (Exception e) {
                 for(Throwable t = e; t != null; t = t.getCause()) {
                     if (t instanceof InterruptedException) {
@@ -519,7 +553,10 @@ public final class MasterMatcher {
                         return;
                     }
                 }
-                LOG.log(Level.WARNING, null, e);
+
+                // since we are not running under document lock (see #131284) there can be exceptions
+                LOG.log(Level.FINE, null, e);
+                return;
             }
 
             // Show the results
@@ -533,16 +570,33 @@ public final class MasterMatcher {
                 MasterMatcher.this.task = null;
             }
 
-            for (Object[] job : highlightingJobs) {
-                highlightAreas(origin, matches, (OffsetsBag) job[0], (AttributeSet) job[1], (AttributeSet) job[2]);
-                if (Boolean.valueOf((String) component.getClientProperty(PROP_SHOW_SEARCH_PARAMETERS))) {
-                    showSearchParameters((OffsetsBag) job[0]);
-                }
-            }
+            final int [] _origin = origin;
+            final int [] _matches = matches;
+            document.render(new Runnable() {
+                public void run() {
+                    try {
+                        for (Object[] job : highlightingJobs) {
+                            highlightAreas(_origin, _matches, (OffsetsBag) job[0], (AttributeSet) job[1], (AttributeSet) job[2]);
+                            if (Boolean.valueOf((String) component.getClientProperty(PROP_SHOW_SEARCH_PARAMETERS))) {
+                                showSearchParameters((OffsetsBag) job[0]);
+                            }
+                        }
 
-            for(Object [] job : navigationJobs) {
-                navigateAreas(origin, matches, caretBias, (Caret) job[0], (Boolean) job[1]);
-            }
+                        for(Object [] job : navigationJobs) {
+                            navigateAreas(_origin, _matches, caretOffset, caretBias, (Caret) job[0], (Boolean) job[1]);
+                        }
+                    } catch (Exception e) {
+                        // the results were not computed under document lock and may be out fo sync
+                        // with the document, just ignore the exception and remove any highlights
+                        LOG.log(Level.FINE, null, e);
+
+                        // clear everything, we probably screwed it up
+                        for (Object[] job : highlightingJobs) {
+                            ((OffsetsBag) job[0]).clear();
+                        }
+                    }
+                }
+            });
         }
         
         private int [] findOrigin(
@@ -610,13 +664,16 @@ public final class MasterMatcher {
                         break;
                     }
                 }
-
+            }
+            
+            if (matcher[0] != null) {
                 // Find the original area
                 int [] origin = null;
                 try {
                     origin = matcher[0].findOrigin();
                 } catch (BadLocationException ble) {
-                    LOG.log(Level.WARNING, null, ble);
+                    // since we are not running under document lock (see #131284) there can be exceptions
+                    LOG.log(Level.FINE, null, ble);
                 }
                 
                 // Check the original area for consistency
@@ -627,13 +684,13 @@ public final class MasterMatcher {
                         if (LOG.isLoggable(Level.WARNING)) {
                             LOG.warning("Invalid BracesMatcher implementation, " + //NOI18N
                                 "findOrigin() should return nothing or offset pairs. " + //NOI18N
-                                "Offending BracesMatcher: " + matcher); //NOI18N
+                                "Offending BracesMatcher: " + matcher[0]); //NOI18N
                         }
                         origin = null;
                     } else if (origin[0] < 0 || origin[1] > document.getLength() || origin[0] > origin[1]) {
                         if (LOG.isLoggable(Level.WARNING)) {
                             LOG.warning("Invalid origin offsets [" + origin[0] + ", " + origin[1] + "]. " + //NOI18N
-                                "Offending BracesMatcher: " + matcher); //NOI18N
+                                "Offending BracesMatcher: " + matcher[0]); //NOI18N
                         }
                         origin = null;
                     } else {
@@ -645,7 +702,7 @@ public final class MasterMatcher {
                                         "caretOffset = " + caretOffset + //NOI18N
                                         ", lookahead = " + lookahead + //NOI18N
                                         ", searching backwards. " + //NOI18N
-                                        "Offending BracesMatcher: " + matcher); //NOI18N
+                                        "Offending BracesMatcher: " + matcher[0]); //NOI18N
                                 }
                                 origin = null;
                             }
@@ -657,7 +714,7 @@ public final class MasterMatcher {
                                         "caretOffset = " + caretOffset + //NOI18N
                                         ", lookahead = " + lookahead + //NOI18N
                                         ", searching forward. " + //NOI18N
-                                        "Offending BracesMatcher: " + matcher); //NOI18N
+                                        "Offending BracesMatcher: " + matcher[0]); //NOI18N
                                 }
                                 origin = null;
                             }
@@ -666,10 +723,12 @@ public final class MasterMatcher {
                     }
                 }
 
-                if (origin != null) {
-                    LOG.fine("[" + origin[0] + ", " + origin[1] + "] for caret = " + caretOffset + ", lookahead = " + (backward ? "-" : "") + lookahead); //NOI18N
-                } else {
-                    LOG.fine("[null] for caret = " + caretOffset + ", lookahead = " + (backward ? "-" : "") + lookahead); //NOI18N
+                if (LOG.isLoggable(Level.FINE)) {
+                    if (origin != null) {
+                        LOG.fine("[" + origin[0] + ", " + origin[1] + "] for caret = " + caretOffset + ", lookahead = " + (backward ? "-" : "") + lookahead); //NOI18N
+                    } else {
+                        LOG.fine("[null] for caret = " + caretOffset + ", lookahead = " + (backward ? "-" : "") + lookahead); //NOI18N
+                    }
                 }
                 
                 return origin;
