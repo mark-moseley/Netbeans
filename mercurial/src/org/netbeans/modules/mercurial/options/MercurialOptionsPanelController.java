@@ -60,9 +60,10 @@ import javax.swing.filechooser.FileFilter;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.MercurialAnnotator;
 import org.netbeans.modules.mercurial.HgModuleConfig;
-import org.netbeans.modules.mercurial.ui.properties.PropertiesPanel;
-import org.netbeans.modules.mercurial.ui.properties.PropertiesTable;
-import org.netbeans.modules.mercurial.ui.properties.PropertiesTableModel;
+import org.netbeans.modules.mercurial.options.PropertiesPanel;
+import org.netbeans.modules.mercurial.options.PropertiesTable;
+import org.netbeans.modules.mercurial.options.PropertiesTableModel;
+import org.netbeans.modules.mercurial.util.HgCommand;
 import org.netbeans.spi.options.OptionsPanelController;
 import org.netbeans.modules.versioning.util.AccessibleJFileChooser;
 import org.openide.DialogDescriptor;
@@ -71,6 +72,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 
 final class MercurialOptionsPanelController extends OptionsPanelController implements ActionListener {
     
@@ -167,6 +169,11 @@ final class MercurialOptionsPanelController extends OptionsPanelController imple
             return false;
         }
         String execpath = panel.executablePathTextField.getText();
+        if(Utilities.isWindows() && execpath.endsWith(HgCommand.HG_COMMAND + HgCommand.HG_WINDOWS_EXE)){
+            execpath = execpath.substring(0, execpath.length() - (HgCommand.HG_COMMAND + HgCommand.HG_WINDOWS_EXE).length());
+        }else  if(execpath.endsWith(HgCommand.HG_COMMAND)){
+            execpath = execpath.substring(0, execpath.length() - HgCommand.HG_COMMAND.length());            
+        }   
         if (!HgModuleConfig.getDefault().isExecPathValid(execpath)) {
             JOptionPane.showMessageDialog(null,
                                           NbBundle.getMessage(MercurialPanel.class, "MSG_WARN_EXEC_PATH_TEXT"), // NOI18N
@@ -211,8 +218,7 @@ final class MercurialOptionsPanelController extends OptionsPanelController imple
             public String getDescription() {
                 return NbBundle.getMessage(MercurialOptionsPanelController.class, "MercurialExec");// NOI18N
             }
-        });
-        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        });        
         fileChooser.showDialog(panel, NbBundle.getMessage(MercurialOptionsPanelController.class, "OK_Button"));                                            // NOI18N
         File f = fileChooser.getSelectedFile();
         if (f != null) {
@@ -320,8 +326,7 @@ final class MercurialOptionsPanelController extends OptionsPanelController imple
 
         final PropertiesTable propTable;
 
-        propTable = new PropertiesTable(PropertiesTable.PROPERTIES_COLUMNS, new
-String[] { PropertiesTableModel.COLUMN_NAME_VALUE});
+        propTable = new PropertiesTable(panel.labelForTable, PropertiesTable.PROPERTIES_COLUMNS, new String[] { PropertiesTableModel.COLUMN_NAME_VALUE});
 
         panel.setPropertiesTable(propTable);
 
@@ -335,12 +340,16 @@ String[] { PropertiesTableModel.COLUMN_NAME_VALUE});
 
         DialogDescriptor dd = new DialogDescriptor(panel, NbBundle.getMessage(MercurialOptionsPanelController.class, "CTL_PropertiesDialog_Title", null), true, null); // NOI18N
         final JButton okButton =  new JButton(NbBundle.getMessage(MercurialOptionsPanelController.class, "CTL_Properties_Action_OK")); // NOI18N
-        dd.setOptions(new Object[] {okButton,
-                                    NbBundle.getMessage(MercurialOptionsPanelController.class, "CTL_Properties_Action_Cancel")}); // NOI18N
+        okButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(MercurialOptionsPanelController.class, "CTL_Properties_Action_OK")); // NOI18N
+        final JButton cancelButton =  new JButton(NbBundle.getMessage(MercurialOptionsPanelController.class, "CTL_Properties_Action_Cancel")); // NOI18N
+        cancelButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(MercurialOptionsPanelController.class, "CTL_Properties_Action_Cancel")); // NOI18N
+        dd.setOptions(new Object[] {okButton, cancelButton}); // NOI18N
         dd.setHelpCtx(new HelpCtx(MercurialOptionsPanelController.class));
         panel.putClientProperty("contentTitle", null);  // NOI18N
         panel.putClientProperty("DialogDescriptor", dd); // NOI18N
         Dialog dialog = DialogDisplayer.getDefault().createDialog(dd);
+        dialog.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(MercurialOptionsPanelController.class, "CTL_PropertiesDialog_Title")); // NOI18N
+
         dialog.pack();
         dialog.setVisible(true);
         if (dd.getValue() == okButton) {
