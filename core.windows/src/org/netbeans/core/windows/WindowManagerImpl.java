@@ -68,7 +68,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     
     // XXX PENDING additional, not-yet officialy supported properties.
     /** Name of property change fired when active mode changed. */
-    public static final String PROP_ACTIVE_MODE = "activeMode"; // NOI8N
+    public static final String PROP_ACTIVE_MODE = "activeMode"; // NOI18N
     /** Name of property change fired when maximized mode changed. */
     public static final String PROP_MAXIMIZED_MODE = "maximizedMode"; // NOI18N
     /** Name of property change fired when editor area state changed. */
@@ -79,6 +79,9 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     
     /** The only instance of the window manager implementation in the system */
     private static WindowManagerImpl defaultInstance;
+
+    /** Flag to tell is assertions are on. Note it's package private and non-final for tests */
+    static boolean assertsEnabled;
 
     /** Central unit of window system. */
     private final Central central = new Central();
@@ -92,7 +95,6 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
 
     /** Only for hack 40237, to not call componentShowing twice */ 
     private TopComponent persistenceShowingTC;
-    
     
     /** exclusive invocation of runnables */
     private Exclusive exclusive = new Exclusive();
@@ -118,12 +120,14 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
         return (WindowManagerImpl)Lookup.getDefault().lookup(WindowManager.class);
     }
     
+    @Override
     public void topComponentRequestAttention(TopComponent tc) {
         ModeImpl mode = (ModeImpl) findMode(tc);
         
         central.topComponentRequestAttention(mode, tc);
     }
 
+    @Override
     public void topComponentCancelRequestAttention(TopComponent tc) {
         ModeImpl mode = (ModeImpl) findMode(tc);
         
@@ -139,7 +143,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
      * Implements <code>WindowManager</code> abstract method.
      * @return the MainWindow */
     public Frame getMainWindow() {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         return central.getMainWindow();
     }
@@ -147,7 +151,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     /** Called after a current LookAndFeel change to update the IDE's UI
      * Implements <code>WindowManager</code> abstract method. */
     public void updateUI() {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         central.updateUI();
     }
@@ -158,7 +162,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
      * @return the manager that handles opening, closing and selecting a component
      * @deprecated Don't use this. */
     protected synchronized WindowManager.Component createTopComponentManager(TopComponent c) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         return null;
     }
@@ -168,7 +172,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
      * @return fake implementation of only workspace
      * @deprecated Doesn't have a sense now. Workspaces aren't supported anymore. */
     public Workspace createWorkspace(String name, String displayName) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         // get back fake workspace.
         return this;
@@ -178,7 +182,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
      * @return fake implementation of only workspace
      * @deprecated Doesn't have a sense now. Workspaces aren't supported anymore. */
     public Workspace findWorkspace(String name) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         // PENDING what to return?
         return this;
@@ -189,7 +193,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
      * @return array with only one (fake) workspace impl
      * @deprecated Doesn't have a sense now. Workspaces aren't supported anymore. */
     public Workspace[] getWorkspaces() {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         return new Workspace[] {this};
     }
@@ -199,7 +203,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
      * @param workspaces array of new workspaces
      * @deprecated Doesn't have a sense now. Workspaces aren't supported anymore. */
     public void setWorkspaces(Workspace[] workspaces) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
     }
 
     /** Gets current workspace. Can be changed by calling Workspace.activate ()
@@ -207,7 +211,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
      * @return fake implementation of only workspace
      * @deprecated Doesn't have a sense now. Workspaces aren't supported anymore. */
     public Workspace getCurrentWorkspace() {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         // Gets back this as a fake workspace.
         return this;
@@ -232,7 +236,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
      * @return <code>TopComponent</code> instance corresponding to unique ID
      */
     public TopComponent findTopComponent(String tcID) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         return getTopComponentForID(tcID);
     }
@@ -517,7 +521,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     /*private*/ ModeImpl getDefaultEditorMode() {
         ModeImpl mode = findModeImpl("editor"); // NOI18N
         if(mode == null) {
-            Logger.getLogger(WindowManagerImpl.class.getName()).log(Level.INFO, null,
+            Logger.getLogger(WindowManagerImpl.class.getName()).log(Level.FINE, null,
                               new java.lang.IllegalStateException("Creating default editor mode. It shouldn\'t happen this way")); // NOI18N
             // PENDING should be defined in winsys layer?
             ModeImpl newMode = createModeImpl("editor", Constants.MODE_KIND_EDITOR, true); // NOI18N
@@ -754,6 +758,11 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
 
     /** Sets visible or invisible window system GUI. */
     public void setVisible(boolean visible) {
+        if( visible ) {
+            FloatingWindowTransparencyManager.getDefault().start();
+        } else {
+            FloatingWindowTransparencyManager.getDefault().stop();
+        }
         SwingUtilities.invokeLater(exclusive);
         central.setVisible(visible);
     }
@@ -1011,6 +1020,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     /////////////////////////////
 
     /** Overrides superclass method, to enhance access modifier. */
+    @Override
     public void componentShowing(TopComponent tc) {
         if((tc != null) && (tc != persistenceShowingTC)) {
             super.componentShowing(tc);
@@ -1025,6 +1035,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     }
     
     /** Overrides superclass method, to enhance access modifier. */
+    @Override
     public void componentHidden(TopComponent tc) {
         if(tc != null) {
             super.componentHidden(tc);
@@ -1040,8 +1051,9 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
         topComponentOpenAtTabPosition(tc, -1);
     }
 
+    @Override
     protected void topComponentOpenAtTabPosition (TopComponent tc, int position) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         if (tc == null) {
             throw new IllegalArgumentException ("Cannot open a null " +
@@ -1064,7 +1076,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
         ModeImpl maximizedMode = getCurrentMaximizedMode();
         if(maximizedMode != null && mode != maximizedMode
            && mode.getKind() != Constants.MODE_KIND_SLIDING
-           && central.isViewMaximized() ) {
+           && (central.isViewMaximized() || mode.getKind() == Constants.MODE_KIND_EDITOR)) {
             switchMaximizedMode(null);
         }
         
@@ -1088,8 +1100,9 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
         }
     }
     
+    @Override
     protected int topComponentGetTabPosition (TopComponent tc) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         ModeImpl mode = getModeForOpenedTopComponent(tc);
         if(mode != null) {
@@ -1100,7 +1113,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     }
     
     protected void topComponentClose(TopComponent tc) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         boolean opened = topComponentIsOpened(tc);
         if(!opened) {
@@ -1113,13 +1126,20 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
                 central.switchMaximizedMode( null );
                 topComponentClose( tc );
             } else {
+                TopComponent recentTc = null;
+                if( mode.getKind() == Constants.MODE_KIND_EDITOR ) {
+                    //an editor document is being closed so let's find the most recent editor to select
+                    recentTc = central.getRecentTopComponent( mode, tc );
+                }
                 mode.close(tc);
+                if( null != recentTc )
+                    recentTc.requestActive();
             }
         }
     }
     
     protected void topComponentRequestActive(TopComponent tc) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         ModeImpl mode = getModeForOpenedTopComponent(tc);
         if(mode != null) {
@@ -1128,7 +1148,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     }
     
     protected void topComponentRequestVisible(TopComponent tc) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         ModeImpl mode = getModeForOpenedTopComponent(tc);
         if(mode != null) {
@@ -1137,7 +1157,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     }
 
     protected void topComponentDisplayNameChanged(TopComponent tc, String displayName) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         ModeImpl mode = getModeForOpenedTopComponent(tc);
         if(mode != null) {
@@ -1151,7 +1171,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     }
     
     protected void topComponentToolTipChanged(TopComponent tc, String toolTip) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         ModeImpl mode = getModeForOpenedTopComponent(tc);
         if(mode != null) {
@@ -1160,7 +1180,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     }
     
     protected void topComponentIconChanged(TopComponent tc, Image icon) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         ModeImpl mode = getModeForOpenedTopComponent(tc);
         if(mode != null) {
@@ -1169,25 +1189,25 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     }
 
     protected void topComponentActivatedNodesChanged(TopComponent tc, Node[] activatedNodes) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         notifyRegistrySelectedNodesChanged(tc, activatedNodes);
     }
     
     protected boolean topComponentIsOpened(TopComponent tc) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         return getModeForOpenedTopComponent(tc) != null;
     }
     
     protected Action[] topComponentDefaultActions(TopComponent tc) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         return ActionUtils.createDefaultPopupActions(tc);
     }
     
     protected String topComponentID (TopComponent tc, String preferredID) {
-        assertEventDispatchThreadWeak();
+        warnIfNotInEDT();
         
         if (preferredID == null) {
             Logger.getLogger(WindowManagerImpl.class.getName()).log(Level.WARNING, null,
@@ -1211,8 +1231,10 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
             return false;
         //check opened TopComponents first to avoid AWT assertion if possible
         for(ModeImpl mode: getModes()) {
+            if( mode.getKind() != Constants.MODE_KIND_EDITOR )
+                continue;
             if( mode.containsTopComponent( tc ) ) {
-                return mode.getKind() == Constants.MODE_KIND_EDITOR;
+                return true;
             }
         }
 
@@ -1225,8 +1247,10 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
         if( null == tc )
             return false;
         for(ModeImpl mode: getModes()) {
+            if( mode.getKind() != Constants.MODE_KIND_EDITOR )
+                continue;
             if( mode.getOpenedTopComponents().contains( tc ) ) {
-                return mode.getKind() == Constants.MODE_KIND_EDITOR;
+                return true;
             }
         }
 
@@ -1425,19 +1449,52 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
         return rp.getClientProperty(Constants.SEPARATE_WINDOW_PROPERTY) != null;
     }
 
-    private static final String ASSERTION_ERROR_MESSAGE = "WindowsAPI is required to be called from AWT thread only, see " // NOI18N
+    private static final String ASSERTION_ERROR_MESSAGE = "Window System API is required to be called from AWT thread only, see " // NOI18N
         + "http://core.netbeans.org/proposals/threading/"; // NOI18N
     
     static void assertEventDispatchThread() {
         assert SwingUtilities.isEventDispatchThread() : ASSERTION_ERROR_MESSAGE;
     }
 
-    // PENDING Just temporary until all 'bad' calls are really put into AWT thread.
-    static void assertEventDispatchThreadWeak() {
+    static {
+        assertsEnabled = false;
+        assert assertsEnabled = true;  // Intentional side-effect!!!
+    }
+
+    /** Weaker form of assertion to control if client's code is calling
+     * winsys from ED thread. Level of logged exception is lower if
+     * assertions are disabled (for releases etc).
+     */
+    static void warnIfNotInEDT () {
+        Level level = assertsEnabled ? Level.WARNING : Level.FINE;
         if(!SwingUtilities.isEventDispatchThread()) {
-            Logger.getLogger(WindowManagerImpl.class.getName()).log(Level.WARNING, null,
-                              new java.lang.IllegalStateException("Assertion failed. " +
-                                                                  ASSERTION_ERROR_MESSAGE)); // NOI18N
+            // tries to catch known JDK problem, SwingUtilities.isEventDispatchThread()
+            // returns false even if it *is* in ED thread.
+            // if we find "java.awt.EventDispatchThread" stack line, it's probable
+            // that we hit this JDK problem (see links below)
+            boolean isJDKProblem = false;
+            StackTraceElement[] elems = Thread.currentThread().getStackTrace();
+            for (StackTraceElement elem : elems) {
+                if ("java.awt.EventDispatchThread".equals(elem.getClassName())) {
+                    isJDKProblem = true;
+                    break;
+                }
+            }
+
+            if (!isJDKProblem) {
+                // problem somewhere in NetBeans modules' code
+                Logger.getLogger(WindowManagerImpl.class.getName()).log(level, null,
+                        new java.lang.IllegalStateException(
+                        "Problem in some module which uses Window System: "
+                        + ASSERTION_ERROR_MESSAGE));
+            } else {
+                // probably known problem in JDK
+                Logger.getLogger(WindowManagerImpl.class.getName()).log(level, null,
+                        new java.lang.IllegalStateException(
+                        "Known problem in JDK occurred. If you are interested, vote and report at:\n" +
+                        "http://bugs.sun.com/view_bug.do?bug_id=6424157, http://bugs.sun.com/view_bug.do?bug_id=6553239 \n" +
+                        "Also see related discussion at http://www.netbeans.org/issues/show_bug.cgi?id=90590"));
+            }
         }
     }
 
