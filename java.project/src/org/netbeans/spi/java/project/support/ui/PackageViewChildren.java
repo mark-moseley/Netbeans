@@ -152,22 +152,18 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
         if ( fo != null && fo.isValid()) {
             Object o = names2nodes.get(path);
             PackageNode n;
-            if ( o == NODE_NOT_CREATED ) {
-                n = new PackageNode( root, DataFolder.findFolder( fo ), false );
+            DataFolder folder = DataFolder.findFolder(fo);
+            if (folder.isValid()) {
+                if ( o == NODE_NOT_CREATED ) {
+                    n = new PackageNode(root, folder, false);
+                } else { // NODE_NOT_CREATED_EMPTY, PackageNode
+                    n = new PackageNode(root, folder);
+                }
+                names2nodes.put(path, n);
+                return new Node[] {n};
             }
-            else if ( o ==  NODE_NOT_CREATED_EMPTY ) {
-                n = new PackageNode( root, DataFolder.findFolder( fo ), true );
-            }
-            else {
-                n = new PackageNode( root, DataFolder.findFolder( fo ) );
-            }            
-            names2nodes.put(path, n);
-            return new Node[] {n};
         }
-        else {
-            return new Node[0];
-        }
-        
+        return new Node[0];
     }
     
     RequestProcessor.Task task = RequestProcessor.getDefault().create( this );
@@ -999,7 +995,7 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
         }
         
         private Image getMyOpenedIcon(int type) {
-            return getIcon(type);
+            return getMyIcon(type);
         }
         
         public void update() {
@@ -1146,7 +1142,7 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
                 
         public boolean acceptDataObject(DataObject obj) {                
             FileObject fo = obj.getPrimaryFile();                
-            return  VisibilityQuery.getDefault().isVisible(fo) && !(obj instanceof DataFolder) && group.contains(fo);
+            return  fo.isValid() && VisibilityQuery.getDefault().isVisible(fo) && !(obj instanceof DataFolder) && group.contains(fo);
         }
         
         public void stateChanged( ChangeEvent e) {            
