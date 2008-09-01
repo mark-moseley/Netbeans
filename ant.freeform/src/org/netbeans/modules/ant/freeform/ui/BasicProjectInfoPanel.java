@@ -42,16 +42,18 @@
 package org.netbeans.modules.ant.freeform.ui;
 
 import java.io.File;
+import java.io.IOException;
 import java.text.MessageFormat;
 import javax.swing.JFileChooser;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import org.apache.tools.ant.module.api.support.AntScriptUtils;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
-import org.netbeans.modules.ant.freeform.Util;
 import org.netbeans.spi.project.ui.support.ProjectChooser;
+import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.HelpCtx;
@@ -124,58 +126,62 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         return Boolean.valueOf(mainProject.isSelected());
     }
 
-    public String getError() {
+    public String[] getError() {
         if (projectLocation.getText().length() == 0) {
-            return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_1");
+            return new String[] { org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_1"), WizardDescriptor.PROP_INFO_MESSAGE };  //NOI18N
         }
         if (!getProjectLocation().exists()) {
-            return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_2");
+            return new String[] { org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_2"), WizardDescriptor.PROP_ERROR_MESSAGE };  //NOI18N
         }
         if (antScript.getText().length() == 0) {
-            return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_3");
+            return new String[] { org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_3"), WizardDescriptor.PROP_INFO_MESSAGE };  //NOI18N
         }
         if (!getAntScript().exists()) {
-            return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_4");
+            return new String[] { org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_4"), WizardDescriptor.PROP_ERROR_MESSAGE };  //NOI18N
         }
         if (!antScriptValidityChecked) {
             FileObject fo = FileUtil.toFileObject(getAntScript());
-            if (fo != null && Util.getAntScriptTargetNames(fo) != null) {
-                antScriptValidityChecked = true;
-            } else {
-                return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_5");
+            if (fo != null) {
+                try {
+                    AntScriptUtils.getCallableTargetNames(fo);
+                    antScriptValidityChecked = true;
+                } catch (IOException x) {/* failed */}
+            }
+            if (!antScriptValidityChecked) {
+                return new String[] { org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_5"), WizardDescriptor.PROP_ERROR_MESSAGE };  //NOI18N
             }
         }
         if (getProjectName().length() == 0) {
-            return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_6");
+            return new String[] { org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_6"), WizardDescriptor.PROP_INFO_MESSAGE };  //NOI18N
         }
         if (projectFolder.getText().length() == 0) {
-            return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_7");
+            return new String[] { org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_7"), WizardDescriptor.PROP_INFO_MESSAGE };  //NOI18N
         }
         if (getAsFile(projectFolder.getText() + File.separatorChar + "nbproject").exists()){ // NOI18N
-            return org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_8");
+            return new String[] { org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_8"), WizardDescriptor.PROP_ERROR_MESSAGE };  //NOI18N
         }
         
         Project p;
-        File projectFolder = getProjectFolder();
+        File prjFolder = getProjectFolder();
         
-        assert projectFolder != null;
+        assert prjFolder != null;
         
-        if ((p = FileOwnerQuery.getOwner(projectFolder.toURI())) != null && projectFolder.equals(FileUtil.toFile(p.getProjectDirectory()))) {
+        if ((p = FileOwnerQuery.getOwner(prjFolder.toURI())) != null && prjFolder.equals(FileUtil.toFile(p.getProjectDirectory()))) {
             ProjectInformation pi = p.getLookup().lookup(ProjectInformation.class);
             String displayName = (pi == null ? "" : pi.getDisplayName());   //NOI18N
-            return MessageFormat.format(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_9"),
-                new Object[] {displayName});
+            return new String[] { MessageFormat.format(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_9"),  //NOI18N
+                new Object[] {displayName}), WizardDescriptor.PROP_ERROR_MESSAGE };
         }
         
-        File projectLocation = getProjectLocation();
+        File prjLocation = getProjectLocation();
         
-        assert projectLocation != null;
+        assert prjLocation != null;
         
-        if ((p = FileOwnerQuery.getOwner(projectLocation.toURI())) != null && projectLocation.equals(FileUtil.toFile(p.getProjectDirectory()))) {
+        if ((p = FileOwnerQuery.getOwner(prjLocation.toURI())) != null && prjLocation.equals(FileUtil.toFile(p.getProjectDirectory()))) {
             ProjectInformation pi = p.getLookup().lookup(ProjectInformation.class);
             String displayName = (pi == null ? "" : pi.getDisplayName());   //NOI18N
-            return MessageFormat.format(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_10"),
-                new Object[] {displayName});
+            return new String[] { MessageFormat.format(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_Error_10"),  //NOI18N
+                new Object[] {displayName}), WizardDescriptor.PROP_ERROR_MESSAGE };
         }
         return null;
     }
@@ -210,13 +216,13 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         ignoreEvent = false;
 
         if (projectFolder.getDocument() == e.getDocument()) {
-            projectFolderTouched = !"".equals(projectFolder.getText());
+            projectFolderTouched = !"".equals(projectFolder.getText());  //NOI18N
         }
         if (antScript.getDocument() == e.getDocument()) {
-            antScriptTouched = !"".equals(antScript.getText());
+            antScriptTouched = !"".equals(antScript.getText());  //NOI18N
         }
         if (projectName.getDocument() == e.getDocument()) {
-            projectNameTouched = !"".equals(projectName.getText());
+            projectNameTouched = !"".equals(projectName.getText());  //NOI18N
         }
 
         listener.stateChanged(null);
@@ -250,7 +256,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
             if (as.exists()) {
                 FileObject fo = FileUtil.toFileObject(as);
                 assert fo != null : as;
-                String name = Util.getAntScriptName(fo);
+                String name = AntScriptUtils.getAntScriptName(fo);
                 if (name != null) {
                     projectName.setText(name);
                     return;
@@ -300,14 +306,14 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         jLabel7 = new javax.swing.JLabel();
         jTextArea2 = new javax.swing.JTextArea();
 
-        setPreferredSize(new java.awt.Dimension(323, 223));
+        setPreferredSize(new java.awt.Dimension(400, 360));
         setLayout(new java.awt.GridBagLayout());
 
         org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_BasicProjectInfoPanel_jLabel1")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = 3;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(0, 0, 12, 0);
+        gridBagConstraints.insets = new java.awt.Insets(0, 0, 10, 0);
         add(jLabel1, gridBagConstraints);
         jLabel1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "ACSD_BasicProjectInfoPanel_jLabel1")); // NOI18N
 
@@ -327,7 +333,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         gridBagConstraints.gridy = 3;
         gridBagConstraints.gridwidth = 3;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(24, 0, 12, 0);
+        gridBagConstraints.insets = new java.awt.Insets(16, 0, 10, 0);
         add(jLabel3, gridBagConstraints);
         jLabel3.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "ACSD_BasicProjectInfoPanel_jLabel3")); // NOI18N
 
@@ -434,7 +440,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         gridBagConstraints.gridy = 6;
         gridBagConstraints.gridwidth = 3;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.insets = new java.awt.Insets(12, 0, 12, 0);
+        gridBagConstraints.insets = new java.awt.Insets(12, 0, 10, 0);
         add(jSeparator1, gridBagConstraints);
 
         mainProject.setSelected(true);
@@ -467,6 +473,8 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.insets = new java.awt.Insets(4, 10, 4, 4);
         jPanel2.add(jTextArea2, gridBagConstraints);
+        jTextArea2.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "ACSN_Freeform_Warning_Message")); // NOI18N
+        jTextArea2.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(BasicProjectInfoPanel.class, "ACSD_Freeform_Warning_Message")); // NOI18N
 
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -489,7 +497,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         } else {
             chooser.setSelectedFile(ProjectChooser.getProjectsFolder());
         }
-        chooser.setDialogTitle(NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_Browse_Location"));
+        chooser.setDialogTitle(NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_Browse_Location"));  //NOI18N
         if ( JFileChooser.APPROVE_OPTION == chooser.showOpenDialog(this)) {
             File projectLoc = FileUtil.normalizeFile(chooser.getSelectedFile());
             projectLocation.setText(projectLoc.getAbsolutePath());
@@ -507,7 +515,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         } else {
             chooser.setSelectedFile(ProjectChooser.getProjectsFolder());
         }
-        chooser.setDialogTitle(NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_Browse_Project_Folder"));
+        chooser.setDialogTitle(NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_Browse_Project_Folder"));  //NOI18N
         if ( JFileChooser.APPROVE_OPTION == chooser.showOpenDialog(this)) {
             File projectDir = FileUtil.normalizeFile(chooser.getSelectedFile());
             projectFolder.setText(projectDir.getAbsolutePath());
@@ -525,7 +533,7 @@ public class BasicProjectInfoPanel extends javax.swing.JPanel implements HelpCtx
         } else {
             chooser.setSelectedFile(ProjectChooser.getProjectsFolder());
         }
-        chooser.setDialogTitle(NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_Browse_Build_Script"));
+        chooser.setDialogTitle(NbBundle.getMessage(BasicProjectInfoPanel.class, "LBL_Browse_Build_Script"));  //NOI18N
         if ( JFileChooser.APPROVE_OPTION == chooser.showOpenDialog(this)) {
             File script = FileUtil.normalizeFile(chooser.getSelectedFile());
             antScript.setText(script.getAbsolutePath());

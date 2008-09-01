@@ -40,11 +40,9 @@
 package org.netbeans.modules.ant.freeform.ui;
 
 import org.netbeans.modules.ant.freeform.FreeformProjectGenerator;
-
 import org.netbeans.modules.ant.freeform.spi.support.Util;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
-
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 
@@ -83,7 +81,7 @@ public class GeneralInformationPanel extends javax.swing.JPanel {
         contentsFolderTextField = new javax.swing.JTextField();
         projectFolderTextField = new javax.swing.JTextField();
 
-        setPreferredSize(new java.awt.Dimension(560, 450));
+        setPreferredSize(new java.awt.Dimension(600, 500));
         setLayout(new java.awt.GridBagLayout());
 
         panelLabel.setText(org.openide.util.NbBundle.getMessage(GeneralInformationPanel.class, "GeneralInformationPanel.panelLabel.text")); // NOI18N
