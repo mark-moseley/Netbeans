@@ -56,12 +56,13 @@ import org.netbeans.modules.sql.framework.ui.view.graph.MetaTableModel;
 import java.util.ArrayList;
 import net.java.hulp.i18n.Logger;
 import org.netbeans.modules.etl.logger.Localizer;
-import org.netbeans.modules.etl.logger.LogUtil;
+import org.netbeans.modules.etl.ui.DataObjectProvider;
 import org.netbeans.modules.sql.framework.model.DBMetaDataFactory;
 import org.netbeans.modules.sql.framework.common.utils.DBExplorerUtil;
 import org.netbeans.modules.sql.framework.model.DBConnectionDefinition;
 import org.netbeans.modules.sql.framework.model.SQLDBModel;
 import org.netbeans.modules.sql.framework.model.impl.AbstractDBTable;
+import org.netbeans.modules.sql.framework.model.impl.PrimaryKeyImpl;
 
 
 
@@ -72,7 +73,7 @@ import org.netbeans.modules.sql.framework.model.impl.AbstractDBTable;
  */
 public class SQLDBSynchronizationVisitor {
 
-    private static transient final Logger mLogger = LogUtil.getLogger(SQLDBSynchronizationVisitor.class.getName());
+    private static transient final Logger mLogger = Logger.getLogger(SQLDBSynchronizationVisitor.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
     private class Table extends AbstractDBTable {
 
@@ -83,7 +84,7 @@ public class SQLDBSynchronizationVisitor {
     
     public List<ValidationInfo> infoList = new ArrayList<ValidationInfo>();
 
-    private void mergeUpdates(SQLDBColumn collabColumn, List newColumns, SQLDBTable table, MetaTableModel tableModel) {
+    private void mergeUpdates(SQLDBColumn collabColumn, List newColumns, SQLDBTable table, MetaTableModel tableModel, boolean ignorePrecision) {
         SQLDBColumn newColumn = null;
         boolean columnMatched = true;
 
@@ -98,10 +99,11 @@ public class SQLDBSynchronizationVisitor {
             // If column name match
             if (columnMatched) {
                 // Check whether the column metadata is not matching
-                if (compareWith(collabColumn, newColumn) != 0) {
+                if (compareWith(collabColumn, newColumn, ignorePrecision) != 0) {
                     // *** UPDATE ***
-                    copyFrom(newColumn, collabColumn);
+                    copyFrom(newColumn, collabColumn, ignorePrecision);
                     tableModel.updateColumn(collabColName, collabColumn);
+                    DataObjectProvider.getProvider().getActiveDataObject().setModified(true);
                     String desc = collabColumn.getQualifiedName() + " was updated from Database " + table.getParent().getModelName();
                     ValidationInfo vInfo = new ValidationInfoImpl(collabColumn, desc, ValidationInfo.VALIDATION_WARNING);
                     infoList.add(vInfo);
@@ -114,24 +116,27 @@ public class SQLDBSynchronizationVisitor {
         if (!columnMatched) {
             // *** DELETE *** the column
             table.deleteColumn(collabColumn.getName());
-            tableModel.removeColumn(collabColumn);
+            tableModel.removeColumn(collabColumn); 
+            DataObjectProvider.getProvider().getActiveDataObject().setModified(true);
             String desc = collabColumn.getQualifiedName() + " was deleted since it no longer exists in Database " + table.getParent().getModelName();
             ValidationInfo vInfo = new ValidationInfoImpl(collabColumn, desc, ValidationInfo.VALIDATION_WARNING);
             infoList.add(vInfo);
         }
     }
 
-    public void copyFrom(SQLDBColumn source, SQLDBColumn target) {
+    public void copyFrom(SQLDBColumn source, SQLDBColumn target, boolean ignorePrecision) {
         target.setJdbcType(source.getJdbcType());
+        if(!ignorePrecision) {
         target.setScale(source.getScale());
         target.setPrecision(source.getPrecision());
+        }
         target.setOrdinalPosition(source.getOrdinalPosition());
         target.setPrimaryKey(source.isPrimaryKey());
         target.setForeignKey(source.isForeignKey());
         target.setNullable(source.isNullable());
     }
 
-    private int compareWith(SQLDBColumn collabCol, SQLDBColumn newCol) {
+    private int compareWith(SQLDBColumn collabCol, SQLDBColumn newCol, boolean ignorePrecision) {
         // compare primary keys
         if (collabCol.isPrimaryKey() && !newCol.isPrimaryKey()) {
             return -1;
@@ -151,6 +156,7 @@ public class SQLDBSynchronizationVisitor {
             return -1;
         }
 
+        if(!ignorePrecision) {
         // compare scale
         if (collabCol.getScale() != newCol.getScale()) {
             return -1;
@@ -159,6 +165,7 @@ public class SQLDBSynchronizationVisitor {
         // compare getPrecision
         if (collabCol.getPrecision() != newCol.getPrecision()) {
             return -1;
+        }
         }
 
         // compare getOrdinalPosition
@@ -202,6 +209,7 @@ public class SQLDBSynchronizationVisitor {
             // *** ADD *** the column
             table.addColumn(col);
             tableModel.addColumn(col);
+            DataObjectProvider.getProvider().getActiveDataObject().setModified(true);
             String desc1 = "Found new column in Database -> " + table.getParent().getModelName() + col.getQualifiedName() + " was added";
             ValidationInfo vInfo1 = new ValidationInfoImpl(collabColumn, desc1, ValidationInfo.VALIDATION_INFO);
             infoList.add(vInfo1);
@@ -219,26 +227,73 @@ public class SQLDBSynchronizationVisitor {
         try {
             meta.connectDB(conn);
 
-            if (meta.isTableOrViewExist(collabTable.getCatalog(), collabTable.getSchema(), collabTable.getName())) {
+            if (meta.isTableOrViewExist(AbstractDBTable.getResolvedCatalogName(collabTable), AbstractDBTable.getResolvedSchemaName(collabTable), AbstractDBTable.getResolvedTableName(collabTable))) {
                 // Get the table from database
-                Table newTable = new Table(collabTable.getName(), collabTable.getCatalog(), collabTable.getSchema());
+                Table newTable = new Table(AbstractDBTable.getResolvedTableName(collabTable),AbstractDBTable.getResolvedCatalogName(collabTable),AbstractDBTable.getResolvedSchemaName(collabTable));
                 meta.populateColumns(newTable);
 
                 List collabColumns = collabTable.getColumnList();
                 List newColumns = newTable.getColumnList();
 
                 for (Iterator itr = collabColumns.iterator(); itr.hasNext();) {
-                    mergeUpdates((SQLDBColumn) itr.next(), newColumns, collabTable, tableModel);
+                    SQLDBColumn oldCol = (SQLDBColumn) itr.next();
+                    int sqlTypeCode = oldCol.getJdbcType();
+                    boolean ignorePrecision = false;
+                    if ((sqlTypeCode == java.sql.Types.DATE || sqlTypeCode == java.sql.Types.TIME || sqlTypeCode == java.sql.Types.TIMESTAMP || sqlTypeCode == java.sql.Types.NUMERIC) && connDef.getDBType().equals(DBMetaDataFactory.AXION)) {
+                        ignorePrecision = true;
+                    }
+                    mergeUpdates(oldCol, newColumns, collabTable, tableModel, ignorePrecision);
                 }
                 for (Iterator itr = newColumns.iterator(); itr.hasNext();) {
                     mergeNewColumns((SQLDBColumn) itr.next(), collabColumns, collabTable, tableModel);
                 }
+                
+                if ((newTable.getPrimaryKey() != null)) {
+                    List<String> pkCols = newTable.getPrimaryKey().getColumnNames();
+                    for (String col : pkCols) {
+                        mLogger.fine("DB PK Column(s):" + col.toString());
+                    }
+                    mLogger.fine("DB PK : " + newTable.getPrimaryKey().toString());
+                } else {
+                    mLogger.fine("Database table " + newTable.getName() + " has no PK");
+                }
+                
+                if ((collabTable.getPrimaryKey() != null)) {
+                    List<String> pkCols = collabTable.getPrimaryKey().getColumnNames();
+                    for (String col : pkCols) {
+                        mLogger.fine("Collab Table PK Column(s):" + col.toString());
+                    }
+                    mLogger.fine("Collab Table PK : " + collabTable.getPrimaryKey().toString());
+                }
+                else {
+                    mLogger.fine("Collab Table " + collabTable.getName() + " has no PK.");
+                }
+                                
+                ((AbstractDBTable) collabTable).setPrimaryKey((PrimaryKeyImpl) newTable.getPrimaryKey());
+
+                if ((collabTable.getPrimaryKey() != null)) {
+                    String nbBundle1 = collabTable.getQualifiedName() + " - Primary Key: ("
+                            + collabTable.getPrimaryKey().toString() + ")";
+                    
+                    ValidationInfo vInfo = new ValidationInfoImpl(collabTable, nbBundle1, ValidationInfo.VALIDATION_INFO);
+                    infoList.add(vInfo);
+                    return;
+                } else {
+                    String nbBundle1 = collabTable.getQualifiedName() + " has no Primary Key.";
+                    ValidationInfo vInfo = new ValidationInfoImpl(collabTable, nbBundle1, ValidationInfo.VALIDATION_INFO);
+                    infoList.add(vInfo);
+                    return;
+                }
 
             // TODO: XXXXX We also need to check PK, FK, Index modifications XXXXX
             } else {
-                String nbBundle1 = mLoc.t("PRSR001: Table {0} is removed or renamed in Database",collabTable.getName());
-                String desc = Localizer.parse(nbBundle1) + " " + connDef.getConnectionURL();
-                ValidationInfo vInfo = new ValidationInfoImpl(collabTable, desc, ValidationInfo.VALIDATION_ERROR);
+                boolean createIfNotExists = false;
+                if (collabTable instanceof TargetTable) {
+                    createIfNotExists = ((TargetTable) collabTable).isCreateTargetTable();
+                }
+                String nbBundle1 = mLoc.t("BUND299: Table {0} is removed or renamed in Database", collabTable.getName());
+                String desc = nbBundle1.substring(15) + " " + connDef.getConnectionURL();
+                ValidationInfo vInfo = new ValidationInfoImpl(collabTable, desc, createIfNotExists ? ValidationInfo.VALIDATION_WARNING : ValidationInfo.VALIDATION_ERROR);
                 infoList.add(vInfo);
                 return;
             }
