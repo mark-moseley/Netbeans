@@ -40,16 +40,16 @@
  */
 package org.netbeans.modules.php.project.ui.actions;
 
+
 import java.net.MalformedURLException;
+import java.net.URL;
 import org.netbeans.modules.php.project.PhpProject;
-import org.netbeans.modules.php.project.ProjectPropertiesSupport;
 import org.netbeans.modules.php.project.spi.XDebugStarter;
 import org.netbeans.modules.web.client.tools.api.WebClientToolsProjectUtils;
 import org.netbeans.modules.web.client.tools.api.WebClientToolsSessionStarterService;
 import org.netbeans.spi.project.ActionProvider;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
-import org.openide.NotifyDescriptor.Message;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
@@ -58,48 +58,53 @@ import org.openide.util.NbBundle;
 /**
  * @author Radek Matous
  */
-public class DebugCommand extends Command implements Displayable {
-
-    public static final String ID = ActionProvider.COMMAND_DEBUG;
-    public static String DISPLAY_NAME = NbBundle.getMessage(DebugCommand.class, "LBL_DebugProject");
-
+public class DebugSingleCommand extends DebugCommand {
+    public static final String ID = ActionProvider.COMMAND_DEBUG_SINGLE;
+    public static String DISPLAY_NAME = DebugCommand.DISPLAY_NAME;
     private final DebugLocalCommand debugLocalCommand;
 
-    public DebugCommand(PhpProject project) {
+    public DebugSingleCommand(PhpProject project) {
         super(project);
         debugLocalCommand = new DebugLocalCommand(project);        
     }
 
     @Override
     public void invokeAction(final Lookup context) throws IllegalArgumentException {
-        boolean scriptSelected = isScriptSelected();
-        if (scriptSelected) {
+        if (isScriptSelected()) {
             // we don't need to check anything here, because if the customizer show, then scriptSelected == false
-            debugLocalCommand.invokeAction(null);
+            debugLocalCommand.invokeAction(context);
         } else {
-            if (!isIndexFileSet() || !isUrlSet()) {
-                // property not set yet
+            if (!isUrlSet()) {
                 return;
             }
-            eventuallyUploadFiles();
+            // need to fetch these vars _before_ focus changes (can happen in eventuallyUploadFiles() method)
+            final FileObject startFile = fileForContext(context);
+            final URL[] url = new URL[1];
+            try {
+                url[0] = getURLForDebug(context);
+            } catch (MalformedURLException ex) {
+                //TODO improve error handling
+                Exceptions.printStackTrace(ex);
+            }
+
+            eventuallyUploadFiles(CommandUtils.filesForSelectedNodes());
             Runnable runnable = new Runnable() {
                 public void run() {
-                        try {
-                            showURLForDebugProjectFile();
-                        } catch (MalformedURLException ex) {
+                    try {
+                        showURLForDebug(url[0]);
+                    } catch (MalformedURLException ex) {
                         //TODO improve error handling
-                            Exceptions.printStackTrace(ex);
-                        }
+                        Exceptions.printStackTrace(ex);
                     }
+                }
             };
             
             boolean jsDebuggingAvailable = WebClientToolsSessionStarterService.isAvailable();
             if (!jsDebuggingAvailable || WebClientToolsProjectUtils.getServerDebugProperty(getProject())) {
-                //temporary; after narrowing deps. will be changed
                 XDebugStarter dbgStarter = XDebugStarterFactory.getInstance();
                 if (dbgStarter != null) {
                     if (dbgStarter.isAlreadyRunning()) {
-                        String message = NbBundle.getMessage(DebugCommand.class, "MSG_NoMoreDebugSession");
+                        String message = NbBundle.getMessage(DebugSingleCommand.class, "MSG_NoMoreDebugSession");
                         NotifyDescriptor descriptor = new NotifyDescriptor.Confirmation(message,
                                 NotifyDescriptor.OK_CANCEL_OPTION); //NOI18N
                         boolean confirmed = DialogDisplayer.getDefault().notify(descriptor).equals(NotifyDescriptor.OK_OPTION);
@@ -108,18 +113,7 @@ public class DebugCommand extends Command implements Displayable {
                             invokeAction(context);
                         }
                     } else {
-                        final FileObject fileForProject = fileForProject();
-                        if (fileForProject != null) {
-                            dbgStarter.start(getProject(), runnable, fileForProject, scriptSelected);
-                        } else {
-                            String idxFileName = ProjectPropertiesSupport.getIndexFile(getProject());
-                            String err = NbBundle.getMessage(DebugLocalCommand.class,
-                                    "ERR_Missing_IndexFile", idxFileName);//NOI18N
-
-                            final Message messageDecriptor = new NotifyDescriptor.Message(err,
-                                    NotifyDescriptor.WARNING_MESSAGE);
-                            DialogDisplayer.getDefault().notify(messageDecriptor);
-                        }
+                        dbgStarter.start(getProject(), runnable, startFile, isScriptSelected());
                     }
                 }
             } else {
@@ -130,7 +124,7 @@ public class DebugCommand extends Command implements Displayable {
 
     @Override
     public boolean isActionEnabled(Lookup context) throws IllegalArgumentException {
-        return XDebugStarterFactory.getInstance() != null;
+        return fileForContext(context) != null && XDebugStarterFactory.getInstance() != null;
     }
 
     @Override
@@ -138,6 +132,7 @@ public class DebugCommand extends Command implements Displayable {
         return ID;
     }
 
+    @Override
     public String getDisplayName() {
         return DISPLAY_NAME;
     }
