@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.enterprise.deploy.shared.CommandType;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.IncrementalDeployment;
 import javax.enterprise.deploy.spi.Target;
@@ -55,6 +56,7 @@ import javax.enterprise.deploy.spi.TargetModuleID;
 import javax.enterprise.deploy.spi.DeploymentManager;
 import javax.enterprise.deploy.spi.DeploymentConfiguration;
 import javax.enterprise.deploy.shared.ModuleType;
+import javax.enterprise.deploy.shared.StateType;
 import javax.enterprise.deploy.spi.status.ProgressObject;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.config.ModuleConfiguration;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.Utils;
@@ -62,10 +64,13 @@ import org.netbeans.modules.j2ee.sun.ide.j2ee.runtime.actions.ViewLogAction;
 import org.netbeans.modules.j2ee.sun.share.configbean.SunONEDeploymentConfiguration;
 import org.netbeans.modules.j2ee.sun.api.SunDeploymentManagerInterface;
 import org.netbeans.modules.j2ee.deployment.plugins.api.AppChangeDescriptor;
+import org.netbeans.modules.j2ee.deployment.plugins.api.DeploymentChangeDescriptor;
 import org.netbeans.modules.j2ee.sun.api.ServerInterface;
 import org.netbeans.modules.j2ee.sun.api.ServerLocationManager;
+import org.netbeans.modules.j2ee.sun.ide.ShortCircuitProgressObject;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.DeploymentManagerProperties;
 import org.openide.filesystems.FileObject;
+import org.openide.util.NbBundle;
 
 /**
  *
@@ -172,6 +177,7 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
         return retVal;
     }
     
+    @Override
     public String getModuleUrl(javax.enterprise.deploy.spi.TargetModuleID module) {
         String retVal = null;
         if (null != inner){
@@ -180,7 +186,11 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
         return retVal;
     }
     
-    public ProgressObject incrementalDeploy(TargetModuleID module, AppChangeDescriptor changes) {
+    public ProgressObject incrementalDeploy(TargetModuleID module, AppChangeDescriptor acd) {
+        return incrementalDeploy(module, acd, true);
+    }
+    
+    private ProgressObject incrementalDeploy(TargetModuleID module, AppChangeDescriptor acd, boolean userActivated) {
         //Register resources if any
         
         // XXX
@@ -191,24 +201,33 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
         if((resourceDirs != null) && (dm != null)){
             Utils.registerResources(resourceDirs, (ServerInterface)((SunDeploymentManagerInterface)dm).getManagement());
         }
-        if (null!=dm){
+        if (null!=dm && userActivated){
             ViewLogAction.viewLog((SunDeploymentManagerInterface)dm);
         }
-        
-        return ((IncrementalDeployment)inner).incrementalDeploy(module, changes);
+        // j2eeserver does this check for "regular" in-place deployment
+        // but not for "on-save" in-place deploymnent
+        if (acd.manifestChanged() || acd.descriptorChanged() || acd.classesChanged()
+            || acd.ejbsChanged() || acd.serverDescriptorChanged()) {
+            return ((IncrementalDeployment)inner).incrementalDeploy(module, acd);
+        } else {
+            return new ShortCircuitProgressObject(CommandType.REDEPLOY,
+                        NbBundle.getMessage(ShortCircuitProgressObject.class,"MESS_NO_DEPLOY_NECESSARY"),
+                        StateType.COMPLETED,new TargetModuleID[] { module });
+        }
+
     }
     
-    
-    
     public File getDirectoryForNewApplication(String deploymentName, Target target, DeploymentConfiguration configuration){
-        SunONEDeploymentConfiguration s1dc =(SunONEDeploymentConfiguration) configuration;
-        s1dc.setDeploymentModuleName(deploymentName);
+        if(configuration instanceof SunONEDeploymentConfiguration) {
+            SunONEDeploymentConfiguration s1dc =(SunONEDeploymentConfiguration) configuration;
+            s1dc.setDeploymentModuleName(deploymentName);
+        }
         return null;
     }
     
     public ProgressObject initialDeploy(Target target, J2eeModule app, ModuleConfiguration configuration, File dir) {
         //Register resources if any
-        File[] resourceDirs = Utils.getResourceDirs(app);
+        //File[] resourceDirs = Utils.getResourceDirs(app);
         if((resourceDirs != null) && (dm != null)) {
             Utils.registerResources(resourceDirs, (ServerInterface)((SunDeploymentManagerInterface)dm).getManagement());
         }
@@ -314,6 +333,16 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
     
     public void notifyDeployment(TargetModuleID module) {
         super.notifyDeployment(module);
+    }
+
+    @Override
+    public ProgressObject deployOnSave(TargetModuleID module, DeploymentChangeDescriptor desc) {
+        return incrementalDeploy(module, desc, false);
+    }
+
+    @Override
+    public boolean isDeployOnSaveSupported() {
+        return true;
     }
     
 }
