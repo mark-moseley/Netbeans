@@ -148,6 +148,7 @@ public abstract class UMLNodeWidget extends Widget
     public static final String  GRANDPARENTLOCATION = "GRANDPARENTLOCATION"; // needed for combined fragments
     public static final String SIZE = "SIZE";
     public static final String WIDGET_INDEX = "WIDGET_INDEX";
+    public static final String COLLAPSED = "COLLAPSED";
 
     
     public UMLNodeWidget(Scene scene)
@@ -437,6 +438,20 @@ public abstract class UMLNodeWidget extends Widget
         }
         HashMap map = nodeWriter.getProperties();
         map.put(WIDGET_INDEX, index);
+        
+        //save the "collapsed" state of compartments
+        Collection<? extends CollapsibleWidgetManager> mgrList = getLookup().lookupAll(CollapsibleWidgetManager.class);
+        CollapsibleWidgetManager[] collapWidetMgrs = new CollapsibleWidgetManager[mgrList.size()];
+        mgrList.toArray(collapWidetMgrs); 
+        for (CollapsibleWidgetManager mgr : collapWidetMgrs)
+        {
+            if (mgr.isCompartmentCollapsed())
+            {
+                String name = mgr.getCollapsibleCompartmentName();
+                map.put(name, COLLAPSED);
+            }            
+        }
+        
         nodeWriter.setProperties(map);
         
         nodeWriter.beginGraphNodeWithModelBridge();
@@ -600,6 +615,26 @@ public abstract class UMLNodeWidget extends Widget
                 }
             }
         }
+        //now process collapsed compartments
+        if (props.containsValue(COLLAPSED)) 
+        {
+            Collection<? extends CollapsibleWidgetManager> mgrList = this.getLookup().lookupAll(CollapsibleWidgetManager.class);
+            for (Enumeration<String> e = props.keys(); e.hasMoreElements();) 
+            {
+                String key = e.nextElement();
+                if (props.get(key).equalsIgnoreCase(COLLAPSED)) 
+                {                    
+                    for (CollapsibleWidgetManager mgr : mgrList)
+                    {
+                        if (mgr != null && (mgr.getCollapsibleCompartmentName().equalsIgnoreCase(key)))
+                        {
+                            mgr.collapseWidget(key);
+                            break;
+                        }
+                    }
+                }
+            }
+        }        
     }
     
     private Color parseColor(String color)
@@ -779,6 +814,29 @@ public abstract class UMLNodeWidget extends Widget
         ((UMLNodeWidget) target).setNodeBackground(getNodeBackground());
         ((UMLNodeWidget) target).setNodeForeground(getNodeForeground());
         ((UMLNodeWidget) target).setNodeFont(getNodeFont());
+        
+        
+        Collection<? extends CollapsibleWidgetManager> mgrList = getLookup().lookupAll(CollapsibleWidgetManager.class);
+        CollapsibleWidgetManager[] originalMgrs = new CollapsibleWidgetManager[mgrList.size()];
+        mgrList.toArray(originalMgrs); 
+        
+        mgrList = target.getLookup().lookupAll(CollapsibleWidgetManager.class);
+        CollapsibleWidgetManager[] clonedMgrs = new CollapsibleWidgetManager[mgrList.size()];
+        mgrList.toArray(clonedMgrs); 
+        
+        for (CollapsibleWidgetManager mgr : originalMgrs)
+        {
+            String name = mgr.getCollapsibleCompartmentName();
+            for (CollapsibleWidgetManager cloned : clonedMgrs)
+            {
+                if (name.equals(cloned.getCollapsibleCompartmentName()))
+                {
+                    if (mgr.isCompartmentCollapsed())
+                        cloned.collapseWidget(UMLNodeWidget.COLLAPSE_ALL);
+                    break;
+                }
+            }
+        }
         
         if (setBounds)
         {
