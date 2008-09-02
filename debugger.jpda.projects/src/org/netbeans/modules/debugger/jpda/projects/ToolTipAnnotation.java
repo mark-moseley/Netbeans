@@ -42,14 +42,11 @@
 package org.netbeans.modules.debugger.jpda.projects;
 
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import javax.swing.JEditorPane;
-import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.StyledDocument;
-import org.openide.ErrorManager;
 
 import org.openide.cookies.EditorCookie;
 import org.openide.loaders.DataObject;
@@ -62,29 +59,31 @@ import org.openide.util.RequestProcessor;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.jpda.InvalidExpressionException;
-import org.netbeans.api.debugger.Watch;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.JPDAThread;
-import org.netbeans.api.debugger.jpda.JPDAWatch;
 import org.netbeans.api.debugger.jpda.ObjectVariable;
 import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.spi.debugger.jpda.EditorContext.Operation;
 
-import org.openide.nodes.Node;
-import org.openide.windows.TopComponent;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 
 
 public class ToolTipAnnotation extends Annotation implements Runnable {
+    
+    private static final int TO_STRING_LENGTH_LIMIT = 10000;
 
     private Part lp;
     private EditorCookie ec;
 
     public String getShortDescription () {
+        // [TODO] hack for org.netbeans.modules.debugger.jpda.actions.MethodChooser that disables tooltips
+        if ("true".equals(System.getProperty("org.netbeans.modules.debugger.jpda.doNotShowTooltips"))) { // NOI18N
+            return null;
+        }
         DebuggerEngine currentEngine = DebuggerManager.getDebuggerManager ().
             getCurrentEngine ();
         if (currentEngine == null) return null;
-        JPDADebugger d = (JPDADebugger) currentEngine.lookupFirst 
-            (null, JPDADebugger.class);
+        JPDADebugger d = currentEngine.lookupFirst(null, JPDADebugger.class);
         if (d == null) return null;
 
         Part lp = (Part) getAttachedAnnotatable();
@@ -92,7 +91,7 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         Line line = lp.getLine ();
         DataObject dob = DataEditorSupport.findDataObject (line);
         if (dob == null) return null;
-        EditorCookie ec = (EditorCookie) dob.getCookie (EditorCookie.class);
+        EditorCookie ec = dob.getCookie(EditorCookie.class);
         if (ec == null) 
             return null;
             // Only for editable dataobjects
@@ -111,23 +110,24 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
         } catch (IOException ex) {
             return ;
         }                    
-        JEditorPane ep = getCurrentEditor ();
+        JEditorPane ep = EditorContextDispatcher.getDefault().getCurrentEditor ();
         if (ep == null) return ;
         int offset;
+        boolean[] isMethodPtr = new boolean[] { false };
         String expression = getIdentifier (
             doc, 
             ep,
             offset = NbDocument.findLineOffset (
                 doc,
                 lp.getLine ().getLineNumber ()
-            ) + lp.getColumn ()
+            ) + lp.getColumn (),
+            isMethodPtr
         );
         if (expression == null) return ;
         DebuggerEngine currentEngine = DebuggerManager.getDebuggerManager ().
             getCurrentEngine ();
         if (currentEngine == null) return;
-        JPDADebugger d = (JPDADebugger) currentEngine.lookupFirst 
-            (null, JPDADebugger.class);
+        JPDADebugger d = currentEngine.lookupFirst(null, JPDADebugger.class);
         if (d == null) return;
         JPDAThread t = d.getCurrentThread();
         if (t == null || !t.isSuspended()) return ;
@@ -147,30 +147,45 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
                 }
             }
             if (v == null) {
+                if (isMethodPtr[0]) {
+                    return ; // We do not evaluate methods
+                }
                 v = d.evaluate (expression);
             }
             String type = v.getType ();
-            String value = v.getValue ();
             if (v instanceof ObjectVariable)
                 try {
+                    String toString = null;
+                    try {
+                        java.lang.reflect.Method toStringMethod =
+                                v.getClass().getMethod("getToStringValue",  // NOI18N
+                                                       new Class[] { Integer.TYPE });
+                        toStringMethod.setAccessible(true);
+                        toString = (String) toStringMethod.invoke(v, TO_STRING_LENGTH_LIMIT);
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                    if (toString == null) {
+                        toString = ((ObjectVariable) v).getToStringValue();
+                    }
                     toolTipText = expression + " = " + 
                         (type.length () == 0 ? 
                             "" : 
                             "(" + type + ") ") +
-                        ((ObjectVariable) v).getToStringValue ();
+                        toString;
                 } catch (InvalidExpressionException ex) {
                     toolTipText = expression + " = " +
                         (type.length () == 0 ? 
                             "" : 
                             "(" + type + ") ") +
-                        value;
+                        v.getValue ();
                 }
             else 
                 toolTipText = expression + " = " + 
                     (type.length () == 0 ? 
                         "" : 
                         "(" + type + ") ") +
-                    value;
+                    v.getValue ();
         } catch (InvalidExpressionException e) {
             toolTipText = expression + " = >" + e.getMessage () + "<";
         }
@@ -184,7 +199,8 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
     private static String getIdentifier (
         StyledDocument doc, 
         JEditorPane ep, 
-        int offset
+        int offset,
+        boolean[] isMethodPtr
     ) {
         String t = null;
         if ( (ep.getSelectionStart () <= offset) &&
@@ -225,58 +241,21 @@ public class ToolTipAnnotation extends Annotation implements Runnable {
             }
 
             if (identStart == identEnd) return null;
-            return t.substring (identStart, identEnd);
+            String ident = t.substring (identStart, identEnd);
+            while (identEnd < lineLen &&
+                   Character.isWhitespace(t.charAt(identEnd))
+            ) {
+                identEnd++;
+            }
+            if (identEnd < lineLen && t.charAt(identEnd) == '(') {
+                // We're at a method call
+                isMethodPtr[0] = true;
+            }
+            return ident;
         } catch (BadLocationException e) {
             return null;
         }
     }
     
-    /** 
-     * Returns current editor component instance.
-     *
-     * Used in: ToolTipAnnotation
-     */
-    private static JEditorPane getCurrentEditor_() {
-        EditorCookie e = getCurrentEditorCookie ();
-        if (e == null) return null;
-        JEditorPane[] op = e.getOpenedPanes ();
-        if ((op == null) || (op.length < 1)) return null;
-        return op [0];
-    }
-    
-    private static JEditorPane getCurrentEditor () {
-        if (SwingUtilities.isEventDispatchThread()) {
-            return getCurrentEditor_();
-        } else {
-            final JEditorPane[] ce = new JEditorPane[1];
-            try {
-                SwingUtilities.invokeAndWait(new Runnable() {
-                    public void run() {
-                        ce[0] = getCurrentEditor_();
-                    }
-                });
-            } catch (InvocationTargetException ex) {
-                ErrorManager.getDefault().notify(ex.getTargetException());
-            } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
-            }
-            return ce[0];
-        }
-    }
-    
-    /** 
-     * Returns current editor component instance.
-     *
-     * @return current editor component instance
-     */
-    private static EditorCookie getCurrentEditorCookie () {
-        Node[] nodes = TopComponent.getRegistry ().getActivatedNodes ();
-        if ( (nodes == null) ||
-             (nodes.length != 1) ) return null;
-        Node n = nodes [0];
-        return (EditorCookie) n.getCookie (
-            EditorCookie.class
-        );
-    }
 }
 
