@@ -30,7 +30,7 @@ package org.netbeans.modules.java.hints.errors;
 import org.netbeans.modules.java.hints.infrastructure.HintsTestBase;
 
 /**
- * Tests for Uncaught Exceptions (add throws, aurround with try-catch)
+ * Tests for Uncaught Exceptions (add throws, surround with try-catch)
  * @author Max Sauer
  */
 public class UncaughtExceptionTest extends HintsTestBase {
@@ -108,7 +108,15 @@ public class UncaughtExceptionTest extends HintsTestBase {
     public void testBug113380b() throws Exception {
 	performTestDoNotPerform("TestBug113380", 14, 17);
     }
-    
+
+    /**
+     * Surround with try-catch should be offered inside initializers
+     * @throws java.lang.Exception
+     */
+    public void testSurroundWithTCInsideInitializer() throws Exception {
+        performTestDoNotPerform("TestInitializer", 7, 17);
+    }
+
     public void testBug88923() throws Exception {
         performTestDoNotPerform("TestBug88923", 8, 11);
     }
