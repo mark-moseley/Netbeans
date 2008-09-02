@@ -50,36 +50,46 @@ import javax.management.MalformedObjectNameException;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectName;
 import org.netbeans.napi.gsfret.source.SourceTaskFactoryManager;
-import org.netbeans.editor.Settings;
 import org.netbeans.modules.gsfret.source.ActivatedDocumentListener;
+import org.netbeans.modules.gsfret.source.SourceAccessor;
 import org.netbeans.modules.gsfret.source.usages.ClassIndexManager;
-import org.netbeans.modules.gsfret.source.usages.NBLockFactory;
 import org.netbeans.modules.gsfret.source.usages.RepositoryUpdater;
 import org.netbeans.modules.gsfret.source.util.LowMemoryNotifierMBean;
 import org.netbeans.modules.gsfret.source.util.LowMemoryNotifierMBeanImpl;
 import org.openide.ErrorManager;
 import org.openide.modules.ModuleInstall;
 import org.openide.util.Exceptions;
+import org.openide.util.RequestProcessor;
 import org.openide.windows.WindowManager;
 
 
 public class GsfModuleInstaller extends ModuleInstall {
+//static {
+//    System.setProperty("gsf.preindexing", "true");
+//}    
     private static final boolean ENABLE_MBEANS =
         Boolean.getBoolean("org.netbeans.modules.gsf.enableMBeans"); //NOI18N
 
+    private static final RequestProcessor RP = new RequestProcessor("gsf module install", 1);                  //NOI18N
+
     @Override
     public void restored() {
-        // add editor support for our registered editor types
-        Settings.addInitializer(new GsfEditorSettings());
-        Settings.reset();
-
-        NBLockFactory.clearLocks();
+        // Attempt to deal with load order problem deadlocking on the mac
+        // This was a quickfix for a similar bug to 126558; see
+        //  http://hg.netbeans.org/main/rev/63c10f6d307b
+        // for a better way to fix it
+        SourceAccessor.dummy = 1;
+        
         SourceTaskFactoryManager.register();
 
         WindowManager.getDefault().invokeWhenUIReady(new Runnable() {
                 public void run() {
-                    RepositoryUpdater.getDefault();
-                    ActivatedDocumentListener.register();
+                    RP.post(new Runnable() {
+                        public void run() {
+                            RepositoryUpdater.getDefault();
+                            ActivatedDocumentListener.register();
+                        }
+                    });
                 }
             });
 
@@ -92,15 +102,19 @@ public class GsfModuleInstaller extends ModuleInstall {
         final boolean ret = super.closing();
         RepositoryUpdater.getDefault().close();
         try {
-            ClassIndexManager.getDefault().writeLock(new ClassIndexManager.ExceptionAction<Void>() {
-                 public Void run() throws IOException {
-                     ClassIndexManager.getDefault().close();
-                     return null;
-                 }
-            });
+            for (final Language language : LanguageRegistry.getInstance()) {
+                if (language.getIndexer() != null) {
+                    ClassIndexManager.writeLock(new ClassIndexManager.ExceptionAction<Void>() {
+                         public Void run() throws IOException {
+                             ClassIndexManager.get(language).close();
+                             return null;
+                         }
+                    });
+                }
+            }
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
-        };            
+        }
         if (ENABLE_MBEANS) {
             unregisterMBeans();
         }
