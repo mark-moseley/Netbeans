@@ -41,15 +41,27 @@
 
 package org.netbeans.modules.cnd.completion.cplusplus.hyperlink;
 
+import java.io.IOException;
+import java.util.List;
+import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
-import org.netbeans.editor.BaseDocument;
+import org.netbeans.api.lexer.Token;
+import org.netbeans.cnd.api.lexer.CppTokenId;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmInclude;
+import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
-import org.netbeans.modules.cnd.completion.cplusplus.utils.Token;
+import org.netbeans.modules.cnd.api.model.CsmUID;
+import org.netbeans.modules.cnd.api.model.services.CsmFileInfoQuery;
 import org.netbeans.modules.cnd.completion.impl.xref.ReferencesSupport;
-import org.netbeans.modules.cnd.editor.cplusplus.CCTokenContext;
+import org.netbeans.modules.cnd.modelutil.CsmDisplayUtilities;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.openide.util.NbBundle;
+import org.openide.windows.IOProvider;
+import org.openide.windows.InputOutput;
+import org.openide.windows.OutputEvent;
+import org.openide.windows.OutputListener;
+import org.openide.windows.OutputWriter;
 
 /**
  * Implementation of the hyperlink provider for java language.
@@ -61,34 +73,35 @@ import org.netbeans.modules.cnd.modelutil.CsmUtilities;
  * @author Vladimir Voskresensky
  */
 public class CsmIncludeHyperlinkProvider extends CsmAbstractHyperlinkProvider {
-    private static final boolean NEED_TO_TRACE_UNRESOLVED_INCLUDE = getBoolean("cnd.modelimpl.trace.failed.include", false); 
-   
+    private static final boolean NEED_TO_TRACE_UNRESOLVED_INCLUDE = getBoolean("cnd.modelimpl.trace.failed.include", false); // NOI18N
+    private final static boolean TRACE_INCLUDES = Boolean.getBoolean("cnd.trace.includes"); // NOI18N
     
     /** Creates a new instance of CsmIncludeHyperlinkProvider */
     public CsmIncludeHyperlinkProvider() {
     }
     
-    protected boolean isValidToken(Token token) {
+    protected boolean isValidToken(Token<CppTokenId> token) {
         return isSupportedToken(token);
     }
     
-    public static boolean isSupportedToken(Token token) {
-        if ((token != null) &&
-                ((token.getTokenID() == CCTokenContext.SYS_INCLUDE) ||
-                (token.getTokenID() == CCTokenContext.USR_INCLUDE) ||
-                (token.getTokenID() == CCTokenContext.CPPINCLUDE) ||
-                (token.getTokenID() == CCTokenContext.CPPINCLUDE_NEXT))) {
-            return true;
-        } else {
-            return false;
+    public static boolean isSupportedToken(Token<CppTokenId> token) {
+        if (token != null) {
+            switch (token.id()) {
+                case PREPROCESSOR_INCLUDE:
+                case PREPROCESSOR_INCLUDE_NEXT:
+                case PREPROCESSOR_SYS_INCLUDE:
+                case PREPROCESSOR_USER_INCLUDE:
+                    return true;
+            }
         }
+        return false;
     }
     
-    protected void performAction(final BaseDocument originalDoc, final JTextComponent target, final int offset) {
+    protected void performAction(final Document originalDoc, final JTextComponent target, final int offset) {
         goToInclude(originalDoc, target, offset);
     }
     
-    public boolean goToInclude(BaseDocument doc, JTextComponent target, int offset) {
+    public boolean goToInclude(Document doc, JTextComponent target, int offset) {
         if (!preJump(doc, target, offset, "opening-include-element")) { //NOI18N
             return false;
         }
@@ -96,7 +109,7 @@ public class CsmIncludeHyperlinkProvider extends CsmAbstractHyperlinkProvider {
         return postJump(item, "goto_source_source_not_found", "cannot-open-include-element"); //NOI18N
     }
 
-    /*package*/ CsmOffsetable findTargetObject(final BaseDocument doc, final int offset) {
+    /*package*/ CsmOffsetable findTargetObject(final Document doc, final int offset) {
         CsmInclude incl = findInclude(doc, offset);
         CsmOffsetable item = incl == null ? null : new IncludeTarget(incl);
         if (incl != null && NEED_TO_TRACE_UNRESOLVED_INCLUDE && incl.getIncludeFile() == null) {
@@ -109,8 +122,8 @@ public class CsmIncludeHyperlinkProvider extends CsmAbstractHyperlinkProvider {
         }
         return item;
     }
-    
-    private CsmInclude findInclude(BaseDocument doc, int offset) {
+
+    private CsmInclude findInclude(Document doc, int offset) {
         CsmFile csmFile = CsmUtilities.getCsmFile(doc, true);
         if (csmFile != null) {
             return ReferencesSupport.findInclude(csmFile, offset);
@@ -155,8 +168,8 @@ public class CsmIncludeHyperlinkProvider extends CsmAbstractHyperlinkProvider {
             return DUMMY_POSITION;
         }
         
-        public String getText() {
-            return include.getIncludeName().toString();
+        public CharSequence getText() {
+            return include.getIncludeName();
         }
         
     }
@@ -174,4 +187,98 @@ public class CsmIncludeHyperlinkProvider extends CsmAbstractHyperlinkProvider {
             return -1;
         }
     };
+    
+    protected String getTooltipText(Document doc, Token token, int offset) {
+        CsmFile csmFile = CsmUtilities.getCsmFile(doc, true);
+        CsmInclude target = null;
+        if (csmFile != null) {
+            target = ReferencesSupport.findInclude(csmFile, offset);
+        }
+        CharSequence tooltip = target == null ? null : CsmDisplayUtilities.getTooltipText(target);
+        if (tooltip != null) {
+            StringBuilder buf = new StringBuilder(tooltip);
+            CsmFile includeFile = target.getIncludeFile();
+            List<CsmInclude> includeStack = CsmFileInfoQuery.getDefault().getIncludeStack(csmFile);
+            if (includeFile == null || TRACE_INCLUDES) {
+                // append include stack
+                buf.append("<br><pre>"); // NOI18N
+                appendInclStack(buf, includeStack);
+                // append search paths
+                appendPaths(buf, i18n("SourceUserPaths"), CsmFileInfoQuery.getDefault().getUserIncludePaths(csmFile));
+                appendPaths(buf, i18n("SourceSystemPaths"), CsmFileInfoQuery.getDefault().getSystemIncludePaths(csmFile));
+                buf.append("</pre>"); // NOI18N
+            }
+            // for testing put info into output window
+            if (TRACE_INCLUDES || NEED_TO_TRACE_UNRESOLVED_INCLUDE) {
+                InputOutput io = IOProvider.getDefault().getIO("Test Inlcudes", false); // NOI18N
+                OutputWriter out = io.getOut();
+                if (!includeStack.isEmpty()) {
+                    try {
+                        out.println("path to file " + csmFile.getAbsolutePath(), new RefLink(csmFile)); // NOI18N
+                        for (CsmInclude incl : includeStack) {
+                            out.println(incl.getText() + " from file " + incl.getContainingFile().getAbsolutePath(), new RefLink(incl)); // NOI18N
+                        }
+                    } catch (IOException iOException) {
+                    }
+                }
+                out.println(buf.toString().replaceAll("<br>", "\n"));   // NOI18N             
+                out.flush();
+            }
+            tooltip = buf.toString();           
+        }
+        return tooltip == null ? null : tooltip.toString();
+    }
+
+    private void appendInclStack(StringBuilder buf, List<CsmInclude> includeStack) {
+        if (!includeStack.isEmpty()) {
+            buf.append(i18n("PathToCurFile")).append('\n');  // NOI18N
+            for (CsmInclude inc : includeStack) {
+                String msg = i18n("PathToHeaderOnLine", inc.getContainingFile().getAbsolutePath(), inc.getStartPosition().getLine()); // NOI18N
+                buf.append(msg).append('\n');
+            }
+        }
+    }
+
+    private void appendPaths(StringBuilder buf, String title, List<String> includePaths) {
+        if (!includePaths.isEmpty()) {
+            buf.append(title).append('\n');
+            for (String path : includePaths) {
+                buf.append(path).append('\n');
+            }
+        }
+    }
+    
+    private String i18n(String key) {
+        return NbBundle.getMessage(CsmIncludeHyperlinkProvider.class, key);
+    }
+    
+    private String i18n(String key, Object param1, Object param2) {
+        return NbBundle.getMessage(CsmIncludeHyperlinkProvider.class, key, param1, param2);
+    }
+
+    private static final class RefLink implements OutputListener {
+        private final CsmUID<? extends CsmObject> uid;
+
+        public RefLink(CsmInclude incl) {
+            uid = incl.getUID();
+        }
+
+        public RefLink(CsmFile file) {
+            uid = file.getUID();
+        }
+
+        public void outputLineSelected(OutputEvent ev) {
+        }
+
+        public void outputLineAction(OutputEvent ev) {
+            CsmObject obj = uid.getObject();
+            if (obj != null) {
+                CsmUtilities.openSource(obj);
+            }
+        }
+
+        public void outputLineCleared(OutputEvent ev) {
+        }
+    }
+
 }
