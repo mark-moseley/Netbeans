@@ -48,12 +48,11 @@ package org.netbeans.modules.j2ee.sun.ide.sunresources.wizards;
 
 import java.awt.Component;
 import java.util.Vector;
+import org.netbeans.modules.j2ee.sun.api.restricted.ResourceUtils;
 import org.netbeans.modules.j2ee.sun.ide.editors.NameValuePair;
 import org.openide.WizardDescriptor;
 import org.openide.loaders.TemplateWizard;
 import org.openide.util.HelpCtx;
-
-import org.netbeans.modules.j2ee.sun.ide.sunresources.beans.ResourceUtils;
 
 import org.netbeans.modules.j2ee.sun.sunresources.beans.FieldGroup;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.Wizard;
@@ -128,9 +127,10 @@ public class JMSWizardPanel extends ResourceWizardPanel {
         if(jndiName.trim().length() == 0 || jndiName.trim().equals("")) {//NOI18N
             setErrorMsg(bundle.getString("Err_InvalidJndiName"));
             return false;
-        }else if(! ResourceUtils.isLegalResourceName(jndiName))
+        }else if(! ResourceUtils.isLegalResourceName(jndiName)){
+            setErrorMsg(bundle.getString("Err_InvalidJndiName"));
             return false;
-        else if(! ResourceUtils.isUniqueFileName(jndiName, this.helper.getData().getTargetFileObject(), __JMSResource)){
+        }else if(! ResourceUtils.isUniqueFileName(jndiName, this.helper.getData().getTargetFileObject(), __JMSResource)){
             setErrorMsg(bundle.getString("Err_DuplFileJndiName"));
             return false;
         }else
@@ -148,6 +148,10 @@ public class JMSWizardPanel extends ResourceWizardPanel {
         FileObject resFolder = ResourceUtils.getResourceDirectory(this.helper.getData().getTargetFileObject());
         this.helper.getData().setTargetFileObject (resFolder);
         if(resFolder != null){
+            String resourceName = helper.getData().getString("jndi-name"); //NOI18N
+            if((resourceName != null) && (! resourceName.equals(""))) {
+                targetName = resourceName;
+            }
             targetName = ResourceUtils.createUniqueFileName (targetName, resFolder, __JMSResource);
             this.helper.getData ().setTargetFile (targetName);
             if(component == null)

@@ -60,10 +60,9 @@ import javax.swing.event.ChangeListener;
 import org.openide.util.NbBundle;
 import org.openide.WizardDescriptor;
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.j2ee.sun.api.restricted.ResourceUtils;
 import org.openide.filesystems.FileObject;
 import org.netbeans.spi.project.ui.templates.support.Templates;
-
-import org.netbeans.modules.j2ee.sun.ide.sunresources.beans.ResourceUtils;
 
 import org.netbeans.modules.j2ee.sun.sunresources.beans.Wizard;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.WizardConstants;
@@ -144,9 +143,9 @@ public final class ConnPoolWizard implements WizardDescriptor.InstantiatingItera
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent)c;
                 // Step #.
-                jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }        
     }
