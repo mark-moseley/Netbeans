@@ -41,16 +41,15 @@
 
 package org.netbeans.modules.j2ee.earproject;
 
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
-import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -62,15 +61,25 @@ import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.ant.AntBuildExtender;
+import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.modules.j2ee.api.ejbjar.Ear;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectProperties;
+import org.netbeans.modules.j2ee.common.ui.BrokenServerSupport;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.earproject.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.j2ee.earproject.classpath.ClassPathSupportCallbackImpl;
 import org.netbeans.modules.j2ee.earproject.ui.IconBaseProvider;
 import org.netbeans.modules.j2ee.earproject.ui.J2eeArchiveLogicalViewProvider;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.CustomizerProviderImpl;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.EarProjectProperties;
-import org.netbeans.modules.j2ee.earproject.ui.customizer.VisualClassPathItem;
+import org.netbeans.modules.j2ee.earproject.util.EarProjectUtil;
 import org.netbeans.modules.j2ee.spi.ejbjar.EjbJarFactory;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.spi.java.project.support.LookupMergerSupport;
 import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.SubprojectProvider;
@@ -93,11 +102,7 @@ import org.netbeans.spi.project.ui.PrivilegedTemplates;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.netbeans.spi.project.ui.RecommendedTemplates;
 import org.netbeans.spi.project.ui.support.UILookupMergerSupport;
-import org.openide.filesystems.FileAttributeEvent;
-import org.openide.filesystems.FileChangeListener;
-import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
@@ -118,12 +123,10 @@ import org.w3c.dom.Text;
  *
  * @author vince kraemer
  */
-public final class EarProject implements Project, AntProjectListener, FileChangeListener, ProjectPropertyProvider {
+public final class EarProject implements Project, AntProjectListener, ProjectPropertyProvider {
     
     private static final Icon EAR_PROJECT_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/j2ee/earproject/ui/resources/projectIcon.gif")); // NOI18N
     public static final String ARTIFACT_TYPE_EAR = "ear";
-    
-    private static final String UI_LOGGER_NAME = "org.netbeans.ui.ear.project"; //NOI18N
     
     private final AntProjectHelper helper;
     private final PropertyEvaluator eval;
@@ -134,9 +137,12 @@ public final class EarProject implements Project, AntProjectListener, FileChange
     private final Ear ear;
     private final AntBasedProjectType abpt;
     private final UpdateHelper updateHelper;
-    private final BrokenProjectSupport brokenProjectSupport;
+    private final UpdateProjectImpl updateProject;
+    private final ClassPathProviderImpl cpProvider;
+    private PropertyChangeListener j2eePlatformListener;
     
     private AntBuildExtender buildExtender;
+    public ClassPathSupport cs;
             
     EarProject(final AntProjectHelper helper, AntBasedProjectType abpt) throws IOException {
         this.helper = helper;
@@ -148,10 +154,17 @@ public final class EarProject implements Project, AntProjectListener, FileChange
         genFilesHelper = new GeneratedFilesHelper(helper,buildExtender);
         appModule = new ProjectEar(this);
         ear = EjbJarFactory.createEar(appModule);
-        updateHelper = new UpdateHelper(this, this.helper, aux, this.genFilesHelper, UpdateHelper.createDefaultNotifier());
-        brokenProjectSupport = new BrokenProjectSupport(this);
-        lookup = createLookup(aux);
-   }
+        updateProject = new UpdateProjectImpl(this, this.helper, aux);
+        updateHelper = new UpdateHelper(updateProject, helper);
+        cpProvider = new ClassPathProviderImpl(helper, evaluator());
+        lookup = createLookup(aux, cpProvider);
+        cs = new ClassPathSupport( eval, refHelper, 
+                updateHelper.getAntProjectHelper(), updateHelper, new ClassPathSupportCallbackImpl(helper));
+    }
+
+    public ClassPathSupport getClassPathSupport() {
+        return cs;
+    }
     
     public UpdateHelper getUpdateHelper() {
         return updateHelper;
@@ -159,6 +172,10 @@ public final class EarProject implements Project, AntProjectListener, FileChange
     
     public FileObject getProjectDirectory() {
         return helper.getProjectDirectory();
+    }
+
+    public ReferenceHelper getReferenceHelper() {
+        return refHelper;
     }
     
     @Override
@@ -171,7 +188,7 @@ public final class EarProject implements Project, AntProjectListener, FileChange
         return helper.getStandardPropertyEvaluator();
     }
     
-    PropertyEvaluator evaluator() {
+    public PropertyEvaluator evaluator() {
         return eval;
     }
     
@@ -183,7 +200,7 @@ public final class EarProject implements Project, AntProjectListener, FileChange
         return helper;
     }
     
-    private Lookup createLookup(AuxiliaryConfiguration aux) {
+    private Lookup createLookup(AuxiliaryConfiguration aux, ClassPathProviderImpl cpProvider) {
         SubprojectProvider spp = refHelper.createSubprojectProvider();
         
         // XXX unnecessarily creates a SourcesHelper, which is then GC's
@@ -201,13 +218,14 @@ public final class EarProject implements Project, AntProjectListener, FileChange
             new Info(),
             aux,
             spp,
+            helper.createAuxiliaryProperties(),
             new ProjectEarProvider(),
             appModule, //implements J2eeModuleProvider
             new EarActionProvider(this, updateHelper),
             new J2eeArchiveLogicalViewProvider(this, updateHelper, evaluator(), refHelper, abpt),
             new MyIconBaseProvider(),
             new CustomizerProviderImpl(this, helper, refHelper, abpt),
-            new ClassPathProviderImpl(helper, evaluator()),
+            LookupMergerSupport.createClassPathProviderMerger(cpProvider),
             new ProjectXmlSavedHookImpl(),
             UILookupMergerSupport.createProjectOpenHookMerger(new ProjectOpenedHookImpl()),
             new EarSources(helper, evaluator()),
@@ -220,7 +238,6 @@ public final class EarProject implements Project, AntProjectListener, FileChange
             ),
             this,
             new EarProjectOperations(this),
-            brokenProjectSupport,
             new AntArtifactProviderImpl(),
             UILookupMergerSupport.createPrivilegedTemplatesMerger(),
             UILookupMergerSupport.createRecommendedTemplatesMerger(),
@@ -251,24 +268,6 @@ public final class EarProject implements Project, AntProjectListener, FileChange
     
     public Ear getEar() {
         return ear;
-    }
-    
-    public void fileAttributeChanged(FileAttributeEvent fe) {
-    }
-    
-    public void fileChanged(FileEvent fe) {
-    }
-    
-    public void fileDataCreated(FileEvent fe) {
-    }
-    
-    public void fileDeleted(FileEvent fe) {
-    }
-    
-    public void fileFolderCreated(FileEvent fe) {
-    }
-    
-    public void fileRenamed(FileRenameEvent fe) {
     }
     
     /** Return configured project name. */
@@ -312,6 +311,40 @@ public final class EarProject implements Project, AntProjectListener, FileChange
                 return null;
             }
         });
+    }
+    
+    public void registerJ2eePlatformListener(final J2eePlatform platform) {
+        // listen to classpath changes
+        j2eePlatformListener = new PropertyChangeListener() {
+            public void propertyChange(PropertyChangeEvent evt) {
+                if (evt.getPropertyName().equals(J2eePlatform.PROP_CLASSPATH)) {
+                    ProjectManager.mutex().writeAccess(new Mutex.Action<Void>() {
+                        public Void run() {
+                            EditableProperties ep = helper.getProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH);
+                            EditableProperties projectProps = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
+                            if (!ProjectProperties.isUsingServerLibrary(projectProps, EarProjectProperties.J2EE_PLATFORM_CLASSPATH)) {         
+                                String classpath = EarProjectGenerator.toClasspathString(platform.getClasspathEntries());
+                                ep.setProperty(ProjectProperties.J2EE_PLATFORM_CLASSPATH, classpath);
+                            }
+                            helper.putProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH, ep);
+                            try {
+                                ProjectManager.getDefault().saveProject(EarProject.this);
+                            } catch (IOException e) {
+                                Exceptions.printStackTrace(e);
+                            }
+                            return null;
+                        }
+                    });
+                }
+            }
+        };
+        platform.addPropertyChangeListener(j2eePlatformListener);
+    }
+    
+    public void unregisterJ2eePlatformListener(J2eePlatform platform) {
+        if (j2eePlatformListener != null) {
+            platform.removePropertyChangeListener(j2eePlatformListener);
+        }
     }
     
     // Private innerclasses ----------------------------------------------------
@@ -387,29 +420,6 @@ public final class EarProject implements Project, AntProjectListener, FileChange
         
     }
     
-    private boolean addLibrary(List<VisualClassPathItem> cpItems, FileObject lib) {
-        boolean needsAdding = true;
-        for (Iterator vcpsIter = cpItems.iterator(); vcpsIter.hasNext();) {
-            VisualClassPathItem vcpi = (VisualClassPathItem) vcpsIter.next();
-            
-            if (vcpi.getType() != VisualClassPathItem.Type.JAR) {
-                continue;
-            }
-            FileObject fo = FileUtil.toFileObject(new File(helper.getStandardPropertyEvaluator().evaluate(vcpi.getEvaluated())));
-            if (lib.equals(fo)) {
-                needsAdding = false;
-                break;
-            }
-        }
-        if (needsAdding) {
-            String file = "${"+EarProjectProperties.LIBRARIES_DIR+"}/"+lib.getNameExt(); // NOI18N
-            VisualClassPathItem cpItem = VisualClassPathItem.createClassPath(
-                    file,  VisualClassPathItem.PATH_IN_WAR_LIB);
-            cpItems.add(cpItem);
-        }
-        return needsAdding;
-    }
-    
     /** Package-private for unit tests only. */
     final class ProjectOpenedHookImpl extends ProjectOpenedHook {
         
@@ -417,26 +427,7 @@ public final class EarProject implements Project, AntProjectListener, FileChange
         
         protected void projectOpened() {
             try {
-                //Check libraries and add them to classpath automatically
-                String libFolderName = helper.getStandardPropertyEvaluator().getProperty(EarProjectProperties.LIBRARIES_DIR);
-                EarProjectProperties epp = new EarProjectProperties(EarProject.this, refHelper, abpt);
-                getAppModule().setModules(epp.getModuleMap());
-                if (libFolderName != null && new File(libFolderName).isDirectory()) {
-                    @SuppressWarnings("unchecked")
-                    List<VisualClassPathItem> cpItems = (List<VisualClassPathItem>) epp.get(EarProjectProperties.JAVAC_CLASSPATH);
-                    FileObject libFolder = FileUtil.toFileObject(new File(libFolderName));
-                    FileObject libs [] = libFolder.getChildren();
-                    boolean anyChanged = false;
-                    for (int i = 0; i < libs.length; i++) {
-                        anyChanged = addLibrary(cpItems, libs [i]) || anyChanged;
-                    }
-                    if (anyChanged) {
-                        epp.put(EarProjectProperties.JAVAC_CLASSPATH, cpItems);
-                        epp.store();
-                        ProjectManager.getDefault().saveProject(EarProject.this);
-                    }
-                    libFolder.addFileChangeListener(EarProject.this);
-                }
+                getAppModule().setModules(EarProjectProperties.getModuleMap(EarProject.this));
                 // Check up on build scripts.
                 genFilesHelper.refreshBuildScript(
                         GeneratedFilesHelper.BUILD_IMPL_XML_PATH,
@@ -446,19 +437,13 @@ public final class EarProject implements Project, AntProjectListener, FileChange
                         getBuildXmlName(),
                         EarProject.class.getResource("resources/build.xsl"),
                         true);
-                
-                epp.ensurePlatformIsSet(true);
             } catch (IOException e) {
                 Logger.getLogger("global").log(Level.INFO, null, e);
             }
             
             // register project's classpaths to GlobalPathRegistry
-            ClassPathProviderImpl cpProvider = lookup.lookup(ClassPathProviderImpl.class);
             GlobalPathRegistry.getDefault().register(ClassPath.BOOT, cpProvider.getProjectClassPaths(ClassPath.BOOT));
             GlobalPathRegistry.getDefault().register(ClassPath.COMPILE, cpProvider.getProjectClassPaths(ClassPath.COMPILE));
-            
-            J2eeModuleProvider pwm = EarProject.this.getLookup().lookup(J2eeModuleProvider.class);
-            pwm.getConfigSupport().ensureConfigurationReady();
             
             try {
                 getProjectDirectory().getFileSystem().runAtomicAction(new AtomicAction() {
@@ -475,22 +460,85 @@ public final class EarProject implements Project, AntProjectListener, FileChange
                 Exceptions.printStackTrace(e);
             }
             
+            String disableDeployOnSave = EarProject.this.getUpdateHelper().
+                    getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH).getProperty(EarProjectProperties.DISABLE_DEPLOY_ON_SAVE);
+            if (!Boolean.parseBoolean(disableDeployOnSave)) {
+                Deployment.getDefault().enableCompileOnSaveSupport(appModule);
+            }
+            
             if (J2eeArchiveLogicalViewProvider.hasBrokenLinks(helper, refHelper)) {
                 BrokenReferencesSupport.showAlert();
             }
+
+            String servInstID = EarProject.this.getUpdateHelper().
+                    getProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH).
+                    getProperty(EarProjectProperties.J2EE_SERVER_INSTANCE);
+            J2eePlatform platform = Deployment.getDefault().getJ2eePlatform(servInstID);
+            String serverType = null;
+            if (platform != null) {
+                // updates j2ee.platform.cp & wscompile.cp & reg. j2ee platform listener
+                EarProjectProperties.setServerInstance(EarProject.this, EarProject.this.updateHelper, servInstID);
+            } else {
+                // if there is some server instance of the type which was used
+                // previously do not ask and use it
+                serverType = EarProject.this.getUpdateHelper().
+                        getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH).
+                        getProperty(EarProjectProperties.J2EE_SERVER_TYPE);
+                if (serverType != null) {
+                    String[] servInstIDs = Deployment.getDefault().getInstancesOfServer(serverType);
+                    if (servInstIDs.length > 0) {
+                        EarProjectProperties.setServerInstance(EarProject.this, EarProject.this.updateHelper, servInstIDs[0]);
+                        platform = Deployment.getDefault().getJ2eePlatform(servInstIDs[0]);
+                    }
+                }
+                if (platform == null) {
+                    BrokenServerSupport.showAlert();
+                }
+            }
+
+            // initialize the server configuration
+            // it MUST BE called AFTER classpaths are registered to GlobalPathRegistry
+            // and after server resolve!!
+            // DDProvider (used here) needs classpath set correctly when resolving Java Extents for annotations
+            J2eeModuleProvider pwm = EarProject.this.getLookup().lookup(J2eeModuleProvider.class);
+            pwm.getConfigSupport().ensureConfigurationReady();
             
             // UI Logging
-            LogRecord logRecord = new LogRecord(Level.INFO, "UI_EAR_PROJECT_OPENED");  //NOI18N
-            logRecord.setLoggerName(UI_LOGGER_NAME);                   //NOI18N
-            logRecord.setResourceBundle(NbBundle.getBundle(EarProject.class));
-            logRecord.setParameters(new Object[] { pwm.getServerID(), pwm.getServerInstanceID()});
-            Logger.getLogger(UI_LOGGER_NAME).log(logRecord);
+            EarProjectUtil.logUI(NbBundle.getBundle(EarProject.class), "UI_EAR_PROJECT_OPENED", // NOI18N
+                    new Object[] {(serverType != null ? serverType : Deployment.getDefault().getServerID(servInstID)), servInstID});
+            
+            // Usage Logging
+            String serverName = ""; // NOI18N
+            try {
+                if (servInstID != null) {
+                    serverName = Deployment.getDefault().getServerInstance(servInstID).getServerDisplayName();
+                }
+            }
+            catch (InstanceRemovedException ier) {
+                // ignore
+            }
+            EarProjectUtil.logUsage(EarProject.class, "USG_PROJECT_OPEN_EAR", new Object[] { serverName }); // NOI18N
         }
         
         private void updateProject() {
             // Make it easier to run headless builds on the same machine at least.
             EditableProperties ep = helper.getProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH);
             ep.setProperty("netbeans.user", System.getProperty("netbeans.user"));
+            
+            // #134642 - use Ant task from copylibs library
+            if (helper.isSharableProject() && refHelper.getProjectLibraryManager().getLibrary("CopyLibs") == null) { // NOI18N
+                try {
+                    refHelper.copyLibrary(LibraryManager.getDefault().getLibrary("CopyLibs")); // NOI18N
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+            //update lib references in project properties
+            EditableProperties props = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
+            ProjectProperties.removeObsoleteLibraryLocations(ep);
+            ProjectProperties.removeObsoleteLibraryLocations(props);
+            helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, props);
+            
             helper.putProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH, ep);
             try {
                 ProjectManager.getDefault().saveProject(EarProject.this);
@@ -500,6 +548,14 @@ public final class EarProject implements Project, AntProjectListener, FileChange
         }
         
         protected void projectClosed() {
+            // listen to j2ee platform classpath changes
+            EditableProperties privateProperties = updateHelper.getProperties( AntProjectHelper.PRIVATE_PROPERTIES_PATH );
+            String servInstID = privateProperties.getProperty(EarProjectProperties.J2EE_SERVER_INSTANCE);
+            J2eePlatform platform = Deployment.getDefault().getJ2eePlatform(servInstID);
+            if (platform != null) {
+                unregisterJ2eePlatformListener(platform);
+            }
+            
             // Probably unnecessary, but just in case:
             try {
                 ProjectManager.getDefault().saveProject(EarProject.this);
@@ -507,10 +563,9 @@ public final class EarProject implements Project, AntProjectListener, FileChange
                 Exceptions.printStackTrace(e);
             }
             
-            brokenProjectSupport.cleanUp();
+            Deployment.getDefault().disableCompileOnSaveSupport(appModule);
             
             // unregister project's classpaths to GlobalPathRegistry
-            ClassPathProviderImpl cpProvider = lookup.lookup(ClassPathProviderImpl.class);
             GlobalPathRegistry.getDefault().unregister(ClassPath.BOOT, cpProvider.getProjectClassPaths(ClassPath.BOOT));
             GlobalPathRegistry.getDefault().unregister(ClassPath.COMPILE, cpProvider.getProjectClassPaths(ClassPath.COMPILE));
         }
@@ -567,14 +622,8 @@ public final class EarProject implements Project, AntProjectListener, FileChange
         FileObject metaInfFO = null;
         try {
             File prjDirF = FileUtil.toFile(getProjectDirectory());
-            File rootF = prjDirF;
-            while (rootF.getParentFile() != null) {
-                rootF = rootF.getParentFile();
-            }
             File metaInfF = PropertyUtils.resolveFile(prjDirF, metaInfProp);
-            String metaInfPropRel = PropertyUtils.relativizeFile(rootF, metaInfF);
-            assert metaInfPropRel != null;
-            metaInfFO = FileUtil.createFolder(FileUtil.toFileObject(rootF), metaInfPropRel);
+            metaInfFO = FileUtil.createFolder(metaInfF);
         } catch (IOException ex) {
             assert false : ex;
         }
@@ -612,7 +661,7 @@ public final class EarProject implements Project, AntProjectListener, FileChange
     }
     
     public EarProjectProperties getProjectProperties() {
-        return new EarProjectProperties(this, refHelper, abpt);
+        return new EarProjectProperties(this, updateHelper, eval, refHelper);
     }
     
     public GeneratedFilesHelper getGeneratedFilesHelper() {

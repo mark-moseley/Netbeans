@@ -51,8 +51,8 @@ import java.util.HashMap;
 import java.util.Map;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.web.project.WebProject;
-import org.netbeans.modules.web.project.UpdateHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.CustomizerProvider;
@@ -80,7 +80,7 @@ public class CustomizerProviderImpl implements CustomizerProvider {
     
     public static final String CUSTOMIZER_FOLDER_PATH = "Projects/org-netbeans-modules-web-project/Customizer"; //NO18N
 
-    private static Map /*<Project,Dialog>*/project2Dialog = new HashMap(); 
+    private static Map<Project,Dialog> project2Dialog = new HashMap<Project,Dialog>(); 
     
     public CustomizerProviderImpl(Project project, UpdateHelper updateHelper, PropertyEvaluator evaluator, ReferenceHelper refHelper) {
         this.project = project;
