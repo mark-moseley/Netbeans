@@ -41,9 +41,9 @@
 
 package org.netbeans.modules.reglib;
 
-import com.sun.servicetag.RegistrationData;
-import com.sun.servicetag.ServiceTag;
-import com.sun.servicetag.Registry;
+import org.netbeans.modules.servicetag.RegistrationData;
+import org.netbeans.modules.servicetag.ServiceTag;
+import org.netbeans.modules.servicetag.Registry;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -57,8 +57,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.io.Writer;
 import java.util.Collection;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -76,6 +78,10 @@ public class NbServiceTagSupport {
     private static String GF_VERSION;
     
     private static final String USER_HOME = System.getProperty("user.home");
+
+    private static final String SUPER_IDENTITY_FILE_NAME = ".superId"; // NOI18N
+    
+    private static final String DEFAULT_NETBEANS_DIR = ".netbeans"; // NOI18N
     
     private static final String USER_DIR = System.getProperty("netbeans.user");
     
@@ -341,7 +347,7 @@ public class NbServiceTagSupport {
     
     /**
      * Returns the NetBeans registration data located in
-     * the NB_INST_DIR/nb6.0/servicetag/registration.xml by default. 
+     * the NB_INST_DIR/nb6.x/servicetag/registration.xml by default. 
      *
      * @throws IllegalArgumentException if the registration data
      *         is of invalid format.
@@ -514,18 +520,72 @@ public class NbServiceTagSupport {
         StringBuilder definedId = new StringBuilder();
         definedId.append("id=");
         definedId.append(NB_VERSION);
-        
-        String location = ",dir=" + nbInstallDir.getPath() + ",java.version=" + javaVersion;
+
+        definedId.append(",uuid=");
+        definedId.append(getSuperId());
+
+        definedId.append(",java.version=");
+        definedId.append(javaVersion);
+
+        String location = ",dir=" + nbInstallDir.getPath();
         if ((definedId.length() + location.length()) < 256) {
             definedId.append(location);
         } else {
             // if it exceeds the limit, we will not include the location
             LOG.log(Level.INFO, "Warning: Product defined instance ID exceeds the field limit:");
         }
-
+        
         return definedId.toString();
     }
     
+    /**
+     * Returns id unique to user. It is either read from file $HOME/.netbeans/.superId or if this fil;e does not
+     * exist id is generated and fstored to this file.
+     * 
+     * @return id unique to user
+     * 
+     */
+    private static String getSuperId () {
+        String superId = "";
+        File f = new File(USER_HOME + File.separator + DEFAULT_NETBEANS_DIR + File.separator + SUPER_IDENTITY_FILE_NAME);
+        if (f.exists()) {
+            // read existing super Id
+            BufferedReader r = null;
+            try {
+                r = new BufferedReader(new FileReader(f));
+                superId = r.readLine().trim();
+            } catch (IOException ex) {
+                LOG.log(Level.INFO,"Error: Cannot read from file:" + f, ex);
+            } finally {
+                try {
+                    r.close();
+                } catch (IOException ex) {
+                    LOG.log(Level.INFO,"Error: Cannot close input stream of file:" + f, ex);
+                }
+            }
+        } else {
+            File dir = new File(USER_HOME + File.separator + DEFAULT_NETBEANS_DIR);
+            if (dir.canWrite() && (!dir.exists())) {
+                dir.mkdirs();
+            }
+            Writer w = null;
+            try {
+                w = new BufferedWriter(new FileWriter(f));
+                superId = UUID.randomUUID().toString();
+                w.write(superId);
+            } catch (IOException ex) {
+                LOG.log(Level.INFO,"Error: Cannot write to file:" + f, ex);
+            } finally {
+                try {
+                    w.close ();
+                } catch (IOException ex) {
+                    LOG.log(Level.INFO,"Error: Cannot close writer to file:" + f, ex);
+                }
+            }
+        }
+        return superId;
+    }
+
     /**
      * Returns the product defined instance ID for GlassFish.
      * It is a list of comma-separated name/value pairs.
