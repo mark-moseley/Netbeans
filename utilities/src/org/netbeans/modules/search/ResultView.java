@@ -69,6 +69,7 @@ import javax.swing.JToggleButton;
 import javax.swing.JToolBar;
 import javax.swing.JTree;
 import javax.swing.SwingConstants;
+import javax.swing.tree.TreeCellRenderer;
 import javax.swing.tree.TreePath;
 import org.openide.awt.Mnemonics;
 import org.openide.nodes.Node;
@@ -323,7 +324,20 @@ final class ResultView extends TopComponent {
     private static JTree createTree(ResultTreeModel treeModel,
                                     NodeListener nodeListener) {
         JTree tree = new JTree(treeModel);
-        tree.setCellRenderer(new NodeRenderer(false));
+
+        TreeCellRenderer cellRenderer = new NodeRenderer(false);
+        tree.setCellRenderer(cellRenderer);
+        tree.setRowHeight(cellRenderer.getTreeCellRendererComponent(
+                                                tree,       //tree
+                                                treeModel,  //value
+                                                true,       //selected
+                                                true,       //expanded
+                                                false,      //leaf
+                                                0,          //row
+                                                true)       //hasFocus
+                          .getPreferredSize()
+                          .height);
+
         tree.putClientProperty("JTree.lineStyle", "Angled");            //NOI18N
         
         tree.addMouseListener(nodeListener);
@@ -603,9 +617,12 @@ final class ResultView extends TopComponent {
         
         if (resultModel.wasLimitReached()) {
             setRootDisplayName(
-                    NbBundle.getMessage(ResultView.class,
-                                        "TEXT_MSG_FOUND_X_NODES_LIMIT", //NOI18N
-                                        new Integer(resultSize)));
+                    NbBundle.getMessage(
+                            ResultView.class,
+                            "TEXT_MSG_FOUND_X_NODES_LIMIT",             //NOI18N
+                            Integer.valueOf(resultSize),
+                            Integer.valueOf(resultModel.getTotalDetailsCount()))
+                            + ' ' + resultModel.getLimitDisplayName());
             return;
         }
         
