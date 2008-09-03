@@ -57,6 +57,7 @@ import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JSeparator;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import org.netbeans.modules.form.HandleLayer;
 import org.netbeans.modules.form.RADComponent;
 import org.netbeans.modules.form.menu.DropTargetLayer.DropTargetType;
 import org.netbeans.modules.form.menu.MenuEditLayer.SelectedPortion;
@@ -199,19 +200,34 @@ class DropTargetLayer extends JComponent {
         }
         
         JComponent payload = canvas.getDragOperation().getDragComponent();
-        if(payload instanceof JSeparator && canvas.getDragOperation().getDeepestComponent(currentTargetPoint) != null) {
-            g2.translate(payload.getX(), payload.getY());
-            g2.setStroke(SELECTION_STROKE);
-            g2.setColor(SELECTION_COLOR);
-            g2.drawRect(0, 0, 50, 3);
-            g2.translate(-payload.getX(), -payload.getY());
+        if(payload instanceof JSeparator) {
+            HandleLayer handleLayer = canvas.formDesigner.getHandleLayer();
+            
+            if (canvas.getDragOperation().getDeepestComponent(currentTargetPoint) != null) {
+                g2.translate(payload.getX(), payload.getY());
+                g2.setStroke(SELECTION_STROKE);
+                g2.setColor(SELECTION_COLOR);
+                g2.drawRect(0, 0, payload.getWidth(), 3);
+                g2.translate(-payload.getX(), -payload.getY());
+                
+                // suspend drawing of underlaying handle layer,
+                // separator component is above menu components
+                handleLayer.suspend();
+                payload.setVisible(true);
+            } else {
+                // resume drawing of underlaying handle layer,
+                // separator component is not above menu area 
+                handleLayer.resume();
+                payload.setVisible(false);
+            }
         }
         
         // draw the menu item subselection rectangles
         //JComponent selected = null;//canvas.getSelectedComponent();
         for(RADComponent rad : canvas.getSelectedRADComponents()) {
             if(rad != null) {
-                JComponent selected = (JComponent) canvas.formDesigner.getComponent(rad);
+                Object o = canvas.formDesigner.getComponent(rad);
+                JComponent selected = (o instanceof JComponent) ? (JComponent)o : null;
                 drawSelectedComponent(g2, selected, rad);
             }
         }
