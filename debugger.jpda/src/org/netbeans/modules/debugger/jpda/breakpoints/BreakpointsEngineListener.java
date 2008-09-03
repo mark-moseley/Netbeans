@@ -59,6 +59,7 @@ import org.netbeans.api.debugger.Watch;
 import org.netbeans.api.debugger.jpda.ClassLoadUnloadBreakpoint;
 import org.netbeans.api.debugger.jpda.ExceptionBreakpoint;
 import org.netbeans.api.debugger.jpda.FieldBreakpoint;
+import org.netbeans.api.debugger.jpda.JPDABreakpoint;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.LineBreakpoint;
 import org.netbeans.api.debugger.jpda.MethodBreakpoint;
@@ -91,9 +92,8 @@ implements PropertyChangeListener, DebuggerManagerListener {
     public BreakpointsEngineListener (ContextProvider lookupProvider) {
         debugger = (JPDADebuggerImpl) lookupProvider.lookupFirst 
             (null, JPDADebugger.class);
-        engineContext = (SourcePath) lookupProvider.
-            lookupFirst (null, SourcePath.class);
-        session = (Session) lookupProvider.lookupFirst(null, Session.class);
+        engineContext = lookupProvider.lookupFirst(null, SourcePath.class);
+        session = lookupProvider.lookupFirst(null, Session.class);
         debugger.addPropertyChangeListener (
             JPDADebugger.PROP_STATE,
             this
@@ -223,11 +223,16 @@ implements PropertyChangeListener, DebuggerManagerListener {
     private void removeBreakpointImpls () {
         Breakpoint[] bs = DebuggerManager.getDebuggerManager ().getBreakpoints ();
         int i, k = bs.length;
-        for (i = 0; i < k; i++)
-            removeBreakpointImpl (bs [i]);
+        for (i = 0; i < k; i++) {
+            boolean removed = removeBreakpointImpl (bs [i]);
+            if (removed && bs[i] instanceof JPDABreakpoint && ((JPDABreakpoint) bs[i]).isHidden()) {
+                // A hidden breakpoint submitted just for this one session. Remove it with the end of the session.
+                DebuggerManager.getDebuggerManager ().removeBreakpoint(bs[i]);
+            }
+        }
     }
     
-    public void fixBreakpointImpls () {
+    public synchronized void fixBreakpointImpls () {
         Iterator<BreakpointImpl> i = breakpointToImpl.values ().iterator ();
         while (i.hasNext ())
             i.next ().fixed ();
@@ -300,11 +305,12 @@ implements PropertyChangeListener, DebuggerManagerListener {
         logger.finer("BreakpointsEngineListener: created impl "+breakpointToImpl.get(b)+" for "+b);
     }
 
-    private synchronized void removeBreakpointImpl (Breakpoint b) {
+    private synchronized boolean removeBreakpointImpl (Breakpoint b) {
         BreakpointImpl impl = breakpointToImpl.get (b);
-        if (impl == null) return;
+        if (impl == null) return false;
         logger.finer("BreakpointsEngineListener: removed impl "+impl+" for "+b);
         impl.remove ();
         breakpointToImpl.remove (b);
+        return true;
     }
 }
