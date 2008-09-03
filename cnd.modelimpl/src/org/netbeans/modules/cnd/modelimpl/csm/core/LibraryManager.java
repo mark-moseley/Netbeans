@@ -84,7 +84,7 @@ public final class LibraryManager {
     /**
      * Returns collection of artificial libraries used in project
      */
-    public Collection<LibProjectImpl> getLiraries(ProjectImpl project){
+    public Collection<LibProjectImpl> getLibraries(ProjectImpl project){
         List<LibProjectImpl> res = new ArrayList<LibProjectImpl>();
         CsmUID<CsmProject> projectUid = project.getUID();
         for(LibraryEntry entry : librariesEntries.values()){
@@ -288,9 +288,9 @@ public final class LibraryManager {
             }
             if (needFire){
                 final LibraryEntry passEntry = entry;
-                CsmModelAccessor.getModel().enqueue(new Runnable() {
+                ModelImpl.instance().enqueueModelTask(new Runnable() {
                     public void run() {
-                        model.fireProjectOpened((ProjectBase)passEntry.getLibrary().getObject());
+                        ListenersImpl.getImpl().fireProjectOpened((ProjectBase)passEntry.getLibrary().getObject());
                     }
                 }, "postponed library opened " + includeFolder); // NOI18N
             }

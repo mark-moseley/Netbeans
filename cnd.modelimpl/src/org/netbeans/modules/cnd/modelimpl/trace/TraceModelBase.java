@@ -17,11 +17,14 @@
 package org.netbeans.modules.cnd.modelimpl.trace;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
 import org.netbeans.modules.cnd.api.model.CsmProject;
@@ -36,7 +39,9 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.util.Cancellable;
 import org.openide.util.Exceptions;
+import org.openide.util.RequestProcessor.Task;
 import org.openide.util.Utilities;
 
 /**
@@ -55,8 +60,6 @@ public class TraceModelBase {
     
     private ModelImpl model;
 
-    // only one of project/projectUID must be used 
-    private ProjectBase project;
     private CsmUID<CsmProject> projectUID;
 
     private List<String> quoteIncludePaths = new ArrayList<String>();
@@ -71,14 +74,14 @@ public class TraceModelBase {
     private boolean pathsRelCurFile = false;
     
     public TraceModelBase() {
-        Logger openideLogger = Logger.getLogger("org.openide.loaders");
+        Logger openideLogger = Logger.getLogger("org.openide.loaders"); // NOI18N
         // reduce log level to prevent unnecessary messages in tests
         openideLogger.setLevel(Level.SEVERE);
 	RepositoryUtils.cleanCashes();
 	model = (ModelImpl) CsmModelAccessor.getModel(); // new ModelImpl(true);
 	if (model == null) {
 	    model = new ModelImpl();
-	}
+        }
 	model.startup();
 	currentIncludePaths = quoteIncludePaths;
     }
@@ -90,10 +93,22 @@ public class TraceModelBase {
     }
 
     protected final void shutdown() {
+        waitModelTasks();
 	model.shutdown();
+        waitModelTasks();
 	RepositoryUtils.cleanCashes();
     }
 
+    private void waitModelTasks(){
+        Cancellable task = model.enqueueModelTask(new Runnable(){
+            public void run() {
+            }
+        }, "wait finished other tasks");
+        if (task instanceof Task) {
+            ((Task)task).waitFinished();
+        }
+    }
+    
     public void processArguments(final String... args) {
 	for (int i = 0; i < args.length; i++) {
 	    if (args[i].startsWith("--")) { // NOI18N
@@ -198,16 +213,27 @@ public class TraceModelBase {
 	    closeProject(aProject, cleanRepository);
 	}
 	projectUID = null;
-	project = null;
 	//getProject();
     }
     
     
     private ProjectBase createProject() {
-	NativeProject nativeProject = NativeProjectProvider.createProject("DummyProject", files, // NOI18N
-		getSystemIncludes(), quoteIncludePaths, getSysMacros(), macros, pathsRelCurFile);
-	ProjectBase result = model.addProject(nativeProject, "DummyProject", true); // NOI18N
-	return result;
+        NativeProject np = null;
+        if (files.size() == 1 && files.get(0).getName().equals("project.xml")) { // NOI18N
+            try {
+                FileObject projectDir = FileUtil.toFileObject(
+                        files.get(0).getParentFile().getParentFile());
+                Project p = ProjectManager.getDefault().findProject(projectDir);
+                np = p.getLookup().lookup(NativeProject.class);
+            } catch (IOException ioe) {
+                throw new IllegalArgumentException(ioe);
+            }
+        } else {
+            np = NativeProjectProvider.createProject("DummyProject", files, // NOI18N
+                    getSystemIncludes(), quoteIncludePaths, getSysMacros(),
+                    macros, pathsRelCurFile);
+        }
+        return model.addProject(np, np.getProjectDisplayName(), true);
     }
 
     protected List<String> getSystemIncludes() {
