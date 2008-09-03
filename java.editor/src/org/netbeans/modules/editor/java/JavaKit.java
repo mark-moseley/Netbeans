@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -59,19 +59,17 @@ import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.queries.SourceLevelQuery;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
-import org.netbeans.editor.ext.ExtKit.CommentAction;
 import org.netbeans.editor.ext.ExtKit.PrefixMakerAction;
-import org.netbeans.editor.ext.ExtKit.UncommentAction;
 import org.netbeans.lib.editor.codetemplates.api.CodeTemplateManager;
 import org.netbeans.modules.editor.MainMenuAction;
 import org.netbeans.modules.editor.NbEditorKit;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.java.editor.codegen.InsertSemicolonAction;
-import org.netbeans.modules.java.editor.codegen.GenerateCodeAction;
 import org.netbeans.modules.java.editor.imports.FastImportAction;
 import org.netbeans.modules.java.editor.imports.JavaFixAllImports;
 import org.netbeans.modules.java.editor.overridden.GoToSuperTypeAction;
 import org.netbeans.modules.java.editor.rename.InstantRenameAction;
+import org.netbeans.modules.java.editor.semantic.GoToMarkOccurrencesAction;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.awt.Mnemonics;
@@ -157,7 +155,6 @@ public class JavaKit extends NbEditorKit {
     
 
     public JavaKit(){
-        org.netbeans.modules.java.editor.JavaEditorModule.init();
     }
     
     public String getContentType() {
@@ -172,22 +169,9 @@ public class JavaKit extends NbEditorKit {
         return new JavaSyntax(getSourceLevel((BaseDocument)doc));
     }
 
-    public Completion createCompletion(ExtEditorUI extEditorUI) {
-        return null;
-    }
-
-    public CompletionJavaDoc createCompletionJavaDoc(ExtEditorUI extEditorUI) {
-        return null;
-    }
-
     @Override
     public Document createDefaultDocument() {
-        Document doc = new JavaDocument(this.getClass());
-        Object mimeType = doc.getProperty("mimeType"); //NOI18N
-        if (mimeType == null){
-            doc.putProperty("mimeType", getContentType()); //NOI18N
-        }
-        return doc;
+        return new JavaDocument(getContentType());
     }
     
     public String getSourceLevel(BaseDocument doc) {
@@ -240,6 +224,7 @@ public class JavaKit extends NbEditorKit {
                                    new JavaGenerateGoToPopupAction(),
 				   new JavaInsertBreakAction(),
 				   new JavaDeleteCharAction(deletePrevCharAction, false),
+				   new JavaDeleteCharAction(deleteNextCharAction, true),
                                    new ExpandAllJavadocFolds(),
                                    new CollapseAllJavadocFolds(),
                                    new ExpandAllCodeBlockFolds(),
@@ -250,7 +235,6 @@ public class JavaKit extends NbEditorKit {
                                    new JavaGotoHelpAction(),
 				   new InstantRenameAction(),
                                    new JavaFixImports(),
-                                   new GenerateCodeAction(),
                                    new InsertSemicolonAction(true),
                                    new InsertSemicolonAction(false),
                                    new SelectCodeElementAction(selectNextElementAction, true),
@@ -265,6 +249,9 @@ public class JavaKit extends NbEditorKit {
                                    
                                    new FastImportAction(),
                                    new GoToSuperTypeAction(),
+                                   
+                                   new GoToMarkOccurrencesAction(false),
+                                   new GoToMarkOccurrencesAction(true),
                                };
                                
         return TextAction.augmentList(superActions, javaActions);
@@ -287,7 +274,7 @@ public class JavaKit extends NbEditorKit {
                                     boolean overwrite) throws BadLocationException {
             char insertedChar = str.charAt(0);
             if (insertedChar == '\"' || insertedChar == '\''){
-                boolean inserted = BracketCompletion.completeQuote(doc, dotPos, caret, insertedChar);
+                boolean inserted = BraceCompletion.completeQuote(doc, dotPos, caret, insertedChar);
                 if (inserted){
                     caret.setDot(dotPos+1);
                 }else{
@@ -296,7 +283,7 @@ public class JavaKit extends NbEditorKit {
                 }
             } else {
                 super.insertString(doc, dotPos, caret, str, overwrite);
-                BracketCompletion.charInserted(doc, dotPos, caret, insertedChar);
+                BraceCompletion.charInserted(doc, dotPos, caret, insertedChar);
             }
         }
         
@@ -319,7 +306,7 @@ public class JavaKit extends NbEditorKit {
                         }
                         int caretPosition = caret.getDot();
                         if (doc instanceof BaseDocument){
-                            inserted = BracketCompletion.completeQuote(
+                            inserted = BraceCompletion.completeQuote(
                                     (BaseDocument)doc,
                                     caretPosition,
                                     caret, insertedChar);
@@ -338,7 +325,7 @@ public class JavaKit extends NbEditorKit {
             } else {
                 super.replaceSelection(target, dotPos, caret, str, overwrite);
                 if (doc instanceof BaseDocument){
-                    BracketCompletion.charInserted((BaseDocument)doc, caret.getDot()-1, caret, insertedChar);
+                    BraceCompletion.charInserted((BaseDocument)doc, caret.getDot()-1, caret, insertedChar);
                 }
             }
         }
@@ -508,7 +495,7 @@ public class JavaKit extends NbEditorKit {
         
         protected Object beforeBreak(JTextComponent target, BaseDocument doc, Caret caret) {
             int dotPos = caret.getDot();
-            if (BracketCompletion.posWithinString(doc, dotPos)) {
+            if (BraceCompletion.posWithinString(doc, dotPos)) {
                 try {
                     doc.insertString(dotPos, "\" + \"", null); //NOI18N
                     dotPos += 3;
@@ -518,8 +505,8 @@ public class JavaKit extends NbEditorKit {
                 }
             } else {
                 try {
-                    if (BracketCompletion.isAddRightBrace(doc, dotPos)) {
-                        int end = BracketCompletion.getRowOrBlockEnd(doc, dotPos);
+                    if (BraceCompletion.isAddRightBrace(doc, dotPos)) {
+                        int end = BraceCompletion.getRowOrBlockEnd(doc, dotPos);
                         doc.insertString(end, "}", null); // NOI18N
                         doc.getFormatter().indentNewLine(doc, end);                        
                         caret.setDot(dotPos);
@@ -638,7 +625,22 @@ public class JavaKit extends NbEditorKit {
 
         protected void charBackspaced(BaseDocument doc, int dotPos, Caret caret, char ch)
         throws BadLocationException {
-            BracketCompletion.charBackspaced(doc, dotPos, caret, ch);
+            BraceCompletion.charBackspaced(doc, dotPos, caret, ch);
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent evt, JTextComponent target) {
+            target.putClientProperty(JavaDeleteCharAction.class, this);
+            
+            try {
+                super.actionPerformed(evt, target);
+            } finally {
+                target.putClientProperty(JavaDeleteCharAction.class, null);
+            }
+        }
+        
+        public boolean getNextChar() {
+            return nextChar;
         }
     }
     
@@ -718,6 +720,8 @@ public class JavaKit extends NbEditorKit {
     
     private static class JavaGoToDeclarationAction extends GotoDeclarationAction {
         public @Override boolean gotoDeclaration(JTextComponent target) {
+            if (!(target.getDocument() instanceof BaseDocument)) // Fixed #113062
+                return false;
             GoToSupport.goTo((BaseDocument) target.getDocument(), target.getCaretPosition(), false);
             return true;
         }
@@ -736,7 +740,7 @@ public class JavaKit extends NbEditorKit {
         }
 
         public void actionPerformed(ActionEvent evt, JTextComponent target) {
-            if (target != null) {
+            if (target != null && (target.getDocument() instanceof BaseDocument)) {
                 GoToSupport.goTo((BaseDocument) target.getDocument(), target.getCaretPosition(), true);
             }
         }
