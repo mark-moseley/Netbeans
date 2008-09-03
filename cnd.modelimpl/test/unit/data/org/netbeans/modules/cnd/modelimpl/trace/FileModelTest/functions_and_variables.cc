@@ -40,6 +40,17 @@ using namespace qwe;
 using namespace qwe::asd;
 using namespace qwe::asd::zxc;
 
+// IZ 136165 : Parameter type is not resolved in contained class
+class NewClass {
+public:
+    static int AAA;
+    static int BBB;
+private:
+
+};
+
+int NewClass::AAA = 10;
+int NewClass::BBB(AAA);
 
 //
 // Functions
@@ -57,3 +68,7 @@ int main(int argc, char** argv) {
     foo = zxczxc;
     return foo;
 }
+
+//Some more variables
+int pBa(*bbbb);
+int ba(&bbbbb);
