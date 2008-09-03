@@ -31,7 +31,7 @@
 
 <%-- completion for body HTML endtag --%>
 <%--CC
-<body>|
+<body></|
 ...
 <body></body>
 --%>
