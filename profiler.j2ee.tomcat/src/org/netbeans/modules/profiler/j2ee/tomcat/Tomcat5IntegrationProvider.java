@@ -40,19 +40,17 @@
 
 package org.netbeans.modules.profiler.j2ee.tomcat;
 
-import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.IntegrationProvider;
-import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
-import org.netbeans.lib.profiler.common.integration.exceptions.*;
-import org.netbeans.modules.profiler.ui.wizards.providers.TargetPlatformEnum;
-import org.netbeans.modules.profiler.ui.wizards.providers.ValidationResult;
-import org.openide.util.NbBundle;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.text.MessageFormat;
-
+import org.netbeans.lib.profiler.common.AttachSettings;
+import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
+import org.netbeans.modules.profiler.attach.providers.ValidationResult;
+import org.netbeans.modules.profiler.attach.spi.IntegrationProvider;
+import org.netbeans.modules.profiler.attach.spi.ModificationException;
+import org.openide.util.NbBundle;
 
 /**
  *
@@ -121,16 +119,12 @@ public class Tomcat5IntegrationProvider extends AbstractTomcatIntegrationProvide
         }
     }
 
-    public boolean supportsJVM(TargetPlatformEnum jvm) {
-        return true;
-    }
-
     public ValidationResult validateInstallation(final String targetOS, final String path) {
         ValidationResult retValue = super.validateInstallation(targetOS, path);
 
         if (!retValue.isValid()) {
             if (isTomcatExeUsed(path) && IntegrationUtils.isWindowsPlatform(targetOS)) { // Tomcat5 installed by the windows installer has no catalina.bat; check for tomcat5.exe instead
-                retValue = new ValidationResult(true, "No CATALINA script found. Using Tomcat5.exe instead"); // NOI18N
+                retValue = new ValidationResult(true, "No CATALINA script found. Using " + getTomcatExe() + " instead"); // NOI18N
             }
         }
 
@@ -138,11 +132,19 @@ public class Tomcat5IntegrationProvider extends AbstractTomcatIntegrationProvide
     }
 
     protected int getAttachWizardPriority() {
-        return 11;
+        return 12;
     }
 
     protected String getCatalinaScriptName() {
         return "catalina.50"; // NOI18N
+    }
+
+    protected String getTomcatName() {
+        return "Tomcat5"; // NOI18N
+    }
+
+    private String getTomcatExe() {
+        return getTomcatName() + ".exe"; // NOI18N
     }
 
     protected int getMagicNumber() {
@@ -200,8 +202,8 @@ public class Tomcat5IntegrationProvider extends AbstractTomcatIntegrationProvide
             catalinaBaseOption = ";-Dcatalina.base=" + IntegrationUtils.getEnvVariableReference("CATALINA_BASE", targetOS); // NOI18N
         }
 
-        catalinaScript.append(getQuotedPath(this.getInstallationPath() + separator + "bin" + separator + "tomcat5.exe"))
-                      .append(" //TS//Tomcat5 "); // NOI18N
+        catalinaScript.append(getQuotedPath(this.getInstallationPath() + separator + "bin" + separator + getTomcatExe()))
+                      .append(" //TS//" + getTomcatName()); // NOI18N
         catalinaScript.append("--JavaHome=").append(getQuotedPath(getTargetJavaHome())).append(' '); // NOI18N
         catalinaScript.append("--JvmOptions %CATALINA_OPTS%").append(catalinaBaseOption); // NOI18N
 
@@ -219,7 +221,7 @@ public class Tomcat5IntegrationProvider extends AbstractTomcatIntegrationProvide
 
     private boolean isTomcatExeUsed(final String path) {
         final String separator = System.getProperty("file.separator"); // NOI18N
-        final File exeFile = new File(path + separator + "bin" + separator + "tomcat5.exe"); // NOI18N
+        final File exeFile = new File(path + separator + "bin" + separator + getTomcatExe()); // NOI18N
         final File scriptFile = new File(getScriptPath(IntegrationUtils.PLATFORM_WINDOWS_OS, false)); // this method is called only for Windows tomcat installation
 
         return exeFile.exists() && !scriptFile.exists();
