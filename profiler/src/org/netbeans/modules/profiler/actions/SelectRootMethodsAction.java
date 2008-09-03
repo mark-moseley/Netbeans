@@ -46,10 +46,8 @@ import org.netbeans.lib.profiler.client.ClientUtils;
 import org.netbeans.lib.profiler.common.ProfilingSettings;
 import org.netbeans.modules.profiler.NetBeansProfiler;
 import org.netbeans.modules.profiler.ui.NBSwingWorker;
-import org.netbeans.modules.profiler.ui.panels.SelectRootMethodsForClassPanel;
 import org.netbeans.modules.profiler.ui.stp.ProfilingSettingsManager;
 import org.netbeans.modules.profiler.utils.IDEUtils;
-import org.netbeans.modules.profiler.utils.SourceUtils;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
@@ -57,6 +55,8 @@ import org.openide.util.NbBundle;
 import org.openide.util.actions.NodeAction;
 import java.util.ArrayList;
 import java.util.List;
+import org.netbeans.modules.profiler.projectsupport.utilities.SourceUtils;
+import org.netbeans.modules.profiler.ui.panels.ClassSelectRootMethodsPanel;
 
 
 /**
@@ -165,7 +165,7 @@ public final class SelectRootMethodsAction extends NodeAction {
                             return; // cancelled by the user
                         }
 
-                        ClientUtils.SourceCodeSelection[] rootMethodsSelection = SelectRootMethodsForClassPanel.getDefault()
+                        ClientUtils.SourceCodeSelection[] rootMethodsSelection = ClassSelectRootMethodsPanel.getDefault()
                                                                                                                .getRootMethods(project,
                                                                                                                                className,
                                                                                                                                settings
