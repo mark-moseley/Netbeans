@@ -89,6 +89,7 @@ public class J2SEProjectGeneratorTest extends NbTestCase {
         "build.test.results.dir",
         "debug.classpath",
         "debug.test.classpath",
+        "disable.compile.on.save",
         "dist.dir",
         "dist.jar",
         "dist.javadoc.dir",
@@ -132,6 +133,7 @@ public class J2SEProjectGeneratorTest extends NbTestCase {
         "build.test.results.dir",
         "debug.classpath",
         "debug.test.classpath",
+        "disable.compile.on.save",
         "dist.dir",
         "dist.jar",
         "dist.javadoc.dir",
@@ -195,7 +197,7 @@ public class J2SEProjectGeneratorTest extends NbTestCase {
         File testRoot = new File (root, "test");
         testRoot.mkdir ();
         J2SEProjectGenerator.setDefaultSourceLevel(new SpecificationVersion ("1.4"));   //NOI18N
-        AntProjectHelper helper = J2SEProjectGenerator.createProject(proj, "test-project-ext-src", new File[] {srcRoot}, new File[] {testRoot}, "manifest.mf", null);
+        AntProjectHelper helper = J2SEProjectGenerator.createProject(proj, "test-project-ext-src", new File[] {srcRoot}, new File[] {testRoot}, "manifest.mf", null, null);
         J2SEProjectGenerator.setDefaultSourceLevel(null);   //NOI18N
         assertNotNull (helper);
         FileObject fo = FileUtil.toFileObject(proj);
