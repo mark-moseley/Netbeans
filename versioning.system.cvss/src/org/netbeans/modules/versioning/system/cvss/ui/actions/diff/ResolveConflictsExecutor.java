@@ -63,6 +63,7 @@ import org.netbeans.api.diff.Difference;
 import org.netbeans.api.diff.StreamSource;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.spi.diff.MergeVisualizer;
+import org.netbeans.modules.versioning.util.Utils;
 
 import javax.swing.*;
 
@@ -86,7 +87,6 @@ public class ResolveConflictsExecutor {
     private String rightFileRevision = null;
 
     public void exec(File file) {
-        assert SwingUtilities.isEventDispatchThread();
         MergeVisualizer merge = (MergeVisualizer) Lookup.getDefault().lookup(MergeVisualizer.class);
         if (merge == null) {
             throw new IllegalStateException("No Merge engine found."); // NOI18N
@@ -94,21 +94,36 @@ public class ResolveConflictsExecutor {
         
         try {
             FileObject fo = FileUtil.toFileObject(file);
-            handleMergeFor(file, fo, fo.lock(), merge);
-        } catch (FileAlreadyLockedException e) {
-            Set components = TopComponent.getRegistry().getOpened();
-            for (Iterator i = components.iterator(); i.hasNext();) {
-                TopComponent tc = (TopComponent) i.next();
-                if (tc.getClientProperty(ResolveConflictsExecutor.class.getName()) != null) {
-                    tc.requestActive();
+            boolean mergeResolverOpened = false;
+            FileLock lock = fo.lock();
+            try {
+                handleMergeFor(file, fo, lock, merge);
+            } finally {
+                if(!mergeResolverOpened && lock != null) {
+                    lock.releaseLock();
                 }
             }
+        } catch (FileAlreadyLockedException e) {
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    Set components = TopComponent.getRegistry().getOpened();
+                    for (Iterator i = components.iterator(); i.hasNext();) {
+                        TopComponent tc = (TopComponent) i.next();
+                        if (tc.getClientProperty(ResolveConflictsExecutor.class.getName()) != null) {
+                            tc.requestActive();
+                        }
+                    }
+                }
+            });
         } catch (IOException ioex) {
             org.openide.ErrorManager.getDefault().notify(ioex);
         }
     }
-    
-    private void handleMergeFor(final File file, FileObject fo, FileLock lock,
+
+    /**
+     * Returns true is merge resolver was openened, otherwise false
+     */
+    private boolean handleMergeFor(final File file, FileObject fo, FileLock lock,
                                 final MergeVisualizer merge) throws IOException {
         String mimeType = (fo == null) ? "text/plain" : fo.getMIMEType(); // NOI18N
         String ext = "."+fo.getExt(); // NOI18N
@@ -118,12 +133,12 @@ public class ResolveConflictsExecutor {
         f1.deleteOnExit();
         f2.deleteOnExit();
         f3.deleteOnExit();
-        
+
         final Difference[] diffs = copyParts(true, file, f1, true);
         if (diffs.length == 0) {
             DialogDisplayer.getDefault ().notify (new org.openide.NotifyDescriptor.Message(
-                org.openide.util.NbBundle.getMessage(ResolveConflictsExecutor.class, "NoConflictsInFile", file)));
-            return ;
+                            org.openide.util.NbBundle.getMessage(ResolveConflictsExecutor.class, "NoConflictsInFile", file)));
+                return false;
         }
         copyParts(false, file, f2, false);
         //GraphicalMergeVisualizer merge = new GraphicalMergeVisualizer();
@@ -141,10 +156,12 @@ public class ResolveConflictsExecutor {
         } else {
             rightFileRevision = org.openide.util.NbBundle.getMessage(ResolveConflictsExecutor.class, "Diff.titleRevision", rightFileRevision);
         }
-        
+
         final StreamSource s1;
         final StreamSource s2;
         Charset encoding = FileEncodingQuery.getEncoding(fo);
+        Utils.associateEncoding(file, f1);
+        Utils.associateEncoding(file, f2);
         s1 = StreamSource.createSource(file.getName(), leftFileRevision, mimeType, f1);
         s2 = StreamSource.createSource(file.getName(), rightFileRevision, mimeType, f2);
         final StreamSource result = new MergeResultWriterInfo(f1, f2, f3, file, mimeType,
@@ -152,14 +169,19 @@ public class ResolveConflictsExecutor {
                                                               originalRightFileRevision,
                                                               fo, lock, encoding);
 
-        try {
-            Component c = merge.createView(diffs, s1, s2, result);
-            if (c instanceof TopComponent) {
-                ((TopComponent) c).putClientProperty(ResolveConflictsExecutor.class.getName(), Boolean.TRUE);
+        SwingUtilities.invokeLater(new Runnable () {
+            public void run() {
+                try {
+                    Component c = merge.createView(diffs, s1, s2, result);
+                    if (c instanceof TopComponent) {
+                        ((TopComponent) c).putClientProperty(ResolveConflictsExecutor.class.getName(), Boolean.TRUE);
+                    }
+                } catch (IOException ioex) {
+                    org.openide.ErrorManager.getDefault().notify(ioex);
+                }
             }
-        } catch (IOException ioex) {
-            org.openide.ErrorManager.getDefault().notify(ioex);
-        }
+        });
+        return true;
     }
 
     /**
