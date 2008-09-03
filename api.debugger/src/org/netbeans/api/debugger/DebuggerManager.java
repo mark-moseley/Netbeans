@@ -48,13 +48,12 @@ import java.util.HashMap;
 import org.openide.util.Cancellable;
 import org.openide.util.Task;
 
+import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.debugger.DelegatingDebuggerEngineProvider;
 import org.netbeans.spi.debugger.DelegatingSessionProvider;
 import org.netbeans.spi.debugger.DebuggerEngineProvider;
 import org.netbeans.spi.debugger.SessionProvider;
-import org.openide.modules.ModuleInfo;
-import org.openide.util.WeakListeners;
-import org.openide.util.WeakSet;
+import org.openide.util.Exceptions;
 
 
 /**
@@ -138,7 +137,7 @@ import org.openide.util.WeakSet;
  *
  * @author Jan Jancura
  */
-public final class DebuggerManager {
+public final class DebuggerManager implements ContextProvider {
     
     // TODO: deprecate all these properties. They are useless, since there are
     //       dedicated methods in DebuggerManagerListener
@@ -225,7 +224,7 @@ public final class DebuggerManager {
      * @param service a type of service to look for
      * @return list of services of given type
      */
-    public List lookup (String folder, Class service) {
+    public <T> List<? extends T> lookup(String folder, Class<T> service) {
         return lookup.lookup (folder, service);
     }
     
@@ -235,8 +234,21 @@ public final class DebuggerManager {
      * @param service a type of service to look for
      * @return ne service of given type
      */
-    public Object lookupFirst (String folder, Class service) {
+    public <T> T lookupFirst(String folder, Class<T> service) {
         return lookup.lookupFirst (folder, service);
+    }
+    
+    /**
+     * Join two lookups together.
+     * The result will merge the lookups.
+     * The result of its {@link #lookup} method will additionally implement {@link Customizer}.
+     * @param cp1 first lookup
+     * @param cp2 second lookup
+     * @return a merger of the two
+     * @since org.netbeans.api.debugger/1 1.13
+     */
+    public static ContextProvider join(ContextProvider cp1, ContextProvider cp2) {
+        return new Lookup.Compound(cp1, cp2);
     }
     
     
@@ -267,8 +279,8 @@ public final class DebuggerManager {
         //S ystem.out.println("@StartDebugging info: " + info);
         
         // init sessions
-        ArrayList sessionProviders = new ArrayList ();
-        ArrayList engines = new ArrayList ();
+        List sessionProviders = new ArrayList();
+        List<DebuggerEngine> engines = new ArrayList<DebuggerEngine>();
         Lookup l = info.getLookup ();
         Lookup l2 = info.getLookup ();
         synchronized (l) {
@@ -299,6 +311,9 @@ public final class DebuggerManager {
                 //S ystem.out.println("@  StartDebugging DelegaingSession: " + s);
             } else {
                 SessionProvider sp = (SessionProvider) sessionProviders.get (i);
+                if (sp.getSessionName() == null) throw new NullPointerException("<null> session name provided by: "+sp);
+                if (sp.getTypeID() == null) throw new NullPointerException("<null> type ID provided by: "+sp);
+                if (sp.getServices() == null) throw new NullPointerException("<null> services provided by: "+sp);
                 s = new Session (
                     sp.getSessionName (),
                     sp.getLocationName (),
@@ -332,8 +347,7 @@ public final class DebuggerManager {
                         engineProviders.get (j);
                     Object[] services = ep.getServices ();
                     engine = new DebuggerEngine (
-                        ((DebuggerEngineProvider) engineProviders.get (j)).
-                            getEngineTypeID (),
+                        ep.getEngineTypeID (),
                         s,
                         services,
                         l
@@ -362,7 +376,7 @@ public final class DebuggerManager {
             if (Thread.interrupted()) {
                 break;
             }
-            Task task = ((DebuggerEngine) engines.get (i)).getActionsManager ().postAction
+            Task task = engines.get(i).getActionsManager ().postAction
                 (ActionsManager.ACTION_START);
             if (task instanceof Cancellable) {
                 try {
@@ -381,18 +395,20 @@ public final class DebuggerManager {
         if (i < k) { // It was canceled
             int n = i + 1;
             for (i = 0; i < k; i++) {
-                ActionsManager am = ((DebuggerEngine) engines.get (i)).getActionsManager();
+                ActionsManager am = engines.get(i).getActionsManager();
                 if (i < (n - 1)) am.postAction(ActionsManager.ACTION_KILL); // kill the started engines
                 am.destroy();
             }
             return new DebuggerEngine[] {};
         }
         
-        if (sessionToStart != null)
+        if (sessionToStart != null) {
+            GestureSubmitter.logDebugStart(sessionToStart, engines);
             setCurrentSession (sessionToStart);
+        }
         
         DebuggerEngine[] des = new DebuggerEngine [engines.size ()];
-        return (DebuggerEngine[]) engines.toArray (des);
+        return engines.toArray (des);
     }
 
     /**
@@ -500,13 +516,15 @@ public final class DebuggerManager {
         Breakpoint breakpoint
     ) {
         if (initBreakpoints (breakpoint)) {
-            registerBreakpoint(breakpoint);
-            breakpoints.addElement (breakpoint);
-            fireBreakpointCreated (breakpoint, null);
+            // do not add one breakpoint more than once.
+            if (registerBreakpoint(breakpoint)) {
+                breakpoints.addElement (breakpoint);
+                fireBreakpointCreated (breakpoint, null);
+            }
         }
     }
     
-    private void registerBreakpoint(Breakpoint breakpoint) {
+    private boolean registerBreakpoint(Breakpoint breakpoint) {
         Class c = breakpoint.getClass();
         ClassLoader cl = c.getClassLoader();
         synchronized (breakpointsByClassLoaders) {
@@ -516,7 +534,7 @@ public final class DebuggerManager {
                 breakpointsByClassLoaders.put(cl, lb);
                 //moduleUnloadListeners.listenOn(cl);
             }
-            lb.add(breakpoint);
+            return lb.add(breakpoint);
         }
     }
     
@@ -651,12 +669,22 @@ public final class DebuggerManager {
             this, name, o, n
         );
         int i, k = l.size ();
-        for (i = 0; i < k; i++)
-            ((DebuggerManagerListener)l.elementAt (i)).propertyChange (ev);
+        for (i = 0; i < k; i++) {
+            try {
+                ((DebuggerManagerListener)l.elementAt (i)).propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
         if (l1 != null) {
             k = l1.size ();
-            for (i = 0; i < k; i++)
-                ((DebuggerManagerListener)l1.elementAt (i)).propertyChange (ev);
+            for (i = 0; i < k; i++) {
+                try {
+                    ((DebuggerManagerListener)l1.elementAt (i)).propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
         }
     }
 
@@ -738,8 +766,12 @@ public final class DebuggerManager {
         for (i = 0; i < k; i++) {
             DebuggerManagerListener dl = (DebuggerManagerListener) l.elementAt (i);
             if (dl != originatingListener) {
-                dl.breakpointAdded (breakpoint);
-                dl.propertyChange (ev);
+                try {
+                    dl.breakpointAdded (breakpoint);
+                    dl.propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
         
@@ -755,8 +787,12 @@ public final class DebuggerManager {
             for (i = 0; i < k; i++) {
                 DebuggerManagerListener dl = (DebuggerManagerListener) l1.elementAt (i);
                 if (dl != originatingListener) {
-                    dl.breakpointAdded (breakpoint);
-                    dl.propertyChange (ev);
+                    try {
+                        dl.breakpointAdded (breakpoint);
+                        dl.propertyChange (ev);
+                    } catch (Exception ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
                 }
             }
         }
@@ -789,8 +825,12 @@ public final class DebuggerManager {
             if (ignoreInitBreakpointsListeners && (bps = ml.initBreakpoints()) != null && bps.length > 0) {
                 continue;
             }
-            ml.breakpointRemoved(breakpoint);
-            ml.propertyChange (ev);
+            try {
+                ml.breakpointRemoved(breakpoint);
+                ml.propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
         
         Vector l1;
@@ -809,8 +849,12 @@ public final class DebuggerManager {
                 if (ignoreInitBreakpointsListeners && (bps = ml.initBreakpoints()) != null && bps.length > 0) {
                     continue;
                 }
-                ml.breakpointRemoved(breakpoint);
-                ml.propertyChange (ev);
+                try {
+                    ml.breakpointRemoved(breakpoint);
+                    ml.propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
     }
@@ -983,9 +1027,12 @@ public final class DebuggerManager {
         Vector l = (Vector) listeners.clone ();
         int i, k = l.size ();
         for (i = 0; i < k; i++) {
-            ((DebuggerManagerListener) l.elementAt (i)).watchAdded 
-                (watch);
-            ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            try {
+                ((DebuggerManagerListener) l.elementAt (i)).watchAdded (watch);
+                ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
 
         Vector l1;
@@ -998,9 +1045,12 @@ public final class DebuggerManager {
         if (l1 != null) {
             k = l1.size ();
             for (i = 0; i < k; i++) {
-                ((DebuggerManagerListener) l1.elementAt (i)).watchAdded 
-                    (watch);
-                ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                try {
+                    ((DebuggerManagerListener) l1.elementAt (i)).watchAdded (watch);
+                    ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
     }
@@ -1024,10 +1074,13 @@ public final class DebuggerManager {
         Vector l = (Vector) listeners.clone ();
         int i, k = l.size ();
         for (i = 0; i < k; i++) {
-            ((DebuggerManagerListener) l.elementAt (i)).watchRemoved 
-                (watch);
-            // TODO: fix nonsense double firing
-            ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            try {
+                ((DebuggerManagerListener) l.elementAt (i)).watchRemoved (watch);
+                // TODO: fix nonsense double firing
+                ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
 
         Vector l1;
@@ -1040,10 +1093,13 @@ public final class DebuggerManager {
         if (l1 != null) {
             k = l1.size ();
             for (i = 0; i < k; i++) {
-                ((DebuggerManagerListener) l1.elementAt (i)).watchRemoved 
-                    (watch);
-                // TODO: fix nonsense double firing
-                ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                try {
+                    ((DebuggerManagerListener) l1.elementAt (i)).watchRemoved (watch);
+                    // TODO: fix nonsense double firing
+                    ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
     }
@@ -1062,8 +1118,12 @@ public final class DebuggerManager {
         Vector l = (Vector) listeners.clone ();
         int i, k = l.size ();
         for (i = 0; i < k; i++) {
-            ((DebuggerManagerListener) l.elementAt (i)).initWatches ();
-            ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            try {
+                ((DebuggerManagerListener) l.elementAt (i)).initWatches ();
+                ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
 
         Vector l1;
@@ -1076,8 +1136,12 @@ public final class DebuggerManager {
         if (l1 != null) {
             k = l1.size ();
             for (i = 0; i < k; i++) {
-                ((DebuggerManagerListener) l1.elementAt (i)).initWatches ();
-                ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                try {
+                    ((DebuggerManagerListener) l1.elementAt (i)).initWatches ();
+                    ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
     }
@@ -1105,9 +1169,12 @@ public final class DebuggerManager {
         Vector l = (Vector) listeners.clone ();
         int i, k = l.size ();
         for (i = 0; i < k; i++) {
-            ((DebuggerManagerListener) l.elementAt (i)).sessionAdded 
-                (session);
-            ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            try {
+                ((DebuggerManagerListener) l.elementAt (i)).sessionAdded(session);
+                ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
         
         Vector l1;
@@ -1120,9 +1187,12 @@ public final class DebuggerManager {
         if (l1 != null) {
             k = l1.size ();
             for (i = 0; i < k; i++) {
-                ((DebuggerManagerListener) l1.elementAt (i)).sessionAdded
-                    (session);
-                ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                try {
+                    ((DebuggerManagerListener) l1.elementAt (i)).sessionAdded(session);
+                    ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
     }
@@ -1150,9 +1220,12 @@ public final class DebuggerManager {
         Vector l = (Vector) listeners.clone ();
         int i, k = l.size ();
         for (i = 0; i < k; i++) {
-            ((DebuggerManagerListener) l.elementAt (i)).sessionRemoved 
-                (session);
-            ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            try {
+                ((DebuggerManagerListener) l.elementAt (i)).sessionRemoved(session);
+                ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
 
         Vector l1;
@@ -1165,9 +1238,12 @@ public final class DebuggerManager {
         if (l1 != null) {
             k = l1.size ();
             for (i = 0; i < k; i++) {
-                ((DebuggerManagerListener) l1.elementAt (i)).sessionRemoved 
-                    (session);
-                ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                try {
+                    ((DebuggerManagerListener) l1.elementAt (i)).sessionRemoved(session);
+                    ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
     }
@@ -1195,9 +1271,12 @@ public final class DebuggerManager {
         Vector l = (Vector) listeners.clone ();
         int i, k = l.size ();
         for (i = 0; i < k; i++) {
-            ((DebuggerManagerListener) l.elementAt (i)).engineAdded 
-                (engine);
-            ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            try {
+                ((DebuggerManagerListener) l.elementAt (i)).engineAdded(engine);
+                ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
         
         Vector l1;
@@ -1210,9 +1289,12 @@ public final class DebuggerManager {
         if (l1 != null) {
             k = l1.size ();
             for (i = 0; i < k; i++) {
-                ((DebuggerManagerListener) l1.elementAt (i)).engineAdded
-                    (engine);
-                ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                try {
+                    ((DebuggerManagerListener) l1.elementAt (i)).engineAdded(engine);
+                    ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
     }
@@ -1240,9 +1322,12 @@ public final class DebuggerManager {
         Vector l = (Vector) listeners.clone ();
         int i, k = l.size ();
         for (i = 0; i < k; i++) {
-            ((DebuggerManagerListener) l.elementAt (i)).engineRemoved 
-                (engine);
-            ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            try {
+                ((DebuggerManagerListener) l.elementAt (i)).engineRemoved(engine);
+                ((DebuggerManagerListener) l.elementAt (i)).propertyChange (ev);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
 
         Vector l1;
@@ -1255,9 +1340,12 @@ public final class DebuggerManager {
         if (l1 != null) {
             k = l1.size ();
             for (i = 0; i < k; i++) {
-                ((DebuggerManagerListener) l1.elementAt (i)).engineRemoved 
-                    (engine);
-                ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                try {
+                    ((DebuggerManagerListener) l1.elementAt (i)).engineRemoved(engine);
+                    ((DebuggerManagerListener) l1.elementAt (i)).propertyChange (ev);
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
+                }
             }
         }
     }
@@ -1266,7 +1354,7 @@ public final class DebuggerManager {
     // helper methods ....................................................
     
     private Set<LazyDebuggerManagerListener> loadedListeners;
-    private List<LazyDebuggerManagerListener> listenersLookupList;
+    private List<? extends LazyDebuggerManagerListener> listenersLookupList;
     
     private void initDebuggerManagerListeners () {
         synchronized (listenersMap) {
@@ -1277,7 +1365,7 @@ public final class DebuggerManager {
                 ((Customizer) listenersLookupList).addPropertyChangeListener(new PropertyChangeListener() {
 
                     public void propertyChange(PropertyChangeEvent evt) {
-                        refreshDebuggerManagerListeners((List<LazyDebuggerManagerListener>) evt.getSource());
+                        refreshDebuggerManagerListeners((List<? extends LazyDebuggerManagerListener>) evt.getSource());
                     }
                 });
             }
@@ -1285,7 +1373,7 @@ public final class DebuggerManager {
         }
     }
     
-    private void refreshDebuggerManagerListeners (List<LazyDebuggerManagerListener> listenersLookupList) {
+    private void refreshDebuggerManagerListeners(List<? extends LazyDebuggerManagerListener> listenersLookupList) {
         //System.err.println("\n refreshDebuggerManagerListeners()");
         //It's neccessary to pay attention on the order in which the listeners and breakpoints are registered!
         //Annotation listeners must be unregistered AFTER breakpoints are removed
