@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project basedir="." default="netbeans" name="css.editor">
+    <description>Builds, tests, and runs the project org.netbeans.modules.css</description>
+    <import file="../nbbuild/templates/projectized.xml"/>
+    
+    <target name="build-css-parser" description="Builds CSS javacc parser">
+        <property name="javacc.home" value="/opt/local/var/macports/software/javacc/4.0_0/opt/local/share/java"/>
+        
+        <jjtree target="src/org/netbeans/modules/css/parser/css.jjt" outputdirectory="src/org/netbeans/modules/css/parser/" javacchome="${javacc.home}"/>
+        <javacc target="src/org/netbeans/modules/css/parser/css.jj" outputdirectory="src/org/netbeans/modules/css/parser/" javacchome="${javacc.home}"/>
+    </target>
+
+    <target name="jar" depends="init,compile,jar-prep" unless="is.jar.uptodate">
+        <taskdef name="gsfjar" classname="org.netbeans.modules.gsf.GsfJar" classpath="${nb_all}/gsf.api/anttask/gsfanttask.jar:${nb_all}/nbbuild/nbantext.jar"/>
+        <gsfjar jarfile="${cluster}/${module.jar}" compress="${build.package.compress}" index="${build.package.index}" manifest="${manifest.mf}" stamp="${cluster}/.lastModified">
+            <fileset dir="${build.classes.dir}"/>
+        </gsfjar>
+    </target>
+
+</project>
