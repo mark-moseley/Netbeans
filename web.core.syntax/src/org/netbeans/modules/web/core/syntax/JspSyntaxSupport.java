@@ -56,13 +56,13 @@ import org.netbeans.api.lexer.Language;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.ext.html.HTMLCompletionQuery;
+import org.netbeans.modules.web.core.syntax.completion.JspCompletionItem;
 import org.netbeans.modules.web.core.syntax.deprecated.ELTokenContext;
 import org.netbeans.modules.web.core.syntax.deprecated.JspDirectiveTokenContext;
 import org.netbeans.modules.web.core.syntax.deprecated.JspMultiTokenContext;
 import org.netbeans.modules.web.core.syntax.deprecated.JspTagTokenContext;
 import org.netbeans.modules.web.core.syntax.spi.JspContextInfo;
 import org.netbeans.modules.web.jsps.parserapi.JspParserAPI.JspOpenInfo;
-import org.netbeans.modules.web.jsps.parserapi.PageInfo;
 import org.netbeans.spi.editor.completion.CompletionItem;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
@@ -75,7 +75,6 @@ import org.netbeans.editor.ext.java.JavaTokenContext;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.openide.filesystems.FileUtil;
 import org.openide.modules.InstalledFileLocator;
-import org.netbeans.modules.web.core.syntax.completion.JspCompletionItem;
 import org.openide.text.CloneableEditorSupport;
 
 /**
@@ -183,7 +182,7 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
             PageInfo pi = pre.getPageInfo();
             if(pi == null) {
                 //report error but do not break the entire CC
-                err.log(Level.WARNING, null, new NullPointerException("PageInfo obtained from JspParserAPI.ParseResult is null!"));
+                err.log(Level.WARNING, null, new NullPointerException("PageInfo obtained from JspParserAPI.ParseResult is null"));
                 return null;
             }
             List<String> imports = pi.getImports();
@@ -243,7 +242,16 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
         getTagLibraryMappings();
         //force the parser to update the parse information for the file
         JspParserAPI.ParseResult result = JspUtils.getCachedParseResult(getDocument(), fobj, false, true, true);
-        if (result != null) return result.getPageInfo().getTagLibraries();
+        if (result != null) {
+            PageInfo pi = result.getPageInfo();
+            if(pi == null) {
+                //report error but do not break the entire CC
+                err.log(Level.WARNING, null, new NullPointerException("PageInfo obtained from JspParserAPI.ParseResult is null"));
+                return null;
+            } else {
+                return pi.getTagLibraries();
+            }
+        }
         
         return null; //an error
     }
@@ -450,8 +458,8 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
     
     /** Filters list of strings so only strings starting
      * with a given prefix are returned in the new List. */
-    public final List filterList(List toFilter, String prefix) {
-        List newList = new ArrayList();
+    public static final List<Object> filterList(List<? extends Object> toFilter, String prefix) {
+        List<Object> newList = new ArrayList<Object>();
         Object item;
         for (int i = 0; i < toFilter.size(); i++) {
             item = toFilter.get(i);
@@ -470,8 +478,20 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
         return newList;
     }
     
+     /** Filters list of strings so only strings starting
+     * with a given prefix are returned in the new List. */
+    public static final List<String> filterStrings(List<String> toFilter, String prefix) {
+        List<String> newList = new ArrayList<String>();
+        for(String val : toFilter) {
+            if(val.startsWith(prefix)) {
+                newList.add(val);
+            }
+        }
+        return newList;
+    }
+    
     /** Gets all 'jsp prefixes' whose 'string prefix' matches complPrefix as a list of Strings. */
-    public final List getTagPrefixes(String complPrefix) {
+    public final List<Object> getTagPrefixes(String complPrefix) {
         return filterList(getAllTagPrefixes(), complPrefix);
     }
     
@@ -689,9 +709,9 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
     
     
     /** Should be overriden ny subclasses to support JSP 1.1. */
-    protected List getAllDirectives() {
+    protected List<TagInfo> getAllDirectives() {
         initCompletionData();
-        List items = new ArrayList();
+        List<TagInfo> items = new ArrayList<TagInfo>();
         
         //Is xml syntax? => return nothing.
         if (isXmlSyntax()) return items;
@@ -920,7 +940,11 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
                         new TagAttributeInfo("class", false, url + "syntaxref2027.html#10968#19433", false),      // NOI18N
                         new TagAttributeInfo("id", true, url + "syntaxref2027.html#10964#10966", false),         // NOI18N
                         new TagAttributeInfo("scope", true, url + "syntaxref2027.html#10966#10968", false),      // NOI18N
-                        new TagAttributeInfo("type", false, url + "syntaxref2027.html#19433#18019", false)})     // NOI18N
+                        new TagAttributeInfo("type", false, url + "syntaxref2027.html#19433#18019", false)}),     // NOI18N
+                        new TagInfo("declaration", null, TagInfo.BODY_CONTENT_JSP, url+"syntaxref204.html#10983#10991",                 // NOI18N
+                        null, null, new TagAttributeInfo[] {}),
+                        new TagInfo("scriptlet", null, TagInfo.BODY_CONTENT_JSP, url+"syntaxref206.html#10996#11007",                 // NOI18N
+                        null, null, new TagAttributeInfo[] {})
             };
             
             standardTagTagDatas = new TagInfo[standardJspTagDatas.length + 2 ];
@@ -949,6 +973,8 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
             standardTagTagDatas[13] = standardJspTagDatas[11]; //"setProperty"
             standardTagTagDatas[14] = standardJspTagDatas[12]; //"text"
             standardTagTagDatas[15] = standardJspTagDatas[13]; //"useBean"
+            standardTagTagDatas[16] = standardJspTagDatas[14]; //"declaration"
+            standardTagTagDatas[17] = standardJspTagDatas[15]; //"expression"            
         }
         
         
@@ -1016,15 +1042,11 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
         if (xmlJspTagDatas == null) {
             TagInfo[] commonXMLTagDatas;
             commonXMLTagDatas = new TagInfo[]{
-                new TagInfo("declaration", null, TagInfo.BODY_CONTENT_JSP, url+"syntaxref204.html#10983#10991",                 // NOI18N
-                        null, null, new TagAttributeInfo[] {}),
                         new TagInfo("output", null, TagInfo.BODY_CONTENT_JSP, url + "syntaxref2022.html#1004130#1007521",                 // NOI18N
                         null, null, new TagAttributeInfo[] {new TagAttributeInfo("doctype-public", false, "url + syntaxref2022.html#1007534#1007521", false),  // NOI18N
                         new TagAttributeInfo("doctype-root-element", false, "url + syntaxref2022.html#1007528#1007532", false),    // NOI18N
                         new TagAttributeInfo("doctype-system", false, url + "syntaxref2022.html#1007532#1007534", false),  // NOI18N
                         new TagAttributeInfo("omit-xml-declaration", false, url + "syntaxref2022.html#1007525#1007528"   , false)}),    // NOI18N
-                        new TagInfo("scriptlet", null, TagInfo.BODY_CONTENT_JSP, url+"syntaxref206.html#10996#11007",                 // NOI18N
-                        null, null, new TagAttributeInfo[] {}),
                         new TagInfo("root", null, TagInfo.BODY_CONTENT_JSP, url+"syntaxref2024.html#1003283#1003311",                         // NOI18N
                         null, null, new TagAttributeInfo[] {new TagAttributeInfo("version", false, url+"syntaxref2024.html#1003299#1003301", false),
                         new TagAttributeInfo("xmlns:jsp", false, url+"syntaxref2024.html#1003297#1003299", false),
@@ -1740,15 +1762,16 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
         return elem;
     }
     
-    public List getPossibleEndTags(int offset, String pattern) throws BadLocationException {
-        return getPossibleEndTags(offset, pattern, false); //return all end tags
+    public List<JspCompletionItem> getPossibleEndTags(int offset, int anchor, String pattern) throws BadLocationException {
+        return getPossibleEndTags(offset, anchor, pattern, false); //return all end tags
     }
     
-    public List getPossibleEndTags(int offset, String pattern, boolean firstOnly) throws BadLocationException {
+    public List<JspCompletionItem> getPossibleEndTags(int offset, int anchor, String pattern, boolean firstOnly) throws BadLocationException {
         SyntaxElement elem = getElementChain( offset );
-        Stack stack = new Stack();
-        List result = new ArrayList();
-        Set found = new HashSet();
+        
+        Stack<String> stack = new Stack<String>();
+        List<JspCompletionItem> result = new ArrayList<JspCompletionItem>();
+        Set<String> found = new HashSet<String>();
         
         if( elem != null ) {
             elem = elem.getPrevious();  // we need smtg. before our </
@@ -1808,7 +1831,7 @@ public class JspSyntaxSupport extends ExtSyntaxSupport {
                         if (ti.getBodyContent().equalsIgnoreCase(TagInfo.BODY_CONTENT_EMPTY))
                             continue;
                         
-                        result.add( new JspCompletionItem.Tag( "/"+image, ti ) );  // NOI18N
+                        result.add(JspCompletionItem.createTag("/"+image, anchor, ti ) );  // NOI18N
                         
                         if(firstOnly) break; //return only the first found not-finished start token
                     }
