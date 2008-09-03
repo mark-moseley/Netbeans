@@ -51,21 +51,14 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.ResourceBundle;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.JSeparator;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -74,6 +67,7 @@ import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
@@ -81,13 +75,14 @@ import org.netbeans.modules.j2ee.api.ejbjar.Car;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
 import org.netbeans.modules.j2ee.clientproject.AppClientProject;
 import org.netbeans.modules.j2ee.clientproject.AppClientProjectUtil;
-import org.netbeans.modules.j2ee.clientproject.SourceRoots;
-import org.netbeans.modules.j2ee.clientproject.UpdateHelper;
-import org.netbeans.modules.j2ee.clientproject.classpath.ClassPathSupport;
+import org.netbeans.modules.j2ee.clientproject.classpath.ClassPathSupportCallbackImpl;
 import org.netbeans.modules.j2ee.clientproject.ui.customizer.AppClientProjectProperties;
 import org.netbeans.modules.j2ee.clientproject.ui.customizer.CustomizerLibraries;
 import org.netbeans.modules.j2ee.clientproject.ui.customizer.CustomizerProviderImpl;
 import org.netbeans.modules.j2ee.clientproject.wsclient.AppClientProjectWebServicesClientSupport;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
+import org.netbeans.modules.j2ee.common.project.ui.LibrariesNode;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectProperties;
 import org.netbeans.modules.j2ee.common.ui.BrokenServerSupport;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
@@ -95,6 +90,8 @@ import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.InstanceListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.spi.ejbjar.support.J2eeProjectView;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.websvc.api.client.WebServicesClientSupport;
 import org.netbeans.modules.websvc.api.client.WebServicesClientView;
 import org.netbeans.modules.websvc.api.jaxws.client.JAXWSClientSupport;
@@ -104,6 +101,7 @@ import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
 import org.netbeans.spi.java.project.support.ui.PackageView;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
+import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
@@ -114,10 +112,6 @@ import org.openide.actions.FindAction;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileStatusEvent;
-import org.openide.filesystems.FileStatusListener;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.modules.SpecificationVersion;
 import org.openide.nodes.AbstractNode;
@@ -125,7 +119,6 @@ import org.openide.nodes.Children;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
-import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -229,12 +222,12 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
     // Private innerclasses ----------------------------------------------------
     
     private static final String[] BREAKABLE_PROPERTIES = new String[] {
-        AppClientProjectProperties.JAVAC_CLASSPATH,
+        ProjectProperties.JAVAC_CLASSPATH,
 //        AppClientProjectProperties.RUN_CLASSPATH, take it from target server
         AppClientProjectProperties.DEBUG_CLASSPATH,
-        AppClientProjectProperties.RUN_TEST_CLASSPATH,
+        ProjectProperties.RUN_TEST_CLASSPATH,
         AppClientProjectProperties.DEBUG_TEST_CLASSPATH,
-        AppClientProjectProperties.JAVAC_TEST_CLASSPATH,
+        ProjectProperties.JAVAC_TEST_CLASSPATH,
     };
     
     public boolean hasBrokenLinks() {
@@ -278,28 +271,14 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
         return result;
     }
     
-    private static Image brokenProjectBadge = Utilities.loadImage("org/netbeans/modules/j2ee/clientproject/ui/resources/brokenProjectBadge.gif", true);
-    
     /** Filter node containin additional features for the J2SE physical
      */
-    private final class AppClientLogicalViewRootNode extends AbstractNode implements Runnable, FileStatusListener, ChangeListener, PropertyChangeListener {
+    private final class AppClientLogicalViewRootNode extends AbstractNode {
         
         private Action brokenLinksAction;
         private BrokenServerAction brokenServerAction;
         private boolean broken;         //Represents a state where project has a broken reference repairable by broken reference support
         private boolean illegalState;   //Represents a state where project is not in legal state, eg invalid source/target level
-        
-        // icon badging >>>
-        private Set<FileObject> files;
-        private Map<FileSystem, FileStatusListener> fileSystemListeners;
-        private RequestProcessor.Task task;
-        private final Object privateLock = new Object();
-        private boolean iconChange;
-        private boolean nameChange;
-        private ChangeListener sourcesListener;
-        private Map<SourceGroup, PropertyChangeListener> groupsListeners;
-        //private Project project;
-        // icon badging <<<
         
         public AppClientLogicalViewRootNode() {
             super(new LogicalViewChildren(project, evaluator, helper, resolver), Lookups.singleton(project));
@@ -315,74 +294,6 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
             J2eeModuleProvider moduleProvider = project.getLookup().lookup(J2eeModuleProvider.class);
             moduleProvider.addInstanceListener(
                     WeakListeners.create(InstanceListener.class, brokenServerAction, moduleProvider));
-            setProjectFiles(project);
-        }
-        
-        
-        protected void setProjectFiles(Project project) {
-            Sources sources = ProjectUtils.getSources(project);  // returns singleton
-            if (sourcesListener == null) {
-                sourcesListener = WeakListeners.change(this, sources);
-                sources.addChangeListener(sourcesListener);
-            }
-            setGroups(Arrays.asList(sources.getSourceGroups(Sources.TYPE_GENERIC)));
-        }
-        
-        
-        private void setGroups(Collection groups) {
-            if (groupsListeners != null) {
-                Iterator it = groupsListeners.keySet().iterator();
-                while (it.hasNext()) {
-                    SourceGroup group = (SourceGroup) it.next();
-                    PropertyChangeListener pcl = groupsListeners.get(group);
-                    group.removePropertyChangeListener(pcl);
-                }
-            }
-            groupsListeners = new HashMap<SourceGroup, PropertyChangeListener>();
-            Set<FileObject> roots = new HashSet<FileObject>();
-            Iterator it = groups.iterator();
-            while (it.hasNext()) {
-                SourceGroup group = (SourceGroup) it.next();
-                PropertyChangeListener pcl = WeakListeners.propertyChange(this, group);
-                groupsListeners.put(group, pcl);
-                group.addPropertyChangeListener(pcl);
-                FileObject fo = group.getRootFolder();
-                roots.add(fo);
-            }
-            setFiles(roots);
-        }
-        
-        protected void setFiles(Set<FileObject> files) {
-            if (fileSystemListeners != null) {
-                for (FileSystem fs : fileSystemListeners.keySet()) {
-                    FileStatusListener fsl = fileSystemListeners.get(fs);
-                    fs.removeFileStatusListener(fsl);
-                }
-            }
-            
-            fileSystemListeners = new HashMap<FileSystem, FileStatusListener>();
-            this.files = files;
-            if (files == null) {
-                return;
-            }
-            
-            Iterator it = files.iterator();
-            Set<FileSystem> hookedFileSystems = new HashSet<FileSystem>();
-            while (it.hasNext()) {
-                FileObject fo = (FileObject) it.next();
-                try {
-                    FileSystem fs = fo.getFileSystem();
-                    if (hookedFileSystems.contains(fs)) {
-                        continue;
-                    }
-                    hookedFileSystems.add(fs);
-                    FileStatusListener fsl = FileUtil.weakFileStatusListener(this, fs);
-                    fs.addFileStatusListener(fsl);
-                    fileSystemListeners.put(fs, fsl);
-                } catch (FileStateInvalidException e) {
-                    Logger.getLogger("global").log(Level.INFO, null, Exceptions.attachMessage(e, "Cannot get " + fo + " filesystem, ignoring...")); // NOI18N
-                }
-            }
         }
         
         @Override
@@ -399,41 +310,18 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
         
         @Override
         public Image getIcon(int type) {
-            Image img = getMyIcon(type);
-            
-            if (files != null && files.iterator().hasNext()) {
-                try {
-                    FileObject fo = files.iterator().next();
-                    img = fo.getFileSystem().getStatus().annotateIcon(img, type, files);
-                } catch (FileStateInvalidException e) {
-                    Logger.getLogger("global").log(Level.INFO, null, e);
-                }
-            }
-            
-            return img;
-        }
-        
-        private Image getMyIcon(int type) {
             Image original = super.getIcon(type);
             return broken || illegalState || brokenServerAction.isEnabled()
-                   ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0)
+                   ? Utilities.mergeImages(original, ProjectProperties.ICON_BROKEN_BADGE.getImage(), 8, 0)
                    : original;
         }
         
         @Override
         public Image getOpenedIcon(int type) {
-            Image img = getMyOpenedIcon(type);
-            
-            if (files != null && files.iterator().hasNext()) {
-                try {
-                    FileObject fo = files.iterator().next();
-                    img = fo.getFileSystem().getStatus().annotateIcon(img, type, files);
-                } catch (FileStateInvalidException e) {
-                    Logger.getLogger("global").log(Level.INFO, null, e);
-                }
-            }
-            
-            return img;
+            Image original = super.getOpenedIcon(type);
+            return broken || illegalState || brokenServerAction.isEnabled()
+                   ? Utilities.mergeImages(original, ProjectProperties.ICON_BROKEN_BADGE.getImage(), 8, 0)
+                   : original;
         }
         
         @Override
@@ -442,62 +330,6 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
             return NbBundle.getMessage(AppClientLogicalViewProvider.class, "HINT_project_root_node", prjDirDispName); // NO18N
         }
 
-        private Image getMyOpenedIcon(int type) {
-            Image original = super.getOpenedIcon(type);
-            return broken || illegalState || brokenServerAction.isEnabled()
-                   ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0)
-                   : original;
-        }
-        
-        public void run() {
-            boolean fireIcon;
-            boolean fireName;
-            synchronized (privateLock) {
-                fireIcon = iconChange;
-                fireName = nameChange;
-                iconChange = false;
-                nameChange = false;
-            }
-            if (fireIcon) {
-                fireIconChange();
-                fireOpenedIconChange();
-            }
-            if (fireName) {
-                fireDisplayNameChange(null, null);
-            }
-        }
-        
-        public void annotationChanged(FileStatusEvent event) {
-            if (task == null) {
-                task = RequestProcessor.getDefault().create(this);
-            }
-            
-            synchronized (privateLock) {
-                if ((iconChange == false && event.isIconChange()) || (nameChange == false && event.isNameChange())) {
-                    Iterator it = files.iterator();
-                    while (it.hasNext()) {
-                        FileObject fo = (FileObject) it.next();
-                        if (event.hasChanged(fo)) {
-                            iconChange |= event.isIconChange();
-                            nameChange |= event.isNameChange();
-                        }
-                    }
-                }
-            }
-            
-            task.schedule(50); // batch by 50 ms
-        }
-        
-        // sources change
-        public void stateChanged(ChangeEvent e) {
-            setProjectFiles(project);
-        }
-        
-        // group change
-        public void propertyChange(PropertyChangeEvent evt) {
-            setProjectFiles(project);
-        }
-        
         @Override
         public Action[] getActions( boolean context ) {
             return getAdditionalActions();
@@ -512,18 +344,6 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
         public void setName(String s) {
             DefaultProjectOperations.performDefaultRenameOperation(project, s);
         }
-        
-        /*
-        public boolean canDestroy() {
-            return true;
-        }
-         
-        public void destroy() throws IOException {
-            System.out.println("Destroy " + project.getProjectDirectory());
-            LogicalViews.closeProjectAction().actionPerformed(new ActionEvent(this, 0, ""));
-            project.getProjectDirectory().delete();
-        }
-         */
         
         // Private methods -------------------------------------------------
         
@@ -561,21 +381,8 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
             actions.add(SystemAction.get(FindAction.class));
             
             // honor 57874 contact
- 
-            Lookup lookup = Lookups.forPath("Projects/Actions"); // NOI18N
-            Lookup.Template query = new Lookup.Template(Object.class);
-            Iterator it = lookup.lookup(query).allInstances().iterator();
-            if (it.hasNext()) {
-                actions.add(null);
-            }
-            while (it.hasNext()) {
-                Object next = it.next();
-                if (next instanceof Action) {
-                    actions.add((Action) next);
-                } else if (next instanceof JSeparator) {
-                    actions.add(null);
-                }
-            }
+            actions.add(null);
+            actions.addAll(Utilities.actionsForPath("Projects/Actions")); // NOI18N
             
             actions.add(null);
             if (brokenLinksAction != null && brokenLinksAction.isEnabled()) {
@@ -587,10 +394,6 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
             actions.add(CommonProjectActions.customizeProjectAction());
 
             return actions.toArray(new Action[actions.size()]);
-        }
-        
-        private boolean isBroken() {
-            return this.broken;
         }
         
         private void setBroken(boolean broken) {
@@ -632,7 +435,7 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
             
             public void actionPerformed(ActionEvent e) {
                 try {
-                    helper.requestSave();
+                    helper.requestUpdate();
                     BrokenReferencesSupport.showCustomizer(helper.getAntProjectHelper(), resolver, getBreakableProperties(), new String[] {AppClientProjectProperties.JAVA_PLATFORM});
                     run();
                 } catch (IOException ioe) {
@@ -694,10 +497,14 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
             }
 
             public void actionPerformed(ActionEvent e) {
-                String j2eeSpec = AppClientProjectProperties.getProperty(
-                        AppClientProjectProperties.J2EE_PLATFORM,
-                        helper.getAntProjectHelper(),
-                        AntProjectHelper.PROJECT_PROPERTIES_PATH);
+                String j2eeSpec = project.evaluator().getProperty(AppClientProjectProperties.J2EE_PLATFORM);
+                if (j2eeSpec == null) {
+                    j2eeSpec = ProjectProperties.JAVA_EE_5; // NOI18N
+                    Logger.getLogger(AppClientLogicalViewProvider.class.getName()).warning(
+                            "project ["+project.getProjectDirectory()+"] is missing "+AppClientProjectProperties.J2EE_PLATFORM+". " + // NOI18N
+                            "default value will be used instead: "+j2eeSpec); // NOI18N
+                    updateJ2EESpec(project, project.getAntProjectHelper(), j2eeSpec);
+                }
                 String instance = BrokenServerSupport.selectServer(j2eeSpec, J2eeModule.CLIENT);
                 if (instance != null) {
                     AppClientProjectProperties.setServerInstance(
@@ -706,6 +513,21 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
                 checkMissingServer();
             }
 
+            private void updateJ2EESpec(final Project project, final AntProjectHelper helper, final String j2eeSpec) {
+                ProjectManager.mutex().postWriteRequest(new Runnable() {
+                    public void run() {
+                        try {
+                            EditableProperties projectProps = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
+                            projectProps.put(AppClientProjectProperties.J2EE_PLATFORM, j2eeSpec);
+                            helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, projectProps);
+                            ProjectManager.getDefault().saveProject(project);
+                        } catch (IOException e) {
+                            Exceptions.printStackTrace(e);
+                        }
+                    }
+                });
+            }
+            
             public void propertyChange(PropertyChangeEvent evt) {
                 if (AppClientProjectProperties.J2EE_SERVER_INSTANCE.equals(evt.getPropertyName())) {
                     checkMissingServer();
@@ -725,7 +547,7 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
 
             private void checkMissingServer() {
                 boolean old = brokenServer;
-                String servInstID = AppClientProjectProperties.getProperty(AppClientProjectProperties.J2EE_SERVER_INSTANCE, helper.getAntProjectHelper(), AntProjectHelper.PRIVATE_PROPERTIES_PATH);
+                String servInstID = project.evaluator().getProperty(AppClientProjectProperties.J2EE_SERVER_INSTANCE);
                 brokenServer = BrokenServerSupport.isBroken(servInstID);
                 if (old != brokenServer) {
                     fireIconChange();
@@ -742,7 +564,7 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
         private static final Object TEST_LIBRARIES = "TestLibs"; //NOI18N
         private static final String WSDL_FOLDER=AppClientProjectWebServicesClientSupport.WSDL_FOLDER;
         
-        private final Project project;
+        private final AppClientProject project;
         private final PropertyEvaluator evaluator;
         private final UpdateHelper helper;
         private final ReferenceHelper resolver;
@@ -753,6 +575,7 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
         private final JaxWsChangeListener jaxWsListener;
         private FileObject wsdlFolder;
         private Car jp;
+        private final ClassPathSupport cs;
         
         public LogicalViewChildren(AppClientProject project, PropertyEvaluator evaluator, UpdateHelper helper, ReferenceHelper resolver) {
             this.project = project;
@@ -763,6 +586,8 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
             this.metaInfListener = new MetaInfListener();
             this.wsdlListener = new WsdlCreationListener();
             this.jaxWsListener = new JaxWsChangeListener();
+            cs = new ClassPathSupport(evaluator, resolver, helper.getAntProjectHelper(), helper, 
+                    new ClassPathSupportCallbackImpl(helper.getAntProjectHelper()));
             Car jps[] = Car.getCars(project);
             assert jps.length > 0;
             jp = jps[0];
@@ -841,54 +666,54 @@ public class AppClientLogicalViewProvider implements LogicalViewProvider {
             Node[] result;
             if (key == LIBRARIES) {
                 //Libraries Node
-                result = new Node[] {
+                result = new Node[]{
                     new LibrariesNode(
-                            NbBundle.getMessage(AppClientLogicalViewProvider.class,"CTL_LibrariesNode"),
-                            project,
-                            evaluator,
-                            helper,
-                            resolver,
-                            AppClientProjectProperties.RUN_CLASSPATH,
-                            new String[] {AppClientProjectProperties.BUILD_CLASSES_DIR},
-                            AppClientProjectProperties.JAVA_PLATFORM, // NOI18N
-                            AppClientProjectProperties.J2EE_SERVER_INSTANCE,
-                            new Action[] {
-                        LibrariesNode.createAddProjectAction(project, AppClientProjectProperties.JAVAC_CLASSPATH,
-                                                         ClassPathSupport.ELEMENT_INCLUDED_LIBRARIES),
-                        LibrariesNode.createAddLibraryAction(project, helper.getAntProjectHelper(), AppClientProjectProperties.JAVAC_CLASSPATH,
-                                                         ClassPathSupport.ELEMENT_INCLUDED_LIBRARIES),
-                        LibrariesNode.createAddFolderAction(project, AppClientProjectProperties.JAVAC_CLASSPATH,
-                                                         ClassPathSupport.ELEMENT_INCLUDED_LIBRARIES),
+                    NbBundle.getMessage(AppClientLogicalViewProvider.class, "CTL_LibrariesNode"),
+                    project,
+                    evaluator,
+                    helper,
+                    resolver,
+                    ProjectProperties.RUN_CLASSPATH,
+                    new String[]{ProjectProperties.BUILD_CLASSES_DIR},
+                    AppClientProjectProperties.JAVA_PLATFORM,
+                    AppClientProjectProperties.J2EE_SERVER_INSTANCE,
+                    AppClientProjectProperties.J2EE_PLATFORM_CLASSPATH,
+                    new Action[]{
+                        LibrariesNode.createAddProjectAction(project, project.getSourceRoots()),
+                        LibrariesNode.createAddLibraryAction(resolver, project.getSourceRoots(), null),
+                        LibrariesNode.createAddFolderAction(project.getAntProjectHelper(), project.getSourceRoots()),
                         null,
                         new PreselectPropertiesAction(project, "Libraries", CustomizerLibraries.COMPILE) // NOI18N
-                        },
-                    ClassPathSupport.ELEMENT_INCLUDED_LIBRARIES)
+                    },
+                    ClassPathSupportCallbackImpl.ELEMENT_INCLUDED_LIBRARIES,
+                    cs)
                 };
             } else if (key == TEST_LIBRARIES) {
-                result = new Node[] {
+                result = new Node[]{
                     new LibrariesNode(
-                            NbBundle.getMessage(AppClientLogicalViewProvider.class,"CTL_TestLibrariesNode"),
-                            project,
-                            evaluator,
-                            helper,
-                            resolver,
-                            AppClientProjectProperties.RUN_TEST_CLASSPATH,
-                            new String[] {
-                        AppClientProjectProperties.BUILD_TEST_CLASSES_DIR,
-                        AppClientProjectProperties.JAVAC_CLASSPATH,
-                        AppClientProjectProperties.BUILD_CLASSES_DIR,
-                            },
-                            null,
-                            null,
-                            new Action[] {
-                        LibrariesNode.createAddProjectAction(project, AppClientProjectProperties.JAVAC_TEST_CLASSPATH, null),
-                        LibrariesNode.createAddLibraryAction(project, helper.getAntProjectHelper(), AppClientProjectProperties.JAVAC_TEST_CLASSPATH, null),
-                        LibrariesNode.createAddFolderAction(project, AppClientProjectProperties.JAVAC_TEST_CLASSPATH, null),
+                    NbBundle.getMessage(AppClientLogicalViewProvider.class, "CTL_TestLibrariesNode"),
+                    project,
+                    evaluator,
+                    helper,
+                    resolver,
+                    ProjectProperties.RUN_TEST_CLASSPATH,
+                    new String[]{
+                        ProjectProperties.BUILD_TEST_CLASSES_DIR,
+                        ProjectProperties.JAVAC_CLASSPATH,
+                        ProjectProperties.BUILD_CLASSES_DIR,
+                    },
+                    null,
+                    null,
+                    null,
+                    new Action[]{
+                        LibrariesNode.createAddProjectAction(project, project.getTestSourceRoots()),
+                        LibrariesNode.createAddLibraryAction(resolver, project.getTestSourceRoots(), null),
+                        LibrariesNode.createAddFolderAction(project.getAntProjectHelper(), project.getTestSourceRoots()),
                         null,
                         new PreselectPropertiesAction(project, "Libraries", CustomizerLibraries.COMPILE_TESTS), // NOI18N
-                            },
-                            null
-                    ),
+                    },
+                    null,
+                    cs)
                 };
             }
             // else if (key instanceof SourceGroup) {
