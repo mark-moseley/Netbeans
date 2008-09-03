@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,7 +42,6 @@
 package org.openide.util.lookup;
 
 import java.util.Arrays;
-import java.util.Collections;
 import org.netbeans.modules.openide.util.NamedServicesProvider;
 import org.openide.util.Lookup;
 
@@ -72,10 +71,7 @@ public class Lookups {
             throw new NullPointerException();
         }
 
-        // performance of the resulting lookup might be further
-        // improved by providing specialized singleton result (and lookup)
-        // instead of using SimpleResult
-        return new SimpleLookup(Collections.singleton(objectToLookup));
+        return new SingletonLookup(objectToLookup);
     }
 
     /**
@@ -224,7 +220,7 @@ public class Lookups {
      * assertEquals("Returns C as A.class is not between B and C", c, l2.lookup(B.class));
      * </pre>
      * For more info check the
-     * <a href="http://www.netbeans.org/source/browse/openide/util/test/unit/src/org/openide/util/lookup/ExcludingLookupTest.java">
+     * <a href="http://hg.netbeans.org/main-golden/annotate/4883eaeda744/openide.util/test/unit/src/org/openide/util/lookup/ExcludingLookupTest.java">
      * excluding lookup tests</a> and the discussion in issue
      * <a href="http://openide.netbeans.org/issues/show_bug.cgi?id=53058">53058</a>.
      *
