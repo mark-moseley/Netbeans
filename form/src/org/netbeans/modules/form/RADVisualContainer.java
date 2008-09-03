@@ -148,7 +148,9 @@ public class RADVisualContainer extends RADVisualComponent implements ComponentC
     private void refillContainerInstance() {
         Container cont = getContainerDelegate(getBeanInstance());
         cont.removeAll();
-        cont.setLayout(null); // Issue 77904
+        if (!(cont instanceof ScrollPane)) { // Issue 128797
+            cont.setLayout(null); // Issue 77904
+        }
         for (RADVisualComponent sub : subComponents) {
             Component comp = (Component) sub.getBeanInstance();
             FakePeerSupport.attachFakePeer(comp);
@@ -346,7 +348,7 @@ public class RADVisualContainer extends RADVisualComponent implements ComponentC
 
         for (int i=0; i < initComponents.length; i++) {
             RADComponent metacomp = initComponents[i];
-            if (i == 0 && !isMenuTypeComponent() && canHaveMenu(metacomp.getBeanClass())) {
+            if (!isMenuTypeComponent() && canHaveMenu(metacomp.getBeanClass())) {
                 containerMenu = metacomp;
             } else {
                 subComponents.add((RADVisualComponent)metacomp);
