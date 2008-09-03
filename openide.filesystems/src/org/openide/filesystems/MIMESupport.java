@@ -47,11 +47,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import java.util.Date;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.logging.Logger;
+import org.netbeans.modules.openide.filesystems.declmime.MIMEResolverImpl;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
@@ -63,9 +68,13 @@ import org.openide.util.Union2;
  * registered subclasses of MIMEResolver are asked one by one to resolve MIME type of this FileObject.
  * Resolving is finished right after first resolver is able to resolve this FileObject or if all registered
  * resolvers returns null (not recognized).
- *
- *Resolvers are registered if they have their record in IDE_HOME\system\Services
- * in form *.instance e.g.: org-some-package-JavaResolver.instance
+ * <p>
+ * Resolvers are registered if they have their record in the Lookup area.
+ * E.g. in form : org-some-package-JavaResolver.instance file.
+ * <p>
+ * MIME resolvers can also be registered in the <code>Services/MIMEResolver</code>
+ * folder as <code>*.xml</code> files obeying a <a href="doc-files/HOWTO-MIME.html">certain format</a>.
+ * These will be interpreted before resolvers in lookup (in the order specified in that folder).
  *
  * @author  rmatous
  */
@@ -77,7 +86,7 @@ final class MIMESupport extends Object {
     private static final Reference<FileObject> EMPTY = new WeakReference<FileObject>(null);
     private static Reference<FileObject> lastFo = EMPTY;
     private static Reference<FileObject> lastCfo = EMPTY;
-    private static Object lock = new Object();
+    private static final Object lock = new Object();
     
     /** for logging and test interaction */
     private static Logger ERR = Logger.getLogger(MIMESupport.class.getName());
@@ -88,8 +97,9 @@ final class MIMESupport extends Object {
     /** Asks all registered subclasses of MIMEResolver to resolve FileObject passed as parameter.
      * @param fo is FileObject, whose MIME should be resolved
      * @param def the default value to return or null
+     * @param withinMIMETypes an array of MIME types which only should be considered
      * @return  MIME type or null if not resolved*/
-    static String findMIMEType(FileObject fo, String def) {
+    static String findMIMEType(FileObject fo, String def, String... withinMIMETypes) {
         if (!fo.isValid() || fo.isFolder()) {
             return null;
         }
@@ -103,7 +113,7 @@ final class MIMESupport extends Object {
         try {
             synchronized (lock) {
                 CachedFileObject lcfo = (CachedFileObject)lastCfo.get();
-                if (lcfo == null || fo != lastFo.get() || timeOf(fo) != timeOf(lcfo)) {
+                if (lcfo == null || fo != lastFo.get()) {
                     cfo = new CachedFileObject(fo);
                 } else {
                     cfo = lcfo;
@@ -112,7 +122,7 @@ final class MIMESupport extends Object {
                 lastCfo = EMPTY;
             }
 
-            return cfo.getMIMEType(def);
+            return cfo.getMIMEType(def, withinMIMETypes);
         } finally {
             synchronized (lock) {
                 lastFo = new WeakReference<FileObject>(fo);
@@ -120,15 +130,7 @@ final class MIMESupport extends Object {
             }
         }
     }
-    private static long timeOf(FileObject fo) {
-        if (fo == null) {
-            throw new NullPointerException();
-        }
-        Date d = fo.lastModified();
-        assert d != null : "Null lastModified from " + fo;
-        return d.getTime();
-    }
-    
+
     /** Testing purposes.
      */
     static MIMEResolver[] getResolvers() {
@@ -140,10 +142,14 @@ final class MIMESupport extends Object {
         private static Union2<MIMEResolver[],Set<Thread>> resolvers; // call getResolvers instead 
         /** resolvers that were here before we cleaned them */
         private static MIMEResolver[] previousResolvers;
-        
+        /** Set used to print just one warning per resolver. */
+        private static final Set<String> warningPrinted = new HashSet<String>();
+
         String mimeType;
         java.util.Date lastModified;
+        Long size;
         CachedInputStream fixIt;
+        String ext;
 
         /*All calls delegated to this object.
          Except few methods, that returns cached values*/
@@ -151,7 +157,6 @@ final class MIMESupport extends Object {
 
         CachedFileObject(FileObject fo) {
             fileObj = fo;
-            lastModified = fileObj.lastModified();
             fileObj.addFileChangeListener(FileUtil.weakFileChangeListener(this, fileObj));
         }
 
@@ -182,16 +187,7 @@ final class MIMESupport extends Object {
                     result.addLookupListener(
                         new LookupListener() {
                             public void resultChanged(LookupEvent evt) {
-                                synchronized (CachedFileObject.class) {
-                                    ERR.fine("Clearing cache"); // NOI18N
-                                    Union2<MIMEResolver[],Set<Thread>> prev = resolvers;
-                                    if (prev != null && prev.hasFirst()) {
-                                        previousResolvers = prev.first();
-                                    }
-                                    resolvers = null;
-                                    lastFo = EMPTY;
-                                    lastCfo = EMPTY;
-                                }
+                                resetCache();
                             }
                         }
                     );
@@ -202,8 +198,10 @@ final class MIMESupport extends Object {
             }
 
             ERR.fine("Computing resolvers"); // NOI18N
-            
-            MIMEResolver[] toRet = result.allInstances().toArray(new MIMEResolver[0]);
+
+            List<MIMEResolver> all = new ArrayList<MIMEResolver>(declarativeResolvers());
+            all.addAll(result.allInstances());
+            MIMEResolver[] toRet = all.toArray(new MIMEResolver[all.size()]);
 
             ERR.fine("Resolvers computed"); // NOI18N
 
@@ -222,6 +220,48 @@ final class MIMESupport extends Object {
             }
         }
 
+        private static synchronized void resetCache() {
+            ERR.fine("Clearing cache"); // NOI18N
+            Union2<MIMEResolver[],Set<Thread>> prev = resolvers;
+            if (prev != null && prev.hasFirst()) {
+                previousResolvers = prev.first();
+            }
+            resolvers = null;
+            lastFo = EMPTY;
+            lastCfo = EMPTY;
+        }
+
+        private static final FileChangeListener declarativeFolderListener = new FileChangeAdapter() {
+            public @Override void fileDataCreated(FileEvent fe) {
+                resetCache();
+            }
+            public @Override void fileDeleted(FileEvent fe) {
+                resetCache();
+            }
+        };
+        private static final FileChangeListener weakDeclarativeFolderListener = FileUtil.weakFileChangeListener(declarativeFolderListener, null);
+        private static final Map<FileObject,MIMEResolver> declarativeResolverCache = new WeakHashMap<FileObject,MIMEResolver>();
+        private static synchronized List<MIMEResolver> declarativeResolvers() {
+            List<MIMEResolver> declmimes = new ArrayList<MIMEResolver>();
+            FileObject declarativeFolder = Repository.getDefault().getDefaultFileSystem().findResource("Services/MIMEResolver"); // NOI18N
+            if (declarativeFolder != null) {
+                for (FileObject f : Ordering.getOrder(Arrays.asList(declarativeFolder.getChildren()), true)) {
+                    if (f.hasExt("xml")) { // NOI18N
+                        // For now, just assume it has the right DTD. Could check this if desired.
+                        MIMEResolver r = declarativeResolverCache.get(f);
+                        if (r == null) {
+                            r = MIMEResolverImpl.forDescriptor(f);
+                            declarativeResolverCache.put(f, r);
+                        }
+                        declmimes.add(r);
+                    }
+                }
+                declarativeFolder.removeFileChangeListener(weakDeclarativeFolderListener);
+                declarativeFolder.addFileChangeListener(weakDeclarativeFolderListener);
+            }
+            return declmimes;
+        }
+
         public static boolean isAnyResolver() {
             return getResolvers().length > 0;
         }
@@ -230,28 +270,66 @@ final class MIMESupport extends Object {
             fixIt = null;
             mimeType = null;
             lastModified = null;
+            ext = null;
         }
 
+        @Override
         public String getMIMEType() {
             return getMIMEType(null);
         }
 
-        public String getMIMEType(String def) {
+        public String getMIMEType(String def, String... withinMIMETypes) {
             if (mimeType == null) {
-                mimeType = resolveMIME(def);
+                mimeType = resolveMIME(def, withinMIMETypes);
             }
 
             return mimeType;
         }
 
-        private String resolveMIME(String def) {
+        /** Decides whether given MIMEResolver is capable to resolve at least
+         * one of given MIME types.
+         * @param resolver MIMEResolver to be examined
+         * @param desiredMIMETypes an array of MIME types
+         * @return true if at least one of given MIME types can be resolved by
+         * given resolver or if array is empty or resolver.getMIMETypes() doesn't
+         * return non empty array, false otherwise.
+         */
+        private boolean canResolveMIMETypes(MIMEResolver resolver, String... desiredMIMETypes) {
+            if(desiredMIMETypes.length == 0) {
+                return true;
+            }
+            String[] resolvableMIMETypes = null;
+            if (MIMEResolverImpl.isDeclarative(resolver)) {
+                resolvableMIMETypes = MIMEResolverImpl.getMIMETypes(resolver);
+            } else {
+                resolvableMIMETypes = resolver.getMIMETypes();
+            }
+            if(resolvableMIMETypes == null || resolvableMIMETypes.length == 0) {
+                if(warningPrinted.add(resolver.getClass().getName())) {
+                    ERR.warning(resolver.getClass().getName() + "'s constructor should call super(String...) with list of resolvable MIME types.");  //NOI18N
+                }
+                return true;
+            }
+            for (int i = 0; i < desiredMIMETypes.length; i++) {
+                for (int j = 0; j < resolvableMIMETypes.length; j++) {
+                    if(resolvableMIMETypes[j].equals(desiredMIMETypes[i])) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        private String resolveMIME(String def, String... withinMIMETypes) {
             String retVal = null;
             MIMEResolver[] local = getResolvers();
 
             try {
                 for (int i = 0; i < local.length; i++) {
-                    retVal = local[i].findMIMEType(this);
-
+                    MIMEResolver resolver = local[i];
+                    if(canResolveMIMETypes(resolver, withinMIMETypes)) {
+                        retVal = resolver.findMIMEType(this);
+                    }
                     if (retVal != null) {
                         return retVal;
                     }
@@ -272,11 +350,10 @@ final class MIMESupport extends Object {
         }
 
         public java.util.Date lastModified() {
-            if (lastModified != null) {
-                return lastModified;
+            if (lastModified == null) {
+                lastModified = fileObj.lastModified();
             }
-
-            return lastModified = fileObj.lastModified();
+            return lastModified;
         }
 
         public InputStream getInputStream() throws java.io.FileNotFoundException {
@@ -315,19 +392,23 @@ final class MIMESupport extends Object {
         }
 
         @Deprecated // have to override for compat
+        @Override
         public String getPackageNameExt(char separatorChar, char extSepChar) {
             return fileObj.getPackageNameExt(separatorChar, extSepChar);
         }
 
+        @Override
         public FileObject copy(FileObject target, String name, String ext)
         throws IOException {
             return fileObj.copy(target, name, ext);
         }
 
+        @Override
         protected void fireFileDeletedEvent(Enumeration<FileChangeListener> en, FileEvent fe) {
             fileObj.fireFileDeletedEvent(en, fe);
         }
 
+        @Override
         protected void fireFileFolderCreatedEvent(Enumeration<FileChangeListener> en, FileEvent fe) {
             fileObj.fireFileFolderCreatedEvent(en, fe);
         }
@@ -345,6 +426,7 @@ final class MIMESupport extends Object {
             return fileObj.getAttribute(attrName);
         }
 
+        @Override
         public Enumeration<? extends FileObject> getFolders(boolean rec) {
             return fileObj.getFolders(rec);
         }
@@ -357,6 +439,7 @@ final class MIMESupport extends Object {
             return fileObj.isRoot();
         }
 
+        @Override
         public Enumeration<? extends FileObject> getData(boolean rec) {
             return fileObj.getData(rec);
         }
@@ -365,6 +448,7 @@ final class MIMESupport extends Object {
             return fileObj.getChildren();
         }
 
+        @Override
         public String getNameExt() {
             return fileObj.getNameExt();
         }
@@ -389,7 +473,10 @@ final class MIMESupport extends Object {
         }
 
         public String getExt() {
-            return fileObj.getExt();
+            if(ext == null) {
+                ext = fileObj.getExt();
+            }
+            return ext;
         }
 
         public String getName() {
@@ -400,20 +487,27 @@ final class MIMESupport extends Object {
             fileObj.removeFileChangeListener(fcl);
         }
 
+        @Override
         protected void fireFileRenamedEvent(Enumeration<FileChangeListener> en, FileRenameEvent fe) {
             fileObj.fireFileRenamedEvent(en, fe);
         }
 
+        @Override
         public void refresh(boolean expected) {
             fileObj.refresh(expected);
         }
 
+        @Override
         protected void fireFileAttributeChangedEvent(Enumeration<FileChangeListener> en, FileAttributeEvent fe) {
             fileObj.fireFileAttributeChangedEvent(en, fe);
         }
 
         public long getSize() {
-            return fileObj.getSize();
+            if (size != null) {
+                return size;
+            }
+            
+            return size = fileObj.getSize();
         }
 
         public Enumeration<String> getAttributes() {
@@ -425,6 +519,7 @@ final class MIMESupport extends Object {
             fileObj.rename(lock, name, ext);
         }
 
+        @Override
         protected void fireFileChangedEvent(Enumeration<FileChangeListener> en, FileEvent fe) {
             fileObj.fireFileChangedEvent(en, fe);
         }
@@ -433,6 +528,7 @@ final class MIMESupport extends Object {
             return fileObj.getFileObject(name, ext);
         }
 
+        @Override
         public void refresh() {
             fileObj.refresh();
         }
@@ -446,6 +542,7 @@ final class MIMESupport extends Object {
             fileObj.addFileChangeListener(fcl);
         }
 
+        @Override
         protected void fireFileDataCreatedEvent(Enumeration<FileChangeListener> en, FileEvent fe) {
             fileObj.fireFileDataCreatedEvent(en, fe);
         }
@@ -458,6 +555,7 @@ final class MIMESupport extends Object {
             return fileObj.createFolder(name);
         }
 
+        @Override
         public Enumeration<? extends FileObject> getChildren(boolean rec) {
             return fileObj.getChildren(rec);
         }
@@ -468,6 +566,7 @@ final class MIMESupport extends Object {
         }
 
         @Deprecated // have to override for compat
+        @Override
         public String getPackageName(char separatorChar) {
             return fileObj.getPackageName(separatorChar);
         }
@@ -481,10 +580,12 @@ final class MIMESupport extends Object {
             return fileObj.getOutputStream(lock);
         }
 
+        @Override
         public boolean existsExt(String ext) {
             return fileObj.existsExt(ext);
         }
 
+        @Override
         public FileObject move(FileLock lock, FileObject target, String name, String ext)
         throws IOException {
             return fileObj.move(lock, target, name, ext);
@@ -510,16 +611,23 @@ final class MIMESupport extends Object {
 
         /** MIMEResolvers should not cache this FileObject. But they can cache
          * resolved patterns in Map with this FileObject as key.*/
+        @Override
         public int hashCode() {
             return fileObj.hashCode();
         }
 
+        @Override
         public boolean equals(java.lang.Object obj) {
             if (obj instanceof CachedFileObject) {
                 return ((CachedFileObject) obj).fileObj.equals(fileObj);
             }
 
             return super.equals(obj);
+        }
+
+        @Override
+        public String getPath() {
+            return fileObj.getPath();
         }
     }
 
@@ -536,6 +644,7 @@ final class MIMESupport extends Object {
 
         /** This stream can be closed only from MIMESupport. That`s why
          * internalClose was added*/
+        @Override
         public void close() throws java.io.IOException {
         }
 
@@ -546,6 +655,7 @@ final class MIMESupport extends Object {
             }
         }
 
+        @Override
         protected void finalize() {
             internalClose();
         }
@@ -596,6 +706,7 @@ final class MIMESupport extends Object {
         }
 
         /** for debug purposes. Returns buffered content. */
+        @Override
         public String toString() {
             String retVal = super.toString() + '[' + inputStream.toString() + ']' + '\n'; //NOI18N
             retVal += new String(buffer);
