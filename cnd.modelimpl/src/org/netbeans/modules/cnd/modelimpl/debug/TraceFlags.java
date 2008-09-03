@@ -60,6 +60,9 @@ public interface TraceFlags {
     public static final boolean REPORT_PARSING_ERRORS = Boolean.getBoolean("parser.report.errors");
     public static final boolean DUMP_AST = Boolean.getBoolean("parser.collect.ast");
     public static final boolean DUMP_PROJECT_ON_OPEN = DebugUtils.getBoolean("cnd.dump.project.on.open", false);
+
+
+    public static final boolean SMART_HEADERS_PARSE = DebugUtils.getBoolean("cnd.smart.parse", false);
     
     /** 
      * swithces off parsing function bodies
@@ -101,8 +104,6 @@ public interface TraceFlags {
     public static final boolean SET_UNNAMED_QUALIFIED_NAME = DebugUtils.getBoolean("cnd.modelimpl.fqn.unnamed", false);
     public static final boolean TRACE_UNNAMED_DECLARATIONS = DebugUtils.getBoolean("cnd.modelimpl.trace.unnamed", false);
 
-    public static final boolean CHECK_DECLARATIONS = DebugUtils.getBoolean("cnd.modelimpl.check.decl", false);
-
     public static final boolean TRACE_REGISTRATION = DebugUtils.getBoolean("cnd.modelimpl.trace.registration", false);
     public static final boolean TRACE_DISPOSE = DebugUtils.getBoolean("cnd.modelimpl.trace.dispose", false);
 
@@ -133,4 +134,5 @@ public interface TraceFlags {
     public static boolean TRACE_EXTERNAL_CHANGES = DebugUtils.getBoolean("cnd.modelimpl.trace.external.changes", false);
     
     public static final boolean TRACE_ERROR_PROVIDER = DebugUtils.getBoolean("cnd.modelimpl.trace.error.provider", false);
+    public static final boolean PARSE_STATISTICS = DebugUtils.getBoolean("cnd.parse.statistics", false);
 }
