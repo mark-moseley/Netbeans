@@ -43,14 +43,19 @@ package org.netbeans.modules.j2ee.deployment.impl.ui.wizard;
 
 import java.awt.Dialog;
 import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.j2ee.deployment.impl.Server;
+import org.netbeans.modules.j2ee.deployment.impl.ServerRegistry;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.OptionalDeploymentManagerFactory;
+import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.WizardDescriptor;
 import org.openide.util.NbBundle;
@@ -63,12 +68,12 @@ public class AddServerInstanceWizard extends WizardDescriptor {
     public final static String PROP_DISPLAY_NAME = "ServInstWizard_displayName"; // NOI18N
     public final static String PROP_SERVER = "ServInstWizard_server"; // NOI18N
 
-    private final static String PROP_AUTO_WIZARD_STYLE = "WizardPanel_autoWizardStyle"; // NOI18N
-    private final static String PROP_CONTENT_DISPLAYED = "WizardPanel_contentDisplayed"; // NOI18N
-    private final static String PROP_CONTENT_NUMBERED = "WizardPanel_contentNumbered"; // NOI18N
-    private final static String PROP_CONTENT_DATA = "WizardPanel_contentData"; // NOI18N
-    private final static String PROP_CONTENT_SELECTED_INDEX = "WizardPanel_contentSelectedIndex"; // NOI18N
-    private final static String PROP_ERROR_MESSAGE = "WizardPanel_errorMessage"; // NOI18N
+    private final static String PROP_AUTO_WIZARD_STYLE = WizardDescriptor.PROP_AUTO_WIZARD_STYLE; // NOI18N
+    private final static String PROP_CONTENT_DISPLAYED = WizardDescriptor.PROP_CONTENT_DISPLAYED; // NOI18N
+    private final static String PROP_CONTENT_NUMBERED = WizardDescriptor.PROP_CONTENT_NUMBERED; // NOI18N
+    private final static String PROP_CONTENT_DATA = WizardDescriptor.PROP_CONTENT_DATA; // NOI18N
+    private final static String PROP_CONTENT_SELECTED_INDEX = WizardDescriptor.PROP_CONTENT_SELECTED_INDEX; // NOI18N
+    private final static String PROP_ERROR_MESSAGE = WizardDescriptor.PROP_ERROR_MESSAGE; // NOI18N
 
     private AddServerInstanceWizardIterator iterator;
     private ServerChooserPanel chooser;
@@ -95,6 +100,32 @@ public class AddServerInstanceWizard extends WizardDescriptor {
     
     
     public static String showAddServerInstanceWizard() {
+        Collection<Server> allServers = ServerRegistry.getInstance().getServers();
+        for (java.util.Iterator<Server> it = allServers.iterator(); it.hasNext();) {
+            Server server = it.next();
+            OptionalDeploymentManagerFactory factory = server.getOptionalFactory();
+            if (factory == null || factory.getAddInstanceIterator() == null) {
+                it.remove();
+            }
+        }
+        if (allServers.isEmpty()) {
+            // display the warning dialog - no server plugins
+            String close = NbBundle.getMessage(AddServerInstanceWizard.class, "LBL_NoServerPlugins_Close");
+            DialogDescriptor descriptor = new DialogDescriptor(
+                    NbBundle.getMessage(AddServerInstanceWizard.class, "LBL_NoServerPlugins_Text"),
+                    NbBundle.getMessage(AddServerInstanceWizard.class, "LBL_NoServerPlugins_Title"),
+                    true,
+                    new Object[] {close},
+                    close,
+                    DialogDescriptor.DEFAULT_ALIGN,
+                    null,
+                    null);
+
+            // TODO invoke plugin manager once API to do that will be available
+            DialogDisplayer.getDefault().notify(descriptor);
+            return null;
+        }
+            
         AddServerInstanceWizard wizard = new AddServerInstanceWizard();
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizard);
         try {
