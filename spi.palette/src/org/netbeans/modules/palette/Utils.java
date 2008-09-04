@@ -67,6 +67,7 @@ import org.openide.util.*;
 import org.openide.util.datatransfer.PasteType;
 import org.openide.util.datatransfer.NewType;
 import org.openide.util.datatransfer.ExClipboard;
+import org.openide.windows.TopComponent;
 
 
 /**
@@ -209,6 +210,16 @@ public final class Utils {
             controller.refresh();
         }
     }
+    
+    public static void setOpenedByUser( TopComponent tc, boolean userOpened ) {
+        tc.putClientProperty( "userOpened", Boolean.valueOf(userOpened) ); //NOI18N
+    }
+    
+    public static boolean isOpenedByUser( TopComponent tc ) {
+        Object val = tc.getClientProperty( "userOpened" );
+        tc.putClientProperty("userOpened", null);
+        return null != val && val instanceof Boolean && ((Boolean)val).booleanValue();
+    }
 
     /**
      * An action to create a new palette category.
@@ -233,6 +244,12 @@ public final class Utils {
             } catch( IOException ioE ) {
                 ERR.log( Level.INFO, ioE.getLocalizedMessage(), ioE );
             }
+        }
+
+        @Override
+        public boolean isEnabled() {
+            NewType[] newTypes = paletteNode.getNewTypes();
+            return null != newTypes && newTypes.length > 0;
         }
     }
     
