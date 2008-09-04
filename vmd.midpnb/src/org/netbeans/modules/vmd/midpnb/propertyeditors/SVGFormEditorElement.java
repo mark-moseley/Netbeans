@@ -76,6 +76,8 @@ import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.midp.components.MidpProjectSupport;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.resource.element.PropertyEditorResourceElement;
+import org.netbeans.modules.vmd.midp.propertyeditors.api.resource.element.PropertyEditorResourceElementEvent;
+import org.netbeans.modules.vmd.midp.propertyeditors.api.resource.element.PropertyEditorResourceElementListener;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorMessageAwareness;
 import org.netbeans.modules.vmd.midpnb.components.svg.form.SVGFormCD;
 import org.netbeans.modules.vmd.midpnb.components.svg.SVGImageCD;
@@ -95,7 +97,7 @@ import org.openide.util.NbBundle;
  *
  * @author Karol Harezlak
  */
-public class SVGFormEditorElement extends PropertyEditorResourceElement implements Runnable {
+public class SVGFormEditorElement extends PropertyEditorResourceElement implements Runnable, PropertyEditorResourceElementListener {
 
     private static final String EXTENSION = "svg"; // NOI18N
     private long componentID;
@@ -244,17 +246,17 @@ public class SVGFormEditorElement extends PropertyEditorResourceElement implemen
         final FileObject[] svgImageFileObject = new FileObject[1];
         final Boolean[] parseIt = new Boolean[1];
         parseIt[0] = Boolean.TRUE;
-        parentComponent.getDocument().getTransactionManager().writeAccess(new Runnable() {
+         parentComponent.getDocument().getTransactionManager().readAccess(new Runnable() {
 
             public void run() {
-                String path = (String) pathTextComboBox.getSelectedItem();
-                childComponent.writeProperty(SVGImageCD.PROP_RESOURCE_PATH, MidpTypes.createStringValue(path));
-                //String svgImagePath = MidpTypes.getString(propertyValue);
-                
-                Map<FileObject, FileObject> images = MidpProjectSupport.getFileObjectsForRelativeResourcePath(parentComponent.getDocument(), path);
-                Iterator<FileObject> iterator = images.keySet().iterator();
-                svgImageFileObject[0] = iterator.hasNext() ? iterator.next() : null;
-                parseIt[0] = Boolean.TRUE;
+                PropertyValue propertyValue = childComponent.readProperty(SVGImageCD.PROP_RESOURCE_PATH);
+                if (propertyValue.getKind() == PropertyValue.Kind.VALUE) {
+                    //String svgImagePath = MidpTypes.getString(propertyValue);
+                    Map<FileObject, FileObject> images = MidpProjectSupport.getFileObjectsForRelativeResourcePath(parentComponent.getDocument(), MidpTypes.getString(propertyValue));
+                    Iterator<FileObject> iterator = images.keySet().iterator();
+                    svgImageFileObject[0] = iterator.hasNext() ? iterator.next() : null;
+                    parseIt[0] = Boolean.TRUE;
+                }
                 DesignComponent oldComponent = parentComponent.readProperty(SVGFormCD.PROP_SVG_IMAGE).getComponent();
                 if (oldComponent == childComponent && svgImageFileObject[0] != null) {
                     parseIt[0] = Boolean.FALSE;
@@ -462,14 +464,22 @@ public class SVGFormEditorElement extends PropertyEditorResourceElement implemen
         File file = FileUtil.toFile(fo);
         if (file == null) {
             // abstract FO - zip/jar...
-            relativePath = "/" + fo.getPath(); // NOI18N
+            if (!fo.getPath().startsWith("/")) { // NOI18N
+                relativePath = "/" + fo.getPath(); // NOI18N
+            } else {
+                relativePath = fo.getPath();
+            }
         } else {
             String fullPath = file.getAbsolutePath();
             if (fullPath.contains(sourcePath)) {
                 // file is inside sources
                 fullPath = fo.getPath();
                 int i = fullPath.indexOf(sourcePath) + sourcePath.length() + 1;
-                relativePath = "/" + fullPath.substring(i); //NOI18N
+                if (!fullPath.substring(i).startsWith("/")) { //NOI18N
+                    relativePath = "/" + fullPath.substring(i); //NOI18N
+                } else {
+                    relativePath = fullPath.substring(i); 
+                }
             } else if (needCopy) {
                 // somewhere outside sources - need to copy (export image)
                 File possible = new File(sourcePath + File.separator + fo.getNameExt());
@@ -985,5 +995,9 @@ public class SVGFormEditorElement extends PropertyEditorResourceElement implemen
                 menu.show(e.getComponent(), e.getX(), e.getY());
             }
         }
+    }
+
+    public void elementChanged(PropertyEditorResourceElementEvent event) {
+        
     }
 }
