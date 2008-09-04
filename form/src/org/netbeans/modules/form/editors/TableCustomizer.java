@@ -54,6 +54,7 @@ import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableModel;
 import javax.swing.tree.TreePath;
 import org.jdesktop.layout.GroupLayout;
@@ -61,6 +62,8 @@ import org.netbeans.modules.form.*;
 import org.netbeans.modules.form.editors2.JTableHeaderEditor;
 import org.netbeans.modules.form.editors2.TableColumnModelEditor;
 import org.netbeans.modules.form.editors2.TableModelEditor;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.util.NbBundle;
 
 /**
@@ -90,7 +93,7 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     /** TableHeader property. */
     private FormProperty headerProperty;
     /** ColumnModel property. */
-    private FormProperty columnModelProperty;
+    private RADProperty columnModelProperty;
     /** ColumnSelectionAllowed property. */
     private FormProperty columnSelectionAllowedProperty;
 
@@ -584,19 +587,28 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
                 .addContainerGap(25, Short.MAX_VALUE))
         );
 
+        columnCountLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Columns_Count_ACSD")); // NOI18N
         insertColumnButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Columns_Insert_ACSD")); // NOI18N
         columnCountSpinner.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Columns_Count_ACSD")); // NOI18N
         deleteColumnButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Columns_Delete_ACSD")); // NOI18N
         moveUpColumnButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Columns_MoveUp_ACSD")); // NOI18N
         moveDownColumnButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Columns_MoveDown_ACSD")); // NOI18N
+        columnTitleLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Column_Title_ACSD")); // NOI18N
+        columnTypeLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Column_Type_ACSD")); // NOI18N
+        columnEditorLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Column_Editor_ACSD")); // NOI18N
+        columnRendererLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Column_Renderer_ACSD")); // NOI18N
         columnTitlePanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Column_Title_ACSD")); // NOI18N
         columnTypeCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Column_Type_ACSD")); // NOI18N
         columnEditorPanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Column_Editor_ACSD")); // NOI18N
         columnRendererPanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Column_Renderer_ACSD")); // NOI18N
+        selectionModelLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_SelectionModel_ACSD")); // NOI18N
         selectionModelCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_SelectionModel_ACSD")); // NOI18N
         reorderingAllowedChoice.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_ReorderingAllowed_ACSD")); // NOI18N
         resizableColumnChoice.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Resizable_ACSD")); // NOI18N
         editableColumnChoice.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Editable_ACSD")); // NOI18N
+        widthPrefLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Width_Pref_ACSD")); // NOI18N
+        widthMinLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Width_Min_ACSD")); // NOI18N
+        widthMaxLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Width_Max_ACSD")); // NOI18N
         widthPrefCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Width_Min_ACSD")); // NOI18N
         widthMinCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Width_Pref_ACSD")); // NOI18N
         widthMaxCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Width_Max_ACSD")); // NOI18N
@@ -668,6 +680,7 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
                 .addContainerGap())
         );
 
+        rowCountLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Rows_Count_ACSD")); // NOI18N
         rowCountSpinner.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Rows_Count_ACSD")); // NOI18N
         insertRowButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Rows_Insert_ACSD")); // NOI18N
         deleteRowButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_Rows_Delete_ACSD")); // NOI18N
@@ -687,7 +700,11 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
             .add(tabbedPane)
         );
 
+        tabbedPane.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_ACSN")); // NOI18N
         tabbedPane.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_ACSD")); // NOI18N
+
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_ACSN")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableCustomizer.class, "LBL_TableCustomizer_ACSD")); // NOI18N
     }
 
     // Code for dispatching events from components to event handlers.
@@ -775,18 +792,21 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     }//GEN-LAST:event_resizableColumnChoiceActionPerformed
 
     private void moveDownRowButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_moveDownRowButtonActionPerformed
+        stopCellEditing(rowsTable);
         int index = rowsTable.getSelectedRow();
         rowTableModel.moveRow(index, index+1);
         rowsTable.getSelectionModel().setSelectionInterval(index+1, index+1);
     }//GEN-LAST:event_moveDownRowButtonActionPerformed
 
     private void moveUpRowButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_moveUpRowButtonActionPerformed
+        stopCellEditing(rowsTable);
         int index = rowsTable.getSelectedRow();
         rowTableModel.moveRow(index, index-1);
         rowsTable.getSelectionModel().setSelectionInterval(index-1, index-1);
     }//GEN-LAST:event_moveUpRowButtonActionPerformed
 
     private void deleteRowButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_deleteRowButtonActionPerformed
+        stopCellEditing(rowsTable);
         int[] index = rowsTable.getSelectedRows();
         for (int i=index.length-1; i>=0; i--) {
             rowTableModel.removeRow(index[i]);
@@ -795,11 +815,13 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     }//GEN-LAST:event_deleteRowButtonActionPerformed
 
     private void insertRowButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_insertRowButtonActionPerformed
+        stopCellEditing(rowsTable);
         rowTableModel.addRow(rowTableModel.getRowCount());
         rowCountSpinner.setValue(rowTableModel.getRowCount());
     }//GEN-LAST:event_insertRowButtonActionPerformed
 
     private void rowCountSpinnerStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_rowCountSpinnerStateChanged
+        stopCellEditing(rowsTable);
         int rowNo = ((Integer)rowCountSpinner.getValue()).intValue();
         ensureRowCount(rowNo);
     }//GEN-LAST:event_rowCountSpinnerStateChanged
@@ -811,11 +833,13 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     }//GEN-LAST:event_tabbedPaneStateChanged
 
     private void columnCountSpinnerStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_columnCountSpinnerStateChanged
+        stopCellEditing(columnsTable);
         int columnNo = ((Integer)columnCountSpinner.getValue()).intValue();
         ensureColumnCount(columnNo);
     }//GEN-LAST:event_columnCountSpinnerStateChanged
 
     private void moveDownColumnButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_moveDownColumnButtonActionPerformed
+        stopCellEditing(columnsTable);
         int index = columnsTable.getSelectedRow();
         columnsTable.clearSelection();
         ColumnInfo column = columns.remove(index);
@@ -827,6 +851,7 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     }//GEN-LAST:event_moveDownColumnButtonActionPerformed
 
     private void moveUpColumnButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_moveUpColumnButtonActionPerformed
+        stopCellEditing(columnsTable);
         int index = columnsTable.getSelectedRow();
         columnsTable.clearSelection();
         ColumnInfo column = columns.remove(index);
@@ -838,6 +863,7 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     }//GEN-LAST:event_moveUpColumnButtonActionPerformed
 
     private void deleteColumnButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_deleteColumnButtonActionPerformed
+        stopCellEditing(columnsTable);
         boolean hardcoded = modelHardcodedChoice.isSelected();
         int[] index = columnsTable.getSelectedRows();
         for (int i=index.length-1; i>=0; i--) {
@@ -852,7 +878,8 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     }//GEN-LAST:event_deleteColumnButtonActionPerformed
 
     private void insertColumnButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_insertColumnButtonActionPerformed
-        columns.add(new ColumnInfo(columnModelProperty));
+        stopCellEditing(columnsTable);
+        columns.add(new ColumnInfo(columnModelProperty, columns.size()));
         if (modelHardcodedChoice.isSelected()) {
             rowTableModel.addColumn(rowTableModel.getColumnCount());
         }
@@ -876,6 +903,13 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     private void modelHardcodedChoiceActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_modelHardcodedChoiceActionPerformed
         updateModelCustomizers();
     }//GEN-LAST:event_modelHardcodedChoiceActionPerformed
+
+    private static void stopCellEditing(JTable table) {
+        TableCellEditor editor = table.getCellEditor();
+        if (editor != null) {
+            editor.stopCellEditing();
+        }
+    }
 
     private int lastSelectedCustomizer = -1;
     private void updateModelCustomizers() {
@@ -945,6 +979,11 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
                 || ((lastSelectedCustomizer != 1) && bound))) {
             ensureColumnCount(0);
             ensureRowCount(0);
+            rowCountSpinner.setValue(0);
+            // Clear rowTableModel
+            for (int i=rowTableModel.getColumnCount()-1; i>=0; i--) {
+                rowTableModel.removeColumn(i);
+            }
         }
         columnCountSpinner.setValue(columns.size());
         lastSelectedCustomizer = (hardcoded ? 0 : (bound ? 1 : (fromComponent ? 2 : 3)));
@@ -1071,6 +1110,9 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     }
 
     private void updateFromUI() {
+        if (columnsTable.isEditing()) {
+            columnsTable.getCellEditor().stopCellEditing();
+        }
         updateColumnSection();
         if (!modelBoundChoice.isSelected() && !bindingProperty.isDefaultValue()) {
             bindingProperty.restoreDefaultValue();
@@ -1145,8 +1187,10 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
                 }
             }
             try {
-                modelProperty.setValue(rowTableModel);
+                modelProperty.setValue(new FormProperty.ValueWithEditor(rowTableModel, new TableModelEditor()));
             } catch (Exception ex) {
+                String message = NbBundle.getMessage(getClass(), "MSG_TableCustomizer_ModelPropertyError"); // NOI18N
+                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(message));
                 Logger.getLogger(getClass().getName()).log(Level.INFO, ex.getMessage(), ex);
             }
         }
@@ -1161,7 +1205,7 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
         int selectionModel = selectionModelCombo.getSelectedIndex();
         model.setSelectionModel(selectionModel);
         try {
-            columnModelProperty.setValue(model);
+            columnModelProperty.setValue(new FormProperty.ValueWithEditor(model, new TableColumnModelEditor()));
         } catch (Exception ex) {
             Logger.getLogger(getClass().getName()).log(Level.INFO, ex.getMessage(), ex);
         }
@@ -1184,7 +1228,8 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
             resizingAllowed = header.isResizingAllowed();
         }
         try {
-            headerProperty.setValue(new JTableHeaderEditor.FormTableHeader(headerProperty, resizingAllowed, reorderingAllowedChoice.isSelected()));
+            value = new JTableHeaderEditor.FormTableHeader(headerProperty, resizingAllowed, reorderingAllowedChoice.isSelected());
+            headerProperty.setValue(new FormProperty.ValueWithEditor(value, new JTableHeaderEditor()));
         } catch (Exception ex) {
             Logger.getLogger(getClass().getName()).log(Level.INFO, ex.getMessage(), ex);
         }
@@ -1205,7 +1250,7 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
         modelFromComponentEd.setContext(formModel, modelProperty);
         modelCustomEd.setContext(formModel, modelProperty);
         headerProperty = (FormProperty)comp.getPropertyByName("tableHeader"); // NOI18N
-        columnModelProperty = (FormProperty)comp.getPropertyByName("columnModel"); // NOI18N
+        columnModelProperty = (RADProperty)comp.getPropertyByName("columnModel"); // NOI18N
         columnSelectionAllowedProperty = (FormProperty)comp.getPropertyByName("columnSelectionAllowed"); // NOI18N
 
         // Determine type of model
@@ -1328,7 +1373,8 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
      */
     private void checkBindingType() {
         FormUtils.TypeHelper type = modelBoundCustomizer.getSelectedType();
-        boolean collection = (type != null) && Collection.class.isAssignableFrom(FormUtils.typeToClass(type));
+        Class clazz = (type == null) ? null : FormUtils.typeToClass(type);
+        boolean collection = (clazz != null) && (Collection.class.isAssignableFrom(clazz) || Object.class.equals(clazz));
         tabbedPane.setEnabledAt(1, collection);
         expressionCombo.setEnabled(false);
     }
@@ -1393,9 +1439,14 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
                         }
                     }
                 }
+                // Issue 140846
+                int columnCount = rowTableModel.getColumnCount();
+                for (int i=columns.size()-1; i>=columnCount; i--) {
+                    columns.remove(i);
+                }
             } catch (Exception ex) {
                 Logger.getLogger(getClass().getName()).log(Level.INFO, ex.getMessage(), ex);
-            }            
+            }
         } else if (modelBoundChoice.isSelected()) {
             MetaBinding binding = bindingProperty.getValue();
             if (binding != null) {
@@ -1413,11 +1464,25 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
                         info.setClazz(columnClass);
                         info.setExpression(subBinding.getSourcePath());
                         FormProperty title = info.getColumn().getTitle();
-                        if (!title.isChanged() && (model != null) && (model.getColumnCount() > index)) {
-                            try {
-                                title.setValue(model.getColumnName(index));
-                            } catch (Exception ex) {
-                                Logger.getLogger(getClass().getName()).log(Level.INFO, ex.getMessage(), ex);
+                        if (!title.isChanged()) {
+                            String columnName = subBinding.getParameter(MetaBinding.NAME_PARAMETER);
+                            if (columnName == null) {
+                                if ((model != null) && (model.getColumnCount() > index)) {
+                                    columnName = model.getColumnName(index);
+                                } else {
+                                    String name = subBinding.getSourcePath();
+                                    if (BindingDesignSupport.isSimpleExpression(name)) {
+                                        columnName = BindingDesignSupport.unwrapSimpleExpression(name);
+                                        columnName = BindingDesignSupport.capitalize(columnName);
+                                    }
+                                }
+                            }
+                            if (columnName != null) {
+                                try {
+                                    title.setValue(columnName);
+                                } catch (Exception ex) {
+                                    Logger.getLogger(getClass().getName()).log(Level.INFO, ex.getMessage(), ex);
+                                }
                             }
                         }
                         String editableColumn = subBinding.getParameter(MetaBinding.EDITABLE_PARAMETER);
@@ -1497,7 +1562,7 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     private void ensureColumnCount(int columnCount) {
         boolean hardcoded = modelHardcodedChoice.isSelected();
         for (int i=columns.size(); i<columnCount; i++) {
-            columns.add(new ColumnInfo(columnModelProperty));
+            columns.add(new ColumnInfo(columnModelProperty, columns.size()));
             if (hardcoded) {
                 rowTableModel.addColumn(i);
             }
@@ -1668,8 +1733,8 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
             this.column = column;
         }
 
-        ColumnInfo(FormProperty columnModelProperty) {
-            this(new TableColumnModelEditor.FormTableColumn(columnModelProperty));
+        ColumnInfo(RADProperty columnModelProperty, int index) {
+            this(new TableColumnModelEditor.FormTableColumn(columnModelProperty, index));
         }
 
         public TableColumnModelEditor.FormTableColumn getColumn() {
@@ -1715,6 +1780,9 @@ public class TableCustomizer extends JPanel implements Customizer, FormAwareEdit
     class ColumnSelectionListener implements ListSelectionListener {
 
         public void valueChanged(ListSelectionEvent e) {
+            if (e.getValueIsAdjusting()) {
+                return;
+            }
             int[] index = columnsTable.getSelectedRows();
             boolean empty = (index.length == 0);
             boolean multi = (index.length > 1);
