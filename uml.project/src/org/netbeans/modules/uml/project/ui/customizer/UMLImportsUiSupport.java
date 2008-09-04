@@ -496,7 +496,9 @@ public class UMLImportsUiSupport
                                        IElement element, 
                                        INamespace owner,
                                        IResultCell cell)
-        {            
+        {        
+            if (importingPackage == null || owner == null)
+                return;
             Project referencedProject = ProjectUtil.findNetBeansProjectForModel(owner.getProject());
             Project referencingProject = ProjectUtil.findNetBeansProjectForModel(importingPackage.getProject());
             
@@ -521,6 +523,8 @@ public class UMLImportsUiSupport
                                        INamespace owner,
                                        IResultCell cell)
         {
+            if (owner == null)
+                return;
             Project referencedProject = ProjectUtil.findNetBeansProjectForModel(owner.getProject());
             Project referencingProject = ProjectUtil.findNetBeansProjectForModel(importingPackage.getProject());
             
