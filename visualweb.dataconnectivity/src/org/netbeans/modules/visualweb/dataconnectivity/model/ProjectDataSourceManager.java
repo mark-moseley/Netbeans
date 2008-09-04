@@ -56,23 +56,19 @@ import org.netbeans.modules.visualweb.project.jsf.services.DesignTimeDataSourceS
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
+import javax.naming.NamingException;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.visualweb.api.j2ee.common.RequestedResource;
-import org.netbeans.modules.visualweb.dataconnectivity.project.datasource.ProjectDataSourceTracker;
-import org.netbeans.modules.visualweb.dataconnectivity.sql.DesignTimeDataSource;
 
+import org.netbeans.modules.visualweb.dataconnectivity.customizers.SqlCommandCustomizer;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 
 
 /**
@@ -190,6 +186,7 @@ public class ProjectDataSourceManager  {
     }
     
     public RequestedJdbcResource getDataSourceWithName(String name) {
+        String projectDsName = "";
         if ((project != null) && (dataSourceService != null)) {
             // First Search the project data sources
             Set<RequestedJdbcResource> projectDataSources = dataSourceService.getProjectDataSources(project);
@@ -198,7 +195,6 @@ public class ProjectDataSourceManager  {
             while (projectDataSourcesIterator.hasNext()) {
                 RequestedJdbcResource requestedJdbcResource = projectDataSourcesIterator.next();
                 String resourceName = requestedJdbcResource.getResourceName();
-                String projectDsName = "";
                 
                  // stripDATASOURCE_PREFIX is a hack for JBoss and other application servers due to differences in JNDI string format
                  // for issue 101812
@@ -220,7 +216,7 @@ public class ProjectDataSourceManager  {
             while (serverDataSourcesIterator.hasNext()) {
                 RequestedJdbcResource requestedJdbcResource = serverDataSourcesIterator.next();
                 //String projectDsName = requestedJdbcResource.getResourceName().replaceFirst("jdbc/",""); // NOI18N
-                String projectDsName = requestedJdbcResource.getResourceName();
+                projectDsName = requestedJdbcResource.getResourceName();
                 
                  // stripDATASOURCE_PREFIX is a hack for JBoss and other application servers due to differences in JNDI string format
                  // for issue 101812

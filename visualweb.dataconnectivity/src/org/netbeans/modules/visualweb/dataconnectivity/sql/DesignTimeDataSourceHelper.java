@@ -75,7 +75,10 @@ import org.netbeans.modules.visualweb.dataconnectivity.project.datasource.Projec
 import org.netbeans.modules.visualweb.dataconnectivity.utils.ImportDataSource;
 import org.netbeans.modules.visualweb.project.jsf.api.JsfProjectUtils;
 import org.netbeans.modules.visualweb.project.jsf.services.DesignTimeDataSourceService;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
@@ -498,7 +501,7 @@ public class DesignTimeDataSourceHelper {
     }
     
     
-    public Map updateDataSource(Project currentProj) {       
+    public Map updateDataSource(Project currentProj) throws NamingException {       
          // Manage the migration of legacy projects
         if (ImportDataSource.isLegacyProject(currentProj) && JsfProjectUtils.getProjectProperty(currentProj, "migrated").equals("")) {//NOI18N   
             DataSourceResolver.getInstance().updateSettings();
@@ -615,8 +618,14 @@ public class DesignTimeDataSourceHelper {
     
     public static DataSourceInfo getDsInfo(String dsName) {
         ProjectDataSourceManager projectDataSourceManager  = new ProjectDataSourceManager(CurrentProject.getInstance().getOpenedProject());
-        RequestedJdbcResource jdbcResource = projectDataSourceManager.getDataSourceWithName(dsName);
+        RequestedJdbcResource jdbcResource = null;
+        jdbcResource = projectDataSourceManager.getDataSourceWithName(dsName);
         
+        if (jdbcResource == null) {
+            DialogDisplayer.getDefault().notifyLater(new NotifyDescriptor.Message(NbBundle.getMessage(DesignTimeDataSourceHelper.class, "MSG_NameNotFoundMessage"), NotifyDescriptor.INFORMATION_MESSAGE));
+            return null;
+        }
+
         return new DataSourceInfo(dsName, jdbcResource.getDriverClassName(), jdbcResource.getUrl(), null, jdbcResource.getUsername(), jdbcResource.getPassword());
     }
     
