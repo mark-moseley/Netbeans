@@ -56,22 +56,25 @@ public class ClassMemberPanel implements NavigatorPanel {
 
     private ClassMemberPanelUI component;
 
-    private static ClassMemberPanel INSTANCE;
+    private static volatile ClassMemberPanel INSTANCE;   //Apparently not accessed in event dispatch thread in CaretListeningTask
     
     public ClassMemberPanel() {
-        this.INSTANCE = this;
     }
 
     public void panelActivated(Lookup context) {
         assert context != null;
-        // System.out.println("Panel Activated");
-        ClassMemberNavigatorJavaSourceFactory.getInstance().setLookup(context, getClassMemberPanelUI());
+        INSTANCE = this;
         getClassMemberPanelUI().showWaitNode();
+        ClassMemberNavigatorJavaSourceFactory.getInstance().setLookup(context, getClassMemberPanelUI());
+        
     }
 
     public void panelDeactivated() {
         getClassMemberPanelUI().showWaitNode(); // To clear the ui
+        INSTANCE = null;
+        
         ClassMemberNavigatorJavaSourceFactory.getInstance().setLookup(Lookup.EMPTY, null);
+        
     }
 
     public Lookup getLookup() {
