@@ -115,6 +115,10 @@ public class ThreadBreakpointImpl extends BreakpointImpl implements Executor {
         return null;
     }
 
+    public boolean processCondition(Event event) {
+        return true; // Empty condition, always satisfied.
+    }
+
     public boolean exec (Event event) {
         ThreadReference thread = null;
         if (event instanceof ThreadStartEvent)
@@ -125,10 +129,12 @@ public class ThreadBreakpointImpl extends BreakpointImpl implements Executor {
 
         return perform (
             event,
-            null,
             thread,
             null,
             thread
         );
+    }
+
+    public void removed(EventRequest eventRequest) {
     }
 }
