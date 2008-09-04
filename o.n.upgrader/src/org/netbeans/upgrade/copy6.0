@@ -46,7 +46,6 @@
 # decides the result
 
 include Preferences/.*
-exclude Preferences/org/netbeans/modules/welcome.properties!feedback.*
 include Databases/.*
 include Editors/.*
 exclude Editors/.*/macros.xml
@@ -59,22 +58,24 @@ include HTMLPalette/.*
 include J2EE/.*
 include JSPPalette/.*
 include Keymaps/.*
+exclude MVD/.*
 include org-netbeans-api-project-libraries/Libraries/.*\.xml
 include Services/Browsers/.*
 include Services/DiffProviders/.*
 include Services/formsettings.settings
 include Services/IndentEngine/.*
+exclude Services/IndentEngine/org-netbeans-modules-cnd-editor-cplusplus-CCIndentEngine\.settings
+exclude Services/IndentEngine/org-netbeans-modules-cnd-editor-cplusplus-CIndentEngine\.settings
 include Services/org-netbeans-modules-db-explorer-DatabaseOption\.settings
 include Services/org-netbeans-modules-debugger-Settings\.properties
 include Services/Platforms/org-netbeans-api-java-Platform/.*\.xml
 include Shortcuts/.*
-exclude Templates/Beans/Bean.java
-exclude Templates/Beans/BeanInfo.java
-exclude Templates/Beans/NoIconBeanInfo.java
-exclude Templates/Beans/Customizer.java
-exclude Templates/Beans/Customizer.form
-exclude Templates/Beans/PropertyEditor.java
+include Templates/Classes/.*
 include Templates/J2MEProjectConfigurations/.*\.cfg
 include Toolbars/.*
 exclude Toolbars/Progress/.*
-include vmd-midp/palette/custom/.*
+include WebServices/service-groups.xml
+include WebServices/.*/.*-saas.xml
+exclude Windows2Local/Components/DesignInspector.settings
+exclude Windows2Local/Groups/mvd/DesignInspector.wstcgrp
+exclude Windows2Local/Modes/navigator/DesignInspector.wstcref
