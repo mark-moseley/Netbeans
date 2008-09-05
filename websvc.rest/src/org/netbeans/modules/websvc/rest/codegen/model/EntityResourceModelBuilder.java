@@ -41,7 +41,9 @@
 
 package org.netbeans.modules.websvc.rest.codegen.model;
 
-import org.netbeans.modules.websvc.rest.codegen.model.EntityClassInfo;
+import org.openide.util.Exceptions;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -49,13 +51,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.persistence.api.metadata.orm.Entity;
 import org.netbeans.modules.websvc.rest.codegen.model.EntityResourceBean.Type;
-import org.netbeans.modules.websvc.rest.codegen.model.EntityClassInfo;
 import org.netbeans.modules.websvc.rest.codegen.model.EntityClassInfo.FieldInfo;
+import org.netbeans.modules.websvc.rest.support.SourceGroupSupport;
 import org.netbeans.modules.websvc.rest.wizard.Util;
 
 /**
@@ -70,8 +71,21 @@ public class EntityResourceModelBuilder {
     public EntityResourceModelBuilder(Project project, Collection<Entity> entities) {
         entityClassInfoMap = new HashMap<String, EntityClassInfo>();
         for (Entity entity : entities) {
-            EntityClassInfo info = new EntityClassInfo(entity, project, this);
-            entityClassInfoMap.put(entity.getClass2(), info);
+            try {
+                EntityClassInfo info = null;
+                JavaSource js = SourceGroupSupport.getJavaSourceFromClassName(entity.getClass2(), project);
+             
+                if (js != null) {
+                    info = new EntityClassInfo(entity, project, this, js);
+                } else if (entity instanceof RuntimeJpaEntity) {
+                    info = new RuntimeEntityClassInfo((RuntimeJpaEntity)entity, project, this);
+                }
+                if (info != null) {
+                    entityClassInfoMap.put(entity.getClass2(), info);
+                }
+            } catch(IOException ioe) {
+                Exceptions.printStackTrace(ioe);
+            }
         }
     }
     
@@ -106,7 +120,7 @@ public class EntityResourceModelBuilder {
             model.setValid(true);
             
         } catch (Exception ex) {
-            Logger.getLogger(getClass().getName()).log(Level.ALL, "build", ex);
+            Exceptions.printStackTrace(ex);
             model.setValid(false);
         }
         
@@ -135,7 +149,7 @@ public class EntityResourceModelBuilder {
        
         EntityResourceBean itemBean = getItemResourceBean(info);
         
-        containerBean.addSubResource(new RelatedEntityResource(itemBean, info.getIdFieldInfo()));
+        containerBean.addSubResource(new RelatedEntityResource(itemBean, info.getIdFieldInfo(), null));
         
         return containerBean;
     }
@@ -154,7 +168,7 @@ public class EntityResourceModelBuilder {
     private EntityResourceBean createItemResourceBean(EntityClassInfo info) {
         EntityResourceBean itemBean = new EntityResourceBean(Type.ITEM);
         
-        itemBean.setName(Util.singularize(info.getName()));
+        itemBean.setName(info.getName());
         itemBean.setEntityClassInfo(info);
         FieldInfo idField = info.getIdFieldInfo();
         String uriTemplate = "";
@@ -183,12 +197,14 @@ public class EntityResourceModelBuilder {
         return itemBean;
     }
     
-    private void computeRelationship(EntityResourceBean bean, EntityClassInfo info) { 
+    private void computeRelationship(EntityResourceBean bean, EntityClassInfo info) {
+        String entityClassName = info.getName();
+     
         for (FieldInfo fieldInfo : info.getFieldInfos()) {
             if (fieldInfo.isRelationship()) {
                 EntityResourceBean foreignBean = null;
                 EntityResourceBean foreignItemBean = null;
-                
+  
                 if (fieldInfo.isOneToMany() || fieldInfo.isManyToMany()) {
                     foreignBean = getContainerResourceBean(entityClassInfoMap.get(fieldInfo.getTypeArg()));
                     foreignItemBean = getItemResourceBean(entityClassInfoMap.get((fieldInfo.getTypeArg())));
@@ -196,10 +212,25 @@ public class EntityResourceModelBuilder {
                     foreignBean = getItemResourceBean(entityClassInfoMap.get(fieldInfo.getType()));
                 }
      
-                RelatedEntityResource subResource = new RelatedEntityResource(foreignBean, fieldInfo);
+                FieldInfo reverseFieldInfo = null;
+   
+                for (FieldInfo f : foreignBean.getEntityClassInfo().getFieldInfos()) {
+                    if (f.isOneToOne() || f.isManyToOne()) {
+                        if (f.getSimpleTypeName().equals(entityClassName)) {
+                            reverseFieldInfo = f;
+                            break;
+                        }
+                    } else if (f.isOneToMany() || f.isManyToMany()) {
+                        if (f.getSimpleTypeArgName().equals(entityClassName)) {
+                            reverseFieldInfo = f;
+                            break;
+                        }
+                    }
+                }
+                RelatedEntityResource subResource = new RelatedEntityResource(foreignBean, fieldInfo, reverseFieldInfo);
                 bean.addSubResource(subResource);
                 
-                RelatedEntityResource superResource = new RelatedEntityResource(bean, fieldInfo);
+                RelatedEntityResource superResource = new RelatedEntityResource(bean, reverseFieldInfo, fieldInfo);
                 foreignBean.addSuperResource(superResource);
                 
                 if (foreignItemBean != null) {
