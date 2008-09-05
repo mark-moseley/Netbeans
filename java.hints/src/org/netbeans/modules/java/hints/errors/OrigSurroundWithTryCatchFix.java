@@ -40,10 +40,7 @@
 package org.netbeans.modules.java.hints.errors;
 
 import com.sun.source.tree.BlockTree;
-import com.sun.source.tree.CatchTree;
-import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
-import com.sun.source.tree.Scope;
 import com.sun.source.tree.StatementTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
@@ -51,22 +48,13 @@ import com.sun.source.tree.TryTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.TypeMirror;
 import org.netbeans.api.java.source.CompilationInfo;
-import org.netbeans.api.java.source.ElementUtilities.ElementAcceptor;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.Task;
@@ -87,11 +75,13 @@ class OrigSurroundWithTryCatchFix implements Fix {
     private JavaSource javaSource;
     private List<TypeMirrorHandle> thandles;
     private TreePathHandle path;
+    private List<String> fqns;
 
-    public OrigSurroundWithTryCatchFix(JavaSource javaSource, List<TypeMirrorHandle> thandles, TreePathHandle path) {
+    public OrigSurroundWithTryCatchFix(JavaSource javaSource, List<TypeMirrorHandle> thandles, TreePathHandle path, List<String> fqns) {
         this.javaSource = javaSource;
         this.thandles = thandles;
         this.path = path;
+        this.fqns = fqns;
     }
 
     public String getText() {
@@ -122,8 +112,8 @@ class OrigSurroundWithTryCatchFix implements Fix {
                     //may be necessary to separate variable declaration and assignment:
                     Element e = parameter.getTrees().getElement(p);
                     VariableTree vt = (VariableTree) leaf;
-                    long start = parameter.getTrees().getSourcePositions().getStartPosition(parameter.getCompilationUnit(), vt);
-                    
+
+                    // XXX: Come up with some smart skipping solution for comma separated variables, with respect to #143232
                     if (e != null && e.getKind() == ElementKind.LOCAL_VARIABLE) {
                         TreePath block = findBlock(p);
                         
@@ -136,21 +126,6 @@ class OrigSurroundWithTryCatchFix implements Fix {
                                 
                                 assert index != (-1);
                                 
-                                int skipIndex = index + 1;
-
-                                while (bt.getStatements().size() > skipIndex) {
-                                    StatementTree s = bt.getStatements().get(skipIndex);
-                                    
-                                    if (s.getKind() != Kind.VARIABLE) {
-                                        break;
-                                    }
-                                    
-                                    if (start != parameter.getTrees().getSourcePositions().getStartPosition(parameter.getCompilationUnit(), vt))
-                                        break;
-                                    
-                                    skipIndex++;
-                                }
-                                
                                 StatementTree assignment = make.ExpressionStatement(make.Assignment(make.Identifier(vt.getName()), vt.getInitializer()));
                                 StatementTree declaration = make.Variable(vt.getModifiers(), vt.getName(), vt.getType(), null);//XXX: mask out final
                                 TryTree tryTree = make.Try(make.Block(Collections.singletonList(assignment), false), MagicSurroundWithTryCatchFix.createCatches(parameter, make, thandles, p), null);
@@ -158,9 +133,8 @@ class OrigSurroundWithTryCatchFix implements Fix {
                                 
                                 nueStatements.addAll(bt.getStatements().subList(0, index));
                                 nueStatements.add(declaration);
-                                nueStatements.addAll(bt.getStatements().subList(index + 1, skipIndex));
                                 nueStatements.add(tryTree);
-                                nueStatements.addAll(bt.getStatements().subList(skipIndex, bt.getStatements().size()));
+                                nueStatements.addAll(bt.getStatements().subList(index + 1, bt.getStatements().size()));
                                 
                                 parameter.rewrite(bt, make.Block(nueStatements, false));
                                 return ;
@@ -222,5 +196,35 @@ class OrigSurroundWithTryCatchFix implements Fix {
         }
         
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final OrigSurroundWithTryCatchFix other = (OrigSurroundWithTryCatchFix) obj;
+        if (this.javaSource != other.javaSource && (this.javaSource == null || !this.javaSource.equals(other.javaSource))) {
+            return false;
+        }
+        if (!this.path.equals(other.path)) {
+            return false;
+        }
+        if (!this.fqns.equals(other.fqns)) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 5;
+        hash = 23 * hash + (this.javaSource != null ? this.javaSource.hashCode() : 0);
+        return hash;
+    }
+    
+    
     
 }
