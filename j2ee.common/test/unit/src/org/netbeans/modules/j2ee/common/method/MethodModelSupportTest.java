@@ -59,7 +59,6 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.ModificationResult;
@@ -67,10 +66,10 @@ import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
-import org.netbeans.modules.j2ee.common.source.FakeJavaDataLoaderPool;
-import org.netbeans.modules.j2ee.common.source.RepositoryImpl;
-import org.netbeans.modules.j2ee.common.source.SourceUtils;
-import org.netbeans.modules.j2ee.common.source.TestUtilities;
+import org.netbeans.modules.j2ee.common.test.FakeJavaDataLoaderPool;
+import org.netbeans.modules.j2ee.common.test.RepositoryImpl;
+import org.netbeans.modules.j2ee.common.test.TestUtilities;
+import org.netbeans.modules.j2ee.core.api.support.java.SourceUtils;
 import org.netbeans.modules.java.source.usages.IndexUtil;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -93,7 +92,7 @@ public class MethodModelSupportTest extends NbTestCase {
         clearWorkDir();
         
         File file = new File(getWorkDir(),"cache");	//NOI18N
-        file.mkdirs();
+        FileUtil.createFolder(file);
         IndexUtil.setCacheFolder(file);
 
         FileObject workDir = FileUtil.toFileObject(getWorkDir());
@@ -114,7 +113,7 @@ public class MethodModelSupportTest extends NbTestCase {
         runUserActionTask(testFO, new Task<CompilationController>() {
             public void run(CompilationController controller) throws IOException {
                 controller.toPhase(JavaSource.Phase.ELEMENTS_RESOLVED);
-                TypeElement typeElement = SourceUtils.newInstance(controller).getTypeElement();
+                TypeElement typeElement = SourceUtils.getPublicTopLevelElement(controller);
                 for (ExecutableElement method : ElementFilter.methodsIn(typeElement.getEnclosedElements())) {
                     MethodModel methodModel = MethodModelSupport.createMethodModel(controller, method);
                     if (method.getSimpleName().contentEquals("method1")) {
@@ -173,23 +172,23 @@ public class MethodModelSupportTest extends NbTestCase {
                 Types types = controller.getTypes();
                 
                 String typeName = String.class.getName();
-                String resolvedTypeName = MethodModelSupport.getTypeName(controller, elements.getTypeElement(typeName).asType());
+                String resolvedTypeName = MethodModelSupport.getTypeName(elements.getTypeElement(typeName).asType());
                 assertEquals(typeName, resolvedTypeName);
                 
                 typeName = InputStream.class.getName();
-                resolvedTypeName = MethodModelSupport.getTypeName(controller, elements.getTypeElement(typeName).asType());
+                resolvedTypeName = MethodModelSupport.getTypeName(elements.getTypeElement(typeName).asType());
                 assertEquals(typeName, resolvedTypeName);
                 
-                resolvedTypeName = MethodModelSupport.getTypeName(controller, types.getPrimitiveType(TypeKind.INT));
+                resolvedTypeName = MethodModelSupport.getTypeName(types.getPrimitiveType(TypeKind.INT));
                 assertEquals("int", resolvedTypeName);
 
                 typeName = String.class.getName();
-                resolvedTypeName = MethodModelSupport.getTypeName(controller, types.getArrayType(elements.getTypeElement(typeName).asType()));
+                resolvedTypeName = MethodModelSupport.getTypeName(types.getArrayType(elements.getTypeElement(typeName).asType()));
                 assertEquals("java.lang.String[]", resolvedTypeName);
                 
                 PrimitiveType primitiveType = types.getPrimitiveType(TypeKind.BYTE);
                 ArrayType arrayType = types.getArrayType(primitiveType);
-                resolvedTypeName = MethodModelSupport.getTypeName(controller, arrayType);
+                resolvedTypeName = MethodModelSupport.getTypeName(arrayType);
                 assertEquals("byte[]", resolvedTypeName);
             }
         });
@@ -233,7 +232,8 @@ public class MethodModelSupportTest extends NbTestCase {
                 "}");
         runUserActionTask(testFO, new Task<CompilationController>() {
             public void run(CompilationController controller) throws IOException {
-                TypeElement typeElement = SourceUtils.newInstance(controller).getTypeElement();
+                controller.toPhase(JavaSource.Phase.ELEMENTS_RESOLVED);
+                TypeElement typeElement = SourceUtils.getPublicTopLevelElement(controller);
                 List<VariableElement> fields = ElementFilter.fieldsIn(typeElement.getEnclosedElements());
                 MethodModel.Variable nonFinalVariable = MethodModelSupport.createVariable(controller, fields.get(0));
                 assertEquals("java.lang.String", nonFinalVariable.getType());
