@@ -47,11 +47,15 @@ import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmFunction;
 import org.netbeans.modules.cnd.api.model.CsmFunctionDefinition;
 import org.netbeans.modules.cnd.api.model.CsmInheritance;
+import org.netbeans.modules.cnd.api.model.CsmInitializerListContainer;
 import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmType;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.CsmParameter;
+import org.netbeans.modules.cnd.api.model.CsmTemplate;
+import org.netbeans.modules.cnd.api.model.CsmTemplateParameter;
 import org.netbeans.modules.cnd.api.model.CsmVariable;
+import org.netbeans.modules.cnd.api.model.deep.CsmExpression;
 
 /**
  * resolve file objects under offset
@@ -109,6 +113,15 @@ public class CsmOffsetResolver {
                 context.setLastObject(retType);
                 return retType;
             }
+            // check template parameters
+            if (CsmKindUtilities.isTemplate(fun)) {
+                Collection<CsmTemplateParameter> templateParams = ((CsmTemplate)fun).getTemplateParameters();
+                CsmTemplateParameter templateParam = CsmOffsetUtilities.findObject(templateParams, context, offset);
+                if (templateParam != null) {
+                    context.setLastObject(templateParam);
+                    return templateParam;                   
+                }
+            }
             // check if offset in parameters
             Collection<CsmParameter> params = fun.getParameters();
             CsmParameter param = CsmOffsetUtilities.findObject(params, context, offset);
@@ -120,10 +133,16 @@ public class CsmOffsetResolver {
                 }
                 return param;
             }   
-            
             // check for constructor initializers
-            // ....
-            
+            if (CsmKindUtilities.isConstructor(lastObj)) {
+                CsmInitializerListContainer ctor = (CsmInitializerListContainer)lastObj;
+                for (CsmExpression izer : ctor.getInitializerList()) {
+                    if (CsmOffsetUtilities.isInObject(izer, offset)) {
+                        context.setLastObject(izer);
+                        return izer;
+                    }
+                }
+            }
             // for function definition search deeper in body's statements
             if (CsmKindUtilities.isFunctionDefinition(lastObj)) {
                 CsmFunctionDefinition funDef = (CsmFunctionDefinition)lastObj;
@@ -132,16 +151,19 @@ public class CsmOffsetResolver {
                     // offset is in body, try to find inners statement
                     if (CsmStatementResolver.findInnerObject(funDef.getBody(), offset, context)) {
                         // if found exact object => return it, otherwise return last found scope
-                        last = context.getLastObject();
+                        lastObj = last = context.getLastObject();
                     }
                 }
             }
-        } else if (CsmKindUtilities.isClass(lastObj)) {
+        } 
+        
+        if (CsmKindUtilities.isClass(lastObj)) {
             // check if in inheritance part
             CsmClass clazz = (CsmClass)lastObj;
             Collection<CsmInheritance> inherits = clazz.getBaseClasses();
             CsmInheritance inh = CsmOffsetUtilities.findObject(inherits, context, offset);
             if (inh != null) {
+                context.setLastObject(inh);
                 last = inh;
             }             
         } else if (CsmKindUtilities.isVariable(lastObj)) {
@@ -150,6 +172,16 @@ public class CsmOffsetResolver {
                 context.setLastObject(type);
                 last = type;
             }            
+        } else if (CsmKindUtilities.isClassForwardDeclaration(lastObj)) {
+            // check template parameters
+            if (CsmKindUtilities.isTemplate(lastObj)) {
+                Collection<CsmTemplateParameter> templateParams = ((CsmTemplate)lastObj).getTemplateParameters();
+                CsmTemplateParameter templateParam = CsmOffsetUtilities.findObject(templateParams, context, offset);
+                if (templateParam != null) {
+                    context.setLastObject(templateParam);
+                    return templateParam;
+                }
+            }
         }
         return last;
     }    
