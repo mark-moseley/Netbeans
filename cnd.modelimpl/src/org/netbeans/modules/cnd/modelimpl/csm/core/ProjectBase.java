@@ -983,24 +983,11 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
      * to get state lock use
      * Object stateLock = getFileContainer().getLock(file);
      */
-    protected final void putPreprocState(File file, APTPreprocHandler.State state) {
+    private final void putPreprocState(File file, APTPreprocHandler.State state) {
 	if( state != null && ! state.isCleaned() ) {
 	    state = APTHandlersSupport.createCleanPreprocState(state);
 	}
         getFileContainer().putPreprocState(file, state);
-    }
-
-    /**
-     * This method must be called only under stateLock,
-     * to get state lock use
-     * Object stateLock = getFileContainer().getLock(file);
-     */
-    //@Deprecated
-    private void putPreprocState(FileContainer.Entry entry, APTPreprocHandler.State state) {
-	if( state != null && ! state.isCleaned() ) {
-	    state = APTHandlersSupport.createCleanPreprocState(state);
-	}
-        getFileContainer().putPreprocState(entry, state);
     }
 
     protected final APTPreprocHandler.State setChangedFileState(NativeFileItem nativeFile) {
@@ -1174,6 +1161,10 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                     }
                     entry.setStates(statesToKeep, new FileContainer.StatePair(newState, pcState));
                     scheduleIncludedFileParsing(csmFile, statesToParse, clean);
+                    if (TraceFlags.TRACE_PC_STATE) {
+                        traceIncludeScheduling(csmFile, newState, pcState, clean,
+                                statesToParse, statesToKeep);
+                    }
                 }
             }
             return csmFile;
@@ -1182,6 +1173,30 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         }
     }
 
+    private static void traceIncludeScheduling(
+            CsmFile file, APTPreprocHandler.State newState, FilePreprocessorConditionState pcState,
+            boolean clean, Collection<APTPreprocHandler.State> statesToParse, Collection<FileContainer.StatePair> statesToKeep) {
+        
+        System.err.printf("scheduling %s (1) %s valid %b context %b %s\n",
+                (clean ? "reparse" : "  parse"), file.getAbsolutePath(),
+                newState.isValid(), newState.isCompileContext(), pcState);
+        
+        for (APTPreprocHandler.State state : statesToParse) {
+            if (!newState.equals(state)) {
+                FilePreprocessorConditionState currPcState = null;
+                for (FileContainer.StatePair pair : statesToKeep) {
+                    if (newState.equals(pair.state)) {
+                        currPcState = pair.pcState;
+                        break;
+                    }
+                }
+                System.err.printf("scheduling %s (2) %s valid %b context %b %s\n",
+                        "  parse", file.getAbsolutePath(),
+                        state.isValid(), state.isCompileContext(), currPcState);
+            }
+        }
+    }
+    
     private static final int BETTER = 1;
     private static final int SAME = 0;
     private static final int WORSE = -1;
@@ -1257,7 +1272,10 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
     private boolean isBetterThanAll(
             FilePreprocessorConditionState pcState,
             Collection<FileContainer.StatePair> oldStates) {
-        
+
+        if (TraceFlags.NO_HEADERS_REPARSE) {
+            return false;
+        }
         boolean newIsTheBest = true;
         for (FileContainer.StatePair pair : oldStates) {
             if (!pcState.isBetter(pair.pcState)) {
@@ -1295,7 +1313,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
 
         statesToKeep.clear();
         
-        for (FileContainer.StatePair old : statesToKeep) {
+        for (FileContainer.StatePair old : oldStates) {
             if( pcState.isSubset(old.pcState)) {
                 return WORSE;
             }
@@ -1371,7 +1389,16 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         DeepReparsingUtils.reparseOnEdit(file, this);
    }
 
-    public CsmFile findFile(CharSequence absolutePath) {
+    public CsmFile findFile(Object absolutePathOrNativeFileItem) {
+        if (absolutePathOrNativeFileItem instanceof CharSequence) {
+            return findFileByPath((CharSequence)absolutePathOrNativeFileItem);
+        } else if (absolutePathOrNativeFileItem instanceof NativeFileItem) {
+            return findFileByItem((NativeFileItem)absolutePathOrNativeFileItem);
+        }
+        return null;
+    }
+    
+    private CsmFile findFileByPath(CharSequence absolutePath) {
         File file = new File(absolutePath.toString());
         APTPreprocHandler preprocHandler = null;
         if (getFileContainer().getPreprocState(file) == null){
@@ -1389,6 +1416,25 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                     if( ! acceptNativeItem(nativeFile) ) {
                         return null;
                     }
+                    preprocHandler = createPreprocHandler(nativeFile);
+                }
+            }
+            if (preprocHandler != null) {
+                return findFile(file, FileImpl.UNDEFINED_FILE, preprocHandler, true, preprocHandler.getState(), nativeFile);
+            }
+        }
+	// if getPreprocState(file) isn't null, the file alreasy exists, so we may not pass nativeFile
+        return findFile(file, FileImpl.UNDEFINED_FILE, preprocHandler, true, null, null);
+    }
+
+    private CsmFile findFileByItem(NativeFileItem nativeFile) {
+        File file = nativeFile.getFile().getAbsoluteFile();
+        APTPreprocHandler preprocHandler = null;
+        if (getFileContainer().getPreprocState(file) == null){
+            // Try to find native file
+            if (getPlatformProject() instanceof NativeProject){
+                NativeProject prj = nativeFile.getNativeProject();
+                if (prj != null){
                     preprocHandler = createPreprocHandler(nativeFile);
                 }
             }
