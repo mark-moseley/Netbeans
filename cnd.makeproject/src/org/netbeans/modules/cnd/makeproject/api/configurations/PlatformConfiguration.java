@@ -41,108 +41,63 @@
 
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-public class IntConfiguration {
-    private IntConfiguration master;
-    private int def;
-    private String[] names;
-    private String[] options;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
+import org.netbeans.modules.cnd.makeproject.configurations.ui.PlatformNodeProp;
 
-    private int value;
-    private boolean modified;
-    private boolean dirty = false;
+public class PlatformConfiguration extends IntConfiguration implements PropertyChangeListener {
+    
+    private PlatformNodeProp pnp;
+    private DevelopmentHostConfiguration dhconf;
 
-    public IntConfiguration(IntConfiguration master, int def, String[] names, String[] options) {
-        this.master = master;
-        this.def = def;
-        this.names = names;
-        this.options = options;
-        reset();
+    public PlatformConfiguration(DevelopmentHostConfiguration dhconf, int def, String[] names) {
+        super(null, def, names, null);
+        pnp = null;
+        this.dhconf = dhconf;
+    }
+
+    public PlatformConfiguration(PlatformConfiguration conf) {
+        super(null, conf.getDefault(), conf.getNames(), null);
+        pnp = conf.pnp;
+        dhconf = conf.dhconf;
     }
     
-    /** Needed for CompilerSetConfiguration to maintain compatibility */
-    protected IntConfiguration() {}
-
-    public void setValue(int value) {
-        this.value = value;
-        if (master != null) {
-            setModified(true);
-        } else {
-            setModified(value != getDefault());
-        }
+    public void setPlatformNodeProp(PlatformNodeProp pnp) {
+        this.pnp = pnp;
     }
 
-    public void setValue(String s) {
-        if (s != null) {
-            for (int i = 0; i < names.length; i++) {
-                if (s.equals(names[i])) {
-                    setValue(i);
-                    break;
-                }
-            }
-        }
-    }
-    
-    public int getValue() {
-        if (master != null && !getModified()) {
-            return master.getValue();
-        } else {
-            return value;
-        }
-    }
-
-    public void setModified(boolean b) {
-        this.modified = b;
-    }
-
-    public boolean getModified() {
-        return modified;
-    }
-
-    public void setDirty(boolean dirty) {
-        this.dirty = dirty;
-    }
-
-    public boolean getDirty() {
-        return dirty;
-    }
-    
-    public int getDefault() {
-        return def;
-    }
-
-    public void reset() {
-        value = getDefault();
-        setModified(false);
-    }
-
+    @Override
     public String getName() {
-        if (getValue() < names.length) {
-            return names[getValue()];
-        } else {
-            return "???"; // FIXUP // NOI18N
+        return dhconf.isOnline() ? super.getName() : "";
+    }
+
+    public void propertyChange(PropertyChangeEvent evt) {
+        dhconf = (DevelopmentHostConfiguration) evt.getNewValue();
+        String hkey = dhconf.getName();
+        int platform = CompilerSetManager.getDefault(hkey).getPlatform();
+        if (platform == -1) {
+            // TODO: CompilerSet is not reliable about platform; it must be.
+            platform = PlatformTypes.PLATFORM_NONE;
         }
+        setValue(platform);
     }
 
-    public String[] getNames() {
-        return names;
-    }
-
-    public String getOption() {
-        return options[getValue()] + " "; // NOI18N
+    public boolean isDevHostOnline() {
+        return dhconf.isOnline();
     }
 
     // Clone and Assign
-    public void assign(IntConfiguration conf) {
-        dirty = getValue() != conf.getValue();
-        setValue(conf.getValue());
-        setModified(conf.getModified());
+    public void assign(PlatformConfiguration conf) {
+        super.assign(conf);
+        pnp = conf.pnp;
+        dhconf = conf.dhconf;
     }
 
     @Override
     public Object clone() {
-        IntConfiguration clone = new IntConfiguration(master, def, names, options);
-        clone.setValue(getValue());
-        clone.setModified(getModified());
+        PlatformConfiguration clone = new PlatformConfiguration(this);
         return clone;
     }
 }
