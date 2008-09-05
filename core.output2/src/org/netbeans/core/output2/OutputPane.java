@@ -84,7 +84,9 @@ class OutputPane extends AbstractOutputPane implements ComponentListener {
     }
 
     protected void postPopupMenu(Point p, Component src) {
-        findOutputTab().postPopupMenu(p, src);
+        if (src.isShowing()) {
+            findOutputTab().postPopupMenu(p, src);
+        }
     }
 
     public void setMouseLine (int line, Point p) {
@@ -215,11 +217,11 @@ class OutputPane extends AbstractOutputPane implements ComponentListener {
             } finally {
                 textView.setCursor (cursor);
             }
-            if (val) {
+            /*if (val) { #78191
                 getViewport().addChangeListener(this);
             } else {
                 getViewport().removeChangeListener(this);
-            }
+            }*/
             
             //Don't try to set the caret position until the view has
             //been fully readjusted to its new dimensions, scroll bounds, etc.
