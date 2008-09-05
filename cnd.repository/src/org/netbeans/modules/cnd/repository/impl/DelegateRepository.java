@@ -41,10 +41,9 @@
 
 package org.netbeans.modules.cnd.repository.impl;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 import org.netbeans.modules.cnd.repository.api.Repository;
+import org.netbeans.modules.cnd.repository.disk.DiskRepositoryManager;
 import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.spi.RepositoryListener;
@@ -59,9 +58,6 @@ public final class DelegateRepository implements Repository {
     
     private final Repository delegate;
     
-    private Map<String, Object> locks = new HashMap<String, Object>();
-    private String mainLock = new String("DelegateRepository main lock"); // NOI18N
-    
     public DelegateRepository() {
         if (Stats.validateKeys) {
             Stats.log("Testing keys using KeyValidatorRepository."); // NOI18N
@@ -71,7 +67,7 @@ public final class DelegateRepository implements Repository {
             delegate = new HashMapRepository ();
         } else {
             Stats.log("by default using HybridRepository."); // NOI18N
-            delegate = new HybridRepository();
+            delegate = new DiskRepositoryManager();
         }        
     }
 
@@ -113,33 +109,17 @@ public final class DelegateRepository implements Repository {
         delegate.shutdown();
     }
 
-    private Object getLock(String unitName) {
-	synchronized( mainLock  ) {
-	    Object lock = locks.get(unitName);
-	    if( lock == null ) {
-		lock = new String(unitName); // NOI18N
-		locks.put(unitName, lock);
-	    }
-	    return lock;
-	}
-    }
     
-    public void openUnit(String unitName) {
-	synchronized( getLock(unitName) ) {
-	    delegate.openUnit(unitName);
-	}
+    public void openUnit(int unitId, String unitName) {
+        delegate.openUnit(unitId, unitName);
     }
     
     public void closeUnit(String unitName, boolean cleanRepository, Set<String> requiredUnits) {
-	synchronized( getLock(unitName) ) {
-	    delegate.closeUnit(unitName, cleanRepository, requiredUnits);
-	}
+        delegate.closeUnit(unitName, cleanRepository, requiredUnits);
     }
     
     public void removeUnit(String unitName) {
-	synchronized( getLock(unitName) ) {
-	    delegate.removeUnit(unitName);
-	}
+        delegate.removeUnit(unitName);
     }
 
     public void cleanCaches() {
@@ -157,5 +137,4 @@ public final class DelegateRepository implements Repository {
     public void startup(int persistMechanismVersion) {
         delegate.startup(persistMechanismVersion);
     }
-    
 }
