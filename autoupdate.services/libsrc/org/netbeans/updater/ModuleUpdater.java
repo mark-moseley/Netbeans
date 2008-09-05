@@ -95,6 +95,9 @@ public final class ModuleUpdater extends Thread {
     
     private static final String TEMP_FILE_NAME = "temporary";
     
+    public static final String UPDATER_JAR = "updater.jar"; // NOI18N
+    public static final String AUTOUPDATE_UPDATER_JAR_PATH = "netbeans/modules/ext/" + UPDATER_JAR; // NOI18N
+    
     /** files that are supposed to be installed (when running inside the ide) */
     private Collection<File> forInstall;
     private Map<File, Collection<File>> files2clustersForInstall;
@@ -356,6 +359,10 @@ public final class ModuleUpdater extends Thread {
                         checkStop();
                         if ( entry.getName().startsWith( UPDATE_NETBEANS_DIR ) ) {
                             if (! entry.isDirectory ()) {
+                                if (AUTOUPDATE_UPDATER_JAR_PATH.equals (entry.getName ())) {
+                                    // skip updater.jar
+                                    continue;
+                                }
                                 String pathTo = entry.getName ().substring (UPDATE_NETBEANS_DIR.length () + 1);
                                 // path without netbeans prefix
                                 if ( mu.isL10n() )
@@ -429,13 +436,7 @@ public final class ModuleUpdater extends Thread {
             }
             
             if (installedNBMs > 0) {
-                try {
-                    File stamp = new File(cluster, ".lastModified"); // NOI18N
-                    stamp.createNewFile();
-                    stamp.setLastModified(System.currentTimeMillis());
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
+                UpdaterDispatcher.touchLastModified (cluster);
             }
         }
         
@@ -455,7 +456,7 @@ public final class ModuleUpdater extends Thread {
         }
     }
     
-    private static boolean trickyDeleteOnWindows(File destFile) {
+    public static boolean trickyDeleteOnWindows(File destFile) {
         assert isWindows() : "Call it only on Windows but system is " + System.getProperty("os.name");
         File f = new File(destFile.getParentFile(), destFile.getName());
         assert f.exists() : "The file " + f + " must exists.";        
@@ -463,6 +464,7 @@ public final class ModuleUpdater extends Thread {
             File tmpFile = File.createTempFile(TEMP_FILE_NAME, null, f.getParentFile());
             if (tmpFile.delete()) {
                 f.renameTo(tmpFile);
+                tmpFile.deleteOnExit ();
             }
         } catch (IOException ex) {
             //no special handling needed
@@ -470,7 +472,7 @@ public final class ModuleUpdater extends Thread {
         return !f.exists();
     }
     
-    private static boolean isWindows() {
+    public static boolean isWindows() {
         String os = System.getProperty("os.name"); // NOI18N
         return (os != null && os.toLowerCase().startsWith("windows"));//NOI18N
     }
@@ -857,11 +859,11 @@ public final class ModuleUpdater extends Thread {
             original = replaceAll(original, VAR_IDE_HOME,
                 UpdateTracking.getPlatformDir () == null ? "" : UpdateTracking.getPlatformDir ().getPath());
             original = replaceAll(original, VAR_IDE_USER,
-                UpdateTracking.getPlatformDir () == null ? "" : UpdateTracking.getPlatformDir ().getPath());
-            original = replaceAll(original,VAR_FILE_SEPARATOR,
+                UpdateTracking.getUserDir () == null ? "" : UpdateTracking.getUserDir ().getPath());
+            original = replaceAll(original, VAR_FILE_SEPARATOR,
                 UpdateTracking.FILE_SEPARATOR);            
-            original = replaceAll(original,VAR_JAVA_HOME,
-                System.getProperty ("java.home"));
+            original = replaceAll(original, VAR_JAVA_HOME,
+                System.getProperty ("java.home")); // NOI18N
             return original;
         }
         
