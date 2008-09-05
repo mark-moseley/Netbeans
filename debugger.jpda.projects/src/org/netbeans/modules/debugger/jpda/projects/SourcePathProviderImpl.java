@@ -45,6 +45,8 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
@@ -55,6 +57,7 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
+import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 
 import org.netbeans.spi.debugger.jpda.SourcePathProvider;
@@ -67,12 +70,12 @@ import org.netbeans.api.java.classpath.GlobalPathRegistryListener;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.java.queries.SourceForBinaryQuery;
+import org.netbeans.api.java.source.BuildArtifactMapper;
+import org.netbeans.api.java.source.BuildArtifactMapper.ArtifactsUpdated;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.spi.java.classpath.ClassPathProvider;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 
 import org.openide.filesystems.FileObject;
@@ -81,6 +84,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.JarFileSystem;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
+import org.openide.util.NbBundle;
 import org.openide.util.WeakListeners;
 
 
@@ -116,8 +120,10 @@ public class SourcePathProviderImpl extends SourcePathProvider {
         pcs = new PropertyChangeSupport (this);
         //this.session = (Session) contextProvider.lookupFirst 
         //    (null, Session.class);
-        Map properties = (Map) contextProvider.lookupFirst 
-            (null, Map.class);
+        JPDADebugger debugger = (JPDADebugger) contextProvider.lookupFirst(null, JPDADebugger.class);
+        Map properties = contextProvider.lookupFirst(null, Map.class);
+
+        Set<FileObject> srcRootsToListenForArtifactsUpdates = null;
         
         // 2) get default allSourceRoots of source roots used for stepping
         if (properties != null) {
@@ -144,6 +150,22 @@ public class SourcePathProviderImpl extends SourcePathProvider {
                     originalSourcePath,
                     globalCP
             );
+            String listeningCP = (String) properties.get("listeningCP");
+            if (listeningCP != null) {
+                for (String cp : listeningCP.split(File.pathSeparator)) {
+                    logger.log(Level.FINE, "Listening cp = '" + cp + "'");
+                    File f = new File(cp);
+                    f = FileUtil.normalizeFile(f);
+                    URL entry = FileUtil.urlForArchiveOrDir(f);
+
+                    if (entry != null) {
+                        srcRootsToListenForArtifactsUpdates = new HashSet<FileObject>();
+                        for (FileObject src : SourceForBinaryQuery.findSourceRoots(entry).getRoots()) {
+                            srcRootsToListenForArtifactsUpdates.add(src);
+                        }
+                    }
+                }
+            }
         } else {
             pathRegistryListener = new PathRegistryListener();
             GlobalPathRegistry.getDefault().addGlobalPathRegistryListener(
@@ -223,7 +245,27 @@ public class SourcePathProviderImpl extends SourcePathProvider {
         if (verbose) 
             System.out.println (
                 "SPPI: init smartSteppingSourcePath " + smartSteppingSourcePath
-            );    
+            );
+
+        if (srcRootsToListenForArtifactsUpdates != null) {
+            final Set<ArtifactsUpdatedImpl> artifactsListeners = new HashSet<ArtifactsUpdatedImpl>();
+            for (FileObject src : srcRootsToListenForArtifactsUpdates) {
+                try {
+                    artifactsListeners.add(addArtifactsUpdateListenerFor(debugger, src));
+                } catch (FileStateInvalidException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+            debugger.addPropertyChangeListener(JPDADebugger.PROP_STATE, new PropertyChangeListener() {
+                public void propertyChange(PropertyChangeEvent evt) {
+                    if (JPDADebugger.STATE_DISCONNECTED == ((Integer) evt.getNewValue()).intValue()) {
+                        for (ArtifactsUpdatedImpl al : artifactsListeners) {
+                            BuildArtifactMapper.removeArtifactsUpdatedListener(al.getURL(), al);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     /**
@@ -349,7 +391,23 @@ public class SourcePathProviderImpl extends SourcePathProvider {
      */
     @Override
     public synchronized String getSourceRoot(String url) {
-        for (FileObject fileObject : originalSourcePath.getRoots()) {
+        FileObject fo;
+        try {
+            fo = URLMapper.findFileObject(new java.net.URL(url));
+        } catch (java.net.MalformedURLException ex) {
+            fo = null;
+        }
+        FileObject[] roots = null;
+        if (fo != null) {
+            ClassPath cp = ClassPath.getClassPath(fo, ClassPath.SOURCE);
+            if (cp != null) {
+                roots = cp.getRoots();
+            }
+        }
+        if (roots == null) {
+            roots = originalSourcePath.getRoots();
+        }
+        for (FileObject fileObject : roots) {
             try {
                 String rootURL = fileObject.getURL().toString();
                 if (url.startsWith(rootURL)) {
@@ -364,7 +422,7 @@ public class SourcePathProviderImpl extends SourcePathProvider {
         }
         return null; // not found
     }
-    
+
     private String[] getSourceRoots(ClassPath classPath) {
         FileObject[] sourceRoots = classPath.getRoots();
         List<String> roots = new ArrayList<String>(sourceRoots.length);
@@ -393,6 +451,10 @@ public class SourcePathProviderImpl extends SourcePathProvider {
      */
     public synchronized String[] getSourceRoots () {
         return getSourceRoots(smartSteppingSourcePath);
+    }
+
+    synchronized Set<FileObject> getSourceRootsFO() {
+        return new HashSet(Arrays.asList(smartSteppingSourcePath.getRoots()));
     }
     
     /**
@@ -522,7 +584,7 @@ public class SourcePathProviderImpl extends SourcePathProvider {
      * @param path path to normalize
      * @return normalized path without "." and ".." elements
      */ 
-    private static String normalize(String path) {
+    public static String normalize(String path) {
       for (Matcher m = thisDirectoryPattern.matcher(path); m.find(); )
       {
         path = m.replaceAll("$1");
@@ -543,16 +605,20 @@ public class SourcePathProviderImpl extends SourcePathProvider {
      */
     private static String getRoot(FileObject fileObject) {
         File f = null;
+        String path = "";
         try {
             if (fileObject.getFileSystem () instanceof JarFileSystem) {
                 f = ((JarFileSystem) fileObject.getFileSystem ()).getJarFile ();
+                if (!fileObject.isRoot()) {
+                    path = "!/"+fileObject.getPath();
+                }
             } else {
                 f = FileUtil.toFile (fileObject);
             }
         } catch (FileStateInvalidException ex) {
         }
         if (f != null) {
-            return f.getAbsolutePath ();
+            return f.getAbsolutePath () + path;
         } else {
             return null;
         }
@@ -564,11 +630,96 @@ public class SourcePathProviderImpl extends SourcePathProvider {
     private FileObject getFileObject (String file) {
         File f = new File (file);
         FileObject fo = FileUtil.toFileObject (f);
-        if (fo != null && FileUtil.isArchiveFile (fo))
+        String path = null;
+        if (fo == null && file.contains("!/")) {
+            int index = file.indexOf("!/");
+            f = new File(file.substring(0, index));
+            fo = FileUtil.toFileObject (f);
+            path = file.substring(index + "!/".length());
+        }
+        if (fo != null && FileUtil.isArchiveFile (fo)) {
             fo = FileUtil.getArchiveRoot (fo);
+            if (path !=null) {
+                fo = fo.getFileObject(path);
+            }
+        }
         return fo;
     }
     
+    private ArtifactsUpdatedImpl addArtifactsUpdateListenerFor(JPDADebugger debugger, FileObject src) throws FileStateInvalidException {
+        URL url = src.getURL();
+        ArtifactsUpdatedImpl l = new ArtifactsUpdatedImpl(debugger, url, src);
+        BuildArtifactMapper.addArtifactsUpdatedListener(url, l);
+        return l;
+    }
+
+    private static boolean CAN_FIX_CLASSES_AUTOMATICALLY = Boolean.getBoolean("debugger.apply-code-changes.on-save"); // NOI18N
+
+    private static class ArtifactsUpdatedImpl implements ArtifactsUpdated {
+
+        private Reference<JPDADebugger> debuggerRef;
+        private final URL url;
+        private FileObject src;
+
+        public ArtifactsUpdatedImpl(JPDADebugger debugger, URL url, FileObject src) {
+            this.debuggerRef = new WeakReference<JPDADebugger>(debugger);
+            this.url = url;
+            this.src = src;
+        }
+
+        public URL getURL() {
+            return url;
+        }
+
+        public void artifactsUpdated(Iterable<File> artifacts) {
+            String error = null;
+            final JPDADebugger debugger = debuggerRef.get();
+            if (debugger == null) {
+                error = NbBundle.getMessage(SourcePathProviderImpl.class, "MSG_NoJPDADebugger");
+            } else if (!debugger.canFixClasses()) {
+                error = NbBundle.getMessage(SourcePathProviderImpl.class, "MSG_CanNotFix");
+            } else if (debugger.getState() == JPDADebugger.STATE_DISCONNECTED) {
+                error = NbBundle.getMessage(SourcePathProviderImpl.class, "MSG_NoDebug");
+            }
+
+            if (error == null) {
+                if (!CAN_FIX_CLASSES_AUTOMATICALLY) {
+                    for (File f : artifacts) {
+                        FileObject fo = FileUtil.toFileObject(f);
+                        if (fo != null) {
+                            String className = fileToClassName(fo);
+                            FixActionProvider.ClassesToReload.getInstance().addClassToReload(
+                                    debugger, src, className, fo);
+                        }
+                    }
+                    return ;
+                }
+                Map<String, FileObject> classes = new HashMap();
+                for (File f : artifacts) {
+                    FileObject fo = FileUtil.toFileObject(f);
+                    if (fo != null) {
+                        String className = fileToClassName(fo);
+                        classes.put(className, fo);
+                    }
+                }
+                FixActionProvider.reloadClasses(debugger, classes);
+            } else {
+                BuildArtifactMapper.removeArtifactsUpdatedListener(url, this);
+            }
+
+            if (error != null && CAN_FIX_CLASSES_AUTOMATICALLY) {
+                FixActionProvider.notifyError(error);
+            }
+        }
+
+        private static String fileToClassName (FileObject fo) {
+            // remove ".class" from and use dots for for separator
+            ClassPath cp = ClassPath.getClassPath (fo, ClassPath.EXECUTE);
+    //        FileObject root = cp.findOwnerRoot (fo);
+            return cp.getResourceName (fo, '.', false);
+        }
+    }
+
     private class PathRegistryListener implements GlobalPathRegistryListener, PropertyChangeListener {
         
         public void pathsAdded(GlobalPathRegistryEvent event) {
