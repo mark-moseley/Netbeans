@@ -50,6 +50,7 @@ import org.netbeans.modules.cnd.modelimpl.csm.*;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 
 import antlr.collections.AST;
+import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 
 /**
@@ -76,6 +77,7 @@ public class DeclarationStatementImpl extends StatementBase implements CsmDeclar
         return declarators;
     }
     
+    @Override
     public String toString() {
         return "" + getKind() + ' ' + getOffsetString() + '[' + declarators + ']'; // NOI18N
     }
@@ -92,20 +94,87 @@ public class DeclarationStatementImpl extends StatementBase implements CsmDeclar
 	    super((FileImpl) getContainingFile());
 	}
 	
+        @Override
 	protected VariableImpl createVariable(AST offsetAst, CsmFile file, CsmType type, String name, boolean _static, MutableDeclarationsContainer container1, MutableDeclarationsContainer container2,CsmScope scope) {
 	    VariableImpl var = super.createVariable(offsetAst, file, type, name, _static, container1, container2, getScope());
 	    declarators.add(var);
 	    return var;
 	}
 
+        protected FunctionImpl createFunction(AST ast, CsmFile file, CsmScope scope) {
+	    FunctionImpl fun = null;
+            try {
+                fun = new FunctionImpl(ast, file, getScope());
+        	declarators.add(fun);
+            } catch (AstRendererException ex) {
+                DiagnosticExceptoins.register(ex);
+            }
+	    return fun;
+	}
+        
+        @Override
+        protected boolean isRenderingLocalContext() {
+            return true;
+        }
+    
+        @Override
 	public void render(AST tree, NamespaceImpl currentNamespace, MutableDeclarationsContainer container) {
 	    if( tree != null ) {
 		AST token = tree;
-		switch( token.getType() ) {
+                switch( token.getType() ) {
 		    case CPPTokenTypes.CSM_FOR_INIT_STATEMENT:
 		    case CPPTokenTypes.CSM_DECLARATION_STATEMENT:
-			if (!renderVariable(token, currentNamespace, container)){
-			    render(token.getFirstChild(), currentNamespace, container);
+			if (!renderVariable(token, currentNamespace, container)){                            
+                            AST ast = token;
+                            token = token.getFirstChild();
+                            if (token != null) {
+                                boolean _static = false;
+                                if (isQualifier(token.getType())) {
+                                    _static = AstUtil.hasChildOfType(token, CPPTokenTypes.LITERAL_static);
+                                    token = getFirstSiblingSkipQualifiers(token);
+                                }
+                                if (token != null && (token.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN || token.getType() == CPPTokenTypes.CSM_TYPE_COMPOUND)) {
+                                    AST typeToken = token;
+                                    AST next = token.getNextSibling();
+                                    AST ptrOperator = null;
+                                    while (next != null && next.getType() == CPPTokenTypes.CSM_PTR_OPERATOR) {
+                                        if (ptrOperator == null) {
+                                            ptrOperator = next;
+                                        }
+                                        next = next.getNextSibling();
+                                    }
+                                    if (next != null && next.getType() == CPPTokenTypes.CSM_QUALIFIED_ID) {
+                                        do {
+                                            TypeImpl type;
+                                            if (typeToken.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN) {
+                                                type = TypeFactory.createBuiltinType(typeToken.getText(), ptrOperator, 0, typeToken, getContainingFile());
+                                            } else {
+                                                type = TypeFactory.createType(typeToken, getContainingFile(), ptrOperator, 0);
+                                            }
+                                            String name = next.getText();
+
+                                            if (isVariableLikeFunc(ast)) {
+                                                FunctionImpl fun = createFunction(ast, getContainingFile(), getScope());
+                                            } else {
+                                                VariableImpl var = createVariable(next, getContainingFile(), type, name, _static, currentNamespace, container, getScope());
+                                            }
+
+                                            // we ignore both currentNamespace and container; <= WHY?
+                                            // eat all tokens up to the comma that separates the next decl
+                                            next = next.getNextSibling();
+                                            if (next != null && next.getType() == CPPTokenTypes.CSM_PARMLIST) {
+                                                next = next.getNextSibling();
+                                            }
+                                            if (next != null && next.getType() == CPPTokenTypes.COMMA) {
+                                                next = next.getNextSibling();
+                                            }
+                                        } while (next != null && next.getType() == CPPTokenTypes.CSM_QUALIFIED_ID);
+                                        break;
+                                    }
+                                }
+                            }
+                            
+			    render(ast.getFirstChild(), currentNamespace, container);
 			}
 			break;
 		    case CPPTokenTypes.CSM_NAMESPACE_ALIAS:
@@ -115,7 +184,7 @@ public class DeclarationStatementImpl extends StatementBase implements CsmDeclar
 			declarators.add(new UsingDirectiveImpl(token, getContainingFile()));
 			break;
 		    case CPPTokenTypes.CSM_USING_DECLARATION:
-			declarators.add(new UsingDeclarationImpl(token, getContainingFile()));
+			declarators.add(new UsingDeclarationImpl(token, getContainingFile(), null));
 			break;
 
 		    case CPPTokenTypes.CSM_CLASS_DECLARATION:
@@ -133,34 +202,6 @@ public class DeclarationStatementImpl extends StatementBase implements CsmDeclar
 			renderVariableInClassifier(token, csmEnum, currentNamespace, container);
 			break;
 		    }
-		    case CPPTokenTypes.CSM_TYPE_BUILTIN:
-		    case CPPTokenTypes.CSM_TYPE_COMPOUND:
-			AST typeToken = token;
-			AST next = token.getNextSibling();
-			if( next != null && next.getType() == CPPTokenTypes.CSM_QUALIFIED_ID ) {
-			    do {
-				TypeImpl type;
-				if( typeToken.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN ) {
-				    type = TypeFactory.createBuiltinType(typeToken.getText(), null, 0, typeToken, getContainingFile());
-				}
-				else {
-				    type = TypeFactory.createType(typeToken, getContainingFile(), null, 0);
-				}
-				String name = next.getText();
-				VariableImpl var = createVariable(next, getContainingFile(), type, name, false, currentNamespace, container, getScope());
-				// we ignore both currentNamespace and container; <= WHY?
-				// eat all tokens up to the comma that separates the next decl
-				next = next.getNextSibling();
-				if( next != null && next.getType() == CPPTokenTypes.CSM_PARMLIST ) {
-				    next = next.getNextSibling();
-				}
-				if( next != null && next.getType() == CPPTokenTypes.COMMA ) {
-				    next = next.getNextSibling();
-				}
-			    }
-			    while( next != null && next.getType() ==  CPPTokenTypes.CSM_QUALIFIED_ID );
-			}
-			break;
                     case CPPTokenTypes.CSM_GENERIC_DECLARATION:
                         CsmTypedef[] typedefs = renderTypedef(token, (FileImpl) getContainingFile(), getScope());
 			if( typedefs != null && typedefs.length > 0 ) {
@@ -168,7 +209,7 @@ public class DeclarationStatementImpl extends StatementBase implements CsmDeclar
 				declarators.add(typedefs[i]);
                             }
                         }
-		}
+                }
 	    }
 	}
 
