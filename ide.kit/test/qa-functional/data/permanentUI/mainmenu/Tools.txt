@@ -1,0 +1,22 @@
+| Tools |                      T (mnemonics)
+=========
+Add to Favorites               A [dynamic]
+Add to Palette...              e [dynamic]
+============================
+Java Platforms                 J
+NetBeans Platforms             N
+Ruby Platforms                 u
+Variables                      V
+Libraries                      L
+Component Libraries            C
+Ruby Gems                      R
+Servers                        S
+Mobility Deployment            m
+Keystores                      K
+Templates                      T
+DTDs and XML Schemas           D
+Palette                    >   P
+============================
+Plugins                        g
+============================
+Options                        O
