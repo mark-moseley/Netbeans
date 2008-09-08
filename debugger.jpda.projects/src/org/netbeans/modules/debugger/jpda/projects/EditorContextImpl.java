@@ -41,14 +41,6 @@
 
 package org.netbeans.modules.debugger.jpda.projects;
 
-import com.sun.source.tree.AssignmentTree;
-import com.sun.source.tree.BlockTree;
-import com.sun.source.tree.ExpressionStatementTree;
-import com.sun.source.tree.ExpressionTree;
-import com.sun.source.tree.Scope;
-import com.sun.source.tree.VariableTree;
-import com.sun.source.util.TreeScanner;
-
 import java.awt.Color;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -60,15 +52,12 @@ import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Future;
 import javax.swing.SwingUtilities;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Caret;
 import javax.swing.text.StyledDocument;
@@ -79,14 +68,14 @@ import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.ImportTree;
 import com.sun.source.tree.MemberSelectTree;
-import com.sun.source.tree.StatementTree;
-import com.sun.source.tree.TreeVisitor;
+import com.sun.source.tree.Scope;
+import com.sun.source.tree.Tree.Kind;
+import com.sun.source.tree.VariableTree;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.Trees;
 
-import javax.lang.model.util.Elements;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -95,47 +84,43 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
+
+import javax.swing.text.AttributeSet;
+import javax.swing.text.StyleConstants;
+import org.netbeans.api.debugger.jpda.JPDABreakpoint;
+import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.LineBreakpoint;
 
+import org.netbeans.api.editor.settings.AttributesUtilities;
+import org.netbeans.api.editor.settings.EditorStyleConstants;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.ElementUtilities;
-import org.netbeans.api.java.source.SourceUtils;
-import org.netbeans.editor.Coloring;
-import org.netbeans.modules.editor.highlights.spi.Highlight;
-
-import org.openide.ErrorManager;
-import org.openide.cookies.EditorCookie;
-import org.openide.cookies.LineCookie;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.URLMapper;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataShadow;
-import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.nodes.Node;
-import org.openide.text.Line;
-import org.openide.text.NbDocument;
-import org.openide.util.Lookup;
-import org.openide.util.LookupEvent;
-import org.openide.util.LookupListener;
-import org.openide.util.Utilities;
-import org.openide.windows.TopComponent;
-
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.Task;
-import org.netbeans.api.java.source.TreeMaker;
-import org.netbeans.api.java.source.TreeUtilities;
-import org.netbeans.api.java.source.WorkingCopy;
-
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.editor.JumpList;
+
+import org.openide.ErrorManager;
+import org.openide.cookies.EditorCookie;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.filesystems.URLMapper;
+import org.openide.loaders.DataObject;
+import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.text.Annotation;
+import org.openide.text.Line;
+import org.openide.text.NbDocument;
+import org.openide.util.Utilities;
+import org.openide.util.WeakListeners;
+
 import org.netbeans.spi.debugger.jpda.EditorContext;
 import org.netbeans.spi.debugger.jpda.SourcePathProvider;
-import org.netbeans.spi.java.classpath.support.ClassPathSupport;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 
 /**
  *
@@ -148,30 +133,16 @@ public class EditorContextImpl extends EditorContext {
     
     private PropertyChangeSupport   pcs;
     private Map                     annotationToURL = new HashMap ();
-    private PropertyChangeListener  editorObservableListener;
-
-    private Lookup.Result resDataObject;
-    private Lookup.Result resEditorCookie;
-    private Lookup.Result resNode;
-
-    private Object currentLock = new Object();
-    private String currentURL = null;
-    //private Element currentElement = null;
-    private EditorCookie currentEditorCookie = null;
+    private PropertyChangeListener  dispatchListener;
+    private EditorContextDispatcher contextDispatcher;
     
     
     {
         pcs = new PropertyChangeSupport (this);
-
-        resDataObject = Utilities.actionsGlobalContext().lookup(new Lookup.Template(DataObject.class));
-        resDataObject.addLookupListener(new EditorLookupListener(DataObject.class));
-
-        resEditorCookie = Utilities.actionsGlobalContext().lookup(new Lookup.Template(EditorCookie.class));
-        resEditorCookie.addLookupListener(new EditorLookupListener(EditorCookie.class));
-
-        resNode = Utilities.actionsGlobalContext().lookup(new Lookup.Template(Node.class));
-        resNode.addLookupListener(new EditorLookupListener(Node.class));
-
+        dispatchListener = new EditorContextDispatchListener();
+        contextDispatcher = EditorContextDispatcher.getDefault();
+        contextDispatcher.addPropertyChangeListener("text/x-java",
+                WeakListeners.propertyChange(dispatchListener, contextDispatcher));
     }
     
     
@@ -183,11 +154,19 @@ public class EditorContextImpl extends EditorContext {
      * @param timeStamp a time stamp to be used
      */
     public boolean showSource (String url, int lineNumber, Object timeStamp) {
+        Line l = showSourceLine(url, lineNumber, timeStamp);
+        if (l != null) {
+            addPositionToJumpList(url, l, 0);
+        }
+        return l != null;
+    }
+    
+    static Line showSourceLine (String url, int lineNumber, Object timeStamp) {
         Line l = LineTranslations.getTranslations().getLine (url, lineNumber, timeStamp); // false = use original ln
         if (l == null) {
             ErrorManager.getDefault().log(ErrorManager.WARNING,
                     "Show Source: Have no line for URL = "+url+", line number = "+lineNumber);
-            return false;
+            return null;
         }
         if ("true".equalsIgnoreCase(fronting) || Utilities.isWindows()) {
             l.show (Line.SHOW_REUSE);
@@ -195,8 +174,7 @@ public class EditorContextImpl extends EditorContext {
         } else {
             l.show (Line.SHOW_REUSE);
         }
-        addPositionToJumpList(url, l, 0);
-        return true;
+        return l;
     }
     
     /**
@@ -266,14 +244,27 @@ public class EditorContextImpl extends EditorContext {
         String annotationType,
         Object timeStamp
     ) {
+        return annotate(url, lineNumber, annotationType, timeStamp, null);
+    }
+    public Object annotate (
+        String url, 
+        int lineNumber, 
+        String annotationType,
+        Object timeStamp,
+        JPDAThread thread
+    ) {
         Line l =  LineTranslations.getTranslations().getLine (
             url, 
             lineNumber, 
-            timeStamp
+            (timeStamp instanceof JPDABreakpoint) ? null : timeStamp
         );
         if (l == null) return null;
-        DebuggerAnnotation annotation =
-            new DebuggerAnnotation (annotationType, l);
+        Annotation annotation;
+        if (timeStamp instanceof JPDABreakpoint) {
+            annotation = new DebuggerBreakpointAnnotation(annotationType, l, (JPDABreakpoint) timeStamp);
+        } else {
+            annotation = new DebuggerAnnotation (annotationType, l, thread);
+        }
         annotationToURL.put (annotation, url);
         
         return annotation;
@@ -286,16 +277,16 @@ public class EditorContextImpl extends EditorContext {
         String annotationType,
         Object timeStamp
     ) {
-        Coloring coloring;
+        AttributeSet attrs;
         if (EditorContext.CURRENT_LAST_OPERATION_ANNOTATION_TYPE.equals(annotationType)) {
-            coloring = new Coloring(null, Coloring.FONT_MODE_DEFAULT, null, null, getColor(annotationType), null, null);
+            attrs = AttributesUtilities.createImmutable(EditorStyleConstants.WaveUnderlineColor, getColor(annotationType));
         } else {
-            coloring = new Coloring(null, null, getColor(annotationType));
+            attrs = AttributesUtilities.createImmutable(StyleConstants.Background, getColor(annotationType));
         }
-        Highlight highlight = new OperationHighlight(coloring, startPosition, endPosition);
         DebuggerAnnotation annotation;
         try {
-            annotation = new DebuggerAnnotation(annotationType, highlight, URLMapper.findFileObject(new URL(url)));
+            annotation = new DebuggerAnnotation(annotationType, attrs, startPosition, endPosition,
+                    URLMapper.findFileObject(new URL(url)));
         } catch (MalformedURLException ex) {
             RuntimeException rex = new RuntimeException("Bad URL: "+url);
             rex.initCause(ex);
@@ -335,14 +326,14 @@ public class EditorContextImpl extends EditorContext {
         if (a instanceof Collection) {
             Collection annotations = ((Collection) a);
             for (Iterator it = annotations.iterator(); it.hasNext(); ) {
-                removeAnnotation((DebuggerAnnotation) it.next());
+                removeAnnotation((Annotation) it.next());
             }
         } else {
-            removeAnnotation((DebuggerAnnotation) a);
+            removeAnnotation((Annotation) a);
         }
     }
     
-    private void removeAnnotation(DebuggerAnnotation annotation) {
+    private void removeAnnotation(Annotation annotation) {
         annotation.detach ();
         annotationToURL.remove (annotation);
     }
@@ -371,12 +362,17 @@ public class EditorContextImpl extends EditorContext {
             int line = ((Integer) urlLine[1]).intValue();
             return LineTranslations.getTranslations().getOriginalLineNumber(url, line, timeStamp);
         }*/
-        DebuggerAnnotation a = (DebuggerAnnotation) annotation;
+        Line line;
+        if (annotation instanceof DebuggerBreakpointAnnotation) {
+            line = ((DebuggerBreakpointAnnotation) annotation).getLine();
+        } else {
+            line = ((DebuggerAnnotation) annotation).getLine();
+        }
         if (timeStamp == null) 
-            return a.getLine ().getLineNumber () + 1;
-        String url = (String) annotationToURL.get (a);
+            return line.getLineNumber () + 1;
+        String url = (String) annotationToURL.get (annotation);
         Line.Set lineSet = LineTranslations.getTranslations().getLineSet (url, timeStamp);
-        return lineSet.getOriginalLineNumber (a.getLine ()) + 1;
+        return lineSet.getOriginalLineNumber (line) + 1;
     }
     
     /**
@@ -395,39 +391,7 @@ public class EditorContextImpl extends EditorContext {
      * @return number of line currently selected in editor or <code>-1</code>
      */
     public int getCurrentLineNumber () {
-        if (SwingUtilities.isEventDispatchThread()) {
-            return getCurrentLineNumber_();
-        } else {
-            final int[] ln = new int[1];
-            try {
-                SwingUtilities.invokeAndWait(new Runnable() {
-                    public void run() {
-                        ln[0] = getCurrentLineNumber_();
-                    }
-                });
-            } catch (InvocationTargetException ex) {
-                ErrorManager.getDefault().notify(ex.getTargetException());
-            } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
-            }
-            return ln[0];
-        }
-    }
-    
-    private int getCurrentLineNumber_() {
-        EditorCookie e = getCurrentEditorCookie ();
-        if (e == null) return -1;
-        JEditorPane ep = getCurrentEditor ();
-        if (ep == null) return -1;
-        StyledDocument d = e.getDocument ();
-        if (d == null) return -1;
-        Caret caret = ep.getCaret ();
-        if (caret == null) return -1;
-        int ln = NbDocument.findLineNumber (
-            d,
-            caret.getDot ()
-        );
-        return ln + 1;
+        return contextDispatcher.getCurrentLineNumber();
     }
     
     /**
@@ -436,32 +400,8 @@ public class EditorContextImpl extends EditorContext {
      * @return number of line currently selected in editor or <code>-1</code>
      */
     public int getCurrentOffset () {
-        if (SwingUtilities.isEventDispatchThread()) {
-            return getCurrentOffset_();
-        } else {
-            final int[] ln = new int[1];
-            try {
-                SwingUtilities.invokeAndWait(new Runnable() {
-                    public void run() {
-                        ln[0] = getCurrentOffset_();
-                    }
-                });
-            } catch (InvocationTargetException ex) {
-                ErrorManager.getDefault().notify(ex.getTargetException());
-            } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
-            }
-            return ln[0];
-        }
-    }
-    
-    private int getCurrentOffset_() {
-        EditorCookie e = getCurrentEditorCookie ();
-        if (e == null) return -1;
-        JEditorPane ep = getCurrentEditor ();
+        JEditorPane ep = contextDispatcher.getCurrentEditor();
         if (ep == null) return -1;
-        StyledDocument d = e.getDocument ();
-        if (d == null) return -1;
         Caret caret = ep.getCaret ();
         if (caret == null) return -1;
         return caret.getDot();
@@ -484,29 +424,9 @@ public class EditorContextImpl extends EditorContext {
      * @return URL of source currently selected in editor or empty string
      */
     public String getCurrentURL () {
-        synchronized (currentLock) {
-            if (currentURL == null) {
-                DataObject[] nodes = (DataObject[])resDataObject.allInstances().toArray(new DataObject[0]);
-
-                currentURL = "";
-                if (nodes.length != 1)
-                    return currentURL;
-                
-                DataObject dO = nodes[0];
-                if (dO instanceof DataShadow)
-                    dO = ((DataShadow) dO).getOriginal ();
-
-                try {
-                    currentURL = dO.getPrimaryFile ().getURL ().toString ();
-                } catch (FileStateInvalidException ex) {
-                    //noop
-                }
-            }
-
-            return currentURL;
-        }
+        return contextDispatcher.getCurrentURLAsString();
     }
-
+    
     /**
      * Returns name of method currently selected in editor or empty string.
      *
@@ -561,27 +481,7 @@ public class EditorContextImpl extends EditorContext {
      * @return identifier currently selected in editor or <code>null</code>
      */
     public String getSelectedIdentifier () {
-        if (SwingUtilities.isEventDispatchThread()) {
-            return getSelectedIdentifier_();
-        } else {
-            final String[] si = new String[1];
-            try {
-                SwingUtilities.invokeAndWait(new Runnable() {
-                    public void run() {
-                        si[0] = getSelectedIdentifier_();
-                    }
-                });
-            } catch (InvocationTargetException ex) {
-                ErrorManager.getDefault().notify(ex.getTargetException());
-            } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
-            }
-            return si[0];
-        }
-    }
-
-    private String getSelectedIdentifier_() {
-        JEditorPane ep = getCurrentEditor ();
+        JEditorPane ep = contextDispatcher.getCurrentEditor ();
         if (ep == null) return null;
         String s = ep.getSelectedText ();
         if (s == null) return null;
@@ -608,18 +508,16 @@ public class EditorContextImpl extends EditorContext {
             } catch (InvocationTargetException ex) {
                 ErrorManager.getDefault().notify(ex.getTargetException());
             } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
+                // interrupted, ignored.
             }
             return mn[0];
         }
     }
     
     private String getSelectedMethodName_() {
-        EditorCookie e = getCurrentEditorCookie ();
-        if (e == null) return "";
-        JEditorPane ep = getCurrentEditor ();
+        JEditorPane ep = contextDispatcher.getCurrentEditor ();
         if (ep == null) return "";
-        StyledDocument doc = e.getDocument ();
+        StyledDocument doc = (StyledDocument) ep.getDocument ();
         if (doc == null) return "";
         int offset = ep.getCaret ().getDot ();
         String t = null;
@@ -858,6 +756,21 @@ public class EditorContextImpl extends EditorContext {
                                     SourcePositions positions =  ci.getTrees().getSourcePositions();
                                     Tree tree = ci.getTrees().getTree(elm);
                                     int pos = (int)positions.getStartPosition(ci.getCompilationUnit(), tree);
+                                    { // Find the method name
+                                        String text = ci.getText();
+                                        int l = text.length();
+                                        char c = 0;
+                                        while (pos < l && (c = text.charAt(pos)) != '(' && c != ')') pos++;
+                                        if (pos >= l) {
+                                            // We went somewhere wrong. Re-initialize original values
+                                            c = 0;
+                                            pos = (int)positions.getStartPosition(ci.getCompilationUnit(), tree);
+                                        }
+                                        if (c == '(') {
+                                            pos--;
+                                            while (pos > 0 && Character.isWhitespace(text.charAt(pos))) pos--;
+                                        }
+                                    }
                                     EditorCookie editor = (EditorCookie) dataObject.getCookie(EditorCookie.class);
                                     result.add(new Integer(NbDocument.findLineNumber(editor.openDocument(), pos) + 1));
                                 }
@@ -888,17 +801,11 @@ public class EditorContextImpl extends EditorContext {
     /** @return { "method name", "method signature", "enclosing class name" }
      */
     public String[] getCurrentMethodDeclaration() {
-        Node[] nodes = TopComponent.getRegistry ().getCurrentNodes ();
-        if (nodes == null) return null;
-        if (nodes.length != 1) return null;
-        DataObject dataObject = nodes[0].getCookie(DataObject.class);
-        if (dataObject == null) return null;
-        JavaSource js = JavaSource.forFileObject(dataObject.getPrimaryFile());
+        FileObject fo = contextDispatcher.getCurrentFile();
+        if (fo == null) return null;
+        JEditorPane ep = contextDispatcher.getCurrentEditor();
+        JavaSource js = JavaSource.forFileObject(fo);
         if (js == null) return null;
-        // TODO: Can be called outside of AWT? Probably need invokeAndWait()
-        EditorCookie ec = nodes[0].getCookie(EditorCookie.class);
-        JEditorPane[] op = ec.getOpenedPanes ();
-        JEditorPane ep = (op != null && op.length >= 1) ? op[0] : null;
         final int currentOffset = (ep == null) ? 0 : ep.getCaretPosition();
         //final int currentOffset = org.netbeans.editor.Registry.getMostActiveComponent().getCaretPosition();
         final String[] currentMethodPtr = new String[] { null, null, null };
@@ -1080,8 +987,17 @@ public class EditorContextImpl extends EditorContext {
                                 "\nFree memory = "+Runtime.getRuntime().freeMemory());
                         return;
                     }
-                    Scope scope = ci.getTreeUtilities().scopeFor(offset);
-                    TypeElement te = scope.getEnclosingClass();
+                    TreePath p = ci.getTreeUtilities().pathFor(offset);
+                    while  (p != null && p.getLeaf().getKind() != Kind.CLASS) {
+                        p = p.getParentPath();
+                    }
+                    TypeElement te;
+                    if (p != null) {
+                        te = (TypeElement) ci.getTrees().getElement(p);
+                    } else {
+                        Scope scope = ci.getTreeUtilities().scopeFor(offset);
+                        te = scope.getEnclosingClass();
+                    }
                     if (te != null) {
                         result[0] = ElementUtilities.getBinaryName(te);
                     } else {
@@ -1131,7 +1047,7 @@ public class EditorContextImpl extends EditorContext {
         
     @Override
     public Operation[] getOperations(String url, final int lineNumber,
-                                     final BytecodeProvider bytecodeProvider) {
+                                     BytecodeProvider bytecodeProvider) {
         DataObject dataObject = getDataObject (url);
         if (dataObject == null) return null;
         JavaSource js = JavaSource.forFileObject(dataObject.getPrimaryFile());
@@ -1147,6 +1063,12 @@ public class EditorContextImpl extends EditorContext {
         }
         final int offset = findLineOffset(doc, (int) lineNumber);
         final Operation ops[][] = new Operation[1][];
+        final CompilationController[] ciPtr = new CompilationController[1];
+        final List<Tree>[] expTreesPtr = new List[1];
+        final ExpressionScanner.ExpressionsInfo[] infoPtr = new ExpressionScanner.ExpressionsInfo[1];
+        final Tree[] methodTreePtr = new Tree[1];
+        final int[] treeStartLinePtr = new int[1];
+        final int[] treeEndLinePtr = new int[1];
         try {
             js.runUserActionTask(new CancellableTask<CompilationController>() {
                 public void cancel() {
@@ -1157,6 +1079,7 @@ public class EditorContextImpl extends EditorContext {
                                 "Unable to resolve "+ci.getFileObject()+" to phase "+Phase.RESOLVED+", current phase = "+ci.getPhase()+
                                 "\nDiagnostics = "+ci.getDiagnostics()+
                                 "\nFree memory = "+Runtime.getRuntime().freeMemory());
+                        ops[0] = new Operation[] {};
                         return;
                     }
                     Scope scope = ci.getTreeUtilities().scopeFor(offset);
@@ -1176,33 +1099,45 @@ public class EditorContextImpl extends EditorContext {
                         ops[0] = new Operation[] {};
                         return ;
                     }
+                    expTreesPtr[0] = expTrees;
+                    infoPtr[0] = info;
+                    ciPtr[0] = ci;
+                    methodTreePtr[0] = methodTree;
                     //Tree[] expTrees = expTreeSet.toArray(new Tree[0]);
                     SourcePositions sp = ci.getTrees().getSourcePositions();
-                    int treeStartLine = 
+                    treeStartLinePtr[0] = 
                             (int) cu.getLineMap().getLineNumber(
                                 sp.getStartPosition(cu, expTrees.get(0)));
-                    int treeEndLine =
+                    treeEndLinePtr[0] =
                             (int) cu.getLineMap().getLineNumber(
                                 sp.getEndPosition(cu, expTrees.get(expTrees.size() - 1)));
                     
-                    int[] indexes = bytecodeProvider.indexAtLines(treeStartLine, treeEndLine);
-                    if (indexes == null) {
-                        return ;
-                    }
-                    Map<Tree, Operation> nodeOperations = new HashMap<Tree, Operation>();
-                    ops[0] = AST2Bytecode.matchSourceTree2Bytecode(
-                            cu,
-                            ci,
-                            expTrees, info, bytecodeProvider.byteCodes(),
-                            indexes,
-                            bytecodeProvider.constantPool(),
-                            new OperationCreationDelegateImpl(),
-                            nodeOperations);
-                    if (ops[0] != null) {
-                        assignNextOperations(methodTree, cu, ci, bytecodeProvider, expTrees, info, nodeOperations);
-                    }
                 }
-            },true);
+            },false);
+            if (ops[0] != null) {
+                return ops[0];
+            }
+            int treeStartLine = treeStartLinePtr[0];
+            int treeEndLine = treeEndLinePtr[0];
+            int[] indexes = bytecodeProvider.indexAtLines(treeStartLine, treeEndLine);
+            if (indexes == null) {
+                return null;
+            }
+            Map<Tree, Operation> nodeOperations = new HashMap<Tree, Operation>();
+            CompilationController ci = ciPtr[0];
+            CompilationUnitTree cu = ci.getCompilationUnit();
+            List<Tree> expTrees = expTreesPtr[0];
+            ops[0] = AST2Bytecode.matchSourceTree2Bytecode(
+                    cu,
+                    ci,
+                    expTrees, infoPtr[0], bytecodeProvider.byteCodes(),
+                    indexes,
+                    bytecodeProvider.constantPool(),
+                    new OperationCreationDelegateImpl(),
+                    nodeOperations);
+            if (ops[0] != null) {
+                assignNextOperations(methodTreePtr[0], cu, ci, bytecodeProvider, expTrees, infoPtr[0], nodeOperations);
+            }
         } catch (IOException ioex) {
             ErrorManager.getDefault().notify(ioex);
             return null;
@@ -1241,6 +1176,9 @@ public class EditorContextImpl extends EditorContext {
                             ExpressionScanner scanner = new ExpressionScanner(treeStartLine, cu, ci.getTrees().getSourcePositions());
                             ExpressionScanner.ExpressionsInfo newInfo = new ExpressionScanner.ExpressionsInfo();
                             List<Tree> newExpTrees = methodTree.accept(scanner, newInfo);
+                            if (newExpTrees == null) {
+                                continue;
+                            }
                             treeStartLine = 
                                     (int) cu.getLineMap().getLineNumber(
                                         sp.getStartPosition(cu, newExpTrees.get(0)));
@@ -1468,16 +1406,21 @@ public class EditorContextImpl extends EditorContext {
                                    final TreePathScanner<R,D> visitor, final D context,
                                    final SourcePathProvider sp) {
         JavaSource js = null;
-        try {
-            FileObject fo = URLMapper.findFileObject(new URL(url));
-            js = JavaSource.forFileObject(fo);
-        } catch (MalformedURLException ex) {
-            ErrorManager.getDefault().notify(ErrorManager.WARNING, ex);
+        if (url != null) {
+            try {
+                FileObject fo = URLMapper.findFileObject(new URL(url));
+                if (fo != null) {
+                    js = JavaSource.forFileObject(fo);
+                }
+            } catch (MalformedURLException ex) {
+                ErrorManager.getDefault().notify(ErrorManager.WARNING, ex);
+            }
         }
         if (js == null) {
             js = getJavaSource(sp);
         }
-        final R[] retValue = (R[]) new Object[] { null };
+        final TreePath[] treePathPtr = new TreePath[] { null };
+        final Tree[] treePtr = new Tree[] { null };
         try {
             js.runUserActionTask(new Task<CompilationController>() {
                 public void run(CompilationController ci) throws Exception {
@@ -1521,66 +1464,25 @@ public class EditorContextImpl extends EditorContext {
                             setTreePathMethod.invoke(context, treePath);
                         }
                     } catch (Exception ex) { return;}
-                    if (treePath != null) {
-                        retValue[0] = visitor.scan(treePath, context);
-                    } else {
-                        retValue[0] = tree.accept(visitor, context);
-                    }
+                    treePathPtr[0] = treePath;
+                    treePtr[0] = tree;
                 }
-            }, true);
-            /*
-            js.runModificationTask(new Task<WorkingCopy>() {
-                public void run(WorkingCopy wc) throws Exception {
-                    if (wc.toPhase(Phase.PARSED).compareTo(Phase.PARSED) < 0)
-                        return;
-                    int offset = findLineOffset((StyledDocument) wc.getDocument(), line);
-                    Scope scope = wc.getTreeUtilities().scopeFor(offset);
-                    Element clazz = scope.getEnclosingClass();
-                    if (clazz == null) {
-                        return ;
-                    }
-                    ExpressionTree expressionTree = wc.getTreeUtilities().parseExpression(
-                            expression,
-                            new SourcePositions[] { wc.getTrees().getSourcePositions() }
-                    );
-                    wc.getTreeUtilities().attributeTree(expressionTree, scope);
-                    TreeMaker tm = wc.getTreeMaker();
-                    ExpressionStatementTree est = tm.ExpressionStatement(expressionTree);
-                    addStatement(tm, wc.getTrees(), wc.getTreeUtilities().pathFor(offset), offset, est);
-                    //wc.rewrite(est, est);
-                }
-            });
-             */
-            return retValue[0];
+            }, false);
+            TreePath treePath = treePathPtr[0];
+            Tree tree = treePtr[0];
+            R retValue;
+            if (treePath != null) {
+                retValue = visitor.scan(treePath, context);
+            } else {
+                retValue = tree.accept(visitor, context);
+            }
+            return retValue;
         } catch (IOException ioex) {
             ErrorManager.getDefault().notify(ioex);
             return null;
         }
     }
-    /*
-    private static void addStatement(TreeMaker tm, Trees trees, TreePath positionPath, int offset, StatementTree statement) {
-        SourcePositions sourcePositions = trees.getSourcePositions();
-        CompilationUnitTree root = positionPath.getCompilationUnit();
-        Tree newTree = null;
-        for (java.util.Iterator<Tree> it = positionPath.iterator(); it.hasNext(); ) {
-            Tree element = it.next();
-            if (element.getKind() == Tree.Kind.BLOCK && newTree == null) {
-                BlockTree block = (BlockTree) element;
-                List<? extends StatementTree> statements = block.getStatements();
-                int index = 0;
-                for (StatementTree st : statements) {
-                    if (sourcePositions.getStartPosition(root, st) >= offset) {
-                        break;
-                    }
-                    index++;
-                }
-                newTree = tm.insertBlockStatement(block, index, statement);
-            } else {
-                
-            }
-        }
-    }
-    */
+    
     /**
      * Adds a property change listener.
      *
@@ -1646,19 +1548,13 @@ public class EditorContextImpl extends EditorContext {
     /** throws IllegalComponentStateException when can not return the data in AWT. */
     private String getCurrentElement(final ElementKind kind, final Element[] elementPtr)
             throws java.awt.IllegalComponentStateException {
-        Node[] nodes = TopComponent.getRegistry ().getCurrentNodes ();
-        if (nodes == null) return null;
-        if (nodes.length != 1) return null;
-        DataObject dataObject = nodes[0].getCookie(DataObject.class);
-        if (dataObject == null) return null;
-        JavaSource js = JavaSource.forFileObject(dataObject.getPrimaryFile());
-        if (js == null) return null;
-        // TODO: Can be called outside of AWT? Probably need invokeAndWait()
-        EditorCookie ec = nodes[0].getCookie(EditorCookie.class);
-        final int currentOffset;
+        FileObject fo = contextDispatcher.getCurrentFile();
+        if (fo == null) return null;
+        JEditorPane ep = contextDispatcher.getCurrentEditor();
         
-        JEditorPane[] op = ec.getOpenedPanes ();
-        JEditorPane ep = (op != null && op.length >= 1) ? op[0] : null;
+        JavaSource js = JavaSource.forFileObject(fo);
+        if (js == null) return null;
+        final int currentOffset;
         final String selectedIdentifier;
         if (ep != null) {
             String s = ep.getSelectedText ();
@@ -1834,34 +1730,6 @@ public class EditorContextImpl extends EditorContext {
         return currentElementPtr[0];
     }
     
-    private JEditorPane getCurrentEditor () {
-        EditorCookie e = getCurrentEditorCookie ();
-        if (e == null) return null;
-        JEditorPane[] op = e.getOpenedPanes ();
-        // We listen on open panes if e implements EditorCookie.Observable
-        if ((op == null) || (op.length < 1)) return null;
-        return op [0];
-    }
-    
-    private EditorCookie getCurrentEditorCookie () {
-        synchronized (currentLock) {
-            if (currentEditorCookie == null) {
-                TopComponent tc = TopComponent.getRegistry().getActivated();
-                if (tc != null) {
-                    currentEditorCookie = (EditorCookie) tc.getLookup().lookup(EditorCookie.class);
-                }
-                // Listen on open panes if currentEditorCookie implements EditorCookie.Observable
-                if (currentEditorCookie instanceof EditorCookie.Observable) {
-                    if (editorObservableListener == null) {
-                        editorObservableListener = new EditorLookupListener(EditorCookie.Observable.class);
-                    }
-                    ((EditorCookie.Observable) currentEditorCookie).addPropertyChangeListener(editorObservableListener);
-                }
-            }
-            return currentEditorCookie;
-        }
-    }
-    
     private static DataObject getDataObject (String url) {
         FileObject file;
         try {
@@ -1878,78 +1746,12 @@ public class EditorContextImpl extends EditorContext {
         }
     }
     
-    private class EditorLookupListener extends Object implements LookupListener, PropertyChangeListener {
-        
-        private Class type;
-        
-        public EditorLookupListener(Class type) {
-            this.type = type;
-        }
-        
-        public void resultChanged(LookupEvent ev) {
-            if (type == DataObject.class) {
-                synchronized (currentLock) {
-                    currentURL = null;
-                    //currentElement = null;
-                    if (currentEditorCookie instanceof EditorCookie.Observable) {
-                        ((EditorCookie.Observable) currentEditorCookie).
-                                removePropertyChangeListener(editorObservableListener);
-                    }
-                    currentEditorCookie = null;
-                }
-                pcs.firePropertyChange (TopComponent.Registry.PROP_CURRENT_NODES, null, null);
-            } else if (type == EditorCookie.class) {
-                synchronized (currentLock) {
-                    currentURL = null;
-                    //currentElement = null;
-                    if (currentEditorCookie instanceof EditorCookie.Observable) {
-                        ((EditorCookie.Observable) currentEditorCookie).
-                                removePropertyChangeListener(editorObservableListener);
-                    }
-                    currentEditorCookie = null;
-                }
-                pcs.firePropertyChange (TopComponent.Registry.PROP_CURRENT_NODES, null, null);
-            } else if (type == Node.class) {
-                synchronized (currentLock) {
-                    //currentElement = null;
-                }
-                pcs.firePropertyChange (TopComponent.Registry.PROP_CURRENT_NODES, null, null);
-            }
-        }
-        
+    private class EditorContextDispatchListener extends Object implements PropertyChangeListener {
+
         public void propertyChange(PropertyChangeEvent evt) {
-            if (evt.getPropertyName().equals(EditorCookie.Observable.PROP_OPENED_PANES)) {
-                pcs.firePropertyChange (EditorCookie.Observable.PROP_OPENED_PANES, null, null);
-            }
+            pcs.firePropertyChange (org.openide.windows.TopComponent.Registry.PROP_CURRENT_NODES, null, null);
         }
         
-    }
-    
-    private static final class OperationHighlight implements Highlight {
-    
-        private Coloring coloring;
-        private int start;
-        private int end;
-
-        /** Creates a new instance of OperationHighlight */
-        public OperationHighlight(Coloring coloring, int start, int end) {
-            this.coloring = coloring;
-            this.start = start;
-            this.end = end;
-        }
-
-        public int getStart() {
-            return start;
-        }
-
-        public int getEnd() {
-            return end;
-        }
-
-        public Coloring getColoring() {
-            return coloring;
-        }
-
     }
     
     private class OperationCreationDelegateImpl implements AST2Bytecode.OperationCreationDelegate {
