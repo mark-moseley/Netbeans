@@ -67,21 +67,17 @@ import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.uml.common.generics.ETPairT;
 import org.netbeans.modules.uml.core.IApplication;
 import org.netbeans.modules.uml.core.eventframework.IEventPayload;
-import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityGroup;
 import org.netbeans.modules.uml.core.metamodel.common.commonactivities.IActivityPartition;
 import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.IState;
 import org.netbeans.modules.uml.core.metamodel.common.commonstatemachines.ITransition;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.IPackage;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagramKind;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IProxyDiagram;
 import org.netbeans.modules.uml.core.metamodel.diagrams.TSDiagramDetails;
-import org.netbeans.modules.uml.core.metamodel.dynamics.CombinedFragment;
 import org.netbeans.modules.uml.core.metamodel.dynamics.ICombinedFragment;
-import org.netbeans.modules.uml.core.metamodel.dynamics.IInteractionOperand;
 import org.netbeans.modules.uml.core.metamodel.dynamics.Lifeline;
 import org.netbeans.modules.uml.core.metamodel.dynamics.Message;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IAssociation;
@@ -99,7 +95,6 @@ import org.netbeans.modules.uml.drawingarea.actions.AfterValidationExecutor;
 import org.netbeans.modules.uml.drawingarea.actions.SQDMessageConnectProvider;
 import org.netbeans.modules.uml.drawingarea.engines.DiagramEngine;
 import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramEdgeReader;
-import org.netbeans.modules.uml.drawingarea.persistence.api.DiagramNodeReader;
 import org.netbeans.modules.uml.drawingarea.persistence.data.EdgeInfo;
 import org.netbeans.modules.uml.drawingarea.persistence.data.NodeInfo.NodeLabel;
 import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
@@ -305,55 +300,82 @@ public class TSDiagramConverter
             addNodeToScene(ninfo);
         }
         addEdgestWithValidationWait();
+        scene.revalidate();
         scene.validate();
    }
     
     private void addEdgestWithValidationWait()
     {
-        new AfterValidationExecutor(new ActionProvider() {
-
-            public void perfomeAction() {
-                if(diagramDetails.getDiagramType() == IDiagramKind.DK_SEQUENCE_DIAGRAM)
-                {
-                    addEdgesSequenceDiagram();
-                }
-                else
-                {
-                    addEdgesGeneral();
-                }
-                processContainmentWithValidationWait();
-                scene.validate();
-            }
-        },scene);
+        ActionProviderImplOne actProvOne = new ActionProviderImplOne();
+        new AfterValidationExecutor(actProvOne, scene);
     }
+    
+    private class ActionProviderImplOne implements ActionProvider
+    {
+        public ActionProviderImplOne()
+        {
+        }
+
+        public void perfomeAction()
+        {
+            if (diagramDetails.getDiagramType() == IDiagramKind.DK_SEQUENCE_DIAGRAM)
+            {
+                addEdgesSequenceDiagram();
+            }
+            else
+            {
+                addEdgesGeneral();
+            }
+            processContainmentWithValidationWait();
+            scene.revalidate();
+            scene.validate();
+        }
+    }
+    
     private void processContainmentWithValidationWait()
     {
-        new AfterValidationExecutor(new ActionProvider() {
+        ActionProviderImplTwo actProvTwo = new ActionProviderImplTwo();
+        new AfterValidationExecutor(actProvTwo, scene);
+    }
+    
+    private class ActionProviderImplTwo implements ActionProvider
+    {
+        public ActionProviderImplTwo()
+        {
+        }
 
-            public void perfomeAction() {
-                for(Widget w:widgetsList)
+        public void perfomeAction()
+        {
+            for (Widget w : widgetsList)
+            {
+                if (w instanceof ContainerNode && w instanceof UMLNodeWidget)
                 {
-                    if(w instanceof ContainerNode && w instanceof UMLNodeWidget)
+                    ObjectScene scene = (ObjectScene) w.getScene();
+                    IPresentationElement pe = (IPresentationElement) scene.findObject(w);
+                    if (pe.getFirstSubject() instanceof ICombinedFragment)
                     {
-                        ObjectScene scene=(ObjectScene) w.getScene();
-                        IPresentationElement pe=(IPresentationElement) scene.findObject(w);
-                        if(pe.getFirstSubject() instanceof ICombinedFragment)continue;//TBD need to solve concurrent modification issue
-                         ContainerNode cont=(ContainerNode) w;
-                         cont.getContainer().calculateChildren(false);
+                        continue; //TBD need to solve concurrent modification issue
                     }
+                    ContainerNode cont = (ContainerNode) w;
+                    cont.getContainer().calculateChildren(false);
                 }
-                scene.validate();
-                try {
-                    scene.getDiagram().save();
-                } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
-                }
-                processArchiveWithValidationWait();
-                scene.revalidate();
-                scene.validate();
-                PersistenceUtil.setDiagramLoading(false);
             }
-        }, scene);
+            scene.validate();
+            scene.getDiagram().setDirty(true);
+//                scene.getEngine().getTopComponent().setDiagramDirty(true);
+            try
+            {
+                scene.getDiagram().save();
+            }
+            catch (IOException ex)
+            {
+                Exceptions.printStackTrace(ex);
+            }
+            processArchiveWithValidationWait();
+            scene.revalidate();
+            scene.validate();
+            PersistenceUtil.setDiagramLoading(false);
+        }
     }
     
     private void processArchiveWithValidationWait()
@@ -392,6 +414,7 @@ public class TSDiagramConverter
             }
         }
         if(messagesInfo.size()>0)addMessagesToSQD(messagesInfo);
+        scene.validate();
     }
     
     private void archiveTSDiagram()
@@ -626,7 +649,7 @@ public class TSDiagramConverter
                     else if(sourcePE!=null && targetPE!=null)
                     {
                         //shouldn't happens
-                        System.out.println("****WARNING: both ends of association class link exist");
+//                        System.out.println("****WARNING: both ends of association class link exist");
                     }
                     else
                     {
@@ -685,10 +708,7 @@ public class TSDiagramConverter
             }
             else
             {
-                if(connWidget instanceof UMLEdgeWidget)
-                {
-                   ((UMLEdgeWidget)connWidget).initialize(peToUse);
-                }
+
             }
         return connWidget;
     }
@@ -899,7 +919,7 @@ public class TSDiagramConverter
                         }
                         catch(java.lang.IllegalArgumentException ex)
                         {
-                            System.out.println("***WARNING: "+ex);
+//                            System.out.println("***WARNING: "+ex);
                         }
                     }                        
                 }
@@ -1203,7 +1223,7 @@ public class TSDiagramConverter
                                 }
                                 else
                                 {
-                                    System.out.println("***WARNING: UNKNOWN ORIENTATION: "+orientation);
+//                                    System.out.println("***WARNING: UNKNOWN ORIENTATION: "+orientation);
                                 }
                             }
                             if("Transitions".equals(value))
@@ -1278,7 +1298,7 @@ public class TSDiagramConverter
             {
                 case 11:
                     //it's name for activity edge with lightning, after addition of support in 6.5 need to add some info here
-                    System.out.println("***WARNING: Unsupported lightning on signal to invocation edge");
+//                    System.out.println("***WARNING: Unsupported lightning on signal to invocation edge");
                 case 1://for names of smth on all diagrams
                 case 12://for names of smth on all diagrams
                     typeInfo=AbstractLabelManager.NAME;
@@ -1340,7 +1360,7 @@ public class TSDiagramConverter
                 default:
                     throw new UnsupportedOperationException("Converter can't handle label kind: "+tsType);
             }
-            System.out.println("LABEL: "+typeInfo+":"+type);
+//            System.out.println("LABEL: "+typeInfo+":"+type);
             if(typeInfo==null)continue;//unsupported yet
             if(endLabel)
             {
@@ -1357,7 +1377,7 @@ public class TSDiagramConverter
                 }
                 else if(elt!=null && elt instanceof ITransition)
                 {
-                    System.out.println("***WARNING: unsupported pre/postcondition label was skipped");
+//                    System.out.println("***WARNING: unsupported pre/postcondition label was skipped");
                     continue;//pre-post transitions unsupported yet
                 }
                 else
