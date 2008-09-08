@@ -42,211 +42,34 @@
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.List;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
-import org.netbeans.modules.cnd.makeproject.api.configurations.BasicCompilerConfiguration;
-import org.openide.DialogDisplayer;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager.CompilerDescriptor;
 import org.openide.ErrorManager;
-import org.openide.NotifyDescriptor;
-import org.openide.util.NbBundle;
 
-public class SunCCompiler extends CCCCompiler {
+public class SunCCompiler extends SunCCCCompiler {
     private static final String compilerStderrCommand = " -xdryrun -E"; // NOI18N
-    private PersistentList systemIncludeDirectoriesList = null;
-    private PersistentList systemPreprocessorSymbolsList = null;
-    private boolean saveOK = true;
-    
-    private static final String[] DEVELOPMENT_MODE_OPTIONS = {
-        "",  // Fast Build // NOI18N
-        "-g", // Debug" // NOI18N
-        "-g -xO3 -xhwcprof", // Performance Debug" // NOI18N
-        "-xprofile=tcov -xinline=", // Test Coverage // NOI18N
-        "-g -xO2", // Dianosable Release // NOI18N
-        "-xO3 -xstrconst", // Release // NOI18N
-        "-xO5 -xipo=1 -xdepend -fsimple=1 -xlibmil -xlibmopt -xvector -xbuiltin -xalias_level=basic", // Performance Release // NOI18N
-    };
-    
-    private static final String[] WARNING_LEVEL_OPTIONS = {
-        "-w", // No Warnings // NOI18N
-        "", // Default // NOI18N
-        "+w", // More Warnings // NOI18N
-        "-errwarn=%all", // Convert Warnings to Errors // NOI18N
-    };
-    
-    private static final String[] MT_LEVEL_OPTIONS = {
-        "", // None // NOI18N
-        "-mt", // Safe // NOI18N
-        "-xautopar -xvector -xreduction -xloopinfo", // Automatic // NOI18N
-        "-xopenmp", // Open MP // NOI18N
-    };
-    
-    private static final String[] STANDARD_OPTIONS = {
-        "-xc99=none", // Old // NOI18N
-        "-xc99=none", // Legacy // NOI18N
-        "", // Default // NOI18N
-        "-xstrconst -xc99", // Modern // NOI18N
-    };
-    
-    private static final String[] LANGUAGE_EXT_OPTIONS = {
-        "-Xc", // None // NOI18N
-        "", // Default // NOI18N
-        "", // All // NOI18N
-    };
     
     /** Creates a new instance of SunCCompiler */
-    public SunCCompiler(CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        super(flavor, kind, name, displayName, path);
+    public SunCCompiler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+        super(hkey, flavor, kind, name, displayName, path);
     }
     
     @Override
-    public String getDevelopmentModeOptions(int value) {
-        return DEVELOPMENT_MODE_OPTIONS[value];
+    public SunCCompiler createCopy() {
+        SunCCompiler copy = new SunCCompiler(getHostKey(), getFlavor(), getKind(), "", getDisplayName(), getPath());
+        copy.setName(getName());
+        return copy;
+    }
+
+    @Override
+    public CompilerDescriptor getDescriptor() {
+        return getFlavor().getToolchainDescriptor().getC();
     }
     
     @Override
-    public String getWarningLevelOptions(int value) {
-        if (value < WARNING_LEVEL_OPTIONS.length)
-            return WARNING_LEVEL_OPTIONS[value];
-        else
-            return ""; // NOI18N
-    }
-    
-    @Override
-    public String getSixtyfourBitsOption(int value) {
-        if (getFlavor() == CompilerFlavor.Sun12) {
-            if (value == BasicCompilerConfiguration.BITS_DEFAULT)
-                return ""; // NOI18N
-            else if (value == BasicCompilerConfiguration.BITS_32)
-                return "-m32"; // NOI18N
-            else if (value == BasicCompilerConfiguration.BITS_64)
-                return "-m64"; // NOI18N
-            else
-                return ""; // NOI18N
-        } else {
-            if (value == BasicCompilerConfiguration.BITS_DEFAULT)
-                return ""; // NOI18N
-            else if (value == BasicCompilerConfiguration.BITS_32)
-                return ""; // NOI18N
-            else if (value == BasicCompilerConfiguration.BITS_64)
-                return "-xarch=generic64"; // NOI18N
-            else
-                return ""; // NOI18N
-        }
-    }
-    
-    @Override
-    public String getStripOption(boolean value) {
-        return value ? "-s" : ""; // NOI18N
-    }
-    
-    @Override
-    public boolean setSystemIncludeDirectories(List values) {
-        assert values != null;
-        if (values.equals(systemIncludeDirectoriesList)) {
-            return false;
-        }
-        systemIncludeDirectoriesList = new PersistentList(values);
-        normalizePaths(systemIncludeDirectoriesList);
-        return true;
-    }
-    
-    @Override
-    public boolean setSystemPreprocessorSymbols(List values) {
-        assert values != null;
-        if (values.equals(systemPreprocessorSymbolsList)) {
-            return false;
-        }
-        systemPreprocessorSymbolsList = new PersistentList(values);
-        return true;
-    }
-    
-    @Override
-    public List getSystemPreprocessorSymbols() {
-        if (systemPreprocessorSymbolsList != null)
-            return systemPreprocessorSymbolsList;
+    protected void parseCompilerOutput(BufferedReader reader) {
         
-        getSystemIncludesAndDefines();
-        return systemPreprocessorSymbolsList;
-    }
-    
-    @Override
-    public List getSystemIncludeDirectories() {
-        if (systemIncludeDirectoriesList != null)
-            return systemIncludeDirectoriesList;
-        
-        getSystemIncludesAndDefines();
-        return systemIncludeDirectoriesList;
-    }
-    
-    // To be overridden
-    @Override
-    public String getMTLevelOptions(int value) {
-        return MT_LEVEL_OPTIONS[value];
-    }
-    
-    // To be overridden
-    @Override
-    public String getStandardsEvolutionOptions(int value) {
-        return STANDARD_OPTIONS[value];
-    }
-    
-    // To be overridden
-    @Override
-    public String getLanguageExtOptions(int value) {
-        return LANGUAGE_EXT_OPTIONS[value];
-    }
-    
-    @Override
-    public void saveSystemIncludesAndDefines() {
-        if (systemIncludeDirectoriesList != null && saveOK)
-            systemIncludeDirectoriesList.saveList(getUniqueID() + "systemIncludeDirectoriesList"); // NOI18N
-        if (systemPreprocessorSymbolsList != null && saveOK)
-            systemPreprocessorSymbolsList.saveList(getUniqueID() + "systemPreprocessorSymbolsList"); // NOI18N
-    }
-    
-    private void restoreSystemIncludesAndDefines() {
-        systemIncludeDirectoriesList = PersistentList.restoreList(getUniqueID() + "systemIncludeDirectoriesList"); // NOI18N
-        systemPreprocessorSymbolsList = PersistentList.restoreList(getUniqueID() + "systemPreprocessorSymbolsList"); // NOI18N
-    }
-    
-    private void getSystemIncludesAndDefines() {
-        restoreSystemIncludesAndDefines();
-        if (systemIncludeDirectoriesList == null || systemPreprocessorSymbolsList == null) {
-            getFreshSystemIncludesAndDefines();
-        }
-    }
-    
-    private void getFreshSystemIncludesAndDefines() {
-        systemIncludeDirectoriesList = new PersistentList();
-        systemPreprocessorSymbolsList = new PersistentList();
-        String path = getPath();
-        if (path == null || !new File(path).exists()) {
-            path = "cc"; // NOI18N
-        }
-        try {
-            getSystemIncludesAndDefines(path + compilerStderrCommand, false);
-            systemIncludeDirectoriesList.addUnique("/usr/include"); // NOI18N
-            saveOK = true;
-        } catch (IOException ioe) {
-            System.err.println("IOException " + ioe);
-            String errormsg = NbBundle.getMessage(getClass(), "CANTFINDCOMPILER", path); // NOI18N
-            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(errormsg, NotifyDescriptor.ERROR_MESSAGE));
-            saveOK = false;
-        }
-    }
-    
-    @Override
-    public void resetSystemIncludesAndDefines() {
-        getFreshSystemIncludesAndDefines();
-    }
-    
-    @Override
-    protected void parseCompilerOutput(InputStream is) {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(is));
         try {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -257,11 +80,11 @@ public class SunCCompiler extends CCCCompiler {
                     int spaceIndex = line.indexOf(" ", includeIndex + 1); // NOI18N
                     if (spaceIndex > 0) {
                         token = line.substring(includeIndex+2, spaceIndex);
-                        systemIncludeDirectoriesList.addUnique(normalizePath(token));
+                        systemIncludeDirectoriesList.addUnique(applyPathPrefix(token));
                         includeIndex = line.indexOf("-I", spaceIndex); // NOI18N
                     } else {
                         token = line.substring(includeIndex+2);
-                        systemIncludeDirectoriesList.addUnique(normalizePath(token));
+                        systemIncludeDirectoriesList.addUnique(applyPathPrefix(token));
                         break;
                     }
                 }
@@ -270,7 +93,6 @@ public class SunCCompiler extends CCCCompiler {
             // Adding "__STDC__=0". It's missing from dryrun output
             systemPreprocessorSymbolsList.add("__STDC__=0"); // NOI18N
             
-            is.close();
             reader.close();
         } catch (IOException ioe) {
             ErrorManager.getDefault().notify(ErrorManager.WARNING, ioe); // FIXUP
@@ -285,5 +107,16 @@ public class SunCCompiler extends CCCCompiler {
         for (int i = 0; i < systemPreprocessorSymbolsList.size(); i++) {
             System.out.println("-D" + systemPreprocessorSymbolsList.get(i)); // NOI18N
         }
+    }
+    
+    
+    @Override
+    protected String getCompilerStderrCommand() {
+        return compilerStderrCommand;
+    }
+
+    @Override
+    protected String getCompilerStderrCommand2() {
+        return null;
     }
 }
