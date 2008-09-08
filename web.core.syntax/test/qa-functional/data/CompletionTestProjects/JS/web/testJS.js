@@ -8,26 +8,26 @@ var myvariable="variable";
 
 
 /**CC
-c|
-keyword const
+cons|
+const
 const
 */
 
 /**CC
-v|
-keyword var
+va|
+var
 var
 */
 
 /**CC
-S|
-JS Core String
+St|
+Core JS String
 String
 */
 
 /**CC #99811
 my|
-testJS.js myfunction()
+testJS.js myfunction () : void
 myfunction()
 */
 
@@ -37,10 +37,9 @@ testJS.js myvariable
 myvariable
 */
 
-
 /**CC
-|
-JS Core RangeError
+Ra|
+Core JS RangeError
 RangeError
 */
 
