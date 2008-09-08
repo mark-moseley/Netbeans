@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,13 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
+ * 
  * Contributor(s):
- *
+ * 
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -39,42 +39,45 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.websvc.api.jaxws.wsdlmodel;
+package org.netbeans.modules.websvc.saas.codegen.j2ee.support;
 
-import com.sun.tools.ws.processor.model.Model;
-import com.sun.tools.ws.processor.model.Service;
-import java.util.*;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.websvc.saas.codegen.model.ParameterInfo;
+import org.netbeans.modules.websvc.saas.model.WsdlSaasMethod;
+import java.util.List;
+import java.util.Map;
+import javax.xml.namespace.QName;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSOperation;
+import org.netbeans.modules.websvc.saas.codegen.java.support.SoapClientJavaOperationInfo;
+import org.netbeans.modules.websvc.saas.codegen.model.ParameterInfo.ParamStyle;
+
 
 /**
  *
- * @author mkuchtiak
+ * @author ayubskhan
  */
-public class WsdlModel  implements org.netbeans.modules.websvc.jaxwsmodelapi.wsdlmodel.WsdlModel{
+public class SoapClientJ2eeOperationInfo extends SoapClientJavaOperationInfo {
+    
+    private List<ParameterInfo> headerParams;
 
-    private Model model;
-
-    /** Creates a new instance of WsdlModel */
-    WsdlModel(Model model) {
-        this.model=model;
+    public SoapClientJ2eeOperationInfo(WsdlSaasMethod m, Project project) {
+        super(m, project);
     }
 
-    public Object /*com.sun.tools.ws.processor.model.Model*/ getInternalJAXWSModel() {
-        return model;
-    }
-
-    public List<WsdlService> getServices() {
-        List<WsdlService> wsdlServices = new ArrayList<WsdlService> ();
-        if (model==null) return wsdlServices;
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            wsdlServices.add(new WsdlService(s));
-        return wsdlServices;
-    }
-
-    public WsdlService getServiceByName(String serviceName) {
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            if (serviceName.equals(s.getName().getLocalPart())) return new WsdlService(s);
-        return null;
+    @Override
+    public List<ParameterInfo> getSoapHeaderParameters() {
+        if (headerParams == null) {
+            headerParams = new java.util.ArrayList<ParameterInfo>();
+            Map<QName,String> params = SoapClientUtils.getSoapHandlerParameters(
+                    getXamWsdlModel(), getPort(), 
+                    (WSOperation)getOperation());
+            for (Map.Entry<QName,String> entry : params.entrySet()) {
+                Class type = getType(getProject(), entry.getValue());
+                ParameterInfo info = new ParameterInfo(entry.getKey(), type, entry.getValue());
+                info.setStyle(ParamStyle.UNKNOWN);
+                headerParams.add(info);
+            }
+        }
+        return headerParams;
     }
 }

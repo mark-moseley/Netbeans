@@ -39,42 +39,14 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.websvc.api.jaxws.wsdlmodel;
+package org.netbeans.modules.websvc.jaxrpc.wsdlmodel;
 
-import com.sun.tools.ws.processor.model.Model;
-import com.sun.tools.ws.processor.model.Service;
-import java.util.*;
-
-/**
+/** Listener for WsdlModeler object to notify the client when WSDL model is changed
  *
  * @author mkuchtiak
  */
-public class WsdlModel  implements org.netbeans.modules.websvc.jaxwsmodelapi.wsdlmodel.WsdlModel{
-
-    private Model model;
-
-    /** Creates a new instance of WsdlModel */
-    WsdlModel(Model model) {
-        this.model=model;
-    }
-
-    public Object /*com.sun.tools.ws.processor.model.Model*/ getInternalJAXWSModel() {
-        return model;
-    }
-
-    public List<WsdlService> getServices() {
-        List<WsdlService> wsdlServices = new ArrayList<WsdlService> ();
-        if (model==null) return wsdlServices;
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            wsdlServices.add(new WsdlService(s));
-        return wsdlServices;
-    }
-
-    public WsdlService getServiceByName(String serviceName) {
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            if (serviceName.equals(s.getName().getLocalPart())) return new WsdlService(s);
-        return null;
-    }
+public interface WsdlChangeListener {
+    
+    /* Notifies that WsdlModel was changed */
+    public void wsdlModelChanged(WsdlModel oldWsdlModel, WsdlModel newWsdlModel);
 }

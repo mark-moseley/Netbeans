@@ -68,7 +68,7 @@ import org.netbeans.modules.visualweb.websvcmgr.codegen.DataProviderParameter;
 // BEGIN_NOI18N
 import org.netbeans.modules.visualweb.websvcmgr.consumer.DesignerWebServiceExtData;
 import org.netbeans.modules.visualweb.websvcmgr.consumer.DesignerWebServiceExtImpl;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSPort;
 import org.netbeans.modules.websvc.manager.api.WebServiceDescriptor;
 import org.netbeans.modules.websvc.manager.model.WebServiceData;
 import org.netbeans.modules.websvc.manager.util.ManagerUtil;
@@ -403,7 +403,7 @@ public class Util {
             }
             
             ClassLoader urlClassLoader = new URLClassLoader(urlList.toArray(new URL[urlList.size()]), Util.class.getClassLoader());
-            WsdlPort port = wsData.getWsdlService().getPortByName(portName);
+            WSPort port = wsData.getWsdlService().getPortByName(portName);
             
             DesignerWebServiceExtData data =
                     (DesignerWebServiceExtData)descriptor.getConsumerData().get(DesignerWebServiceExtImpl.CONSUMER_ID);
@@ -415,7 +415,7 @@ public class Util {
             List<Method> candidateMethods = new ArrayList<Method>();
             
             for (int i = 0; i < methods.length; i++) {
-                if (methods[i].getName().equalsIgnoreCase(modelMethod.getName())) {
+                if (isSimilarMethod(methods[i].getName(), modelMethod.getName())) {
                     candidateMethods.add(methods[i]);
                 }
             }
@@ -442,6 +442,16 @@ public class Util {
         }catch (IOException ex) {
             return null;
         }
+    }
+    
+    private static boolean isSimilarMethod(String jaxRpcName, String modelName) {
+        if (jaxRpcName.equalsIgnoreCase(modelName)) {
+            return true;
+        }else if (jaxRpcName.replace("_", "").equalsIgnoreCase(modelName)) { // NOI18N
+            return true;
+        }
+        
+        return false;
     }
     
     private static int getMatchingParametersCount(Method method, JavaMethod model) {

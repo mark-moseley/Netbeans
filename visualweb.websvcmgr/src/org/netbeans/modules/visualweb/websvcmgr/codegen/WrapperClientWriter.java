@@ -46,7 +46,6 @@ import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.net.URL;
-import java.util.HashMap;
 import java.util.List;
 
 import org.netbeans.modules.visualweb.websvcmgr.util.Util;
@@ -57,8 +56,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import javax.xml.bind.annotation.XmlType;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
+
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSOperation;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSPort;
 import org.netbeans.modules.websvc.manager.api.WebServiceDescriptor;
 import org.netbeans.modules.websvc.manager.util.ManagerUtil;
 
@@ -77,9 +77,11 @@ public class WrapperClientWriter extends java.io.PrintWriter {
     private Set<String> imports = new HashSet<String>();
     private String className;
     private WebServiceDescriptor wsData;
-    private WsdlPort port;
-    private final List<WsdlOperation> operations;
+    private WSPort port;
+    private final List<WSOperation> operations;
     private ClassLoader wsClassLoader;
+    private String portGetterMethod;
+    private String portClassName;
     
     int indent = 0;
     
@@ -88,7 +90,7 @@ public class WrapperClientWriter extends java.io.PrintWriter {
     boolean isJaxRpc = false;
     
     /** Creates a new instance of JavaWriter */
-    public WrapperClientWriter(Writer writer, WebServiceDescriptor wsData, boolean isJaxRpc, List<java.lang.reflect.Method> sortedMethods, List<WsdlOperation> operations){
+    public WrapperClientWriter(Writer writer, WebServiceDescriptor wsData, boolean isJaxRpc, List<java.lang.reflect.Method> sortedMethods, List<WSOperation> operations){
         super(writer);
         
         this.operations = operations;
@@ -103,6 +105,14 @@ public class WrapperClientWriter extends java.io.PrintWriter {
         this.serviceName = serviceName;
         serviceVariable = serviceName.substring(serviceName.lastIndexOf('.') + 1, serviceName.length());
         serviceVariable = serviceVariable.toLowerCase() + "1";
+    }
+    
+    public void setPortGetterMethod(String methodName) {
+        portGetterMethod = methodName;
+    }
+    
+    public void setPortClassName(String portClass) {
+        portClassName = portClass;
     }
     
     public void setClassLoader(ClassLoader loader) {
@@ -126,8 +136,11 @@ public class WrapperClientWriter extends java.io.PrintWriter {
         imports.add(importLine);
     }
     
-    public void setPort(WsdlPort port) {
+    public void setPort(WSPort port) {
         this.port = port;
+        if (portGetterMethod == null) {
+            portGetterMethod = port.getPortGetter();
+        }
     }
     
     /** Set the name of the super class this class would extends */
@@ -191,7 +204,7 @@ public class WrapperClientWriter extends java.io.PrintWriter {
         // write a variable for the port
 
         // get the Java class name for the port
-        String portInterfaceName = port.getJavaName();
+        String portInterfaceName = (portClassName == null) ? port.getJavaName() : portClassName;
         /**
          * Strip off the leading package qualification since we don't need it.
          */
@@ -237,7 +250,7 @@ public class WrapperClientWriter extends java.io.PrintWriter {
             println("    System.setProperty(\"javax.xml.soap.MessageFactory\",\"com.sun.xml.messaging.saaj.soap.ver1_1.SOAPMessageFactory1_1Impl\");");
             println("    try {");
             println("      " + serviceName + " " + serviceVariable + " = " + "new " + serviceName + "_Impl();");
-            println("      " + portInterfaceVariable + " = " + serviceVariable + "." + port.getPortGetter() +"();");
+            println("      " + portInterfaceVariable + " = " + serviceVariable + "." + portGetterMethod +"();");
             println("      initialized = true;");
             println("    } catch (ServiceException se) {");
             println("      se.printStackTrace();" );
@@ -267,7 +280,7 @@ public class WrapperClientWriter extends java.io.PrintWriter {
             println("    if (initialized) return;");
             println("    " + "java.net.URL wsdl = this.getClass().getResource(\"" + wsdlFileName + "\");");
             println("    " + serviceName + " " + serviceVariable + " = " + "new " + serviceName + "(wsdl, new javax.xml.namespace.QName(\"" + namespace + "\", \"" + qname + "\"));");
-            println("    " + portInterfaceVariable + " = " + serviceVariable + "." + port.getPortGetter() +"();");
+            println("    " + portInterfaceVariable + " = " + serviceVariable + "." + portGetterMethod +"();");
             println("    initialized = true;");
             println("  }");
             println();
@@ -278,7 +291,7 @@ public class WrapperClientWriter extends java.io.PrintWriter {
         println("}");
     }
     
-    private void printOperations(WsdlPort port) {
+    private void printOperations(WSPort port) {
         
         // This is to keep track of the overloadded method names
         Map<String, Integer> methodNames = new HashMap<String, Integer>();
@@ -286,7 +299,7 @@ public class WrapperClientWriter extends java.io.PrintWriter {
         /**
          * get the Java class name for the port.
          */
-        String portInterfaceName = port.getJavaName();
+        String portInterfaceName = (portClassName == null) ? port.getJavaName() : portClassName;
         /**
          * Strip off the leading package qualification since we don't need it.
          */

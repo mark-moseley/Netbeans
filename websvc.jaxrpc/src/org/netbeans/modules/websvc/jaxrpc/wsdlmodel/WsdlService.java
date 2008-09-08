@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,44 +31,71 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.websvc.api.jaxws.wsdlmodel;
+package org.netbeans.modules.websvc.jaxrpc.wsdlmodel;
 
-import com.sun.tools.ws.processor.model.Model;
-import com.sun.tools.ws.processor.model.Service;
-import java.util.*;
+import com.sun.xml.rpc.processor.model.Port;
+import com.sun.xml.rpc.processor.model.Service;
+import java.util.ArrayList;
+import java.util.List;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSPort;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSService;
 
 /**
  *
- * @author mkuchtiak
+ * @author Roderico Cruz
  */
-public class WsdlModel  implements org.netbeans.modules.websvc.jaxwsmodelapi.wsdlmodel.WsdlModel{
+public class WsdlService implements WSService{
+    private Service service;
 
-    private Model model;
-
-    /** Creates a new instance of WsdlModel */
-    WsdlModel(Model model) {
-        this.model=model;
+    public WsdlService(){
     }
 
-    public Object /*com.sun.tools.ws.processor.model.Model*/ getInternalJAXWSModel() {
-        return model;
+    public void setService(Service service){
+        this.service = service;
     }
 
-    public List<WsdlService> getServices() {
-        List<WsdlService> wsdlServices = new ArrayList<WsdlService> ();
-        if (model==null) return wsdlServices;
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            wsdlServices.add(new WsdlService(s));
-        return wsdlServices;
+    public WsdlService(Service service){
+        this.service = service;
+    }
+    public Object getInternalJAXWSService() {
+        return service;
     }
 
-    public WsdlService getServiceByName(String serviceName) {
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            if (serviceName.equals(s.getName().getLocalPart())) return new WsdlService(s);
-        return null;
+    public List<WSPort> getPorts() {
+        List<WSPort> wsPorts = new ArrayList<WSPort>();
+        if(service == null) return wsPorts;
+        List<Port> ports = service.getPortsList();
+        for(Port port : ports){
+            wsPorts.add(new WsdlPort(port));
+        }
+        return wsPorts;
+    }
+
+    public String getName() {
+        return service.getName().getLocalPart();
+    }
+
+    public String getNamespaceURI() {
+        return service.getName().getNamespaceURI();
+    }
+
+    public String getJavaName() {
+        return service.getJavaInterface().getName();
+    }
+
+    public WSPort getPortByName(String portName) {
+        List<WSPort> ports = getPorts();
+        for(WSPort port : ports){
+            if(port.getName().equals(portName)){
+                return port;
+            }
+        }
+            return null;
     }
 }

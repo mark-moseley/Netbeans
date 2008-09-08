@@ -38,43 +38,63 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.websvc.jaxrpc.wsdlmodel;
 
-package org.netbeans.modules.websvc.api.jaxws.wsdlmodel;
-
-import com.sun.tools.ws.processor.model.Model;
-import com.sun.tools.ws.processor.model.Service;
-import java.util.*;
+import org.netbeans.modules.websvc.jaxwsmodelapi.java.JavaParameter;
 
 /**
  *
- * @author mkuchtiak
+ * @author rico
  */
-public class WsdlModel  implements org.netbeans.modules.websvc.jaxwsmodelapi.wsdlmodel.WsdlModel{
+public class WsdlJavaParameter implements JavaParameter {
 
-    private Model model;
+    private com.sun.xml.rpc.processor.model.java.JavaParameter param;
+    private String name;
+    private WsdlJavaType type;
 
-    /** Creates a new instance of WsdlModel */
-    WsdlModel(Model model) {
-        this.model=model;
+    public WsdlJavaParameter(com.sun.xml.rpc.processor.model.java.JavaParameter param) {
+        this.param = param;
     }
 
-    public Object /*com.sun.tools.ws.processor.model.Model*/ getInternalJAXWSModel() {
-        return model;
+    public Object getInternalJAXWSJavaParameter() {
+        return this.param;
     }
 
-    public List<WsdlService> getServices() {
-        List<WsdlService> wsdlServices = new ArrayList<WsdlService> ();
-        if (model==null) return wsdlServices;
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            wsdlServices.add(new WsdlService(s));
-        return wsdlServices;
+    public String getName() {
+        if (this.name == null) {
+            this.name = this.param.getName();
+        }
+        return this.name;
     }
 
-    public WsdlService getServiceByName(String serviceName) {
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            if (serviceName.equals(s.getName().getLocalPart())) return new WsdlService(s);
-        return null;
+    public WsdlJavaType getType() {
+        if (this.type == null) {
+            this.type = new WsdlJavaType(this.param.getType());
+        }
+        return this.type;
+    }
+
+    public Object getParameter() {
+        return this.param.getParameter();
+    }
+
+    public boolean isHolder() {
+        return this.param.isHolder();
+    }
+
+    public String getHolderName() {
+        return this.param.getHolderName();
+    }
+
+    public boolean isIN() {
+        return getHolderName() == null; //TODO figure this out
+    }
+
+    public boolean isINOUT() {
+        return getHolderName() != null; //TODO figure this out
+    }
+
+    public boolean isOUT() {
+        return getHolderName() != null; //TODO figure this out
     }
 }

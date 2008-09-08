@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,44 +31,80 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.websvc.api.jaxws.wsdlmodel;
+package org.netbeans.modules.websvc.jaxrpc.wsdlmodel;
 
-import com.sun.tools.ws.processor.model.Model;
-import com.sun.tools.ws.processor.model.Service;
-import java.util.*;
+import com.sun.xml.rpc.processor.model.Operation;
+import com.sun.xml.rpc.processor.model.Port;
+import java.util.ArrayList;
+import java.util.List;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSOperation;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSPort;
 
 /**
  *
- * @author mkuchtiak
+ * @author Roderico Cruz
  */
-public class WsdlModel  implements org.netbeans.modules.websvc.jaxwsmodelapi.wsdlmodel.WsdlModel{
+public class WsdlPort implements WSPort{
 
-    private Model model;
-
-    /** Creates a new instance of WsdlModel */
-    WsdlModel(Model model) {
-        this.model=model;
+    private Port port;
+    
+    public WsdlPort(Port port){
+        this.port = port;
+    }
+    public Object getInternalJAXWSPort() {
+        return port;
     }
 
-    public Object /*com.sun.tools.ws.processor.model.Model*/ getInternalJAXWSModel() {
-        return model;
+    public List<WSOperation> getOperations() {
+        List<WSOperation> wsOperations = new ArrayList<WSOperation>();
+        List<Operation> operations = port.getOperationsList();
+        for(Operation operation : operations){
+            wsOperations.add(new WsdlOperation(operation));
+        }
+        return wsOperations;
     }
 
-    public List<WsdlService> getServices() {
-        List<WsdlService> wsdlServices = new ArrayList<WsdlService> ();
-        if (model==null) return wsdlServices;
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            wsdlServices.add(new WsdlService(s));
-        return wsdlServices;
+    public String getName() {
+        return port.getName().getLocalPart();
     }
 
-    public WsdlService getServiceByName(String serviceName) {
-        List<Service> services = model.getServices();
-        for (Service s:services)
-            if (serviceName.equals(s.getName().getLocalPart())) return new WsdlService(s);
-        return null;
+    public String getNamespaceURI() {
+        return port.getName().getNamespaceURI();
     }
+
+    public String getJavaName() {
+        return port.getJavaInterface().getName();
+    }
+
+    public String getPortGetter() {
+        return "get" + getName();
+    }
+
+    public String getSOAPVersion() {
+        return "soap1.1";
+    }
+
+    public String getStyle() {
+        List<Operation> operations = port.getOperationsList();
+        if(operations.size() > 0){
+            Operation operation = operations.get(0);
+            return operation.getStyle().toString();
+        }
+        return null; 
+    }
+
+    public boolean isProvider() {
+        return false;
+    }
+
+    public String getAddress() {
+        return port.getAddress();
+    }
+
 }
