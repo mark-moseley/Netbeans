@@ -42,8 +42,6 @@
 package org.netbeans.modules.form.layoutsupport.delegates;
 
 import java.awt.*;
-import java.beans.*;
-import java.util.*;
 import javax.swing.*;
 import java.lang.reflect.Method;
 
@@ -102,7 +100,8 @@ public class JTabbedPaneSupport extends AbstractLayoutSupport {
         JTabbedPane tabbedPane = (JTabbedPane)container;
         int n = tabbedPane.getTabCount();
         for (int i=0; i < n; i++) {
-            if (tabbedPane.getBoundsAt(i).contains(p)) {
+            Rectangle rect = tabbedPane.getBoundsAt(i);
+            if ((rect != null) && rect.contains(p)) {
                 selectedTab = i;
                 tabbedPane.setSelectedIndex(i);
                 break;
@@ -253,11 +252,12 @@ public class JTabbedPaneSupport extends AbstractLayoutSupport {
                         ((FormProperty)constraints.getProperties()[2])
                             .getRealValue();
 
-                    tabbedPane.addTab(
+                    tabbedPane.insertTab(
                         title instanceof String ? (String) title : null,
                         icon instanceof Icon ? (Icon) icon : null,
                         components[i],
-                        tooltip instanceof String ? (String) tooltip : null);
+                        tooltip instanceof String ? (String) tooltip : null,
+                        index+i);
                 }
                 catch (Exception ex) {
                     org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
@@ -322,6 +322,13 @@ public class JTabbedPaneSupport extends AbstractLayoutSupport {
         getConstraintsList().add(constr);
 
         componentCode.addStatement(statement);
+        
+        // Issue 129229
+        constr.createComponentCode(
+            componentCode,
+            getLayoutContext().getContainerCodeExpression(),
+            compExp,
+            false);
 
         return compExp;
     }
@@ -346,7 +353,8 @@ public class JTabbedPaneSupport extends AbstractLayoutSupport {
         ((TabConstraints)constr).createComponentCode(
                            componentCode,
                            getLayoutContext().getContainerCodeExpression(),
-                           componentExpression);
+                           componentExpression,
+                           true);
     }
 
     /** This method is called to get a default component layout constraints
@@ -575,13 +583,16 @@ public class JTabbedPaneSupport extends AbstractLayoutSupport {
 
         private void createComponentCode(CodeGroup compCode,
                                          CodeExpression contExp,
-                                         CodeExpression compExp)
+                                         CodeExpression compExp,
+                                         boolean update)
         {
             this.componentCode = compCode;
             this.containerExpression = contExp;
             this.componentExpression = compExp;
             this.propertyExpressions = null;
-            updateCode();
+            if (update) {
+                updateCode();
+            }
         }
 
         private void updateCode() {
