@@ -42,13 +42,13 @@
 package org.netbeans.modules.java.source.ui;
 
 import java.io.IOException;
-import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.java.source.ClasspathInfo;
-import org.netbeans.spi.java.classpath.support.ClassPathSupport;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.logging.Logger;
 import javax.lang.model.element.TypeElement;
 import javax.swing.Icon;
@@ -67,6 +67,7 @@ import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.java.BinaryElementOpen;
 import org.netbeans.modules.java.source.usages.RepositoryUpdater;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
@@ -100,6 +101,7 @@ public class JavaTypeProvider implements TypeProvider {
     }
     
     public void cleanup() {
+        isCanceled = false;
         cache = null;
         if (pathListener != null)
             GlobalPathRegistry.getDefault().removeGlobalPathRegistryListener(pathListener);
@@ -111,17 +113,6 @@ public class JavaTypeProvider implements TypeProvider {
     
     public JavaTypeProvider() {
         this(null, null);
-//        pathListener = new GlobalPathRegistryListener() {
-//
-//            public void pathsAdded(GlobalPathRegistryEvent event) {
-//                cache = null; cpInfo = null;
-//            }
-//
-//            public void pathsRemoved(GlobalPathRegistryEvent event) {
-//                cache = null; cpInfo = null;
-//            }
-//        };
-//        GlobalPathRegistry.getDefault().addGlobalPathRegistryListener(pathListener);
     }
    
     public JavaTypeProvider(ClasspathInfo cpInfo, TypeElementFinder.Customizer customizer) {
@@ -146,7 +137,8 @@ public class JavaTypeProvider implements TypeProvider {
 //        }
 //    }
 
-    public void computeTypeNames(Context context, Result res) {
+    public void computeTypeNames(Context context, final Result res) {
+        isCanceled = false;
         String text = context.getText();
         SearchType searchType = context.getSearchType();
         
@@ -163,15 +155,20 @@ public class JavaTypeProvider implements TypeProvider {
         default: throw new RuntimeException("Unexpected search type: " + searchType);
         }
         
-        long time;
+        long time = 0;
 
         long cp, gss, gsb, sfb, gtn, add, sort;
         cp = gss = gsb = sfb = gtn = add = sort = 0;
 
-        if (RepositoryUpdater.getDefault().isScanInProgress()) {
-            String message = NbBundle.getMessage(JavaTypeProvider.class, "LBL_ScanInProgress_warning");
-            res.setMessage(message);
+        Future<Project[]> openProjectsTask = OpenProjects.getDefault().openProjects();
+        try {
+            openProjectsTask.get();
+        } catch (InterruptedException ex) {
+            LOGGER.fine(ex.getMessage());
+        } catch (ExecutionException ex) {
+            LOGGER.fine(ex.getMessage());
         }
+        
         if (cache == null) {
             Set<CacheItem> sources = null;
 
@@ -290,37 +287,80 @@ public class JavaTypeProvider implements TypeProvider {
         }
 
         ArrayList<JavaTypeDescription> types = new ArrayList<JavaTypeDescription>(cache.size() * 20);
-        Set<ElementHandle<TypeElement>> names = null;
-        for(final CacheItem ci : cache) {
-            time = System.currentTimeMillis();
+        
+        // is scan in progress? If so, provide a message to user.
+        boolean scanInProgress = RepositoryUpdater.getDefault().isScanInProgress();
+        if (scanInProgress) {
+            // ui message
+            String message = NbBundle.getMessage(JavaTypeProvider.class, "LBL_ScanInProgress_warning");
+            res.setMessage(message);
+        } else {
+            res.setMessage(null);
+        }
 
-            final String textForQuery;
-            switch( nameKind ) {
-                case REGEXP:
-                case CASE_INSENSITIVE_REGEXP:
-                    text = removeNonJavaChars(text);
-                    String pattern = searchType == SearchType.CASE_INSENSITIVE_EXACT_NAME ? text : text + "*"; // NOI18N
-                    pattern = pattern.replace( "*", ".*" ).replace( '?', '.' );
-                    textForQuery = pattern;
-                    break;
-                default:
-                    textForQuery = text;
+        final String textForQuery;
+        switch( nameKind ) {
+            case REGEXP:
+            case CASE_INSENSITIVE_REGEXP:
+                text = removeNonJavaChars(text);
+                String pattern = searchType == SearchType.CASE_INSENSITIVE_EXACT_NAME ? text : text + "*"; // NOI18N
+                pattern = pattern.replace( "*", ".*" ).replace( '?', '.' );
+                textForQuery = pattern;
+                break;
+            default:
+                textForQuery = text;
+        }
+        LOGGER.fine("Text For Query '" + text + "'.");
+        if (customizer != null) {
+            for(final CacheItem ci : cache) {
+                time = System.currentTimeMillis();
+                Set<ElementHandle<TypeElement>> names = customizer.query(
+                        ci.classpathInfo, textForQuery, nameKind,
+                        EnumSet.of(ci.isBinary ? ClassIndex.SearchScope.DEPENDENCIES : ClassIndex.SearchScope.SOURCE)
+                    );
+                for (ElementHandle<TypeElement> name : names) {
+                    JavaTypeDescription td = new JavaTypeDescription(ci, name);
+                    types.add(td);
+                    if (isCanceled) {
+                        return;
+                    }
+                }
             }
 
-            if (customizer != null) {
-                names = customizer.query(ci.classpathInfo, textForQuery, nameKind, EnumSet.of(ci.isBinary ? ClassIndex.SearchScope.DEPENDENCIES : ClassIndex.SearchScope.SOURCE));
-            } else {
+        } else {
+            for(final CacheItem ci : cache) {
                 @SuppressWarnings("unchecked")
-                final Set<ElementHandle<TypeElement>>[] n = new Set[1];
-                JavaSource source = JavaSource.create(ci.classpathInfo, new FileObject[0]);
+                final Set<ElementHandle<TypeElement>> names = ci.classpathInfo.getClassIndex().getDeclaredTypes(
+                            textForQuery, nameKind, EnumSet.of(ci.isBinary ? ClassIndex.SearchScope.DEPENDENCIES : ClassIndex.SearchScope.SOURCE)
+                        );
+                for (ElementHandle<TypeElement> name : names) {
+                    JavaTypeDescription td = new JavaTypeDescription(ci, name);
+                    types.add(td);
+                    if (isCanceled) {
+                        return;
+                    }
+                }
+            }
+            if (types.isEmpty() && scanInProgress) {
                 try {
-                    source.runUserActionTask(new Task<CompilationController>() {
-
+                    ClassPath cPath = ClassPathSupport.createClassPath(new URL[0]);
+                    ClasspathInfo cInfo = ClasspathInfo.create(cPath, cPath, cPath);
+                    JavaSource src = JavaSource.create(cInfo);
+                    Future<Void> f = src.runWhenScanFinished(new Task<CompilationController>() {
                         public void run(CompilationController parameter) throws Exception {
-                            n[0] = ci.classpathInfo.getClassIndex().getDeclaredTypes(textForQuery, nameKind, EnumSet.of(ci.isBinary ? ClassIndex.SearchScope.DEPENDENCIES : ClassIndex.SearchScope.SOURCE));
+                            LOGGER.fine("Restarting search...");
+                            res.setMessage(null);
                         }
-                    }, true);
-                    names = n[0];
+                    }, false);
+                    f.get();
+                    cache = null;
+                    cpInfo = null;
+                    computeTypeNames(context, res);
+                    return;
+                } catch (InterruptedException ex) {
+                    Exceptions.printStackTrace(ex);
+                } catch (ExecutionException ex) {
+                    Exceptions.printStackTrace(ex);
                 } catch (IOException ex) {
                     Exceptions.printStackTrace(ex);
                 }
@@ -333,21 +373,9 @@ public class JavaTypeProvider implements TypeProvider {
             gtn += System.currentTimeMillis() - time;            
             time = System.currentTimeMillis();
 
-//              Removed because of bad performance To reenable see diff between 1.15 and 1.16
-//              ClassPath.Entry defEntry = ci.getDefiningEntry();
-            for (ElementHandle<TypeElement> name : names) {
-//                    Removed because of bad performance To reenable see diff between 1.15 and 1.16
-//                    if (defEntry.includes(convertToSourceName(name.getBinaryName()))) {
-                    JavaTypeDescription td = new JavaTypeDescription(ci, name );
-                    types.add(td);
-//                    }
-                if ( isCanceled ) {
-                    return;
-                }
-            }
             add += System.currentTimeMillis() - time;
         }
-
+        
         if ( !isCanceled ) {            
             time = System.currentTimeMillis();
             // Sorting is now done on the Go To Tpe dialog side
@@ -356,6 +384,7 @@ public class JavaTypeProvider implements TypeProvider {
             LOGGER.fine("PERF - " + " GSS:  " + gss + " GSB " + gsb + " CP: " + cp + " SFB: " + sfb + " GTN: " + gtn + "  ADD: " + add + "  SORT: " + sort );
             res.addResult(types);
         }
+        
     }
     
     private static boolean isAllUpper( String text ) {
