@@ -59,11 +59,9 @@ import org.netbeans.lib.profiler.ui.components.FlatToolBar;
 import org.netbeans.lib.profiler.ui.components.SnippetPanel;
 import org.netbeans.lib.profiler.utils.StringUtils;
 import org.netbeans.modules.profiler.actions.*;
-import org.netbeans.modules.profiler.heapwalk.HeapWalker;
 import org.netbeans.modules.profiler.heapwalk.HeapWalkerManager;
 import org.netbeans.modules.profiler.ui.ProfilerDialogs;
 import org.netbeans.modules.profiler.utils.IDEUtils;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
@@ -73,7 +71,6 @@ import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.SharedClassObject;
 import org.openide.util.Utilities;
-import org.openide.util.actions.Presenter;
 import org.openide.util.actions.SystemAction;
 import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
@@ -104,6 +101,7 @@ import javax.swing.event.ListSelectionListener;
 import javax.swing.plaf.ComboBoxUI;
 import javax.swing.plaf.IconUIResource;
 import javax.swing.plaf.basic.BasicComboBoxUI;
+import org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities;
 
 
 /**
@@ -1756,7 +1754,7 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
     ); // NOI18N
     private static final ImageIcon emptyIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/empty16.gif") // NOI18N
     ); // NOI18N
-    private static final String PREFERRED_ID = "PROFILERCONTROLPANEL_TC"; // NOI18N // for winsys persistence
+    private static final String ID = "profiler_cp"; // NOI18N // for winsys persistence
     private static final Integer EXTERNALIZABLE_VERSION_WITH_SNAPSHOTS = new Integer(3);
     
     private static final Color CP_BACKGROUND_COLOR = UIUtils.getProfilerResultsBackground();
@@ -1844,16 +1842,11 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
     public static synchronized ProfilerControlPanel2 getDefault() {
         if (defaultInstance == null) {
             IDEUtils.runInEventDispatchThreadAndWait(new Runnable() {
-                    public void run() {
-                        final TopComponent tc = WindowManager.getDefault().findTopComponent(PREFERRED_ID);
-
-                        if ((tc != null) && tc instanceof ProfilerControlPanel2) {
-                            defaultInstance = (ProfilerControlPanel2) tc;
-                        } else {
-                            defaultInstance = new ProfilerControlPanel2();
-                        }
-                    }
-                });
+                public void run() {
+                    defaultInstance = (ProfilerControlPanel2) WindowManager.getDefault().findTopComponent(ID);
+                    if (defaultInstance == null) defaultInstance = new ProfilerControlPanel2();
+                }
+            });
         }
 
         return defaultInstance;
@@ -1871,26 +1864,12 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
         return CONTROL_PANEL_TOOLTIP;
     }
 
-    public static void closeIfOpened() {
+    public static synchronized void closeIfOpened() {
         IDEUtils.runInEventDispatchThread(new Runnable() {
-                public void run() {
-                    ProfilerControlPanel2 instance = defaultInstance;
-
-                    if (instance == null) {
-                        final TopComponent tc = WindowManager.getDefault().findTopComponent(PREFERRED_ID);
-
-                        if ((tc != null) && tc instanceof ProfilerControlPanel2) {
-                            instance = (ProfilerControlPanel2) tc;
-                        }
-                    }
-
-                    if (instance != null) {
-                        if (instance.isOpened()) {
-                            instance.close();
-                        }
-                    }
-                }
-            });
+            public void run() {
+                if (defaultInstance != null && defaultInstance.isOpened()) defaultInstance.close();
+            }
+        });
     }
 
     public int getPersistenceType() {
@@ -2030,7 +2009,7 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
     }
 
     protected String preferredID() {
-        return PREFERRED_ID;
+        return ID;
     }
 
     //  private static class CPMainPanel extends JPanel implements Scrollable {
