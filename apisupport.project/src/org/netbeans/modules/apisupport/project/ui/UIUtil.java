@@ -371,10 +371,19 @@ public final class UIUtil {
     
     /**
      * Create combobox containing packages from the given {@link SourceGroup}.
+     *
+     * When null srcRoot is passed, combo box is disabled and shows a warning message (#143392).
      */
     public static JComboBox createPackageComboBox(SourceGroup srcRoot) {
-        JComboBox packagesComboBox = new JComboBox(PackageView.createListView(srcRoot));
-        packagesComboBox.setRenderer(PackageView.listRenderer());
+        JComboBox packagesComboBox;
+        if (srcRoot != null) {
+            packagesComboBox = new JComboBox(PackageView.createListView(srcRoot));
+            packagesComboBox.setRenderer(PackageView.listRenderer());
+        } else {
+            packagesComboBox = new JComboBox();
+            packagesComboBox.addItem(NbBundle.getMessage(UIUtil.class, "MSG_Missing_Source_Root"));
+            packagesComboBox.setEnabled(false);
+        }
         return packagesComboBox;
     }
     
@@ -791,10 +800,34 @@ public final class UIUtil {
      * @return true if user accepted the dialog
      */
     public static boolean showAcceptCancelDialog(String title, String message, String acceptButton, String cancelButton, int messageType) {
+        return showAcceptCancelDialog(title, message, acceptButton, null , 
+                cancelButton, messageType) ;
+    }
+    
+    /**
+     * Show an OK/cancel-type dialog with customized button texts.
+     * Only a separate method because it is otherwise cumbersome to replace
+     * the OK button with a button that is set as the default.
+     * @param title the dialog title
+     * @param message the body of the message (usually HTML text)
+     * @param acceptButton a label for the default accept button; should not use mnemonics
+     * @param accDescrAcceptButton a accessible description for acceptButton 
+     * @param cancelButton a label for the cancel button (or null for default); should not use mnemonics
+     * @param messageType {@link NotifyDescriptor#WARNING_MESSAGE} or similar
+     * @return true if user accepted the dialog
+     */
+    public static boolean showAcceptCancelDialog(String title, String message, 
+            String acceptButton, String accDescrAcceptButton , 
+            String cancelButton, int messageType) 
+    {
         DialogDescriptor d = new DialogDescriptor(message, title);
         d.setModal(true);
         JButton accept = new JButton(acceptButton);
         accept.setDefaultCapable(true);
+        if ( accDescrAcceptButton != null ){
+            accept.getAccessibleContext().
+            setAccessibleDescription( accDescrAcceptButton);
+        }
         d.setOptions(new Object[] {
             accept,
             cancelButton != null ? new JButton(cancelButton) : NotifyDescriptor.CANCEL_OPTION,
