@@ -145,12 +145,15 @@ public class CustomIconEditor extends javax.swing.JPanel {
         ignoreCombo = false;
         urlField.setText(""); // NOI18N
         
-        if (nbIcon == null) {
-            classPathRadio.setSelected(true);
+        if ((nbIcon == null) || (nbIcon.getType() != IconEditor.TYPE_CLASSPATH)) {
             FileObject sourceFile = propertyEditor.getSourceFile();
             ClassPath cp = ClassPath.getClassPath(sourceFile, ClassPath.SOURCE);
             setPackageRoot(cp.findOwnerRoot(sourceFile));
-            setPackage(propertyEditor.getDefaultResourceFolder());
+            setPackage(propertyEditor.getDefaultResourceFolder());            
+        }
+        
+        if (nbIcon == null) {
+            classPathRadio.setSelected(true);
             previewLabel.setIcon(null);
             return;
         }
@@ -195,15 +198,12 @@ public class CustomIconEditor extends javax.swing.JPanel {
         else if (setDefaultIfInvalid) {
             FileObject folder = null;
             String pkgName;
-            String fileName;
             int i = resName.lastIndexOf('/');
             if (i < 0) {
                 pkgName = null; // NOI18N
-                fileName = resName;
             }
             else {
                 pkgName = resName.substring(0, i);
-                fileName = resName.substring(i + 1);
                 cp = sourceCP;
                 folder = cp.findResource(pkgName);
                 if (folder == null) {
@@ -213,7 +213,12 @@ public class CustomIconEditor extends javax.swing.JPanel {
             }
             if (folder == null)
                 folder = propertyEditor.getDefaultResourceFolder();
-            setPackageRoot(cp.findOwnerRoot(folder));
+            FileObject root = cp.findOwnerRoot(folder);
+            if (root == null) {
+                setPackageRoot(sourceCP.findOwnerRoot(sourceFile));
+            } else {
+                setPackageRoot(root);
+            }
             setPackage(folder);
         }
     }
@@ -611,7 +616,7 @@ public class CustomIconEditor extends javax.swing.JPanel {
 
     private String getFileChooserDir() {
         if (lastDirectoryUsed == null && selectedPackage != null) {
-            lastDirectoryUsed = selectedPackage.getPath();
+            lastDirectoryUsed = FileUtil.toFile(selectedPackage).getPath();
         }
         return lastDirectoryUsed;
     }
@@ -851,6 +856,7 @@ public class CustomIconEditor extends javax.swing.JPanel {
             ignoreNull = false;
         }
         if (propertyEditor.getValue() instanceof NbImageIcon) {
+            setValue((NbImageIcon)propertyEditor.getValue());
             switchFromCPToExternal();
         }
         else if (!"".equals(text.trim())) { // not a valid text // NOI18N
