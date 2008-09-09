@@ -39,11 +39,13 @@ package org.netbeans.installer.utils;
 import java.awt.GraphicsEnvironment;
 import java.awt.HeadlessException;
 import java.awt.Toolkit;
-import java.security.cert.Certificate;
-import java.security.Principal;
-import java.security.cert.X509Certificate;
-import java.text.DateFormat;
-import java.util.Date;
+import java.io.File;
+import java.io.FileFilter;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -52,18 +54,22 @@ import javax.swing.JProgressBar;
 import javax.swing.LookAndFeel;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
+import org.netbeans.installer.Installer;
 import org.netbeans.installer.utils.exceptions.InitializationException;
+import org.netbeans.installer.utils.helper.NbiThread;
 import org.netbeans.installer.utils.helper.Platform;
 import org.netbeans.installer.utils.helper.UiMode;
-
 import static javax.swing.JOptionPane.YES_NO_OPTION;
+import static javax.swing.JOptionPane.YES_NO_CANCEL_OPTION;
 import static javax.swing.JOptionPane.YES_OPTION;
 import static javax.swing.JOptionPane.NO_OPTION;
+import static javax.swing.JOptionPane.CANCEL_OPTION;
 import static org.netbeans.installer.utils.SystemUtils.getCurrentPlatform;
 
 /**
  *
  * @author Kirill Sorokin
+ * @author Dmitry Lipin
  */
 public final class UiUtils {
     /////////////////////////////////////////////////////////////////////////////////
@@ -91,160 +97,129 @@ public final class UiUtils {
                 } else if (messageType == MessageType.CRITICAL) {
                     intMessageType = JOptionPane.ERROR_MESSAGE;
                 }
-                
+                LogManager.logIndent("... show message dialog");
+                LogManager.log("title: "+ title);
+                LogManager.log("message: " + message);                
                 JOptionPane.showMessageDialog(
                         null,
                         message,
                         title,
                         intMessageType);
+                LogManager.logUnindent("... dialog closed");
                 break;
             case SILENT:
+                LogManager.log(message);
                 System.err.println(message);
                 break;
         }
     }
-    
+    /**
+     * 
+     * @param title The title of the dialog
+     * @param message The message of the dialog
+     * @return true if user click YES option. 
+     * If installer is running silently then false is returned.
+     */
     public static boolean showYesNoDialog(
             final String title,
             final String message) {
-        final int result = JOptionPane.showConfirmDialog(
-                null,
-                message,
-                title,
-                YES_NO_OPTION);
-        
-        return result == YES_OPTION;
+        return showYesNoDialog(title, message, false);
     }
-    
-    public static CertificateAcceptanceStatus showCertificateAcceptanceDialog(
-            final Certificate[] certificates,
-            final int chainStart,
-            final int chainEnd,
-            final boolean rootCaIsNotValid,
-            final boolean timeIsNotValid,
-            final Date timestamp,
-            final String description) {
-        if (certificates[chainStart] instanceof X509Certificate
-                && certificates[chainEnd-1] instanceof X509Certificate) {
-            final X509Certificate firstCert =
-                    (X509Certificate) certificates[chainStart];
-            final X509Certificate lastCert =
-                    (X509Certificate) certificates[chainEnd-1];
-            
-            final Principal subject = firstCert.getSubjectDN();
-            final Principal issuer = lastCert.getIssuerDN();
-            
-            // extract subject & issuer's name
-            final String subjectName = extractName(
-                    subject.getName(),
-                    "CN=",
-                    "Unknown Subject");
-            final String issuerName = extractName(
-                    issuer.getName(),
-                    "O=",
-                    "Unknown Issuer");
-            
-            // dialog caption
-            String caption = null;
-            String body = "";
-            
-            // check if this is the case when both - the root CA and time of
-            // signing is valid:
-            if ((!rootCaIsNotValid) && (!timeIsNotValid)) {
-                caption = StringUtils.format(
-                        "The digital signature of {0} has been verified.",
-                        description);
+    /**
+     * @param title The title of the dialog
+     * @param message The message of the dialog
+     * @param silentDefault The default return value if installer is running silently
+     * @return true if user click YES option. In silent mode return <code>silentDefault</code>
+     */
+    public static boolean showYesNoDialog(
+            final String title,
+            final String message,
+            final boolean silentDefault) {
+        
+        switch (UiMode.getCurrentUiMode()) {
+            case SWING:
+                LogManager.logIndent("... showing Yes/No dialog");
+                LogManager.log("title: " + title);
+                LogManager.log("message: " + message);
+                final int result = JOptionPane.showConfirmDialog(
+                        null,
+                        message,
+                        title,
+                        YES_NO_OPTION);
+                LogManager.logUnindent("... dialog closed, choice : " + (result == YES_OPTION ? "yes" : (result == NO_OPTION ? "no" : "closed")));
+                return result == YES_OPTION;
                 
-                body +=
-                        "The digital signature has been validated by a trusted source. " +
-                        "The security certificate was issued by a company that is trusted";
-                
-                // for timestamp info, add a message saying that certificate was
-                // valid at the time of signing. And display date of signing.
-                if (timestamp != null) {
-                    // get the right date format for timestamp
-                    final DateFormat df = DateFormat.getDateTimeInstance(
-                            DateFormat.LONG,
-                            DateFormat.LONG);
-                    body += StringUtils.format(
-                            " and was valid at the time of signing on {0}.",
-                            df.format(timestamp));
-                } else {
-                    // add message about valid time of signing:
-                    body +=
-                            ", has not expired and is still valid.";
-                }
-                
-                // we should add one more message here - disclaimer we used
-                // to have.  This is to be displayed in the "All trusted"
-                // case in the More Information dialog.
-                body += StringUtils.format(
-                        "Caution: \"{0}\" asserts that this content is safe.  You should only accept this content if you trust \"{1}\" to make that assertion.",
-                        subjectName,
-                        subjectName);
-            } else {
-                // this is the case when either publisher or time of signing
-                // is invalid - check and add corresponding messages to
-                // appropriate message arrays.
-                
-                // If root CA is not valid, add a caption and a message to the
-                // securityAlerts array.
-                if (rootCaIsNotValid){
-                    // Use different caption text for https and signed content
-                    caption = StringUtils.format(
-                            "The digital signature of {0} cannot be verified.",
-                            description);
-                    
-                    body += "The digital signature cannot be verified by a trusted source. " +
-                            "Only continue if you trust the origin of the file. " +
-                            "The security certificate was issued by a company that is not trusted.";
-                } else {
-                    caption = StringUtils.format(
-                            "The digital signature of {0} has been verified.",
-                            description);
-                    
-                    // Same details for both
-                    body += "The security certificate was issued by a company that is trusted.";
-                }
-                
-                // now check if time of signing is valid.
-                if (timeIsNotValid) {
-                    // if no warnings yet, add the one that will show with the
-                    // bullet in security warning dialog:
-                    body += "The digital signature was generated with a trusted certificate but has expired or is not yet valid";
-                } else {
-                    // for timestamp info, add a message saying that certificate
-                    // was valid at the time of signing
-                    if (timestamp != null) {
-                        // get the right date format for timestamp
-                        final DateFormat df = DateFormat.getDateTimeInstance(
-                                DateFormat.LONG,
-                                DateFormat.LONG);
-                        body += StringUtils.format(
-                                "The security certificate was valid at the time of signing on {0}.",
-                                df.format(timestamp));
-                    } else {
-                        body += "The security certificate has not expired and is still valid.";
-                    }
-                }
-            }
-            
-            
-            String message = StringUtils.format("<html><b>{0}</b><br>Subject: {1}<br>Issuer: {2}<br><br>{3}<br><br>Click OK to accept the certificate permanently, No to accept it temporary for this session, Cancel to reject the certificate.", caption, subjectName, issuerName, body);
-            
-            int option = JOptionPane.showConfirmDialog(null, message);
-            if (option == JOptionPane.OK_OPTION) {
-                return CertificateAcceptanceStatus.ACCEPT_PERMANENTLY;
-            } else {
-                return CertificateAcceptanceStatus.DENY;
-            }
+            case SILENT:
+                LogManager.log(message);                
+                final String option = StringUtils.format(
+                        ResourceUtils.getString(UiUtils.class,
+                        silentDefault ? 
+                            RESOURCE_SILENT_DEFAULT_YES : 
+                            RESOURCE_SILENT_DEFAULT_NO));
+                System.err.println(message);
+                System.err.println(option);
+                LogManager.log(message);
+                LogManager.log(option);
+                return silentDefault;
         }
+        //never get this line...
+        return true;
+    }
+    /**
+     * @param title The title of the dialog
+     * @param message The message of the dialog
+     * @param silentDefault The dafault return value if installer is running silently
+     * @return true if user click YES option. In silent mode return <code>silentDefault</code>
+     */
+    public static int showYesNoCancelDialog(
+            final String title,
+            final String message,
+            final int silentDefault) {
         
-        return CertificateAcceptanceStatus.DENY;
+        switch (UiMode.getCurrentUiMode()) {
+            case SWING:
+                LogManager.logIndent("... show Yes/No/Cancel dialog");
+                LogManager.log("title: " + title);
+                LogManager.log("message: " + message);
+                int result = JOptionPane.showConfirmDialog(
+                        null,
+                        message,
+                        title,
+                        YES_NO_CANCEL_OPTION);
+                LogManager.logUnindent("... dialog closed, choice : " + (result == YES_OPTION ? "yes" : (result == NO_OPTION ? "no" : (result==CANCEL_OPTION ? "cancel" : "closed"))));
+                return result;
+                
+            case SILENT:
+                LogManager.log(message);               
+                String resource;
+                switch(silentDefault) {
+                    case YES_OPTION : 
+                        resource = RESOURCE_SILENT_DEFAULT_YES; 
+                        break;
+                    case NO_OPTION : 
+                        resource = RESOURCE_SILENT_DEFAULT_NO; 
+                        break;
+                    case CANCEL_OPTION : 
+                        resource = RESOURCE_SILENT_DEFAULT_CANCEL; 
+                        break;
+                    default:
+                        resource = StringUtils.EMPTY_STRING;
+                        break;
+                }
+                        
+                final String option = StringUtils.format(
+                        ResourceUtils.getString(UiUtils.class,resource));
+                System.err.println(message);
+                System.err.println(option);
+                LogManager.log(message);
+                LogManager.log(option);
+                return silentDefault;
+        }
+        //never get this line...
+        return silentDefault;
     }
     
-    public static void initializeLookAndFeel(
-            ) throws InitializationException {
+    public static void initializeLookAndFeel() throws InitializationException {
         if (lookAndFeelInitialized) {
             return;
         }
@@ -258,6 +233,8 @@ public final class UiUtils {
                     if (className == null) {
                         LogManager.log("... custom look and feel class name was not specified, using system default");
                         className = UiUtils.getDefaultLookAndFeelClassName();
+                    } else if(!className.contains(StringUtils.DOT)) {//short name of the L&F class
+                        className = UiUtils.getLookAndFeelClassNameByShortName(className);
                     }
                     
                     LogManager.log("... class name: " + className);
@@ -267,6 +244,7 @@ public final class UiUtils {
                     }
                     
                     try {
+                        Thread jdkFileChooserWarningLogThread = null;
                         try {
                             // this helps to avoid some GTK L&F bugs for some locales
                             LogManager.log("... get installed L&Fs");
@@ -292,7 +270,54 @@ public final class UiUtils {
                                 // http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6449933
                                 // http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6489447
                                 LogManager.log("... creating JFileChooser object to check possible issues with UI");
-                                new JFileChooser();
+                                
+                                if (System.getProperty("java.version").startsWith("1.6")) {
+                                    File desktop = new File(SystemUtils.getUserHomeDirectory(), "Desktop");
+                                    File[] zips = null;
+                                    final List<String> names = new ArrayList<String>();
+                                    if (FileUtils.exists(desktop)) {
+                                        zips = desktop.listFiles(new FileFilter() {
+                                            public boolean accept(File pathname) {
+                                                boolean result = pathname.getName().endsWith(".zip") && pathname.length() > 1000000L;
+                                                if (result) {
+                                                    names.add(pathname.getName());
+                                                }
+                                                return result;
+                                            }
+                                        });
+                                    }
+                                    if (zips != null && zips.length > 0) {
+                                        jdkFileChooserWarningLogThread = new NbiThread() {
+                                            @Override
+                                            public void run() {
+                                                try {
+                                                    sleep(8000); //8 seconds
+                                                } catch (InterruptedException e) {
+                                                    return;
+                                                }
+                                                final File lock = new File(Installer.getInstance().getLocalDirectory(), Installer.LOCK_FILE_NAME);
+                                                LogManager.log("\n... !!! WARNING !!!");
+                                                LogManager.log("... There are some big zip files on your desktop: " + StringUtils.asString(names));
+                                                LogManager.log("... In case installer UI does not appear for a long time:");
+                                                LogManager.log("...    1) kill the installer process");
+                                                LogManager.log("...    2) move those zip files somewhere from the desktop");
+                                                LogManager.log("...    3) delete " + lock);
+                                                LogManager.log("...    4) run installer again");                                                
+                                                LogManager.log("... For more details see the following bugs descriptions: ");
+                                                LogManager.log("... http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6372808");
+                                                LogManager.log("... http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=5050516");
+                                            }
+                                        };
+                                        jdkFileChooserWarningLogThread.start();
+                                    }
+                                }
+                                
+                                
+                                new JFileChooser();                                
+                                if(jdkFileChooserWarningLogThread!=null) {
+                                    jdkFileChooserWarningLogThread.interrupt();
+                                    jdkFileChooserWarningLogThread = null;
+                                }
                                 
                                 LogManager.log("... getting default Toolkit to check possible issues with UI");
                                 Toolkit.getDefaultToolkit();
@@ -307,6 +332,10 @@ public final class UiUtils {
                             }
                             LogManager.log("... L&F is set");
                         } catch (Throwable e) {
+                            if(jdkFileChooserWarningLogThread!=null) {
+                                jdkFileChooserWarningLogThread.interrupt();
+                                jdkFileChooserWarningLogThread = null;
+                            }
                             // we're catching Throwable here as pretty much anything can happen
                             // while setting the look and feel and we have no control over it
                             // if something wrong happens we should fall back to the default
@@ -362,6 +391,23 @@ public final class UiUtils {
         } finally {
             LogManager.unindent();
             LogManager.log("... initializing L&F finished");
+            
+            if (Boolean.getBoolean("nbi.look.and.feel.dump.defaults")) {
+                try {
+                    LogManager.logIndent("... dumping UIManger L&F defaults: ");
+                    Hashtable hash = (Hashtable) UIManager.getLookAndFeelDefaults();
+                    Enumeration keys = hash.keys();
+                    while (keys.hasMoreElements()) {
+                        Object key = keys.nextElement();
+                        LogManager.log("" + key + " = " + hash.get(key));
+                    }
+                } catch (Exception e) {
+                    LogManager.log(e);
+                } finally {
+                    LogManager.unindent();
+                }
+            }
+            
             lookAndFeelInitialized = true;
             lookAndFeelType = getLAF();
         }
@@ -386,9 +432,9 @@ public final class UiUtils {
                             // check whether the GTK look and feel class is
                             // available -- we'll get CNFE if it is not and it will
                             // not be set
-                            Class.forName("com.sun.java.swing.plaf.gtk.GTKLookAndFeel");
+                            Class.forName(LookAndFeelType.GTK.getClassName());
                             
-                            className = "com.sun.java.swing.plaf.gtk.GTKLookAndFeel";
+                            className = LookAndFeelType.GTK.getClassName();
                         }
                     } catch (ClassNotFoundException e) {
                         ErrorManager.notifyDebug(ResourceUtils.getString(UiUtils.class,
@@ -401,6 +447,21 @@ public final class UiUtils {
                 return null;
         }
     }
+    
+    public static final String getLookAndFeelClassNameByShortName(String name) {
+        if(name == null) {
+            return null;
+        }
+        for(LookAndFeelType lafType : LookAndFeelType.values()) {
+            if(lafType.getId()!=null && lafType.getClassName()!=null) {
+                if(name.toLowerCase(Locale.ENGLISH).equals(lafType.getId().toLowerCase(Locale.ENGLISH))) {
+                    return lafType.getClassName();
+                }
+            }
+        }
+        return name;
+    }
+    
     public static final LookAndFeelType getLAF() {
         if(lookAndFeelType==null) {
             try {
@@ -409,74 +470,32 @@ public final class UiUtils {
                 LogManager.log(e);
             }
             lookAndFeelType = LookAndFeelType.DEFAULT;
-            
-            if(UiMode.getCurrentUiMode() == UiMode.SWING) {
+
+            if (UiMode.getCurrentUiMode() == UiMode.SWING) {
                 LookAndFeel laf = UIManager.getLookAndFeel();
-                if(laf!=null) {
+                if (laf != null) {
                     String id = laf.getID();
-                    if(id.equals("Windows")) {
-                        final Object object = Toolkit.
-                                getDefaultToolkit().
-                                getDesktopProperty(WINDOWS_XP_THEME_MARKER_PROPERTY);
-                        boolean xpThemeActive = false;
-                        if (object != null) {
-                            xpThemeActive = (Boolean) object;
+                    for (LookAndFeelType type : LookAndFeelType.values()) {
+                        if (id.equals(LookAndFeelType.WINDOWS_XP.getId()) ||
+                                id.equals(LookAndFeelType.WINDOWS_CLASSIC.getId())) {
+                            final Object object = Toolkit.getDefaultToolkit().
+                                    getDesktopProperty(WINDOWS_XP_THEME_MARKER_PROPERTY);
+                            boolean xpThemeActive = false;
+                            if (object != null) {
+                                xpThemeActive = (Boolean) object;
+                            }
+                            lookAndFeelType = (xpThemeActive) ? LookAndFeelType.WINDOWS_XP : LookAndFeelType.WINDOWS_CLASSIC;
+                            break;
+                        } else if (id.equals(type.getId())) {
+                            lookAndFeelType = type;
+                            break;
                         }
-                        lookAndFeelType = (xpThemeActive) ? LookAndFeelType.WINDOWS_XP :
-                            LookAndFeelType.WINDOWS_CLASSIC;
-                    } else if(id.equals("GTK")){
-                        lookAndFeelType = LookAndFeelType.GTK;
-                    } else if(id.equals("Motif")){
-                        lookAndFeelType = LookAndFeelType.MOTIF;
-                    }else if(id.equals("Metal")){
-                        lookAndFeelType = LookAndFeelType.METAL;
-                    } else if(id.equals("Aqua")){
-                        lookAndFeelType = LookAndFeelType.AQUA;
                     }
                 }
             }
         }
         return lookAndFeelType;
     }
-    // private //////////////////////////////////////////////////////////////////////
-    private static String extractName(
-            final String nameString,
-            final String prefix,
-            final String defaultValue) {
-        int i = nameString.indexOf(prefix);
-        int j = 0;
-        
-        if (i < 0) {
-            return defaultValue;
-        } else {
-            try {
-                // shift to the beginning of the prefix text
-                i = i + prefix.length();
-                
-                // check if it begins with a quote
-                if (nameString.charAt(i) == '\"') {
-                    // skip the quote
-                    i = i + 1;
-                    
-                    // search for another quote
-                    j = nameString.indexOf('\"', i);
-                } else {
-                    
-                    // no quote, so search for comma
-                    j = nameString.indexOf(',', i);
-                }
-                
-                if (j < 0) {
-                    return nameString.substring(i);
-                } else {
-                    return nameString.substring(i, j);
-                }
-            } catch (IndexOutOfBoundsException e) {
-                return defaultValue;
-            }
-        }
-    }
-    
     /////////////////////////////////////////////////////////////////////////////////
     // Instance
     private UiUtils() {
@@ -485,11 +504,6 @@ public final class UiUtils {
     
     /////////////////////////////////////////////////////////////////////////////////
     // Inner Classes
-    public static enum CertificateAcceptanceStatus {
-        ACCEPT_PERMANENTLY,
-        ACCEPT_FOR_THIS_SESSION,
-        DENY
-    }
     
     public static enum MessageType {
         INFORMATION,
@@ -499,20 +513,33 @@ public final class UiUtils {
     }
     
     public enum LookAndFeelType {
-        WINDOWS_XP("win.xp"),
-        WINDOWS_CLASSIC("win.classic"),
-        MOTIF("motif"),
-        GTK("gtk"),
-        METAL("metal"),
-        AQUA("aqua"),
-        DEFAULT("default");
+        WINDOWS_XP("win.xp", "Windows", "com.sun.java.swing.plaf.windows.WindowsLookAndFeel"),
+        WINDOWS_CLASSIC("win.classic", "Windows", "com.sun.java.swing.plaf.windows.WindowsLookAndFeel"),
+        MOTIF("motif", "Motif", "com.sun.java.swing.plaf.motif.MotifLookAndFeel"),
+        GTK("gtk", "GTK", "com.sun.java.swing.plaf.gtk.GTKLookAndFeel"),
+        METAL("metal", "Metal", "javax.swing.plaf.metal.MetalLookAndFeel"),
+        AQUA("aqua", "Aqua", "apple.laf.AquaLookAndFeel"),
+        NIMBUS("nimbus", "Nimbus", "com.sun.java.swing.plaf.nimbus.NimbusLookAndFeel"),
+        DEFAULT("default", null, null);
         
         private String name;
+        private String className;
+        private String id;
+        
+        @Override
         public String toString() {
             return name;
         }
-        private LookAndFeelType(String name) {
+        private LookAndFeelType(String name, String id, String className) {
             this.name = name;
+            this.id = id;
+            this.className = className;
+        }
+        public String getId() {
+            return id;
+        }
+        public String getClassName() {
+            return className;
         }
     };
     
@@ -572,4 +599,10 @@ public final class UiUtils {
             "UI.error.failed.to.init.ui";//NOI18N
     private static final String RESOURCE_FAILED_TO_FORCE_GTK =
             "UI.error.failed.to.force.gtk";//NOI18N
+    private static final String RESOURCE_SILENT_DEFAULT_YES = 
+            "UI.silent.default.yes";//NOI18N
+    private static final String RESOURCE_SILENT_DEFAULT_NO = 
+            "UI.silent.default.no";//NOI18N
+    private static final String RESOURCE_SILENT_DEFAULT_CANCEL = 
+            "UI.silent.default.cancel";//NOI18N
 }
