@@ -63,7 +63,6 @@ import org.netbeans.modules.cnd.loaders.CDataLoader;
 import org.netbeans.modules.cnd.loaders.FortranDataLoader;
 import org.netbeans.modules.cnd.loaders.HDataLoader;
 import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
-import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.netbeans.modules.cnd.settings.CppSettings;
@@ -325,7 +324,10 @@ public class Item implements NativeFileItem, PropertyChangeListener {
         MakeConfigurationDescriptor makeConfigurationDescriptor = getMakeConfigurationDescriptor();
         if (makeConfigurationDescriptor == null)
             return null;
-        return (MakeConfiguration)makeConfigurationDescriptor.getConfs().getActive();
+        Configurations confs = makeConfigurationDescriptor.getConfs();
+        if( confs == null )
+            return null;
+        return (MakeConfiguration)confs.getActive();
     }
     
     public NativeProject getNativeProject() {
@@ -343,12 +345,14 @@ public class Item implements NativeFileItem, PropertyChangeListener {
         ItemConfiguration itemConfiguration = getItemConfiguration(makeConfiguration);//ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(getPath()));
         if (itemConfiguration == null || !itemConfiguration.isCompilerToolConfiguration()) // FIXUP: sometimes itemConfiguration is null (should not happen)
             return vec;
-        CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(makeConfiguration.getCompilerSet().getValue());
+        CompilerSet compilerSet = makeConfiguration.getCompilerSet().getCompilerSet();
+        if (compilerSet == null)
+            return vec;
         BasicCompiler compiler = (BasicCompiler)compilerSet.getTool(itemConfiguration.getTool());
         BasicCompilerConfiguration compilerConfiguration = itemConfiguration.getCompilerConfiguration();
         if (compilerConfiguration instanceof CCCCompilerConfiguration) {
             // Get include paths from compiler
-            if( compiler != null ) {
+            if( compiler != null  && compiler.getPath() != null && compiler.getPath().length() > 0) {
                 vec.addAll(compiler.getSystemIncludeDirectories());
             }
         }
@@ -361,8 +365,9 @@ public class Item implements NativeFileItem, PropertyChangeListener {
         ItemConfiguration itemConfiguration = getItemConfiguration(makeConfiguration);//ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(getPath()));
         if (itemConfiguration == null || !itemConfiguration.isCompilerToolConfiguration()) // FIXUP: sometimes itemConfiguration is null (should not happen)
             return vec;
-        CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(makeConfiguration.getCompilerSet().getValue());
-        BasicCompiler compiler = (BasicCompiler)compilerSet.getTool(itemConfiguration.getTool());
+        CompilerSet compilerSet = makeConfiguration.getCompilerSet().getCompilerSet();
+        if (compilerSet == null)
+            return vec;
         BasicCompilerConfiguration compilerConfiguration = itemConfiguration.getCompilerConfiguration();
         if (compilerConfiguration instanceof CCCCompilerConfiguration) {
             // Get include paths from project/file
@@ -392,11 +397,13 @@ public class Item implements NativeFileItem, PropertyChangeListener {
         ItemConfiguration itemConfiguration = getItemConfiguration(makeConfiguration); //ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(getPath()));
         if (itemConfiguration == null || !itemConfiguration.isCompilerToolConfiguration()) // FIXUP: itemConfiguration should never be null
             return vec;
-        CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(makeConfiguration.getCompilerSet().getValue());
+        CompilerSet compilerSet = makeConfiguration.getCompilerSet().getCompilerSet();
+        if (compilerSet == null)
+            return vec;
         BasicCompiler compiler = (BasicCompiler)compilerSet.getTool(itemConfiguration.getTool());
         BasicCompilerConfiguration compilerConfiguration = itemConfiguration.getCompilerConfiguration();
         if (compilerConfiguration instanceof CCCCompilerConfiguration) {
-            if( compiler != null ) {
+            if( compiler != null && compiler.getPath() != null && compiler.getPath().length() > 0) {
                 // Get macro definitions from compiler
                 vec.addAll(compiler.getSystemPreprocessorSymbols());
             }
@@ -410,21 +417,21 @@ public class Item implements NativeFileItem, PropertyChangeListener {
         ItemConfiguration itemConfiguration = getItemConfiguration(makeConfiguration); //ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(getPath()));
         if (itemConfiguration == null || !itemConfiguration.isCompilerToolConfiguration()) // FIXUP: itemConfiguration should never be null
             return vec;
-        CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSet(makeConfiguration.getCompilerSet().getValue());
-        BasicCompiler compiler = (BasicCompiler)compilerSet.getTool(itemConfiguration.getTool());
+        CompilerSet compilerSet = makeConfiguration.getCompilerSet().getCompilerSet();
+        if (compilerSet == null)
+            return vec;
         BasicCompilerConfiguration compilerConfiguration = itemConfiguration.getCompilerConfiguration();
         if (compilerConfiguration instanceof CCCCompilerConfiguration) {
-            // get macro definitions from project/file
             CCCCompilerConfiguration cccCompilerConfiguration = (CCCCompilerConfiguration)compilerConfiguration;
             CCCCompilerConfiguration master = (CCCCompilerConfiguration)cccCompilerConfiguration.getMaster();
             while (master != null && cccCompilerConfiguration.getInheritPreprocessor().getValue()) {
-                vec.addAll(master.getPreprocessorConfiguration().getValuesAsList());
-                if (master.getInheritPreprocessor().getValue())
+                vec.addAll(master.getPreprocessorConfiguration().getValue());
+                if (master.getInheritIncludes().getValue())
                     master = (CCCCompilerConfiguration)master.getMaster();
                 else
                     master = null;
             }
-            vec.addAll(cccCompilerConfiguration.getPreprocessorConfiguration().getValuesAsList());
+            vec.addAll(cccCompilerConfiguration.getPreprocessorConfiguration().getValue());
         }
         return vec;
     }
@@ -484,4 +491,10 @@ public class Item implements NativeFileItem, PropertyChangeListener {
         }
         return true;
     }
+
+    @Override
+    public String toString() {
+        return path;
+    }
+
 }
