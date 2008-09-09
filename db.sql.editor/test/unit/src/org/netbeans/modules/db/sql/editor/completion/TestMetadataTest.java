@@ -37,37 +37,64 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.metadata.model.spi;
+package org.netbeans.modules.db.sql.editor.completion;
 
-import java.util.Collection;
-import org.netbeans.modules.db.metadata.model.MetadataAccessor;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import org.netbeans.modules.db.metadata.model.api.Catalog;
 import org.netbeans.modules.db.metadata.model.api.Schema;
+import org.netbeans.modules.db.metadata.model.test.api.MetadataTestBase;
 
 /**
  *
  * @author Andrei Badea
  */
-public abstract class CatalogImplementation {
+public class TestMetadataTest extends MetadataTestBase {
 
-    private Catalog catalog;
-
-    public final Catalog getCatalog() {
-        if (catalog == null) {
-            catalog = MetadataAccessor.getDefault().createCatalog(this);
-        }
-        return catalog;
+    public TestMetadataTest(String name) {
+        super(name);
     }
 
-    public abstract String getName();
+    public void testSimple() throws Exception {
+        TestMetadata metadata = new TestMetadata(new String[] {
+                "schema1*",
+                "  table2",
+                "    col3",
+                "    col4",
+                "schema5",
+                "  table6",
+                "    col7",
+                "    col8"
+        });
+        Catalog defaultCatalog = metadata.getDefaultCatalog();
+        assertNames(new HashSet<String>(Arrays.asList("schema1", "schema5")), defaultCatalog.getSchemas());
+        Schema defaultSchema = defaultCatalog.getDefaultSchema();
+        assertEquals("schema1", defaultSchema.getName());
+        assertNames(Collections.singleton("table2"), defaultSchema.getTables());
+        assertNames(Arrays.asList("col7", "col8"), defaultCatalog.getSchema("schema5").getTable("table6").getColumns());
 
-    public abstract boolean isDefault();
+        try {
+            new TestMetadata(new String[] {
+                    "schema1"
+            });
+            fail();
+        } catch (IllegalArgumentException e) {
+        }
+    }
 
-    public abstract Schema getDefaultSchema();
-
-    public abstract Schema getSyntheticSchema();
-
-    public abstract Collection<Schema> getSchemas();
-
-    public abstract Schema getSchema(String name);
+    public void testNoSchema() throws Exception {
+        TestMetadata metadata = new TestMetadata(new String[] {
+                "<no-schema>",
+                "  table1",
+                "  table2"
+        });
+        Catalog defaultCatalog = metadata.getDefaultCatalog();
+        Schema defaultSchema = defaultCatalog.getDefaultSchema();
+        assertTrue(defaultSchema.isSynthetic());
+        assertTrue(defaultSchema.isDefault());
+        assertSame(defaultSchema, defaultCatalog.getSyntheticSchema());
+        assertEquals(0, defaultCatalog.getSchemas().size());
+        assertNames(Arrays.asList("table1", "table2"), defaultSchema.getTables());
+    }
 }

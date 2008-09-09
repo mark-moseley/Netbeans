@@ -37,37 +37,62 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.metadata.model.spi;
+package org.netbeans.modules.db.metadata.model.api;
 
 import java.util.Collection;
-import org.netbeans.modules.db.metadata.model.MetadataAccessor;
-import org.netbeans.modules.db.metadata.model.api.Catalog;
-import org.netbeans.modules.db.metadata.model.api.Schema;
+import org.netbeans.modules.db.metadata.model.spi.CatalogImplementation;
 
 /**
  *
  * @author Andrei Badea
  */
-public abstract class CatalogImplementation {
+public class Catalog extends MetadataObject {
 
-    private Catalog catalog;
+    final CatalogImplementation impl;
 
-    public final Catalog getCatalog() {
-        if (catalog == null) {
-            catalog = MetadataAccessor.getDefault().createCatalog(this);
-        }
-        return catalog;
+    Catalog(CatalogImplementation impl) {
+        this.impl = impl;
     }
 
-    public abstract String getName();
+    public String getName() {
+        return impl.getName();
+    }
 
-    public abstract boolean isDefault();
+    public boolean isDefault() {
+        return impl.isDefault();
+    }
 
-    public abstract Schema getDefaultSchema();
+    /**
+     * @return the default schema or null.
+     * @throws MetadataException.
+     */
+    public Schema getDefaultSchema() {
+        return impl.getDefaultSchema();
+    }
 
-    public abstract Schema getSyntheticSchema();
+    public Schema getSyntheticSchema() {
+        return impl.getSyntheticSchema();
+    }
 
-    public abstract Collection<Schema> getSchemas();
+    /**
+     * @return the schemas.
+     * @throws MetadataException.
+     */
+    public Collection<Schema> getSchemas() {
+        return impl.getSchemas();
+    }
 
-    public abstract Schema getSchema(String name);
+    /**
+     * @param name a schema name.
+     * @return a schema named {@code name} or null.
+     * @throws MetadataException.
+     */
+    public Schema getSchema(String name) {
+        return impl.getSchema(name);
+    }
+
+    @Override
+    public String toString() {
+        return "Catalog[name='" + impl.getName() + "',default=" + isDefault() + "]"; // NOI18N
+    }
 }
