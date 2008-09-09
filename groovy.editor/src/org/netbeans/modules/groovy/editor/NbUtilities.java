@@ -38,7 +38,8 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
+
+package org.netbeans.modules.groovy.editor;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -46,6 +47,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -54,9 +56,9 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.StyledDocument;
-import org.netbeans.api.editor.EditorRegistry;
+import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.editor.BaseDocument;
-
 import org.openide.ErrorManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.LineCookie;
@@ -67,9 +69,12 @@ import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.nodes.Node;
 import org.openide.text.Line;
 import org.openide.text.NbDocument;
 import org.openide.util.Exceptions;
+import org.openide.windows.TopComponent;
+import org.netbeans.api.editor.EditorRegistry;
 
 
 /**
@@ -198,7 +203,6 @@ public class NbUtilities {
 
                         if (l != null) {
                             l.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.FOCUS, column);
-
                             return true;
                         }
                     }
@@ -250,7 +254,7 @@ public class NbUtilities {
         while ((je = jis.getNextEntry()) != null) {
             String name = je.getName();
 
-            if (name.toLowerCase().startsWith("meta-inf/")) {
+            if (name.toLowerCase(Locale.ENGLISH).startsWith("meta-inf/")) {
                 continue; // NOI18N
             }
 
@@ -287,46 +291,35 @@ public class NbUtilities {
         return doc.getProperty(EDITING_TEMPLATE_DOC_PROPERTY) == Boolean.TRUE ||
                 doc.getProperty(CT_HANDLER_DOC_PROPERTY) != null;
     }
+    /**
+     * Return substring after last dot.
+     * @param fqn fully qualified type name
+     * @return singe typename without package, or method without type
+     */
+    public static String stripPackage(String fqn) {
 
-    public static BaseDocument getBaseDocument(FileObject fileObject, boolean forceOpen) {
-        DataObject dobj;
-
-        try {
-            dobj = DataObject.find(fileObject);
-
-            EditorCookie ec = dobj.getCookie(EditorCookie.class);
-
-            if (ec == null) {
-                throw new IOException("Can't open " + fileObject.getNameExt());
-            }
-
-            Document document;
-
-            if (forceOpen) {
-                document = ec.openDocument();
-            } else {
-                document = ec.getDocument();
-            }
-
-            if (document instanceof BaseDocument) {
-                return ((BaseDocument)document);
-            } else {
-                // Must be testsuite execution
-                try {
-                    Class c = Class.forName("org.netbeans.modules.ruby.RubyTestBase");
-                    if (c != null) {
-                        @SuppressWarnings("unchecked")
-                        java.lang.reflect.Method m = c.getMethod("getDocumentFor", new Class[] { FileObject.class });
-                        return (BaseDocument) m.invoke(null, (Object[])new FileObject[] { fileObject });
-                    }
-                } catch (Exception ex) {
-                    Exceptions.printStackTrace(ex);
-                }
-            }
-        } catch (IOException ioe) {
-            Exceptions.printStackTrace(ioe);
+        if (fqn.contains(".")) {
+            int idx = fqn.lastIndexOf(".");
+            fqn = fqn.substring(idx + 1);
         }
 
-        return null;
+        // every now and than groovy comes with tailing
+        // semicolons. We got to get rid of them.
+
+        return fqn.replace(";", "");
+            }
+
+    public static ClasspathInfo getClasspathInfoForFileObject ( FileObject fo) {
+        
+        ClassPath bootPath = ClassPath.getClassPath(fo, ClassPath.BOOT);
+        ClassPath compilePath = ClassPath.getClassPath(fo, ClassPath.COMPILE);
+        ClassPath srcPath = ClassPath.getClassPath(fo, ClassPath.SOURCE);
+
+        if (bootPath == null || compilePath == null || srcPath == null) {
+            return null;
+        }
+        
+        return ClasspathInfo.create(bootPath, compilePath, srcPath);
     }
+    
 }

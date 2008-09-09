@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.php.editor.index;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -198,7 +198,6 @@ public class NbUtilities {
 
                         if (l != null) {
                             l.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.FOCUS, column);
-
                             return true;
                         }
                     }
@@ -313,7 +312,7 @@ public class NbUtilities {
             } else {
                 // Must be testsuite execution
                 try {
-                    Class c = Class.forName("org.netbeans.modules.ruby.RubyTestBase");
+                    Class c = Class.forName("org.netbeans.modules.php.editor.PHPTestBase");
                     if (c != null) {
                         @SuppressWarnings("unchecked")
                         java.lang.reflect.Method m = c.getMethod("getDocumentFor", new Class[] { FileObject.class });
