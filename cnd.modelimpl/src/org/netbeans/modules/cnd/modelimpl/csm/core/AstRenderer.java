@@ -98,7 +98,7 @@ public class AstRenderer {
                 }
                 case CPPTokenTypes.CSM_ENUM_DECLARATION:
                 {
-                    CsmEnum csmEnum = EnumImpl.create(token, currentNamespace, file);
+                    CsmEnum csmEnum = EnumImpl.create(token, currentNamespace, file, !isRenderingLocalContext());
                     container.addDeclaration(csmEnum);
                     renderVariableInClassifier(token, csmEnum, currentNamespace, container);
                     break;
@@ -453,9 +453,13 @@ public class AstRenderer {
 	if( token != null ) {
             AST ast = token;
 	    token = token.getFirstChild();
-	    switch( token.getType() ) {
-	    	case CPPTokenTypes.CSM_TYPE_BUILTIN:
-	    	case CPPTokenTypes.CSM_TYPE_COMPOUND:
+            if(token != null) {
+                boolean _static = false;
+                if (isQualifier(token.getType())) {
+                    _static = AstUtil.hasChildOfType(token, CPPTokenTypes.LITERAL_static);
+                    token = getFirstSiblingSkipQualifiers(token);
+                }
+                if (token != null && (token.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN || token.getType() == CPPTokenTypes.CSM_TYPE_COMPOUND)) {
 		    AST typeToken = token;
 		    AST next = token.getNextSibling();
 		    while( next != null && next.getType() == CPPTokenTypes.CSM_PTR_OPERATOR ) {
@@ -471,7 +475,7 @@ public class AstRenderer {
                         String name = next.getText();
                         
                         if(!fakeRegistration) {
-                            VariableImpl var = createVariable(next, file, type, name, false, currentNamespace, container, null);
+                            VariableImpl var = createVariable(next, file, type, name, _static, currentNamespace, container, null);
                             if (currentNamespace != null) {
                                 currentNamespace.addDeclaration(var);
                             }
@@ -490,10 +494,9 @@ public class AstRenderer {
                                 return true;
                             }
                         }
-		    }
-		    break;
-		
-	    }
+		    }                    
+                }
+            }
 	}
 	return false;
     }
@@ -705,7 +708,7 @@ public class AstRenderer {
                             case CPPTokenTypes.LITERAL_enum:
                                 if (AstUtil.findSiblingOfType(curr, CPPTokenTypes.RCURLY) != null) {
                                     if (container instanceof CsmScope) {
-                                        ei = EnumImpl.create(curr, (CsmScope) container, file);
+                                        ei = EnumImpl.create(curr, (CsmScope) container, file, !isRenderingLocalContext());
                                         if (container instanceof MutableDeclarationsContainer) {
                                             ((MutableDeclarationsContainer) container).addDeclaration(ei);
                                         }
