@@ -49,7 +49,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,6 +56,7 @@ import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 import javax.swing.plaf.TextUI;
+import javax.swing.text.Document;
 import javax.swing.text.EditorKit;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.Keymap;
@@ -64,7 +64,6 @@ import javax.swing.text.html.HTMLDocument;
 
 import org.netbeans.editor.*;
 import org.netbeans.editor.ext.ExtKit;
-import org.netbeans.editor.ext.ExtSettingsDefaults;
 import org.netbeans.spi.editor.completion.CompletionDocumentation;
 
 import org.openide.awt.HtmlBrowser;
@@ -87,12 +86,14 @@ public class DocumentationScrollPane extends JScrollPane {
     private static final String JAVADOC_FORWARD = "javadoc-forward"; //NOI18N    
     private static final String JAVADOC_OPEN_IN_BROWSER = "javadoc-open-in-browser"; //NOI18N    
     private static final String JAVADOC_OPEN_SOURCE = "javadoc-open-source"; //NOI18N    
+    private static final String COPY_TO_CLIPBOARD = "copy-to-clipboard";
     
     private static final int ACTION_JAVADOC_ESCAPE = 0;
     private static final int ACTION_JAVADOC_BACK = 1;
     private static final int ACTION_JAVADOC_FORWARD = 2;
     private static final int ACTION_JAVADOC_OPEN_IN_BROWSER = 3;
     private static final int ACTION_JAVADOC_OPEN_SOURCE = 4;
+    private static final int ACTION_JAVADOC_COPY = 5;
 
     private JButton bBack, bForward, bGoToSource, bShowWeb;    
     private HTMLDocView view;
@@ -109,21 +110,15 @@ public class DocumentationScrollPane extends JScrollPane {
         super();
  
         // Determine and use fixed preferred size
-        documentationPreferredSize = CompletionSettings.INSTANCE.documentationPopupPreferredSize();
+        documentationPreferredSize = CompletionSettings.getInstance().documentationPopupPreferredSize();
         setPreferredSize(null); // Use the documentationPopupPreferredSize
         
-        Color bgColor = CompletionSettings.INSTANCE.documentationBackgroundColor();
+        Color bgColor = new JEditorPane().getBackground();
+        bgColor = new Color(
+                Math.max(bgColor.getRed() - 8, 0 ), 
+                Math.max(bgColor.getGreen() - 8, 0 ), 
+                bgColor.getBlue());
         
-        // XXX Workaround. If the option is set to default use system settings.
-        // The bg color oprion should die.
-        if (ExtSettingsDefaults.defaultJavaDocBGColor.equals(bgColor)) {
-            bgColor = new JEditorPane().getBackground();
-            bgColor = new Color(
-                    Math.max(bgColor.getRed() - 8, 0 ), 
-                    Math.max(bgColor.getGreen() - 8, 0 ), 
-                    bgColor.getBlue());
-        }
-                
         // Add the completion doc view
         view = new HTMLDocView(bgColor);
         view.addHyperlinkListener(new HyperlinkAction());
@@ -131,10 +126,10 @@ public class DocumentationScrollPane extends JScrollPane {
         
         installTitleComponent();
         installKeybindings(editorComponent);
-        setFocusable(false);
+        setFocusable(true);
     }
     
-    public void setPreferredSize(Dimension preferredSize) {
+    public @Override void setPreferredSize(Dimension preferredSize) {
         if (preferredSize == null) {
             preferredSize = documentationPreferredSize;
         }
@@ -226,9 +221,10 @@ public class DocumentationScrollPane extends JScrollPane {
         String text = currentDocumentation.getText();
         URL url = currentDocumentation.getURL();
         if (text != null){
+            Document document = view.getDocument();
+            document.putProperty(Document.StreamDescriptionProperty, null);
             if (url!=null){
                 // fix of issue #58658
-                javax.swing.text.Document document = view.getDocument();
                 if (document instanceof HTMLDocument){
                     ((HTMLDocument)document).setBase(url);
                 }
@@ -295,6 +291,10 @@ public class DocumentationScrollPane extends JScrollPane {
         if (action != null)
             action.actionPerformed(new ActionEvent(currentDocumentation, 0, null));        
     }
+    
+    private void copy() {
+        view.copy();
+    }
 
     /** Attempt to find the editor keystroke for the given editor action. */
     private KeyStroke[] findEditorKeys(String editorActionName, KeyStroke defaultKey, JTextComponent component) {
@@ -302,12 +302,12 @@ public class DocumentationScrollPane extends JScrollPane {
         // #25715 - Attempt to search keymap for the keybinding that logically corresponds to the action
         KeyStroke[] ret = new KeyStroke[] { defaultKey };
         if (component != null) {
-            TextUI ui = component.getUI();
+            TextUI componentUI = component.getUI();
             Keymap km = component.getKeymap();
-            if (ui != null && km != null) {
-                EditorKit kit = ui.getEditorKit(component);
+            if (componentUI != null && km != null) {
+                EditorKit kit = componentUI.getEditorKit(component);
                 if (kit instanceof BaseKit) {
-                    Action a = ((BaseKit)kit).getActionByName(editorActionName);
+                     Action a = ((BaseKit)kit).getActionByName(editorActionName);
                     if (a != null) {
                         KeyStroke[] keys = km.getKeyStrokesForAction(a);
                         if (keys != null && keys.length > 0) {
@@ -354,22 +354,25 @@ public class DocumentationScrollPane extends JScrollPane {
         KeyStroke.getKeyStroke(KeyEvent.VK_O, KeyEvent.ALT_MASK | KeyEvent.CTRL_MASK),
         null, component);
         
-        // Register movement keystrokes to be reachable through Shift+<orig-keystroke>
-        mapWithShift(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0));
-        mapWithShift(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0));
-        mapWithShift(KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_UP, 0));
-        mapWithShift(KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_DOWN, 0));
-        mapWithShift(KeyStroke.getKeyStroke(KeyEvent.VK_HOME, KeyEvent.CTRL_MASK));
-        mapWithShift(KeyStroke.getKeyStroke(KeyEvent.VK_END, KeyEvent.CTRL_MASK));
-        mapWithShift(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0));
-        mapWithShift(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0));
+        //register copy action
+        registerKeybinding(ACTION_JAVADOC_COPY, COPY_TO_CLIPBOARD,
+        KeyStroke.getKeyStroke(KeyEvent.VK_C, KeyEvent.CTRL_MASK),
+        COPY_TO_CLIPBOARD, component);
+        
+        // Register movement keystrokes to be reachable through Ctrl+<orig-keystroke>
+        mapWithCtrl(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0));
+        mapWithCtrl(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0));
+        mapWithCtrl(KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_UP, 0));
+        mapWithCtrl(KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_DOWN, 0));
+        mapWithCtrl(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0));
+        mapWithCtrl(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0));
     }        
     
-    private void mapWithShift(KeyStroke key) {
+    private void mapWithCtrl(KeyStroke key) {
         InputMap inputMap = getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         Object actionKey = inputMap.get(key);
         if (actionKey != null) {
-            key = KeyStroke.getKeyStroke(key.getKeyCode(), key.getModifiers() | InputEvent.SHIFT_MASK);
+            key = KeyStroke.getKeyStroke(key.getKeyCode(), key.getModifiers() | InputEvent.CTRL_MASK);
             getInputMap().put(key, actionKey);
         }
     }
@@ -392,7 +395,7 @@ public class DocumentationScrollPane extends JScrollPane {
             setFocusPainted(false);
         }
 
-        public void setEnabled(boolean b) {
+        public @Override void setEnabled(boolean b) {
             super.setEnabled(b);
         }
         
@@ -406,18 +409,18 @@ public class DocumentationScrollPane extends JScrollPane {
             this.button = button;
         }
         
-        public void mouseEntered(MouseEvent ev) {
+        public @Override void mouseEntered(MouseEvent ev) {
             if (button.isEnabled()){
                 button.setContentAreaFilled(true);
                 button.setBorderPainted(true);
             }
         }
-        public void mouseExited(MouseEvent ev) {
+        public @Override void mouseExited(MouseEvent ev) {
             button.setContentAreaFilled(false);
             button.setBorderPainted(false);
         }
         
-        public void mouseClicked(MouseEvent evt) {
+        public @Override void mouseClicked(MouseEvent evt) {
             if (button.equals(bBack)){
                 backHistory();
             }else if(button.equals(bForward)){
@@ -437,43 +440,10 @@ public class DocumentationScrollPane extends JScrollPane {
                 final String desc = e.getDescription();
                 if (desc != null) {
                     CompletionDocumentation doc = currentDocumentation.resolveLink(desc);
-                    if (doc == null) {
-                        try {
-                            URL url = currentDocumentation.getURL();
-                            url =  url != null ? new URL(url, desc) : new URL(desc);
-                            doc = new DefaultDoc(url);
-                        } catch (MalformedURLException ex) {                            
-                        }
-                    }
                     if (doc != null)
                         setData(doc);
                 }                    
             }
-        }
-    }
-    
-    private class DefaultDoc implements CompletionDocumentation {
-        
-        private URL url = null;
-        
-        private DefaultDoc(URL url) {
-            this.url = url;
-        }
-    
-        public String getText() {
-            return null;
-        }
-        
-        public URL getURL() {
-            return url;
-        }
-        
-        public CompletionDocumentation resolveLink(String link) {
-            return null;
-        }
-        
-        public Action getGotoSourceAction() {
-            return null;
         }
     }
     
@@ -500,6 +470,9 @@ public class DocumentationScrollPane extends JScrollPane {
                     break;
                 case ACTION_JAVADOC_OPEN_SOURCE:
                     goToSource();
+                    break;
+                case ACTION_JAVADOC_COPY:
+                    copy();
                     break;
             }
             
