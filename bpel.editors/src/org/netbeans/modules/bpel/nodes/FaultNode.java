@@ -19,10 +19,11 @@
 package org.netbeans.modules.bpel.nodes;
 
 import javax.xml.namespace.QName;
+import org.netbeans.modules.bpel.editors.api.EditorUtil;
 import org.netbeans.modules.bpel.editors.api.nodes.NodeType;
+import org.netbeans.modules.bpel.model.ext.Extensions;
 import org.netbeans.modules.bpel.properties.BpelStandardFaults;
 import org.netbeans.modules.bpel.properties.ResolverUtility;
-import org.netbeans.modules.bpel.properties.Util;
 import org.netbeans.modules.bpel.properties.editors.controls.filter.PreferredFaultFilter;
 import org.openide.nodes.Children;
 import org.openide.util.Lookup;
@@ -45,11 +46,14 @@ public class FaultNode extends BpelNode<QName> {
         return NodeType.FAULT;
     }
     
+    @Override
     protected String getNameImpl() {
         String name = null;
         QName ref = getReference();
         String namespace = ref.getNamespaceURI();
         if (BpelStandardFaults.BPEL_2_0_NS.equals(namespace)) {
+            name = ref.getLocalPart();
+        } else if (Extensions.ERROR_EXT_URI.equals(namespace)) {
             name = ref.getLocalPart();
         } else {
             name = ResolverUtility.qName2DisplayText(ref);
@@ -58,6 +62,7 @@ public class FaultNode extends BpelNode<QName> {
         return (name != null) ? name : "";
     }
     
+    @Override
     protected String getImplHtmlDisplayName() {
         String result = super.getImplHtmlDisplayName();
         PreferredFaultFilter filter = (PreferredFaultFilter)getLookup().
@@ -68,7 +73,7 @@ public class FaultNode extends BpelNode<QName> {
             // the Reply property dialog
             QName faultName = getReference();
             if (filter.isFaultPreferred(faultName)) {
-                result = Util.getAccentedString(result);
+                result = EditorUtil.getAccentedString(result);
             }
         }
         //
