@@ -47,6 +47,7 @@ import java.beans.IntrospectionException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -70,6 +71,9 @@ import org.openide.actions.MoveUpAction;
 import org.openide.actions.PropertiesAction;
 import org.openide.actions.ReorderAction;
 import org.openide.actions.ToolsAction;
+import org.openide.filesystems.FileChangeAdapter;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
@@ -89,6 +93,7 @@ import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
+import org.openide.util.NotImplementedException;
 import org.openide.util.RequestProcessor;
 import org.openide.util.TopologicalSortException;
 import org.openide.util.Utilities;
@@ -624,32 +629,39 @@ public final class LoaderPoolNode extends AbstractNode {
     
     // I/O with loaders.ser; moved from NbProjectOperation:
     public static void store() throws IOException {
+        if (modifiedLoaders.isEmpty()) {
+            return;
+        }
+
         FileObject ser = getLoaderPoolStorage(true);
-        FileLock lock = ser.lock();
+        OutputStream os = ser.getOutputStream();
         try {
-            ObjectOutputStream oos = new NbObjectOutputStream(ser.getOutputStream(lock));
-            try {
-                NbObjectOutputStream.writeSafely(oos, getNbLoaderPool());
-            } finally {
-                oos.close();
-            }
+            ObjectOutputStream oos = new NbObjectOutputStream(os);
+            NbObjectOutputStream.writeSafely(oos, getNbLoaderPool());
+            oos.flush();
+            oos.close();
         } finally {
-            lock.releaseLock();
+            os.close();
         }
     }
     public static void load() throws IOException {
         FileObject ser = getLoaderPoolStorage(false);
         if (ser != null) {
-            ObjectInputStream ois = new NbObjectInputStream(ser.getInputStream());
             try {
-                NbObjectInputStream.readSafely(ois);
-            } finally {
-                ois.close();
+                ObjectInputStream ois = new NbObjectInputStream(ser.getInputStream());
+                try {
+                    NbObjectInputStream.readSafely(ois);
+                } finally {
+                    ois.close();
+                }
+            } catch (IOException x) {
+                ser.delete(); // #144158: probably not valuable, just kill it
+                throw x;
             }
         }
     }
     private static final String LOADER_POOL_NAME = "loaders.ser"; // NOI18N
-    public static FileObject getLoaderPoolStorage(boolean create) throws IOException {
+    private static FileObject getLoaderPoolStorage(boolean create) throws IOException {
         FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
         FileObject fo = sfs.findResource(LOADER_POOL_NAME);
         if (fo == null && create) {
@@ -737,7 +749,6 @@ public final class LoaderPoolNode extends AbstractNode {
         return nbLoaderPool;
     }
     private static NbLoaderPool nbLoaderPool = null;
-
 
     /***** Inner classes **************/
 
@@ -867,6 +878,7 @@ public final class LoaderPoolNode extends AbstractNode {
     public static final class NbLoaderPool extends DataLoaderPool
     implements PropertyChangeListener, Runnable, LookupListener {
         private static final long serialVersionUID =-8488524097175567566L;
+        static boolean IN_TEST = false;
 
         private transient RequestProcessor.Task fireTask;
 
@@ -876,7 +888,22 @@ public final class LoaderPoolNode extends AbstractNode {
         public NbLoaderPool() {
             fireTask = rp.create(this, true);
             mimeResolvers = Lookup.getDefault().lookupResult(MIMEResolver.class);
-            mimeResolvers.addLookupListener(this);            
+            mimeResolvers.addLookupListener(this);
+            listenToDeclarativeResolvers();
+        }
+        private final FileChangeListener listener = new FileChangeAdapter() {
+            public @Override void fileDataCreated(FileEvent ev) {
+                maybeFireChangeEvent();
+            }
+            public @Override void fileDeleted(FileEvent ev) {
+                maybeFireChangeEvent();
+            }
+        };
+        private void listenToDeclarativeResolvers() {
+            FileObject resolvers = Repository.getDefault().getDefaultFileSystem().findResource("Services/MIMEResolver"); // NOI18N
+            if (resolvers != null) { // might be inside test which overrides SFS?
+                resolvers.addFileChangeListener(listener);
+            }
         }
 
         /** Enumerates all loaders. Loaders are taken from children
@@ -952,7 +979,11 @@ public final class LoaderPoolNode extends AbstractNode {
         }
 
         public void resultChanged(LookupEvent ev) {
-            if (org.netbeans.core.startup.Main.isInitialized()) {
+            maybeFireChangeEvent();
+        }
+
+        private void maybeFireChangeEvent() {
+            if (IN_TEST || org.netbeans.core.startup.Main.isInitialized()) {
                 superFireChangeEvent();
             }
         }
