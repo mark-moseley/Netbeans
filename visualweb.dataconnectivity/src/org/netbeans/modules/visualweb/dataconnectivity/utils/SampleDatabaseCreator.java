@@ -50,9 +50,10 @@ package org.netbeans.modules.visualweb.dataconnectivity.utils;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.filesystems.FileLock;
@@ -117,13 +118,13 @@ public class SampleDatabaseCreator {
         FileObject systemHomeFO = FileUtil.toFileObject(systemHomeFile);
         // Partial fix for Issue 121195.  If toFileObject can't find the file on disk, it returns null
         if (systemHomeFO == null) {
-            LOGGER.log(Level.WARNING, org.openide.util.NbBundle.getMessage(SampleDatabaseCreator.class, "MSG_DERBY_SYSTEM_FOLDER_NOT_FOUND")); // NOI18N
-            throw new FileNotFoundException(org.openide.util.NbBundle.getMessage(SampleDatabaseCreator.class, "MSG_DERBY_SYSTEM_FOLDER_NOT_FOUND") + systemHomeFile.getCanonicalPath()); // NOI18N
-        }
-        FileObject sampleFO = systemHomeFO.getFileObject(databaseName); // NOI18N
-        if (sampleFO == null) {
-            sampleFO = systemHomeFO.createFolder(databaseName);
-            this.extractZip(sourceFO, sampleFO);
+            LOGGER.log(Level.WARNING, org.openide.util.NbBundle.getMessage(SampleDatabaseCreator.class, "MSG_DERBY_SYSTEM_FOLDER_NOT_FOUND")); // NOI18N                  
+        } else {
+            FileObject sampleFO = systemHomeFO.getFileObject(databaseName); // NOI18N
+            if (sampleFO == null) {
+                sampleFO = systemHomeFO.createFolder(databaseName);
+                extractZip(sourceFO, sampleFO);
+            }
         }
     }
 
@@ -137,7 +138,11 @@ public class SampleDatabaseCreator {
             throw new IllegalStateException("The " + DRIVER_DISP_NAME_NET + " driver was not found"); // NOI18N
         }
         DatabaseConnection dbconn = DatabaseConnection.create(drivers[0], "jdbc:derby://" + server + ":" + port + "/" + databaseName, user, schema, password, rememberPassword); // NOI18N
-        ConnectionManager.getDefault().addConnection(dbconn);
+        DatabaseConnection[] dbconns = ConnectionManager.getDefault().getConnections();
+        List dbconnsList = Arrays.asList(dbconns);
+        if (!dbconnsList.contains(dbconn.getName())) {
+            ConnectionManager.getDefault().addConnection(dbconn);
+        }
         return dbconn;
     }
 
