@@ -46,8 +46,6 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
@@ -167,21 +165,19 @@ public class RubyExecution extends ExecutionService {
             // Additional execution flags specified in the JRuby startup script:
             argvList.add("-Xverify:none"); // NOI18N
             argvList.add("-da"); // NOI18N
-            
-            String extraArgs = System.getenv("JRUBY_EXTRA_VM_ARGS"); // NOI18N
 
             String javaMemory = "-Xmx512m"; // NOI18N
             String javaStack = "-Xss1024k"; // NOI18N
-            
-            if (extraArgs != null) {
-                if (extraArgs.indexOf("-Xmx") != -1) { // NOI18N
-                    javaMemory = null;
-                }
-                if (extraArgs.indexOf("-Xss") != -1) { // NOI18N
-                    javaStack = null;
-                }
-                String[] jrubyArgs = Utilities.parseParameters(extraArgs);
-                for (String arg : jrubyArgs) {
+
+            String[] jvmArgs = descriptor == null ? null : descriptor.getJVMArguments();
+            if (jvmArgs != null) {
+                for (String arg : jvmArgs) {
+                    if (arg.contains("-Xmx")) { // NOI18N
+                        javaMemory = null;
+                    }
+                    if (arg.contains("-Xss")) { // NOI18N
+                        javaStack = null;
+                    }
                     argvList.add(arg);
                 }
             }
@@ -310,24 +306,6 @@ public class RubyExecution extends ExecutionService {
         }
         
         return javaHome;
-    }
-
-    /**
-     * Add settings in the environment appropriate for running JRuby:
-     * add the given directory into the path, and set up JRUBY_HOME
-     */
-    public @Override void setupProcessEnvironment(Map<String, String> env) {
-        super.setupProcessEnvironment(env);
-
-        // In case we're launching JRuby:
-        RubyPlatform platform = descriptor.getPlatform();
-        if (platform.isJRuby()) {
-            File rubyHome = platform.getHome();
-            String jrubyHome = rubyHome.getAbsolutePath();
-            env.put("JRUBY_HOME", jrubyHome); // NOI18N
-            env.put("JRUBY_BASE", jrubyHome); // NOI18N
-            env.put("JAVA_HOME", getJavaHome()); // NOI18N
-        }
     }
     
     /** Package-private for unit test. */
