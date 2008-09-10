@@ -61,6 +61,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.Repository;
+import org.openide.util.RequestProcessor;
 import org.openide.util.WeakListeners;
 
 /**
@@ -169,11 +170,14 @@ public final class ProfilesTracker {
         private final String id;
         private final String displayName;
         private final boolean isRollbackAllowed;
+        // for logging only
+        private final String profileOrigin;
         
-        private ProfileDescription(String id, String displayName, boolean isRollbackAllowed) {
+        private ProfileDescription(String id, String displayName, boolean isRollbackAllowed, String profileOrigin) {
             this.id = id;
             this.displayName = displayName;
             this.isRollbackAllowed = isRollbackAllowed;
+            this.profileOrigin = profileOrigin;
         }
         
         public boolean isRollbackAllowed() {
@@ -207,22 +211,28 @@ public final class ProfilesTracker {
     private Map<String, ProfileDescription> profiles = Collections.<String, ProfileDescription>emptyMap();
     private Map<String, ProfileDescription> profilesByDisplayName = Collections.<String, ProfileDescription>emptyMap();
     
+    private final RequestProcessor.Task task = RequestProcessor.getDefault().create(new Runnable() {
+        public void run() {
+            rebuild();
+        }
+    });
+    
     private void rebuild() {
         PropertyChangeEvent event = null;
-        
+
         synchronized (LOCK) {
             FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
-            Map<String, List<Object []>> scan = new HashMap<String, List<Object []>>();
+            Map<String, List<Object[]>> scan = new HashMap<String, List<Object[]>>();
 
             FileObject baseFolder = sfs.findResource(mimeTypes.getBasePath());
             if (baseFolder != null && baseFolder.isFolder()) {
                 // Scan base folder
-                locator.scan(baseFolder, null, null, false, true, true, scan);
+                locator.scan(baseFolder, null, null, false, true, true, false, scan);
 
                 // Scan mime type folders
                 Collection<String> mimes = mimeTypes.getMimeTypes();
-                for(String mime : mimes) {
-                    locator.scan(baseFolder, mime, null, false, true, true, scan);
+                for (String mime : mimes) {
+                    locator.scan(baseFolder, mime, null, false, true, true, false, scan);
                 }
             }
 
@@ -230,29 +240,36 @@ public final class ProfilesTracker {
             HashMap<String, ProfileDescription> newProfilesByDisplayName = new HashMap<String, ProfileDescription>();
             for(String id : scan.keySet()) {
                 List<Object []> profileInfos = scan.get(id);
-                
+
                 // Determine profile's display name and if it can roll back user changes
                 String displayName  = null;
                 boolean canRollback = false;
+                String profileOrigin = null;
                 for(Object [] info : profileInfos) {
                     FileObject profileHome = (FileObject) info[0];
                     FileObject settingFile = (FileObject) info[1];
                     boolean modulesFile = ((Boolean) info[2]);
 
-                    if (displayName == null && profileHome != null) {
-                        // First try the standard way for filesystem annotations
-                        displayName = Utils.getLocalizedName(profileHome, null);
+                    if (profileHome != null) {
+                        profileOrigin = profileHome.getPath();
 
-                        // Then try the crap way introduced with Tools-Options
                         if (displayName == null) {
-                            displayName = Utils.getLocalizedName(profileHome, id, null);
+                            // First try the standard way for filesystem annotations
+                            displayName = Utils.getLocalizedName(profileHome, null);
+
+                            // Then try the crap way introduced with Tools-Options
+                            if (displayName == null) {
+                                displayName = Utils.getLocalizedName(profileHome, id, null);
+                            }
                         }
+                    } else {
+                        profileOrigin = settingFile.getPath();
                     }
-                    
+
                     if (!canRollback) {
                         canRollback = modulesFile;
                     }
-                    
+
                     if (displayName != null && canRollback) {
                         break;
                     }
@@ -262,38 +279,47 @@ public final class ProfilesTracker {
                 // Check for duplicate display names
                 ProfileDescription maybeDupl = newProfilesByDisplayName.get(displayName);
                 if (maybeDupl != null) {
-                    LOG.warning("Ignoring profile '" + id + "', it's got the same display name as '" + maybeDupl.getId()); //NOI18N
-                    continue;
+                    // writable file for all languages in the profile's home folder
+                    String writableFile = baseFolder.getPath() + "/" + locator.getWritableFileName(null, id, null, false); //NOI18N
+                    if (writableFile.startsWith(profileOrigin)) {
+                        // the profile comes from the empty mimepath (all languages) and we will prefer it
+                        newProfiles.remove(maybeDupl.getId());
+                        newProfilesByDisplayName.remove(displayName);
+                        LOG.warning("Ignoring profile '" + maybeDupl.getId() + "' (" + maybeDupl.profileOrigin + ") in favor of '" + id + "' (" + profileOrigin + ") with the same display name."); //NOI18N
+                    } else {
+                        LOG.warning("Ignoring profile '" + id + "' (" + profileOrigin + "), it's got the same display name as '" + maybeDupl.getId() + "' (" + maybeDupl.profileOrigin + ")."); //NOI18N
+                        continue;
+                    }
                 }
-                
-                ProfileDescription desc = reuseOrCreate(id, displayName, canRollback);
+
+                ProfileDescription desc = reuseOrCreate(id, displayName, canRollback, profileOrigin);
                 newProfiles.put(id, desc);
                 newProfilesByDisplayName.put(displayName, desc);
             }
 
             // Just a sanity check
             assert newProfilesByDisplayName.size() == newProfiles.size() : "Inconsistent profile maps"; //NOI18N
-            
+
             if (!profiles.equals(newProfiles)) {
                 event = new PropertyChangeEvent(this, PROP_PROFILES, profiles, newProfiles);
                 profiles = newProfiles;
                 profilesByDisplayName = newProfilesByDisplayName;
             }
         }
-        
+
         if (event != null) {
             pcs.firePropertyChange(event);
         }
     }
 
-    private ProfileDescription reuseOrCreate(String id, String displayName, boolean rollback) {
+    private ProfileDescription reuseOrCreate(String id, String displayName, boolean rollback, String profileOrigin) {
         ProfileDescription desc = profiles.get(id);
         if (desc != null) {
             if (desc.getDisplayName().equals(displayName) && desc.isRollbackAllowed() == rollback) {
                 return desc;
             }
         }
-        return new ProfileDescription(id, displayName, rollback);
+        return new ProfileDescription(id, displayName, rollback, profileOrigin);
     }
     
     private final class Listener extends FileChangeAdapter implements PropertyChangeListener {
@@ -328,7 +354,7 @@ public final class ProfilesTracker {
         private void notifyRebuild(FileObject file) {
             String path = file.getPath();
             if (path.startsWith(mimeTypes.getBasePath())) {
-                rebuild();
+                task.schedule(100);
             }
         }
     } // End of Listener class
