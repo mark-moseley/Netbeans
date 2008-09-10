@@ -103,7 +103,7 @@ public class LoadSubPartitionsProvider implements ActionProvider{
                 if(subW!=null)
                 {
                     Dimension size=subW.getBounds().getSize();
-                    if(orientation==orientation.HORIZONTAL)
+                    if(orientation==orientation.VERTICAL)
                     {
                         totalInitialWidth+=size.height;
                         int bottom=Integer.parseInt(offsets.get(i));
@@ -114,7 +114,7 @@ public class LoadSubPartitionsProvider implements ActionProvider{
                         }
                         size.height=up-bottom;
                     }
-                    else///vertical
+                    else///
                     {
                         totalInitialWidth+=size.width;
                         int bottom=Integer.parseInt(offsets.get(i));
@@ -148,8 +148,23 @@ public class LoadSubPartitionsProvider implements ActionProvider{
                             ContainerWithCompartments cont = (ContainerWithCompartments) partition;
                             cont.addChildrenInBounds();
                             //
-                            DesignerScene scene=(DesignerScene) partition.getScene();
+                            final DesignerScene scene=(DesignerScene) partition.getScene();
                             scene.getDiagram().setDirty(true);
+                                new Thread()
+                                        //we can get perfomance regression with saving after each conteiner resolving, but it's better then have incinsistent diagram state.
+                                        //on other side it looks hen most common scenario include one or at max several of partitions, so in most cases regression shouldn't be signinficant
+                                        //TBD. it's good to find a better way and save only once if everal partitions exist.
+                                {
+                                    @Override
+                                    public void run()
+                                    {
+                                        try {
+                                            scene.getDiagram().save();
+                                        } catch (IOException ex) {
+                                            Exceptions.printStackTrace(ex);
+                                        }
+                                    }
+                                }.start();
                          }
                     });
                 } catch (InterruptedException ex) {
