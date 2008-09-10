@@ -128,6 +128,14 @@ made subject to such option by the copyright holder.
                         <specification-version>6.2</specification-version>
                     </run-dependency>
                 </dependency>
+                <dependency>
+                    <code-name-base>org.openide.windows</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>6.19</specification-version>
+                    </run-dependency>
+                </dependency>
             </module-dependencies>
             <test-dependencies>
                 <test-type>
@@ -144,11 +152,13 @@ made subject to such option by the copyright holder.
                 <friend>org.netbeans.modules.mobility.end2end</friend>
                 <friend>org.netbeans.modules.tcpmon.integration</friend>
                 <friend>org.netbeans.modules.visualweb.project.jsfproject</friend>
+                <friend>org.netbeans.modules.web.businessone</friend>
                 <friend>org.netbeans.modules.web.project</friend>
                 <friend>org.netbeans.modules.websvc.core</friend>
                 <friend>org.netbeans.modules.websvc.customization</friend>
                 <friend>org.netbeans.modules.websvc.jaxrpc</friend>
                 <friend>org.netbeans.modules.websvc.rest</friend>
+                <friend>org.netbeans.modules.websvc.saas.codegen.j2ee</friend>
                 <friend>org.netbeans.modules.websvc.wsitconf</friend>
                 <package>org.netbeans.modules.websvc.api.client</package>
                 <package>org.netbeans.modules.websvc.api.jaxws.client</package>
