@@ -58,14 +58,12 @@ import java.util.logging.Logger;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import javax.swing.*;
-import javax.swing.text.Document;
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.libraries.LibraryManager;
-import org.netbeans.editor.EditorUI;
-import org.netbeans.editor.ext.ExtCaret;
 import javax.swing.text.BadLocationException;
 import org.netbeans.api.editor.guards.SimpleSection;
 import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.java.queries.SourceLevelQuery;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.WorkingCopy;
@@ -311,6 +309,8 @@ public class FormEditor {
 	
         openForms.put(formModel, this);
 
+        Logger.getLogger("TIMER").log(Level.FINE, "FormModel", new Object[] { formDataObject.getPrimaryFile(), formModel}); // NOI18N
+
         // Force initialization of Auto Set Component Name.
         // It cannot be initialized in constructor of FormModel,
         // because it may call getResourceSupport() which
@@ -348,7 +348,10 @@ public class FormEditor {
         formLoaded = true;
 	
         getCodeGenerator().initialize(formModel);
-        getResourceSupport(); // make sure ResourceSupport is created and initialized
+        ResourceSupport resupport = getResourceSupport(); // make sure ResourceSupport is created and initialized
+        if (resupport.getDesignLocale() != null) {
+            resupport.updateDesignLocale();
+        }
 
         getBindingSupport();
         formModel.fireFormLoaded();
@@ -499,7 +502,7 @@ public class FormEditor {
         logPersistenceError(t, -1);
     }
 
-    private boolean anyPersistenceError() {
+    boolean anyPersistenceError() {
         return persistenceErrors != null && !persistenceErrors.isEmpty();
     }
     
@@ -512,10 +515,14 @@ public class FormEditor {
             return; // no errors or warnings logged
 
         final ErrorManager errorManager = ErrorManager.getDefault();
+        final GandalfPersistenceManager persistManager = 
+                    (GandalfPersistenceManager) persistenceManager;
 
         boolean checkLoadingErrors = operation == LOADING && formLoaded;
         boolean anyNonFatalLoadingError = false; // was there a real error?
 
+        StringBuilder userErrorMsgs = new StringBuilder();
+        
         for (Iterator it=persistenceErrors.iterator(); it.hasNext(); ) {
             Throwable t  = (Throwable) it.next();      
             if (t instanceof PersistenceException) {
@@ -523,12 +530,12 @@ public class FormEditor {
                 if (th != null)
                     t = th;
             }     
-           
+            
             if (checkLoadingErrors && !anyNonFatalLoadingError) {
                 // was there a real loading error (not just warnings) causing
                 // some data not loaded?
-                ErrorManager.Annotation[] annotations =
-                                            errorManager.findAnnotations(t);
+                ErrorManager.Annotation[] annotations = 
+                        errorManager.findAnnotations(t);
                 int severity = 0;
                 if ((annotations != null) && (annotations.length != 0)) {
                     for (int i=0; i < annotations.length; i++) {
@@ -545,12 +552,25 @@ public class FormEditor {
                     anyNonFatalLoadingError = true;
             }
             errorManager.notify(ErrorManager.INFORMATIONAL, t);
-            errorManager.notify(ErrorManager.USER, t);
+
+            if (persistManager != null) {
+                // form file was recognized, there is instance of persistance managager
+                // creating report about problems while loading components, 
+                // setting props of components, ...
+                userErrorMsgs.append(persistManager.getExceptionAnnotation(t));
+                userErrorMsgs.append("\n\n");  // NOI18N
+            } else {
+                // form file was not recognized
+                errorManager.notify(ErrorManager.WARNING, t);
+            }
         }
         
         if (checkLoadingErrors && anyNonFatalLoadingError) {
             // the form was loaded with some non-fatal errors - some data
             // was not loaded - show a warning about possible data loss
+            final String wholeMsg = userErrorMsgs.append(
+                    FormUtils.getBundleString("MSG_FormLoadedWithErrors")).toString();  // NOI18N
+
             java.awt.EventQueue.invokeLater(new Runnable() {
                 public void run() {
                     // for some reason this would be displayed before the
@@ -560,7 +580,7 @@ public class FormEditor {
                     JButton allowEditing = new JButton(FormUtils.getBundleString("CTL_AllowEditing"));	// NOI18N                                        
                     
                     Object ret = DialogDisplayer.getDefault().notify(new NotifyDescriptor(
-                        FormUtils.getBundleString("MSG_FormLoadedWithErrors"), // NOI18N
+                        wholeMsg,
                         FormUtils.getBundleString("CTL_FormLoadedWithErrors"), // NOI18N
                         NotifyDescriptor.DEFAULT_OPTION,
                         NotifyDescriptor.WARNING_MESSAGE,
@@ -1281,8 +1301,10 @@ public class FormEditor {
 
     private void checkSuppressWarningsAnnotation() {
         FileObject fo = getFormDataObject().getPrimaryFile();
+        String sourceLevel = SourceLevelQuery.getSourceLevel(fo);
+        boolean invalidSL = (sourceLevel != null) && ("1.5".compareTo(sourceLevel) > 0); // NOI18N
         ClassPath cp = ClassPath.getClassPath(fo, ClassPath.BOOT);
-        if (cp.findResource("java/lang/SuppressWarnings.class") == null) { // NOI18N
+        if (invalidSL || cp.findResource("java/lang/SuppressWarnings.class") == null) { // NOI18N
             // The project's bootclasspath doesn't contain SuppressWarnings class.
             // So, remove this annotation from initComponents() method.
             final String foName = fo.getName();
