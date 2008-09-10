@@ -44,13 +44,21 @@ package org.netbeans.modules.cnd.makeproject.api.configurations;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
+import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.compilers.Tool;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platforms;
 import org.netbeans.modules.cnd.makeproject.configurations.ConfigurationXMLReader;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Lookup;
 import org.openide.util.RequestProcessor;
 
 public class ConfigurationDescriptorProvider {
+    public static final String USG_PROJECT_CONFIG_CND = "USG_PROJECT_CONFIG_CND"; // NOI18N
+    public static final String USG_PROJECT_OPEN_CND = "USG_PROJECT_OPEN_CND"; // NOI18N
     private FileObject projectDirectory;
     private ConfigurationDescriptor projectDescriptor = null;
     boolean hasTried = false;
@@ -64,7 +72,7 @@ public class ConfigurationDescriptorProvider {
         this.relativeOffset = relativeOffset;
     }
     
-    private Object readLock = new Object();
+    private final Object readLock = new Object();
     public ConfigurationDescriptor getConfigurationDescriptor() {
         if (projectDescriptor == null) {
             // attempt to read configuration descriptor
@@ -76,21 +84,21 @@ public class ConfigurationDescriptorProvider {
                         ConfigurationXMLReader reader = new ConfigurationXMLReader(projectDirectory);
                         
                         if (SwingUtilities.isEventDispatchThread()) {
-                            //System.err.println("ConfigurationDescriptorProvider Switching thead...");
-                            ProjectReader projectReader = new ProjectReader(reader, relativeOffset);
-                            RequestProcessor.Task task = RequestProcessor.getDefault().post(projectReader); 
-                            task.waitFinished();
-                            projectDescriptor = projectReader.projectDescriptor;
+                            new Exception("Not allowed to use EDT for reading XML descriptor of project!").printStackTrace(System.err); // NOI18N
+                            // PLEASE DO NOT ADD HACKS like Task.waitFinished()
+                            // CHANGE YOUR LOGIC INSTEAD
+
+                            // FIXUP for IZ#146696: cannot open projects: Not allowed to use EDT...
+                            // return null;
                         }
-                        else {
-                            try {
-                                projectDescriptor = reader.read(relativeOffset);
-                            } catch (java.io.IOException x) {
-                                ;	// most likely open failed
-                            }
+                        try {
+                            projectDescriptor = reader.read(relativeOffset);
+                        } catch (java.io.IOException x) {
+                            // most likely open failed
                         }
                         
                         hasTried = true;
+                        recordMetrics(USG_PROJECT_OPEN_CND, projectDescriptor);
                     }
                 }
             }
@@ -100,25 +108,6 @@ public class ConfigurationDescriptorProvider {
     
     public boolean gotDescriptor() {
         return projectDescriptor != null;   
-    }
-    
-    private class ProjectReader implements Runnable {
-        public ConfigurationDescriptor projectDescriptor = null;
-        private ConfigurationXMLReader reader;
-        private String relativeOffset;
-        
-        public ProjectReader(ConfigurationXMLReader reader, String relativeOffset) {
-            this.reader = reader;
-            this.relativeOffset = relativeOffset;
-        }
-        
-        public void run() {
-            try {
-                projectDescriptor = reader.read(relativeOffset);
-            } catch (java.io.IOException x) {
-                ;	// most likely open failed
-            }
-        }
     }
     
     public static ConfigurationAuxObjectProvider[] getAuxObjectProviders() {
@@ -136,5 +125,127 @@ public class ConfigurationDescriptorProvider {
         }
 //      System.err.println("-------------------------------auxObjectProviders " + auxObjectProviders);
         return (ConfigurationAuxObjectProvider[])auxObjectProviders.toArray(new ConfigurationAuxObjectProvider[auxObjectProviders.size()]);
+    }
+
+    public static void recordMetrics(String msg, ConfigurationDescriptor descr) {
+        if (!(descr instanceof MakeConfigurationDescriptor)) {
+            return;
+        }
+        Logger logger = Logger.getLogger("org.netbeans.ui.metrics.cnd"); // NOI18N
+        if (logger.isLoggable(Level.INFO)) {
+            LogRecord rec = new LogRecord(Level.INFO, msg);
+                MakeConfiguration makeConfiguration = (MakeConfiguration) descr.getConfs().getActive();
+                String type;
+                switch (makeConfiguration.getConfigurationType().getValue()) {
+                    case MakeConfiguration.TYPE_MAKEFILE:
+                        type = "MAKEFILE"; // NOI18N
+                        break;
+                    case MakeConfiguration.TYPE_APPLICATION:
+                        type = "APPLICATION"; // NOI18N
+                        break;
+                    case MakeConfiguration.TYPE_DYNAMIC_LIB:
+                        type = "DYNAMIC_LIB"; // NOI18N
+                        break;
+                    case MakeConfiguration.TYPE_STATIC_LIB:
+                        type = "STATIC_LIB"; // NOI18N
+                        break;
+                    default:
+                        type = "UNKNOWN"; // NOI18N
+                }
+                String host;
+                CompilerSet compilerSet;
+                if (makeConfiguration.getDevelopmentHost().isLocalhost()) {
+                    host = "LOCAL"; // NOI18N
+                    compilerSet = makeConfiguration.getCompilerSet().getCompilerSet();
+                } else {
+                    host = "REMOTE"; // NOI18N
+                    // do not force creation of compiler sets
+                    compilerSet = null;
+                }
+                String flavor;
+                String[] families;
+                if (compilerSet != null) {
+                    families = compilerSet.getCompilerFlavor().getToolchainDescriptor().getFamily();
+                    flavor = compilerSet.getCompilerFlavor().toString();
+                } else {
+                    families = new String[0];
+                    flavor = makeConfiguration.getCompilerSet().getFlavor();
+                }
+                String family;
+                if (families.length == 0) {
+                    family = "UKNOWN"; // NOI18N
+                } else {
+                    StringBuilder buffer = new StringBuilder();
+                    for (int i = 0; i < families.length; i++) {
+                        buffer.append(families[i]);
+                        if (i < families.length - 1) {
+                            buffer.append(","); // NOI18N
+                        }
+                    }
+                    family = buffer.toString();
+                }                
+                String platform;
+                if (Platforms.getPlatform(makeConfiguration.getCompilerSet().getPlatform()) != null) {
+                    platform = Platforms.getPlatform(makeConfiguration.getCompilerSet().getPlatform()).getName();
+                } else {
+                    platform = "UNKNOWN_PLATFORM"; // NOI18N
+                }
+                makeConfiguration.reCountLanguages((MakeConfigurationDescriptor) descr);
+                Item[] projectItems = ((MakeConfigurationDescriptor) descr).getProjectItems();
+                int size = 0;
+                int allItems = projectItems.length;
+                boolean cLang = false;
+                boolean ccLang = false;
+                boolean fLang = false;
+                for (Item item : projectItems) {
+                    ItemConfiguration itemConfiguration = item.getItemConfiguration(makeConfiguration);
+                    if (!itemConfiguration.getExcluded().getValue()) {
+                        size++;
+                        switch (itemConfiguration.getTool()) {
+                            case Tool.CCompiler:
+                                cLang = true;
+                                break;
+                            case Tool.CCCompiler:
+                                ccLang = true;
+                                break;
+                            case Tool.FortranCompiler:
+                                fLang = true;
+                                break;
+                        }
+                    }
+                }
+                String ccUsage = ccLang ? "USE_CPP" : "NO_CPP"; // NOI18N
+                String cUsage = cLang ? "USE_C" : "NO_C"; // NOI18N
+                String fUsage = fLang ? "USE_FORTRAN" : "NO_FORTRAN"; // NOI18N
+                rec.setParameters(new Object[] { type, flavor, family, host, platform, toSizeString(allItems), toSizeString(size), ccUsage, cUsage, fUsage});
+                rec.setLoggerName(logger.getName());
+                logger.log(rec);
+        }
+    }
+
+    private static String toSizeString(int size) {
+        String strSize;
+        if (size < 25) {
+            strSize = "25"; // NOI18N
+        } else if (size < 100) {
+            strSize = "100"; // NOI18N
+        } else if (size < 500) {
+            strSize = "500"; // NOI18N
+        } else if (size < 1000) {
+            strSize = "1000"; // NOI18N
+        } else if (size < 2000) {
+            strSize = "2000"; // NOI18N
+        } else if (size < 5000) {
+            strSize = "5000"; // NOI18N
+        } else if (size < 10000) {
+            strSize = "10000"; // NOI18N
+        } else if (size < 20000) {
+            strSize = "20000"; // NOI18N
+        } else if (size < 50000) {
+            strSize = "50000"; // NOI18N
+        } else {
+            strSize = "99999"; // NOI18N
+        }
+        return strSize;
     }
 }
