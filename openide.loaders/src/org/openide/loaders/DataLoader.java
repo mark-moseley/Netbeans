@@ -62,7 +62,7 @@ import org.openide.util.io.SafeException;
 *
 * @author Jaroslav Tulach
 */
-public abstract class DataLoader extends SharedClassObject {
+public abstract class DataLoader extends SharedClassObject implements DataObject.Factory {
     /** error manager for logging the happenings in loaders */
     static final Logger ERR = Logger.getLogger("org.openide.loaders.DataLoader"); // NOI18N
 
@@ -236,11 +236,11 @@ public abstract class DataLoader extends SharedClassObject {
     }
     
     /**
-     * Get default actions. Now deprecated;
-     * instead of overriding this method it 
-     * is preferable to override {@link #actionsContext}.
+     * Get default actions.
+     * @deprecated Instead of overriding this method it is preferable to override {@link #actionsContext}.
      * @return array of default system actions
      */
+    @Deprecated
     protected SystemAction[] defaultActions () {
         SystemAction[] actions = NodeOp.getDefaultActions();
         return actions;
@@ -356,6 +356,28 @@ public abstract class DataLoader extends SharedClassObject {
     }
 
     /** Find a data object appropriate to the given file object--the meat of this class.
+     * 
+     * @param fo file object
+     * @param recognized set of already processed files
+     * @return created data object
+     * @throws java.io.IOException
+     * @since 7.0
+     */
+    public final DataObject findDataObject (
+        FileObject fo, final Set<? super FileObject> recognized
+    ) throws IOException {
+        class Rec implements RecognizedFiles {
+            public void markRecognized(FileObject fo) {
+                recognized.add(fo);
+            }
+        }
+        RecognizedFiles rec =
+            recognized == DataLoaderPool.emptyDataLoaderRecognized ? DataLoaderPool.emptyDataLoaderRecognized : new Rec();
+
+        return findDataObject(fo, rec);
+    }
+    
+    /** Find a data object appropriate to the given file object--the meat of this class.
      * <p>
     * For example: for files with the same basename but extensions <EM>.java</EM> and <EM>.class</EM>, the handler
     * should return the same <code>DataObject</code>.
@@ -441,6 +463,7 @@ public abstract class DataLoader extends SharedClassObject {
     /** Writes nothing to the stream.
     * @param oo ignored
     */
+    @Override
     public void writeExternal (ObjectOutput oo) throws IOException {
         oo.writeObject( new Integer(LOADER_VERSION) );
         
@@ -472,6 +495,7 @@ public abstract class DataLoader extends SharedClassObject {
     *    stream, but all the content has been read ok. Subclasses can
     *    catch this exception and continue reading from the stream
     */
+    @Override
     public void readExternal (ObjectInput oi)
     throws IOException, ClassNotFoundException {
         Exception main = null;
@@ -548,6 +572,7 @@ public abstract class DataLoader extends SharedClassObject {
         }
     }
 
+    @Override
     protected boolean clearSharedData () {
         return false;
     }
