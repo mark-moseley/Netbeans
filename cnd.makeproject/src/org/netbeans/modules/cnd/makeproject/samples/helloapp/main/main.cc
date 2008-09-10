@@ -39,32 +39,28 @@
  * made subject to such option by the copyright holder.
  */
 
-#include <sys/types.h>
-#include <unistd.h>
 #include <iostream>
 
-int main(int argc, char**argv) {
-    pid_t pid;
-    pid_t f_res;
+#include "../hello1lib/hello1.h"
+#include "../hello2lib/hello2.h"
+#include "../hello3lib/hello3.h"
+#include "../hello4lib/hello4.h"
 
-    // Prints welcome message...
-    std::cout << "Welcome ..." << std::endl;
-    pid=getpid();
+int main(int argc, char**argv) {
+    // Print welcome messages...
+    std::cout << "Hello from main..." << std::endl;
+    std::cout << hello1();
+    std::cout << hello2();
+    std::cout << hello3();
+    std::cout << hello4();
 
     // Prints arguments...
     if (argc > 1) {
-        f_res = fork();
-        if (0 == f_res) {
-            /* Child */
-            pid=getpid();
-            std::cout << std::endl << "PID child = " << pid << std::endl;
-            _exit(0);
-        }
-        std::cout << "PID parent = " << pid  << "  PID child = " << f_res << std::endl;
         std::cout << std::endl << "Arguments:" << std::endl;
         for (int i = 1; i < argc; i++) {
             std::cout << i << ": " << argv[i] << std::endl;
         }
     }
+
     return 0;
 }
