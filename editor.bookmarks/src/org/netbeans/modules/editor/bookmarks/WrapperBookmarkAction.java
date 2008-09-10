@@ -42,12 +42,14 @@
 package org.netbeans.modules.editor.bookmarks;
 
 import java.awt.event.ActionEvent;
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.Action;
 import javax.swing.JEditorPane;
+
 import org.netbeans.editor.BaseAction;
 import org.netbeans.lib.editor.bookmarks.actions.ClearDocumentBookmarksAction;
 import org.netbeans.lib.editor.bookmarks.actions.GotoBookmarkAction;
-import org.netbeans.lib.editor.bookmarks.actions.ToggleBookmarkAction;
 import org.openide.cookies.EditorCookie;
 import org.openide.nodes.Node;
 import org.openide.util.actions.NodeAction;
@@ -88,21 +90,19 @@ public class WrapperBookmarkAction extends NodeAction {
                     JEditorPane pane = panes[0];
                     ActionEvent paneEvt = new ActionEvent(pane, 0, "");
                     originalAction.actionPerformed(paneEvt);
-                }
-            }
         }
+    }
     }
     
     protected boolean enable(Node[] activatedNodes) {
         if (activatedNodes != null && activatedNodes.length == 1) {
             EditorCookie ec = (EditorCookie)activatedNodes[0].getCookie(EditorCookie.class);
-            if (ec != null) {
-                JEditorPane panes[] = ec.getOpenedPanes();
+                if (ec != null) {
+                    JEditorPane panes[] = ec.getOpenedPanes();
                 return panes != null && panes.length > 0;
+                    }
+                }
             }
-        }
-        return false;
-    }
 
     public org.openide.util.HelpCtx getHelpCtx() {
         return null;
