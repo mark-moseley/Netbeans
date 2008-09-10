@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 /*
- * GtkEditorTabDisplayerUI.java
+ * NimbusEditorTabDisplayerUI.java
  *
  * Created on 09 December 2003, 16:53
  */
@@ -62,23 +62,23 @@ import org.netbeans.swing.tabcontrol.TabDisplayer;
 import javax.swing.plaf.ComponentUI;
 
 /**
- * Gtk impl of tabs ui
+ * Nimbus impl of tabs ui
  *
  * @author Marek Slama
  */
-public final class GtkEditorTabDisplayerUI extends BasicScrollingTabDisplayerUI {
+public final class NimbusEditorTabDisplayerUI extends BasicScrollingTabDisplayerUI {
     
     private static Map<Integer, String[]> buttonIconPaths;
     
     /**
      * Creates a new instance of GtkEditorTabDisplayerUI
      */
-    public GtkEditorTabDisplayerUI(TabDisplayer displayer) {
+    public NimbusEditorTabDisplayerUI(TabDisplayer displayer) {
         super (displayer);
     }
     
     public static ComponentUI createUI(JComponent c) {
-        return new GtkEditorTabDisplayerUI ((TabDisplayer) c);
+        return new NimbusEditorTabDisplayerUI ((TabDisplayer) c);
     }
 
     public Rectangle getTabRect(int idx, Rectangle rect) {
@@ -109,7 +109,7 @@ public final class GtkEditorTabDisplayerUI extends BasicScrollingTabDisplayerUI 
     }
 
     protected TabCellRenderer createDefaultRenderer() {
-        return new GtkEditorTabCellRenderer();
+        return new NimbusEditorTabCellRenderer();
     }
 
     private static void initIcons() {
