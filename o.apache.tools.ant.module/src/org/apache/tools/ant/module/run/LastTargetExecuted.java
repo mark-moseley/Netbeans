@@ -43,15 +43,13 @@ package org.apache.tools.ant.module.run;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Map;
 import javax.swing.event.ChangeListener;
 import org.apache.tools.ant.module.api.AntProjectCookie;
+import org.apache.tools.ant.module.api.support.AntScriptUtils;
 import org.openide.execution.ExecutorTask;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.ChangeSupport;
 
 /**
@@ -63,16 +61,18 @@ public class LastTargetExecuted {
     private LastTargetExecuted() {}
     
     private static File buildScript;
-    private static int verbosity;
+    //private static int verbosity;
     private static String[] targets;
     private static Map<String,String> properties;
+    private static String displayName;
     
     /** Called from {@link TargetExecutor}. */
-    static void record(File buildScript, int verbosity, String[] targets, Map<String,String> properties) {
+    static void record(File buildScript, String[] targets, Map<String,String> properties, String displayName) {
         LastTargetExecuted.buildScript = buildScript;
-        LastTargetExecuted.verbosity = verbosity;
+        //LastTargetExecuted.verbosity = verbosity;
         LastTargetExecuted.targets = targets;
         LastTargetExecuted.properties = properties;
+        LastTargetExecuted.displayName = displayName;
         cs.fireChange();
     }
     
@@ -84,11 +84,7 @@ public class LastTargetExecuted {
         if (buildScript != null && buildScript.isFile()) {
             FileObject fo = FileUtil.toFileObject(buildScript);
             assert fo != null;
-            try {
-                return DataObject.find(fo).getCookie(AntProjectCookie.class);
-            } catch (DataObjectNotFoundException e) {
-                assert false : e;
-            }
+            return AntScriptUtils.antProjectCookieFor(fo);
         }
         return null;
     }
@@ -106,12 +102,7 @@ public class LastTargetExecuted {
      * @return a process display name, or null if nothing has been run yet
      */
     public static String getProcessDisplayName() {
-        AntProjectCookie apc = getLastBuildScript();
-        if (apc != null) {
-            return TargetExecutor.getProcessDisplayName(apc, targets != null ? Arrays.asList(targets) : null);
-        } else {
-            return null;
-        }
+        return displayName;
     }
     
     /**
@@ -126,8 +117,9 @@ public class LastTargetExecuted {
             return null;
         }
         TargetExecutor t = new TargetExecutor(apc, targets);
-        t.setVerbosity(verbosity);
+        //t.setVerbosity(verbosity);
         t.setProperties(properties);
+        t.setDisplayName(displayName); // #140999: do not recalculate
         return t.execute();
     }
     
