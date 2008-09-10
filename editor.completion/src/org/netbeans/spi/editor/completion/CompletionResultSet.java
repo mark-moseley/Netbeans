@@ -114,7 +114,7 @@ public final class CompletionResultSet {
      * Add the completion item to this result set.
      * <br>
      * This method can be called multiple times until
-     * all the items have been added to ths result set.
+     * all the items have been added to this result set.
      * <br>
      * After the adding is completed @link #finish()} must be called to confirm
      * that the result set will no longer be modified.
@@ -133,7 +133,7 @@ public final class CompletionResultSet {
      * Add the collection of the completion items to this result set.
      * <br>
      * This method can be called multiple times until
-     * all the items have been added to ths result set.
+     * all the items have been added to this result set.
      * <br>
      * After the adding is completed @link #finish()} must be called to confirm
      * that the result set will no longer be modified.
@@ -192,6 +192,22 @@ public final class CompletionResultSet {
      */
     public void setHasAdditionalItems(boolean value) {
         impl.setHasAdditionalItems(value);
+    }
+        
+    /**
+     * Set the text to be displayed in a completion popup whenever a {@link CompletionProvider}
+     * indicates that additional items could be added to this result set by passing
+     * <code>true</code> to {@link CompletionResultSet#setHasAdditionalItems(boolean)}.
+     *
+     * @param text the text that will be directly prepend to the "Press 'Ctrl-Space' Again for All Items"
+     * message in the completion popup. The text should end with a separator (e.g. space, semicolon and space, etc.)
+     * that will separate it from the rest of the displayed message. <code>null</code> can be passed
+     * to revert any previous setting of the text.
+     *  
+     * @since 1.11
+     */
+    public void setHasAdditionalItemsText(String text) {
+        impl.setHasAdditionalItemsText(text);
     }
     
     /**
@@ -252,7 +268,7 @@ public final class CompletionResultSet {
      * If not set explicitly the completion infrastructure will use
      * the default text.
      *
-     * @param waitText description of what the query copmutation
+     * @param waitText description of what the query computation
      *  is currently (doing or waiting for).
      *  <br>
      *  After previous explicit setting <code>null</code> can be passed
