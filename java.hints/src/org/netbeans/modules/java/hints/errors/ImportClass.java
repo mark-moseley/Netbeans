@@ -42,7 +42,9 @@
 package org.netbeans.modules.java.hints.errors;
 
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.ImportTree;
 import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.Scope;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.util.TreePath;
 import java.io.IOException;
@@ -56,12 +58,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
-import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.modules.editor.java.Utilities;
@@ -75,7 +77,6 @@ import org.netbeans.modules.java.hints.spi.ErrorRule;
 import org.netbeans.spi.editor.hints.ChangeInfo;
 import org.netbeans.spi.editor.hints.EnhancedFix;
 import org.netbeans.spi.editor.hints.Fix;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
@@ -141,7 +142,16 @@ public final class ImportClass implements ErrorRule<ImportCandidatesHolder> {
         FileObject file = info.getFileObject();
         String simpleName = ident.text().toString();
         Pair<List<String>, List<String>> candidates = getCandidateFQNs(info, file, simpleName, data);
-        
+
+        //workaround for #118714 -- neverending import
+        List<? extends ImportTree> imports = info.getCompilationUnit().getImports();
+        for (ImportTree it : imports) {
+            String toString = it.getQualifiedIdentifier().toString();
+            if (candidates != null && candidates.getA().contains(toString)) {
+                return Collections.<Fix>emptyList();
+            }
+        }
+
         if (isCancelled() || candidates == null) {
             ErrorHintsProvider.LOG.log(Level.FINE, "ImportClassEnabler.cancelled."); //NOI18N
             
