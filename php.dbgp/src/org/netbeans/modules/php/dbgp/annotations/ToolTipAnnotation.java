@@ -45,21 +45,20 @@ import java.beans.PropertyChangeListener;
 
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Element;
 import javax.swing.text.StyledDocument;
 
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.modules.php.dbgp.DebugSession;
 import org.netbeans.modules.php.dbgp.StartActionProviderImpl;
-import org.netbeans.modules.php.dbgp.api.SessionId;
-import org.netbeans.modules.php.dbgp.api.UnsufficientValueException;
+import org.netbeans.modules.php.dbgp.SessionId;
+import org.netbeans.modules.php.dbgp.UnsufficientValueException;
 import org.netbeans.modules.php.dbgp.breakpoints.Utils;
 import org.netbeans.modules.php.dbgp.packets.EvalCommand;
 import org.netbeans.modules.php.dbgp.packets.Property;
-import org.netbeans.modules.php.model.Expression;
-import org.netbeans.modules.php.model.ModelAccess;
-import org.netbeans.modules.php.model.PhpModel;
-import org.netbeans.modules.php.model.SourceElement;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
@@ -146,7 +145,7 @@ public class ToolTipAnnotation extends Annotation
             return null;
         }
         if ( result != null ){
-            return result;
+            return (result.trim().length()==0) ? null : result;
         }
         boolean notFirst = false;
         StringBuilder builder = new StringBuilder(LEFT_BRACKET);
@@ -163,7 +162,7 @@ public class ToolTipAnnotation extends Annotation
 
     private void evaluate( Line.Part part ){
         Line line = part.getLine();
-        if (line != null) {
+        if (line == null) {
             return;
         }
         DataObject dataObject = DataEditorSupport.findDataObject(line);
@@ -174,27 +173,81 @@ public class ToolTipAnnotation extends Annotation
         EditorCookie editorCookie = (EditorCookie)dataObject.
             getCookie(EditorCookie.class);
         StyledDocument document = editorCookie.getDocument();
+        if (document == null) {return;}
         final int offset = NbDocument.findLineOffset(document, 
                 part.getLine().getLineNumber()) + part.getColumn();
-        String selectedText = getSelectedText( editorCookie, offset);
+        JEditorPane ep = EditorContextDispatcher.getDefault().getCurrentEditor();
+        String selectedText = getSelectedText( ep, offset);
         if ( selectedText != null ){
             sendEvalCommand( selectedText );
+        } else {
+            final String identifier = ep != null ? getIdentifier(document, ep, offset) : null;            
+            if (identifier != null && isDollarMark(identifier.charAt(0))) {
+                Runnable runnable = new Runnable(){
+                    public void run() {
+                        //TODO: should have been changed to PropertCommand
+                        sendEvalCommand(identifier);
+                    }
+                };
+                RequestProcessor.getDefault().post(runnable);
+            }
         }
-        else {
-            Runnable runnable = new Runnable(){
-                public void run() {
-                    computeVariable(fileObject, offset);                    
-                }
-            };
-            RequestProcessor.getDefault().post(runnable);
+        //TODO: review, replace the code depending on lexer.model - part I
+    }
+
+    private static String getIdentifier(final StyledDocument doc, final JEditorPane ep, final int offset) {
+        String t = null;
+        if ((ep.getSelectionStart() <= offset) && (offset <= ep.getSelectionEnd())) {
+            t = ep.getSelectedText();
+        }
+        if (t != null) { return t; }
+        int line = NbDocument.findLineNumber(doc, offset);
+        int col = NbDocument.findLineColumn(doc, offset);
+        Element lineElem = NbDocument.findLineRootElement(doc).getElement(line);
+        try {
+            if (lineElem == null) { return null; }
+            int lineStartOffset = lineElem.getStartOffset();
+            int lineLen = lineElem.getEndOffset() - lineStartOffset;
+            if (col + 1 >= lineLen) {
+                // do not evaluate when mouse hover behind the end of line (112662)
+                return null;
+            }
+            t = doc.getText(lineStartOffset, lineLen);
+            return getExpressionToEvaluate(t, col);
+        } catch (BadLocationException e) {
+            return null;
         }
     }
+
+    static String getExpressionToEvaluate(String text, int col) {
+        int identStart = col;
+        while (identStart > 0 && (isPHPIdentifier(text.charAt(identStart - 1)) || (text.charAt(identStart - 1) == '.'))) {
+            identStart--;
+        }
+        int identEnd = col;
+        while (identEnd < text.length() && Character.isJavaIdentifierPart(text.charAt(identEnd))) {
+            identEnd++;
+        }
+        if (identStart == identEnd) {
+            return null;
+        }
+        return text.substring(identStart, identEnd);
+    }
+    
+    static boolean isPHPIdentifier(char ch) {
+        return isDollarMark(ch) || Character.isJavaIdentifierPart(ch);
+    }
+
+    private static boolean isDollarMark(char ch) {
+        return ch == '$';//NOI18N
+    }        
     
     private boolean isPhpDataObject( DataObject dataObject ) {
         return Utils.isPhpFile( dataObject.getPrimaryFile() );
     }
 
-    private void computeVariable( FileObject fObject, int offset ){
+    //TODO: review, replace the code depending on lexer.model - part II (methods computeVariable, getExpression)
+    /*private void computeVariable( FileObject fObject, int offset ){
         PhpModel model = ModelAccess.getAccess().getModel( 
                 ModelAccess.getModelOrigin( fObject ));
         if ( model == null ){
@@ -220,7 +273,7 @@ public class ToolTipAnnotation extends Annotation
         else {
             return getExpression( element.getParent() );
         }
-    }
+    }*/
 
     private void sendEvalCommand( String str ){
         DebugSession session = getSession();
@@ -233,9 +286,8 @@ public class ToolTipAnnotation extends Annotation
         session.sendCommandLater(command);
     }
     
-    private String getSelectedText( EditorCookie cookie , int offset ){
-        JEditorPane pane = Utils.getEditorPane( cookie );
-        if ((pane.getSelectionStart() <= offset) && 
+    private String getSelectedText( JEditorPane pane , int offset ){
+        if ((pane != null && pane.getSelectionStart() <= offset) && 
                 (offset <= pane.getSelectionEnd()))
         {
             return pane.getSelectedText();
