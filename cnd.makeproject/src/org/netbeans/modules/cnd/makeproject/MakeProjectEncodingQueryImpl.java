@@ -41,42 +41,54 @@
 
 package org.netbeans.modules.cnd.makeproject;
 
-import java.io.IOException;
-import org.netbeans.api.project.Project;
-import org.netbeans.spi.project.support.ant.AntBasedProjectType;
-import org.netbeans.spi.project.support.ant.AntProjectHelper;
+import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
+import org.netbeans.spi.queries.FileEncodingQueryImplementation;
+import org.openide.filesystems.FileObject;
 
 /**
- * Factory for simple Make projects.
+ *
+ * @author Tomas Zezula
  */
-public final class MakeProjectType implements AntBasedProjectType {
-
-    public static final String TYPE = "org.netbeans.modules.cnd.makeproject"; // NOI18N
-    private static final String PROJECT_CONFIGURATION_NAME = "data"; // NOI18N
-    public static final String PROJECT_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/make-project/1"; // NOI18N
-    private static final String PRIVATE_CONFIGURATION_NAME = "data"; // NOI18N
-    private static final String PRIVATE_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/make-project-private/1"; // NOI18N
-    public static final String MAKE_DEP_PROJECTS = "make-dep-projects"; // NOI18N
-    public static final String MAKE_DEP_PROJECT = "make-dep-project"; // NOI18N
-    public static final String SOURCE_ENCODING_TAG = "sourceEncoding"; // NOI18N
+public class MakeProjectEncodingQueryImpl extends FileEncodingQueryImplementation {
     
-    /** Do nothing, just a service. */
-    public MakeProjectType() {}
+    private MakeProject project;
+    private String nameCache = null;
+    private Charset cache = null;
     
-    public String getType() {
-        return TYPE;
+    /** Creates a new instance of J2SEProjectEncodingQueryImpl */
+    public MakeProjectEncodingQueryImpl(MakeProject project) {
+        this.project = project;
     }
     
-    public Project createProject(AntProjectHelper helper) throws IOException {
-        return new MakeProject(helper);
+    public Charset getEncoding(FileObject file) {
+        assert file != null;
+        
+        synchronized (this) {
+            String enc = project.getSourceEncoding();
+            
+            if (!enc.equals(nameCache)) {
+                cache = null;
+                nameCache = enc;
+            }
+        
+            if (cache != null) {
+                return cache;
+            }
+        }
+        
+        synchronized (this) {
+            if (cache == null) {
+                try {
+                    //From discussion with K. Frank the project returns Charset.defaultCharset ()
+                    //for older projects (no encoding property). The old project used system encoding => Charset.defaultCharset ()
+                    //should work for most users.
+                    cache = nameCache == null ? Charset.defaultCharset() : Charset.forName(nameCache);
+                } catch (IllegalCharsetNameException exception) {
+                    return null;
+                }
+            }
+            return cache;
+        }
     }
-
-    public String getPrimaryConfigurationDataElementName(boolean shared) {
-        return shared ? PROJECT_CONFIGURATION_NAME : PRIVATE_CONFIGURATION_NAME;
-    }
-    
-    public String getPrimaryConfigurationDataElementNamespace(boolean shared) {
-        return shared ? PROJECT_CONFIGURATION_NAMESPACE : PRIVATE_CONFIGURATION_NAMESPACE;
-    }
-    
 }
