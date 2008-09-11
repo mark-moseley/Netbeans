@@ -95,7 +95,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
                         CompilationUnitTree cut = co.getCompilationUnit();
                         for (Tree t: cut.getTypeDecls()) {
                             Element e = co.getTrees().getElement(TreePath.getPath(cut, t));
-                            if (e.getSimpleName().toString().equals(co.getFileObject().getName())) {
+                            if (e!=null && e.getSimpleName().toString().equals(co.getFileObject().getName())) {
                                 treePathHandle = TreePathHandle.create(TreePath.getPath(cut, t), co);
                                 refactoring.getContext().add(co);
                                 break;
@@ -242,7 +242,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
             boolean nameNotChanged = true;
             if (kind.isClass()) {
                 if (!((TypeElement) element).getNestingKind().isNested()) {
-                    nameNotChanged = info.getFileObject().getName().equals(element);
+                    nameNotChanged = info.getFileObject().getName().contentEquals(((TypeElement) element).getSimpleName());
                 }
             }
             if (nameNotChanged) {
@@ -283,19 +283,28 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
                     fastCheckProblem = createProblem(fastCheckProblem, true, msg);
                     return fastCheckProblem;
                 }
+                FileObject parentFolder = fo.getParent();
+                Enumeration enumeration = parentFolder.getFolders(false);
+                while (enumeration.hasMoreElements()) {
+                    FileObject subfolder = (FileObject) enumeration.nextElement();
+                    if (subfolder.getName().equals(newName)) {
+                        String msg = new MessageFormat(getString("ERR_ClassPackageClash")).format(
+                            new Object[] {newName, pkgname}
+                        );
+                        fastCheckProblem = createProblem(fastCheckProblem, true, msg);
+                        return fastCheckProblem;
+                    }
+                }
             }
             FileObject primFile = treePathHandle.getFileObject();
             FileObject folder = primFile.getParent();
-            FileObject[] children = folder.getChildren();
-            for (int x = 0; x < children.length; x++) {
-                if (children[x] != primFile && !children[x].isVirtual() && children[x].getName().equals(newName) && "java".equals(children[x].getExt())) { //NOI18N
-                    String msg = new MessageFormat(getString("ERR_ClassClash")).format(
-                            new Object[] {newName, folder.getPath()}
-                    );
-                    fastCheckProblem = createProblem(fastCheckProblem, true, msg);
-                    break;
-                }
-            } // for
+            FileObject existing = folder.getFileObject(newName, primFile.getExt());
+            if (existing != null && primFile != existing) {
+                // primFile != existing is check for case insensitive filesystems; #136434
+                String msg = NbBundle.getMessage(RenameRefactoringPlugin.class,
+                        "ERR_ClassClash", newName, folder.getPath());
+                fastCheckProblem = createProblem(fastCheckProblem, true, msg);
+            }
         } else if (kind == ElementKind.LOCAL_VARIABLE || kind == ElementKind.PARAMETER) {
             String msg = variableClashes(newName,treePath, info);
             if (msg != null) {
@@ -437,9 +446,9 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
         Set<FileObject> a = getRelevantFiles();
         fireProgressListenerStart(ProgressEvent.START, a.size());
         TransformTask transform = new TransformTask(new RenameTransformer(refactoring.getNewName(), allMethods, refactoring.isSearchInComments()), treePathHandle);
-        createAndAddElements(a, transform, elements, refactoring);
+        Problem problem = createAndAddElements(a, transform, elements, refactoring);
         fireProgressListenerStop();
-        return null;
+        return problem;
     }
 
     private static int getAccessLevel(Element e) {
@@ -548,7 +557,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
             );
         
         TreePath temp = tp;
-        while (temp.getLeaf().getKind() != Tree.Kind.METHOD) {
+        while (temp != null && temp.getLeaf().getKind() != Tree.Kind.METHOD) {
             Scope scope = info.getTrees().getScope(temp);
             for (Element el:scope.getLocalElements()) {
                 if (el.getSimpleName().toString().equals(newName)) {
