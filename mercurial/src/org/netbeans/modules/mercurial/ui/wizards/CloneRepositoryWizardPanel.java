@@ -40,7 +40,6 @@
  */
 package org.netbeans.modules.mercurial.ui.wizards;
 
-import java.net.MalformedURLException;
 import java.awt.Component;
 import java.awt.BorderLayout;
 import java.beans.PropertyChangeListener;
@@ -65,11 +64,8 @@ import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.HgModuleConfig;
-import org.netbeans.modules.mercurial.HgException;
-import org.netbeans.modules.mercurial.util.HgCommand;
 import org.netbeans.modules.mercurial.ui.repository.Repository;
 import org.netbeans.modules.mercurial.ui.repository.RepositoryConnection;
-import org.netbeans.modules.mercurial.ui.repository.HgURL;
 
 public class CloneRepositoryWizardPanel implements WizardDescriptor.AsynchronousValidatingPanel, PropertyChangeListener {
     
@@ -94,7 +90,7 @@ public class CloneRepositoryWizardPanel implements WizardDescriptor.Asynchronous
             if (repository == null) {
                 repositoryModeMask = repositoryModeMask | Repository.FLAG_URL_EDITABLE | Repository.FLAG_URL_ENABLED | Repository.FLAG_SHOW_HINTS | Repository.FLAG_SHOW_PROXY;
                 String title = org.openide.util.NbBundle.getMessage(CloneRepositoryWizardPanel.class, "CTL_Repository_Location");       // NOI18N
-                repository = new Repository(repositoryModeMask, title);
+                repository = new Repository(repositoryModeMask, title, false);
                 repository.addPropertyChangeListener(this);
                 CloneRepositoryPanel panel = (CloneRepositoryPanel)component;
                 panel.repositoryPanel.setLayout(new BorderLayout());
