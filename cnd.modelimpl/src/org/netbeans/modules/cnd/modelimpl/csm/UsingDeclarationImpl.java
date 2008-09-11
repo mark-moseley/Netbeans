@@ -46,6 +46,13 @@ import antlr.collections.AST;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.modelimpl.parser.CsmAST;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
@@ -59,16 +66,21 @@ import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
  * Implements CsmUsingDeclaration
  * @author Vladimir Kvasihn
  */
-public class UsingDeclarationImpl extends OffsetableDeclarationBase<CsmUsingDeclaration> implements CsmUsingDeclaration, RawNamable {
+public class UsingDeclarationImpl extends OffsetableDeclarationBase<CsmUsingDeclaration> 
+        implements CsmUsingDeclaration, RawNamable, Disposable {
 
     private final CharSequence name;
     private final int startOffset;
     private final CharSequence[] rawName;
     // TODO: don't store declaration here since the instance might change
     private CsmUID<CsmDeclaration> referencedDeclarationUID = null;
+    private WeakReference<CsmDeclaration> refDeclaration;
+    private boolean lastResolveFalure;
+    private final CsmUID<CsmScope> scopeUID;
     
-    public UsingDeclarationImpl(AST ast, CsmFile file) {
+    public UsingDeclarationImpl(AST ast, CsmFile file, CsmScope scope) {
         super(ast, file);
+        this.scopeUID = UIDCsmConverter.scopeToUID(scope);
         name = NameCache.getManager().getString(ast.getText());
         // TODO: here we override startOffset which is not good because startPosition is now wrong
         startOffset = ((CsmAST)ast.getFirstChild()).getOffset();
@@ -84,43 +96,82 @@ public class UsingDeclarationImpl extends OffsetableDeclarationBase<CsmUsingDecl
         // TODO: process non-class elements
 //        if (!Boolean.getBoolean("cnd.modelimpl.resolver"))
         CsmDeclaration referencedDeclaration = _getReferencedDeclaration();
-        if (referencedDeclaration == null) {
+        if (referencedDeclaration == null && ! lastResolveFalure) {
             _setReferencedDeclaration(null);
-            ProjectBase prjBase = ((ProjectBase)getProject());
-            referencedDeclaration = prjBase.findClassifier(name, true);
-            if (referencedDeclaration == null && rawName != null && rawName.length > 1) {
-                // resolve all before last ::
-                CharSequence[] partial = new CharSequence[rawName.length - 1];
-                System.arraycopy(rawName, 0, partial, 0, rawName.length - 1);
-                CsmObject result = ResolverFactory.createResolver(getContainingFile(), startOffset, resolver).resolve(partial, Resolver.NAMESPACE);
-                if (CsmKindUtilities.isNamespace(result)) {
+            if (rawName != null) {
+                ProjectBase prjBase = (ProjectBase)getProject();
+                CsmNamespace namespace = null;
+                if (rawName.length == 1) {
+                    namespace = prjBase.getGlobalNamespace();
+                } else if (rawName.length > 1) {
+                    CharSequence[] partial = new CharSequence[rawName.length - 1];
+                    System.arraycopy(rawName, 0, partial, 0, rawName.length - 1);
+                    CsmObject result = ResolverFactory.createResolver(getContainingFile(), startOffset, resolver).resolve(partial, Resolver.NAMESPACE);
+                    if (CsmKindUtilities.isNamespace(result)) {
+                        namespace = (CsmNamespace)result;
+                    }
+                }
+                if (namespace != null) {
                     CharSequence lastName = rawName[rawName.length - 1];
                     CsmDeclaration bestChoice = null;
-                    for (CsmDeclaration elem : ((CsmNamespace)result).getDeclarations()) {
-                        if (CharSequenceKey.Comparator.compare(lastName,elem.getName())==0) {
-                            if (!CsmKindUtilities.isExternVariable(elem)) {
-                                referencedDeclaration = elem;
-                                break;
-                            } else {
-                                bestChoice = elem;
+                    CsmFilter filter = CsmSelect.getDefault().getFilterBuilder().createNameFilter(lastName.toString(), true, true, false);
+
+                    // we should try searching not only in namespace resolved found,
+                    // but in numspaces with the same name in required projects
+                    // iz #140787 cout, endl unresolved in some Loki files
+                    Collection<CsmNamespace> namespacesToSearch = new ArrayList<CsmNamespace>();
+                    namespacesToSearch.add(namespace);
+                    CharSequence nspQName = namespace.getQualifiedName();
+                    for (CsmProject lib : getProject().getLibraries()) {
+                        CsmNamespace libNs = lib.findNamespace(nspQName);
+                        if (libNs != null) {
+                            namespacesToSearch.add(libNs);
+                        }
+                    }
+
+                    outer:
+                    for (CsmNamespace curr : namespacesToSearch) {
+                        Iterator<CsmOffsetableDeclaration> it = CsmSelect.getDefault().getDeclarations(curr, filter);
+                        while (it.hasNext()) {
+                            CsmDeclaration elem = it.next();
+                            if (CharSequenceKey.Comparator.compare(lastName,elem.getName())==0) {
+                                if (!CsmKindUtilities.isExternVariable(elem)) {
+                                    referencedDeclaration = elem;
+                                    break outer;
+                                } else {
+                                    bestChoice = elem;
+                                }
                             }
                         }
                     }
                     referencedDeclaration = referencedDeclaration == null ? bestChoice : referencedDeclaration;
                 }
             }
-            _setReferencedDeclaration(referencedDeclaration);                
+            _setReferencedDeclaration(referencedDeclaration);
+            lastResolveFalure = referencedDeclaration == null;
         }
         return referencedDeclaration;
     }
     
     private CsmDeclaration _getReferencedDeclaration() {
-        CsmDeclaration referencedDeclaration = UIDCsmConverter.UIDtoDeclaration(referencedDeclarationUID);
+        CsmDeclaration referencedDeclaration = null;
+        if (refDeclaration != null) {
+            referencedDeclaration =((Reference<CsmDeclaration>)refDeclaration).get();
+        }
+        if (referencedDeclaration == null) {
+            referencedDeclaration = UIDCsmConverter.UIDtoDeclaration(referencedDeclarationUID);
+            refDeclaration = new WeakReference<CsmDeclaration>(referencedDeclaration);
+        }
         // can be null if namespace was removed 
         return referencedDeclaration;
     }    
 
     private void _setReferencedDeclaration(CsmDeclaration referencedDeclaration) {
+        if (referencedDeclaration != null) {
+            refDeclaration = new WeakReference<CsmDeclaration>(referencedDeclaration);
+        } else {
+            refDeclaration = null;
+        }
         this.referencedDeclarationUID = UIDCsmConverter.declarationToUID(referencedDeclaration);
         assert this.referencedDeclarationUID != null || referencedDeclaration == null;
     }
@@ -147,8 +198,16 @@ public class UsingDeclarationImpl extends OffsetableDeclarationBase<CsmUsingDecl
     }
     
     public CsmScope getScope() {
-        //TODO: implement!
-        return null;
+        return  UIDCsmConverter.UIDtoScope(this.scopeUID);
+    }
+
+    @Override
+    public void dispose() {
+        super.dispose();
+        CsmScope scope = getScope();
+        if( scope instanceof MutableDeclarationsContainer ) {
+            ((MutableDeclarationsContainer) scope).removeDeclaration(this);
+        }
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -164,8 +223,10 @@ public class UsingDeclarationImpl extends OffsetableDeclarationBase<CsmUsingDecl
         
         // save cached declaration
         UIDObjectFactory.getDefaultFactory().writeUID(this.referencedDeclarationUID, output);
+        UIDObjectFactory.getDefaultFactory().writeUID(this.scopeUID, output);
     }
     
+    @SuppressWarnings("unchecked")
     public UsingDeclarationImpl(DataInput input) throws IOException {
         super(input);
         this.name = NameCache.getManager().getString(input.readUTF());
@@ -175,5 +236,6 @@ public class UsingDeclarationImpl extends OffsetableDeclarationBase<CsmUsingDecl
         
         // read cached declaration
         this.referencedDeclarationUID = UIDObjectFactory.getDefaultFactory().readUID(input);        
+        this.scopeUID = UIDObjectFactory.getDefaultFactory().readUID(input);
     }      
 }
