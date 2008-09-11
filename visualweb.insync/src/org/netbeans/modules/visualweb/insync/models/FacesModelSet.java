@@ -113,6 +113,11 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import org.netbeans.modules.web.jsf.api.facesmodel.ManagedBean;
+import org.openide.windows.TopComponent;
+import java.awt.Component;
+import java.awt.Container;
+import org.openide.windows.Mode;
+import org.openide.windows.WindowManager;
 
 /**
  * A specific concrete ModelSet class that knows all about JSF.
@@ -396,7 +401,7 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
     private FacesContainer facesContainer;
 
     // Memory leak probing
-    private static final Logger TIMERS = Logger.getLogger("TIMER.facesModelSets"); // NOI18N
+    private static final Logger TIMERS = Logger.getLogger("TIMER.visualweb"); // NOI18N
     
     /**
      * @param project
@@ -422,18 +427,30 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
                 try {
                     if (projectBuiltQueryStatus != null && projectBuiltQueryStatus.isBuilt()) {
                         classPathChanged();
-                        StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(FacesModelSet.class, "MSG_RefreshingModels")); // NOI18N
                         SwingUtilities.invokeLater(new Runnable() {
-                           public void run() {
-                               try {
-                                   // Now refresh all models
-                                   for (Iterator i = getModelsMap().values().iterator(); i.hasNext(); ) {
-                                       ((FacesModel)i.next()).refreshUnits();
-                                   }    
-                               } finally {
-                                   StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(FacesModelSet.class, "MSG_RefreshingModelsDone")); // NOI18N
-                               }
-                           }
+                            public void run() {
+                                List<FacesModel> visibleModels = getVisibleModels();
+                                if (visibleModels.size() > 0) {
+                                    StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(FacesModelSet.class,
+                                            "MSG_RefreshingModels")); // NOI18N
+                                }
+                                try {
+                                    // refresh visible models immediately and rest of them whenever they are visible
+                                    for (Iterator i = getModelsMap().values().iterator(); i.hasNext();) {
+                                        FacesModel fm = (FacesModel) i.next();
+                                        boolean immediate = false;
+                                        if (visibleModels.size() > 0 && (visibleModels.contains(fm) || !fm.isPageBean())) {
+                                            immediate = true;
+                                        }
+                                        fm.refreshUnits(immediate);
+                                    }
+                                } finally {
+                                    if (visibleModels.size() > 0) {
+                                        StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(FacesModelSet.class,
+                                                "MSG_RefreshingModelsDone")); // NOI18N
+                                    }
+                                }
+                            }
                         });
                     }
                 } catch (IllegalStateException ise) {
@@ -444,6 +461,71 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
         projectBuiltQueryStatus.addChangeListener(projectBuiltQueryStatusChangeListener);
     }
 
+    private List<FacesModel> getVisibleModels() {
+        List<FacesModel> visibleModels = new ArrayList<FacesModel>();
+        for(Mode mode : WindowManager.getDefault().getModes()) {
+            TopComponent tc = mode.getSelectedTopComponent();
+            if(tc != null && tc.isOpened() && isMultiViewTopComponent(tc)){
+                TopComponent topComponent = getSelectedMultiView(tc);
+                if(topComponent != null && isDesignerTopComponent(topComponent)) {
+//                    DataObject dObj = topComponent.getActivatedNodes()[0].getLookup().lookup(DataObject.class);
+                    // XXX #131996 Defend against possible NPE's.
+                    org.openide.nodes.Node[] activatedNodes = topComponent.getActivatedNodes();
+                    if (activatedNodes == null || activatedNodes.length == 0) {
+                        info(new NullPointerException("TopComponent doesn't have any activated nodes, topComponent="
+                                + topComponent + ", nodes=" + activatedNodes)); // NOI18N
+                        continue;
+                    }
+                    DataObject dObj = activatedNodes[0].getLookup().lookup(DataObject.class);
+                    if (dObj == null) {
+                        info(new NullPointerException("Activated node from top component"
+                                + " doesn't contain DataObject in its first activated node lookup, topComponent="
+                                + topComponent + ", node=" + activatedNodes[0])); // NOI18N
+                        continue;
+                    }
+                    visibleModels.add((FacesModel)getModel(dObj.getPrimaryFile()));
+                }
+            }
+        }
+        return visibleModels;
+    }
+    
+    // Copied from org.netbeans.modules.visualweb.outline.OutlineManagerListener
+    private static boolean isDesignerTopComponent(TopComponent tc) {
+        return tc != null &&
+               "org.netbeans.modules.visualweb.designer.jsf.ui.JsfTopComponent".equals(tc.getClass().getName()); // NOI18N
+    }
+
+    // Copied from org.netbeans.modules.visualweb.outline.OutlineManagerListener
+    private static boolean isMultiViewTopComponent(TopComponent tc) {
+        return tc != null && 
+               "org.netbeans.core.multiview.MultiViewCloneableTopComponent".equals(tc.getClass().getName()); // NOI18N
+    }
+    
+    // Copied from org.netbeans.modules.visualweb.outline.OutlineManagerListener
+    private static TopComponent getSelectedMultiView(TopComponent tc) {
+        for (TopComponent containedTC : findDescendantsOfTopComponent(tc)) {
+            if(containedTC.isVisible()) { // XXX Means is selected in that multiview (terrible hack)
+                return containedTC;
+            }
+        }
+        return null;
+    }
+    
+    // Copied from org.netbeans.modules.visualweb.outline.OutlineManagerListener
+    private static TopComponent[] findDescendantsOfTopComponent(Container parent) {
+        List<TopComponent> list = new ArrayList<TopComponent>();
+        for (Component child : parent.getComponents()) {
+            if(child instanceof TopComponent) {
+                list.add((TopComponent)child);
+                continue;
+            }
+            if(child instanceof Container) {
+                list.addAll(java.util.Arrays.asList(findDescendantsOfTopComponent((Container)child)));
+            }
+        }
+        return list.toArray(new TopComponent[0]);
+    }    
 
     private void doModeling() {
         //In case of new project, we need to model all the managed beans in order
@@ -955,6 +1037,12 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
             extension = name.substring(index + 1);
             name = name.substring(0, index);
         }
+        // XXX #131857 If the file already exists, try to delete it first
+        // (in order to get replaced).
+        FileObject oldFile = parentFileObject.getFileObject(name, extension);
+        if (oldFile != null) {
+            oldFile.delete();
+        }
         FileObject copy = source.copy(parentFileObject, name, extension);
         URI uri = relativize(copy);
         return uri;
@@ -1094,8 +1182,7 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
     public void setProjectData(String key, Object data) {
         userData.put(key, data);
         // PROJECTTODO2: Still need to put this on project save not on set.
-        AuxiliaryConfiguration config = (AuxiliaryConfiguration) project.getLookup().lookup(AuxiliaryConfiguration.class);
-        assert config != null : "project has no AuxiliaryConfiguration";
+        AuxiliaryConfiguration config = ProjectUtils.getAuxiliaryConfiguration(project);
         DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
         try {
             // !EAT TODO move this to flushProjectData()
@@ -1122,8 +1209,7 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
             return String.valueOf(result);
         }
 //        if (JsfProjectUtils.isEnabled()) {
-            AuxiliaryConfiguration config = (AuxiliaryConfiguration) project.getLookup().lookup(AuxiliaryConfiguration.class);
-            assert config != null : "project has no AuxiliaryConfiguration";
+            AuxiliaryConfiguration config = ProjectUtils.getAuxiliaryConfiguration(project);
             Element element = config.getConfigurationFragment(PROJECTDATA_ELEMENT_KEY_PREFIX + key, PROJECTDATA_ELEMENT_NAMESPACE, false);
             if (element == null)
                 return null;
@@ -1403,5 +1489,8 @@ public class FacesModelSet extends ModelSet implements FacesDesignProject {
         }
     }
 
+    private static void info(Exception ex) {
+        Logger.getLogger(FacesModelSet.class.getName()).log(Level.INFO, null, ex);
+    }
     
 }
