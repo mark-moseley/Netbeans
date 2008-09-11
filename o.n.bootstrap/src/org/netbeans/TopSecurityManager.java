@@ -41,6 +41,7 @@
 
 package org.netbeans;
 
+import java.awt.AWTPermission;
 import java.io.FileDescriptor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -58,6 +59,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.openide.util.Lookup;
 
 /** NetBeans security manager implementation.
 * @author Ales Novak, Jesse Glick
@@ -75,8 +79,10 @@ public class TopSecurityManager extends SecurityManager {
     private static final Class URLClass = URL.class;
     private static final Class runtimePermissionClass = RuntimePermission.class;
     private static final Class accessControllerClass = AccessController.class;
+    private static final Class awtPermissionClass = AWTPermission.class;
+    private static SecurityManager fsSecManager;
 
-    private static List<SecurityManager> delegates = new ArrayList<SecurityManager>();
+    private static final List<SecurityManager> delegates = new ArrayList<SecurityManager>();
     /** Register a delegate security manager that can handle some checks for us.
      * Currently only checkExit and checkTopLevelWindow are supported.
      * @param sm the delegate to register
@@ -99,6 +105,15 @@ public class TopSecurityManager extends SecurityManager {
         synchronized (delegates) {
             if (delegates.contains(sm)) throw new SecurityException();
             delegates.add(sm);
+            if (fsSecManager == null) {
+                for (Lookup.Item<SecurityManager> item : Lookup.getDefault().lookupResult(SecurityManager.class).allItems()) {
+                    if (item != null && "org.netbeans.modules.masterfs.filebasedfs.utils.FileChangedManager".equals(item.getId())) {//NOI18N
+                        fsSecManager = item.getInstance();
+                        break;
+                    }
+                }
+                assert fsSecManager != null;
+            }            
         }
     }
     /** Unregister a delegate security manager.
@@ -138,7 +153,29 @@ public class TopSecurityManager extends SecurityManager {
         PrivilegedCheck.checkExit(status, this);
     }
 
+    SecurityManager getSecurityManager() {
+        if (fsSecManager == null) {
+            synchronized (delegates) {
+                return fsSecManager;
+            }        
+        }
+        return fsSecManager;
+    }
+    
+    private void notifyDelete(String file) {
+        SecurityManager s = getSecurityManager();
+        if (s != null) {
+            s.checkDelete(file);
+        }
+    }
 
+    private void notifyWrite(String file) {
+        SecurityManager s = getSecurityManager();
+        if (s != null) {
+            s.checkWrite(file);
+        }
+    }
+    
     private static boolean officialExit = false;
     /** Can be called from core classes to exit the system.
      * Direct calls to System.exit will not be honored, for safety.
@@ -229,20 +266,6 @@ public class TopSecurityManager extends SecurityManager {
                 }
             }
         }
-        
-        if ("javax.xml.parsers.SAXParserFactory".equals(x)) {
-            if (Thread.currentThread().getContextClassLoader().getResource(
-                    "org/netbeans/core/startup/SAXFactoryImpl.class") != null) return;
-            throw new SecurityException ("");            
-        }
-        
-        if ("javax.xml.parsers.DocumentBuilderFactory".equals(x)) {
-            if (Thread.currentThread().getContextClassLoader().getResource(
-                    "org/netbeans/core/startup/DOMFactoryImpl.class") != null) return;
-            throw new SecurityException ("");            
-        }
-        
-        return;
     }
     private final Set<String> warnedClassesNDE = new HashSet<String>(25);
     private static final Set<String> warnedClassesNH = new HashSet<String>(25);
@@ -266,11 +289,13 @@ public class TopSecurityManager extends SecurityManager {
     public @Override void checkRead(FileDescriptor fd) {
     }
 
+    
     public @Override void checkWrite(FileDescriptor fd) {
     }
 
     /** The method has awful performance in super class */
     public @Override void checkDelete(String file) {
+        notifyDelete(file);
         try {
             checkPermission(allPermission);
             return;
@@ -278,8 +303,10 @@ public class TopSecurityManager extends SecurityManager {
             super.checkDelete(file);
         }
     }
+           
     /** The method has awful performance in super class */
     public @Override void checkWrite(String file) {
+        notifyWrite(file);
         try {
             checkPermission(allPermission);
             return;
@@ -340,7 +367,7 @@ public class TopSecurityManager extends SecurityManager {
         // part of makeSwingUseSpecialClipboard that makes it work on
         // JDK 1.5
         //
-        if (perm instanceof java.awt.AWTPermission) {
+        if (awtPermissionClass.isInstance(perm)) {
             if ("accessClipboard".equals (perm.getName ())) { // NOI18N
                 ThreadLocal<Object> t;
                 synchronized (TopSecurityManager.class) {
@@ -366,10 +393,40 @@ public class TopSecurityManager extends SecurityManager {
         return;
     }
     
+    public static void install() {
+        try {
+            System.setSecurityManager(new TopSecurityManager());
+        } catch (SecurityException ex) {
+            Logger.getLogger("global").log(Level.WARNING, "Cannot associated own security manager"); // NOI18N
+            Logger.getLogger("global").log(Level.INFO, "Cannot associated own security manager", ex); // NOI18N
+        }
+    }
+    static void uninstall() {
+        System.setSecurityManager(null);
+    }
+    
     /** Prohibits to set another SecurityManager */
-    private static void checkSetSecurityManager(Permission perm) {
+    private void checkSetSecurityManager(Permission perm) {
         if (runtimePermissionClass.isInstance(perm)) {
-            if ("setSecurityManager".equals(perm.getName())) { // NOI18N - hardcoded in java.lang
+            if (perm.getName().equals("setSecurityManager")) { // NOI18N - hardcoded in java.lang
+                Class[] arr = getClassContext();
+                boolean seenJava = false;
+                for (int i = 0; i < arr.length; i++) {
+                    if (arr[i].getName().equals("org.netbeans.TopSecurityManager")) { // NOI18N
+                        if (seenJava) {
+                            // if the change of security manager is called from my own
+                            // class or the class loaded by other classloader, then it is likely ok
+                            return;
+                        } else {
+                            continue;
+                        }
+                    }
+                    if (arr[i] != System.class) {
+                        // if there is a non-java class on stack, skip and throw exception
+                        break;
+                    }
+                    seenJava = true;
+                }
                 throw new SecurityException();
             }
         }
@@ -535,7 +592,9 @@ LOOP:   for (int i = 0; i < ctx.length; i++) {
         } catch (Throwable t) {
             t.printStackTrace();
         } finally {
-            CLIPBOARD_FORBIDDEN.set (null);
+            if (CLIPBOARD_FORBIDDEN != null) {
+                CLIPBOARD_FORBIDDEN.set (null);
+            }
         }
     }
     
