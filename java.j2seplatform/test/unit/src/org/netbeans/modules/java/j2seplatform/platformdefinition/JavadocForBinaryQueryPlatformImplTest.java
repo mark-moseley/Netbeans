@@ -42,51 +42,41 @@
 package org.netbeans.modules.java.j2seplatform.platformdefinition;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.jar.JarOutputStream;
-import java.util.zip.ZipEntry;
-import junit.framework.Test;
-import junit.framework.TestCase;
-import junit.framework.TestSuite;
+import java.util.List;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery;
-import org.netbeans.api.project.TestUtil;
 import org.netbeans.junit.NbTestCase;
-import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
-import org.openide.util.Lookup;
 import org.openide.util.Utilities;
-import org.openide.util.lookup.Lookups;
 import org.netbeans.core.startup.layers.ArchiveURLMapper;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.modules.masterfs.MasterURLMapper;
 
 // XXX needs to test listening as well
+import org.openide.util.test.MockLookup;
 
 /**
  * JavadocForBinaryQueryPlatformImpl test
  *
  * @author  David Konecny
  */
-public class JavadocForBinaryQueryPlatformImplTest extends NbTestCase implements Lookup.Provider {
-    
+public class JavadocForBinaryQueryPlatformImplTest extends NbTestCase {
     
     public JavadocForBinaryQueryPlatformImplTest(java.lang.String testName) {
         super(testName);
-        TestUtil.setLookup (Lookups.proxy(this));
+        MockLookup.setInstances(
+                new JavaPlatformProviderImpl(),
+                new ArchiveURLMapper(),
+                new JavadocForBinaryQueryPlatformImpl(),
+                new MasterURLMapper());
     }
     
-    private Lookup lookup;
-    
-    protected void setUp() throws Exception {
+    protected @Override void setUp() throws Exception {
         System.setProperty("netbeans.user", getWorkDirPath()); 
         super.setUp();
         clearWorkDir();                
@@ -99,12 +89,13 @@ public class JavadocForBinaryQueryPlatformImplTest extends NbTestCase implements
         }
         return dir;
     }
-    
+
+    @RandomlyFails
     public void testQuery() throws Exception {
         JavaPlatform platform = JavaPlatform.getDefault();
         
         ClassPath cp = platform.getBootstrapLibraries();
-        ClassPath.Entry entry = (ClassPath.Entry)cp.entries().iterator().next();
+        ClassPath.Entry entry = cp.entries().iterator().next();
         URL url = entry.getURL();
         if (FileUtil.getArchiveFile(url) != null) {
             url = FileUtil.getArchiveFile(url);
@@ -116,26 +107,40 @@ public class JavadocForBinaryQueryPlatformImplTest extends NbTestCase implements
         URL urls[] = JavadocForBinaryQuery.findJavadoc(u).getRoots();
         assertEquals(0, urls.length);
 
-        ArrayList l = new ArrayList();
+        List<URL> l = new ArrayList<URL>();
         File javadocFile = getBaseDir();
+        File api = new File (javadocFile,"api");
+        File index = new File (api,"index-files");
+        FileUtil.toFileObject(index);
+        index.mkdirs();
         l.add(javadocFile.toURI().toURL());
         J2SEPlatformImpl platformImpl = (J2SEPlatformImpl)platform;
         platformImpl.setJavadocFolders(l);
         urls = JavadocForBinaryQuery.findJavadoc(u).getRoots();
         assertEquals(1, urls.length);
-        assertEquals(javadocFile.toURI().toURL(), urls[0]);
+        assertEquals(api.toURI().toURL(), urls[0]);
     }
     
-    public synchronized Lookup getLookup() {
-        if (lookup == null) {
-            lookup = Lookups.fixed(new Object[] {
-                new JavaPlatformProviderImpl (),
-                new ArchiveURLMapper(),
-                new JavadocForBinaryQueryPlatformImpl(),
-                new MasterURLMapper(),
-            });
-        }
-        return lookup;
-    }        
+    public void testJavadocFolders () throws Exception {
+        final File wd = this.getWorkDir();
+        final FileObject wdfo = FileUtil.toFileObject(wd);
+        final FileObject golden1 = FileUtil.createFolder(wdfo,"test1/docs/api/index-files").getParent();        //NOI18N
+        final FileObject golden2 = FileUtil.createFolder(wdfo,"test2/docs/ja/api/index-files").getParent();     //NOI18N
+        FileObject testFo = wdfo.getFileObject("test1");                                                        //NOI18N
+        FileObject res = JavadocForBinaryQueryPlatformImpl.findIndexFolder(testFo);
+        assertEquals(res, golden1);
+        testFo = wdfo.getFileObject("test1/docs");                                                              //NOI18N
+        res = JavadocForBinaryQueryPlatformImpl.findIndexFolder(testFo);
+        assertEquals(res, golden1);
+        testFo = wdfo.getFileObject("test2");                                                                   //NOI18N
+        res = JavadocForBinaryQueryPlatformImpl.findIndexFolder(testFo);
+        assertEquals(res, golden2);
+        testFo = wdfo.getFileObject("test2/docs");                                                              //NOI18N
+        res = JavadocForBinaryQueryPlatformImpl.findIndexFolder(testFo);
+        assertEquals(res, golden2);
+        testFo = wdfo.getFileObject("test2/docs/ja");                                                           //NOI18N
+        res = JavadocForBinaryQueryPlatformImpl.findIndexFolder(testFo);
+        assertEquals(res, golden2);        
+    }
     
 }

@@ -48,7 +48,6 @@ import java.io.File;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.net.URL;
 import java.net.URI;
 import java.net.MalformedURLException;
@@ -57,11 +56,12 @@ import javax.swing.filechooser.FileFilter;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.event.ListSelectionEvent;
 import org.openide.NotifyDescriptor;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.spi.java.classpath.PathResourceImplementation;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
+import org.openide.util.Exceptions;
 
 
 
@@ -128,8 +128,8 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
                     break;
                 case JAVADOC:
                     key = "TXT_JDKJavadoc";         //NOI18N
-                    mneKey = "MNE_JDKJavadoc";      //NOI8N
-                    ad = "AD_JDKJavadoc";      //NOI8N
+                    mneKey = "MNE_JDKJavadoc";      //NOI18N
+                    ad = "AD_JDKJavadoc";      //NOI18N
                     break;
                 default:
                     assert false : "Illegal type of panel";     //NOI18N
@@ -348,7 +348,7 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
             chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
             //#61789 on old macosx (jdk 1.4.1) these two method need to be called in this order.
             chooser.setAcceptAllFileFilterUsed( false );
-            chooser.setFileFilter (new SimpleFileFilter(message,new String[] {"ZIP","JAR"}));   //NOI18N
+            chooser.setFileFilter (new ArchiveFileFilter(message,new String[] {"ZIP","JAR"}));   //NOI18N
             if (this.currentDir != null) {
                 chooser.setCurrentDirectory(this.currentDir);
             }
@@ -444,7 +444,7 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
 
         private J2SEPlatformImpl platform;
         private int type;
-        private java.util.List data;
+        private java.util.List<URL> data;
 
         public PathModel (J2SEPlatformImpl platform, int type) {
             this.platform = platform;
@@ -456,8 +456,8 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
         }
 
         public Object getElementAt(int index) {
-            java.util.List list = this.getData();
-            URL url = (URL)list.get(index);
+            java.util.List<URL> list = this.getData();
+            URL url = list.get(index);
             if ("jar".equals(url.getProtocol())) {      //NOI18N
                 URL fileURL = FileUtil.getArchiveFile (url);
                 if (FileUtil.getArchiveRoot(fileURL).equals(url)) {
@@ -487,10 +487,10 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
         }
 
         private void moveUpPath (int[] indices) {
-            java.util.List data = getData ();
+            java.util.List<URL> data = getData ();
             for (int i=0; i<indices.length; i++) {
-                Object p2 = data.get (indices[i]);
-                Object p1 = data.set (indices[i]-1,p2);
+                URL p2 = data.get (indices[i]);
+                URL p1 = data.set (indices[i]-1,p2);
                 data.set (indices[i],p1);
             }
             updatePlatform ();
@@ -498,10 +498,10 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
         }
 
         private void moveDownPath (int[] indices) {
-            java.util.List data = getData ();
+            java.util.List<URL> data = getData ();
             for (int i=indices.length-1; i>=0; i--) {
-                Object p1 = data.get (indices[i]);
-                Object p2 = data.set (indices[i]+1,p1);
+                URL p1 = data.get (indices[i]);
+                URL p2 = data.set (indices[i]+1,p1);
                 data.set (indices[i],p2);
             }
             updatePlatform();
@@ -525,10 +525,10 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
                 try {
                     url = new URL (url.toExternalForm()+"/");
                 } catch (MalformedURLException mue) {
-                    ErrorManager.getDefault().notify(mue);
+                    Exceptions.printStackTrace(mue);
                 }
             }
-            java.util.List data = getData();
+            java.util.List<URL> data = getData();
             int oldSize = data.size ();
             data.add (url);
             updatePlatform();
@@ -536,36 +536,34 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
             return true;
         }
 
-        private synchronized java.util.List getData () {
+        private synchronized java.util.List<URL> getData () {
             if (this.data == null) {
                 switch (this.type) {
                     case CLASSPATH:
-                        this.data = getPathList (this.platform.getBootstrapLibraries());
+                        this.data = getPathList(this.platform.getBootstrapLibraries());
                         break;
                     case SOURCES:
-                        this.data = getPathList (this.platform.getSourceFolders());
+                        this.data = getPathList(this.platform.getSourceFolders());
                         break;
                     case JAVADOC:
-                        this.data = new ArrayList(this.platform.getJavadocFolders());
+                        this.data = new ArrayList<URL>(this.platform.getJavadocFolders());
                         break;
                 }
             }
             return this.data;
         }
 
-        private static java.util.List getPathList (ClassPath cp) {
-            java.util.List result = new ArrayList ();
-            for (Iterator it = cp.entries().iterator(); it.hasNext();) {
-                ClassPath.Entry entry = (ClassPath.Entry) it.next ();
+        private static java.util.List<URL> getPathList (ClassPath cp) {
+            java.util.List<URL> result = new ArrayList<URL> ();
+            for (ClassPath.Entry entry : cp.entries()) {
                 result.add (entry.getURL());
             }
             return result;
         }
 
-        private static ClassPath createClassPath (java.util.List/*<URL>*/ roots) {
-            java.util.List resources = new ArrayList ();
-            for (Iterator it = roots.iterator(); it.hasNext();) {
-                URL url = (URL) it.next ();
+        private static ClassPath createClassPath (java.util.List<URL> roots) {
+            java.util.List<PathResourceImplementation> resources = new ArrayList<PathResourceImplementation> ();
+            for (URL url : roots) {
                 resources.add (ClassPathSupport.createResource(url));
             }
             return ClassPathSupport.createClassPath(resources);
@@ -586,13 +584,13 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
     }
 
 
-    private static class SimpleFileFilter extends FileFilter {
+    private static class ArchiveFileFilter extends FileFilter {
 
         private String description;
         private Collection extensions;
 
 
-        public SimpleFileFilter (String description, String[] extensions) {
+        public ArchiveFileFilter (String description, String[] extensions) {
             this.description = description;
             this.extensions = Arrays.asList(extensions);
         }
@@ -605,7 +603,15 @@ public class J2SEPlatformCustomizer extends JTabbedPane {
             if (index <= 0 || index==name.length()-1)
                 return false;
             String extension = name.substring (index+1).toUpperCase();
-            return this.extensions.contains(extension);
+            if (!this.extensions.contains(extension)) {
+                return false;
+            }
+            try {
+                return FileUtil.isArchiveFile(f.toURI().toURL());
+            } catch (MalformedURLException e) {
+                Exceptions.printStackTrace(e);
+                return false;
+            }
         }
 
         public String getDescription() {

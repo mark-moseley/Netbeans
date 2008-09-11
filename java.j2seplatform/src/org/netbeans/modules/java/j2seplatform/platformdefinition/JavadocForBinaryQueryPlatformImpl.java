@@ -45,19 +45,24 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.logging.Logger;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery;
 import org.netbeans.spi.java.queries.JavadocForBinaryQueryImplementation;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.ChangeSupport;
+import org.openide.util.Exceptions;
 import org.openide.util.WeakListeners;
 
 /**
@@ -73,7 +78,6 @@ public class JavadocForBinaryQueryPlatformImpl implements JavadocForBinaryQueryI
     private static final int STATE_INDEX = 4;
 
     private static final String NAME_DOCS = "docs"; //NOI18N
-    private static final String NAME_JA = "ja";     //NOI18N
     private static final String NAME_API = "api";   //NOI18N
     private static final String NAME_IDNEX ="index-files";  //NOI18N
 
@@ -96,14 +100,32 @@ public class JavadocForBinaryQueryPlatformImpl implements JavadocForBinaryQueryI
             public synchronized URL[] getRoots() {
                 if (this.cachedRoots == null) {
                     List<URL> l = new ArrayList<URL>();
-                    for (URL u : platform.getJavadocFolders()) {
-                        l.add(getIndexFolder(u));
+                    for (URL u : platform.getJavadocFolders()) {                        
+                        if (u != null) {
+                            FileObject root = URLMapper.findFileObject(u);
+                            if (root == null) {
+                                //Non existing
+                                l.add (u);
+                            }
+                            else if (root.isFolder()) {
+                                //Has to be folder
+                                try {
+                                    l.add(getIndexFolder(root));
+                                } catch (FileStateInvalidException e) {
+                                    Exceptions.printStackTrace(e);
+                                }
+                            }
+                            else {
+                                Logger.getLogger(JavadocForBinaryQueryPlatformImpl.class.getName()).warning(
+                                        "Ignoring non folder root: " + FileUtil.getFileDisplayName(root));
+                            }
+                        }
                     }
                     this.cachedRoots = l.toArray(new URL[l.size()]);
                 }
                 return this.cachedRoots;
             }
-
+            
             public synchronized void addChangeListener(ChangeListener l) {
                 assert l != null : "Listener can not be null";      //NOI18N
                 cs.addChangeListener(l);
@@ -148,47 +170,36 @@ public class JavadocForBinaryQueryPlatformImpl implements JavadocForBinaryQueryI
      * @param URL Javadoc folder/file
      * @return URL either the URL of folder containg the index or the given parameter if the index was not found.
      */
-    private static URL getIndexFolder (URL rootURL) {
-        if (rootURL == null) {
-            return null;
-        }
-        FileObject root = URLMapper.findFileObject(rootURL);
-        if (root == null) {
-            return rootURL;
-        }
+    private static URL getIndexFolder (FileObject root) throws FileStateInvalidException {        
         FileObject result = findIndexFolder (root);
-        try {
-            return result == null ? rootURL : result.getURL();        
-        } catch (FileStateInvalidException e) {
-            ErrorManager.getDefault().notify (e);
-            return rootURL;
-        }
+        return result == null ? root.getURL() : result.getURL();        
     }
     
-    private static FileObject findIndexFolder (FileObject fo) {
+    //Package private, used by tests
+    /*private*/ static FileObject findIndexFolder (FileObject fo) {
         int state = STATE_START;
         while (state != STATE_ERROR && state != STATE_INDEX) {
             switch (state) {
                 case STATE_START:
                     {
-                        FileObject tmpFo = fo.getFileObject(NAME_DOCS);    //NOI18N
+                        FileObject tmpFo = fo.getFileObject(NAME_DOCS);
                         if (tmpFo != null) {
                             fo = tmpFo;
                             state = STATE_DOCS;
                             break;
-                        }
-                        tmpFo = fo.getFileObject(NAME_JA);     //NOI18N
-                        if (tmpFo != null) {
-                            fo = tmpFo;
-                            state = STATE_LAN;
-                            break;
-
-                        }
+                        }                        
                         tmpFo = fo.getFileObject(NAME_API);
                         if (tmpFo != null) {
                             fo = tmpFo;
                             state = STATE_API;
                             break;
+                        }
+                        tmpFo = getLocalization (fo);
+                        if (tmpFo != null) {
+                            fo = tmpFo;
+                            state = STATE_LAN;
+                            break;
+
                         }
                         fo = null;
                         state = STATE_ERROR;
@@ -196,18 +207,19 @@ public class JavadocForBinaryQueryPlatformImpl implements JavadocForBinaryQueryI
                     }
                 case STATE_DOCS:
                     {
-                        FileObject tmpFo = fo.getFileObject(NAME_JA);
-                        if (tmpFo != null) {
-                            fo = tmpFo;
-                            state = STATE_LAN;
-                            break;
-                        }
-                        tmpFo = fo.getFileObject(NAME_API);
+                        FileObject tmpFo = fo.getFileObject(NAME_API);
                         if (tmpFo != null) {
                             fo = tmpFo;
                             state = STATE_API;
                             break;
                         }
+                        tmpFo = getLocalization (fo);
+                        if (tmpFo != null) {
+                            fo = tmpFo;
+                            state = STATE_LAN;
+                            break;
+                        }
+                        
                         fo = null;
                         state = STATE_ERROR;
                         break;
@@ -238,6 +250,57 @@ public class JavadocForBinaryQueryPlatformImpl implements JavadocForBinaryQueryI
             }
         }
         return fo;
+    }
+    
+    private static FileObject getLocalization (final FileObject root)  {
+        final FileObject[] children = root.getChildren();
+        if (children.length == 0) {
+            return null;
+        }
+        else if (children.length == 1) {
+            return children[0];
+        }
+        else {   
+            final Set<FileObject> candidates = new HashSet<FileObject>();
+            for (FileObject fo : children) {
+                if (!fo.isFolder()) {
+                    continue;
+                }
+                if (fo.getName().charAt(0) == '.') { //Hidden, ignore
+                    continue;
+                }
+                candidates.add(fo);
+            }
+            if (candidates.isEmpty()) {
+                return null;
+            }
+            else if (candidates.size() == 1) {
+                return candidates.iterator().next();
+            }
+            else {
+                //Slow, especially first call
+                final Set<String> locales = getLocales();
+                for (FileObject fo : candidates) {
+                    if (locales.contains(fo.getName())) {
+                        return fo;
+                    }
+                }
+                return null;
+            }
+        }
+    }
+    
+    private static Set<String> locales;
+    
+    private static synchronized Set<String> getLocales () {
+        if (locales == null) {
+            final Locale[] locs = Locale.getAvailableLocales();
+            locales = new HashSet<String>();
+            for (Locale l : locs) {
+                locales.add (l.toString());
+            }
+        }
+        return locales;
     }
     
 }
