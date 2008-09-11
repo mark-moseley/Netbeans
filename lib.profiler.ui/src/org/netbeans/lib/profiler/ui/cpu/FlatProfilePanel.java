@@ -110,7 +110,8 @@ public abstract class FlatProfilePanel extends CPUResultsPanel {
     private static final String INVOCATIONS_COLUMN_NAME = messages.getString("FlatProfilePanel_InvocationsColumnName"); // NOI18N
     private static final String INVOCATIONS_COLUMN_TOOLTIP = messages.getString("FlatProfilePanel_InvocationsColumnToolTip"); // NOI18N
     private static final String TABLE_ACCESS_NAME = messages.getString("FlatProfilePanel_TableAccessName"); // NOI18N
-                                                                                                            // -----
+    private static final String NO_RELEVANT_DATA = messages.getString("FlatProfilePanel_NoRelevantData"); // NOI18N
+// -----
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -213,9 +214,13 @@ public abstract class FlatProfilePanel extends CPUResultsPanel {
     }
 
     public void setResultsAvailable(boolean available) {
-        jScrollPane.setViewportView(available ? resTable : noDataPanel);
-        revalidate();
-        repaint();
+        JViewport viewport = jScrollPane.getViewport();
+        Component viewComponent = available ? resTable : noDataPanel;
+        if (viewComponent != viewport.getView()) {
+            viewport.setView(viewComponent);
+            revalidate();
+            repaint();
+        }
     }
 
     public Object getResultsViewReference() {
@@ -892,7 +897,7 @@ public abstract class FlatProfilePanel extends CPUResultsPanel {
                 }
             });
         noDataPanel = new JPanel(new BorderLayout());
-        noDataPanel.add(new JLabel("No relevant data available"), BorderLayout.NORTH);
+        noDataPanel.add(new JLabel(NO_RELEVANT_DATA), BorderLayout.NORTH);
         noDataPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         noDataPanel.setBackground(resTable.getBackground());
         jScrollPane.setViewportView(null);
