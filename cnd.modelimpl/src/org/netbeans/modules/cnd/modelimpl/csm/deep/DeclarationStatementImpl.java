@@ -136,13 +136,20 @@ public class DeclarationStatementImpl extends StatementBase implements CsmDeclar
                                 if (token != null && (token.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN || token.getType() == CPPTokenTypes.CSM_TYPE_COMPOUND)) {
                                     AST typeToken = token;
                                     AST next = token.getNextSibling();
+                                    AST ptrOperator = null;
+                                    while (next != null && next.getType() == CPPTokenTypes.CSM_PTR_OPERATOR) {
+                                        if (ptrOperator == null) {
+                                            ptrOperator = next;
+                                        }
+                                        next = next.getNextSibling();
+                                    }
                                     if (next != null && next.getType() == CPPTokenTypes.CSM_QUALIFIED_ID) {
                                         do {
                                             TypeImpl type;
                                             if (typeToken.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN) {
-                                                type = TypeFactory.createBuiltinType(typeToken.getText(), null, 0, typeToken, getContainingFile());
+                                                type = TypeFactory.createBuiltinType(typeToken.getText(), ptrOperator, 0, typeToken, getContainingFile());
                                             } else {
-                                                type = TypeFactory.createType(typeToken, getContainingFile(), null, 0);
+                                                type = TypeFactory.createType(typeToken, getContainingFile(), ptrOperator, 0);
                                             }
                                             String name = next.getText();
 
@@ -190,13 +197,13 @@ public class DeclarationStatementImpl extends StatementBase implements CsmDeclar
 		    }
 		    case CPPTokenTypes.CSM_ENUM_DECLARATION:
 		    {
-			CsmEnum csmEnum = EnumImpl.create(token, currentNamespace, getContainingFile());
+			CsmEnum csmEnum = EnumImpl.create(token, currentNamespace, getContainingFile(), !isRenderingLocalContext());
 			declarators.add(csmEnum);
 			renderVariableInClassifier(token, csmEnum, currentNamespace, container);
 			break;
 		    }
                     case CPPTokenTypes.CSM_GENERIC_DECLARATION:
-                        CsmTypedef[] typedefs = renderTypedef(token, (FileImpl) getContainingFile(), getScope());
+                        CsmTypedef[] typedefs = renderTypedef(token, (FileImpl) getContainingFile(), getScope(), null);
 			if( typedefs != null && typedefs.length > 0 ) {
 			    for (int i = 0; i < typedefs.length; i++) {
 				declarators.add(typedefs[i]);
@@ -205,6 +212,12 @@ public class DeclarationStatementImpl extends StatementBase implements CsmDeclar
                 }
 	    }
 	}
+
+        @Override
+        protected CsmClassForwardDeclaration createForwardClassDeclaration(AST ast, MutableDeclarationsContainer container, FileImpl file, CsmScope scope) {
+            // TODO : implement local forward decls support
+            return null;
+        }
 
 // Never used 
 //	/**
