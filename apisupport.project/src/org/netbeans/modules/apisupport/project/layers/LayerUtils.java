@@ -71,9 +71,9 @@ import org.netbeans.modules.apisupport.project.ManifestManager;
 import org.netbeans.modules.apisupport.project.NbModuleProject;
 import org.netbeans.modules.apisupport.project.NbModuleProjectGenerator;
 import org.netbeans.modules.apisupport.project.Util;
-import org.netbeans.modules.apisupport.project.Util;
 import org.netbeans.modules.apisupport.project.spi.NbModuleProvider;
 import org.netbeans.modules.apisupport.project.suite.SuiteProject;
+import org.netbeans.modules.apisupport.project.ui.customizer.SingleModuleProperties;
 import org.netbeans.modules.apisupport.project.ui.customizer.SuiteProperties;
 import org.netbeans.modules.apisupport.project.ui.customizer.SuiteUtils;
 import org.netbeans.modules.apisupport.project.universe.ModuleEntry;
@@ -91,11 +91,11 @@ import org.openide.ErrorManager;
 import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
-import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.MultiFileSystem;
 import org.openide.filesystems.XMLFileSystem;
@@ -108,7 +108,7 @@ import org.xml.sax.SAXException;
  * @author Jesse Glick
  */
 public class LayerUtils {
-    
+
     private LayerUtils() {}
     
     /**
@@ -215,7 +215,7 @@ public class LayerUtils {
     public static LayerHandle layerForProject(Project project) {
         LayerHandle handle = layerHandleCache.get(project);
         if (handle == null) {
-            handle = new LayerHandle(project);
+            handle = new LayerHandle(project, null);
             layerHandleCache.put(project, handle);
         }
         return handle;
@@ -281,13 +281,12 @@ public class LayerUtils {
         
     }
     
-    private static final class CookieImpl implements SavableTreeEditorCookie, FileChangeListener {
+    private static final class CookieImpl implements SavableTreeEditorCookie, FileChangeListener, AtomicAction {
         private TreeDocumentRoot root;
         private boolean dirty;
         private Exception problem;
         private final FileObject f;
         private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
-        private boolean saving;
         public CookieImpl(FileObject f) {
             //System.err.println("new CookieImpl for " + f);
             this.f = f;
@@ -357,38 +356,30 @@ public class LayerUtils {
             if (root == null || !dirty) {
                 return;
             }
-            assert !saving;
-            saving = true;
-            //System.err.println("saving");
-            try {
-                FileLock lock = f.lock();
-                try {
-                    OutputStream os = f.getOutputStream(lock);
-                    try {
-                        new TreeStreamResult(os).getWriter(root).writeDocument();
-                    } catch (TreeException e) {
-                        throw (IOException) new IOException(e.toString()).initCause(e);
-                    } finally {
-                        os.close();
-                    }
-                } finally {
-                    lock.releaseLock();
-                }
-            } finally {
-                saving = false;
-                //System.err.println("!saving in " + Thread.currentThread().getName() + " for " + this);
-            }
+            //System.err.println("saving in " + Thread.currentThread().getName() + " for " + this);
+            f.getFileSystem().runAtomicAction(this);
+            //System.err.println("!saving in " + Thread.currentThread().getName() + " for " + this);
             dirty = false;
             pcs.firePropertyChange(PROP_DIRTY, true, false);
         }
+        public void run() throws IOException {
+            OutputStream os = f.getOutputStream();
+            try {
+                new TreeStreamResult(os).getWriter(root).writeDocument();
+            } catch (TreeException e) {
+                throw (IOException) new IOException(e.toString()).initCause(e);
+            } finally {
+                os.close();
+            }
+        }
         public void fileChanged(FileEvent fe) {
-            changed();
+            changed(fe);
         }
         public void fileDeleted(FileEvent fe) {
-            changed();
+            changed(fe);
         }
         public void fileRenamed(FileRenameEvent fe) {
-            changed();
+            changed(fe);
         }
         public void fileAttributeChanged(FileAttributeEvent fe) {
             // ignore
@@ -399,10 +390,12 @@ public class LayerUtils {
         public void fileDataCreated(FileEvent fe) {
             assert false;
         }
-        private void changed() {
-            //System.err.println("changed on disk; saving=" + saving + " in " + Thread.currentThread().getName() + " for " + this);
+        private void changed(FileEvent fe) {
+            //System.err.println("changed on disk in " + Thread.currentThread().getName() + " for " + this);
+            //Thread.dumpStack();
             synchronized (this) {
-                if (saving) {
+                if (fe.firedFrom(this)) {
+                    //System.err.println("(my own change)");
                     return;
                 }
                 problem = null;
@@ -423,13 +416,15 @@ public class LayerUtils {
     public static final class LayerHandle {
         
         private final Project project;
+        private final FileObject layerXML;
         private FileSystem fs;
         private SavableTreeEditorCookie cookie;
         private boolean autosave;
         
-        LayerHandle(Project project) {
+        LayerHandle(Project project, FileObject layerXML) {
             //System.err.println("new LayerHandle for " + project);
             this.project = project;
+            this.layerXML = layerXML;
         }
         
         /**
@@ -503,7 +498,13 @@ public class LayerUtils {
          * @return the layer, or null
          */
         public FileObject getLayerFile() {
+            if (layerXML != null) {
+                return layerXML;
+            }
             NbModuleProvider module = project.getLookup().lookup(NbModuleProvider.class);
+            if (module == null) { // #126939: other project type
+                return null;
+            }
             Manifest mf = Util.getManifest(module.getManifestFile());
             if (mf == null) {
                 return null;
@@ -542,6 +543,13 @@ public class LayerUtils {
          */
         private String newLayerPath() {
             NbModuleProvider module = project.getLookup().lookup(NbModuleProvider.class);
+            FileObject manifest = module.getManifestFile();
+            if (manifest != null) {
+                String bundlePath = ManifestManager.getInstance(Util.getManifest(manifest), false).getLocalizingBundle();
+                if (bundlePath != null) {
+                    return bundlePath.replaceFirst("/[^/]+$", "/layer.xml"); // NOI18N
+                }
+            }
             return module.getCodeNameBase().replace('.', '/') + "/layer.xml"; // NOI18N
         }
 
@@ -660,8 +668,18 @@ public class LayerUtils {
      * Get the platform JARs associated with a standalone module project.
      */
     public static Set<File> getPlatformJarsForStandaloneProject(Project project) {
+        NbPlatform platform = getPlatformForProject(project);
+        return getPlatformJars(platform, null, null, null);
+    }
+
+    /**
+     * Returns platform for project with fallback to default platform.
+     * 
+     * @param Project, must contain {@link NbModuleProvider} in lookup.
+     * @return Platform for project
+     */
+    public static NbPlatform getPlatformForProject(Project project) {
         NbModuleProvider mod = project.getLookup().lookup(NbModuleProvider.class);
-        //TODO create a utility method to do this if needed in more places
         NbPlatform platform = null;
         File platformDir = mod.getActivePlatformLocation();
         if (platformDir != null) {
@@ -670,7 +688,7 @@ public class LayerUtils {
         if (platform == null || !platform.isValid()) {
             platform = NbPlatform.getDefaultPlatform();
         }
-        return getPlatformJars(platform, null, null, null);
+        return platform;
     }
     
     public static Set<File> getPlatformJarsForSuiteComponentProject(Project project, SuiteProject suite) {
@@ -715,13 +733,7 @@ public class LayerUtils {
         ModuleEntry[] entries = platform.getModules();
         Set<File> jars = new HashSet<File>(entries.length);
         for (ModuleEntry entry : entries) {
-            if (!includedClustersS.isEmpty() && !includedClustersS.contains(entry.getClusterDirectory().getName())) {
-                continue;
-            }
-            if (includedClustersS.isEmpty() && excludedClustersS.contains(entry.getClusterDirectory().getName())) {
-                continue;
-            }
-            if (excludedModulesS.contains(entry.getCodeNameBase())) {
+            if (SingleModuleProperties.isExcluded(entry, excludedModulesS, includedClustersS, excludedClustersS)) {
                 continue;
             }
             jars.add(entry.getJarLocation());
