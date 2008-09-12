@@ -48,6 +48,7 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.ConditionalExpressionTree;
 import com.sun.source.tree.DoWhileLoopTree;
 import com.sun.source.tree.EnhancedForLoopTree;
+import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.IfTree;
 import com.sun.source.tree.InstanceOfTree;
@@ -87,7 +88,6 @@ import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
-import javax.lang.model.util.Types;
 import javax.swing.text.Document;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.modules.java.editor.semantic.Utilities;
@@ -277,10 +277,16 @@ public final class CreateElementUtilities {
             types.add(ElementKind.INTERFACE);
             types.add(ElementKind.ENUM);
         }
-	
-	if (mt.getThrows() != null && !mt.getThrows().isEmpty() && mt.getThrows().get(0) == error) {
-	    types.add(ElementKind.CLASS);
-	    typeParameterBound[0] = info.getElements().getTypeElement("java.lang.Exception").asType();
+
+        List<? extends ExpressionTree> throwList = mt.getThrows();
+	if (throwList != null && !throwList.isEmpty()) {
+            for (ExpressionTree t : throwList) {
+                if (t == error) {
+                    types.add(ElementKind.CLASS);
+                    typeParameterBound[0] = info.getElements().getTypeElement("java.lang.Exception").asType();
+                    break;
+                }
+            }
 	}
         
         if (mt.getBody() == null) {
@@ -331,17 +337,7 @@ public final class CreateElementUtilities {
             type = info.getTrees().getTypeMirror(new TreePath(parent, at.getExpression()));
             
             //anonymous class?
-            Set<ElementKind> fm = EnumSet.of(ElementKind.METHOD, ElementKind.FIELD);
-            if (type instanceof DeclaredType) {
-                Element el = ((DeclaredType) type).asElement();
-                if (el.getSimpleName().length() == 0 || fm.contains(el.getEnclosingElement().getKind())) {
-                    List<? extends TypeMirror> interfaces = ((TypeElement) el).getInterfaces();
-                    if (interfaces.isEmpty())
-                        type = ((TypeElement) el).getSuperclass();
-                    else
-                        type = interfaces.get(0);
-                }
-            }
+            type = org.netbeans.modules.java.hints.errors.Utilities.convertIfAnonymous(type);
             
             if (type.getKind() == TypeKind.EXECUTABLE) {
                 //TODO: does not actualy work, attempt to solve situations like:
