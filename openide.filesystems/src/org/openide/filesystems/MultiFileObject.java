@@ -91,6 +91,9 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
 
     /** Reference to lock or null */
     private Reference<MfLock> lock;
+    
+    /** Stack trace of locking thread. */
+    protected Throwable lockedBy;
 
     /** listener */
     private FileChangeListener weakL;
@@ -324,7 +327,7 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
     * @return file object (new leader) that is writable
     * @exception IOException if the object cannot be writable
     */
-    private FileObject writable() throws IOException {
+    private FileObject writable(boolean copyContents) throws IOException {
         MultiFileSystem fs = getMultiFileSystem();
         FileSystem single = fs.createWritableOn(getPath());
 
@@ -335,7 +338,11 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
                 leader = FileUtil.createFolder(root(single), getPath());
             } else {
                 FileObject folder = FileUtil.createFolder(root(single), getParent().getPath());
-                leader = leader.copy(folder, leader.getName(), leader.getExt());
+                if (copyContents) {
+                    leader = leader.copy(folder, leader.getName(), leader.getExt());
+                } else {
+                    leader = folder.createData(leader.getNameExt());
+                }
             }
 
             MfLock l = ((lock == null) ? null : lock.get());
@@ -371,7 +378,7 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
 
             if (l != null) {
                 // the file has been locked => update the lock
-                mfo.writable();
+                mfo.writable(true);
             }
 
             fo = fo.getParent();
@@ -609,7 +616,7 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
                 l = testLock(lock);
 
                 // this can also change lock in l.lock
-                fo = writable();
+                fo = writable(false);
                 lWritable = l.findLock(fo);
             }
 
@@ -633,18 +640,18 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
             FileLock f = (FileLock) lock.get();
 
             if (f != null) {
-                // [PENDING] construct localized message
-                throw new FileAlreadyLockedException(getPath());
+                FileAlreadyLockedException alreadyLockedException = new FileAlreadyLockedException(getPath());
+                alreadyLockedException.initCause(lockedBy);
+                throw alreadyLockedException;
             }
         }
 
-        java.util.Set set = getMultiFileSystem().createLocksOn(getPath());
+        Set<? extends FileSystem> set = getMultiFileSystem().createLocksOn(getPath());
         MfLock l = new MfLock(leader, delegates(), set);
 
         lock = new WeakReference<MfLock>(l);
 
-        //    Thread.dumpStack ();
-        //    System.out.println ("Locking file: " + this); // NOI18N
+        assert (lockedBy = new Throwable("Locked by:")) != null;  //NOI18N
         return l;
     }
 
@@ -1058,7 +1065,7 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
                 }
 
                 if (this.getFileObject(name, ext) != null) {
-                    FSException.io("EXC_DataAlreadyExist", n, fs.getDisplayName()); // NOI18N
+                    FSException.io("EXC_DataAlreadyExist", n, fs.getDisplayName(), getPath()); // NOI18N
                 }
 
                 String fullName = getPath() + PATH_SEP + n;
@@ -1123,7 +1130,7 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
 
                 String newFullName = parent.getPath() + PATH_SEP + name;
 
-                if (isData()) {
+                if (isData() && ext != null && ext.trim().length() > 0) {
                     newFullName += (EXT_SEP + ext);
                 }
 
@@ -1300,7 +1307,7 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
             }
 
             if ((l == null) && (leader.getFileSystem() != simple)) {
-                leader = writable();
+                leader = writable(true);
                 l = lck.findLock(leader);
             }
 
@@ -1532,7 +1539,7 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
      * The level is zero in simple cases; incremented when one MFS asks
      * another to store a VoidValue.
      */
-    private static final class VoidValue implements Externalizable {
+    static final class VoidValue implements Externalizable {
         // Externalizable:
         private static final long serialVersionUID = -2743645909916238684L;
         int level;
@@ -1569,7 +1576,7 @@ final class MultiFileObject extends AbstractFolder implements FileObject.Priorit
         * @param systems a set of filesystems we should create lock on
         * @exception IOException if the lock cannot be obtained
         */
-        public MfLock(FileObject leader, Enumeration<FileObject> delegates, Set systems)
+        public MfLock(FileObject leader, Enumeration<FileObject> delegates, Set<? extends FileSystem> systems)
         throws IOException {
             while (delegates.hasMoreElements()) {
                 FileObject fo = delegates.nextElement();
