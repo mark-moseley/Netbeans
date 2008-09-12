@@ -18,12 +18,14 @@
  */
 package org.netbeans.modules.bpel.nodes.actions;
 
+import org.netbeans.modules.bpel.editors.api.nodes.actions.*;
+import org.netbeans.modules.bpel.nodes.BpelNode;
+import org.netbeans.modules.bpel.editors.api.nodes.actions.ActionType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
-import org.netbeans.modules.bpel.nodes.BpelNode;
 import org.netbeans.modules.xml.xam.ui.XAMUtils;
 import org.openide.ErrorManager;
 import org.openide.nodes.Node;
@@ -35,43 +37,54 @@ import org.openide.util.actions.NodeAction;
  * @author Vitaly Bychkov
  *
  */
-public abstract class BpelNodeAction extends NodeAction {
+public abstract class BpelNodeAction extends NodeAction implements BpelNodeTypedAction {
+
+    boolean no_transaction = true;
 
     public BpelNodeAction() {
         name = getBundleName();
     }
 
+    public BpelNodeAction(boolean no_transaction) {
+        this();
+        this.no_transaction = no_transaction;
+    }
+
     protected abstract String getBundleName();
-    
-    public abstract ActionType getType();
-    
+
     protected abstract void performAction(BpelEntity[] bpelEntities);
-    
+
     protected boolean enable(BpelEntity[] bpelEntities) {
-        if (bpelEntities == null) return false;
-        if (bpelEntities.length != 1) return false;
-        if (bpelEntities[0] == null) return false;
-                
+        if (bpelEntities == null) {
+            return false;
+        }
+        if (bpelEntities.length != 1) {
+            return false;
+        }
+        if (bpelEntities[0] == null) {
+            return false;
+        }
         BpelModel bpelModel = bpelEntities[0].getBpelModel();
-        
-        if (bpelModel == null) return false;
-        
+
+        if (bpelModel == null) {
+            return false;
+        }
         boolean readonly = !XAMUtils.isWritable(bpelModel);
-        
+
         if (readonly && isChangeAction()) {
             return false;
         }
-        
+
         return true;
     }
-    
+
     protected boolean asynchronous() {
         return false;
     }
-    
+
     public void performAction(Node[] nodes) {
         final BpelEntity[] bpelEntities = getBpelEntities(nodes);
-        
+
         if (!enable(bpelEntities)) {
             return;
         }
@@ -80,18 +93,22 @@ public abstract class BpelNodeAction extends NodeAction {
             return;
         }
         try {
-            model.invoke(new Callable<Object>() {
-                public Object call() {
-                    performAction(bpelEntities);
-                    return null; 
-                }
-            }, this);
+            if (no_transaction) {
+                performAction(bpelEntities);
+            } else {
+                model.invoke(new Callable<Object>() {
+
+                    public Object call() {
+                        performAction(bpelEntities);
+                        return null;
+                    }
+                }, this);
+            }
         } catch (Exception e) {
             ErrorManager.getDefault().notify(e);
         }
     }
-    
-    
+
     public boolean enable(final Node[] nodes) {
         if (nodes == null || nodes.length < 1) {
             return false;
@@ -101,7 +118,7 @@ public abstract class BpelNodeAction extends NodeAction {
                 return false;
             }
         }
-        
+
         BpelModel model = getBpelModel(nodes[0]);
         // model == null in case dead element
         if (model == null) {
@@ -112,39 +129,47 @@ public abstract class BpelNodeAction extends NodeAction {
             return enable(getBpelEntities(nodes));
         }
         try {
-            return model.invoke(new Callable<Boolean>() {
-                public Boolean call() throws Exception {
-                    return new Boolean(enable(getBpelEntities(nodes)));
+            class CheckEnabled implements Runnable {
+
+                public boolean enabled = false;
+
+                public void run() {
+                    this.enabled = enable(getBpelEntities(nodes));
                 }
-            }, this);
+            }
+
+            CheckEnabled check = new CheckEnabled();
+
+            model.invoke(check);
+
+            return check.enabled;
+
         } catch (Exception ex) {
             ErrorManager.getDefault().notify(ex);
         }
-        
+
         return false;
     }
-    
+
     public String getName() {
         return name;
     }
-    
-    
+
     public boolean isChangeAction() {
         return true;
     }
-    
-    
+
     public BpelModel getBpelModel(Node node) {
-        BpelModel bpelModel = (BpelModel)node.getLookup().lookup(BpelModel.class);
+        BpelModel bpelModel = (BpelModel) node.getLookup().lookup(BpelModel.class);
         if (bpelModel == null && node instanceof BpelNode) {
-            Object ref = ((BpelNode)node).getReference();
+            Object ref = ((BpelNode) node).getReference();
             if (ref instanceof BpelEntity) {
-                bpelModel = ((BpelEntity)ref).getBpelModel();
+                bpelModel = ((BpelEntity) ref).getBpelModel();
             }
         }
         return bpelModel;
     }
-    
+
     public BpelModel getBpelModel(BpelEntity entity) {
         return entity == null ? null : entity.getBpelModel();
     }
@@ -152,26 +177,23 @@ public abstract class BpelNodeAction extends NodeAction {
     public HelpCtx getHelpCtx() {
         return HelpCtx.DEFAULT_HELP;
     }
-    
+
     protected static final BpelEntity[] getBpelEntities(Node[] nodes) {
         List<BpelEntity> entities = new ArrayList<BpelEntity>();
-        
+
         Object tmpRefObj = null;
         for (Node node : nodes) {
-            if (node instanceof BpelNode
-                && (tmpRefObj = ((BpelNode)node).getReference()) instanceof BpelEntity) {
-                entities.add((BpelEntity)tmpRefObj);
+            if (node instanceof BpelNode && (tmpRefObj = ((BpelNode) node).getReference()) instanceof BpelEntity) {
+                entities.add((BpelEntity) tmpRefObj);
             }
         }
-        
+
         BpelEntity[] entitiesArray = entities.size() < 1 ? null
-            : new BpelEntity[entities.size()];
-        entitiesArray = entitiesArray == null ?
-            null
-            : entities.toArray(entitiesArray);
-        
+                : new BpelEntity[entities.size()];
+        entitiesArray = entitiesArray == null ? null
+                : entities.toArray(entitiesArray);
+
         return entitiesArray;
     }
-    
     private String name;
 }
