@@ -1,5 +1,3 @@
-argc int
-argv char**
 GtkZZZZZ
 aliases() void
 foo() int
