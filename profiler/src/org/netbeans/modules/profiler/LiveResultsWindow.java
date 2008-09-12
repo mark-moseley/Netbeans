@@ -64,7 +64,7 @@ import org.netbeans.lib.profiler.ui.cpu.CodeRegionLivePanel;
 import org.netbeans.lib.profiler.ui.cpu.FlatProfilePanel;
 import org.netbeans.lib.profiler.ui.cpu.LiveFlatProfilePanel;
 import org.netbeans.lib.profiler.ui.cpu.statistics.StatisticalModuleContainer;
-import org.netbeans.lib.profiler.ui.cpu.statistics.drilldown.DrillDownListener;
+import org.netbeans.modules.profiler.ui.stats.drilldown.DrillDownListener;
 import org.netbeans.lib.profiler.ui.graphs.GraphPanel;
 import org.netbeans.lib.profiler.ui.memory.LiveAllocResultsPanel;
 import org.netbeans.lib.profiler.ui.memory.LiveLivenessResultsPanel;
@@ -72,10 +72,9 @@ import org.netbeans.lib.profiler.ui.memory.MemoryResUserActionsHandler;
 import org.netbeans.modules.profiler.actions.ResetResultsAction;
 import org.netbeans.modules.profiler.actions.TakeSnapshotAction;
 import org.netbeans.modules.profiler.spi.ProjectTypeProfiler;
-import org.netbeans.modules.profiler.ui.stats.drilldown.hierarchical.DrillDown;
+import org.netbeans.modules.profiler.ui.stats.drilldown.DrillDown;
 import org.netbeans.modules.profiler.ui.stp.ProfilingSettingsManager;
 import org.netbeans.modules.profiler.utils.IDEUtils;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -88,6 +87,7 @@ import org.openide.windows.TopComponentGroup;
 import org.openide.windows.WindowManager;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Image;
 import java.awt.Insets;
@@ -115,6 +115,8 @@ import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.lib.profiler.utils.VMUtils;
+import org.netbeans.modules.profiler.ui.stats.drilldown.DrillDownFactory;
 
 
 /**
@@ -439,18 +441,9 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         //~ Methods --------------------------------------------------------------------------------------------------------------
 
         public void showSourceForMethod(final String className, final String methodName, final String methodSig) {
-            if (className.length() == 1) {
-                if (BOOLEAN_CODE.equals(className) || CHAR_CODE.equals(className) || BYTE_CODE.equals(className)
-                        || SHORT_CODE.equals(className) || INT_CODE.equals(className) || LONG_CODE.equals(className)
-                        || FLOAT_CODE.equals(className) || DOUBLE_CODE.equals(className)) {
-                    // primitive type
-                    Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
-
-                    return;
-                }
-            }
-
-            Profiler.getDefault().openJavaSource(className, methodName, methodSig);
+            if ((methodName == null && methodSig == null) && (VMUtils.isVMPrimitiveType(className) ||
+                 VMUtils.isPrimitiveType(className))) Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
+            else Profiler.getDefault().openJavaSource(className, methodName, methodSig);
         }
 
         public void showStacksForClass(final int selectedClassId, final int sortingColumn, final boolean sortingOrder) {
@@ -550,7 +543,6 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         cpuActionsHandler = new CPUActionsHandler();
 
         toolBar = createToolBar();
-        toolBar.setBorder(new EmptyBorder(5, 5, 0, 5));
 
         add(toolBar, BorderLayout.NORTH);
 
@@ -598,11 +590,22 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         toolBar.add(graphTab.zoomOutButton);
         toolBar.add(graphTab.scaleToFitButton);
 
-        JPanel toolbarSpacer = new JPanel(new FlowLayout(0, 0, FlowLayout.LEADING));
+        JPanel toolbarSpacer = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0)) {
+            public Dimension getPreferredSize() {
+                if (UIUtils.isGTKLookAndFeel() || UIUtils.isNimbusLookAndFeel()) {
+                    int currentWidth = toolBar.getSize().width;
+                    int minimumWidth = toolBar.getMinimumSize().width;
+                    int extraWidth = currentWidth - minimumWidth;
+                    return new Dimension(Math.max(extraWidth, 0), 0);
+                } else {
+                    return super.getPreferredSize();
+                }
+            }
+        };
         toolbarSpacer.setOpaque(false);
 
         final DrillDownWindow drillDownWin = DrillDownWindow.getDefault();
-        drillDownWin.closeIfOpened();
+        DrillDownWindow.closeIfOpened();
         drillDownWin.getPresenter().addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     if (drillDownWin.getPresenter().isSelected()) {
@@ -968,6 +971,8 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
 
         toolBar.setFloatable(false);
         toolBar.putClientProperty("JToolBar.isRollover", Boolean.TRUE); //NOI18N
+        toolBar.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
+        
         autoToggle = new JToggleButton(new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/autoRefresh.png") // NOI18N
         ));
         autoToggle.setSelected(true);
@@ -1016,25 +1021,6 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         toolBar.addSeparator();
         toolBar.add(new SaveViewAction(this));
 
-        /*    toolBar.addSeparator();
-        
-                                                                                 valueSlider = new JSlider(JSlider.HORIZONTAL, 0, 100, 0) {
-                                                                                   public Dimension getMaximumSize() {
-                                                                                     return new Dimension(100, super.getMaximumSize().height);
-                                                                                   }
-                                                                                 };
-                                                                                 toolBar.add(valueSlider);
-                                                                                 valueFilterComponent = valueSlider;
-        
-                                                                                 valueSlider.addChangeListener(new ChangeListener() {
-        
-                                                                                   public void stateChanged(ChangeEvent e) {
-                                                                                     // make cubic curve instead of linear
-                                                                                     double val = (double) valueSlider.getValue() / 10f;
-                                                                                     val = val * val;
-                                                                                     if (currentDisplay != null) currentDisplay.updateValueFilter(val);
-                                                                                   }
-                                                                                 }); */
         return toolBar;
     }
 
@@ -1046,7 +1032,6 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
                     if (group != null) {
                         group.close();
                     }
-
                     drillDownGroupOpened = false;
                     DrillDownWindow.getDefault().getPresenter().setEnabled(false);
                 }
@@ -1094,20 +1079,26 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
             case ProfilerEngineSettings.INSTR_RECURSIVE_FULL:
             case ProfilerEngineSettings.INSTR_RECURSIVE_SAMPLED: {
                 Project project = NetBeansProfiler.getDefaultNB().getProfiledProject();
-                ProjectTypeProfiler ptp = ProjectUtilities.getProjectTypeProfiler(project);
+//                ProjectTypeProfiler ptp = org.netbeans.modules.profiler.utils.ProjectUtilities.getProjectTypeProfiler(project);
 
                 List additionalStats = new ArrayList();
 
-                dd = new DrillDown(runner.getProfilerClient(), ptp.getMarkHierarchyRoot());
+                dd = Lookup.getDefault().lookup(DrillDownFactory.class).createDrillDown(project, runner.getProfilerClient());
+                if (dd != null) {
+                    StatisticalModuleContainer container = Lookup.getDefault().lookup(StatisticalModuleContainer.class);
+                    additionalStats.addAll(container.getAllModules());
 
-                runner.getProfilerClient().getMarkFilter().removeAllEvaluators();
-                runner.getProfilerClient().getMarkFilter().addEvaluator(dd);
 
-                StatisticalModuleContainer container = Lookup.getDefault().lookup(StatisticalModuleContainer.class);
-                additionalStats.addAll(container.getAllModules());
+                    DrillDownWindow.getDefault().setDrillDown(dd, additionalStats);
+                    showDrillDown();
+                } else {
+                    hideDrillDown();
+                }
 
                 final LiveFlatProfilePanel cpuPanel = new LiveFlatProfilePanel(runner, cpuActionsHandler, additionalStats);
-                dd.addListener(new DrillDownListener() {
+
+                if (dd != null) {
+                    dd.addListener(new DrillDownListener() {
                         public void dataChanged() {
                         }
 
@@ -1115,8 +1106,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
                             cpuPanel.updateLiveResults();
                         }
                     });
-
-                DrillDownWindow.getDefault().setDrillDown(dd, additionalStats);
+                }
 
                 currentDisplayComponent = cpuPanel;
 

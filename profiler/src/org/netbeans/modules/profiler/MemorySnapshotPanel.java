@@ -67,6 +67,7 @@ import java.util.Date;
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.lib.profiler.utils.VMUtils;
 import org.netbeans.modules.profiler.ui.Utils;
 
 
@@ -84,18 +85,9 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
         //~ Methods --------------------------------------------------------------------------------------------------------------
 
         public void showSourceForMethod(String className, String methodName, String methodSig) {
-            if (className.length() == 1) {
-                if (BOOLEAN_CODE.equals(className) || CHAR_CODE.equals(className) || BYTE_CODE.equals(className)
-                        || SHORT_CODE.equals(className) || INT_CODE.equals(className) || LONG_CODE.equals(className)
-                        || FLOAT_CODE.equals(className) || DOUBLE_CODE.equals(className)) {
-                    // primitive type
-                    Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
-
-                    return;
-                }
-            }
-
-            NetBeansProfiler.getDefaultNB().openJavaSource(project, className, methodName, methodSig);
+            if ((methodName == null && methodSig == null) && (VMUtils.isVMPrimitiveType(className) ||
+                 VMUtils.isPrimitiveType(className))) Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
+            else Profiler.getDefault().openJavaSource(className, methodName, methodSig);
         }
 
         public void showStacksForClass(int selectedClassId, int sortingColumn, boolean sortingOrder) {
@@ -339,7 +331,7 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
             }
 
             memoryPanel.setFindString(findString);
-            reversePanel.setFindString(findString);
+            if (reversePanel != null) reversePanel.setFindString(findString);
 
             if (!memoryPanel.findFirst()) {
                 NetBeansProfiler.getDefaultNB().displayInfoAndWait(STRING_NOT_FOUND_MSG);
@@ -370,7 +362,7 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
                 }
 
                 memoryPanel.setFindString(findString);
-                reversePanel.setFindString(findString);
+                if (reversePanel != null) reversePanel.setFindString(findString);
             }
 
             if (!memoryPanel.findNext()) {
@@ -404,7 +396,7 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
                 }
 
                 memoryPanel.setFindString(findString);
-                reversePanel.setFindString(findString);
+                if (reversePanel != null) reversePanel.setFindString(findString);
             }
 
             if (!memoryPanel.findPrevious()) {
