@@ -71,7 +71,7 @@ public class XMLSyntaxParserTest extends TestCase {
     }
     
     public static Test suite() {
-        TestSuite suite = new TestSuite(XMLSyntaxParserTest.class);
+        TestSuite suite = new TestSuite();
         suite.addTest(new XMLSyntaxParserTest("testParse"));
         suite.addTest(new XMLSyntaxParserTest("testParseDoctype"));
         suite.addTest(new XMLSyntaxParserTest("testParseInvalid"));
@@ -82,7 +82,9 @@ public class XMLSyntaxParserTest extends TestCase {
         suite.addTest(new XMLSyntaxParserTest("testParsePI"));
         suite.addTest(new XMLSyntaxParserTest("testParseValidTag"));
         suite.addTest(new XMLSyntaxParserTest("testParseTestXML"));
+        suite.addTest(new XMLSyntaxParserTest("testMultiRootXML"));
         suite.addTest(new XMLSyntaxParserTest("testParseWSDL"));
+        suite.addTest(new XMLSyntaxParserTest("testParsePerformace"));
         return suite;
     }
     
@@ -105,7 +107,7 @@ public class XMLSyntaxParserTest extends TestCase {
         String docBuf = fv.flushModel(doc);
         assertEquals("The document should be unaltered",basedoc.getText(0,basedoc.getLength()),docBuf);
     }
-	
+	    
     /**
      * Test of parse method, of class org.netbeans.modules.xmltools.xmlmodel.nodes.XMLSyntaxParser.
      */
@@ -249,5 +251,29 @@ public class XMLSyntaxParserTest extends TestCase {
         } catch(Exception ex) {
             assertTrue("Should not come here", false);
         }
+    }    
+
+    public void testMultiRootXML() throws Exception {
+        BaseDocument basedoc = getDocument("nodes/multiRoot.xml");
+        XMLSyntaxParser parser = new XMLSyntaxParser();
+        try {
+            Document doc = parser.parse(basedoc);
+            assertTrue("Should not come here", false);
+        } catch(Exception ex) {
+            assertTrue(ex.getMessage(), true);
+        }
+    }
+    
+    public void testParsePerformace() throws Exception {
+        long start = System.currentTimeMillis();
+        BaseDocument basedoc = getDocument("nodes/fields.xsd");
+        XMLSyntaxParser parser = new XMLSyntaxParser();
+        Document doc = parser.parse(basedoc);
+        long end = System.currentTimeMillis();
+        System.out.println("Time taken to parse healthcare schema: " + (end-start) + "ms.");
+        assertNotNull("Document can not be null", doc);
+        //FlushVisitor fv = new FlushVisitor();
+        //String docBuf = fv.flushModel(doc);
+        //assertEquals("The document should be unaltered",basedoc.getText(0,basedoc.getLength()),docBuf);
     }    
 }
