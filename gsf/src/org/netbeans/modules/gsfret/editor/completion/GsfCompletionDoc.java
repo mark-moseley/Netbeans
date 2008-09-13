@@ -43,13 +43,14 @@ package org.netbeans.modules.gsfret.editor.completion;
 import java.awt.event.ActionEvent;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import org.netbeans.api.editor.completion.Completion;
-import org.netbeans.api.gsf.Completable;
-import org.netbeans.api.gsf.Parser;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementHandle;
+import org.netbeans.modules.gsf.api.CodeCompletionHandler;
+import org.netbeans.modules.gsf.api.ElementHandle;
+import org.netbeans.modules.gsf.LanguageRegistry;
 import org.netbeans.napi.gsfret.source.CompilationController;
 import org.netbeans.napi.gsfret.source.UiUtils;
 import org.netbeans.modules.gsf.Language;
@@ -75,14 +76,14 @@ public class GsfCompletionDoc implements CompletionDocumentation {
         URL url) {
         this.controller = controller;
         this.language = controller.getLanguage();
-        Completable completer = language.getCompletionProvider();
-        final Parser parser = language.getParser();
-        final Element resolved;
-        if ((completer != null) && (parser != null)) {
-            resolved = parser.resolveHandle(controller, elementHandle);
-        } else {
-            resolved = null;
+        if (elementHandle != null && elementHandle.getMimeType() != null) {
+            Language embeddedLanguage = LanguageRegistry.getInstance().getLanguageByMimeType(elementHandle.getMimeType());
+            if (embeddedLanguage != null && embeddedLanguage.getParser() != null) {
+                language = embeddedLanguage;
+            }
         }
+
+        CodeCompletionHandler completer = language.getCompletionProvider();
 
         this.elementHandle = elementHandle;
 
@@ -101,8 +102,8 @@ public class GsfCompletionDoc implements CompletionDocumentation {
             }
         }
 
-        if (resolved != null) {
-            this.content = completer.document(controller, resolved);
+        if (completer != null) {
+            this.content = completer.document(controller, elementHandle);
         }
 
         if (this.content == null) {
@@ -139,7 +140,17 @@ public class GsfCompletionDoc implements CompletionDocumentation {
         
         ElementHandle handle = language.getCompletionProvider().resolveLink(link, elementHandle);
         if (handle != null) {
-            return new GsfCompletionDoc(controller, handle, null);
+            URL url = null;
+            if(handle instanceof ElementHandle.UrlHandle) {
+                String url_text = ((ElementHandle.UrlHandle)handle).getUrl();
+                try {
+                    url = new URL(url_text);
+                } catch (MalformedURLException mue) {
+                    Logger.getLogger("global").log(Level.INFO, null, mue);
+                }
+            }
+            
+            return new GsfCompletionDoc(controller, handle, url);
         }
         return null;
     }
