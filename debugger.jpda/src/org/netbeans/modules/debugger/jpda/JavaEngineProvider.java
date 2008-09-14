@@ -41,11 +41,16 @@
 
 package org.netbeans.modules.debugger.jpda;
 
+import java.awt.Component;
+import java.beans.DesignMode;
+import java.beans.beancontext.BeanContextChildComponentProxy;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.Session;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.spi.debugger.DebuggerEngineProvider;
 import org.netbeans.spi.debugger.ContextProvider;
+import org.openide.windows.TopComponent;
+import org.openide.windows.WindowManager;
 
 
 /**
@@ -61,7 +66,7 @@ public class JavaEngineProvider extends DebuggerEngineProvider {
     private Session                     session;  
     
     public JavaEngineProvider (ContextProvider contextProvider) {
-        session = (Session) contextProvider.lookupFirst (null, Session.class);
+        session = contextProvider.lookupFirst(null, Session.class);
     }
     
     public String[] getLanguages () {
@@ -73,7 +78,41 @@ public class JavaEngineProvider extends DebuggerEngineProvider {
     }
     
     public Object[] getServices () {
-        return new Object [0];
+        return getUIComponentProxies();
+    }
+    
+    static Object[] getUIComponentProxies() {
+        
+        class ComponentProxy implements BeanContextChildComponentProxy, DesignMode {
+            private String name;
+            private boolean openByDefault;
+            ComponentProxy(String name, boolean openByDefault) {
+                this.name = name;
+                this.openByDefault = openByDefault;
+            }
+            public Component getComponent() {
+                return WindowManager.getDefault().findTopComponent(name);
+            }
+            public boolean isDesignTime() {
+                return openByDefault;
+            }
+            public void setDesignTime(boolean designTime) {
+                throw new UnsupportedOperationException("Not supported.");
+            }
+        }
+        
+        return new Object [] {
+            new ComponentProxy("localsView", true),
+            new ComponentProxy("watchesView", true),
+            new ComponentProxy("breakpointsView", true),
+            new ComponentProxy("debugging", true),
+            // Initially closed components
+            new ComponentProxy("callstackView", false),
+            new ComponentProxy("sessionsView", false),
+            new ComponentProxy("sources", false),
+            new ComponentProxy("threadsView", false),
+            new ComponentProxy("classes", false),
+        };
     }
     
     public void setDestructor (DebuggerEngine.Destructor desctuctor) {
