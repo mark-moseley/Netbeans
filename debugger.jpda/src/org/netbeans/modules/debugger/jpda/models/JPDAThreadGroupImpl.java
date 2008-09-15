@@ -41,16 +41,16 @@
 
 package org.netbeans.modules.debugger.jpda.models;
 
+import com.sun.jdi.ObjectCollectedException;
 import com.sun.jdi.ThreadGroupReference;
 import com.sun.jdi.ThreadReference;
-import java.util.Iterator;
 
+import com.sun.jdi.VMDisconnectedException;
 import java.util.List;
 
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.JPDAThreadGroup;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
-import org.netbeans.spi.viewmodel.UnknownTypeException;
 
 
 /**
@@ -60,10 +60,17 @@ public class JPDAThreadGroupImpl implements JPDAThreadGroup {
 
     private ThreadGroupReference tgr;
     private JPDADebuggerImpl debugger;
+    private String name;
     
     public JPDAThreadGroupImpl (ThreadGroupReference tgr, JPDADebuggerImpl debugger) {
         this.tgr = tgr;
         this.debugger = debugger;
+        name = "";
+        try {
+            name = tgr.name();
+        } catch (VMDisconnectedException de) {
+        } catch (ObjectCollectedException ex) {
+        }
     }
 
     /**
@@ -72,50 +79,90 @@ public class JPDAThreadGroupImpl implements JPDAThreadGroup {
     * @return parent thread group.
     */
     public JPDAThreadGroup getParentThreadGroup () {
-        ThreadGroupReference ptgr = tgr.parent ();
+        ThreadGroupReference ptgr = null;
+        try {
+            ptgr = tgr.parent();
+        } catch (VMDisconnectedException e) {
+        }
         if (ptgr == null) return null;
         return debugger.getThreadGroup(ptgr);
     }
     
     public JPDAThread[] getThreads () {
-        List l = tgr.threads ();
+        ThreadsCache tc = debugger.getThreadsCache();
+        if (tc == null) {
+            return new JPDAThread[0];
+        }
+        List<ThreadReference> l = tc.getThreads(tgr);
         int i, k = l.size ();
         JPDAThread[] ts = new JPDAThread [k];
-        for (i = 0; i < k; i++)
-            ts [i] = debugger.getThread((ThreadReference) l.get (i));
+        for (i = 0; i < k; i++) {
+            ts [i] = debugger.getThread(l.get (i));
+        }
         return ts;
     }
     
     public JPDAThreadGroup[] getThreadGroups () {
-        List l = tgr.threadGroups ();
+        ThreadsCache tc = debugger.getThreadsCache();
+        if (tc == null) {
+            return new JPDAThreadGroup[0];
+        }
+        List<ThreadGroupReference> l = tc.getGroups(tgr);
         int i, k = l.size ();
         JPDAThreadGroup[] ts = new JPDAThreadGroup [k];
-        for (i = 0; i < k; i++)
-            ts [i] = debugger.getThreadGroup((ThreadGroupReference) l.get (i));
+        for (i = 0; i < k; i++) {
+            ts [i] = debugger.getThreadGroup(l.get (i));
+        }
         return ts;
     }
     
     public String getName () {
-        return tgr.name ();
+        return name;
     }
     
     // XXX Add some synchronization so that the threads can not be resumed at any time
     public void resume () {
-        List threads = tgr.threads();
-        for (Iterator it = threads.iterator(); it.hasNext(); ) {
-            JPDAThreadImpl thread = (JPDAThreadImpl) debugger.getThread((ThreadReference) it.next());
-            thread.notifyToBeResumed();
+        ThreadsCache tc = debugger.getThreadsCache();
+        if (tc == null) {
+            return ;
         }
+        notifyToBeResumed(tc);
         tgr.resume ();
     }
     
     // XXX Add some synchronization
     public void suspend () {
+        ThreadsCache tc = debugger.getThreadsCache();
+        if (tc == null) {
+            return ;
+        }
         tgr.suspend ();
-        List threads = tgr.threads();
-        for (Iterator it = threads.iterator(); it.hasNext(); ) {
-            JPDAThreadImpl thread = (JPDAThreadImpl) debugger.getThread((ThreadReference) it.next());
+        notifySuspended(tc);
+    }
+    
+    void notifyToBeResumed(ThreadsCache tc) {
+        List<ThreadReference> threads = tc.getThreads(tgr);
+        for (ThreadReference threadRef : threads) {
+            JPDAThreadImpl thread = (JPDAThreadImpl) debugger.getThread(threadRef);
+            thread.notifyToBeResumed();
+        }
+        List<ThreadGroupReference> groups = tc.getGroups(tgr);
+        for (ThreadGroupReference groupRef : groups) {
+            JPDAThreadGroupImpl group = (JPDAThreadGroupImpl) debugger.getThreadGroup(groupRef);
+            group.notifyToBeResumed(tc);
+        }
+    }
+    
+    void notifySuspended(ThreadsCache tc) {
+        List<ThreadReference> threads = tc.getThreads(tgr);
+        for (ThreadReference threadRef : threads) {
+            JPDAThreadImpl thread = (JPDAThreadImpl) debugger.getThread(threadRef);
             thread.notifySuspended();
+        }
+        List<ThreadGroupReference> groups = tc.getGroups(tgr);
+        for (ThreadGroupReference groupRef : groups) {
+            JPDAThreadGroupImpl group = (JPDAThreadGroupImpl) debugger.getThreadGroup(groupRef);
+            group.notifySuspended(tc);
         }
     }
     
