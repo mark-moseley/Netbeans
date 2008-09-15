@@ -39,45 +39,44 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.makeproject.api.configurations;
+package org.netbeans.modules.cnd.makeproject.api.platforms;
 
-import java.util.List;
-import java.util.ArrayList;
+import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.makeproject.api.configurations.LibraryItem;
+import org.openide.util.NbBundle;
 
-public class LibrariesConfiguration extends VectorConfiguration {
-    public LibrariesConfiguration() {
-	super(null);
+public class PlatformNone extends Platform {
+    public static final String NAME = "None"; // NOI18N
+
+    public static final LibraryItem.StdLibItem[] standardLibrariesLinux = {
+        // empty
+    };
+
+    public PlatformNone() {
+        super(NAME, NbBundle.getBundle(PlatformNone.class).getString("NoPlatform"), Platform.PLATFORM_NONE);
     }
 
-    public LibraryItem[] getLibraryItemsAsArray() {
-        return (LibraryItem[])getValue().toArray(new LibraryItem[getValue().size()]);
+    public LibraryItem.StdLibItem[] getStandardLibraries() {
+        return standardLibrariesLinux;
     }
-
-    public String getOptions(MakeConfiguration conf) {
-	StringBuilder options = new StringBuilder();
-	
-	LibraryItem[] items = getLibraryItemsAsArray();
-	for (int i = 0; i < items.length; i++) {
-            options.append(items[i].getOption(conf));
-            options.append(" "); // NOI18N
-	}
-
-	return options.toString();
+    
+    public String getLibraryName(String baseName) {
+        // Use Linux style
+        return "lib" + baseName + ".so"; // NOI18N
     }
-    // Clone and Assign
-    @Override
-    public void assign(VectorConfiguration conf) {
-	// From VectorConfiguration
-	super.assign(conf);
-	// From LibrariesConfiguration
-    }
-
-    @Override
-    public Object clone() {
-	LibrariesConfiguration clone = new LibrariesConfiguration();
-	// From VectorConfiguration
-	clone.setValue((List)((ArrayList)getValue()).clone());
-	// From LibrariesConfiguration
-	return clone;
+    
+    public String getLibraryLinkOption(String libName, String libDir, String libPath, CompilerSet compilerSet) {
+        if (libName.endsWith(".so")) { // NOI18N
+            int i = libName.indexOf(".so"); // NOI18N
+            if (i > 0)
+                libName = libName.substring(0, i);
+            if (libName.startsWith("lib")) // NOI18N
+                libName = libName.substring(3);
+            return compilerSet.getLibrarySearchOption() +  IpeUtils.escapeOddCharacters(libDir)
+                    + " " + compilerSet.getLibraryOption() + IpeUtils.escapeOddCharacters(libName); // NOI18N
+        } else {
+            return IpeUtils.escapeOddCharacters(libPath);
+        }
     }
 }
