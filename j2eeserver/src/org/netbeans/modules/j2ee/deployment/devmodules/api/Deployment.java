@@ -54,6 +54,7 @@ import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
 import org.netbeans.modules.j2ee.deployment.common.api.ConfigurationException;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.InstanceListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
+import org.netbeans.modules.j2ee.deployment.impl.DeployOnSaveManager;
 import org.netbeans.modules.j2ee.deployment.impl.ProgressObjectUtil;
 import org.netbeans.modules.j2ee.deployment.impl.Server;
 import org.netbeans.modules.j2ee.deployment.impl.ServerInstance;
@@ -76,10 +77,12 @@ import org.openide.util.Parameters;
  */
 public final class Deployment {
 
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(Deployment.class.getName());
+    
     private static boolean alsoStartTargets = true;    //TODO - make it a property? is it really needed?
     
     private static Deployment instance = null;
-
+    
     public static synchronized Deployment getDefault () {
         if (instance == null) {
             instance = new Deployment ();
@@ -160,17 +163,21 @@ public final class Deployment {
             // inform the plugin about the deploy action, even if there was
             // really nothing needed to be deployed
             targetserver.notifyIncrementalDeployment(modules);
-            
+            if (targetserver.supportsDeployOnSave(modules)) {
+                DeployOnSaveManager.getDefault().notifyInitialDeployment(jmp);
+            }
+
             if (modules != null && modules.length > 0) {
+                // this write modules to files too
                 deploymentTarget.setTargetModules(modules);
             } else {
                 String msg = NbBundle.getMessage(Deployment.class, "MSG_ModuleNotDeployed");
                 throw new DeploymentException (msg);
             }
             return deploymentTarget.getClientUrl(clientUrlPart);
-        } catch (Exception ex) {            
+        } catch (Exception ex) {
             String msg = NbBundle.getMessage (Deployment.class, "MSG_DeployFailed", ex.getLocalizedMessage ());
-            java.util.logging.Logger.getLogger("global").log(Level.INFO, null, ex);
+            LOGGER.log(Level.INFO, null, ex);
             throw new DeploymentException(msg, ex);
         } finally {
             if (progress != null) {
@@ -178,7 +185,61 @@ public final class Deployment {
             }
         }
     }
-    
+
+    /**
+     * Undeploys the project (if it is deployed and available).
+     *
+     * @param jmp provider representing the project
+     * @param startServer if <code>true</code> server may be started while
+     *            trying to determine whether the project is deployed
+     * @param logger logger for undeploy related events
+     * @throws org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment.DeploymentException
+     * @since 1.52
+     */
+    public void undeploy(J2eeModuleProvider jmp, boolean startServer, Logger logger) throws DeploymentException {
+        DeploymentTargetImpl deploymentTarget = new DeploymentTargetImpl(jmp, null);
+        final J2eeModule module = deploymentTarget.getModule();
+
+        String title = NbBundle.getMessage(Deployment.class, "LBL_Undeploying", jmp.getDeploymentName());
+        ProgressUI progress = new ProgressUI(title, false, logger);
+
+        try {
+            progress.start();
+
+            ServerString server = deploymentTarget.getServer(); //will throw exception if bad server id
+
+            if (module == null) {
+                String msg = NbBundle.getMessage (Deployment.class, "MSG_NoJ2eeModule");
+                throw new DeploymentException(msg);
+            }
+            ServerInstance serverInstance = server.getServerInstance();
+            if (server == null || serverInstance == null) {
+                String msg = NbBundle.getMessage (Deployment.class, "MSG_NoTargetServer");
+                throw new DeploymentException(msg);
+            }
+
+            TargetServer targetserver = new TargetServer(deploymentTarget);
+
+            targetserver.undeploy(progress, startServer);
+        } catch (Exception ex) {
+            String msg = NbBundle.getMessage (Deployment.class, "MSG_UndeployFailed", ex.getLocalizedMessage ());
+            LOGGER.log(Level.INFO, null, ex);
+            throw new DeploymentException(msg, ex);
+        } finally {
+            if (progress != null) {
+                progress.finish();
+            }
+        }
+    }
+
+    public void enableCompileOnSaveSupport(J2eeModuleProvider provider) {
+        DeployOnSaveManager.getDefault().startListening(provider);
+    }
+
+    public void disableCompileOnSaveSupport(J2eeModuleProvider provider) {
+        DeployOnSaveManager.getDefault().stopListening(provider);
+    }
+
     private static void deployMessageDestinations(J2eeModuleProvider jmp) throws ConfigurationException {
         ServerInstance si = ServerRegistry.getInstance ().getServerInstance (jmp.getServerInstanceID ());
         if (si != null) {
