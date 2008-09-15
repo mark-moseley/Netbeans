@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,80 +39,24 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.core.startup;
+Buddhabrot Fractal Demo
 
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import org.openide.util.Lookup;
+Description
+-----------
+        The Buddhabrot fractal set is a derivative of the popular Mandelbrot
+        fractal set. Both sets iterated through the function f(z) = z2 + c,
+        where z is a complex number. A Mandelbrot set is created by selecting
+        points on the real-complex plane. A Buddhabrot set selects initial 
+        points from the image region. Each pixel records its
+        path until iterated result diverges. When the iterated result diverges,
+        its final position is plotted on the canvas. The result reflects the
+        traversal density of the pixel.
 
-/**
- * A special filtering and lazy iterator used by our XML factories
- *
- * @author Petr Nejedly
- */
-class LazyIterator implements Iterator<Class> {
-    Class first;
-    Class step;
-    Class<?> template;
-    Object skip;
-    Iterator delegate;
+        Fractals were originally studied as mathematical objects. Besides
+        their elegant mathematical and visual structure, their application
+        in science and technology is what make fractals an important area of
+        interest. For example, fractals are used in weather forecasting, 
+        population and landscape ecology, financial modeling,  and bacterial 
+        culture simulation. The demo uses fractals to demonstrate a 
+        floating-point arithmetic intensive application.
 
-    LazyIterator(Class first, Class template, Class skip) {
-        assert first != null;
-
-        this.first = first;
-        this.template = template;
-        this.skip = skip;
-    }
-
-    public boolean hasNext() {
-        if (first != null) return true; 
-
-        // lazily prepare delegate
-        if (delegate == null) delegate = prepareDelegate();
-
-        // check next step
-        if (step != null) return true;
-
-        // prepare next step
-        while (delegate.hasNext() && step == null) {
-            Class next = ((Lookup.Item)delegate.next()).getType();
-            if (next != skip) step = next;
-        }
-
-        return step != null;
-    }
-
-    public Class next() {
-        if (first != null) {
-            Class ret = first;
-            first = null;
-            return ret;
-        }
-        // lazily prepare delegate
-        if (delegate == null) delegate = prepareDelegate();
-
-        // check next step
-        if (step != null) {
-            Class ret = step;
-            step = null;
-            return ret;
-        }
-
-        // return directly next without storing
-        while (delegate.hasNext()) {
-            Class next = ((Lookup.Item)delegate.next()).getType();
-            if (next != skip) return next;
-        }
-
-        throw new NoSuchElementException();
-    }
-
-    private Iterator prepareDelegate() {
-        return Lookup.getDefault().lookupResult(template).allItems().iterator();
-    }
-
-    public void remove() {
-        throw new UnsupportedOperationException();
-    } 
-}

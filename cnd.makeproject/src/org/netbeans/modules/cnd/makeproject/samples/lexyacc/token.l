@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,33 +39,14 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.core.xml;
-
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import javax.xml.parsers.*;
-import javax.xml.parsers.SAXParserFactory;
-import junit.framework.*;
-import org.netbeans.junit.*;
-import org.openide.util.*;
-import org.xml.sax.*;
-
-
-
-/**
- * Will be loaded by different classloader by FactoriesTest.
- * @author Jaroslav Tulach
- */
-public class FactoriesRunnableHid extends HashMap implements Runnable {
-    public void run () {
-        try {
-            put ("dom", javax.xml.parsers.DocumentBuilderFactory.newInstance());
-            put ("sax", javax.xml.parsers.SAXParserFactory.newInstance ());
-        } catch (Exception ex) {
-            IllegalStateException e = new IllegalStateException (ex.getMessage ());
-            e.initCause (ex);
-            throw e;
-        }
-    }
-}
+%{
+#include "y.tab.h"
+%}
+%%
+"q"   return STOP;
+"Q"   return STOP;
+[0-9] return DIGIT;
+[a-z] return LOWERCASELETTER;
+[A-Z] return UPPERCASELETTER;
+.     return OTHER;
+%%
