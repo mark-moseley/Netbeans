@@ -22,6 +22,7 @@ package org.netbeans.modules.bpel.design.model.patterns;
 
 
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.geom.Area;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
@@ -34,8 +35,11 @@ import javax.swing.Action;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
+import javax.swing.KeyStroke;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.bpel.design.CopyPasteHandler;
 import org.netbeans.modules.bpel.design.DiagramView;
+import org.netbeans.modules.bpel.design.actions.ScrollToOperationAction;
 import org.netbeans.modules.bpel.design.geometry.FBounds;
 import org.netbeans.modules.bpel.design.geometry.FPoint;
 import org.netbeans.modules.bpel.design.model.DiagramModel;
@@ -272,6 +276,12 @@ public abstract class Pattern {
             //set menu label, used by some L&F
             JPopupMenu menu = new JPopupMenu(node.getDisplayName());
             
+            //Copy-paste section
+            CopyPasteHandler cph = getModel().getView().getCopyPasteHandler(); 
+            menu.add(new JMenuItem(cph.getCopyAction()));
+            menu.add(new JMenuItem(cph.getCutAction()));
+            menu.addSeparator();
+            
             Action collapseExpandAction = getModel().getView()
                     .getCollapseExpandDecorationProvider()
                     .createCollapseExpandAction(this);
@@ -284,6 +294,12 @@ public abstract class Pattern {
             if (scrollToPartnerLink != null) {
                 menu.add(scrollToPartnerLink);
             }
+            
+            JMenuItem scrollToOperation = createScrollToOperationMenuItem();
+            if (scrollToOperation != null) {
+                menu.add(scrollToOperation);
+            }
+            
             
             //populate a list of actions
             Action actions[] = node.getActions(true);
@@ -594,7 +610,6 @@ public abstract class Pattern {
         
     }
     
-    
     private JMenuItem createScrollToPartnerLinkMenuItem() {
         Set<Pattern> patterns = getConnectedParnerLinkPatterns();
         
@@ -615,6 +630,32 @@ public abstract class Pattern {
         }
         
         return menu;
+    }
+    
+    private JMenuItem createScrollToOperationMenuItem() {
+        for (Connection c : getConnections()) {
+            if (c instanceof MessageConnection) {
+                return new JMenuItem(
+                        new ScrollToOperation((MessageConnection) c));
+            }
+        }
+        return null;
+    }
+    
+    static class ScrollToOperation extends AbstractAction {
+        private MessageConnection messageConnection;
+        
+        public ScrollToOperation(MessageConnection connection) {
+            super(ScrollToOperationAction.ACTION_NAME);
+            putValue(ACCELERATOR_KEY, KeyStroke.getKeyStroke(KeyEvent.VK_S, 
+                    KeyEvent.ALT_DOWN_MASK + KeyEvent.SHIFT_DOWN_MASK));
+            this.messageConnection = connection;
+        }
+        
+        public void actionPerformed(ActionEvent event) {
+            messageConnection.getSource().getPattern().getModel().getView()
+                    .scrollToOperation(messageConnection);
+        }
     }
     
     
@@ -640,7 +681,8 @@ public abstract class Pattern {
         }
 
         public void actionPerformed(ActionEvent e) {
-            pattern.getModel().getView().scrollPatternToView(pattern);
+            pattern.getView().scrollPatternToView(pattern);
+            //pattern.getModel().getView().scrollPatternToView(pattern);
         }
     }
 }
