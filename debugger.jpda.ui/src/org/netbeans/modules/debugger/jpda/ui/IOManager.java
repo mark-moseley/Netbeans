@@ -72,7 +72,7 @@ public class IOManager {
     
     // variables ...............................................................
     
-    protected InputOutput                   debuggerIO = null;
+    private InputOutput                     debuggerIO = null;
     private OutputWriter                    debuggerOut;
     private OutputWriter                    debuggerErr;
     private String                          name;
@@ -91,7 +91,7 @@ public class IOManager {
         debuggerIO.setErrSeparated(false);
         debuggerOut = debuggerIO.getOut ();
         debuggerErr = debuggerIO.getErr();
-        debuggerIO.select();
+        //debuggerIO.select();
     }
     
     
