@@ -1,0 +1,3 @@
+Code completion result for source line:
+public function |setFld($fld) {
+(QueryType=COMPLETION, NameKind=PREFIX)
