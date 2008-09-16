@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 /*
- * GtkEditorTabDisplayerUI.java
+ * NimbusEditorTabDisplayerUI.java
  *
  * Created on 09 December 2003, 16:53
  */
@@ -62,23 +62,23 @@ import org.netbeans.swing.tabcontrol.TabDisplayer;
 import javax.swing.plaf.ComponentUI;
 
 /**
- * Gtk impl of tabs ui
+ * Nimbus impl of tabs ui
  *
  * @author Marek Slama
  */
-public final class GtkEditorTabDisplayerUI extends BasicScrollingTabDisplayerUI {
+public final class NimbusEditorTabDisplayerUI extends BasicScrollingTabDisplayerUI {
     
     private static Map<Integer, String[]> buttonIconPaths;
     
     /**
      * Creates a new instance of GtkEditorTabDisplayerUI
      */
-    public GtkEditorTabDisplayerUI(TabDisplayer displayer) {
+    public NimbusEditorTabDisplayerUI(TabDisplayer displayer) {
         super (displayer);
     }
     
     public static ComponentUI createUI(JComponent c) {
-        return new GtkEditorTabDisplayerUI ((TabDisplayer) c);
+        return new NimbusEditorTabDisplayerUI ((TabDisplayer) c);
     }
 
     public Rectangle getTabRect(int idx, Rectangle rect) {
@@ -109,7 +109,7 @@ public final class GtkEditorTabDisplayerUI extends BasicScrollingTabDisplayerUI 
     }
 
     protected TabCellRenderer createDefaultRenderer() {
-        return new GtkEditorTabCellRenderer();
+        return new NimbusEditorTabCellRenderer();
     }
 
     private static void initIcons() {
@@ -118,41 +118,41 @@ public final class GtkEditorTabDisplayerUI extends BasicScrollingTabDisplayerUI 
             
             //left button
             String[] iconPaths = new String[4];
-            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/gtk_scrollleft_enabled.png"; // NOI18N
-            iconPaths[TabControlButton.STATE_DISABLED] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_ROLLOVER] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_PRESSED] = iconPaths[TabControlButton.STATE_DEFAULT];
+            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/nimbus_scrollleft_enabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_DISABLED] = "org/netbeans/swing/tabcontrol/resources/nimbus_scrollleft_disabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_ROLLOVER] = "org/netbeans/swing/tabcontrol/resources/nimbus_scrollleft_rollover.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_PRESSED] = "org/netbeans/swing/tabcontrol/resources/nimbus_scrollleft_pressed.png"; // NOI18N
             buttonIconPaths.put( TabControlButton.ID_SCROLL_LEFT_BUTTON, iconPaths );
 
             //right button
             iconPaths = new String[4];
-            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/gtk_scrollright_enabled.png"; // NOI18N
-            iconPaths[TabControlButton.STATE_DISABLED] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_ROLLOVER] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_PRESSED] = iconPaths[TabControlButton.STATE_DEFAULT];
+            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/nimbus_scrollright_enabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_DISABLED] = "org/netbeans/swing/tabcontrol/resources/nimbus_scrollright_disabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_ROLLOVER] = "org/netbeans/swing/tabcontrol/resources/nimbus_scrollright_pressed.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_PRESSED] = "org/netbeans/swing/tabcontrol/resources/nimbus_scrollright_pressed.png"; // NOI18N
             buttonIconPaths.put( TabControlButton.ID_SCROLL_RIGHT_BUTTON, iconPaths );
 
             //drop down button
             iconPaths = new String[4];
-            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/gtk_popup_enabled.png"; // NOI18N
-            iconPaths[TabControlButton.STATE_DISABLED] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_ROLLOVER] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_PRESSED] = iconPaths[TabControlButton.STATE_DEFAULT];
+            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/nimbus_popup_enabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_DISABLED] = "org/netbeans/swing/tabcontrol/resources/nimbus_popup_disabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_ROLLOVER] = "org/netbeans/swing/tabcontrol/resources/nimbus_popup_rollover.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_PRESSED] = "org/netbeans/swing/tabcontrol/resources/nimbus_popup_pressed.png"; // NOI18N
             buttonIconPaths.put( TabControlButton.ID_DROP_DOWN_BUTTON, iconPaths );
 
             //maximize/restore button
             iconPaths = new String[4];
-            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/gtk_maximize_enabled.png"; // NOI18N
-            iconPaths[TabControlButton.STATE_DISABLED] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_ROLLOVER] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_PRESSED] = iconPaths[TabControlButton.STATE_DEFAULT];
+            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/nimbus_maximize_enabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_DISABLED] = "org/netbeans/swing/tabcontrol/resources/nimbus_maximize_disabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_ROLLOVER] = "org/netbeans/swing/tabcontrol/resources/nimbus_maximize_rollover.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_PRESSED] = "org/netbeans/swing/tabcontrol/resources/nimbus_maximize_pressed.png"; // NOI18N
             buttonIconPaths.put( TabControlButton.ID_MAXIMIZE_BUTTON, iconPaths );
 
             iconPaths = new String[4];
-            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/gtk_restore_enabled.png"; // NOI18N
-            iconPaths[TabControlButton.STATE_DISABLED] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_ROLLOVER] = iconPaths[TabControlButton.STATE_DEFAULT];
-            iconPaths[TabControlButton.STATE_PRESSED] = iconPaths[TabControlButton.STATE_DEFAULT];
+            iconPaths[TabControlButton.STATE_DEFAULT] = "org/netbeans/swing/tabcontrol/resources/nimbus_restore_enabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_DISABLED] = "org/netbeans/swing/tabcontrol/resources/nimbus_restore_disabled.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_ROLLOVER] = "org/netbeans/swing/tabcontrol/resources/nimbus_restore_rollover.png"; // NOI18N
+            iconPaths[TabControlButton.STATE_PRESSED] = "org/netbeans/swing/tabcontrol/resources/nimbus_restore_pressed.png"; // NOI18N
             buttonIconPaths.put( TabControlButton.ID_RESTORE_BUTTON, iconPaths );
         }
     }
