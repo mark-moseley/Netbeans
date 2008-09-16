@@ -46,8 +46,10 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
+import javax.swing.JEditorPane;
 import org.netbeans.api.debugger.Breakpoint.VALIDITY;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.jpda.FieldBreakpoint;
@@ -55,11 +57,15 @@ import org.netbeans.api.debugger.jpda.JPDABreakpoint;
 import org.netbeans.api.debugger.jpda.LineBreakpoint;
 import org.netbeans.api.debugger.jpda.MethodBreakpoint;
 import org.netbeans.api.debugger.jpda.CallStackFrame;
+import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.spi.debugger.jpda.EditorContext;
 import org.netbeans.spi.debugger.jpda.SourcePathProvider;
 
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.ErrorManager;
+import org.openide.util.Exceptions;
+import org.openide.util.Utilities;
 
 
 /**
@@ -92,6 +98,16 @@ public class EditorContextBridge {
 
     
     // ContextProvider methods .................................................
+
+    public static String getMostRecentMethodSignature() {
+        // TODO: return getContext ().getMostRecentMethodSignature ();
+        String ms = getReflectionMethodValue("getMostRecentMethodSignature");
+        if (ms == null) {
+            ms = getCurrentMethodSignature();
+        }
+        return ms;
+
+    }
     
     /**
      * Returns signature of method currently selected in editor or <code>null</code>.
@@ -100,21 +116,11 @@ public class EditorContextBridge {
      */
     public static String getCurrentMethodSignature () {
         // TODO: return getContext ().getCurrentMethodSignature ();
-        try {
-        return (String) getContext ().getClass().getMethod("getCurrentMethodSignature", new Class[] {}).
-                invoke(getContext(), new Object[] {});
-        } catch (java.lang.reflect.InvocationTargetException itex) {
-            Throwable tex = itex.getTargetException();
-            if (tex instanceof RuntimeException) {
-                throw (RuntimeException) tex;
-            } else {
-                ErrorManager.getDefault().notify(tex);
-                return "";
-            }
-        } catch (Exception ex) {
-            ErrorManager.getDefault().notify(ex);
-            return "";
+        String ms = getReflectionMethodValue("getCurrentMethodSignature");
+        if (ms == null) {
+            ms = "";
         }
+        return ms;
     }
 
     
@@ -127,20 +133,6 @@ public class EditorContextBridge {
         } catch (MalformedURLException e) {
             return null;
         }
-    }
-
-    public static boolean showSource (LineBreakpoint b, Object timeStamp) {
-        if (b.getLineNumber () < 1)
-            return EditorContextBridge.getContext().showSource (
-                b.getURL (),
-                1,
-                timeStamp
-            );
-        return EditorContextBridge.getContext().showSource (
-            b.getURL (),
-            b.getLineNumber (),
-            timeStamp
-        );
     }
 
     public static String getDefaultType () {
@@ -156,20 +148,61 @@ public class EditorContextBridge {
                     return CLASS;
                 return FIELD;
             } else {
-                String s = getContext().getCurrentFieldName ();
+                String s = getMostRecentFieldName();
                 if (s != null && s.length () > 0)
                     return FIELD;
-                s = getContext().getCurrentMethodName();
+                s = getMostRecentMethodName();
                 if (s != null && s.length () > 0)
                     return METHOD;
                 if (s != null && s.length () < 1) {
-                    s = getContext().getCurrentClassName ();
+                    s = getMostRecentClassName();
                     if (s.length () > 0)
                         return CLASS;
                 }
             }
         } catch (java.awt.IllegalComponentStateException icsex) {}
         return null;
+    }
+
+    public static String getMostRecentFieldName() {
+        String field = getReflectionMethodValue("getMostRecentFieldName");
+        if (field == null) {
+            field = getContext().getCurrentFieldName ();
+        }
+        return field;
+    }
+
+    public static String getMostRecentMethodName() {
+        String field = getReflectionMethodValue("getMostRecentMethodName");
+        if (field == null) {
+            field = getContext().getCurrentMethodName ();
+        }
+        return field;
+    }
+
+    public static String getMostRecentClassName() {
+        String field = getReflectionMethodValue("getMostRecentClassName");
+        if (field == null) {
+            field = getContext().getCurrentClassName ();
+        }
+        return field;
+    }
+
+    private static String getReflectionMethodValue(String methodName) {
+        try {
+            return (String) getContext().getClass().getMethod(methodName).invoke(getContext());
+        } catch (java.lang.reflect.InvocationTargetException itex) {
+            Throwable tex = itex.getTargetException();
+            if (tex instanceof RuntimeException) {
+                throw (RuntimeException) tex;
+            } else {
+                ErrorManager.getDefault().notify(tex);
+                return null;
+            }
+        } catch (Exception ex) {
+            Exceptions.printStackTrace(ex);
+            return null;
+        }
     }
 
     public static Object annotate (
@@ -193,7 +226,7 @@ public class EditorContextBridge {
             url,
             lineNumber,
             annotationType,
-            null
+            b
         );
     }
 
@@ -278,7 +311,7 @@ public class EditorContextBridge {
         List annotations = new ArrayList(URLs.length);
         for (int i = 0; i < URLs.length; i++) {
             if (lineNumbers[i] >= 1) {
-                Object annotation = getContext().annotate (URLs[i], lineNumbers[i], annotationType, null);
+                Object annotation = getContext().annotate (URLs[i], lineNumbers[i], annotationType, b);
                 if (annotation != null) {
                     annotations.add(annotation);
                 }
@@ -376,6 +409,10 @@ public class EditorContextBridge {
             return s;
         }
 
+        public String getMostRecentClassName() {
+            return getReflectionMethodValue("getMostRecentClassName");
+        }
+
         public String getCurrentURL () {
             String s = cp1.getCurrentURL ();
             if (s.trim ().length () < 1)
@@ -390,6 +427,10 @@ public class EditorContextBridge {
             return s;
         }
         
+        public String getMostRecentFieldName() {
+            return getReflectionMethodValue("getMostRecentFieldName");
+        }
+
         public int getCurrentLineNumber () {
             int i = cp1.getCurrentLineNumber ();
             if (i < 1)
@@ -403,7 +444,57 @@ public class EditorContextBridge {
                 return cp2.getCurrentMethodName ();
             return s;
         }
+
+        public String getMostRecentMethodName() {
+            return getReflectionMethodValue("getMostRecentMethodName");
+        }
+
+        public String getCurrentMethodSignature() {
+            return getReflectionMethodValue("getCurrentMethodSignature");
+        }
+
+        public String getMostRecentMethodSignature() {
+            return getReflectionMethodValue("getMostRecentMethodSignature");
+        }
         
+        private String getReflectionMethodValue(String methodName) {
+            String s = null;
+            try {
+                s = (String) cp1.getClass().getMethod(methodName).
+                        invoke(getContext(), new Object[] {});
+            } catch (java.lang.reflect.InvocationTargetException itex) {
+                Throwable tex = itex.getTargetException();
+                if (tex instanceof RuntimeException) {
+                    throw (RuntimeException) tex;
+                } else {
+                    ErrorManager.getDefault().notify(tex);
+                    return null;
+                }
+            } catch (Exception ex) {
+                // Ignore, we have another attempt with cp2
+                //ErrorManager.getDefault().notify(ex);
+            }
+            if ( (s == null) || (s.trim ().length () < 1)) {
+                try {
+                    s = (String) cp2.getClass().getMethod(methodName).
+                            invoke(getContext(), new Object[] {});
+                } catch (java.lang.reflect.InvocationTargetException itex) {
+                    Throwable tex = itex.getTargetException();
+                    if (tex instanceof RuntimeException) {
+                        throw (RuntimeException) tex;
+                    } else {
+                        ErrorManager.getDefault().notify(tex);
+                        return null;
+                    }
+                } catch (Exception ex) {
+                    ErrorManager.getDefault().notify(ex);
+                    return null;
+                }
+            }
+            return s;
+
+        }
+
         public String getSelectedIdentifier () {
             String s = cp1.getSelectedIdentifier ();
             if ( (s == null) || (s.trim ().length () < 1))
@@ -418,10 +509,26 @@ public class EditorContextBridge {
             return s;
         }
         
-        public void removeAnnotation (Object annotation) {
-            CompoundAnnotation ca = (CompoundAnnotation) annotation;
-            cp1.removeAnnotation (ca.annotation1);
-            cp2.removeAnnotation (ca.annotation2);
+        public void removeAnnotation (Object value) {
+            if (value instanceof List) {
+                for (Iterator iter = ((List) value).iterator(); iter.hasNext();) {
+                    CompoundAnnotation ca = (CompoundAnnotation) iter.next();
+                    if (ca.annotation1 != null) {
+                        cp1.removeAnnotation (ca.annotation1);
+                    }
+                    if (ca.annotation2 != null) {
+                        cp2.removeAnnotation (ca.annotation2);
+                    }
+                }
+                return;
+            }
+            CompoundAnnotation ca = (CompoundAnnotation) value;
+            if (ca.annotation1 != null) {
+                cp1.removeAnnotation (ca.annotation1);
+            }
+            if (ca.annotation2 != null) {
+                cp2.removeAnnotation (ca.annotation2);
+            }
         }
 
         public Object annotate (
@@ -435,14 +542,55 @@ public class EditorContextBridge {
                 (sourceName, lineNumber, annotationType, timeStamp);
             ca.annotation2 = cp2.annotate
                 (sourceName, lineNumber, annotationType, timeStamp);
-            return ca;
+            if (ca.annotation1 != null || ca.annotation2 != null) {
+                return ca;
+            } else {
+                return null;
+            }
         }
+
+        @Override
+        public Object annotate(String url, int lineNumber, String annotationType, Object timeStamp, JPDAThread thread) {
+            CompoundAnnotation ca = new CompoundAnnotation ();
+            ca.annotation1 = cp1.annotate
+                (url, lineNumber, annotationType, timeStamp, thread);
+            ca.annotation2 = cp2.annotate
+                (url, lineNumber, annotationType, timeStamp, thread);
+            if (ca.annotation1 != null || ca.annotation2 != null) {
+                return ca;
+            } else {
+                return null;
+            }
+        }
+
+        @Override
+        public Object annotate(String url, int startPosition, int endPosition, String annotationType, Object timeStamp) {
+            CompoundAnnotation ca = new CompoundAnnotation ();
+            ca.annotation1 = cp1.annotate
+                (url, startPosition, endPosition, annotationType, timeStamp);
+            ca.annotation2 = cp2.annotate
+                (url, startPosition, endPosition, annotationType, timeStamp);
+            if (ca.annotation1 != null || ca.annotation2 != null) {
+                return ca;
+            } else {
+                return null;
+            }
+        }                
 
         public int getLineNumber (Object annotation, Object timeStamp) {
             CompoundAnnotation ca = new CompoundAnnotation ();
-            int ln = cp1.getLineNumber (ca.annotation1, timeStamp);
+            int ln;
+            if (ca.annotation1 != null) {
+                ln = cp1.getLineNumber (ca.annotation1, timeStamp);
+            } else {
+                ln = -1;
+            }
             if (ln >= 0) return ln;
-            return cp2.getLineNumber (ca.annotation2, timeStamp);
+            if (ca.annotation2 != null) {
+                return cp2.getLineNumber (ca.annotation2, timeStamp);
+            } else {
+                return -1;
+            }
         }
 
         public boolean showSource (String sourceName, int lineNumber, Object timeStamp) {
