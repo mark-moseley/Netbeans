@@ -53,8 +53,12 @@ import org.netbeans.modules.db.explorer.nodes.DatabaseNode;
 public class ForeignKeyListNodeInfo extends DatabaseNodeInfo {
     static final long serialVersionUID =5809643799834921044L;
 
+    @Override
     public void initChildren(Vector children) throws DatabaseException {
         try {
+            if (!ensureConnected()) {
+                return;
+            }
             String table = (String)get(DatabaseNode.TABLE);
 
             DriverSpecification drvSpec = getDriverSpecification();
@@ -89,6 +93,16 @@ public class ForeignKeyListNodeInfo extends DatabaseNodeInfo {
         } catch (Exception e) {
             throw new DatabaseException(e.getMessage());
         }
+    }
+    
+    @Override
+    public String getShortDescription() {
+        return bundle().getString("ND_ForeignKeyList"); // NOI18N
+    }
+    
+    @Override
+    public String getDisplayName() {
+        return bundle().getString("NDN_ForeignKeys"); //NOI18N
     }
 
 }

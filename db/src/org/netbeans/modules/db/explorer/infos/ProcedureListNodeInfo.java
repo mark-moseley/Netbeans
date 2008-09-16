@@ -52,7 +52,13 @@ public class ProcedureListNodeInfo extends DatabaseNodeInfo {
     static final long serialVersionUID =-7911927402768472443L;
 
     public void initChildren(Vector children) throws DatabaseException {
+        if (! isConnected()) {
+            return;
+        }
         try {
+            if (!ensureConnected()) {
+                return;
+            }
             DriverSpecification drvSpec = getDriverSpecification();
             drvSpec.getProcedures("%");
             ResultSet rs = drvSpec.getResultSet();
@@ -84,6 +90,16 @@ public class ProcedureListNodeInfo extends DatabaseNodeInfo {
             dbe.initCause(e);
             throw dbe;
         }
+    }
+    
+    @Override
+    public String getDisplayName() {
+        return bundle().getString("NDN_Procedures"); //NOI18N
+    }
+    
+    @Override
+    public String getShortDescription() {
+        return bundle().getString("ND_ProcedureList"); //NOI18N
     }
 
 }
