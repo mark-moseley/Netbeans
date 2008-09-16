@@ -51,6 +51,12 @@ public class BasicHyperlinkTestCase extends HyperlinkBaseTestCase {
         super(testName);
     }
 
+    public void testIZ146392() throws Exception {
+        // IZ#146392: regression: some declaration statements are not rendered any more
+        performTest("iz146392.cc", 4, 25, "iz146392.cc", 4, 22);
+        performTest("iz146392.cc", 6, 15, "iz146392.cc", 4, 22);
+    }
+
     public void testIZ139600() throws Exception {
         performTest("main.c", 35, 15, "main.c", 35, 5); // funPtr in int (*funPtr)();
     }
@@ -345,6 +351,7 @@ public class BasicHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("labels.cc", 31, 12, "labels.cc", 33, 9);
         performTest("labels.cc", 38, 12, "labels.cc", 40, 9);
         performTest("labels.cc", 45, 12, "labels.cc", 47, 9);
+        performTest("labels.cc", 57, 19, "labels.cc", 54, 13);
     }
 
     public void testStaticConstInNamespace() throws Exception {
@@ -471,6 +478,13 @@ public class BasicHyperlinkTestCase extends HyperlinkBaseTestCase {
         // IZ#136731 : No hyper link on local extern function
         performTest("IZ136731_local_extern_function.cc", 4, 18, "IZ136731_local_extern_function.cc", 3, 5);
         performTest("IZ136731_local_extern_function.cc", 3, 40, "IZ136731_local_extern_function.cc", 3, 32);
+    }
+
+    public void testIZ146464() throws Exception {
+        // IZ#146464 : IDE can't find 'wchar_t' identifier in C projects
+        performTest("IZ146464.c", 1, 16, "IZ146464.c", 1, 1); // NOI18N
+        performTest("IZ146464.c", 2, 5, "IZ146464.c", 1, 1); // NOI18N
+        performTest("IZ146464.c", 2, 23, "IZ146464.c", 1, 1); // NOI18N
     }
 
     public static class Failed extends HyperlinkBaseTestCase {
