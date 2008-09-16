@@ -44,10 +44,9 @@ package org.netbeans.modules.apisupport.project.ui;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
+import java.util.Properties;
 import javax.swing.Action;
-import javax.swing.JSeparator;
 import org.apache.tools.ant.module.api.support.ActionUtils;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.apisupport.project.NbModuleProject;
@@ -67,8 +66,8 @@ import org.openide.execution.ExecutorTask;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
-import org.openide.util.lookup.Lookups;
 
 /**
  * Defines actions available on a suite.
@@ -86,15 +85,19 @@ public final class SuiteActions implements ActionProvider {
         actions.add(null);
         actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_RUN, NbBundle.getMessage(SuiteActions.class, "SUITE_ACTION_run"), null));
         actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_DEBUG, NbBundle.getMessage(SuiteActions.class, "SUITE_ACTION_debug"), null));
-        addFromLayers(actions, "Projects/Profiler_Actions_temporary"); //NOI18N
+        actions.addAll(Utilities.actionsForPath("Projects/Profiler_Actions_temporary")); //NOI18N
         actions.add(null);
+        NbPlatform platform = project.getPlatform(true); //true -> #96095
+        if (platform != null && platform.getHarnessVersion() >= NbPlatform.HARNESS_VERSION_61) {
+            actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_TEST, NbBundle.getMessage(SuiteActions.class, "SUITE_ACTION_test"), null));
+            actions.add(null);
+        }
         actions.add(ProjectSensitiveActions.projectCommandAction("build-zip", NbBundle.getMessage(SuiteActions.class, "SUITE_ACTION_zip"), null));
         actions.add(null);
         actions.add(ProjectSensitiveActions.projectCommandAction("build-jnlp", NbBundle.getMessage(SuiteActions.class, "SUITE_ACTION_build_jnlp"), null));
         actions.add(ProjectSensitiveActions.projectCommandAction("run-jnlp", NbBundle.getMessage(SuiteActions.class, "SUITE_ACTION_run_jnlp"), null));
         actions.add(ProjectSensitiveActions.projectCommandAction("debug-jnlp", NbBundle.getMessage(SuiteActions.class, "SUITE_ACTION_debug_jnlp"), null));
         actions.add(null);
-        NbPlatform platform = project.getPlatform(true); //true -> #96095
         if (platform != null && platform.getHarnessVersion() >= NbPlatform.HARNESS_VERSION_55u1) {
             actions.add(ProjectSensitiveActions.projectCommandAction("build-mac", NbBundle.getMessage(SuiteActions.class, "SUITE_ACTION_mac"), null));
             actions.add(null);
@@ -113,31 +116,11 @@ public final class SuiteActions implements ActionProvider {
         
         actions.add(null);
         actions.add(SystemAction.get(FindAction.class));
-        Collection<? extends Object> res = Lookups.forPath("Projects/Actions").lookupAll(Object.class); // NOI18N
-        if (!res.isEmpty()) {
-            actions.add(null);
-            for (Object next : res) {
-                if (next instanceof Action) {
-                    actions.add((Action) next);
-                } else if (next instanceof JSeparator) {
-                    actions.add(null);
-                }
-            }
-        }
+        actions.add(null);
+        actions.addAll(Utilities.actionsForPath("Projects/Actions")); // NOI18N
         actions.add(null);
         actions.add(CommonProjectActions.customizeProjectAction());
         return actions.toArray(new Action[actions.size()]);
-    }
-    
-    private static void addFromLayers(List<Action> actions, String path) {
-        Lookup look = Lookups.forPath(path);
-        for (Object next : look.lookupAll(Object.class)) {
-            if (next instanceof Action) {
-                actions.add((Action) next);
-            } else if (next instanceof JSeparator) {
-                actions.add(null);
-            }
-        }
     }
     
     private final SuiteProject project;
@@ -147,7 +130,7 @@ public final class SuiteActions implements ActionProvider {
     }
     
     public String[] getSupportedActions() {
-        return new String[] {
+        List<String> actions = new ArrayList<String>(Arrays.asList(
             ActionProvider.COMMAND_BUILD,
             ActionProvider.COMMAND_CLEAN,
             ActionProvider.COMMAND_REBUILD,
@@ -163,7 +146,12 @@ public final class SuiteActions implements ActionProvider {
             ActionProvider.COMMAND_RENAME,
             ActionProvider.COMMAND_MOVE,
             ActionProvider.COMMAND_DELETE
-        };
+        ));
+        NbPlatform platform = project.getPlatform(true); //true -> #96095
+        if (platform != null && platform.getHarnessVersion() >= NbPlatform.HARNESS_VERSION_61) {
+            actions.add(ActionProvider.COMMAND_TEST);
+        }
+        return actions.toArray(new String[actions.size()]);
     }
     
     public boolean isActionEnabled(String command, Lookup context) throws IllegalArgumentException {
@@ -180,11 +168,17 @@ public final class SuiteActions implements ActionProvider {
     
     public void invokeAction(String command, Lookup context) throws IllegalArgumentException {
         if (ActionProvider.COMMAND_DELETE.equals(command)) {
-            DefaultProjectOperations.performDefaultDeleteOperation(project);
+            if (SuiteOperations.canRun(project)) {
+                DefaultProjectOperations.performDefaultDeleteOperation(project);
+            }
         } else if (ActionProvider.COMMAND_RENAME.equals(command)) {
-            DefaultProjectOperations.performDefaultRenameOperation(project, null);
+            if (SuiteOperations.canRun(project)) {
+                DefaultProjectOperations.performDefaultRenameOperation(project, null);
+            }
         } else if (ActionProvider.COMMAND_MOVE.equals(command)) {
-            DefaultProjectOperations.performDefaultMoveOperation(project);
+            if (SuiteOperations.canRun(project)) {
+                DefaultProjectOperations.performDefaultMoveOperation(project);
+            }
         } else {
             NbPlatform plaf = project.getPlatform(false);
             if (plaf != null) {
@@ -211,6 +205,8 @@ public final class SuiteActions implements ActionProvider {
      */
     public ExecutorTask invokeActionImpl(String command, Lookup context) throws IllegalArgumentException, IOException {
         String[] targetNames;
+        Properties p = null;
+
         if (command.equals(ActionProvider.COMMAND_BUILD)) {
             targetNames = new String[] {"build"}; // NOI18N
         } else if (command.equals(ActionProvider.COMMAND_CLEAN)) {
@@ -218,9 +214,21 @@ public final class SuiteActions implements ActionProvider {
         } else if (command.equals(ActionProvider.COMMAND_REBUILD)) {
             targetNames = new String[] {"clean", "build"}; // NOI18N
         } else if (command.equals(ActionProvider.COMMAND_RUN)) {
+            if (project.getTestUserDirLockFile().isFile()) {
+                // #141069: lock file exists, run with bogus option
+                p = new Properties();
+                p.setProperty(ModuleActions.TEST_USERDIR_LOCK_PROP_NAME, ModuleActions.TEST_USERDIR_LOCK_PROP_VALUE);
+            }
             targetNames = new String[] {"run"}; // NOI18N
         } else if (command.equals(ActionProvider.COMMAND_DEBUG)) {
+            if (project.getTestUserDirLockFile().isFile()) {
+                // #141069: lock file exists, run with bogus option
+                p = new Properties();
+                p.setProperty(ModuleActions.TEST_USERDIR_LOCK_PROP_NAME, ModuleActions.TEST_USERDIR_LOCK_PROP_VALUE);
+            }
             targetNames = new String[] {"debug"}; // NOI18N
+        } else if (command.equals(ActionProvider.COMMAND_TEST)) {
+            targetNames = new String[] {"test"}; // NOI18N
         } else if (command.equals("build-zip")) { // NOI18N
             if (promptForAppName(PROMPT_FOR_APP_NAME_MODE_ZIP)) { // #65006
                 return null;
@@ -251,7 +259,7 @@ public final class SuiteActions implements ActionProvider {
             throw new IllegalArgumentException(command);
         }
         
-        return ActionUtils.runTarget(findBuildXml(project), targetNames, null);
+        return ActionUtils.runTarget(findBuildXml(project), targetNames, p);
     }
     
     private static FileObject findBuildXml(SuiteProject project) {
@@ -283,6 +291,7 @@ public final class SuiteActions implements ActionProvider {
                 NbBundle.getMessage(ModuleActions.class, "TITLE_app_name"),
                 msg,
                 NbBundle.getMessage(ModuleActions.class, "LBL_configure_app_name"),
+                NbBundle.getMessage(ModuleActions.class, "ACSD_configure_app_name"),
                 null,
                 NotifyDescriptor.WARNING_MESSAGE)) {
             SuiteCustomizer cpi = project.getLookup().lookup(SuiteCustomizer.class);
