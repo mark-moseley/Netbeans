@@ -60,15 +60,18 @@ PLATFORM_IDS         [4] = "macosx-x86";
 PLATFORM_IDS         [5] = "macosx-ppc";
 */
 
-BUNDLE_IDS [0] = "javaee";
-BUNDLE_IDS [1] = "mobility";
-BUNDLE_IDS [2] = "javase";
-BUNDLE_IDS [3] = "ruby";
-BUNDLE_IDS [4] = "cpp";
+BUNDLE_IDS [0] = "javase";
+BUNDLE_IDS [1] = "java";
+BUNDLE_IDS [2] = "ruby";
+BUNDLE_IDS [3] = "cpp";
+BUNDLE_IDS [4] = "php";
 BUNDLE_IDS [5] = "all";
 
 var DEFAULT_LANGUAGE = "DEFAULT";
 var PAGELANG_SEP = "pagelang=";
+
+var OMNITURE_CODE_JS = "http://www.netbeans.org/images/js/s_code_remote.js";
+var GOOGLE_ANALYTICS_JS = "http://www.google-analytics.com/ga.js";
 
 function getNameById(id,ids,names) {
     for(var i = 0 ; i < ids.length; i++) {
@@ -195,9 +198,79 @@ function startList() {
     }
 }
 
+function getSize(filename) {
+	var size = "";
+	if(typeof file_names!='undefined' && typeof file_sizes!='undefined') {
+            for (var i = 0; i < file_names.length; i++) {		
+		if(file_names[i] == filename) {		
+			size = file_sizes[i];
+			break;
+		}
+            }
+	}
+	return size;
+}
+
+function get_file_name(platform, option) {
+    var file_name = "";
+    if(platform=="zip") {
+        file_name += ZIP_FILES_PREFIX;
+    } else {
+        file_name += BUNDLE_FILES_PREFIX;
+    }
+    if (option != "all") {
+    	file_name += "-" + option;
+    }
+
+    if ( platform != "zip" ) {
+   	file_name += "-" + platform;
+    }
+    if (platform == "windows") {
+        file_name += ".exe";
+    } else if ((platform == "macosx-x86") || (platform == "macosx-ppc")) {
+        file_name += ".tgz";
+    } else if (platform == "macosx") {
+	file_name += ".dmg";
+    } else if(platform == "zip"){
+	file_name += ".zip"        
+    } else {
+        file_name += ".sh";
+    }
+    return file_name;
+}
+
+function get_file_url(platform, option) {
+    var url  = BINARIES_LOCATION;
+	
+    if(platform=="zip") {
+        url += "zip/";
+    } else {
+        url += "bundles/";
+    }    
+    url += get_file_name(platform, option);    
+    return url;
+}
+
+function get_file_bouncer_url(platform, option) {
+    var url = BOUNCER_URL;
+    url += "?" + "product=" + BOUNCER_PRODUCT_PREFIX;
+    if(option != "all") {
+        url += "-" + option;
+    }
+    url += "&" + "os=" + platform;
+    return url;
+}
+
 function message(msg) {
     document.write(msg);
 }
 function writeUrl(url,msg) {
     document.write('<a href="' + url + '">' + msg + '</a>');
+}
+function set_page_title(title) {
+    document.write('<title>' + title + '</title>');
+}
+
+function set_page_description(desc) {
+    document.write('<meta name="description" content="' + desc + '"/>');
 }
