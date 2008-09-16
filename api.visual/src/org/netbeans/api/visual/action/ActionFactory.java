@@ -604,6 +604,17 @@ public final class ActionFactory {
         return new ResizeAction (strategy != null ? strategy : createFreeResizeStategy (), resolver != null ? resolver : createDefaultResizeControlPointResolver (), provider != null ? provider : createDefaultResizeProvider ());
     }
 
+     /**
+     * Creates a select action. Usually the ObjectScene.createSelectAction method is used instead of this method.
+     * @param provider the select logic provider
+     * @param selectOnRightClick whether or not to first select the underlying widget with a right-click.
+     * @return the select action
+     */
+    public static WidgetAction createSelectAction (SelectProvider provider, boolean selectOnRightClick) {
+        assert provider != null;
+        return new SelectAction (provider, selectOnRightClick);
+    }
+    
     /**
      * Creates a select action. Usually the ObjectScene.createSelectAction method is used instead of this method.
      * @param provider the select logic provider
@@ -612,6 +623,21 @@ public final class ActionFactory {
     public static WidgetAction createSelectAction (SelectProvider provider) {
         assert provider != null;
         return new SelectAction (provider);
+    }
+
+    /**
+     * Creates a contiguous select action. Trigger by any left, middle or right mouse-button.
+     * If no key-modifier is held, then it behaves as a non-contiguous replace selection.
+     * If Shift key-modifier is held, then it behaves as a contiguous replace selection.
+     * If Ctrl key-modifier is held, then it behaves as a non-contiguous additive selection.
+     * If Ctrl and Shift key-modifiers are held, then it behaves as a contiguous additive selection.
+     * @param provider the contiguous select logic provider
+     * @return the contiguous select action
+     * @since 2.17
+     */
+    public static WidgetAction createContiguousSelectAction (ContiguousSelectProvider provider) {
+        assert provider != null;
+        return new ContiguousSelectAction (provider);
     }
 
     /**
