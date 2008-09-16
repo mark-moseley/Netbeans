@@ -54,7 +54,9 @@ import org.netbeans.api.debugger.ActionsManagerListener;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.api.debugger.Session;
+import org.netbeans.api.debugger.jpda.JPDABreakpoint;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
+import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.LineBreakpoint;
 import org.netbeans.modules.debugger.jpda.ui.EditorContextBridge;
 import org.netbeans.spi.debugger.ActionsProviderSupport;
@@ -75,16 +77,14 @@ public class RunToCursorActionProvider extends ActionsProviderSupport
     
     
     public RunToCursorActionProvider (ContextProvider lookupProvider) {
-        debugger = (JPDADebugger) lookupProvider.lookupFirst 
-                (null, JPDADebugger.class);
-        session = (Session) lookupProvider.lookupFirst 
-                (null, Session.class);
-        debugger.addPropertyChangeListener (debugger.PROP_STATE, this);
+        debugger = lookupProvider.lookupFirst(null, JPDADebugger.class);
+        session = lookupProvider.lookupFirst(null, Session.class);
+        debugger.addPropertyChangeListener (JPDADebugger.PROP_STATE, this);
         EditorContextBridge.getContext().addPropertyChangeListener (this);
     }
     
     private void destroy () {
-        debugger.removePropertyChangeListener (debugger.PROP_STATE, this);
+        debugger.removePropertyChangeListener (JPDADebugger.PROP_STATE, this);
         EditorContextBridge.getContext().removePropertyChangeListener (this);
     }
     
@@ -116,7 +116,8 @@ public class RunToCursorActionProvider extends ActionsProviderSupport
             getActionsManager().isEnabled(ActionsManager.ACTION_CONTINUE) &&
             (debugger.getState () == debugger.STATE_STOPPED) &&
             (EditorContextBridge.getContext().getCurrentLineNumber () >= 0) && 
-            (EditorContextBridge.getContext().getCurrentURL ().endsWith (".java"))
+            (EditorContextBridge.getContext().getCurrentURL ().endsWith (".java") || 
+             EditorContextBridge.getContext().getCurrentURL ().endsWith (".scala"))
         );
         if ( (debugger.getState () != debugger.STATE_RUNNING) &&
              (breakpoint != null)
@@ -142,10 +143,26 @@ public class RunToCursorActionProvider extends ActionsProviderSupport
             EditorContextBridge.getContext().getCurrentLineNumber ()
         );
         breakpoint.setHidden (true);
+        JPDAThread currentThread = debugger.getCurrentThread();
+        if (currentThread != null) {
+            breakpoint.setThreadFilters(debugger, new JPDAThread[] { currentThread });
+        }
+        // TODO: mb.setSession(debugger);
+        try {
+            java.lang.reflect.Method setSessionMethod = JPDABreakpoint.class.getDeclaredMethod("setSession", JPDADebugger.class);
+            setSessionMethod.setAccessible(true);
+            setSessionMethod.invoke(breakpoint, debugger);
+        } catch (Exception ex) {
+            org.openide.util.Exceptions.printStackTrace(ex);
+        }
         DebuggerManager.getDebuggerManager ().addBreakpoint (breakpoint);
-        session.getEngineForLanguage ("Java").getActionsManager ().doAction (
-            ActionsManager.ACTION_CONTINUE
-        );
+        if (currentThread != null) {
+            currentThread.resume();
+        } else {
+            session.getEngineForLanguage ("Java").getActionsManager ().doAction (
+                ActionsManager.ACTION_CONTINUE
+            );
+        }
     }
 
     public void actionPerformed(Object action) {
@@ -160,7 +177,8 @@ public class RunToCursorActionProvider extends ActionsProviderSupport
                 enabled &&
                 (debugger.getState () == debugger.STATE_STOPPED) &&
                 (EditorContextBridge.getContext().getCurrentLineNumber () >= 0) && 
-                (EditorContextBridge.getContext().getCurrentURL ().endsWith (".java"))
+                (EditorContextBridge.getContext().getCurrentURL ().endsWith (".java") ||
+                 EditorContextBridge.getContext().getCurrentURL ().endsWith (".scala"))
             );
         }
     }
