@@ -46,21 +46,21 @@ import java.util.Set;
 
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
-import org.netbeans.api.gsf.CompilationInfo;
+import org.netbeans.modules.gsf.api.CompilationInfo;
 
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.netbeans.api.gsf.OffsetRange;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.gsf.api.TranslatedSource;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
+import org.netbeans.modules.ruby.RubyMimeResolver;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
-import org.openide.util.Exceptions;
 import org.openide.util.Exceptions;
 
 
@@ -120,22 +120,41 @@ public class LexUtilities {
 
     /** For a possibly generated offset in an AST, return the corresponding lexing/true document offset */
     public static int getLexerOffset(CompilationInfo info, int astOffset) {
-        return info.getPositionManager().getLexicalOffset(info.getParserResult(), astOffset);
+        ParserResult result = info.getEmbeddedResult(RubyMimeResolver.RUBY_MIME_TYPE, 0);
+        if (result != null) {
+            TranslatedSource ts = result.getTranslatedSource();
+            if (ts != null) {
+                return ts.getLexicalOffset(astOffset);
+            }
+        }
+        
+        return astOffset;
     }
     
     public static OffsetRange getLexerOffsets(CompilationInfo info, OffsetRange astRange) {
-        int rangeStart = astRange.getStart();
-        int start = info.getPositionManager().getLexicalOffset(info.getParserResult(), rangeStart);
-        if (start == rangeStart) {
-            return astRange;
-        } else if (start == -1) {
+        if (astRange == OffsetRange.NONE) {
             return OffsetRange.NONE;
-        } else {
-            // Assumes the translated range maintains size
-            return new OffsetRange(start, start+astRange.getLength());
         }
+        ParserResult result = info.getEmbeddedResult(RubyMimeResolver.RUBY_MIME_TYPE, 0);
+        if (result != null) {
+            TranslatedSource ts = result.getTranslatedSource();
+            if (ts != null) {
+                int rangeStart = astRange.getStart();
+                int start = ts.getLexicalOffset(rangeStart);
+                if (start == rangeStart) {
+                    return astRange;
+                } else if (start == -1) {
+                    return OffsetRange.NONE;
+                } else {
+                    // Assumes the translated range maintains size
+                    return new OffsetRange(start, start+astRange.getLength());
+                }
+            }
+        }
+
+        return astRange;
     }
-    
+
     /** Find the ruby token sequence (in case it's embedded in something else at the top level */
     @SuppressWarnings("unchecked")
     public static TokenSequence<?extends RubyTokenId> getRubyTokenSequence(BaseDocument doc, int offset) {
@@ -145,7 +164,8 @@ public class LexUtilities {
     
     @SuppressWarnings("unchecked")
     private static TokenSequence<? extends RubyTokenId> findRhtmlDelimited(TokenSequence t, int offset) {
-        if (t.language().mimeType().equals(RubyInstallation.RHTML_MIME_TYPE)) {
+        String mimeType = t.language().mimeType();
+        if (mimeType.equals(RubyInstallation.RHTML_MIME_TYPE) || mimeType.equals(RubyInstallation.YAML_MIME_TYPE)) {
             t.move(offset);
             if (t.moveNext() && t.token() != null && 
                     "ruby-delimiter".equals(t.token().id().primaryCategory())) { // NOI18N
@@ -206,7 +226,7 @@ public class LexUtilities {
         return ts;
     }
 
-    public static Token<?extends RubyTokenId> getToken(BaseDocument doc, int offset) {
+    public static TokenSequence<?extends RubyTokenId> getPositionedSequence(BaseDocument doc, int offset) {
         TokenSequence<?extends RubyTokenId> ts = getRubyTokenSequence(doc, offset);
 
         if (ts != null) {
@@ -226,9 +246,18 @@ public class LexUtilities {
                 return null;
             }
 
-            Token<?extends RubyTokenId> token = ts.token();
+            return ts;
+        }
 
-            return token;
+        return null;
+    }
+
+    
+    public static Token<?extends RubyTokenId> getToken(BaseDocument doc, int offset) {
+        TokenSequence<?extends RubyTokenId> ts = getPositionedSequence(doc, offset);
+        
+        if (ts != null) {
+            return ts.token();
         }
 
         return null;
@@ -716,7 +745,9 @@ public class LexUtilities {
         if (ts.offset() == caretOffset) {
             // We're looking at the offset to the RIGHT of the caret
             // and here I care about what's on the left
-            ts.movePrevious();
+            if (!ts.movePrevious()) {
+                return null;
+            }
         }
 
         Token<?extends RubyTokenId> token = ts.token();
@@ -748,7 +779,9 @@ public class LexUtilities {
                     (id == RubyTokenId.QUOTED_STRING_LITERAL) || (id == RubyTokenId.EMBEDDED_RUBY)) {
                 string = token.text().toString();
                 segments++;
-                ts.movePrevious();
+                if (!ts.movePrevious()) {
+                    return null;
+                }
                 token = ts.token();
                 id = token.id();
             }
@@ -804,7 +837,9 @@ public class LexUtilities {
         if (ts.offset() == caretOffset) {
             // We're looking at the offset to the RIGHT of the caret
             // and here I care about what's on the left
-            ts.movePrevious();
+            if (!ts.movePrevious()) {
+                return -1;
+            }
         }
 
         Token<?extends RubyTokenId> token = ts.token();
@@ -815,7 +850,9 @@ public class LexUtilities {
             // Skip over embedded Ruby segments and literal strings until you find the beginning
             while ((id == RubyTokenId.ERROR) || (id == RubyTokenId.STRING_LITERAL) ||
                     (id == RubyTokenId.QUOTED_STRING_LITERAL) || (id == RubyTokenId.EMBEDDED_RUBY)) {
-                ts.movePrevious();
+                if (!ts.movePrevious()) {
+                    return -1;
+                }
                 token = ts.token();
                 id = token.id();
             }
@@ -887,7 +924,9 @@ public class LexUtilities {
         if (ts.offset() == caretOffset) {
             // We're looking at the offset to the RIGHT of the caret
             // and here I care about what's on the left
-            ts.movePrevious();
+            if (!ts.movePrevious()) {
+                return -1;
+            }
         }
 
         Token<?extends RubyTokenId> token = ts.token();
@@ -914,7 +953,9 @@ public class LexUtilities {
             while ((id == RubyTokenId.ERROR) || (id == RubyTokenId.STRING_LITERAL) ||
                     (id == RubyTokenId.QUOTED_STRING_LITERAL) ||
                     (id == RubyTokenId.REGEXP_LITERAL) || (id == RubyTokenId.EMBEDDED_RUBY)) {
-                ts.movePrevious();
+                if (!ts.movePrevious()) {
+                    return -1;
+                }
                 token = ts.token();
                 id = token.id();
             }
