@@ -122,6 +122,7 @@ public class ElementDataObject implements Report
     public static String Property_Default = NbBundle.getMessage(ElementDataObject.class, "Property_Default"); // NOI18N
     public static String Property_Primary_Key = NbBundle.getMessage(ElementDataObject.class, "Property_Primary_Key"); // NOI18N
     public static String Property_Redefined = NbBundle.getMessage(ElementDataObject.class, "Property_Redefined"); // NOI18N
+    public static String Property_Documentation = NbBundle.getMessage(ElementDataObject.class, "Property_Documentation"); // NOI18N
     public static String navBar1;
     public static String navBar2;
     public static String navBar3;
@@ -519,6 +520,9 @@ public class ElementDataObject implements Report
                     diagram = ReportTask.loadDiagram(
                             diagrams[i].getData().getDiagram().getFilename());
                 }
+                // temporarily filter out unsupported diagram
+                if (diagram == null)
+                    continue;
                 
                 buff.append("<TR BGCOLOR=\"white\" CLASS=\"TableRowColor\">\r\n"); // NOI18N
                 
