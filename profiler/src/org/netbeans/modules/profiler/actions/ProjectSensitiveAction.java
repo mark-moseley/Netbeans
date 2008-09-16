@@ -43,12 +43,10 @@ package org.netbeans.modules.profiler.actions;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.modules.profiler.NetBeansProfiler;
 import org.netbeans.modules.profiler.ui.NBSwingWorker;
 import org.netbeans.modules.profiler.ui.panels.ProgressDisplayer;
 import org.netbeans.modules.profiler.utils.IDEUtils;
 import org.netbeans.modules.profiler.utils.OutputParameter;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.netbeans.spi.project.ActionProvider;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -223,10 +221,6 @@ public class ProjectSensitiveAction extends AbstractAction implements ContextAwa
         }
     }
 
-    //~ Static fields/initializers -----------------------------------------------------------------------------------------------
-
-    private static boolean refreshing = false;
-
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
     protected volatile boolean actionEnabled = false;
@@ -269,8 +263,10 @@ public class ProjectSensitiveAction extends AbstractAction implements ContextAwa
         // Needs to listen on changes in results
         for (int i = 0; i < watch.length; i++) {
             final Lookup.Result result = lookup.lookup(new Lookup.Template(watch[i]));
-            resultListeners[i] = (LookupListener) WeakListeners.create(LookupListener.class, this, result);
-            result.addLookupListener(resultListeners[i]);
+            // #147348 - Action instance is probobly only weakly held; we must add the strong reference to lookup listener
+//            resultListeners[i] = (LookupListener) WeakListeners.create(LookupListener.class, this, result);
+//            result.addLookupListener(resultListeners[i]);
+            result.addLookupListener(this);
         }
 
         this.performer = performer;
