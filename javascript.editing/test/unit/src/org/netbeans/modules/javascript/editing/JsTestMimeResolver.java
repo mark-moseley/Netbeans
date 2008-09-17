@@ -38,34 +38,45 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.javascript.editing;
 
-package org.netbeans.modules.editor.gsfret;
-
-import javax.swing.text.JTextComponent;
-import org.netbeans.editor.CodeFoldingSideBar;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.MIMEResolver;
 
 /**
- * This file is originally from Retouche, the Java Support
- * infrastructure in NetBeans. I have modified the file as little
- * as possible to make merging Retouche fixes back as simple as
- * possible.
- *
- *  Java Code Folding Side Bar. Component responsible for drawing folding signs and responding
- *  on user fold/unfold action.
- *
- * @todo Hmmm, we don't do anything here.... perhaps we should just nuke this class
- *   and use CodeFoldingSideBar directly??
+ * Recognize JavaScript file types
+ * 
+ * For some reason my declarative mime resolver (in my layer) doesn't kick in. Grrr.
  */
-public class GsfCodeFoldingSideBar extends CodeFoldingSideBar{
-
-    /** Creates a new instance of NbCodeFoldingSideBar */
-    public GsfCodeFoldingSideBar(JTextComponent target) {
-        super(target);
-
+public class JsTestMimeResolver extends MIMEResolver {
+    /**
+     * Extensions recognized as being JavaScript.
+     */
+    private final static String[] JAVASCRIPT_EXTENSIONS = new String[] {
+        "js", "json" // NOI18N
+    };
+    
+    /**
+     * MIME type for JavaScript. Don't change this without also consulting the various XML files
+     * that cannot reference this value directly.
+     */
+    public static final String JAVASCRIPT_MIME_TYPE = "text/javascript"; // NOI18N
+    
+    public JsTestMimeResolver() {
+        super(JAVASCRIPT_MIME_TYPE);
     }
     
-    public javax.swing.JComponent createSideBar(javax.swing.text.JTextComponent target) {
-        return new GsfCodeFoldingSideBar(target);
+    public static boolean isJavaScriptExt(String ext) {
+        for (int i = 0; i < JAVASCRIPT_EXTENSIONS.length; i++) {
+            if (ext.equalsIgnoreCase(JAVASCRIPT_EXTENSIONS[i])) {
+                return true;
+            }
+        }
+        
+        return false;
     }
-
+    
+    public String findMIMEType(FileObject fo) {
+        return isJavaScriptExt(fo.getExt()) ? JAVASCRIPT_MIME_TYPE : null;
+    }
 }

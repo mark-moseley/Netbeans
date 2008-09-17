@@ -44,7 +44,7 @@ package org.netbeans.modules.gsf;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
-import org.netbeans.api.gsf.BracketCompletion;
+import org.netbeans.modules.gsf.api.KeystrokeHandler;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.openide.ErrorManager;
@@ -58,7 +58,7 @@ import org.openide.ErrorManager;
  */
 /* package */ class CamelCaseOperations {
 
-    static int nextCamelCasePosition(JTextComponent textComponent, Language language) {
+    static int nextCamelCasePosition(JTextComponent textComponent) {
         int offset = textComponent.getCaretPosition();
         Document doc = textComponent.getDocument();
 
@@ -67,7 +67,7 @@ import org.openide.ErrorManager;
             return -1;
         }
 
-        BracketCompletion bc = language.getBracketCompletion();
+        KeystrokeHandler bc = GsfEditorKitFactory.getBracketCompletion(doc, offset);
         if (bc != null) {
             int nextOffset = bc.getNextWordOffset(doc, offset, false);
             if (nextOffset != -1) {
@@ -84,18 +84,20 @@ import org.openide.ErrorManager;
         return -1;
     }
 
-    static int previousCamelCasePosition(JTextComponent textComponent, Language language) {
+    static int previousCamelCasePosition(JTextComponent textComponent) {
         int offset = textComponent.getCaretPosition();
 
         // Are we at the beginning of the document?
         if (offset == 0) {
             return -1;
         }
+
+        final Document doc = textComponent.getDocument();
         
-        BracketCompletion bc = language.getBracketCompletion();
+        KeystrokeHandler bc = GsfEditorKitFactory.getBracketCompletion(doc, offset);
         if (bc != null) {
-            int nextOffset = bc.getNextWordOffset(textComponent.getDocument(), 
-                    offset, true);
+            int nextOffset = bc.getNextWordOffset(
+                    doc, offset, true);
             if (nextOffset != -1) {
                 return nextOffset;
             }
@@ -116,25 +118,27 @@ import org.openide.ErrorManager;
         replaceText(textComponent, offset, 1, String.valueOf(c));
     }
 
-    static void replaceText(JTextComponent textComponent, int offset, int length, String text) {
+    static void replaceText(JTextComponent textComponent, final int offset, final int length, final String text) {
         if (!textComponent.isEditable()) {
             return;
         }
-        Document document = textComponent.getDocument();
+        final Document document = textComponent.getDocument();
+        Runnable r = new Runnable() {
+            public void run() {
+                try {
+                    if (length > 0) {
+                        document.remove(offset, length);
+                    }
+                    document.insertString(offset, text, null);
+                } catch (BadLocationException ble) {
+                    ErrorManager.getDefault().notify(ble);
+                }
+            }
+        };
         if (document instanceof BaseDocument) {
-            ((BaseDocument)document).atomicLock();
-        }
-        try {
-            if (length > 0) {
-                document.remove(offset, length);
-            }
-            document.insertString(offset, text, null);
-        } catch (BadLocationException ble) {
-            ErrorManager.getDefault().notify(ble);
-        } finally {
-            if (document instanceof BaseDocument) {
-                ((BaseDocument)document).atomicUnlock();
-            }
+            ((BaseDocument)document).runAtomic(r);
+        } else {
+            r.run();
         }
     }
 }
