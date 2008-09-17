@@ -210,20 +210,20 @@ public class PanelProjectLocationVisual extends SettingsPanel implements Documen
     boolean valid( WizardDescriptor wizardDescriptor ) {
         
         if ( projectNameTextField.getText().length() == 0 ) {
-            wizardDescriptor.putProperty( "WizardPanel_errorMessage", // NOI18N
+            wizardDescriptor.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE, // NOI18N
             NbBundle.getMessage(PanelProjectLocationVisual.class,"MSG_IllegalProjectName"));
             return false; // Display name not specified
         }
         File f = new File (projectLocationTextField.getText()).getAbsoluteFile();
         if (getCanonicalFile (f)==null) {
             String message = NbBundle.getMessage (PanelProjectLocationVisual.class,"MSG_IllegalProjectLocation");
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", message);
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, message);
             return false;
         }
         final File destFolder = getCanonicalFile(new File( createdFolderTextField.getText() ).getAbsoluteFile());
         if (destFolder == null) {
             String message = NbBundle.getMessage (PanelProjectLocationVisual.class,"MSG_IllegalProjectName");
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", message);
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, message);
             return false;
         }
 
@@ -232,21 +232,21 @@ public class PanelProjectLocationVisual extends SettingsPanel implements Documen
             projLoc = projLoc.getParentFile();
         }
         if (projLoc == null || !projLoc.canWrite()) {
-            wizardDescriptor.putProperty( "WizardPanel_errorMessage", // NOI18N
+            wizardDescriptor.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE, // NOI18N
             NbBundle.getMessage(PanelProjectLocationVisual.class,"MSG_ProjectFolderReadOnly"));
             return false;
         }
         
         if (FileUtil.toFileObject(projLoc) == null) {
             String message = NbBundle.getMessage (PanelProjectLocationVisual.class,"MSG_IllegalProjectLocation");
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", message);
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, message);
             return false;
         }
         
         File[] kids = destFolder.listFiles();
         if ( destFolder.exists() && kids != null && kids.length > 0) {
             // Folder exists and is not empty
-            wizardDescriptor.putProperty( "WizardPanel_errorMessage", // NOI18N
+            wizardDescriptor.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE, // NOI18N
             NbBundle.getMessage(PanelProjectLocationVisual.class,"MSG_ProjectFolderExists"));
             return false;
         }                
@@ -273,6 +273,18 @@ public class PanelProjectLocationVisual extends SettingsPanel implements Documen
         this.projectLocationTextField.setText (projectLocation.getAbsolutePath());
         
         String projectName = (String) settings.getProperty ("name"); //NOI18N
+        /*
+         * Fix for #147263 - Ricoh samples project name should be incremented
+         */
+        if ( type == NewCDCProjectWizardIterator.TYPE_SAMPLE  ){
+            int count = 0;
+            do {
+                count++;
+                projectName = validFreeSampleProjectName( projectLocation, 
+                        projectName ,  count );
+            }
+            while ( projectName == null );
+        }
         if (projectName == null) {
             if (preferredName == null){
                 if (this.type == NewCDCProjectWizardIterator.TYPE_APP) {
@@ -288,7 +300,7 @@ public class PanelProjectLocationVisual extends SettingsPanel implements Documen
                     while ((projectName=validFreeProjectName(projectLocation, formater, baseCount))==null)
                         baseCount++;                
                     settings.putProperty (NewCDCProjectWizardIterator.PROP_NAME_INDEX, new Integer(baseCount));
-                }            
+                }
             } else {
                 projectName = preferredName;
             }
@@ -318,6 +330,34 @@ public class PanelProjectLocationVisual extends SettingsPanel implements Documen
         String name = MessageFormat.format (formater, new Object[]{new Integer (index)});                
         File file = new File (parentFolder, name);
         return file.exists() ? null : name;
+    }
+
+    private String validFreeSampleProjectName(File parentFolder, String name,
+            int suffix)
+    {
+        String result = null;
+        if (name == null) {
+            result = preferredName + suffix;
+        } else {
+            result = name + suffix;
+            if (preferredName == null) {
+                File file = new File(parentFolder, name);
+                if (!file.exists()) {
+                    return name;
+                }
+            } else {
+                if (name.startsWith(preferredName) && 
+                        name.length() > preferredName.length())
+                {
+                    return name;
+                }
+                else {
+                    result = preferredName +suffix;
+                }
+            }
+        }
+        File file = new File(parentFolder, result);
+        return file.exists() ? null : result;
     }
 
     // Implementation of DocumentListener --------------------------------------
