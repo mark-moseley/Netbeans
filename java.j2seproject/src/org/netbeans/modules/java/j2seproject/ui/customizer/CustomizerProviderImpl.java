@@ -50,9 +50,10 @@ import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.Map;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.java.j2seproject.J2SEProject;
-import org.netbeans.modules.java.j2seproject.UpdateHelper;
 import org.netbeans.spi.project.support.ant.GeneratedFilesHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
@@ -123,7 +124,8 @@ public class CustomizerProviderImpl implements CustomizerProvider {
             });
 
             OptionListener listener = new OptionListener( project, uiProperties );
-            dialog = ProjectCustomizer.createCustomizerDialog( CUSTOMIZER_FOLDER_PATH, context, preselectedCategory, listener, null );
+            StoreListener storeListener = new StoreListener(uiProperties);
+            dialog = ProjectCustomizer.createCustomizerDialog(CUSTOMIZER_FOLDER_PATH, context, preselectedCategory, listener, storeListener, null);
             dialog.addWindowListener( listener );
             dialog.setTitle( MessageFormat.format(                 
                     NbBundle.getMessage( CustomizerProviderImpl.class, "LBL_Customizer_Title" ), // NOI18N 
@@ -133,6 +135,20 @@ public class CustomizerProviderImpl implements CustomizerProvider {
             dialog.setVisible(true);
         }
     }    
+    
+    private class StoreListener implements ActionListener {
+    
+        private J2SEProjectProperties uiProperties;
+        
+        StoreListener(J2SEProjectProperties uiProperties ) {
+            this.uiProperties = uiProperties;
+        }
+        
+        public void actionPerformed(ActionEvent e) {
+            uiProperties.save();
+        }
+        
+    }
     
     /** Listens to the actions on the Customizer's option buttons */
     private class OptionListener extends WindowAdapter implements ActionListener {
@@ -155,8 +171,9 @@ public class CustomizerProviderImpl implements CustomizerProvider {
 // as modified before the project customizer is shown. 
 //            assert !ProjectManager.getDefault().isModified(project) : 
 //                "Some of the customizer panels has written the changed data before OK Button was pressed. Please file it as bug."; //NOI18N
-            uiProperties.save();
-            
+
+            //Show warning when modified
+            uiProperties.checkModified ();
             // Close & dispose the the dialog
             Dialog dialog = (Dialog)project2Dialog.get( project );
             if ( dialog != null ) {
