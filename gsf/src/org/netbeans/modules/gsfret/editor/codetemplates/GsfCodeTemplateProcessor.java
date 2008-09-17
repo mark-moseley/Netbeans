@@ -45,13 +45,15 @@ import java.util.*;
 
 import javax.swing.text.JTextComponent;
 
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsf.Completable;
+import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsf.api.CodeCompletionHandler;
 import org.netbeans.napi.gsfret.source.CompilationController;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.napi.gsfret.source.Phase;
 import org.netbeans.napi.gsfret.source.Source;
 import org.netbeans.lib.editor.codetemplates.spi.*;
+import org.netbeans.modules.gsfret.editor.completion.GsfCompletionProvider;
 import org.openide.util.Exceptions;
 
 
@@ -121,11 +123,8 @@ public class GsfCodeTemplateProcessor implements CodeTemplateProcessor {
     private String delegatedResolve(int caretOffset, String name, String variable, Map params) {
         try {
             if (initParsing()) {
-                if (cInfo.getLanguage().getParser() == null) {
-                    return null;
-                }
 
-                Completable completer = cInfo.getLanguage().getCompletionProvider();
+                CodeCompletionHandler completer = GsfCompletionProvider.getCompletable(cInfo, caretOffset);
 
                 if (completer == null) {
                     return null;
@@ -145,6 +144,13 @@ public class GsfCodeTemplateProcessor implements CodeTemplateProcessor {
 
             //final int caretOffset = c.getCaret().getDot();
             Source js = Source.forDocument(c.getDocument());
+
+            if (c.getDocument() instanceof BaseDocument) {
+                BaseDocument doc = (BaseDocument) c.getDocument();
+                if (doc.isAtomicLock()) {
+                    return false;
+                }
+            }
 
             if (js != null) {
                 try {
