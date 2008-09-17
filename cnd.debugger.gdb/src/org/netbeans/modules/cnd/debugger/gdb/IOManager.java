@@ -53,11 +53,9 @@ import org.openide.windows.OutputEvent;
 import org.openide.windows.OutputListener;
 import org.openide.windows.OutputWriter;
 
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.modules.cnd.debugger.gdb.EditorContextBridge;
 
 public class IOManager {
-
+    
 //    /** DebuggerManager output constant. */
 //    public static final int                 DEBUGGER_OUT = 1;
 //    /** Process output constant. */
@@ -75,15 +73,15 @@ public class IOManager {
     
     // variables ...............................................................
     
-    protected InputOutput                   debuggerIO = null;
-    private OutputWriter                    debuggerOut;
-    private String                          name;
+    private final InputOutput               debuggerIO;
+    private final OutputWriter              debuggerOut;
+    //private String                        name;
     private boolean                         closed = false;
     
     /** output writer Thread */
     private Hashtable                       lines = new Hashtable();
-    private Listener                        listener = new Listener();
-
+    private final Listener                  listener = new Listener();
+    
     
     // init ....................................................................
     
@@ -96,12 +94,12 @@ public class IOManager {
     
     // public interface ........................................................
 
-    private LinkedList buffer = new LinkedList();
+    private final LinkedList buffer = new LinkedList();
     private RequestProcessor.Task task;
     
     /**
-    * Prints given text to the output.
-    */
+     * Prints given text to the output.
+     */
     public void println(final String text, final Line line) {
         if (text == null) {
             throw new NullPointerException();
@@ -171,8 +169,8 @@ public class IOManager {
     }
     
     private static class Text {
-        private String text;
-        private Line line;
+        private final String text;
+        private final Line line;
      //   private int where;
         
         private Text(String text, Line line) {
@@ -182,14 +180,15 @@ public class IOManager {
         }
     }
     
-    static class Line {
-        private String url;
-        private int lineNumber;
-        private GdbDebugger debugger;
+    public static class Line {
+        private final String url;
+        private final int lineNumber;
+        private final GdbDebugger debugger;
         
         Line(String url, int lineNumber, GdbDebugger debugger) {
             this.url = url;
             this.lineNumber = lineNumber;
+            this.debugger = debugger;
         }
         
         void show() {
