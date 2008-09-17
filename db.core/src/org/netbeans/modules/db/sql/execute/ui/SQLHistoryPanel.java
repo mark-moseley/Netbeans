@@ -45,12 +45,15 @@
 package org.netbeans.modules.db.sql.execute.ui;
 
 import java.awt.Component;
+import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
-import java.io.IOException;
 import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
@@ -64,18 +67,22 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Caret;
 import javax.swing.text.Document;
-import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.db.sql.history.SQLHistory;
+import org.netbeans.modules.db.sql.history.SQLHistoryException;
 import org.netbeans.modules.db.sql.history.SQLHistoryModel;
 import org.netbeans.modules.db.sql.history.SQLHistoryModelImpl;
 import org.netbeans.modules.db.sql.history.SQLHistoryPersistenceManager;
@@ -85,8 +92,6 @@ import org.openide.filesystems.Repository;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
-import org.openide.util.RequestProcessor;
-import org.openide.util.RequestProcessor.Task;
 
 /**
  *
@@ -100,6 +105,9 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
     public static final int SAVE_STATEMENTS_MAX_LIMIT = 10000; 
     public static final int TABLE_DATA_WIDTH_SQL = 125;
     public static final Logger LOGGER = Logger.getLogger(SQLHistoryPanel.class.getName());
+    private static final FileObject USERDIR = Repository.getDefault().getDefaultFileSystem().getRoot();
+    private static final FileObject historyRoot = USERDIR.getFileObject(SQL_HISTORY_FOLDER);
+    private static String historyFilePath;
     private static Object[][] data;
     private List<String> currentUrlList;
     private Object[] comboData;
@@ -110,36 +118,12 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
     /** Creates new form SQLHistoryPanel */
     public SQLHistoryPanel(final JEditorPane editorPane) {
         this.editorPane = editorPane;
-        final Task task = RequestProcessor.getDefault().create(new Runnable() {
-            public void run() {
-                view = new SQLHistoryView(new SQLHistoryModelImpl());
-            }
-        });
-        task.run();
+        historyFilePath = FileUtil.getFileDisplayName(historyRoot) + File.separator + SQL_HISTORY_FILE_NAME + ".xml"; // NOI18N
+        view = new SQLHistoryView(new SQLHistoryModelImpl());
         initSQLHistoryTableData();
         initComponents();
-        connectionUrlComboBox.addActionListener((HistoryTableModel) sqlHistoryTable.getModel());
-        searchTextField.getDocument().addDocumentListener((HistoryTableModel) sqlHistoryTable.getModel());
-        sqlHistoryTable.getColumnModel().getColumn(0).setHeaderValue(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_SQLTableTitle"));
-        sqlHistoryTable.getColumnModel().getColumn(1).setHeaderValue(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_DateTableTitle"));
-        // Initialize data for the Url combo box
-        currentUrlList = new ArrayList<String>();
-        initConnectionUrlComboBox();
-        // SQL statments save limit
-        inputWarningLabel.setVisible(false);
-        String savedLimit = NbPreferences.forModule(SQLHistoryPanel.class).get("SQL_STATEMENTS_SAVED_FOR_HISTORY", ""); // NOI18N
-        if (savedLimit != null) {
-            sqlLimitTextField.setText(savedLimit);
-        } else {
-            sqlLimitTextField.setText(SAVE_STATEMENTS_MAX_LIMIT_ENTERED); // NOI18N
-        }
-        // Make sure the save limit is considered
-        if (savedLimit.equals(SAVE_STATEMENTS_CLEARED)) {
-            savedLimit = SAVE_STATEMENTS_MAX_LIMIT_ENTERED;
-        }
-        SQLHistoryPersistenceManager.getInstance().updateSQLSaved(Integer.parseInt(savedLimit), Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject(SQL_HISTORY_FOLDER));
-        // Check SQL statements limit
-        verifySQLLimit();
+        initComponentData();
+        setupSQLSaveLimit();
         // Adjust table column width
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
@@ -148,9 +132,47 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
             }
         });
     }
+    
+    private void setupSQLSaveLimit() {
+        // SQL statments save limit
+        String savedLimit = NbPreferences.forModule(SQLHistoryPanel.class).get("SQL_STATEMENTS_SAVED_FOR_HISTORY", ""); // NOI18N
+        if (null != savedLimit && !savedLimit.equals(SAVE_STATEMENTS_CLEARED)) {
+            sqlLimitTextField.setText(savedLimit);
+        } else {
+            sqlLimitTextField.setText(SAVE_STATEMENTS_MAX_LIMIT_ENTERED);
+            savedLimit = SAVE_STATEMENTS_MAX_LIMIT_ENTERED;
+            NbPreferences.forModule(SQLHistoryPanel.class).put("SQL_STATEMENTS_SAVED_FOR_HISTORY", SAVE_STATEMENTS_MAX_LIMIT_ENTERED);  // NOI18N
+        }
+    }
 
-    private void initConnectionUrlComboBox() {
+    private void initComponentData() {
+        searchTextField.getDocument().addDocumentListener((HistoryTableModel) sqlHistoryTable.getModel());
+        sqlHistoryTable.getColumnModel().getColumn(0).setHeaderValue(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_SQLTableTitle"));
+        sqlHistoryTable.getColumnModel().getColumn(1).setHeaderValue(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_DateTableTitle"));
+        // Add mouse listener to listen for mouse click on the table header so columns can be sorted
+        JTableHeader header = sqlHistoryTable.getTableHeader();
+        header.addMouseListener(new ColumnListener());
+
+        // Add mouse listener for the case when a user double-clicks on a row to insert SQL
+        sqlHistoryTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    Point origin = e.getPoint();
+                    int row = sqlHistoryTable.rowAtPoint(origin);
+                    int column = sqlHistoryTable.columnAtPoint(origin);
+                    if (row == -1 || column != 0) {
+                        return;
+                    } else {
+                        insertSQL();
+                    }
+                }
+            }
+        });
+
         // Initialize sql column data
+        connectionUrlComboBox.addActionListener((HistoryTableModel) sqlHistoryTable.getModel());
+        currentUrlList = new ArrayList<String>();
         List<String> urlList = view.getUrlList();
         String defaultUrlItem = NbBundle.getMessage(SQLHistoryPanel.class, "LBL_URLComboBoxAllConnectionsItem");
         urlList.add(defaultUrlItem);
@@ -229,7 +251,6 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
 
         insertSQLButton.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_Insert")); // NOI18N
         insertSQLButton.setEnabled(false);
-        insertSQLButton.setFocusTraversalPolicyProvider(true);
         insertSQLButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 insertSQLButtonActionPerformed(evt);
@@ -238,7 +259,6 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
 
         sqlHistoryTable.setModel(new HistoryTableModel());
         sqlHistoryTable.setGridColor(java.awt.Color.lightGray);
-        sqlHistoryTable.setNextFocusableComponent(sqlLimitTextField);
         sqlHistoryTable.setSelectionBackground(javax.swing.UIManager.getDefaults().getColor("EditorPane.selectionBackground"));
         jScrollPane1.setViewportView(sqlHistoryTable);
         sqlHistoryTable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "ACSN_History")); // NOI18N
@@ -247,11 +267,9 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
         sqlLimitLabel.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_SqlLimit")); // NOI18N
 
         sqlLimitTextField.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_InitialLimit")); // NOI18N
-        sqlLimitTextField.setFocusTraversalPolicyProvider(true);
         sqlLimitTextField.setMinimumSize(new java.awt.Dimension(18, 22));
 
         sqlLimitButton.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ApplyButton")); // NOI18N
-        sqlLimitButton.setNextFocusableComponent(insertSQLButton);
         sqlLimitButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 sqlLimitButtonActionPerformed(evt);
@@ -259,7 +277,9 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
         });
 
         inputWarningLabel.setForeground(java.awt.Color.red);
-        inputWarningLabel.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_TextInputWarningLabel")); // NOI18N
+        inputWarningLabel.setFocusable(false);
+        inputWarningLabel.setRequestFocusEnabled(false);
+        inputWarningLabel.setVerifyInputWhenFocusTarget(false);
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -270,6 +290,7 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(layout.createSequentialGroup()
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 556, Short.MAX_VALUE)
                             .add(layout.createSequentialGroup()
                                 .add(jLabel1)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
@@ -277,19 +298,19 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
                                 .add(18, 18, 18)
                                 .add(jLabel2)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
-                                .add(searchTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 147, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                            .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 556, Short.MAX_VALUE))
+                                .add(searchTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 147, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(insertSQLButton))
+                        .add(insertSQLButton)
+                        .addContainerGap())
+                    .add(layout.createSequentialGroup()
+                        .add(inputWarningLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 164, Short.MAX_VALUE)
+                        .add(493, 493, 493))
                     .add(layout.createSequentialGroup()
                         .add(sqlLimitLabel)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(sqlLimitTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 62, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(sqlLimitButton)
-                        .add(18, 18, 18)
-                        .add(inputWarningLabel)))
-                .addContainerGap())
+                        .add(sqlLimitButton))))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -304,13 +325,14 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(insertSQLButton)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                        .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 185, Short.MAX_VALUE)
+                        .add(jScrollPane1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 168, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                            .add(sqlLimitLabel)
                             .add(sqlLimitTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                             .add(sqlLimitButton)
-                            .add(inputWarningLabel))))
+                            .add(sqlLimitLabel))
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(inputWarningLabel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 26, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
         );
 
@@ -327,48 +349,68 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
     }// </editor-fold>//GEN-END:initComponents
 
 private void insertSQLButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_insertSQLButtonActionPerformed
-    int rowSelected = sqlHistoryTable.getSelectedRow();
-    try {
-        // Make sure to insert the entire SQL, not just what appears in the Table
-        List<SQLHistory> sqlHistoryList = view.getSQLHistoryList();
-        int i = 0;
-        String sqlToInsert = ""; // NOI18N
-        for (SQLHistory sqlHistory : sqlHistoryList) {
-            if (rowSelected == i) {
-                sqlToInsert = sqlHistory.getSql().trim();
-            }
-            // increment for the next row
-            i++;
-        }
-        new InsertSQLUtility().insert(sqlToInsert, editorPane);
-    } catch (BadLocationException ex) {
-        Exceptions.printStackTrace(ex);
-    }
-
+    insertSQL();
 }//GEN-LAST:event_insertSQLButtonActionPerformed
 
 private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_sqlLimitButtonActionPerformed
     verifySQLLimit();
 }//GEN-LAST:event_sqlLimitButtonActionPerformed
 
-private void verifySQLLimit() {
-    String limit = sqlLimitTextField.getText();
-    int iLimit = 0;
-    SQLHistoryPersistenceManager sqlPersistanceManager = SQLHistoryPersistenceManager.getInstance();
-    inputWarningLabel.setVisible(false);
-    if (limit.equals(SAVE_STATEMENTS_CLEARED)) { 
+
+    private void insertSQL() {
+        int rowSelected = sqlHistoryTable.getSelectedRow();
+        try {
+            // Make sure to insert the entire SQL, not just what appears in the Table
+            List<SQLHistory> sqlHistoryList = view.getCurrentSQLHistoryList();
+            int i = 0;
+            String sqlToInsert = ""; // NOI18N
+            for (SQLHistory sqlHistory : sqlHistoryList) {
+                if (rowSelected == i) {
+                    sqlToInsert = sqlHistory.getSql().trim();
+                }
+                // increment for the next row
+                i++;
+            }
+            new InsertSQLUtility().insert(sqlToInsert, editorPane);
+        } catch (BadLocationException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+    }
+
+    private void verifySQLLimit() {
+        String enteredLimit = sqlLimitTextField.getText();
+        int iLimit = 0;
+        if (enteredLimit.equals(SAVE_STATEMENTS_CLEARED)) {
+            updateSaveLimitUponClear(iLimit);
+            inputWarningLabel.setText(""); // NOI18N
+        } else { // user enters a value to limit the number of SQL statements to save
+            updateSaveLimitUponReset(enteredLimit);
+        }
+    }
+
+    private void updateSaveLimitUponClear(int iLimit) {
         iLimit = SAVE_STATEMENTS_MAX_LIMIT;
-        view.setSQLHistoryList(sqlPersistanceManager.updateSQLSaved(iLimit, Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject(SQL_HISTORY_FOLDER)));
-        ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(null);
+        List<SQLHistory> sqlHistoryList = new ArrayList<SQLHistory>();
+        try {
+            view.setSQLHistoryList(SQLHistoryPersistenceManager.getInstance().updateSQLSaved(iLimit, historyRoot));
+            sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, historyRoot);
+            view.setCurrentSQLHistoryList(sqlHistoryList);
+        } catch (ClassNotFoundException ex) {
+            Exceptions.printStackTrace(ex);
+        } catch (SQLHistoryException ex) {
+            handleSQLHistoryException();
+        }
+        ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(null, sqlHistoryList);
         NbPreferences.forModule(SQLHistoryPanel.class).put("SQL_STATEMENTS_SAVED_FOR_HISTORY", Integer.toString(iLimit));  // NOI18N               
         sqlLimitTextField.setText(SAVE_STATEMENTS_MAX_LIMIT_ENTERED);
-    } else { // user enters a value to limit the number of SQL statements to save
+    }
+    
+    private void updateSaveLimitUponReset(String enteredLimit) {
         try {
-            iLimit = Integer.parseInt(limit);
+            int iLimit = Integer.parseInt(enteredLimit);
             String savedLimit = NbPreferences.forModule(SQLHistoryPanel.class).get("SQL_STATEMENTS_SAVED_FOR_HISTORY", SAVE_STATEMENTS_CLEARED); // NOI18N
             if (iLimit < 0 || iLimit > SAVE_STATEMENTS_MAX_LIMIT) {
                 sqlLimitButton.setEnabled(true);
-                inputWarningLabel.setVisible(true);
                 inputWarningLabel.setText(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_NumberInputWarningLabel"));
                 // reset user's input
                 if (savedLimit != null) {
@@ -378,13 +420,19 @@ private void verifySQLLimit() {
                     sqlLimitTextField.setText(SAVE_STATEMENTS_MAX_LIMIT_ENTERED); 
                 }
             } else {
-                SQLHistoryPersistenceManager.getInstance().updateSQLSaved(iLimit, Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject(SQL_HISTORY_FOLDER));
-                ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(null);
+                inputWarningLabel.setText(""); // NOI18N
+                SQLHistoryPersistenceManager.getInstance().updateSQLSaved(iLimit, historyRoot);
+                List<SQLHistory> sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, historyRoot);
+                view.setCurrentSQLHistoryList(sqlHistoryList);
+                ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(null, sqlHistoryList);
                 view.updateConnectionUrl();
                 NbPreferences.forModule(SQLHistoryPanel.class).put("SQL_STATEMENTS_SAVED_FOR_HISTORY", Integer.toString(iLimit));  // NOI18N               
             }
+        } catch (ClassNotFoundException ex) {
+            Exceptions.printStackTrace(ex);
+        } catch (SQLHistoryException ex) {
+            handleSQLHistoryException();
         } catch (NumberFormatException ne) {
-            inputWarningLabel.setVisible(true);
             inputWarningLabel.setText(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_TextInputWarningLabel"));
             // reset user's input
             String savedLimit = NbPreferences.forModule(SQLHistoryPanel.class).get("SQL_STATEMENTS_SAVED_FOR_HISTORY", ""); // NOI18N
@@ -393,9 +441,15 @@ private void verifySQLLimit() {
             } else {
                 sqlLimitTextField.setText(SAVE_STATEMENTS_MAX_LIMIT_ENTERED); 
             }
-        }
+        }        
     }
-}
+    
+    private void handleSQLHistoryException() {
+        inputWarningLabel.setText(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ErrorParsingSQLHistory"));
+        LOGGER.log(Level.WARNING, NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ErrorParsingSQLHistory"));
+        SQLHistoryPersistenceManager.getInstance().removeHistoryFile(historyRoot);
+    }
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JComboBox connectionUrlComboBox;
     private javax.swing.JLabel inputWarningLabel;
@@ -411,19 +465,31 @@ private void verifySQLLimit() {
     // End of variables declaration//GEN-END:variables
     private class SQLHistoryView {
         private SQLHistoryModel model;
-        List<SQLHistory> sqlHistoryList;
-        List<SQLHistory> currentSQLHistoryList;
+        List<SQLHistory> sqlHistoryList = new ArrayList<SQLHistory>();
+        List<SQLHistory> currentSQLHistoryList  = new ArrayList<SQLHistory>();
         public static final String MATCH_EMPTY = ""; // NOI18N
         public static final String NO_MATCH = ""; // NOI18N
 
         public SQLHistoryView(SQLHistoryModel model) {
             this.model = model;
-            this.sqlHistoryList = model.getSQLHistoryList();
-            this.currentSQLHistoryList = model.getSQLHistoryList();
+            init();
         }
         
+        private void init() {
+            try {
+                this.sqlHistoryList = model.getSQLHistoryList();
+                this.currentSQLHistoryList = model.getSQLHistoryList();
+            } catch (SQLHistoryException ex) {
+                // ignore for now since this exception will be caught later
+            }
+        }
+
         public void setCurrentSQLHistoryList(List<SQLHistory> sqlHistoryList) {
             currentSQLHistoryList = sqlHistoryList;
+        }
+
+        public List<SQLHistory> getCurrentSQLHistoryList() {
+            return currentSQLHistoryList;
         }
 
         public List<SQLHistory> getSQLHistoryList() {
@@ -525,14 +591,13 @@ private void verifySQLLimit() {
         public void updateConnectionUrl() {
             // Initialize combo box data
             currentUrlList.clear();
-            FileObject root = Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject(SQL_HISTORY_FOLDER);
-            String historyFilePath = FileUtil.getFileDisplayName(root) + File.separator + SQL_HISTORY_FILE_NAME + ".xml"; // NOI18N
+            String historyFilePath = FileUtil.getFileDisplayName(historyRoot) + File.separator + SQL_HISTORY_FILE_NAME + ".xml"; // NOI18N
             try {
-                sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, root);
-            } catch (IOException ex) {
-                Exceptions.printStackTrace(ex);
+                sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, historyRoot);
             } catch (ClassNotFoundException ex) {
                 Exceptions.printStackTrace(ex);
+            } catch (SQLHistoryException ex) {
+                handleSQLHistoryException();
             }
             // Set default item in the combo box
             String defaultSelectedItem = NbBundle.getMessage(SQLHistoryPanel.class, "LBL_URLComboBoxAllConnectionsItem");
@@ -559,7 +624,7 @@ private void verifySQLLimit() {
             String match = searchTextField.getText();
             String url = (String)connectionUrlComboBox.getSelectedItem();
             // modify list of SQL to reflect a selection from the Connection dropdown or if a match text entered
-            for (SQLHistory sqlHistory : currentSQLHistoryList) {
+            for (SQLHistory sqlHistory : sqlHistoryList) {
                 if (sqlHistory.getUrl().equals(url) || url.equals(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ConnectionCombo"))) {
                     if (!match.equals(MATCH_EMPTY)) {
                         if (sqlHistory.getSql().toLowerCase().indexOf(match.toLowerCase()) != -1) {
@@ -679,31 +744,20 @@ private void verifySQLLimit() {
                 }
                 TableColumn column = columnModel.getColumn(col);
                 column.setPreferredWidth(maxwidth);
+                column.setHeaderRenderer(createDefaultRenderer());
             }
         }
 
         public void actionPerformed(ActionEvent evt) {
-            view.setSQLHistoryList(view.filterSQLHistoryList());
+            view.setCurrentSQLHistoryList(view.filterSQLHistoryList());
             sqlHistoryTable.repaint();
             sqlHistoryTable.clearSelection();
             searchTextField.setText(""); // NOI18N
-            refreshTable(evt);
+            refreshTable(evt, view.getCurrentSQLHistoryList());
         }
         
-        public void refreshTable(ActionEvent evt) {
+        public void refreshTable(ActionEvent evt, List<SQLHistory> sqlHistoryList) {
             String url;
-            // Retrieve persisted data
-            List<SQLHistory> sqlHistoryList = new ArrayList<SQLHistory>();
-            FileObject root = Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject(SQL_HISTORY_FOLDER);
-            String historyFilePath = FileUtil.getFileDisplayName(root) + File.separator + SQL_HISTORY_FILE_NAME + ".xml"; // NOI18N
-            try {
-                sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, root);
-                view.setCurrentSQLHistoryList(sqlHistoryList);
-            } catch (IOException ex) {
-                Exceptions.printStackTrace(ex);
-            } catch (ClassNotFoundException ex) {
-                Exceptions.printStackTrace(ex);
-            }
             // Get the connection url from the combo box
             if (sqlHistoryList.size() > 0) {
                 url = connectionUrlComboBox.getSelectedItem().toString();
@@ -843,6 +897,15 @@ private void verifySQLLimit() {
             data = new Object[sqlHistoryList.size()][2];
             sqlHistoryTable.repaint();
         }
+
+        public void sortData() {
+            List<SQLHistory> sqlHistoryList = view.getSQLHistoryList();
+            searchTextField.setText(""); // NOI18N
+            Collections.reverse(sqlHistoryList);
+            view.setSQLHistoryList(sqlHistoryList);
+            view.setCurrentSQLHistoryList(sqlHistoryList);
+            refreshTable(null, sqlHistoryList);
+        }
     }
 
     public static String read(Document doc) throws InterruptedException, Exception {
@@ -900,19 +963,9 @@ private void verifySQLLimit() {
             }
 
             Document doc = target.getDocument();
-            if (doc == null) {
-                return;
+            if (doc != null) {
+                insert(s, target, doc);
             }
-
-            if (doc instanceof BaseDocument) {
-                ((BaseDocument) doc).atomicLock();
-            }
-
-            int start = insert(s, target, doc);
-            if (doc instanceof BaseDocument) {
-                ((BaseDocument) doc).atomicUnlock();
-            }
-
         }
 
         private int insert(String s, JEditorPane target, Document doc)
@@ -925,7 +978,7 @@ private void verifySQLLimit() {
                 int p1 = Math.max(caret.getDot(), caret.getMark());
                 doc.remove(p0, p1 - p0);
                 start = caret.getDot();
-                doc.insertString(start, s + ";", null); // NOI18N
+                doc.insertString(start, s + ";\n", null); // NOI18N
             } catch (BadLocationException ble) {
                 LOGGER.log(Level.WARNING, org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_InsertAtLocationError") + ble);
             }
@@ -965,5 +1018,39 @@ private void verifySQLLimit() {
             return component;
         }
     }
+
+    private TableCellRenderer createDefaultRenderer() {
+        DefaultTableCellRenderer label = new DefaultTableCellRenderer() {
+
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                if (table != null) {
+                    JTableHeader header = table.getTableHeader();
+                    if (header != null) {
+                        setForeground(header.getForeground());
+                        setBackground(header.getBackground());
+                        setFont(header.getFont());
+                    }
+                }
+                setText((value == null) ? "" : value.toString());
+                setBorder(UIManager.getBorder("TableHeader.cellBorder"));
+                return this;
+            }
+        };
+        label.setHorizontalAlignment(JLabel.CENTER);
+        return label;
+    }
+
+    private class ColumnListener extends MouseAdapter {
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            HistoryTableModel model = (HistoryTableModel)sqlHistoryTable.getModel();
+            model.sortData();
+            sqlHistoryTable.tableChanged(new TableModelEvent(model));
+            sqlHistoryTable.repaint();
+        }
+    }
+
+
 
 }
