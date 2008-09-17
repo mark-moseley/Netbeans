@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
@@ -71,7 +72,6 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.util.ElementFilter;
 import org.netbeans.api.java.source.ClasspathInfo;
-import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.modules.classfile.Access;
 import org.netbeans.modules.classfile.CPClassInfo;
 import org.netbeans.modules.classfile.CPFieldInfo;
@@ -90,7 +90,6 @@ import org.netbeans.modules.classfile.Parameter;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
 import org.netbeans.modules.java.source.TreeLoader;
 import org.netbeans.modules.java.source.parsing.FileObjects;
-import org.netbeans.modules.java.source.parsing.FileObjects;
 import org.netbeans.modules.java.source.util.LowMemoryEvent;
 import org.netbeans.modules.java.source.util.LowMemoryListener;
 import org.netbeans.modules.java.source.util.LowMemoryNotifier;
@@ -99,7 +98,6 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
-import org.openide.util.NbBundle;
 
 
 
@@ -122,7 +120,7 @@ public class BinaryAnalyser implements LowMemoryListener {
     private static boolean FULL_INDEX = Boolean.getBoolean("org.netbeans.modules.java.source.usages.BinaryAnalyser.fullIndex");     //NOI18N
     
     private final Index index;
-    private final Map<Pair<String,String>,List<String>> refs = new HashMap<Pair<String,String>,List<String>>();
+    private final Map<Pair<String,String>,Object[]> refs = new HashMap<Pair<String,String>,Object[]>();
     private final Set<Pair<String,String>> toDelete = new HashSet<Pair<String,String>> ();
     private final AtomicBoolean lowMemory;
     private Continuation cont;
@@ -137,7 +135,7 @@ public class BinaryAnalyser implements LowMemoryListener {
      * @param URL the classpath root, either a folder or an archive file.
      *     
      */
-    public final Result start (final URL root, final ProgressHandle handle, final AtomicBoolean cancel, final AtomicBoolean closed) throws IOException, IllegalArgumentException  {
+    public final Result start (final URL root, final AtomicBoolean cancel, final AtomicBoolean closed) throws IOException, IllegalArgumentException  {
         assert root != null;        
         assert cont == null;
         LowMemoryNotifier.getDefault().addLowMemoryListener (BinaryAnalyser.this);
@@ -149,14 +147,8 @@ public class BinaryAnalyser implements LowMemoryListener {
                     //Fast way
                     File archive = new File (URI.create(innerURL.toExternalForm()));
                     if (archive.exists() && archive.canRead()) {
-                        if (handle != null) {
-                            handle.setDisplayName(NbBundle.getMessage(BinaryAnalyser.class,"MSG_Scannig",archive.getAbsolutePath()));
-                        }
                         if (!isUpToDate(null,archive.lastModified())) {
                             index.clear();
-                            if (handle != null) { //Tests don't provide handle
-                                handle.setDisplayName (NbBundle.getMessage(RepositoryUpdater.class,"MSG_Analyzing",archive.getAbsolutePath()));
-                            }
                             try {
                                 final ZipFile zipFile = new ZipFile(archive);
                                 prebuildArgs(zipFile, root);
@@ -172,14 +164,8 @@ public class BinaryAnalyser implements LowMemoryListener {
                 else {
                     FileObject rootFo =  URLMapper.findFileObject(root);
                     if (rootFo != null) {
-                        if (handle != null) {
-                            handle.setDisplayName(NbBundle.getMessage(BinaryAnalyser.class,"MSG_Scannig",FileUtil.getFileDisplayName(rootFo)));
-                        }
                         if (!isUpToDate(null,rootFo.lastModified().getTime())) {
                             index.clear();
-                            if (handle != null) { //Tests don't provide handle
-                                handle.setDisplayName (NbBundle.getMessage(RepositoryUpdater.class,"MSG_Analyzing",FileUtil.getFileDisplayName(rootFo)));
-                            }
                             Enumeration<? extends FileObject> todo = rootFo.getData(true);
                             cont = new FileObjectContinuation (todo,cancel,closed);
                             return cont.execute();
@@ -195,9 +181,6 @@ public class BinaryAnalyser implements LowMemoryListener {
                     if (path.charAt(path.length()-1) != File.separatorChar) {
                         path = path + File.separatorChar;
                     }
-                    if (handle != null) { //Tests don't provide handle
-                        handle.setDisplayName (NbBundle.getMessage(RepositoryUpdater.class,"MSG_Analyzing",rootFile.getAbsolutePath()));
-                    }
                     LinkedList<File> todo = new LinkedList<File> ();
                     if (rootFile.isDirectory() && rootFile.canRead()) {
                         File[] children = rootFile.listFiles();  
@@ -212,9 +195,6 @@ public class BinaryAnalyser implements LowMemoryListener {
             else {
                 FileObject rootFo =  URLMapper.findFileObject(root);
                 if (rootFo != null) {
-                    if (handle != null) { //Tests don't provide handle
-                        handle.setDisplayName (NbBundle.getMessage(RepositoryUpdater.class,"MSG_Analyzing",FileUtil.getFileDisplayName(rootFo)));
-                    }
                     index.clear();
                     Enumeration<? extends FileObject> todo = rootFo.getData(true);
                     cont = new FileObjectContinuation (todo,cancel,closed);
@@ -288,14 +268,20 @@ public class BinaryAnalyser implements LowMemoryListener {
                 String relativePath = FileObjects.convertFolder2Package (filePath.substring(rootPath.length(), endPos));
                 if (this.accepts(file.getName()) && !isUpToDate (relativePath, fileMTime)) {
                     this.toDelete.add(Pair.<String,String>of (relativePath,null));
-                    InputStream in = new BufferedInputStream (new FileInputStream (file));
                     try {
-                        analyse (in);
-                    } catch (InvalidClassFormatException icf) {
-                        LOGGER.warning("Invalid class file format: "+file.getAbsolutePath());      //NOI18N
-                    }
-                    finally {
-                        in.close();
+                        InputStream in = new BufferedInputStream(new FileInputStream(file));
+                        try {
+                            analyse(in);
+                        } catch (InvalidClassFormatException icf) {
+                            LOGGER.warning("Invalid class file format: " + file.getAbsolutePath());      //NOI18N
+
+                        } finally {
+                            in.close();
+                        }
+                    } catch (IOException ex) {
+                        //unreadable file?
+                        LOGGER.warning("Cannot read file: " + file.getAbsolutePath());      //NOI18N
+                        LOGGER.log(Level.FINE, null, ex);
                     }
                     if (this.lowMemory.getAndSet(false)) {
                         this.store();
@@ -592,13 +578,17 @@ public class BinaryAnalyser implements LowMemoryListener {
     
     private List<String> getClassReferences (final Pair<String,String> name) {
         assert name != null;
-        List<String> cr = this.refs.get (name);
+        Object[] cr = this.refs.get (name);
         if (cr == null) {
-            cr = new ArrayList<String> ();
+            cr = new Object[] {
+                new ArrayList<String> (),
+                null,
+                null
+            };
             this.refs.put (name, cr);
         }
-        return cr;
-    }            
+        return (ArrayList<String>) cr[0];
+    }
     
                 
     // Static private methods ---------------------------------------------------------          
@@ -627,21 +617,26 @@ public class BinaryAnalyser implements LowMemoryListener {
      * @param archiveUrl url of an archive
      */
     private static void prebuildArgs (final ZipFile archiveFile, final URL archiveUrl) {
-        final ZipEntry e = archiveFile.getEntry(FileObjects.convertPackage2Folder(javax.swing.JComponent.class.getName())+'.'+FileObjects.CLASS);   //NOI18N
-        if (e != null) {                                   //NOI18N
-            ClasspathInfo cpInfo = ClasspathInfo.create(ClassPathSupport.createClassPath(new URL[]{archiveUrl}),
-                ClassPathSupport.createClassPath(new URL[0]),
-                ClassPathSupport.createClassPath(new URL[0]));
-            final JavacTaskImpl jt = JavaSourceAccessor.INSTANCE.createJavacTask(cpInfo, null, null);            
-            TreeLoader.preRegister(jt.getContext(), cpInfo);
-            TypeElement jc = jt.getElements().getTypeElement(javax.swing.JComponent.class.getName());
-            if (jc != null) {
-                List<ExecutableElement> methods = ElementFilter.methodsIn(jc.getEnclosedElements());
-                for (ExecutableElement method : methods) {
-                    List<? extends VariableElement> params = method.getParameters();
-                    if (!params.isEmpty()) {
-                        params.get(0).getSimpleName();
-                        break;
+        final ZipEntry jce = archiveFile.getEntry(FileObjects.convertPackage2Folder(javax.swing.JComponent.class.getName())+'.'+FileObjects.CLASS);   //NOI18N
+        if (jce != null) {                                   //NOI18N
+            //On the IBM VMs the swing is in separate jar (graphics.jar) where no j.l package exists, don't prebuild such an archive.
+            //The param names will be created on deamand
+            final ZipEntry oe = archiveFile.getEntry(FileObjects.convertPackage2Folder(Object.class.getName())+'.'+FileObjects.CLASS);   //NOI18N
+            if (oe != null) {
+                ClasspathInfo cpInfo = ClasspathInfo.create(ClassPathSupport.createClassPath(new URL[]{archiveUrl}),
+                    ClassPathSupport.createClassPath(new URL[0]),
+                    ClassPathSupport.createClassPath(new URL[0]));
+                final JavacTaskImpl jt = JavaSourceAccessor.getINSTANCE().createJavacTask(cpInfo, null, null);            
+                TreeLoader.preRegister(jt.getContext(), cpInfo);
+                TypeElement jc = jt.getElements().getTypeElement(javax.swing.JComponent.class.getName());
+                if (jc != null) {
+                    List<ExecutableElement> methods = ElementFilter.methodsIn(jc.getEnclosedElements());
+                    for (ExecutableElement method : methods) {
+                        List<? extends VariableElement> params = method.getParameters();
+                        if (!params.isEmpty()) {
+                            params.get(0).getSimpleName();
+                            break;
+                        }
                     }
                 }
             }
