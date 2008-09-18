@@ -185,7 +185,7 @@ public class Folder {
             }
             if (!((Folder)o).isProjectFiles()) {
                 indexAt--;
-                break;
+                continue;
             }
             String name2 = ((Folder)o).getSortName();
             int compareRes = name1.compareTo(name2);
@@ -240,8 +240,11 @@ public class Folder {
         ((MakeConfigurationDescriptor)configurationDescriptor).fireFilesAdded(list);
         return item;
     }
-    
     public Item addItem(Item item) {
+        return addItem(item, true);
+    }
+    
+    public Item addItem(Item item, boolean notify) {
         if (item == null)
             return null;
         // Check if already in project. Refresh if it's there.
@@ -256,7 +259,7 @@ public class Folder {
         addElement(item);
         
         // Add item to the dataObject's lookup
-        if (isProjectFiles()) {
+        if (isProjectFiles() && notify) {
             // item.getLastDataObject() should be inited in method item.setFolder(this);
             if (item.getLastDataObject() instanceof CndDataObject) {
                 CndDataObject dataObject = (CndDataObject)item.getLastDataObject();
@@ -400,7 +403,6 @@ public class Folder {
             for (int i = 0; i < configurations.length; i++)
                 configurations[i].removeAuxObject(item.getId()/*ItemConfiguration.getId(item.getPath())*/);
         }
-        item.removePropertyChangeListener();
         item.setFolder(null);
         fireChangeEvent();
         return ret;
