@@ -129,6 +129,7 @@ class FormToolBar extends JToolBar {
 
         // status label
         addLabel = new JLabel();
+        addLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
 
         // popup menu
         addMouseListener(listener);
@@ -176,8 +177,7 @@ class FormToolBar extends JToolBar {
         add(addLabel);
 
         if (!FormLoaderSettings.getInstance().isPaletteInToolBar()) {
-            addLabel.setVisible(false);
-            paletteButton.setVisible(false);
+            showPaletteButton(false);
         }
     }
 
@@ -241,6 +241,16 @@ class FormToolBar extends JToolBar {
     void showPaletteButton(boolean visible) {
         addLabel.setVisible(visible);
         paletteButton.setVisible(visible);
+        // Hack that solves issue 147578
+        if ("Nimbus".equals(UIManager.getLookAndFeel().getID())) { // NOI18N
+            if (visible) {
+                addLabel.setPreferredSize(null);
+                paletteButton.setPreferredSize(null);
+            } else {
+                addLabel.setPreferredSize(new Dimension());
+                paletteButton.setPreferredSize(new Dimension());
+            }
+        }
     }
 
     private void showPaletteViewMenu() {
