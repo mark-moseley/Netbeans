@@ -68,6 +68,7 @@ class LoadRegionsProvider implements ActionProvider {
     private Orientation orientation;
     private ArrayList<String> offsets;
     private IState state;
+    private boolean isDone=false;
     
     public LoadRegionsProvider(UMLNodeWidget stateWidget,IState state, Orientation orientation, ArrayList<String> devidersOffests) {
         this.stateWidget=stateWidget;
@@ -92,15 +93,16 @@ class LoadRegionsProvider implements ActionProvider {
                 for(IPresentationElement subPETmp:subEl.getPresentationElements())
                 {
                     Widget tmp=scene.findWidget(subPETmp);
-                    for(Widget par=tmp.getParentWidget();par!=null;par=par.getParentWidget())
-                    {
-                        if(par==stateWidget)
+                    if(tmp!=null)//may be on another diagram
+                        for(Widget par=tmp.getParentWidget();par!=null;par=par.getParentWidget())
                         {
-                            subW=tmp;
-                            subPE=subPETmp;
-                            break;
+                            if(par==stateWidget)
+                            {
+                                subW=tmp;
+                                subPE=subPETmp;
+                                break;
+                            }
                         }
-                    }
                     if(subW!=null)break;
                 }
                 if(subW!=null)
@@ -154,8 +156,20 @@ class LoadRegionsProvider implements ActionProvider {
                                 ContainerWithCompartments cont = (ContainerWithCompartments) stateWidget;
                                 cont.addChildrenInBounds();
                                 //
-                                DesignerScene scene=(DesignerScene) stateWidget.getScene();
+                                final DesignerScene scene=(DesignerScene) stateWidget.getScene();
                                 scene.getDiagram().setDirty(true);
+                                new Thread()//we can get perfomance regression with saving after each conteiner resolving, but it's better then have incinsistent diagram state.
+                                {
+                                    @Override
+                                    public void run()
+                                    {
+                                        try {
+                                            scene.getDiagram().save();
+                                        } catch (IOException ex) {
+                                            Exceptions.printStackTrace(ex);
+                                        }
+                                    }
+                                }.start();
                              }
                         });
                     } catch (InterruptedException ex) {
@@ -166,6 +180,7 @@ class LoadRegionsProvider implements ActionProvider {
                 }
             }.start();
         }
+        else isDone=true;
     }
 
 }
