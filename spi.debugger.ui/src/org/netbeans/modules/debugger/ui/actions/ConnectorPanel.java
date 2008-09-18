@@ -74,6 +74,8 @@ public class ConnectorPanel extends JPanel implements ActionListener {
 
     public static final String PROP_TYPE = "type";
     
+    private static final String FIRST_ATTACH_TYPE = "org.netbeans.modules.debugger.jpda.ui.JPDAAttachType"; // NOI18N
+    
     /** Contains list of AttachType names.*/
     private JComboBox             cbAttachTypes;
     /** Switches off listenning on cbAttachTypes.*/
@@ -81,7 +83,7 @@ public class ConnectorPanel extends JPanel implements ActionListener {
     /** Contains list of installed AttachTypes.*/
     private List                  attachTypes;
     /** Currentlydisplayed panel.*/
-    private Controller            currentPanel;
+    private Controller            controller;
     /** Current attach type, which is stored into settings for the next invocation. */
     private AttachType            currentAttachType;
 
@@ -105,6 +107,12 @@ public class ConnectorPanel extends JPanel implements ActionListener {
         Collections.sort(attachTypes, new Comparator() {
             public int compare(Object o1, Object o2) {
                 if (!(o1 instanceof AttachType) || !(o2 instanceof AttachType)) return 0;
+                if (FIRST_ATTACH_TYPE.equals(o1.getClass().getName())) {
+                    return -1;
+                }
+                if (FIRST_ATTACH_TYPE.equals(o2.getClass().getName())) {
+                    return +1;
+                }
                 return ((AttachType) o1).getTypeDisplayName().compareTo(((AttachType) o2).getTypeDisplayName());
             }
         });
@@ -156,7 +164,7 @@ public class ConnectorPanel extends JPanel implements ActionListener {
         c.gridwidth = 0;
         AttachType attachType = (AttachType) attachTypes.get (index);
         JComponent customizer = attachType.getCustomizer ();
-        currentPanel = (Controller) customizer;
+        controller = attachType.getController();
         firePropertyChange(PROP_TYPE, null, customizer);
         this.currentAttachType = attachType;
         add (customizer, c);
@@ -179,17 +187,23 @@ public class ConnectorPanel extends JPanel implements ActionListener {
     }
     
     Controller getController() {
-        return currentPanel;
+        return controller;
     }
     
     boolean cancel () {
-        return currentPanel.cancel ();
+        if (controller == null) return true;
+        return controller.cancel ();
     }
     
     boolean ok () {
         String defaultAttachTypeName = currentAttachType.getClass().getName();
         Properties.getDefault().getProperties("debugger").setString("last_attach_type", defaultAttachTypeName);
-        return currentPanel.ok ();
+        if (controller == null) return true;
+        boolean ok = controller.ok ();
+        if (ok) {
+            GestureSubmitter.logAttach(defaultAttachTypeName);
+        }
+        return ok;
     }    
 }
 
