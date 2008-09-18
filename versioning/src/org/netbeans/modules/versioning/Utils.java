@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.versioning;
 
+import org.openide.filesystems.FileStateInvalidException;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Lookup;
 import org.openide.util.actions.Presenter;
@@ -57,7 +58,11 @@ import javax.swing.text.Document;
 import java.io.File;
 import java.io.Reader;
 import java.io.StringReader;
+import java.io.IOException;
 import java.util.*;
+import java.util.logging.Logger;
+import java.util.logging.Level;
+import org.openide.filesystems.FileSystem;
 
 /**
  * Utilities for Versioning SPI classes. 
@@ -70,6 +75,11 @@ public class Utils {
      * Request processor for long running tasks.
      */
     private static final RequestProcessor vcsBlockingRequestProcessor = new RequestProcessor("Versioning long tasks", 1);
+
+    /**
+     * Keeps the nb masterfilesystem
+     */
+    private static FileSystem filesystem;
 
     /**
      * Constructs a VCSContext out of a Lookup, basically taking all Nodes inside. 
@@ -149,13 +159,13 @@ public class Utils {
      * @param file file/directory to delete
      */
     public static void deleteRecursively(File file) {
-        if (file.isDirectory()) {
-            File [] files = file.listFiles();
-            for (int i = 0; i < files.length; i++) {
-                deleteRecursively(files[i]);
-            }
+        FileObject fo = FileUtil.toFileObject(file);
+        if (fo == null) return;
+        try {
+            fo.delete();
+        } catch (IOException e) {
+            Logger.getLogger(Utils.class.getName()).log(Level.WARNING, "", e);
         }
-        file.delete();
     }
 
     public static boolean isLocalHistory(VersioningSystem system) {
@@ -201,5 +211,18 @@ public class Utils {
         JMenu menu = new JMenu();
         menu.addSeparator();
         return (JSeparator)menu.getPopupMenu().getComponent(0);
+    }
+
+    static FileSystem getRootFilesystem() {
+        if(filesystem == null) {
+            try {
+                String userDir = System.getProperty("netbeans.user"); // NOI18N
+                FileObject fo = FileUtil.toFileObject(new File(userDir));
+                filesystem = fo.getFileSystem();
+            } catch (FileStateInvalidException ex) {
+                VersioningManager.LOG.log(Level.WARNING, null, ex);
+            }
+        }
+        return filesystem;
     }
 }
