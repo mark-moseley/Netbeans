@@ -74,6 +74,7 @@ import org.netbeans.modules.xml.wsdl.ui.commands.CommonAttributePropertyAdapter;
 import org.netbeans.modules.xml.wsdl.ui.commands.OtherAttributePropertyAdapter;
 import org.netbeans.modules.xml.wsdl.ui.commands.XMLAttributePropertyAdapter;
 import org.netbeans.modules.xml.wsdl.ui.cookies.WSDLAttributeCookie;
+import org.netbeans.modules.xml.wsdl.ui.model.StringAttribute;
 import org.netbeans.modules.xml.wsdl.ui.netbeans.module.UIUtilities;
 import org.netbeans.modules.xml.wsdl.ui.netbeans.module.Utility;
 import org.netbeans.modules.xml.wsdl.ui.view.DesignGotoType;
@@ -116,6 +117,7 @@ import org.openide.actions.PropertiesAction;
 import org.openide.actions.ReorderAction;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.AbstractNode;
+import org.openide.nodes.ChildFactory;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.nodes.NodeAdapter;
@@ -163,7 +165,7 @@ public abstract class WSDLElementNode<T extends WSDLComponent> extends AbstractN
     /** cached so that during destroy all listeners can be cleaned up, nullified in destroy*/
     private final WeakReference<WSDLModel> wsdlmodel;
 
-	private final Children children;
+//	private final Children children;
     
     private static final SystemAction[] ACTIONS = new SystemAction[] {
         SystemAction.get(CutAction.class),
@@ -189,15 +191,33 @@ public abstract class WSDLElementNode<T extends WSDLComponent> extends AbstractN
         new DesignGotoType(),
         new SuperGotoType(),
     };
+    private ChildFactory factory;
     
-    public WSDLElementNode(Children children, T element, NewTypesFactory newTypesFactory) {
-        this(children, element);
-        this.mNewTypesFactory = newTypesFactory;
+    
+    public WSDLElementNode(T element) {
+        this(new WSDLChildFactory(NodesFactory.getInstance(), element), element, null);
     }
 
-    public WSDLElementNode(Children children, T element) {
-        this(children, element, new InstanceContent());
+    public WSDLElementNode(T element, NewTypesFactory newTypesFactory) {
+        this(new WSDLChildFactory(NodesFactory.getInstance(), element), element, newTypesFactory);
     }
+
+    public WSDLElementNode(ChildFactory factory, T element) {
+        this(factory, element, null);
+    }
+    
+    public WSDLElementNode(ChildFactory factory, T element, NewTypesFactory newTypesFactory) {
+        this (Children.create(factory, false), element, new InstanceContent(), newTypesFactory);
+        this.factory = factory;
+    }
+    
+//    public WSDLElementNode(Children children, T element) {
+//        this(children, element, null);
+//    }
+//    
+//    public WSDLElementNode(Children children, T element, NewTypesFactory newTypesFactory) {
+//        this (children, element, new InstanceContent(), newTypesFactory);
+//    }
 
     /**
      * Constructor hack to allow creating our own Lookup.
@@ -207,18 +227,19 @@ public abstract class WSDLElementNode<T extends WSDLComponent> extends AbstractN
      * @param  contents  Lookup contents.
      */
     private WSDLElementNode(Children children, T element,
-            InstanceContent contents) {
+            InstanceContent contents, NewTypesFactory newTypesFactory) {
         //Start with leaf children, 
         // this solves IZ 84741
         //set children depending on hasChildren method below,
         //and update when childrenAdded and childrenRemoved
-        super(Children.LEAF, createLookup(element.getModel(), contents));
-        this.children = children;
+        super(children, createLookup(element.getModel(), contents));
+        mNewTypesFactory = newTypesFactory;
+//        this.children = children;
         mElement = element;
         mLookupContents = contents;
-        if (hasChildren()) {
-        	setChildren(children);
-        }
+//        if (hasChildren()) {
+//        	setChildren(children);
+//        }
         // Add various objects to the lookup.
         // Keep this node and its cookie implementation at the top of the
         // lookup, as they provide cookies needed elsewhere, and we want
@@ -246,6 +267,7 @@ public abstract class WSDLElementNode<T extends WSDLComponent> extends AbstractN
         
         addNodeListener(new NodeAdapter() {
         
+            @Override
             public void nodeDestroyed(NodeEvent ev) {
                 if (wsdlmodel != null && wsdlmodel.get() != null) {
                     //remove the xml element listener when node is destroyed
@@ -304,7 +326,7 @@ public abstract class WSDLElementNode<T extends WSDLComponent> extends AbstractN
     public Action[] getActions(boolean context) {
         return ACTIONS;
     }
-    
+
     @Override
     public void destroy() throws IOException {
         //get the stored model.
@@ -554,14 +576,24 @@ public abstract class WSDLElementNode<T extends WSDLComponent> extends AbstractN
             }
 
             Set<QName> attributes = mElement.getAttributeMap().keySet();
-
+            
             if (attributes.contains(qname)) {
-                firePropertyChange(propName, event.getOldValue(),
+                String mappedName = getMappedPropertyName(propName);
+                firePropertyChange(mappedName, event.getOldValue(),
                         event.getNewValue());
             }
         }
     }
 
+    /**
+     * Return the property sheet property name for the element attribute name.
+     * Overriding classes can return a different name. by default, same is returned.
+     * @param propName
+     * @return mapped name on the property sheet
+     */
+    public String getMappedPropertyName(String propName) {
+        return propName;
+    }
     
     /*
      * Recursively finds prefixes used by child extensibility elements and tries to clean them.
@@ -607,9 +639,13 @@ public abstract class WSDLElementNode<T extends WSDLComponent> extends AbstractN
         if (isValid()) {
             // Automatically keep the name in sync for named components.
             if (mElement instanceof Named) {
-                String name = ((Named) mElement).getName();
+                //IZ 126908; setting name from any child calls refactoring.
+                String name = mElement.getAttribute(new StringAttribute(Named.NAME_PROPERTY));
                 // Prevent getting an NPE from ExplorerManager.
                 super.setName(name == null ? "" : name);
+                if (name == null) {
+                    name = ((Named) mElement).getName();
+                }
                 if (name == null || name.length() == 0) {
                     name = mElement.getPeer().getLocalName();
                 }
@@ -983,15 +1019,19 @@ public abstract class WSDLElementNode<T extends WSDLComponent> extends AbstractN
    }
 
    private void updateChildren() {
-	   boolean hasChildren = hasChildren();
-       if (getChildren() == Children.LEAF) {
-    	   if (hasChildren) setChildren(children);
-       } else {
-    	   if (!hasChildren) setChildren(Children.LEAF);
-       }
-       Children children = getChildren();
-       if (children instanceof RefreshableChildren) {
-           ((RefreshableChildren) getChildren()).refreshChildren();
+//       boolean hasChildren = hasChildren();
+//       if (getChildren() == Children.LEAF) {
+//    	   if (hasChildren) setChildren(children);
+//       } else {
+//    	   if (!hasChildren) setChildren(Children.LEAF);
+//       }
+//       Children myChildren = getChildren();
+//       if (myChildren instanceof RefreshableChildren) {
+//           ((RefreshableChildren) myChildren).refreshChildren();
+//       }
+       
+       if (factory instanceof Refreshable) {
+           ((Refreshable) factory).refreshChildren(true);
        }
    }
 }
