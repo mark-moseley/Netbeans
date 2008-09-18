@@ -36,40 +36,38 @@
 
 var PROPERTY_NONE      = 0;
 var PROPERTY_FULL      = 1;
-var PROPERTY_JAVAEE    = 2;
-var PROPERTY_JAVAME    = 4;
-var PROPERTY_JAVA      = 8;
+var PROPERTY_JAVA      = 2;
+var PROPERTY_JAVASE    = 8;
 var PROPERTY_RUBY      = 16;
 var PROPERTY_CND       = 32;
-var PROPERTY_HIDDEN    = 64;
+var PROPERTY_PHP       = 64;
+var PROPERTY_HIDDEN    = 128;
 
-var INFO_ICON   = "img/info_icon.gif";
-var INFO_ICON_H = "img/info_icon_h.gif";
+var INFO_ICON   = IMG_LOCATION + "info_icon.gif";
+var INFO_ICON_H = IMG_LOCATION + "info_icon_h.gif";
 
-
-var ONE_SRC      = "img/one.gif";
-var ONE_LEFT_SRC = "img/one_left.gif";
-
-var IMG_ONE      = '<img src="' + ONE_SRC + '"/>';
-var IMG_ONE_LEFT = '<img src="' + ONE_LEFT_SRC + '"/>';
-
-
-var CHECKED_WHITE_SRC = "img/checked_badge_white.gif";
-var CHECKED_BEIGE_SRC = "img/checked_badge_beige.gif";
-var WARNING_WHITE_SRC = "img/warning_badge_white.gif";
-var WARNING_BEIGE_SRC = "img/warning_badge_beige.gif";
-var CHECKED_WHITE_NA_SRC = "img/checked_badge_notavailable.gif";
+var CHECKED_WHITE_SRC = IMG_LOCATION + "checked_badge_white.gif";
+var CHECKED_BEIGE_SRC = IMG_LOCATION + "checked_badge_beige.gif";
+var WARNING_WHITE_SRC = IMG_LOCATION + "warning_badge_white.gif";
+var WARNING_BEIGE_SRC = IMG_LOCATION + "warning_badge_beige.gif";
+var CHECKED_WHITE_NA_SRC = IMG_LOCATION + "checked_badge_notavailable.gif";
 
 var IMAGE_CHECKED_WHITE_NOT_AVAILABLE = '<img src="' + CHECKED_WHITE_NA_SRC + '"/>';
 
-var DOWNLOAD_IMG = '<img onmouseover="this.src=&quot;' + DOWNLOAD_BUTTON_HIGHLIGHT + '&quot;" onmouseout="this.src=&quot;' + DOWNLOAD_BUTTON_NORMAL + '&quot;" src="' + DOWNLOAD_BUTTON_NORMAL + '" style="cursor: pointer; border: 0;"/>';
-var DOWNLOAD_IMG_DISABLED = '<img src="' + DOWNLOAD_BUTTON_DISABLED + '" style="border: 0;"/>';
+var DOWNLOAD_BUTTON_NORMAL_SRC    = IMG_LOCATION + DOWNLOAD_BUTTON_NORMAL;
+var DOWNLOAD_BUTTON_DISABLED_SRC  = IMG_LOCATION + DOWNLOAD_BUTTON_DISABLED;
+var DOWNLOAD_BUTTON_HIGHLIGHT_SRC = IMG_LOCATION + DOWNLOAD_BUTTON_HIGHLIGHT;
+
+var DOWNLOAD_IMG = '<img onmouseover="this.src=&quot;' + DOWNLOAD_BUTTON_HIGHLIGHT_SRC + '&quot;" onmouseout="this.src=&quot;' + DOWNLOAD_BUTTON_NORMAL_SRC + '&quot;" src="' + DOWNLOAD_BUTTON_NORMAL_SRC + '" style="cursor: pointer; border: 0;"/>';
+var DOWNLOAD_IMG_DISABLED = '<img src="' + DOWNLOAD_BUTTON_DISABLED_SRC + '" style="border: 0;"/>';
 
     
 var IMAGE_CHECKED_WHITE = '<img src="' + CHECKED_WHITE_SRC + '"/>';
 var IMAGE_WARNING_WHITE = '<img src="' + WARNING_WHITE_SRC + '"/>';
 var IMAGE_CHECKED_BEIGE = '<img src="' + CHECKED_BEIGE_SRC + '"/>';
 var IMAGE_WARNING_BEIGE = '<img src="' + WARNING_BEIGE_SRC + '"/>';
+
+var download_tabs_number = 0;
 
 function handle_keyup(event) {
     //if (event.keyCode == 13) {
@@ -80,13 +78,11 @@ function handle_keyup(event) {
 function initialize() {
  if (document.images) {
      download_on = new Image();
-     download_on.src  = DOWNLOAD_BUTTON_NORMAL; 
+     download_on.src  = DOWNLOAD_BUTTON_NORMAL_SRC; 
      download_off= new Image();
-     download_off.src = DOWNLOAD_BUTTON_DISABLED;
+     download_off.src = DOWNLOAD_BUTTON_DISABLED_SRC;
      download_hl = new Image();
-     download_hl.src  = DOWNLOAD_BUTTON_HIGHLIGHT;
-     download_hl = new Image();
-     download_hl.src  = DOWNLOAD_BUTTON_HIGHLIGHT; 
+     download_hl.src  = DOWNLOAD_BUTTON_HIGHLIGHT_SRC;
      info = new Image();
      info.src  = INFO_ICON;
      info_h = new Image();
@@ -127,7 +123,8 @@ function write_components() {
 			document.write('    <th class="onhover_change beige left_border"></th>');
 			document.write('    <th class="onhover_change left_border"></th>');
 			document.write('    <th class="onhover_change beige left_border"></th>');
-			document.write('    <th class="onhover_change left_border"></th>');
+			//document.write('    <th class="onhover_change left_border"></th>');
+			document.write('    <th class="onhover_change left_border right_border"></th>');
 			document.write('</tr>');
         }
 
@@ -151,13 +148,12 @@ function write_components() {
 			}
 			document.write('	</td>');
 
-			document.write('    <td class="onhover_change beige left_border" id="product_' + index + '_javaee"></td>');
-			document.write('    <td class="onhover_change left_border" id="product_' + index + '_javame"></td>');
-			document.write('    <td class="onhover_change beige left_border" id="product_' + index + '_java"></td>');
-			document.write('    <td class="onhover_change left_border" id="product_' + index + '_ruby"></td>');
-			document.write('    <td class="onhover_change beige left_border" id="product_' + index + '_cnd"></td>');
-			document.write('    <td class="onhover_change left_border" id="product_' + index + '_full"></td>');
-			
+			document.write('    <td class="onhover_change beige left_border" id="product_' + index + '_javase"></td>');
+			document.write('    <td class="onhover_change left_border" id="product_' + index + '_java"></td>');
+			document.write('    <td class="onhover_change beige left_border" id="product_' + index + '_ruby"></td>');
+			document.write('    <td class="onhover_change left_border" id="product_' + index + '_cnd"></td>');
+			document.write('    <td class="onhover_change beige left_border" id="product_' + index + '_php"></td>');
+			document.write('    <td class="onhover_change left_border right_border" id="product_' + index + '_full"></td>');
 			document.write('</tr>');
         }
     }
@@ -176,35 +172,35 @@ function write_table_header() {
     document.write('<br><br>');	
     document.write('<tr class="no_hover">');
     document.write('<th class="left no_border bottom_border wide bottom">' + NETBEANS_PACKS_MSG + '<a class="star">*</a></th>');    
-    document.write('<td class="no_border bottom_border" id="javaee_bundle_name"> <a class="bundle_display_name">' + getBundleLongName("javaee") + '</a></td>');
-    document.write('<td class="no_border bottom_border" id="javame_bundle_name"> <a class="bundle_display_name">' + getBundleLongName("mobility") + '</a></td>');
-    document.write('<td class="no_border bottom_border" id="java_bundle_name">   <a class="bundle_display_name">' + getBundleLongName("javase") + '</a></td>');
+    document.write('<td class="no_border bottom_border" id="javase_bundle_name"> <a class="bundle_display_name">' + getBundleLongName("javase") + '</a></td>');
+    document.write('<td class="no_border bottom_border" id="java_bundle_name">   <a class="bundle_display_name">' + getBundleLongName("java") + '</a></td>');
     document.write('<td class="no_border bottom_border" id="ruby_bundle_name">   <a class="bundle_display_name">' + getBundleLongName("ruby") + '</a></td>');
     document.write('<td class="no_border bottom_border" id="cnd_bundle_name">    <a class="bundle_display_name">' + getBundleLongName("cpp") + '</a></td>');
+    document.write('<td class="no_border bottom_border" id="php_bundle_name">    <a class="bundle_display_name">' + getBundleLongName("php") + '</a></td>');
     document.write('<td class="no_border bottom_border" id="full_bundle_name">   <a class="bundle_display_name">' + getBundleLongName("all") + '</a></td>');
     document.write('</tr>');
 }
 
 function write_table_footer() {
     document.write('<tr class="column_hover">');
-    document.write('<th class="no_hover left no_border  wide bottom">&nbsp;</th>');    
-    document.write('<td class="no_border download_button"  id="javaee_link"><a href="javascript: download(\'javaee\')"   id="javaee_name"> ' + DOWNLOAD_IMG + '</a></td>');
-    document.write('<td class="no_border download_button"  id="javame_link"><a href="javascript: download(\'mobility\')" id="javame_name"> ' + DOWNLOAD_IMG + '</a></td>');
-    document.write('<td class="no_border download_button"  id="java_link">  <a href="javascript: download(\'javase\')"     id="java_name"> ' + DOWNLOAD_IMG + '</a></td>');
-    document.write('<td class="no_border download_button"  id="ruby_link">  <a href="javascript: download(\'ruby\')"       id="ruby_name"> ' + DOWNLOAD_IMG + '</a></td>');
-    document.write('<td class="no_border download_button"  id="cnd_link">   <a href="javascript: download(\'cpp\')"         id="cnd_name"> ' + DOWNLOAD_IMG + '</a></td>');
-    document.write('<td class="no_border download_button"  id="full_link">  <a href="javascript: download(\'all\')"        id="full_name"> ' + DOWNLOAD_IMG + '</a></td>');
+    document.write('<th class="no_hover left no_border  wide bottom">&nbsp;</th>');
+    document.write('<td class="no_border download_button"  id="javase_link"><a href="javascript: download(\'javase\')"     id="javase_name"> ' + DOWNLOAD_IMG + '</a></td>');
+    document.write('<td class="no_border download_button"  id="java_link">  <a href="javascript: download(\'java\')"       id="java_name"> '   + DOWNLOAD_IMG + '</a></td>');
+    document.write('<td class="no_border download_button"  id="ruby_link">  <a href="javascript: download(\'ruby\')"       id="ruby_name"> '   + DOWNLOAD_IMG + '</a></td>');
+    document.write('<td class="no_border download_button"  id="cnd_link">   <a href="javascript: download(\'cpp\')"        id="cnd_name"> '    + DOWNLOAD_IMG + '</a></td>');
+    document.write('<td class="no_border download_button"  id="php_link">   <a href="javascript: download(\'php\')"        id="php_name"> '    + DOWNLOAD_IMG + '</a></td>');
+    document.write('<td class="no_border download_button"  id="full_link">  <a href="javascript: download(\'all\')"        id="full_name"> '   + DOWNLOAD_IMG + '</a></td>');
     document.write('</tr>');
 }
 
 function write_components_sizes() {
     document.write('<tr class="no-hover">');
     document.write('<td class="no_border"></td>');
-    document.write('<td class="no_border" id="javaee_size"></td>');
-    document.write('<td class="no_border" id="javame_size"></td>');
+    document.write('<td class="no_border" id="javase_size"></td>');
     document.write('<td class="no_border" id="java_size"></td>');
     document.write('<td class="no_border" id="ruby_size"></td>');
     document.write('<td class="no_border" id="cnd_size"></td>');
+    document.write('<td class="no_border" id="php_size"></td>');
     document.write('<td class="no_border" id="full_size"></td>');
     document.write('</tr>');
 }
@@ -373,7 +369,6 @@ function update() {
         product_messages[i] = null;
         
         if (!is_compatible(i, platform)) {
-            //product_messages[i] = '<tr><td class="no_padding no_border"><img src="img/warning_badge_text_' + platform + '.gif"/></td><td class="no_padding no_border left"><span class="warning">' + product_display_names[i] + ' is not available for ' + platform_display_name + '.</span></td></tr>';
 	     product_messages[i] = product_display_names[i];
         }
 		
@@ -387,35 +382,6 @@ function update() {
             document.getElementById("product_" + i + "_full").innerHTML = '';
         }
 		
-        if (product_properties[i] & PROPERTY_JAVAEE) {
-            if (product_messages[i] == null) {
-                document.getElementById("product_" + i + "_javaee").innerHTML = IMAGE_CHECKED_BEIGE;
-            } else {
-                document.getElementById("product_" + i + "_javaee").innerHTML = IMAGE_WARNING_BEIGE;
-            }
-        } else {
-            document.getElementById("product_" + i + "_javaee").innerHTML = '';
-        }        
-		
-	if (product_properties[i] & PROPERTY_JAVAME) {
-            if (product_messages[i] == null) {
-                if( product_uids [i] == "nb-javame" ) {
-			document.getElementById("product_" + i + "_javame").innerHTML = IMG_ONE_LEFT + IMAGE_CHECKED_WHITE + IMG_ONE;
-		} else {
-			if( (platform == "linux") || (platform == "windows") || (platform == "zip")) {
-                	    document.getElementById("product_" + i + "_javame").innerHTML = IMAGE_CHECKED_WHITE;
-                        }
-			else {                        
-			     document.getElementById("product_" + i + "_javame").innerHTML = IMAGE_CHECKED_WHITE_NOT_AVAILABLE;
-			}
-		}
-            } else {
-                document.getElementById("product_" + i + "_javame").innerHTML = IMAGE_WARNING_WHITE;
-            }
-        } else {
-            document.getElementById("product_" + i + "_javame").innerHTML = '';
-        }
-		
         if (product_properties[i] & PROPERTY_JAVA) {
             if (product_messages[i] == null) {
                 document.getElementById("product_" + i + "_java").innerHTML = IMAGE_CHECKED_BEIGE;
@@ -425,6 +391,17 @@ function update() {
         } else {
             document.getElementById("product_" + i + "_java").innerHTML = '';
         }
+
+        if (product_properties[i] & PROPERTY_JAVASE) {
+            if (product_messages[i] == null) {
+                document.getElementById("product_" + i + "_javase").innerHTML = IMAGE_CHECKED_BEIGE;
+            } else {
+                document.getElementById("product_" + i + "_javase").innerHTML = IMAGE_WARNING_BEIGE;
+            }
+        } else {
+            document.getElementById("product_" + i + "_javase").innerHTML = '';
+        }	
+
 		
 	if (product_properties[i] & PROPERTY_RUBY) {
             if (product_messages[i] == null) {
@@ -444,6 +421,15 @@ function update() {
             }
         } else {
             document.getElementById("product_" + i + "_cnd").innerHTML = '';
+        }
+        if (product_properties[i] & PROPERTY_PHP) {
+            if (product_messages[i] == null) {
+                document.getElementById("product_" + i + "_php").innerHTML = IMAGE_CHECKED_BEIGE;
+            } else {
+                document.getElementById("product_" + i + "_php").innerHTML = IMAGE_WARNING_BEIGE;
+            }
+        } else {
+            document.getElementById("product_" + i + "_php").innerHTML = '';
         }
 
 	if (product_messages[i] == null) {
@@ -509,6 +495,8 @@ function update() {
 	error_message = NOTE_MACOSX;
     } else if(platform.indexOf("solaris")!=-1) {
 	error_message = NOTE_SOLARIS;
+    } else {
+        error_message = NOTE_OTHER;
     }
 
 
@@ -516,11 +504,11 @@ function update() {
     
     // update the sizes 
     var full_size   = 0;
-    var javaee_size = 0;
-    var javame_size = 0;
-    var java_size   = 0;    
+    var java_size = 0;
+    var javase_size   = 0;    
     var ruby_size   = 0;
     var cnd_size    = 0;
+    var php_size    = 0;
     
 
     for (var i = 0; i < product_uids.length; i++) {
@@ -532,16 +520,12 @@ function update() {
             full_size += new Number(product_download_sizes[i]);
         }
         
-	if (product_properties[i] & PROPERTY_JAVAEE) {
-            javaee_size += new Number(product_download_sizes[i]);
+	if (product_properties[i] & PROPERTY_JAVA) {
+            java_size += new Number(product_download_sizes[i]);
         }        	
 		
-	if (product_properties[i] & PROPERTY_JAVAME) {
-            javame_size += new Number(product_download_sizes[i]);
-        }
-		
-        if (product_properties[i] & PROPERTY_JAVA) {
-            java_size += new Number(product_download_sizes[i]);
+        if (product_properties[i] & PROPERTY_JAVASE) {
+            javase_size += new Number(product_download_sizes[i]);
         }
 		
         if (product_properties[i] & PROPERTY_RUBY) {
@@ -551,54 +535,39 @@ function update() {
 	if (product_properties[i] & PROPERTY_CND) {
             cnd_size += new Number(product_download_sizes[i]);
         }        
+	if (product_properties[i] & PROPERTY_PHP) {
+            php_size += new Number(product_download_sizes[i]);
+        }        
     }
 	
     full_size = Math.ceil(full_size / 1024.0);
+    javase_size = Math.ceil(javase_size / 1024.0);
     java_size = Math.ceil(java_size / 1024.0);
-    javaee_size = Math.ceil(javaee_size / 1024.0);
-    javame_size = Math.ceil(javame_size / 1024.0);
     ruby_size = Math.ceil(ruby_size / 1024.0);
     cnd_size = Math.ceil(cnd_size / 1024.0);
+    php_size = Math.ceil(php_size / 1024.0);
 
-    if( platform == "zip") {
-       full_size = 148;
-       java_size = 44;
-       javaee_size = 94;
-       javame_size = 54;
-       ruby_size = 33;
-       cnd_size = 22;
+    if( platform == "zip") {       
+       full_size   = get_file_size_mb(get_file_name(platform, "all"),     174);
+       javase_size = get_file_size_mb(get_file_name(platform, "javase"),   67);
+       java_size   = get_file_size_mb(get_file_name(platform, "java"),  122);
+       ruby_size   = get_file_size_mb(get_file_name(platform, "ruby"),     55);
+       cnd_size    = get_file_size_mb(get_file_name(platform, "cpp"),      41);
+       php_size    = get_file_size_mb(get_file_name(platform, "php"),      38);
     } 
 
-    if ((platform.indexOf("solaris")!=-1) || (platform.indexOf("macosx")!=-1)) {
-		javame_size = NOT_AVAILABLE_SIZE;
-    }   
-
     document.getElementById("full_size").innerHTML   = FREE_SIZE_MESSAGE.replace('{0}', full_size  );
-    document.getElementById("javaee_size").innerHTML = FREE_SIZE_MESSAGE.replace('{0}', javaee_size);    
-    document.getElementById("javame_size").innerHTML = FREE_SIZE_MESSAGE.replace('{0}', javame_size);
-    document.getElementById("java_size").innerHTML   = FREE_SIZE_MESSAGE.replace('{0}', java_size  );
+    document.getElementById("java_size").innerHTML = FREE_SIZE_MESSAGE.replace('{0}', java_size);    
+    document.getElementById("javase_size").innerHTML   = FREE_SIZE_MESSAGE.replace('{0}', javase_size  );
     document.getElementById("ruby_size").innerHTML   = FREE_SIZE_MESSAGE.replace('{0}', ruby_size  );
     document.getElementById("cnd_size").innerHTML    = FREE_SIZE_MESSAGE.replace('{0}', cnd_size   );
+    document.getElementById("php_size").innerHTML    = FREE_SIZE_MESSAGE.replace('{0}', php_size   );
     
-    // no Mobility for Solaris and MacOS
-    if ((platform.indexOf("solaris")!=-1) || (platform.indexOf("macosx")!=-1)) {
-    	document.getElementById("javame_link").innerHTML = DOWNLOAD_IMG_DISABLED;
-    	document.getElementById("javame_bundle_name").innerHTML = '<a class="bundle_display_name_no">' + getBundleLongName("mobility") + '</a>';
-	document.getElementById("mobility_end2end_message").innerHTML = '<br>';
-    } else {
-    	document.getElementById("javame_link").innerHTML = '<a href="javascript: download(\'mobility\')">' + DOWNLOAD_IMG + '</a>';
-        document.getElementById("javame_bundle_name").innerHTML = '<a class="bundle_display_name">' + getBundleLongName("mobility") + '</a>';
-	var end2end_warning = "";
-	end2end_warning += "<a class=\"special_message_number\">1</a>"; 
-	end2end_warning += "<a class=\"special_message_text\">" + MOBILITY_E2E_MESSAGE + "</a>";
-	document.getElementById("mobility_end2end_message").innerHTML = end2end_warning;
-    }
-
     if (platform.indexOf("macosx")!=-1) {
         document.getElementById("jdk_note").innerHTML = JDK_NOTE_MACOSX;
     }
     else {
-        document.getElementById("jdk_note").innerHTML = JDK_NOTE_ALL.replace('{0}',JDK_DOWNLOAD_LINK);
+        document.getElementById("jdk_note").innerHTML = JDK_NOTE_ALL.replace('{0}',JAVA_COM_LINK).replace('{1}',JDK_DOWNLOAD_LINK).replace('{2}',NBJDK_DOWNLOAD_LINK);
     }
 }
 
@@ -623,61 +592,54 @@ function is_compatible(index, platform) {
     return false;
 }
 
+function get_file_size_mb(name,defaultValue) {
+   var size = getSize(name);
+   if(size=="") {
+       size = defaultValue;
+   } else {
+       size = Math.ceil(size / (1024 * 1024));
+   }
+   return size;
+}
+
+function add_download_tab(name, url) {
+   if(download_tabs_number!=0) {
+       document.write(" | ");
+   }
+   if(url) {
+	writeUrl(url,name);
+   } else { 
+	message('<span class="download_tab_active">' + name + '</span>');
+   }
+   download_tabs_number++;
+}
+
 function download(option) {
     var select = document.getElementById("platform_select");
     var platform = select.options[select.selectedIndex].value;
 
-    var basename  = "";
-	
-    if(platform=="zip") {
-        basename += "zip/" + ZIP_FILES_PREFIX;
-    } else {
-        basename += "bundles/" + BUNDLE_FILES_PREFIX;
-    }
-
-    var file_name = START_PAGE + "?" + basename;
-
-    if (option != "all") {
-    	file_name += "-" + option;
-    }
-
-    if ( platform != "zip" ) {
-   	file_name += "-" + platform;
-    }
-
-
-    if (platform == "windows") {
-        file_name += ".exe";
-    } else if ((platform == "macosx-x86") || (platform == "macosx-ppc")) {
-        file_name += ".tgz";
-    } else if (platform == "macosx") {
-	file_name += ".dmg";
-    } else if(platform == "zip"){
-	file_name += ".zip"        
-    } else {
-        file_name += ".sh";
-    }
-    file_name += "&platform=" + platform;
+    var download_url = START_PAGE;
+    download_url += "?platform=" + platform;
 
     var language_select = document.getElementById("language_select");
     var language = language_select.options[language_select.selectedIndex].value;
-    file_name += "&lang=" + language;
-    file_name += "&option=" + option;
+    download_url += "&lang=" + language;
+    download_url += "&option=" + option;
     var email = document.getElementById("emailfield").value;
     if(email!="" && email.indexOf(".")!=-1 && email.indexOf("@")!=-1 && email.indexOf("&")==-1 && email.indexOf("?")==-1) {
 	var monthly = (document.getElementById("monthlycb").checked ? 1 : 0);
 	var weekly  = (document.getElementById("weeklycb").checked ? 1 : 0);
 	var contact = (document.getElementById("contactcb").checked ? 1 : 0);
 	if(monthly==1 || weekly ==1 || contact==1) {
-		file_name+= "&email="   + email;
-		file_name+= "&monthly=" + monthly;
-		file_name+= "&weekly="  + weekly;
-		file_name+= "&contact=" + contact;
+		download_url+= "&email="   + email;
+		download_url+= "&monthly=" + monthly;
+		download_url+= "&weekly="  + weekly;
+		download_url+= "&contact=" + contact;
         }
     }
     var overriden_language=get_overridden_language();
     if(overriden_language!=DEFAULT_LANGUAGE) {
-        file_name += "&" + PAGELANG_SEP + overriden_language;
+        download_url += "&" + PAGELANG_SEP + overriden_language;
     }
-    window.location = file_name;
+    window.location = download_url;
 }
