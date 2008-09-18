@@ -225,14 +225,15 @@ public abstract class BaseAction extends TextAction {
         return obj;
     }
 
-    /** This method is called once after the action is constructed
-    * and then each time the settings are changed.
-    * @param evt event describing the changed setting name. It's null
-    *   if it's called after the action construction.
-    * @param kitClass class of the kit that created the actions
-    */
-    protected void settingsChange(SettingsChangeEvent evt, Class kitClass) {
-    }
+// XXX: remove
+//    /** This method is called once after the action is constructed
+//    * and then each time the settings are changed.
+//    * @param evt event describing the changed setting name. It's null
+//    *   if it's called after the action construction.
+//    * @param kitClass class of the kit that created the actions
+//    */
+//    protected void settingsChange(SettingsChangeEvent evt, Class kitClass) {
+//    }
 
     /** This method is made final here as there's an important
     * processing that must be done before the real action
@@ -247,6 +248,11 @@ public abstract class BaseAction extends TextAction {
     */
     public final void actionPerformed(final ActionEvent evt) {
         final JTextComponent target = getTextComponent(evt);
+
+        // #146657 - Only perform the action if the document is BaseDocument's instance
+        if (!(target.getDocument() instanceof BaseDocument)) {
+            return;
+        }
                               
         if( recording && 0 == (updateMask & NO_RECORDING) ) {
             recordAction( target, evt );
@@ -408,7 +414,7 @@ public abstract class BaseAction extends TextAction {
                     writeLocked = true;
                     doc.extWriteLock();
                     Caret caret = target.getCaret();
-                    if (caret != null && caret.isSelectionVisible()) {
+                    if (caret != null && Utilities.isSelectionShowing(caret)) {
                         int dot = caret.getDot();
                         int markPos = caret.getMark();
                         if (dot < markPos) { // swap positions
