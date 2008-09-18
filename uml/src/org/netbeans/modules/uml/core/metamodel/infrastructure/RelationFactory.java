@@ -64,7 +64,6 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationRefe
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IReference;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IRelationProxy;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.MetaLayerRelationFactory;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.OwnerRetriever;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.ProjectMissingException;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.RelationProxy;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.TypedFactoryRetriever;
@@ -76,7 +75,6 @@ import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IGeneralization;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IInterface;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.AssociationKindEnum;
-import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.ITypedElement;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IUMLBinding;
 
 
@@ -99,7 +97,6 @@ import org.netbeans.modules.uml.core.support.umlsupport.URILocator;
 import org.netbeans.modules.uml.core.support.umlsupport.XMLManip;
 import org.netbeans.modules.uml.core.support.umlutils.ETArrayList;
 import org.netbeans.modules.uml.core.support.umlutils.ETList;
-import org.netbeans.modules.uml.core.support.umlutils.InvalidArguments;
 import org.netbeans.modules.uml.core.typemanagement.ITypeManager;
 
 /*
@@ -1038,16 +1035,18 @@ public class RelationFactory extends Object implements IRelationFactory
         
         private void addToElementMap(ETList<IElement> els)
         {
-        	if (els != null)
-        	{
-				for (int i = els.size() - 1; i >= 0; --i)
-				{
-					IElement el = els.get(i);
-					String xmiID = el.getXMIID();
-//					  if (isInMemory(el))
-						m_Elements.put(xmiID, el);
-				}
-        	}
+            if (els != null)
+            {
+                for (int i = els.size() - 1; i >= 0; --i)
+                {
+                    IElement el = els.get(i);
+                    if(el != null)
+                    {
+                        String xmiID = el.getXMIID();
+                        m_Elements.put(xmiID, el);
+                    }
+                }
+            }
         }
         
         private boolean isInMemory(IElement el)
