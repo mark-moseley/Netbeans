@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,59 +40,39 @@
  */
 
 
-package org.netbeans.modules.debugger.jpda.heapwalk.actions;
+package org.netbeans.modules.debugger.jpda.ui.actions;
+
 
 import java.awt.event.ActionEvent;
-import java.util.Iterator;
 import javax.swing.Action;
 import javax.swing.AbstractAction;
 import javax.swing.ImageIcon;
 
-import org.netbeans.modules.debugger.jpda.heapwalk.views.ClassesCountsView;
-
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
-import org.openide.windows.Mode;
-import org.openide.windows.TopComponent;
-import org.openide.windows.WindowManager;
+
+import org.netbeans.modules.debugger.jpda.ui.debugging.DebuggingView;
 
 
-/** Opens classes counts TopComponent.
- *
- * @author   Martin Entlicher
+/**
+ * Opens Debugging View TopComponent.
  */
-public class ClassesCountsViewAction extends AbstractAction {
+public class DebuggingViewAction extends AbstractAction {
 
-    public ClassesCountsViewAction () {
+    public DebuggingViewAction () {
         // When changed, update also mf-layer.xml, where are the properties duplicated because of Actions.alwaysEnabled()
         putValue (
-            Action.NAME,
-            NbBundle.getMessage (
-                ClassesCountsViewAction.class,
-                "CTL_ClassesAction"
-            )
+            Action.NAME, 
+            NbBundle.getMessage (DebuggingViewAction.class, "CTL_DebuggingViewAction")
         );
-        putValue (
-            "iconbase",
-            "org/netbeans/modules/debugger/resources/classesView/Classes.png" // NOI18N
-        );
+        putValue("iconbase", "org/netbeans/modules/debugger/jpda/resources/debugging.png"); // NOI18N
     }
 
     public void actionPerformed (ActionEvent evt) {
-        if (activateComponent ("classes")) return;
-        ClassesCountsView v = new ClassesCountsView ();
-        v.open ();
-        v.requestActive ();
+        DebuggingView view = DebuggingView.getInstance();
+        view.open ();
+        view.requestActive ();
     }
-
-    private static boolean activateComponent (String componentName) {
-        TopComponent tc = WindowManager.getDefault().findTopComponent(componentName);
-        if (tc != null) {
-            tc.open ();
-            tc.requestActive ();
-            return true;
-        }
-        return false;
-    }
+    
 }
 
