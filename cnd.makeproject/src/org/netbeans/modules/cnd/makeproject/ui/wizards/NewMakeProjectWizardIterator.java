@@ -67,6 +67,7 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration
 import org.netbeans.modules.cnd.makeproject.api.configurations.BasicCompilerConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.api.wizards.IteratorExtension;
+import org.netbeans.modules.cnd.makeproject.ui.utils.PathPanel;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -177,7 +178,13 @@ public class NewMakeProjectWizardIterator implements WizardDescriptor.Instantiat
         if (wizardtype == TYPE_MAKEFILE) { // thp
             MakeConfiguration extConf = new MakeConfiguration(dirF.getPath(), "Default", MakeConfiguration.TYPE_MAKEFILE); // NOI18N
             String workingDir = (String)wiz.getProperty("buildCommandWorkingDirTextField"); // NOI18N
-            String workingDirRel = IpeUtils.toRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(workingDir));
+            String workingDirRel;
+            if (PathPanel.getMode() == PathPanel.REL_OR_ABS)
+                workingDirRel = IpeUtils.toAbsoluteOrRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(workingDir));
+            else if (PathPanel.getMode() == PathPanel.REL)
+                workingDirRel = IpeUtils.toRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(workingDir));
+            else
+                workingDirRel = IpeUtils.toAbsolutePath(dirF.getPath(), FilePathAdaptor.naturalize(workingDir));
             workingDirRel = FilePathAdaptor.normalize(workingDirRel);
             extConf.getMakefileConfiguration().getBuildCommandWorkingDir().setValue(workingDirRel);
             extConf.getMakefileConfiguration().getBuildCommand().setValue((String)wiz.getProperty("buildCommandTextField")); // NOI18N
@@ -185,7 +192,12 @@ public class NewMakeProjectWizardIterator implements WizardDescriptor.Instantiat
             // Build result
             String buildResult = (String)wiz.getProperty("outputTextField"); // NOI18N
             if (buildResult != null && buildResult.length() > 0) {
-                buildResult = IpeUtils.toRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(buildResult)); // NOI18N
+                if (PathPanel.getMode() == PathPanel.REL_OR_ABS)
+                    buildResult = IpeUtils.toAbsoluteOrRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(buildResult));
+                else if (PathPanel.getMode() == PathPanel.REL)
+                    buildResult = IpeUtils.toRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(buildResult));
+                else
+                    buildResult = IpeUtils.toAbsolutePath(dirF.getPath(), FilePathAdaptor.naturalize(buildResult));
                 buildResult = FilePathAdaptor.normalize(buildResult);
                 extConf.getMakefileConfiguration().getOutput().setValue(buildResult);
             }
@@ -207,28 +219,37 @@ public class NewMakeProjectWizardIterator implements WizardDescriptor.Instantiat
             String macros = (String)wiz.getProperty("macroTextField"); // NOI18N
             if (macros != null && macros.length() > 0) {
                 StringTokenizer tokenizer = new StringTokenizer(macros, "; "); // NOI18N
-                StringBuilder macrosString = new StringBuilder();
+                ArrayList list = new ArrayList();
                 while (tokenizer.hasMoreTokens()) {
-                    macrosString.append(tokenizer.nextToken());
-                    if (tokenizer.hasMoreTokens())
-                        macrosString.append(" "); // NOI18N
+                    list.add(tokenizer.nextToken());
                 }
-                extConf.getCCompilerConfiguration().getPreprocessorConfiguration().setValue(macrosString.toString());
-                extConf.getCCCompilerConfiguration().getPreprocessorConfiguration().setValue(macrosString.toString());
+                // FIXUP
+                extConf.getCCompilerConfiguration().getPreprocessorConfiguration().getValue().addAll(list);
+                extConf.getCCCompilerConfiguration().getPreprocessorConfiguration().getValue().addAll(list);
             }
             // Add makefile and configure script to important files
             ArrayList importantItems = new ArrayList();
             String makefilePath = (String)wiz.getProperty("makefileName"); // NOI18N
             File makefileFile = new File(makefilePath);
             if (makefilePath != null && makefilePath.length() > 0) {
-                makefilePath = IpeUtils.toRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(makefilePath));
+                if (PathPanel.getMode() == PathPanel.REL_OR_ABS)
+                    makefilePath = IpeUtils.toAbsoluteOrRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(makefilePath));
+                else if (PathPanel.getMode() == PathPanel.REL)
+                    makefilePath = IpeUtils.toRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(makefilePath));
+                else
+                    makefilePath = IpeUtils.toAbsolutePath(dirF.getPath(), FilePathAdaptor.naturalize(makefilePath));
                 makefilePath = FilePathAdaptor.normalize(makefilePath);
                 importantItems.add(makefilePath);
             }
             String configurePath = (String)wiz.getProperty("configureName"); // NOI18N
             if (configurePath != null && configurePath.length() > 0) {
                 File configureFile = new File(configurePath);
-                configurePath = IpeUtils.toRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(configurePath));
+                if (PathPanel.getMode() == PathPanel.REL_OR_ABS)
+                    configurePath = IpeUtils.toAbsoluteOrRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(configurePath));
+                else if (PathPanel.getMode() == PathPanel.REL)
+                    configurePath = IpeUtils.toRelativePath(dirF.getPath(), FilePathAdaptor.naturalize(configurePath));
+                else
+                    configurePath = IpeUtils.toAbsolutePath(dirF.getPath(), FilePathAdaptor.naturalize(configurePath));
                 configurePath = FilePathAdaptor.normalize(configurePath);
                 importantItems.add(configurePath);
                 
@@ -340,9 +361,9 @@ public class NewMakeProjectWizardIterator implements WizardDescriptor.Instantiat
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent)c;
                 // Step #.
-                jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }
     }
