@@ -49,7 +49,6 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -58,9 +57,13 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Vector;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.modules.db.explorer.infos.RootNodeInfo;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
@@ -79,7 +82,6 @@ import org.openide.util.lookup.InstanceContent;
 import org.openide.xml.EntityCatalog;
 import org.openide.xml.XMLUtil;
 import org.openide.filesystems.Repository;
-import org.netbeans.modules.db.explorer.nodes.RootNode;
 import org.netbeans.modules.db.util.Base64;
 import org.openide.util.Exceptions;
 import org.xml.sax.Attributes;
@@ -108,8 +110,14 @@ public class DatabaseConnectionConvertor implements Environment.Provider, Instan
      */
     private static final int DELAY = 2000;
     
-    private static FileObject newlyCreated;
-    private static DatabaseConnection newlyCreatedInstance;
+    // Ensures DO's created for newly registered connections cannot be garbage-collected
+    // before they are recognized by FolderLookup. This makes sure the FolderLookup
+    // will return the originally registered connection instance.
+    private static final WeakHashMap<DatabaseConnection, DataObject> newConn2DO = new WeakHashMap<DatabaseConnection, DataObject>();
+
+    // Helps ensure that when recognizing a new DO for a newly registered connection,
+    // the DO will hold the originally registered connection instance instead of creating a new one.
+    private static final Map<FileObject, DatabaseConnection> newFile2Conn = new ConcurrentHashMap<FileObject, DatabaseConnection>();
     
     private final Reference holder;
 
@@ -146,8 +154,9 @@ public class DatabaseConnectionConvertor implements Environment.Provider, Instan
     // Environment.Provider methods
     
     public Lookup getEnvironment(DataObject obj) {
-        if (obj.getPrimaryFile() == newlyCreated) {
-            return new DatabaseConnectionConvertor((XMLDataObject)obj, newlyCreatedInstance).getLookup();
+        DatabaseConnection existingInstance = newFile2Conn.remove(obj.getPrimaryFile());
+        if (existingInstance != null) {
+            return new DatabaseConnectionConvertor((XMLDataObject)obj, existingInstance).getLookup();
         } else {
             return new DatabaseConnectionConvertor((XMLDataObject)obj).getLookup();
         }
@@ -249,7 +258,7 @@ public class DatabaseConnectionConvertor implements Environment.Provider, Instan
      * used in 4.1 and previous to the SystemFileSystem.
      */
     public static void importOldConnections() {
-        Vector dbconns = RootNode.getOption().getConnections();
+        Vector dbconns = RootNodeInfo.getOption().getConnections();
         for (Iterator i = dbconns.iterator(); i.hasNext();) {
             try {
                 create((DatabaseConnection) i.next());
@@ -366,16 +375,11 @@ public class DatabaseConnectionConvertor implements Environment.Provider, Instan
             }
 
             if (holder == null) {
-                // a new DataObject must be created for instance
-                // ensure that the object returned by this DO's InstanceCookie.instanceCreate()
-                // method is the same as instance
-                newlyCreated = data;
-                newlyCreatedInstance = instance;
+                newFile2Conn.put(data, instance);
                 holder = (MultiDataObject)DataObject.find(data);
                 // ensure the Environment.Provider.getEnvironment() is called for the new DataObject
-                holder.getCookie(InstanceCookie.class); 
-                newlyCreated = null;
-                newlyCreatedInstance = null;
+                holder.getCookie(InstanceCookie.class);
+                newConn2DO.put(instance, holder);
             }
         }
 
