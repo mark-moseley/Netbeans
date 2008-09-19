@@ -47,49 +47,58 @@ import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.datatransfer.Transferable;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
+import java.net.URI;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.ArrayList;
-import javax.swing.AbstractAction;
-import javax.swing.ActionMap;
+import java.util.concurrent.Callable;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
-import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTree;
-import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EtchedBorder;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.TreeModelEvent;
 import javax.swing.event.TreeModelListener;
-import javax.swing.plaf.basic.BasicComboBoxRenderer;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
-import org.netbeans.modules.bpel.model.api.Activity;
+import javax.xml.XMLConstants;
+import javax.xml.namespace.NamespaceContext;
 import org.netbeans.modules.bpel.model.api.BPELElementsBuilder;
+import org.netbeans.modules.bpel.model.api.BaseCorrelation;
 import org.netbeans.modules.bpel.model.api.BaseScope;
+import org.netbeans.modules.bpel.model.api.BpelContainer;
 import org.netbeans.modules.bpel.model.api.BpelEntity;
 import org.netbeans.modules.bpel.model.api.BpelModel;
 import org.netbeans.modules.bpel.model.api.Correlation;
 import org.netbeans.modules.bpel.model.api.CorrelationContainer;
 import org.netbeans.modules.bpel.model.api.CorrelationSet;
 import org.netbeans.modules.bpel.model.api.CorrelationSetContainer;
+import org.netbeans.modules.bpel.model.api.CorrelationsHolder;
+import org.netbeans.modules.bpel.model.api.EventHandlers;
+import org.netbeans.modules.bpel.model.api.Import;
 import org.netbeans.modules.bpel.model.api.Invoke;
+import org.netbeans.modules.bpel.model.api.OnAlarmEvent;
 import org.netbeans.modules.bpel.model.api.OnAlarmPick;
 import org.netbeans.modules.bpel.model.api.OnEvent;
 import org.netbeans.modules.bpel.model.api.OnMessage;
+import org.netbeans.modules.bpel.model.api.PatternedCorrelation;
+import org.netbeans.modules.bpel.model.api.PatternedCorrelationContainer;
 import org.netbeans.modules.bpel.model.api.Pick;
 import org.netbeans.modules.bpel.model.api.PortTypeReference;
 import org.netbeans.modules.bpel.model.api.Process;
@@ -98,19 +107,20 @@ import org.netbeans.modules.bpel.model.api.Reply;
 import org.netbeans.modules.bpel.model.api.Requester;
 import org.netbeans.modules.bpel.model.api.Responder;
 import org.netbeans.modules.bpel.model.api.Scope;
-import org.netbeans.modules.bpel.model.api.Sequence;
 import org.netbeans.modules.bpel.model.api.references.BpelReference;
 import org.netbeans.modules.bpel.model.api.references.WSDLReference;
 import org.netbeans.modules.bpel.model.api.support.Initiate;
-import org.netbeans.modules.bpel.model.impl.BpelBuilderImpl;
-import org.netbeans.modules.bpel.model.impl.BpelModelImpl;
-import org.netbeans.modules.bpel.model.impl.InvokeReceiveReplyCommonImpl;
-import org.netbeans.modules.bpel.model.impl.OnMessageCommonImpl;
+import org.netbeans.modules.bpel.model.api.support.Pattern;
 import org.netbeans.modules.bpel.model.xam.BpelAttributes;
 import org.netbeans.modules.bpel.nodes.BpelNode;
+import org.netbeans.modules.bpel.properties.ImportRegistrationHelper;
+import org.netbeans.modules.bpel.properties.ResolverUtility;
 import org.netbeans.modules.bpel.properties.Util;
+import org.netbeans.modules.soa.mappercore.Canvas;
 import org.netbeans.modules.soa.mappercore.DefaultMapperContext;
+import org.netbeans.modules.soa.mappercore.LeftTree;
 import org.netbeans.modules.soa.mappercore.Mapper;
+import org.netbeans.modules.soa.mappercore.RightTree;
 import org.netbeans.modules.soa.mappercore.model.Graph;
 import org.netbeans.modules.soa.mappercore.model.GraphSubset;
 import org.netbeans.modules.soa.mappercore.model.Link;
@@ -119,31 +129,55 @@ import org.netbeans.modules.soa.mappercore.model.SourcePin;
 import org.netbeans.modules.soa.mappercore.model.TargetPin;
 import org.netbeans.modules.soa.mappercore.model.TreeSourcePin;
 import org.netbeans.modules.soa.mappercore.model.VertexItem;
+import org.netbeans.modules.soa.ui.UserNotification;
+import org.netbeans.modules.xml.catalogsupport.DefaultProjectCatalogSupport;
 import org.netbeans.modules.xml.schema.model.Attribute;
 import org.netbeans.modules.xml.schema.model.ComplexType;
 import org.netbeans.modules.xml.schema.model.Element;
 import org.netbeans.modules.xml.schema.model.GlobalElement;
 import org.netbeans.modules.xml.schema.model.GlobalSimpleType;
 import org.netbeans.modules.xml.schema.model.GlobalType;
+import org.netbeans.modules.xml.schema.model.Schema;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
+import org.netbeans.modules.xml.schema.model.SchemaModel;
 import org.netbeans.modules.xml.schema.model.SimpleType;
 import org.netbeans.modules.xml.schema.model.TypeContainer;
+import org.netbeans.modules.xml.wsdl.model.Definitions;
 import org.netbeans.modules.xml.wsdl.model.Message;
 import org.netbeans.modules.xml.wsdl.model.Operation;
 import org.netbeans.modules.xml.wsdl.model.OperationParameter;
 import org.netbeans.modules.xml.wsdl.model.Part;
 import org.netbeans.modules.xml.wsdl.model.PortType;
+import org.netbeans.modules.xml.wsdl.model.RequestResponseOperation;
+import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 import org.netbeans.modules.xml.wsdl.model.extensions.bpel.BPELQName;
 import org.netbeans.modules.xml.wsdl.model.extensions.bpel.CorrelationProperty;
 import org.netbeans.modules.xml.wsdl.model.extensions.bpel.PropertyAlias;
-import org.netbeans.modules.xml.wsdl.model.extensions.bpel.PropertyAlias;
+import org.netbeans.modules.xml.wsdl.model.extensions.bpel.Query;
+import org.netbeans.modules.xml.wsdl.model.extensions.bpel.validation.ValidationUtil;
+import org.netbeans.modules.xml.wsdl.ui.netbeans.module.Utility;
+import org.netbeans.modules.xml.wsdl.ui.wsdl.util.RelativePath;
+import org.netbeans.modules.xml.xam.Model;
+import org.netbeans.modules.xml.xam.dom.AbstractDocumentComponent;
 import org.netbeans.modules.xml.xam.dom.NamedComponentReference;
+import org.netbeans.modules.xml.xpath.ext.XPathLocationPath;
+import org.netbeans.modules.xml.xpath.ext.LocationStep;
+import org.netbeans.modules.xml.xpath.ext.StepNodeNameTest;
+import org.netbeans.modules.xml.xpath.ext.XPathModel;
+import org.netbeans.modules.xml.xpath.ext.XPathModelFactory;
+import org.netbeans.modules.xml.xpath.ext.XPathModelHelper;
 import org.netbeans.modules.xml.xpath.ext.schema.FindAllChildrenSchemaVisitor;
+import org.netbeans.modules.xml.xpath.ext.schema.SchemaModelsStack;
+import org.netbeans.modules.xml.xpath.ext.schema.XmlExNamespaceContext;
+import org.netbeans.modules.xml.xpath.ext.spi.ExternalModelResolver;
 import org.openide.DialogDisplayer;
+import org.openide.ErrorManager;
 import org.openide.WizardDescriptor;
 import org.openide.WizardDescriptor.Panel;
 import org.openide.WizardValidationException;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.ChangeSupport;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
@@ -178,14 +212,14 @@ public class DefineCorrelationWizard implements WizardProperties {
     private Map<Class, Icon> mapTreeNodeIcons;
     
     private WizardDescriptor wizardDescriptor;
-    private BpelEntity mainBpelEntity;
+    private BpelEntity correlatedActivity;
     private Panel[] wizardPanels;
     private JButton buttonNext, buttonFinish;
     
-    public DefineCorrelationWizard(BpelNode mainBpelNode) {
-        Object mainBpelNodeRef = mainBpelNode.getReference();
-        if (mainBpelNodeRef instanceof BpelEntity) {
-            this.mainBpelEntity = (BpelEntity) mainBpelNodeRef;
+    public DefineCorrelationWizard(BpelNode selectedBpelNode) {
+        Object selectedBpelNodeRef = selectedBpelNode.getReference();
+        if (selectedBpelNodeRef instanceof BpelEntity) {
+            correlatedActivity = (BpelEntity) selectedBpelNodeRef;
         }
         mapTreeNodeIcons = createTreeNodeIconsMap();
             
@@ -207,7 +241,17 @@ public class DefineCorrelationWizard implements WizardProperties {
     }
     
     public void showWizardDialog() {
+        String errMsg = WizardUtils.validateActivity(correlatedActivity);
+        if (errMsg != null) {
+            UserNotification.showMessage(errMsg);
+            return;
+        }
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizardDescriptor);
+        dialog.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(
+            DefineCorrelationWizard.class, "A11_DESCRIPTOR_DefineCorrelationWizardDialog"));
+        dialog.getAccessibleContext().setAccessibleName(NbBundle.getMessage(
+            DefineCorrelationWizard.class, "A11_NAME_DefineCorrelationWizardDialog"));
+        
         findNextAndFinishButtons(dialog);
         dialog.setPreferredSize(new Dimension(
             LEFT_DIMENSION_VALUE.width + PANEL_DIMENSION_VALUE.width + 50, 
@@ -229,8 +273,8 @@ public class DefineCorrelationWizard implements WizardProperties {
         return panelList;
     }
         
-    protected BpelEntity getTopParentEntity(BpelEntity mainBpelEntity) {
-        BpelEntity parentEntity = mainBpelEntity.getParent();
+    protected BpelEntity getTopParentEntity(BpelEntity bpelEntity) {
+        BpelEntity parentEntity = bpelEntity.getParent();
         while ((parentEntity != null) && 
                (!(parentEntity instanceof Scope)) && 
                (!(parentEntity instanceof Process))) {
@@ -272,6 +316,9 @@ public class DefineCorrelationWizard implements WizardProperties {
         iconFileName = IMAGE_FOLDER_NAME + "GLOBAL_ELEMENT" + IMAGE_FILE_EXT; // NOI18N
         mapIcons.put(Element.class, new ImageIcon(Utilities.loadImage(iconFileName)));
     
+        iconFileName = IMAGE_FOLDER_NAME + "ATTRIBUTE" + IMAGE_FILE_EXT; // NOI18N
+        mapIcons.put(Attribute.class, new ImageIcon(Utilities.loadImage(iconFileName)));
+    
         iconFileName = IMAGE_FOLDER_NAME + "GLOBAL_COMPLEX_TYPE" + IMAGE_FILE_EXT; // NOI18N
         mapIcons.put(ComplexType.class, new ImageIcon(Utilities.loadImage(iconFileName)));
         
@@ -300,22 +347,24 @@ public class DefineCorrelationWizard implements WizardProperties {
     }
     //========================================================================//
     private interface ActivityChooser {
-        List<BpelEntity> getPermittedActivityList(BpelEntity mainBpelEntity);
+        List<BpelEntity> getInitiatingActivityList(BpelEntity mainBpelEntity);
     }
     
     private abstract class AbstractActivityChooser implements ActivityChooser {
-        protected Set<Class> permittedActivityTypeSet = new HashSet<Class>(Arrays.asList(
-            new Class[] {Requester.class, Responder.class}));
+        protected Set<Class> permittedActivityTypeSet = new HashSet<Class>(
+            Arrays.asList(new Class[] {
+            Requester.class, Responder.class, OnMessage.class, OnEvent.class}));
         protected Set<Class> forbiddenActivityTypeSet = new HashSet<Class>();
         
-        public List<BpelEntity> getPermittedActivityList(BpelEntity mainBpelEntity) {
+        public List<BpelEntity> getInitiatingActivityList(BpelEntity mainBpelEntity) {
             List<BpelEntity> bpelEntityList = new ArrayList<BpelEntity>();
-            BpelEntity parentEntity = getTopParentEntity(mainBpelEntity);
-            if (parentEntity == null) return bpelEntityList;
+            //BpelEntity parentEntity = getTopParentEntity(mainBpelEntity);
+            
+            BpelEntity processEntity = mainBpelEntity.getBpelModel().getProcess();
+            if (processEntity == null) return bpelEntityList;
         
-            boolean isScopeEntityIgnored = ! (parentEntity instanceof Scope);
-            List<BpelEntity> activities = chooseActivities(parentEntity, 
-                new ArrayList<BpelEntity>(), isScopeEntityIgnored);
+            List<BpelEntity> activities = chooseActivities(processEntity, 
+                new ArrayList<BpelEntity>());
             for (BpelEntity bpelEntity : activities) {
                 if (mainBpelEntity.equals(bpelEntity)) {
                     bpelEntityList.add(bpelEntity);
@@ -339,152 +388,83 @@ public class DefineCorrelationWizard implements WizardProperties {
                 try {
                     bpelEntity.getClass().asSubclass(checkedClass);
                     return true;
-                } catch (ClassCastException e) {}
+                } catch (ClassCastException e) { // ignore
+                } catch (Exception ex) {
+                    ErrorManager.getDefault().notify(ex);
+                }
             }
             return false;
         }
         
-        private List<BpelEntity> chooseActivities(BpelEntity bpelEntity, 
-            List<BpelEntity> bpelEntityList, boolean isScopeEntityIgnored) {
+        protected List<BpelEntity> chooseActivities(BpelEntity bpelEntity, 
+            List<BpelEntity> bpelEntityList) {
             if (bpelEntityList == null) return (new ArrayList<BpelEntity>());
             
-            if (bpelEntity instanceof Sequence) {
-                for (Activity activity : bpelEntity.getChildren(Activity.class)) {
-                    bpelEntityList.addAll(chooseActivities(activity, 
-                        new ArrayList<BpelEntity>(), true));
-                }
-            } else if ((bpelEntity instanceof Requester) || (bpelEntity instanceof Responder)) {
+            if ((bpelEntity instanceof Requester) || // add Receive, Reply, Invoke
+                (bpelEntity instanceof Responder)) {
                 bpelEntityList.add(bpelEntity);
             } else if (bpelEntity instanceof Pick) {
-                for (OnMessage onMessage : ((Pick) bpelEntity).getOnMessages()) {
-                    bpelEntityList.add(onMessage);
-                    for (Sequence sequence : onMessage.getChildren(Sequence.class)) {
-                        bpelEntityList.addAll(chooseActivities(sequence, 
-                            new ArrayList<BpelEntity>(), true));
-                    }
-                }
-                for (OnAlarmPick onAlarmPick : ((Pick) bpelEntity).getOnAlarms()) {
-                    for (Sequence sequence : onAlarmPick.getChildren(Sequence.class)) {
-                        bpelEntityList.addAll(chooseActivities(sequence, 
-                            new ArrayList<BpelEntity>(), true));
-                    }
-                }
+                bpelEntityList.addAll(handlePickEntity((Pick) bpelEntity, 
+                    new ArrayList<BpelEntity>()));
+            } else if (bpelEntity instanceof EventHandlers) {
+                bpelEntityList.addAll(handleEventHandlersEntity((EventHandlers) bpelEntity, 
+                    new ArrayList<BpelEntity>()));
             } else {
                 // collect activity from the global scope (whole Process scope),
-                // ignoring all sub-scope, or from the current selected scope only
-                if (! ((bpelEntity instanceof Scope) && (isScopeEntityIgnored))) {
-                    for (Sequence sequence : bpelEntity.getChildren(Sequence.class)) {
-                        bpelEntityList.addAll(chooseActivities(sequence, 
-                            new ArrayList<BpelEntity>(), true));
-                    }
-                }
+                // ignoring all sub-scope
+                addAllChildActivities(bpelEntity, bpelEntityList);
             }
             return bpelEntityList;
         }
-        /*
-        protected  List<BpelEntity> removeResponderActivityAbove(List<BpelEntity> activityList, 
-            BpelEntity mainBpelEntity) {
-            // remove all Responder-activities above mainBpelEntity
-            BpelEntity activity = null;
-            int index = 0;
-            while (true) {
-                activity = activityList.get(index);
-                if (activity.equals(mainBpelEntity)) break;
-
-                if ((activity instanceof Responder) && (! (activity instanceof Requester))) {
-                    activityList.remove(index);
-                } else {
-                    ++index;
-                }
+        
+        protected void addAllChildActivities(BpelEntity bpelEntity, 
+            List<BpelEntity> bpelEntityList) {
+            for (BpelEntity childBpelEntity : bpelEntity.getChildren(BpelEntity.class)) {
+                bpelEntityList.addAll(chooseActivities(childBpelEntity, 
+                    new ArrayList<BpelEntity>()));
             }
-            return activityList;
         }
         
-        protected  List<BpelEntity> removeRequesterActivityBelow(List<BpelEntity> activityList, 
-            BpelEntity mainBpelEntity) {
-            // remove all Requester-activities below mainBpelEntity
-            BpelEntity activity = null;
-            int index = activityList.size() - 1;
-            while (true) {
-                activity = activityList.get(index);
-                if (activity.equals(mainBpelEntity)) break;    
-                    
-                if ((activity instanceof Requester) && (! (activity instanceof Responder))) {
-                    activityList.remove(index);
-                }
-                --index;
+        protected List<BpelEntity> handlePickEntity(Pick pickEntity, 
+            List<BpelEntity> bpelEntityList) {
+            for (OnMessage onMessage : pickEntity.getOnMessages()) {
+                bpelEntityList.add(onMessage);
+                addAllChildActivities(onMessage, bpelEntityList);
             }
-            return  activityList;
+            for (OnAlarmPick onAlarmPick : pickEntity.getOnAlarms()) {
+                addAllChildActivities(onAlarmPick, bpelEntityList);
+            }
+            return bpelEntityList;
         }
-        */
-    }
-    
-    private class RequesterActivityChooser extends AbstractActivityChooser {
-        public RequesterActivityChooser() {
-            permittedActivityTypeSet = new HashSet<Class>(Arrays.asList(new Class[] {
-                Responder.class}));
-            forbiddenActivityTypeSet = new HashSet<Class>(Arrays.asList(new Class[] {
-                Requester.class}));
-        }
-        @Override
-        public List<BpelEntity> getPermittedActivityList(BpelEntity mainBpelEntity) {
-            List<BpelEntity> activityList = super.getPermittedActivityList(mainBpelEntity);
-            if (activityList.isEmpty()) return activityList;
-            
-            // remove all Responder-activities above mainBpelEntity and mainBpelEntity itself
-            //activityList = removeResponderActivityAbove(activityList, mainBpelEntity);
-            activityList.remove(mainBpelEntity);
-            return activityList;
-        }
-    }
-    
-    private class ResponderActivityChooser extends AbstractActivityChooser  {
-        public ResponderActivityChooser() {
-            permittedActivityTypeSet = new HashSet<Class>(Arrays.asList(new Class[] {
-                Requester.class}));
-        }
-        @Override
-        public List<BpelEntity> getPermittedActivityList(BpelEntity mainBpelEntity) {
-            List<BpelEntity> activityList = super.getPermittedActivityList(mainBpelEntity);
-            if (activityList.isEmpty()) return activityList;
 
-            // remove all Requester-activities below mainBpelEntity and mainBpelEntity itself
-            //activityList = removeRequesterActivityBelow(activityList, mainBpelEntity);
-            activityList.remove(mainBpelEntity);
-            return activityList;
+        protected List<BpelEntity> handleEventHandlersEntity(EventHandlers eventHandlersEntity, 
+            List<BpelEntity> bpelEntityList) {
+            for (OnEvent onEvent : eventHandlersEntity.getOnEvents()) {
+                bpelEntityList.add(onEvent);
+                addAllChildActivities(onEvent, bpelEntityList);
+            }
+            for (OnAlarmEvent onAlarmEvent : eventHandlersEntity.getOnAlarms()) {
+                addAllChildActivities(onAlarmEvent, bpelEntityList);
+            }
+            return bpelEntityList;
         }
     }
     
-    private class RequesterResponderActivityChooser extends AbstractActivityChooser  {
-        // it's assumed that Invoke (Requester-Responder) is used as Requester only
-        public RequesterResponderActivityChooser() {
-            permittedActivityTypeSet = new HashSet<Class>(Arrays.asList(new Class[] {
-                Responder.class}));
-            forbiddenActivityTypeSet = new HashSet<Class>(Arrays.asList(new Class[] {
-                Requester.class}));
-        }
+    private class DefaultActivityChooser extends AbstractActivityChooser  {
         @Override
-        public List<BpelEntity> getPermittedActivityList(BpelEntity mainBpelEntity) {
-            List<BpelEntity> activityList = super.getPermittedActivityList(mainBpelEntity);
+        public List<BpelEntity> getInitiatingActivityList(BpelEntity mainBpelEntity) {
+            List<BpelEntity> activityList = super.getInitiatingActivityList(mainBpelEntity);
             if (activityList.isEmpty()) return activityList;
             
-            // remove all Responder-activities above mainBpelEntity
-            //activityList = removeResponderActivityAbove(activityList, mainBpelEntity);
-            
-            // remove all Requester-activities below mainBpelEntity
-            //activityList = removeRequesterActivityBelow(activityList, mainBpelEntity);
-            
-            // remove mainBpelEntity from the list
             activityList.remove(mainBpelEntity);
-            
-            return  activityList;
+            return activityList;
         }
     }
     //========================================================================//
     public abstract class WizardAbstractPanel implements WizardDescriptor.ValidatingPanel {
         protected JPanel wizardPanel = createWizardPanel();
         protected ChangeSupport changeSupport = new ChangeSupport(this);
-        protected int insetX = 5, insetY = 5;
+        protected int insetX = 6, insetY = 6;
         
         protected JPanel createWizardPanel() {
             JPanel panel = new JPanel();
@@ -521,50 +501,56 @@ public class DefineCorrelationWizard implements WizardProperties {
         }
     }
     //========================================================================//
-    public class WizardSelectMessagingActivityPanel extends WizardAbstractPanel {
-        private final Dimension COMBOBOX_DIMENSION = new Dimension(350, 20);
+    public class WizardSelectMessagingActivityPanel extends WizardAbstractPanel
+        implements ItemListener {
+        private final Dimension COMBOBOX_DIMENSION = 
+            new Dimension(350, CommonUtils.isMacOS() ? 25 : 20);
         private final int COMBOBOX_MAX_ROW_COUNT = 16;
         private final JComboBox activityComboBox = new JComboBox();
-        private BpelEntity previousSelectedActivity, currentSelectedActivity;
+        private BpelEntity previousSelectedActivity, initiatingActivity;
             
         public WizardSelectMessagingActivityPanel() {
             super();
             wizardPanel.setLayout(new FlowLayout(FlowLayout.LEFT, insetX, insetY));
             wizardPanel.add(new JLabel(NbBundle.getMessage(
-                WizardSelectMessagingActivityPanel.class, "LBL_Initiated_Messaging_Activities")));
+                WizardSelectMessagingActivityPanel.class, "LBL_Initiating_Messaging_Activities")));
 
             fillActivityComboBox();
+            
+            activityComboBox.addItemListener(this);
             activityComboBox.setRenderer(new ComboBoxRenderer());
             activityComboBox.setMaximumRowCount(COMBOBOX_MAX_ROW_COUNT);
             activityComboBox.setEditable(false);
             activityComboBox.setMinimumSize(COMBOBOX_DIMENSION);
             activityComboBox.setPreferredSize(activityComboBox.getMinimumSize());
+            activityComboBox.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(
+                DefineCorrelationWizard.class, "A11_DESCRIPTOR_ActivityComboBox"));
+            activityComboBox.getAccessibleContext().setAccessibleName(NbBundle.getMessage(
+                DefineCorrelationWizard.class, "A11_NAME_ActivityComboBox"));
             wizardPanel.add(activityComboBox);
         }
 
         private void fillActivityComboBox() {
             ActivityChooser activityChooser = null;
-            if ((mainBpelEntity instanceof Requester) && 
-                (mainBpelEntity instanceof Responder)) { // Invoke
-                activityChooser = new RequesterResponderActivityChooser();
-            } else if (mainBpelEntity instanceof Requester) {
-                activityChooser = new RequesterActivityChooser();
-            }  else if (mainBpelEntity instanceof Responder) {
-                activityChooser = new ResponderActivityChooser();
+            if ((correlatedActivity instanceof Requester) || // Invoke, Receive, Reply
+                (correlatedActivity instanceof Responder) ||
+                (correlatedActivity instanceof OnMessage) ||
+                (correlatedActivity instanceof OnEvent)) {
+                activityChooser = new DefaultActivityChooser();
             }
-            if (activityChooser == null) {
-                String errMsg = "Activity Chooser isn't defined for Bpel Entity of type [" +
-                    mainBpelEntity.getElementType().getName() + "]";
-                System.err.println(errMsg);
-                System.out.println(errMsg);
-                return;
-            }
-            List<BpelEntity> activityEntityList = activityChooser.getPermittedActivityList(mainBpelEntity);
+            assert (activityChooser != null);
+            List<BpelEntity> activityEntityList = activityChooser.getInitiatingActivityList(correlatedActivity);
             if (activityEntityList != null) {
                 ((DefaultComboBoxModel) activityComboBox.getModel()).removeAllElements();
                 for (BpelEntity activityEntity : activityEntityList) {
                     activityComboBox.addItem(activityEntity);
                 }
+            }
+        }
+
+        public void itemStateChanged(ItemEvent e) {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                isValid();
             }
         }
         
@@ -575,59 +561,65 @@ public class DefineCorrelationWizard implements WizardProperties {
             
             wizardDescriptor.putProperty(PROPERTY_ERROR_MESSAGE, isOK ? null :
                 NbBundle.getMessage(WizardSelectMessagingActivityPanel.class, "LBL_ErrMsg_No_Activity_For_Correlation"));                              
+
+            if (isOK) {
+                String errMsg = WizardUtils.validateActivity(
+                    (BpelEntity) activityComboBox.getSelectedItem());
+                isOK &= (errMsg == null);
+                wizardDescriptor.putProperty(PROPERTY_ERROR_MESSAGE, errMsg);                              
+            }
+            
             if (buttonNext != null) buttonNext.setEnabled(isOK);
             return isOK;
         }
 
         @Override
         public void validate() throws WizardValidationException {
-            previousSelectedActivity = currentSelectedActivity;
-            currentSelectedActivity = (BpelEntity) activityComboBox.getSelectedItem();
+            previousSelectedActivity = initiatingActivity;
+            initiatingActivity = (BpelEntity) activityComboBox.getSelectedItem();
             WizardDefineCorrelationPanel wizardDefineCorrelationPanel = 
                 ((WizardDefineCorrelationPanel) wizardPanels[1]);
             if (previousSelectedActivity == null) { // this panel is shown for the 1st time
-                wizardDefineCorrelationPanel.buildCorrelationMapper(mainBpelEntity, currentSelectedActivity);
+                wizardDefineCorrelationPanel.buildCorrelationMapper(initiatingActivity, correlatedActivity);
             } else { // this panel is shown after clicking of the button "Back"
-                if (! previousSelectedActivity.equals(currentSelectedActivity)) {
-                    wizardDefineCorrelationPanel.buildCorrelationMapper(null, currentSelectedActivity);
+                if (! previousSelectedActivity.equals(initiatingActivity)) {
+                    wizardDefineCorrelationPanel.buildCorrelationMapper(initiatingActivity, null);
                 }
             }
         }
         //====================================================================//
-        private class ComboBoxRenderer extends BasicComboBoxRenderer.UIResource {
+        private class ComboBoxRenderer extends DefaultListCellRenderer {
             @Override
             public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 Component component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if ((value != null) && (value instanceof BpelEntity) &&
                     (component != null) && (component instanceof JLabel)) {
-                    String itemText = null;
+                    String itemText = "", messagePattern = null;
                     try {
-                        itemText = ((BpelEntity) value).getAttribute(BpelAttributes.NAME);
+                        if ((value instanceof OnMessage) || (value instanceof OnEvent)) {
+                            messagePattern = NbBundle.getMessage(ComboBoxRenderer.class, 
+                                (value instanceof OnMessage) ? "LBL_ComboBox_OnMessage_Name_Pattern" : 
+                                "LBL_ComboBox_OnEvent_Name_Pattern");
+                            itemText = WizardUtils.getBpelEntityName((BpelEntity) value, messagePattern);
+                        } else {
+                            messagePattern = NbBundle.getMessage(ComboBoxRenderer.class, "LBL_ComboBox_Item_Name_Pattern");
+                            itemText = WizardUtils.getBpelEntityName((BpelEntity) value);
+                            Object[] messageValues = new Object[] {itemText, ((BpelEntity) value).getElementType().getSimpleName()};
+                            itemText = MessageFormat.format(messagePattern, messageValues);
+                        }
                     } catch (Exception e) {
                         itemText = value.toString();
                     }
-                    String messagePattern = NbBundle.getMessage(ComboBoxRenderer.class, "LBL_ComboBox_Item_Name_Pattern");
-                    Object[] messageValues = new Object[] {itemText, ((BpelEntity) value).getElementType().getSimpleName()};
-                    if (itemText == null) {
-                        if (value instanceof OnMessage) {
-                            String pickEntityName = ((BpelEntity) value).getParent().getAttribute(BpelAttributes.NAME),
-                                   operationName = ((BpelEntity) value).getAttribute(BpelAttributes.OPERATION);
-                            itemText = ((BpelEntity) value).getElementType().getSimpleName();
-                            messagePattern = NbBundle.getMessage(ComboBoxRenderer.class, "LBL_ComboBox_OnMessage_Name_Pattern");
-                            messageValues = new Object[] {itemText, pickEntityName, operationName};
-                        }
-                    }
-                    ((JLabel) component).setText(MessageFormat.format(messagePattern, messageValues));
+                    ((JLabel) component).setText(itemText);
                 }
                 return component;
             }
         }
     }
     //========================================================================//
-    public class WizardDefineCorrelationPanel extends WizardAbstractPanel {
+    public class WizardDefineCorrelationPanel extends WizardAbstractPanel 
+        implements WizardConstants {
         private final String ACTION_KEY_DELETE = "ACTION_KEY_DELETE";
-        private final String CORRELATION_PROPERTY_NAME_PREFIX = "wizard_";
-        private final String CORRELATION_SET_NAME_PREFIX = "wizard_set_";
             
         private Mapper correlationMapper;
         
@@ -635,7 +627,8 @@ public class DefineCorrelationWizard implements WizardProperties {
             super();
         }
         
-        public void buildCorrelationMapper(BpelEntity leftBpelEntity, BpelEntity rightBpelEntity) {
+        public void buildCorrelationMapper(BpelEntity leftBpelEntity, 
+            BpelEntity rightBpelEntity) {
             boolean isMapperChanged = (correlationMapper == null);
             CorrelationMapperTreeModel 
                 leftTreeModel  = (CorrelationMapperTreeModel) (correlationMapper == null ? null : 
@@ -644,20 +637,18 @@ public class DefineCorrelationWizard implements WizardProperties {
                     ((CorrelationMapperModel) correlationMapper.getModel()).getRightTreeModel());
             if (leftBpelEntity != null) {
                 leftTreeModel = new CorrelationMapperTreeModel();
-                CorrelationMapperTreeNode topLeftTreeNode = buildCorrelationTree(leftBpelEntity,
-                    NbBundle.getMessage(WizardDefineCorrelationPanel.class, 
-                    leftBpelEntity instanceof OnMessage ? "LBL_Mapper_Tree_OnMessage_Name_Pattern" : 
-                                                          "LBL_Mapper_Tree_Top_Node_Name_Pattern"));
-                leftTreeModel.buildCorrelationMapperTree(topLeftTreeNode);
+                CorrelationMapperTreeNode topLeftTreeNode = 
+                    leftTreeModel.makeCorrelationMapperTopTreeNode(leftBpelEntity);
+                leftTreeModel.makeCorrelationMapperRootTreeNode(topLeftTreeNode);
+                leftTreeModel.preBuildCorrelationTree();
                 isMapperChanged = true;
             }
             if (rightBpelEntity != null) {
                 rightTreeModel = new CorrelationMapperTreeModel();
-                CorrelationMapperTreeNode topRightTreeNode = buildCorrelationTree(rightBpelEntity,
-                    NbBundle.getMessage(WizardDefineCorrelationPanel.class, 
-                    rightBpelEntity instanceof OnMessage ? "LBL_Mapper_Tree_OnMessage_Name_Pattern" : 
-                                                           "LBL_Mapper_Tree_Top_Node_Name_Pattern"));
-                rightTreeModel.buildCorrelationMapperTree(topRightTreeNode);
+                CorrelationMapperTreeNode topRightTreeNode = 
+                    rightTreeModel.makeCorrelationMapperTopTreeNode(rightBpelEntity);
+                rightTreeModel.makeCorrelationMapperRootTreeNode(topRightTreeNode);
+                rightTreeModel.preBuildCorrelationTree();
                 isMapperChanged = true;
             }
             MapperModel mapperModel = null;
@@ -672,165 +663,40 @@ public class DefineCorrelationWizard implements WizardProperties {
                 
                 correlationMapper = new Mapper(mapperModel);
                 correlationMapper.setContext(new CorrelationMapperContext());                
-                defineCorrelationMapperKeyBindings();
+                // defineCorrelationMapperKeyBindings();
                 
                 wizardPanel.add(correlationMapper);
                 wizardPanel.revalidate();
             } else if (isMapperChanged) {
                 correlationMapper.setModel(mapperModel);
             }
+            setAccessibilityInfo(correlationMapper);
             ((CorrelationMapperModel) mapperModel).expandTree(((CorrelationMapperModel) mapperModel).getLeftTreeModel());
             ((CorrelationMapperModel) mapperModel).expandTree(((CorrelationMapperModel) mapperModel).getRightTreeModel());
         }
 
-        private CorrelationMapperTreeNode buildCorrelationTree(BpelEntity topBpelEntity, String nodeNamePattern) {
-            CorrelationMapperTreeNode topTreeNode = new CorrelationMapperTreeNode(
-                topBpelEntity, nodeNamePattern);
-            topTreeNode = buildCorrelationTree(topBpelEntity, topTreeNode);
-            return topTreeNode;
-        }
-        
-        private CorrelationMapperTreeNode buildCorrelationTree(BpelEntity topBpelEntity, 
-            CorrelationMapperTreeNode topTreeNode) {
-            PortType portType = ((PortTypeReference) topBpelEntity).getPortType().get();
-            Collection<Operation> operations = portType.getOperations();
-            String requiredOperationName = topBpelEntity.getAttribute(BpelAttributes.OPERATION);
-            Operation requiredOperation = null;
-            for (Operation operation : operations) {
-                if (operation.getName().equals(requiredOperationName)) {
-                    requiredOperation = operation;
-                    break;
-                }
-            }
-            handleOperations(topBpelEntity, topTreeNode, requiredOperation);
-            return topTreeNode;
-        }
-        
-        private void handleOperations(BpelEntity topBpelEntity, 
-            CorrelationMapperTreeNode topTreeNode, Operation operation) {
-            List<Message> messages = new ArrayList<Message>();
-            if (topBpelEntity instanceof Requester) {
-                try {
-                    OperationParameter output = operation.getOutput();
-                    messages.add(output.getMessage().get());
-                } catch (Exception exception) {}
-            }
-            if (topBpelEntity instanceof Responder) {
-                try {
-                    OperationParameter input = operation.getInput();
-                    messages.add(input.getMessage().get());
-                } catch (Exception exception) {}
-            }
-            handleMessages(topBpelEntity, topTreeNode, messages);
-        }
-        
-        private void handleMessages(BpelEntity topBpelEntity, 
-            CorrelationMapperTreeNode topTreeNode, Collection<Message> messages) {
-            for (Message message : messages) {
-                Collection<Part> parts = message.getParts();
-                if (! parts.isEmpty()) {
-                    CorrelationMapperTreeNode messageNode = new CorrelationMapperTreeNode(message, null);
-                    for (Part part : parts) {
-                        messageNode.add(handlePart(part));
-                    }
-                    topTreeNode.add(messageNode);
-                }
-            }
+        private void setAccessibilityInfo(Mapper correlationMapper) {
+            LeftTree leftTree = correlationMapper.getLeftTree();
+            leftTree.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(
+                DefineCorrelationWizard.class, "A11_DESCRIPTOR_MapperLeftTree"));
+            leftTree.getAccessibleContext().setAccessibleName(NbBundle.getMessage(
+                DefineCorrelationWizard.class, "A11_NAME_MapperLeftTree"));
+            
+            Canvas canvas = correlationMapper.getCanvas();
+            canvas.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(
+                DefineCorrelationWizard.class, "A11_DESCRIPTOR_MapperCanvas"));
+            canvas.getAccessibleContext().setAccessibleName(NbBundle.getMessage(
+                DefineCorrelationWizard.class, "A11_NAME_MapperCanvas"));
+            
+            RightTree rightTree = correlationMapper.getRightTree();
+            rightTree.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(
+                DefineCorrelationWizard.class, "A11_DESCRIPTOR_MapperRightTree"));
+            rightTree.getAccessibleContext().setAccessibleName(NbBundle.getMessage(
+                DefineCorrelationWizard.class, "A11_NAME_MapperRightTree"));
         }
 
-        private CorrelationMapperTreeNode handlePart(Part part) {
-            CorrelationMapperTreeNode partNode = new CorrelationMapperTreeNode(part, null);
-            NamedComponentReference<GlobalElement> partElementRef = part.getElement();
-            if (partElementRef != null) {
-                GlobalElement partElement = partElementRef.get();
-                addSchemaComponentNode(partNode, partElement, new FindAllChildrenSchemaVisitor(true, true));                    
-            } else {
-                NamedComponentReference<GlobalType> partTypeRef = part.getType();
-                if (partTypeRef != null) {
-                    GlobalType partType = partTypeRef.get();
-                    addSchemaComponentNode(partNode, partType, new FindAllChildrenSchemaVisitor(true, true)); 
-                }
-            }
-            return partNode;
-        }        
-        
-        private void addSchemaComponentNode(CorrelationMapperTreeNode parentNode, 
-            SchemaComponent schemaComponent, FindAllChildrenSchemaVisitor schemaTypeFinder) {
-            String nodeNamePattern = schemaComponent instanceof SimpleType ?
-                SIMPLE_TYPE_NAME_PATTERN : null;
-            CorrelationMapperTreeNode schemaComponentNode = new CorrelationMapperTreeNode(
-                schemaComponent, nodeNamePattern);
-
-            List<SchemaComponent> childSchemaTypeComponentList = null;
-            if (! (schemaComponent instanceof SimpleType)) {
-                schemaTypeFinder.lookForSubcomponents(schemaComponent);
-                childSchemaTypeComponentList = schemaTypeFinder.getFound();
-                for (SchemaComponent childSchemaTypeComponent : childSchemaTypeComponentList) {
-                    addSchemaComponentNode(schemaComponentNode, childSchemaTypeComponent, new FindAllChildrenSchemaVisitor(true, true));
-                }
-            }
-            if ((schemaComponent instanceof Element) && 
-                ((childSchemaTypeComponentList == null) || (childSchemaTypeComponentList.isEmpty())) &&
-                isElementComplexType(schemaComponent)) {
-                return;
-            }
-            if ((schemaComponent instanceof Attribute) && 
-                ((childSchemaTypeComponentList == null) || (childSchemaTypeComponentList.isEmpty())) &&
-                isAttributeUnknownType(schemaComponent)) {
-                return;
-            }
-            parentNode.add(schemaComponentNode);
-        }
-    
-        private boolean isElementComplexType(SchemaComponent schemaComponent) {
-            if (! (schemaComponent instanceof Element)) {
-                return false;
-            }
-            NamedComponentReference<? extends GlobalType> typeRef = 
-                getSchemaComponentTypeRef(schemaComponent);
-            return ((typeRef != null) && (typeRef.get() instanceof ComplexType));
-        }
-        
-        private boolean isAttributeUnknownType(SchemaComponent schemaComponent) {
-            if (! (schemaComponent instanceof Attribute)) {
-                return false;
-            }
-            return (getSchemaComponentTypeName(schemaComponent) == null);
-        }
-
-        private NamedComponentReference<? extends GlobalType> getSchemaComponentTypeRef(SchemaComponent schemaComponent) {
-            NamedComponentReference<? extends GlobalType> typeRef = null;
-            try {
-                typeRef = ((TypeContainer) schemaComponent).getType();
-            } catch (Exception exception) {}
-            return typeRef;
-        }
-
-        private String getSchemaComponentTypeName(SchemaComponent schemaComponent) {
-            String typeName = null;
-            if ((schemaComponent instanceof SimpleType) || (schemaComponent instanceof ComplexType)) {
-                typeName = schemaComponent.getAttribute(BpelAttributes.NAME);
-            } else {
-                NamedComponentReference<? extends GlobalType> typeRef = getSchemaComponentTypeRef(schemaComponent);
-                if (typeRef != null) {
-                    typeName = typeRef.get().getName();
-                } else {
-                    typeName = ((SchemaComponent) schemaComponent).getAttribute(BpelAttributes.TYPE);
-                }
-            }
-            return typeName;
-        }
-
-        public String getSchemaComponentName(SchemaComponent schemaComponent) {
-            String name = null;
-            if (schemaComponent instanceof SimpleType) {
-                name = getSchemaComponentTypeName(schemaComponent);
-            } else  {
-                name = schemaComponent.toString();
-            }
-            return name;
-        }
-        
+        /* Not used since Jun 2008 - method delete() of the class 
+        // CorrelationMapperModel is used now
         private void defineCorrelationMapperKeyBindings() {
             if (correlationMapper == null) return;
             InputMap inputMap = correlationMapper.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
@@ -838,6 +704,7 @@ public class DefineCorrelationWizard implements WizardProperties {
             ActionMap actionMap = correlationMapper.getActionMap();
             actionMap.put(ACTION_KEY_DELETE, new ActionDeleteKey());
         }
+        */
         
         @Override
         public boolean isValid() {
@@ -857,7 +724,22 @@ public class DefineCorrelationWizard implements WizardProperties {
 
         @Override
         public void validate() throws WizardValidationException {
-            makeCorrelations();
+            try {
+                makeCorrelations();
+            } catch(CorrelationDefinitionException cde) {
+                Throwable t = cde.getCause();
+                if (t != null) {
+                    Logger.getLogger(DefineCorrelationWizard.class.getName()).log(
+                        Level.INFO, null, t);
+                }
+                String warningMsg = cde.getMessage();
+                if (warningMsg != null) {
+                    UserNotification.showMessage(warningMsg);
+                }
+                throw new WizardValidationException(wizardPanel, null, null);
+            } finally {
+                CorrelationWizardWSDLWrapper.closeInstance();
+            }
         }
         
         private void makeCorrelations() throws WizardValidationException {
@@ -865,37 +747,55 @@ public class DefineCorrelationWizard implements WizardProperties {
             CorrelationMapperTreeModel 
                 leftTreeModel = (CorrelationMapperTreeModel) mapperModel.getLeftTreeModel(), 
                 rightTreeModel = (CorrelationMapperTreeModel) mapperModel.getRightTreeModel();
-            List<CorrelationLinker> correlationLinkers = getCorrelationLinkers(mapperModel, leftTreeModel, rightTreeModel);
+            final List<CorrelationLinker> correlationLinkers = 
+                    getCorrelationLinkers(mapperModel, leftTreeModel, rightTreeModel);
+            if (correlationLinkers.isEmpty()) {
+                return;
+            }
             // group linkers by equivalence of [activity-message-part]
             // to combine appropriate properties in one correlation set
-            while (! correlationLinkers.isEmpty()) {
-                List<CorrelationLinker> equalLinkerSublist = getSublistEqualCorrelationLinkers(correlationLinkers);
-                if (equalLinkerSublist.isEmpty()) break;
-                correlationLinkers.removeAll(equalLinkerSublist);
-                
-                createCorrelationPropertiesAndPropertyAliases(equalLinkerSublist);
-                CorrelationSet correlationSet = createCorrelationSet(equalLinkerSublist);
-                equalLinkerSublist.get(0).createActivityCorrelation(correlationSet);
+            CorrelationWizardWSDLWrapper wizardWsdlWrapper = 
+                CorrelationWizardWSDLWrapper.getInstance(correlatedActivity.getBpelModel());
+            final WSDLModel wizardWsdlModel = wizardWsdlWrapper.getWsdlModel();
+            if (wizardWsdlModel != null) {
+                WizardUtils.doInTransaction(wizardWsdlModel, new Runnable() {
+                    public void run() {
+                        while (!correlationLinkers.isEmpty()) {
+                            List<CorrelationLinker> equalLinkerSublist = 
+                                getSublistEqualCorrelationLinkers(correlationLinkers);
+                            if (equalLinkerSublist.isEmpty()) break;
+                            correlationLinkers.removeAll(equalLinkerSublist);
+
+                            createCorrelationPropertiesAndPropertyAliases(
+                                equalLinkerSublist, wizardWsdlModel);
+                            CorrelationSet correlationSet = 
+                                createCorrelationSet(equalLinkerSublist);
+                            equalLinkerSublist.get(0).
+                                createActivityCorrelation(correlationSet);
+                        }
+                    }
+                });
             }
+            wizardWsdlWrapper.importIntoBpelModel();
         }
 
         private CorrelationSet createCorrelationSet(List<CorrelationLinker> linkerList) {
-            BaseScope scopeEntity = (BaseScope) getTopParentEntity(mainBpelEntity);
+            if ((linkerList == null) || (linkerList.isEmpty())) return null;
+            BpelModel bpelModel = correlatedActivity.getBpelModel();
+            BaseScope scopeEntity = bpelModel.getProcess();
             if (scopeEntity == null) {
                 return null;
             }
-            String correlationSetName = getUniqueCorrelationSetName(scopeEntity);
+            String correlationSetName = getUniqueCorrelationSetName(linkerList.get(0), 
+                scopeEntity);
 
-            BpelModel bpelModel = mainBpelEntity.getBpelModel();
             BPELElementsBuilder elementBuilder = bpelModel.getBuilder();
             CorrelationSet correlationSet = elementBuilder.createCorrelationSet();
-            
             try {
                 correlationSet.setName(correlationSetName);
             } catch (Exception e) {
-                e.printStackTrace();
+                ErrorManager.getDefault().notify(e);
             }
-
             List<WSDLReference<CorrelationProperty>> propertyRefList = new ArrayList<WSDLReference<CorrelationProperty>>();
             for (CorrelationLinker linker : linkerList) {
                 WSDLReference<CorrelationProperty> correlationPropertyRef = 
@@ -908,24 +808,40 @@ public class DefineCorrelationWizard implements WizardProperties {
                 correlationSet.setProperties(propertyRefList);
             }
             CorrelationSetContainer container = scopeEntity.getCorrelationSetContainer();
-            try {
-                bpelModel.startTransaction();
-                if (container == null) {
-                    container = elementBuilder.createCorrelationSetContainer();
-                    scopeEntity.setCorrelationSetContainer(container);
-                    container = scopeEntity.getCorrelationSetContainer();
-                }
-                container.insertCorrelationSet(correlationSet, 0);
-            } catch(Exception e) {
-            } finally {
-                bpelModel.endTransaction();
-            }
+            addCorrelationSet(bpelModel, scopeEntity, container, correlationSet);
             return correlationSet;
         }
 
-        private String getUniqueCorrelationSetName(BaseScope scopeEntity) {
+        private void addCorrelationSet(final BpelModel bpelModel, final BaseScope scopeEntity,
+            final CorrelationSetContainer correlationSetContainer, final CorrelationSet correlationSet) {
+            try {
+                bpelModel.invoke(new Callable<CorrelationSet>() {
+                    public CorrelationSet call() throws Exception {
+                        BPELElementsBuilder elementBuilder = bpelModel.getBuilder();
+                        CorrelationSetContainer container = correlationSetContainer;
+                        if (container == null) {
+                            container = elementBuilder.createCorrelationSetContainer();
+                            scopeEntity.setCorrelationSetContainer(container);
+                            container = scopeEntity.getCorrelationSetContainer();
+                        }
+                        container.addCorrelationSet(correlationSet);
+                        return correlationSet;
+                    }
+                }, correlationSet);
+            } catch(Exception e) {
+                ErrorManager.getDefault().notify(e);
+            }
+        }
+        
+        private String getUniqueCorrelationSetName(CorrelationLinker correlationLinker, 
+            BaseScope scopeEntity) {
+            BpelEntity leftBpelEntity = correlationLinker.getSource().getActivity(),
+                       rightBpelEntity = correlationLinker.getTarget().getActivity();
+            
             String baseCorrelationSetName = CORRELATION_SET_NAME_PREFIX + 
-                mainBpelEntity.getAttribute(BpelAttributes.NAME);
+                WizardUtils.getCorrelationSetBpelEntityName(leftBpelEntity) + "_" + 
+                WizardUtils.getCorrelationSetBpelEntityName(rightBpelEntity);
+
             CorrelationSetContainer container = scopeEntity.getCorrelationSetContainer();
             if (container == null) return baseCorrelationSetName;
             CorrelationSet[] correlationSets = container.getCorrelationSets();
@@ -948,17 +864,18 @@ public class DefineCorrelationWizard implements WizardProperties {
             String checkedName) {
             for (CorrelationSet correlationSet : correlationSets) {
                 String correlationSetName = correlationSet.getName();
-                if (ignoreNamespace(correlationSetName).equals(checkedName)) {
+                if (ValidationUtil.ignoreNamespace(correlationSetName).equals(checkedName)) {
                     return true;
                 }
             }
             return false;
         }
         
-        private void createCorrelationPropertiesAndPropertyAliases(List<CorrelationLinker> linkerList) {
+        private void createCorrelationPropertiesAndPropertyAliases(
+            List<CorrelationLinker> linkerList, WSDLModel wizardWsdlModel) {
             for (CorrelationLinker linker : linkerList) {
-                linker.createCorrelationProperty();
-                linker.createPropertyAlias();
+                linker.createCorrelationProperty(wizardWsdlModel);
+                linker.createPropertyAlias(wizardWsdlModel);
             }
         }
         
@@ -1000,26 +917,16 @@ public class DefineCorrelationWizard implements WizardProperties {
                     
                     CorrelationLinker correlationLinker = new CorrelationLinker(
                         leftDataHolder, rightDataHolder);
-                    correlationLinker.checkTypesEquivalence();
                     correlationLinkers.add(correlationLinker);
                 }
             }
             return correlationLinkers;
-        }
-        
-        public String ignoreNamespace(String dataWithNamespace) {
-            int index = dataWithNamespace.indexOf(":");
-            if ((index > -1) && (index < dataWithNamespace.length() - 1)) {
-                return dataWithNamespace.substring(index + 1);
-            }
-            return dataWithNamespace;
         }
         //====================================================================//
         private class CorrelationLinker {
             private CorrelationDataHolder source, target;
             private CorrelationProperty correlationProperty;
             
-            public CorrelationLinker() {}
             public CorrelationLinker(CorrelationDataHolder source, CorrelationDataHolder target) {
                 this.source = source;
                 this.target = target;
@@ -1036,40 +943,54 @@ public class DefineCorrelationWizard implements WizardProperties {
                 target.createActivityCorrelation(correlationSet);
             }
             
-            public void createPropertyAlias() {
-                source.createPropertyAlias(correlationProperty);
-                target.createPropertyAlias(correlationProperty);
+            public void createPropertyAlias(WSDLModel wizardWsdlModel) {
+                source.createPropertyAlias(wizardWsdlModel, correlationProperty);
+                target.createPropertyAlias(wizardWsdlModel, correlationProperty);
             }
 
-            public void createCorrelationProperty() {
+            public void createCorrelationProperty(final WSDLModel wizardWsdlModel) {
                 String propertyName = getBasePropertyName();
-                WSDLModel wsdlModel = source.getWSDLModel();
                 
-                correlationProperty = (CorrelationProperty) wsdlModel.getFactory().create(
-                    wsdlModel.getDefinitions(), BPELQName.PROPERTY.getQName());
+                correlationProperty = (CorrelationProperty) wizardWsdlModel.getFactory().create(
+                    wizardWsdlModel.getDefinitions(), BPELQName.PROPERTY.getQName());
                 correlationProperty.setName(propertyName);
-                
-                NamedComponentReference<GlobalType> typeRef = source.getGlobalTypeReference();
+
+                GlobalSimpleType globalSimpleType = defineCorrelationPropertyType();
+                assert (globalSimpleType != null);
+                NamedComponentReference<GlobalType> typeRef = 
+                    source.getSchemaComponent().createReferenceTo(globalSimpleType, GlobalType.class);
                 if (typeRef != null) {
                     correlationProperty.setType(typeRef);
+                }                
+                assert (typeRef != null);
+                WizardUtils.importWsdlIntoWsdl(wizardWsdlModel, source.getWSDLModel());
+                WizardUtils.importWsdlIntoWsdl(wizardWsdlModel, target.getWSDLModel());
+                if (Util.isUniquePropertyName(wizardWsdlModel, propertyName)) {
+                    WizardUtils.doInTransaction(wizardWsdlModel, new Runnable() {
+                        public void run() {
+                            wizardWsdlModel.addChildComponent(
+                                    wizardWsdlModel.getRootComponent(), 
+                                    correlationProperty, 0);
+                        }
+                    });
                 }
-                
-                if (Util.isUniquePropertyName(wsdlModel, propertyName)) {
-                    try {
-                        wsdlModel.startTransaction();
-                        wsdlModel.addChildComponent(wsdlModel.getRootComponent(), 
-                            correlationProperty, 0);
-                    } finally {
-                        wsdlModel.endTransaction();
-                    }
-                }
+            }
+            
+            private GlobalSimpleType defineCorrelationPropertyType() {
+                TypesCompatibilityValidator typesCompatibilityValidator = 
+                    new TypesCompatibilityValidatorImpl(source.getSchemaComponent(),
+                    target.getSchemaComponent());
+                typesCompatibilityValidator.checkSchemaComponentTypesCompatibility();
+                GlobalSimpleType globalSimpleType = typesCompatibilityValidator.getResolvedType();
+                assert (globalSimpleType != null);
+                return globalSimpleType;
             }
             
             private String getBasePropertyName() {
                 return CORRELATION_PROPERTY_NAME_PREFIX + 
-                       WizardDefineCorrelationPanel.this.getSchemaComponentName(source.getSchemaComponent()) + 
+                       WizardUtils.getSchemaComponentName(source.getSchemaComponent()) + 
                        "_" +
-                       WizardDefineCorrelationPanel.this.getSchemaComponentName(target.getSchemaComponent()); 
+                       WizardUtils.getSchemaComponentName(target.getSchemaComponent()); 
             }
             
             @Override
@@ -1084,127 +1005,195 @@ public class DefineCorrelationWizard implements WizardProperties {
             @Override
             public int hashCode() {
                 int hash = 3;
-                hash = 71 * hash + (this.source != null ? this.source.hashCode() : 0);
-                hash = 71 * hash + (this.target != null ? this.target.hashCode() : 0);
+                hash = 71 * hash + (source != null ? source.hashCode() : 0);
+                hash = 71 * hash + (target != null ? target.hashCode() : 0);
                 return hash;
-            }
-            
-            public void checkTypesEquivalence() throws WizardValidationException {
-                SchemaComponent sourceSchemaComponent = source.getSchemaComponent(),
-                                targetSchemaComponent = target.getSchemaComponent();
-                String sourceType = source.getTypeNameIgnoreNamespace(),
-                       targetType = target.getTypeNameIgnoreNamespace();
-
-                if (! sourceType.equals(targetType)) {
-                    String sourceComponentName = WizardDefineCorrelationPanel.this.getSchemaComponentName(sourceSchemaComponent),
-                           targetComponentName = WizardDefineCorrelationPanel.this.getSchemaComponentName(targetSchemaComponent);
-                    String errMsg = MessageFormat.format(NbBundle.getMessage(WizardDefineCorrelationPanel.class, 
-                        "LBL_ErrMsg_Different_Schema_Component_Types"),
-                        new Object[] {sourceComponentName, targetComponentName});
-                    //wizardDescriptor.putProperty(PROPERTY_ERROR_MESSAGE, errMsg);                              
-                    throw new WizardValidationException(wizardPanel, errMsg, errMsg);
-                }
             }
         }
         //--------------------------------------------------------------------//
-        private class CorrelationDataHolder {
+        private class CorrelationDataHolder implements WizardConstants {
             private BpelEntity activity;
             private Message message;
             private Part part;
-            private SchemaComponent schemaComponent;
-
-            public CorrelationDataHolder() {}
+            private CorrelationMapperTreeNode mapperTreeNode;
 
             public WSDLModel getWSDLModel() {
-                PortType portType = ((PortTypeReference) activity).getPortType().get();
-                return portType.getModel();
+                PortType portType = WizardUtils.getBpelEntityPortType(activity);
+                return (portType == null ? null : portType.getModel());
             }
         
             public void createActivityCorrelation(CorrelationSet correlationSet) {
                 BpelModel bpelModel = activity.getBpelModel();
+                BaseCorrelation correlation = createCorrelation(bpelModel, correlationSet);
+                    
+                BpelContainer container = null;
+                if (activity instanceof Invoke) {
+                    container = ((Invoke) activity).getPatternedCorrelationContainer();
+                } else if ((activity instanceof Receive) || (activity instanceof Reply) ||
+                           (activity instanceof OnMessage) || (activity instanceof OnEvent)) {
+                    container = ((CorrelationsHolder) activity).getCorrelationContainer();
+                }
+                addActivityCorrelation(bpelModel, container, correlation);
+            }
+
+            private void addActivityCorrelation(final BpelModel bpelModel, 
+                final BpelContainer bpelContainer, final BaseCorrelation correlation) {
+                try {
+                    bpelModel.invoke(new Callable<Object>() {
+                        public Object call() throws Exception {
+                            BpelContainer container = bpelContainer;
+                            if (container == null) {
+                                BPELElementsBuilder elementBuilder = bpelModel.getBuilder();
+                                container = activity instanceof Invoke ? 
+                                    elementBuilder.createPatternedCorrelationContainer() : 
+                                    elementBuilder.createCorrelationContainer();
+                                if (activity instanceof Invoke) {
+                                    ((Invoke) activity).setPatternedCorrelationContainer((PatternedCorrelationContainer) container);
+                                    container = ((Invoke) activity).getPatternedCorrelationContainer();
+                                } else if ((activity instanceof Receive) || (activity instanceof Reply) ||
+                                           (activity instanceof OnMessage) || (activity instanceof OnEvent)) {
+                                    ((CorrelationsHolder) activity).setCorrelationContainer((CorrelationContainer) container);
+                                    container = ((CorrelationsHolder) activity).getCorrelationContainer();
+                                }
+                            }
+                            if (activity instanceof Invoke) {
+                                ((PatternedCorrelationContainer) container).addPatternedCorrelation((PatternedCorrelation) correlation);
+                            } else {
+                                ((CorrelationContainer) container).addCorrelation((Correlation) correlation);
+                            }
+                            return correlation;
+                        }
+                    }, correlation);
+                } catch(Exception e) {
+                    ErrorManager.getDefault().notify(e);
+                }
+            }
+            
+            private BaseCorrelation createCorrelation(BpelModel bpelModel, 
+                CorrelationSet correlationSet) {
                 BPELElementsBuilder elementBuilder = bpelModel.getBuilder();
-                Correlation correlation = elementBuilder.createCorrelation();
-                
-                BpelReference<CorrelationSet> correlationSetRef = correlation.createReference(
+                BaseCorrelation correlation = null;
+                try {
+                    correlation = activity instanceof Invoke ?
+                        elementBuilder.createPatternedCorrelation() : 
+                        elementBuilder.createCorrelation();
+
+                    BpelReference<CorrelationSet> correlationSetRef = correlation.createReference(
                     correlationSet, CorrelationSet.class);
-                try {
                     correlation.setSet(correlationSetRef);
-                    correlation.setInitiate(Initiate.NO);
-                    if (activity instanceof Invoke) {
-                        //correlation.setAttribute(*****??????, 
-                        //    PatternedCorrelation.PATTERN, Pattern.REQUEST_RESPONSE);
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                
-                CorrelationContainer container = null;
-                if (activity instanceof InvokeReceiveReplyCommonImpl) {
-                    container = ((InvokeReceiveReplyCommonImpl) activity).getCorrelationContainer();
-                } else if (activity instanceof OnMessageCommonImpl) {
-                    container = ((OnMessageCommonImpl) activity).getCorrelationContainer();
-                }
-                try {
-                    bpelModel.startTransaction();
-                    if (container == null) {
-                        container = elementBuilder.createCorrelationContainer();
-                        if (activity instanceof InvokeReceiveReplyCommonImpl) {
-                            ((InvokeReceiveReplyCommonImpl) activity).setCorrelationContainer(container);
-                            container = ((InvokeReceiveReplyCommonImpl) activity).getCorrelationContainer();
-                        } else if (activity instanceof OnMessageCommonImpl) {
-                            ((OnMessageCommonImpl) activity).setCorrelationContainer(container);
-                            container = ((OnMessageCommonImpl) activity).getCorrelationContainer();
+                    setCorrelationInitiateValue(correlation);
+                    if (correlation instanceof PatternedCorrelation) {
+                        Pattern pattern = defineInvokeCorrelationPattern(activity);
+                        if (pattern != null) {
+                            ((PatternedCorrelation) correlation).setPattern(pattern);
                         }
                     }
-                    container.insertCorrelation(correlation, 0);
-                } catch(Exception e) {
-                } finally {
-                    bpelModel.endTransaction();
+                } catch (Exception e) {
+                    ErrorManager.getDefault().notify(e);
                 }
+                return correlation;
+            }
+
+            /** The Rule:
+             *  - for a CORRELATED activity, on which a pop-up menu has been invoked
+             *    and which is related to the RIGHT mapper tree, the value "no" is used
+             *    <correlation ... initiate="no"/>
+             *  - for an INITIATING activity, which is related to the LEFT mapper tree, 
+             *    the value "yes" is used
+             *    <correlation ... initiate="yes"/>
+             */
+            private void setCorrelationInitiateValue(BaseCorrelation correlation) {
+                correlation.setInitiate(correlatedActivity.equals(activity) ? // is this activity CORRELATED
+                    Initiate.NO :  // for CORRELATED activity
+                    Initiate.YES); // for INITIATING activity
             }
             
-            public void createPropertyAlias(CorrelationProperty correlationProperty) {
-                WSDLModel wsdlModel = getWSDLModel();
-                
-                PropertyAlias propertyAlias = (PropertyAlias) wsdlModel.getFactory().create(
-                    wsdlModel.getDefinitions(), BPELQName.PROPERTY_ALIAS.getQName());
-
-                NamedComponentReference<CorrelationProperty> correlationPropertyRef =
-                    propertyAlias.createReferenceTo(correlationProperty, CorrelationProperty.class);
-                propertyAlias.setPropertyName(correlationPropertyRef);
-
-                NamedComponentReference<Message> messageTypeRef =
-                    propertyAlias.createReferenceTo(message, Message.class);
-                propertyAlias.setMessageType(messageTypeRef);
-
-                propertyAlias.setPart(part.getName());
-                
-                try {
-                    wsdlModel.startTransaction();
-                    wsdlModel.addChildComponent(wsdlModel.getRootComponent(), 
-                        propertyAlias, 0);
-                } finally {
-                    wsdlModel.endTransaction();
-                }
-            }
-            
-            public NamedComponentReference<GlobalType> getGlobalTypeReference() {
-                String typeName = getTypeNameIgnoreNamespace();
-
-                Collection<GlobalSimpleType> globalSimpleTypes = getSchemaComponent().getModel().getSchema().getSimpleTypes();
-                NamedComponentReference<GlobalType> typeRef = null;
-                for (GlobalSimpleType globalSimpleType : globalSimpleTypes) {
-                    if (globalSimpleType.toString().equals(typeName)) {
-                        typeRef = schemaComponent.createReferenceTo(globalSimpleType, GlobalType.class);
-                        return typeRef;
+            private Pattern defineInvokeCorrelationPattern(BpelEntity bpelEntity) {
+                assert (bpelEntity != null);
+                Operation operation = WizardUtils.getBpelEntityOperation(bpelEntity);
+                // Rule: The "pattern"-attribute, which is used inside the tag <correlation ...> 
+                // for Invoke activity, is required for request-response operations, and 
+                // has to be absent, when a one-way operation (OneWayOperation) is used.
+                if ((bpelEntity instanceof Invoke) && 
+                    (operation instanceof RequestResponseOperation)) {
+                    Message outputMessage = null, inputMessage = null;
+                    try {
+                        OperationParameter output = operation.getOutput();
+                        outputMessage = output.getMessage().get();
+                    } catch(Exception e) {}
+                    try {
+                        OperationParameter input = operation.getInput();
+                        inputMessage = input.getMessage().get();
+                    } catch(Exception e) {}
+                    if ((inputMessage != null) && (outputMessage != null) && 
+                        (message.equals(inputMessage)) && (message.equals(outputMessage))) {
+                        return Pattern.REQUEST_RESPONSE;
+                    } else if ((inputMessage != null) && (message.equals(inputMessage))) {
+                        return Pattern.REQUEST;
+                    } else if ((outputMessage != null) && (message.equals(outputMessage))) {
+                        return Pattern.RESPONSE;
                     }
                 }
-                return typeRef;
+                return null;
             }
+            
+            public void createPropertyAlias(final WSDLModel wizardWsdlModel, 
+                final CorrelationProperty correlationProperty) {
+                if (! WizardUtils.wsdlContainsPropertyAlias(wizardWsdlModel, 
+                    correlationProperty, message, part)) {
+                    WizardUtils.doInTransaction(wizardWsdlModel, new Runnable() {
+                        public void run() {
+                            final PropertyAlias propertyAlias = 
+                                (PropertyAlias) wizardWsdlModel.getFactory().create(
+                                wizardWsdlModel.getDefinitions(), BPELQName.PROPERTY_ALIAS.getQName());
 
-            public String getTypeNameIgnoreNamespace() {
-                String typeName = WizardDefineCorrelationPanel.this.getSchemaComponentTypeName(schemaComponent);
-                return ignoreNamespace(typeName);
+                            wizardWsdlModel.addChildComponent(
+                                wizardWsdlModel.getRootComponent(), 
+                                propertyAlias, 0);
+
+                            NamedComponentReference<CorrelationProperty> correlationPropertyRef =
+                                propertyAlias.createReferenceTo(correlationProperty, CorrelationProperty.class);
+                            propertyAlias.setPropertyName(correlationPropertyRef);
+
+                            NamedComponentReference<Message> messageTypeRef =
+                                propertyAlias.createReferenceTo(message, Message.class);
+                            propertyAlias.setMessageType(messageTypeRef);
+
+                            propertyAlias.setPart(part.getName());
+
+                            Query query = getPropertyAliasQuery(wizardWsdlModel,
+                                propertyAlias);
+                            if (query != null) propertyAlias.setQuery(query);
+                        }
+                    });
+                }
+            }
+            
+            private Query getPropertyAliasQuery(WSDLModel wizardWsdlModel,
+                PropertyAlias propertyAlias) {
+                // Query is used for a property alias only if a part contains an attribute 
+                // <element> (not an attribute <type>, either complex type or simple type)
+                NamedComponentReference<GlobalElement> partElementRef = part.getElement();
+                if ((partElementRef != null) && (getSchemaComponent() != null)) {
+                    CorrelationMapperTreeNode parentObj = mapperTreeNode;
+                    Object userObj = parentObj.getUserObject();
+                    List<SchemaComponent> queryComponents = new ArrayList<SchemaComponent>();
+                    do {
+                        queryComponents.add(0, (SchemaComponent) userObj);                            
+                        parentObj = (CorrelationMapperTreeNode) parentObj.getParent();
+                        userObj = parentObj.getUserObject();
+                    } while (! (userObj instanceof Part)); 
+                    WizardUtils.importRequiredSchemas(wizardWsdlModel, queryComponents);
+                    String strQueryAbsPath = WizardUtils.makeLocationPath(wizardWsdlModel, 
+                        queryComponents);
+                    if (strQueryAbsPath.length() > 0) {
+                        Query query = (Query) wizardWsdlModel.getFactory().create(
+                            propertyAlias, BPELQName.QUERY.getQName());
+                        query.setContent(strQueryAbsPath);
+                        return query;
+                    }
+                }
+                return null;
             }
             
             @Override
@@ -1221,16 +1210,16 @@ public class DefineCorrelationWizard implements WizardProperties {
             @Override
             public int hashCode() {
                 int hash = 7;
-                hash = 97 * hash + (this.activity != null ? this.activity.hashCode() : 0);
-                hash = 97 * hash + (this.message != null ? this.message.hashCode() : 0);
-                hash = 97 * hash + (this.part != null ? this.part.hashCode() : 0);
+                hash = 97 * hash + (activity != null ? activity.hashCode() : 0);
+                hash = 97 * hash + (message != null ? message.hashCode() : 0);
+                hash = 97 * hash + (part != null ? part.hashCode() : 0);
+                hash = 97 * hash + (mapperTreeNode != null ? mapperTreeNode.hashCode() : 0);
                 return hash;
             }
-
+            
             public void extractDataFromTreePath(TreePath treePath) {
-                CorrelationMapperTreeNode treeNode = (CorrelationMapperTreeNode) treePath.getLastPathComponent();
-                schemaComponent = (SchemaComponent) treeNode.getUserObject();
-                getPartAndMessage(treeNode);
+                mapperTreeNode = (CorrelationMapperTreeNode) treePath.getLastPathComponent();
+                getPartAndMessage(mapperTreeNode);
             }
             
             public void extractDataFromLink(Link link) {
@@ -1247,7 +1236,9 @@ public class DefineCorrelationWizard implements WizardProperties {
                         part = ((Part) obj);
                         try {
                             message = (Message) ((CorrelationMapperTreeNode) treeNode.getParent()).getUserObject();
-                        } catch (Exception exception) {}
+                        } catch (Exception e) {
+                            ErrorManager.getDefault().notify(e);
+                        }
                         return;
                     }
                     treeNode = (CorrelationMapperTreeNode) treeNode.getParent();
@@ -1260,51 +1251,128 @@ public class DefineCorrelationWizard implements WizardProperties {
             public void setMessage(Message message) {this.message = message;}
             public Part getPart() {return part;}
             public void setPart(Part part) {this.part = part;}
-            public SchemaComponent getSchemaComponent() {return schemaComponent;}
-            public void setSchemaComponent(SchemaComponent schemaComponent) {this.schemaComponent = schemaComponent;}
+            public CorrelationMapperTreeNode getMapperTreeNode() {return mapperTreeNode;}
+            public SchemaComponent getSchemaComponent() {
+                try {
+                    return ((SchemaComponent) mapperTreeNode.getUserObject());
+                } catch(ClassCastException cce) {
+                    ErrorManager.getDefault().notify(cce);
+                    return null;
+                }
+            }
         }
         //====================================================================//
+        /* Not used since Jun 2008 - method delete() of the class 
+        // CorrelationMapperModel is used now
         private class ActionDeleteKey extends AbstractAction {
             public void actionPerformed(ActionEvent e) {
                 List<Link> selectedLinks =  correlationMapper.getSelectionModel().getSelectedLinks();
                 if ((selectedLinks != null) && (! selectedLinks.isEmpty())) {
+                    CorrelationMapperModel mapperModel = 
+                        (CorrelationMapperModel) correlationMapper.getModel();
                     for (Link link : selectedLinks) {
-                        SourcePin sourcePin = link.getSource();
-                        if ((sourcePin == null) || (! (sourcePin instanceof TreeSourcePin))) break;
-
-                        Graph targetGraph = link.getGraph();
-                        if (targetGraph == null) break;
-                        targetGraph.removeLink(link);
-
-                        CorrelationMapperModel mapperModel = (CorrelationMapperModel) correlationMapper.getModel();
-                        TreePath targetTreePath = mapperModel.getTreePathByGraph(targetGraph);                        
-                        if (targetTreePath == null) break;
-                        CorrelationMapperTreeModel rightTreeModel = 
-                            (CorrelationMapperTreeModel) mapperModel.getRightTreeModel();
-                        rightTreeModel.fireTreeChanged(this, targetTreePath);
+                        mapperModel.deleteLink(link);
                     }
                 }
             }
         }
+        */ 
         //====================================================================//
         private class CorrelationMapperTreeModel extends DefaultTreeModel {
             public CorrelationMapperTreeModel() {
                 super(null);
             }
-        
-            public void buildCorrelationMapperTree(CorrelationMapperTreeNode topTreeNode) {
+
+            public CorrelationMapperTreeNode makeCorrelationMapperTopTreeNode(
+                BpelEntity topBpelEntity) {
+                String nodeNamePattern = NbBundle.getMessage(DefineCorrelationWizard.class, 
+                    topBpelEntity instanceof OnMessage ? "LBL_Mapper_Tree_OnMessage_Name_Pattern" : 
+                    topBpelEntity instanceof OnEvent ? "LBL_Mapper_Tree_OnEvent_Name_Pattern" : 
+                    "LBL_Mapper_Tree_Top_Node_Name_Pattern");
+
+                CorrelationMapperTreeNode topTreeNode = new CorrelationMapperTreeNode(
+                    topBpelEntity, nodeNamePattern);
+                return topTreeNode;
+            }
+
+            public void makeCorrelationMapperRootTreeNode(CorrelationMapperTreeNode topTreeNode) {
                 BpelEntity topBpelEntity = (BpelEntity) (topTreeNode).getUserObject();
                 CorrelationMapperTreeNode fakeRootTreeNode = new CorrelationMapperTreeNode(
-                    new BpelBuilderImpl((BpelModelImpl) topBpelEntity.getBpelModel()).createEmpty());
+                    topBpelEntity.getBpelModel().getBuilder().createEmpty());
                 fakeRootTreeNode.add(topTreeNode);
                 setRoot(fakeRootTreeNode);
             }
             
-            public BpelEntity getTopBpelEntity() {
-                CorrelationMapperTreeNode topTreeNode = (CorrelationMapperTreeNode) ((CorrelationMapperTreeNode) getRoot()).getChildAt(0);
-                return (BpelEntity) topTreeNode.getUserObject();
+            public CorrelationMapperTreeNode getTopTreeNode() {
+                Object rootNode = getRoot();
+                if (rootNode == null) return null;
+                
+                CorrelationMapperTreeNode topTreeNode = (CorrelationMapperTreeNode) 
+                    ((CorrelationMapperTreeNode) rootNode).getChildAt(0);
+                return topTreeNode;
             }
             
+            public BpelEntity getTopBpelEntity() {
+                return getTopBpelEntity(getTopTreeNode());
+            }
+            
+            private BpelEntity getTopBpelEntity(CorrelationMapperTreeNode topTreeNode) {
+                return (topTreeNode == null ? null  : 
+                       (BpelEntity) topTreeNode.getUserObject());
+            }
+
+            /**
+             * Adds a tree node, related to the appropriate WSDL message, to the top tree node.
+             * Adds a tree node, related to the appropriate WSDL part, to the WSDL message's 
+             * tree node.
+             * @return returns modified top tree node.
+             */
+            public CorrelationMapperTreeNode preBuildCorrelationTree() {
+                CorrelationMapperTreeNode topTreeNode = getTopTreeNode();
+                BpelEntity topBpelEntity = getTopBpelEntity(topTreeNode);
+                Operation requiredOperation = WizardUtils.getBpelEntityOperation(topBpelEntity);
+                handleOperations(topBpelEntity, topTreeNode, requiredOperation);
+                return topTreeNode;
+            }
+
+            private void handleOperations(BpelEntity topBpelEntity, 
+                CorrelationMapperTreeNode topTreeNode, Operation operation) {
+                Message outputMessage = null, inputMessage = null;
+                List<Message> messages = new ArrayList<Message>();
+                if (topBpelEntity instanceof Requester) {
+                    try {
+                        OperationParameter output = operation.getOutput();
+                        outputMessage = output.getMessage().get();
+                        messages.add(outputMessage);
+                    } catch (Exception e) {}
+                }
+                if (topBpelEntity instanceof Responder) {
+                    try {
+                        OperationParameter input = operation.getInput();
+                        inputMessage = input.getMessage().get();
+                        messages.add(inputMessage);
+                    } catch (Exception e) {}
+                }
+                handleMessages(topTreeNode, messages);
+            }
+        
+            private void handleMessages(CorrelationMapperTreeNode topTreeNode, 
+                Collection<Message> messages) {
+                for (Message message : messages) {
+                    Collection<Part> parts = message.getParts();
+                    if (! parts.isEmpty()) {
+                        CorrelationMapperTreeNode messageNode = new CorrelationMapperTreeNode(
+                            message, null);
+                        for (Part part : parts) {
+                            CorrelationMapperTreeNode partNode = new CorrelationMapperTreeNode(
+                                part, null);
+                            messageNode.add(partNode);
+                        }
+                        topTreeNode.add(messageNode);
+                    }
+                }
+            }
+
             public void fireTreeChanged(Object source, TreePath treePath) {
                 Object[] listeners = listenerList.getListenerList(); // guaranteed to return a non-null array
                 TreeModelEvent treeModelEvent = null;
@@ -1340,6 +1408,7 @@ public class DefineCorrelationWizard implements WizardProperties {
         //====================================================================//
         private class CorrelationMapperTreeNode extends DefaultMutableTreeNode {
             private String nodeNamePattern;
+            private boolean isChildNodeListLoaded;
             
             public CorrelationMapperTreeNode(Object userObject) {
                 this(userObject, null);
@@ -1347,8 +1416,136 @@ public class DefineCorrelationWizard implements WizardProperties {
             public CorrelationMapperTreeNode(Object userObject, String nodeNamePattern) {
                 super(userObject);
                 this.nodeNamePattern = nodeNamePattern;
+                if (! ((userObject instanceof Part) || 
+                       (userObject instanceof SchemaComponent))) {
+                    isChildNodeListLoaded = true;
+                }
             }
 
+            private void initializeChildNodeList() {
+                if (! isChildNodeListLoaded) { 
+                    isChildNodeListLoaded = true;
+                    List<CorrelationMapperTreeNode> childNodeList = getChildNodeList();
+                    if (childNodeList != null) {
+                        for (CorrelationMapperTreeNode childNode : childNodeList) {
+                            add(childNode);
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public int getChildCount() {
+                initializeChildNodeList();
+                return super.getChildCount();
+            }
+
+            @Override
+            public boolean isLeaf() {
+                if (! (userObject instanceof SchemaComponent)) return false;
+
+                if (userObject instanceof SimpleType) return true;
+    
+                if (WizardUtils.isElementComplexType((SchemaComponent) userObject)) 
+                    return false;
+                
+                //if (WizardUtils.isBuiltInSimpleType((SchemaComponent) userObject)) 
+                //    return true;
+                if (ValidationUtil.getBuiltInSimpleType((SchemaComponent) userObject) != null) 
+                    return true;
+
+                return false;
+            }
+
+            public boolean canConnect() {
+                boolean canConnect = isLeaf() || 
+                    ((userObject instanceof Part) && (super.getChildCount() < 1));
+                if (! canConnect) return false;
+
+                if (userObject instanceof SchemaComponent) {
+                    canConnect &= ! ((userObject instanceof Attribute) & 
+                        WizardUtils.isAttributeUnknownType((SchemaComponent) userObject)); 
+                    if (! canConnect) return false;
+
+                    canConnect &= (ValidationUtil.getBuiltInSimpleType(
+                        (SchemaComponent) userObject) != null); 
+                    if (! canConnect) return false;
+                }
+                return canConnect;
+            }
+            
+            private List<CorrelationMapperTreeNode> getChildNodeList() {
+                if (userObject instanceof Part) {
+                    return getPartNodeChildList((Part) userObject);
+                }
+                if (userObject instanceof SchemaComponent) {
+                    return getSchemaComponentNodeChildList((SchemaComponent) userObject);
+                }
+                return null;
+            }
+            
+            public SchemaComponent getPartNodeSchemaComponent(Part part) {
+                NamedComponentReference<GlobalElement> partElementRef = part.getElement();
+                if (partElementRef != null) {
+                    GlobalElement partElement = partElementRef.get();
+                    return partElement;                    
+                } else {
+                    NamedComponentReference<GlobalType> partTypeRef = part.getType();
+                    if (partTypeRef != null) {
+                        GlobalType partType = partTypeRef.get();
+                        return partType; 
+                    }
+                }
+                return null;
+            }
+            
+            private List<CorrelationMapperTreeNode> getPartNodeChildList(Part part) {
+                SchemaComponent partSchemaComponent = getPartNodeSchemaComponent(part);
+                if (partSchemaComponent != null) {
+                    return buildTreeNodeList(Arrays.asList(
+                           new SchemaComponent[] {partSchemaComponent}));
+                }
+                return null;
+            }
+            
+            private List<CorrelationMapperTreeNode> getSchemaComponentNodeChildList(
+                SchemaComponent parentSchemaComponent) {
+                List<SchemaComponent> childSchemaComponentList = 
+                    getSchemaComponentChildList(parentSchemaComponent);
+                return buildTreeNodeList(childSchemaComponentList);
+            }
+
+            private List<CorrelationMapperTreeNode> buildTreeNodeList(
+                List<SchemaComponent> schemaComponentList) {
+                if ((schemaComponentList == null) ||
+                    (schemaComponentList.isEmpty())) return null;
+                
+                List<CorrelationMapperTreeNode> treeNodeList = 
+                    new ArrayList<CorrelationMapperTreeNode>();
+                for (SchemaComponent schemaComponent : schemaComponentList) {
+                    String schemaNodeNamePattern = schemaComponent instanceof SimpleType ?
+                        SIMPLE_TYPE_NAME_PATTERN : null;
+                    CorrelationMapperTreeNode treeNode = new CorrelationMapperTreeNode(
+                        schemaComponent, schemaNodeNamePattern);
+                    treeNodeList.add(treeNode);
+                }
+                return treeNodeList;
+            }
+            
+            private List<SchemaComponent> getSchemaComponentChildList(
+                SchemaComponent parentSchemaComponent) {
+                if (parentSchemaComponent == null) return null;
+                
+                List<SchemaComponent> childSchemaComponentList = null;
+                if (! (parentSchemaComponent instanceof SimpleType)) {
+                    FindAllChildrenSchemaVisitor schemaTypeFinder = 
+                        new FindAllChildrenSchemaVisitor(true, true, false);
+                    schemaTypeFinder.lookForSubcomponents(parentSchemaComponent);
+                    childSchemaComponentList = schemaTypeFinder.getFound();
+                }
+                return childSchemaComponentList;
+            }            
+            
             @Override
             public String toString() {
                 String userObjectName = null;
@@ -1356,13 +1553,10 @@ public class DefineCorrelationWizard implements WizardProperties {
                 Object[] patternValues = new Object[0]; 
                 try {
                     if (userObj instanceof BpelEntity) {
-                        if (userObj instanceof OnMessage) {
-                            String pickEntityName = ((BpelEntity) userObj).getParent().getAttribute(BpelAttributes.NAME),
-                                   operationName = ((BpelEntity) userObj).getAttribute(BpelAttributes.OPERATION);
-                            userObjectName = ((BpelEntity) userObj).getElementType().getSimpleName();
-                            patternValues = new Object[] {userObjectName, pickEntityName, operationName};
+                        if ((userObj instanceof OnMessage) || (userObj instanceof OnEvent)) {
+                            return WizardUtils.getBpelEntityName((BpelEntity) userObj, nodeNamePattern);
                         } else {
-                            userObjectName = ((BpelEntity) userObj).getAttribute(BpelAttributes.NAME);
+                            userObjectName = WizardUtils.getBpelEntityName((BpelEntity) userObj);
                             patternValues = new Object[] {userObjectName, ((BpelEntity) userObj).getElementType().getSimpleName()};
                         }
                     } else if (userObj instanceof Message) {
@@ -1370,16 +1564,16 @@ public class DefineCorrelationWizard implements WizardProperties {
                     } else if (userObj instanceof Part) {
                         userObjectName = ((Part) userObj).getName();
                     } else if ((userObj instanceof Element) || (userObj instanceof Attribute)) {
-                        userObjectName = getSchemaComponentName((SchemaComponent) userObj);
+                        userObjectName = WizardUtils.getSchemaComponentName((SchemaComponent) userObj);
                         if (getChildCount() == 0) { // simple type
-                            String typeName = getSchemaComponentTypeName((SchemaComponent) userObj);
+                            String typeName = WizardUtils.getSchemaComponentTypeName((SchemaComponent) userObj);
                             if (typeName != null) {
                                 userObjectName += " " + MessageFormat.format(SIMPLE_TYPE_NAME_PATTERN, 
                                     new Object[] {typeName});
                             }
                         }
                     } else if ((userObj instanceof SimpleType) || (userObj instanceof ComplexType)) {
-                        userObjectName = getSchemaComponentName((SchemaComponent) userObj);
+                        userObjectName = WizardUtils.getSchemaComponentName((SchemaComponent) userObj);
                         patternValues = new Object[] {userObjectName};
                     } else {
                         userObjectName = userObj.toString();
@@ -1401,7 +1595,7 @@ public class DefineCorrelationWizard implements WizardProperties {
                     if (userObj instanceof Message) userObjClass = Message.class;
                     if (userObj instanceof Part) userObjClass = Part.class;
                     if (userObj instanceof Element) userObjClass = Element.class;
-                    if (userObj instanceof Attribute) userObjClass = SimpleType.class;
+                    if (userObj instanceof Attribute) userObjClass = Attribute.class;
                     if (userObj instanceof SimpleType) userObjClass = SimpleType.class;
                     if (userObj instanceof ComplexType) userObjClass = ComplexType.class;
                 }
@@ -1440,9 +1634,18 @@ public class DefineCorrelationWizard implements WizardProperties {
                 TreeNode rootNode = (TreeNode) mapperTreeModel.getRoot();
                 expandTreeNode(rootNode, (mapperTreeModel.equals(rightTreeModel)));
             }
-            
+
             private void expandTreeNode(TreeNode treeNode, boolean isRightTreeExpanded) {
-                if (treeNode == null) return;
+                expandTreeNode(treeNode, (isRightTreeExpanded ? 5 : 4), isRightTreeExpanded);
+                // value (-1) for the variable "expandLevel" means that all 
+                // tree nodes should be expanded
+                // expandTreeNode(treeNode, -1, isRightTreeExpanded);
+            }
+            
+            private void expandTreeNode(TreeNode treeNode, int expandLevel, 
+                boolean isRightTreeExpanded) {
+                if ((treeNode == null) || (expandLevel == 0)) return;
+                
                 TreePath treePath = new TreePath(isRightTreeExpanded ?
                     ((CorrelationMapperTreeModel) rightTreeModel).getPathToRoot(treeNode) :
                     ((CorrelationMapperTreeModel) leftTreeModel).getPathToRoot(treeNode));
@@ -1453,10 +1656,13 @@ public class DefineCorrelationWizard implements WizardProperties {
                     JTree leftTree = (JTree) correlationMapper.getLeftTree();
                     leftTree.expandPath(treePath);
                 }
+                expandLevel = (expandLevel == -1 ? -1 : expandLevel - 1);
+                if (expandLevel == 0) return;
+                
                 int childCount = treeNode.getChildCount();
                 for (int i = 0; i < childCount; ++i) {
                     TreeNode childNode = treeNode.getChildAt(i);
-                    expandTreeNode(childNode, isRightTreeExpanded);
+                    expandTreeNode(childNode, expandLevel, isRightTreeExpanded);
                 }
             }
 
@@ -1468,13 +1674,13 @@ public class DefineCorrelationWizard implements WizardProperties {
                 if ((source != null) && (source instanceof TreeSourcePin)) {
                     TreePath sourceTreePath = ((TreeSourcePin) source).getTreePath();
                     treeNode = (CorrelationMapperTreeNode) sourceTreePath.getLastPathComponent();
-                    result = treeNode.isLeaf();
+                    result = treeNode.canConnect();
                     result &= ! treeNode.getUserObject().equals(
                         ((CorrelationMapperTreeModel) leftTreeModel).getTopBpelEntity());
                     result &= ! isLeftTreePathLinked(sourceTreePath);
                 }
                 treeNode = (CorrelationMapperTreeNode) treePath.getLastPathComponent();
-                result &= treeNode.isLeaf();
+                result &= treeNode.canConnect();
                 result &= ! treeNode.getUserObject().equals(
                     ((CorrelationMapperTreeModel) rightTreeModel).getTopBpelEntity());
 
@@ -1497,6 +1703,8 @@ public class DefineCorrelationWizard implements WizardProperties {
                 Link newLink = new Link(source, target);
                 graph.addLink(newLink);
                 ((CorrelationMapperTreeModel) rightTreeModel).fireTreeChanged(this, treePath);
+                
+                postConnectLinkValidation(source, treePath);
             }
 
             public Map<TreePath, Graph> getMapTreePathGraphs() {
@@ -1508,6 +1716,75 @@ public class DefineCorrelationWizard implements WizardProperties {
                 mapTreePathGraphs.put(treePath, treePathGraph);
                 ((CorrelationMapperTreeModel) rightTreeModel).fireTreeChanged(this, treePath);
                 return treePathGraph;
+            }
+
+            protected void deleteLink(Link link) {
+                if (link == null) return;
+                SourcePin sourcePin = link.getSource();
+                if ((sourcePin == null) || (! (sourcePin instanceof TreeSourcePin))) return;
+
+                Graph targetGraph = link.getGraph();
+                if (targetGraph == null) return;
+                targetGraph.removeLink(link);
+
+                TreePath targetTreePath = getTreePathByGraph(targetGraph);                        
+                if (targetTreePath == null) return;
+                mapTreePathGraphs.remove(targetTreePath);
+                ((CorrelationMapperTreeModel) rightTreeModel).fireTreeChanged(
+                    this, targetTreePath);
+            }
+            
+            protected void postConnectLinkValidation(SourcePin sourcePin, 
+                final TreePath targetTreePath) {
+                // check types compatibility of 2 linked shema components                
+                if ((sourcePin == null) || (! (sourcePin instanceof TreeSourcePin)) ||
+                    (targetTreePath == null)) return;
+                
+                TreePath sourceTreePath = ((TreeSourcePin) sourcePin).getTreePath();
+                CorrelationMapperTreeNode 
+                    sourceTreeNode = 
+                        (CorrelationMapperTreeNode) sourceTreePath.getLastPathComponent(),
+                    targetTreeNode = 
+                        (CorrelationMapperTreeNode) targetTreePath.getLastPathComponent();
+                if ((sourceTreeNode == null) || (targetTreeNode == null)) return;
+
+                Object
+                    sourceUserObject  = sourceTreeNode.getUserObject(),
+                    targetUserObject  = targetTreeNode.getUserObject();
+                SchemaComponent 
+                    sourceSchemaComponent = sourceUserObject instanceof Part ? 
+                        sourceTreeNode.getPartNodeSchemaComponent((Part) sourceUserObject) : 
+                        (SchemaComponent) sourceUserObject,
+                    targetSchemaComponent = targetUserObject instanceof Part ?
+                        targetTreeNode.getPartNodeSchemaComponent((Part) targetUserObject) :
+                        (SchemaComponent) targetUserObject;
+                TypesCompatibilityValidator typesValidator = new TypesCompatibilityValidatorImpl(
+                    sourceSchemaComponent, targetSchemaComponent);
+                typesValidator.checkSchemaComponentTypesCompatibility();
+                TypesCompatibilityValidator.TypesCompatibilityResult result = 
+                    typesValidator.getTypesCompatibilityResult();
+                
+                if (result != TypesCompatibilityValidator.TypesCompatibilityResult.TYPES_EQUAL) {
+                    String warningMsg = typesValidator.getWarningMessage();
+                    boolean isLinkInvalid = 
+                        (result == TypesCompatibilityValidator.TypesCompatibilityResult.BASE_TYPES_UNEQUAL) || 
+                        (result == TypesCompatibilityValidator.TypesCompatibilityResult.SOURCE_BASE_TYPE_UNKNOWN) || 
+                        (result == TypesCompatibilityValidator.TypesCompatibilityResult.TARGET_BASE_TYPE_UNKNOWN);
+                    if (isLinkInvalid) {
+                        warningMsg += " " + NbBundle.getMessage(DefineCorrelationWizard.class, 
+                            "LBL_ErrMsg_Created_Mapper_Link_Deleted");
+                    }
+                    UserNotification.showMessage(warningMsg);
+                    if (isLinkInvalid) {
+                        SwingUtilities.invokeLater(new Runnable() {
+                            public void run() {
+                                Link newCreatedLink = CorrelationMapperModel.this.getGraph(
+                                    targetTreePath).getLinks().get(0);
+                                deleteLink(newCreatedLink);
+                            }
+                        });
+                    }
+                }
             }
             
             public TreePath getTreePathByGraph(Graph graph) {
@@ -1581,7 +1858,9 @@ public class DefineCorrelationWizard implements WizardProperties {
                 return false;
             }
 
-            public void copy(TreePath treePath, GraphSubset graphGroup, int x, int y) {}
+            public GraphSubset copy(TreePath treePath, GraphSubset graphGroup, int x, int y) {
+                return null;
+            }
 
             public void move(TreePath treePath, GraphSubset graphGroup, int x, int y) {}
             
@@ -1620,6 +1899,25 @@ public class DefineCorrelationWizard implements WizardProperties {
             public boolean canEditInplace(VertexItem vItem) {
                 return true;
             }
+
+            public void delete(TreePath currentTreePath, GraphSubset graphGroup) {
+                List<Link> selectedLinks =  correlationMapper.getSelectionModel().getSelectedLinks();
+                if ((selectedLinks != null) && (! selectedLinks.isEmpty())) {
+                    CorrelationMapperModel mapperModel = 
+                        (CorrelationMapperModel) correlationMapper.getModel();
+                    for (Link link : selectedLinks) {
+                        mapperModel.deleteLink(link);
+                    }
+                }
+            }
+
+            public List<TreePath> findInLeftTree(String value) {
+                return null;
+            }
+
+            public List<TreePath> findInRightTree(String value) {
+                return null;
+            }
         }
     }
     //========================================================================//
@@ -1639,7 +1937,809 @@ public class DefineCorrelationWizard implements WizardProperties {
         public void validate() throws WizardValidationException {}
     }
 }
+//============================================================================//
+class CorrelationWizardWSDLWrapper {
+    private static final String 
+        WIZARD_PROPERTIES_WSDL_FILE_NAME = "WizardCorrelationProperties", // NOI18N
+        WSDL_FILE_EXTENSION = "wsdl", // NOI18N
+        HOST = "http://enterprise.netbeans.org/bpel/"; // NOI18N
+    
+    private static CorrelationWizardWSDLWrapper wizardWSDLWrapperInstance = null;
+    
+    private BpelModel bpelModel;
+    private WSDLModel wsdlModel;
+    
+    private CorrelationWizardWSDLWrapper() {}
 
+    public static final CorrelationWizardWSDLWrapper getInstance(BpelModel bpelModel) {
+        if (wizardWSDLWrapperInstance == null) {
+            wizardWSDLWrapperInstance = new CorrelationWizardWSDLWrapper();
+        }
+        if (bpelModel != null) {
+            wizardWSDLWrapperInstance.bpelModel = bpelModel;
+        }
+        assert (wizardWSDLWrapperInstance.bpelModel != null);
+        return wizardWSDLWrapperInstance;
+    }
+    
+    public static void closeInstance() {
+        if (wizardWSDLWrapperInstance != null) {
+            wizardWSDLWrapperInstance.wsdlModel = null;
+            wizardWSDLWrapperInstance.bpelModel = null;
+        }
+        wizardWSDLWrapperInstance = null;
+    }
+    
+    public WSDLModel getWsdlModel() {
+        if (wsdlModel == null) createWSDLPropertiesFile();
+        return wsdlModel;
+    }
+    
+    private FileObject createWSDLPropertiesFile() {
+        FileObject folderBpelProcess = ResolverUtility.getBpelProcessFolder(bpelModel);
+        WsdlWrapper wsdlWrapper = new WsdlWrapper(folderBpelProcess, 
+            WIZARD_PROPERTIES_WSDL_FILE_NAME, true);
+        wsdlModel = wsdlWrapper.getModel();
+        final Definitions definitions = wsdlModel.getDefinitions();
+
+        WizardUtils.doInTransaction(wsdlModel, new Runnable() {
+            public void run() {
+                try {
+                    definitions.setName(getShortWsdlFileName());
+                    definitions.setTargetNamespace(HOST + WIZARD_PROPERTIES_WSDL_FILE_NAME);
+                } catch (Exception e) {
+                    ErrorManager.getDefault().notify(e);
+                }
+            }
+        });
+        return wsdlWrapper.getFile();
+    }
+    
+    public String getShortWsdlFileName() {
+        return (WIZARD_PROPERTIES_WSDL_FILE_NAME + "." + WSDL_FILE_EXTENSION);
+    }
+    
+    public void importIntoBpelModel() {
+        if (bpelModel == null) return;
+        try {
+            Import wsdlBpelImport = bpelModel.getBuilder().createImport();
+            wsdlBpelImport.setNamespace(wsdlModel.getDefinitions().getTargetNamespace());
+            wsdlBpelImport.setLocation(getShortWsdlFileName());
+            wsdlBpelImport.setImportType(Import.WSDL_IMPORT_TYPE);
+            new ImportRegistrationHelper(bpelModel).addImport(wsdlBpelImport);
+        } catch (Exception e) {
+            ErrorManager.getDefault().notify(e);
+        }
+    }
+}
+//============================================================================//
+class WizardUtils implements WizardConstants {
+    public static String getCorrelationSetBpelEntityName(BpelEntity bpelEntity) {
+        String onMessageOnEventNamePattern = null;
+        if ((bpelEntity instanceof OnMessage) || (bpelEntity instanceof OnEvent)) {
+            onMessageOnEventNamePattern = NbBundle.getMessage(DefineCorrelationWizard.class, 
+                (bpelEntity instanceof OnMessage) ? 
+                "LBL_Correlation_Set_Name_OnMessage_Pattern" :
+                "LBL_Correlation_Set_Name_OnEvent_Pattern");
+        }
+        return getBpelEntityName(bpelEntity, onMessageOnEventNamePattern);
+    }
+
+    public static String getBpelEntityName(BpelEntity bpelEntity) {
+        return getBpelEntityName(bpelEntity, null);
+    }
+    
+    public static String getBpelEntityName(BpelEntity bpelEntity, 
+        String onMessageOnEventNamePattern) {
+        if ((bpelEntity instanceof OnMessage) || (bpelEntity instanceof OnEvent)) {
+            assert (onMessageOnEventNamePattern != null);
+            BpelEntityComplexName compositeName = (bpelEntity instanceof OnMessage) ?
+                new OnMessageComplexName((OnMessage) bpelEntity) :
+                new OnEventComplexName((OnEvent) bpelEntity);
+            String 
+                entityName = compositeName.getFirstName(),
+                relatedObjName = compositeName.getMiddleName(),
+                operationName = compositeName.getLastName();
+            return MessageFormat.format(onMessageOnEventNamePattern, new Object[] {
+                entityName, relatedObjName, operationName});
+        }
+        String bpelEntityName = bpelEntity.getAttribute(BpelAttributes.NAME);
+        return (bpelEntityName != null ? bpelEntityName :
+            UnnamedActivityNameHandler.getInstance().getActivityName(bpelEntity));
+    }
+        
+    public static NamedComponentReference<? extends GlobalType> getSchemaComponentTypeRef(
+        SchemaComponent schemaComponent) {
+        NamedComponentReference<? extends GlobalType> typeRef = null;
+        try {
+            typeRef = ((TypeContainer) schemaComponent).getType();
+        } catch (Exception e) {}
+        return typeRef;
+    }
+
+    public static String getSchemaComponentTypeName(SchemaComponent schemaComponent) {
+        String typeName = null;
+        if ((schemaComponent instanceof SimpleType) || 
+            (schemaComponent instanceof ComplexType)) {
+            typeName = schemaComponent.getAttribute(ValidationUtil.attributeName());
+        } else {
+            NamedComponentReference<? extends GlobalType> typeRef = 
+                getSchemaComponentTypeRef(schemaComponent);
+            if (typeRef != null) {
+                typeName = typeRef.get().getName();
+            } else {
+                typeName = ((SchemaComponent) schemaComponent).getAttribute(
+                    ValidationUtil.attributeType());
+            }
+        }
+        return typeName;
+    }
+
+    public static String getSchemaComponentName(SchemaComponent schemaComponent) {
+        String name = null;
+        if (schemaComponent instanceof SimpleType) {
+            name = getSchemaComponentTypeName(schemaComponent);
+        } else  {
+            name = schemaComponent.toString();
+        }
+        return name;
+    }
+            
+    public static boolean isElementComplexType(SchemaComponent schemaComponent) {
+        if (! (schemaComponent instanceof Element)) {
+            return false;
+        }
+        NamedComponentReference<? extends GlobalType> typeRef = 
+            getSchemaComponentTypeRef(schemaComponent);
+        return ((typeRef != null) && (typeRef.get() instanceof ComplexType));
+    }
+
+    public static boolean isAttributeUnknownType(SchemaComponent schemaComponent) {
+        if (! (schemaComponent instanceof Attribute)) {
+            return false;
+        }
+        return (getSchemaComponentTypeName(schemaComponent) == null);
+    }
+    
+    public static GlobalSimpleType findBuiltInType(SchemaComponent schemaComponent) {
+        String typeName = getSchemaComponentTypeName(schemaComponent);
+        GlobalSimpleType builtInType = ValidationUtil.findGlobalSimpleType(typeName, 
+            ValidationUtil.BUILT_IN_SIMPLE_TYPES);
+        return builtInType;
+    }
+    
+    public static boolean isBuiltInType(SchemaComponent schemaComponent) {
+        return (findBuiltInType(schemaComponent) != null);
+    }
+    
+    public static PortType getBpelEntityPortType(BpelEntity bpelEntity) {
+        if (bpelEntity == null) return null;
+        try {
+            PortType portType = ((PortTypeReference) bpelEntity).getPortType().get();
+            return portType;
+        } catch(Exception e) {
+            return null;
+        }
+    }
+    
+    public static Operation getBpelEntityOperation(BpelEntity bpelEntity) {
+        if (bpelEntity == null) return null;
+        PortType portType = getBpelEntityPortType(bpelEntity);
+        Collection<Operation> operations = portType.getOperations();
+        String requiredOperationName = bpelEntity.getAttribute(BpelAttributes.OPERATION);
+        for (Operation operation : operations) {
+            if (operation.getName().equals(requiredOperationName)) {
+                return operation;
+            }
+        }
+        return null;
+    }
+
+    public static String validateActivity(BpelEntity bpelEntity) {
+        if (getBpelEntityPortType(bpelEntity) == null) {
+            return NbBundle.getMessage(DefineCorrelationWizard.class, "LBL_ErrMsg_Activity_Has_Wrong_PortType");
+        }
+        if (getBpelEntityOperation(bpelEntity) == null) {
+            return NbBundle.getMessage(DefineCorrelationWizard.class, "LBL_ErrMsg_Activity_Has_Wrong_Operation");
+        }
+        return null;
+    }
+    
+    public static void importRequiredSchemas(final WSDLModel wsdlModel, 
+        final List<SchemaComponent> schemaComponents) {
+        WizardUtils.doInTransaction(wsdlModel, new Runnable() {
+            public void run() {
+                try {
+                    for (SchemaComponent schemaComponent : schemaComponents) {
+                        Utility.addSchemaImport(schemaComponent, wsdlModel);
+                    }
+                } catch(Exception e) {
+                    ErrorManager.getDefault().notify(e);
+                }
+            }
+        });
+    }
+    
+    public static void importWsdlIntoWsdl(final WSDLModel baseWsdlModel, 
+            final WSDLModel importedWsdlModel) {
+
+        WizardUtils.doInTransaction(baseWsdlModel, new Runnable() {
+            public void run() {
+                try {
+                    org.netbeans.modules.xml.wsdl.model.Import objImport = 
+                        baseWsdlModel.getFactory().createImport();
+
+                    FileObject 
+                        baseFileObj = baseWsdlModel.getModelSource().getLookup().lookup(FileObject.class),
+                        importedFileObj = importedWsdlModel.getModelSource().getLookup().lookup(FileObject.class);
+                    String importRelativePath = getRelativePath(baseFileObj, importedFileObj);
+
+                    objImport.setNamespace(importedWsdlModel.getDefinitions().getTargetNamespace());
+                    objImport.setLocation(importRelativePath);
+
+                    if (! wsdlContainsImport(baseWsdlModel, objImport)) {
+                        baseWsdlModel.getDefinitions().addImport(objImport);
+                    }
+                } catch(Exception e) {
+                    ErrorManager.getDefault().notify(e);
+                }
+            }
+        });
+    }
+    
+    public static String getRelativePath(FileObject baseFileObj, 
+        FileObject relatedFileObj) {
+        if ((baseFileObj == null) || (relatedFileObj == null)) {
+            throw new NullPointerException(baseFileObj == null ? 
+                "Base file object is null" : "Related file object is null");
+        }
+        // both files are located in the same folder
+        String relativePath = relatedFileObj.getNameExt();
+        
+        URI baseFileURI = FileUtil.toFile(baseFileObj).toURI(),
+            relatedFileURI = FileUtil.toFile(relatedFileObj).toURI();
+        if (! (relatedFileURI.equals(baseFileURI))) {
+            DefaultProjectCatalogSupport catalogSupport = DefaultProjectCatalogSupport.getInstance(baseFileObj);
+            if (catalogSupport.needsCatalogEntry(baseFileObj, relatedFileObj)) {
+                try { // remove a previous catalog entry, then create a new one
+                    URI uri = catalogSupport.getReferenceURI(baseFileObj, relatedFileObj);
+                    catalogSupport.removeCatalogEntry(uri);
+                    catalogSupport.createCatalogEntry(baseFileObj, relatedFileObj);
+                    relativePath = catalogSupport.getReferenceURI(baseFileObj, 
+                        relatedFileObj).toString();
+                } catch (Exception e) {
+                    ErrorManager.getDefault().notify(e);
+                }
+            } else {
+                relativePath = RelativePath.getRelativePath(FileUtil.toFile(
+                    baseFileObj).getParentFile(), FileUtil.toFile(relatedFileObj));
+            }
+        }
+        return relativePath;
+    }
+    
+    public static boolean wsdlContainsImport(WSDLModel baseWsdlModel, 
+        org.netbeans.modules.xml.wsdl.model.Import checkedImport) {
+        Collection<org.netbeans.modules.xml.wsdl.model.Import> imports = 
+            baseWsdlModel.getDefinitions().getImports();
+        for (org.netbeans.modules.xml.wsdl.model.Import existingImport : imports) {
+            if ((existingImport.getNamespace().equals(checkedImport.getNamespace())) &&
+                (existingImport.getLocation().equals(checkedImport.getLocation()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    public static boolean wsdlContainsPropertyAlias(WSDLModel baseWsdlModel, 
+        CorrelationProperty checkedProperty, Message checkedMessage, Part checkedPart) {
+        List<PropertyAlias> propertyAliases = 
+            baseWsdlModel.getRootComponent().getChildren(PropertyAlias.class);
+        for (PropertyAlias existingPropertyAlias : propertyAliases) {
+            CorrelationProperty existingProperty = null;
+            Message existingMessage = null;
+            String existingPart = null;
+            try {
+                existingProperty = existingPropertyAlias.getPropertyName().get();
+                existingMessage = existingPropertyAlias.getMessageType().get();
+                existingPart = existingPropertyAlias.getPart();
+
+                if ((existingProperty.getName().equals(checkedProperty.getName())) &&
+                    (existingMessage.getName().equals(checkedMessage.getName())) &&
+                    (existingPart.equals(checkedPart.getName()))) {
+                    return true;
+                }
+            } catch(Exception e) {
+                String warningMsg = (existingProperty == null) ? "propertyName" : null;
+                warningMsg = (warningMsg == null) && (existingMessage == null) ? "messageType" : warningMsg;
+                warningMsg = (warningMsg == null) && (existingPart == null) ? "part" : warningMsg;
+                if (warningMsg != null) {
+                    String wsdlFileName = baseWsdlModel.getDefinitions().getName(),
+                           xmlText = ((AbstractDocumentComponent) 
+                               existingPropertyAlias).getXmlFragmentInclusive();
+                    warningMsg = "[" + wsdlFileName + "]: " + 
+                        MessageFormat.format(NbBundle.getMessage(DefineCorrelationWizard.class, 
+                        "LBL_ErrMsg_Property_Alias_Wrong_Attribute_Value"), 
+                        new Object[] {warningMsg}) + "\n" + (xmlText != null ? xmlText : "");
+                }
+                throw new CorrelationDefinitionException(warningMsg, e);
+            }
+        }
+        return false;
+    }
+
+    public static String makeLocationPath(final WSDLModel wsdlModel,
+        final List<SchemaComponent> schemaComponents) {
+        if ((schemaComponents == null) || (schemaComponents.isEmpty())) return null;
+        XPathModelHelper xpathHelper = XPathModelHelper.getInstance();
+        XPathModel xpathModel = xpathHelper.newXPathModel();
+
+        NamespaceContext namespaceContext = new XmlExNamespaceContext(
+            (AbstractDocumentComponent)wsdlModel.getDefinitions());
+//        NamespaceContext namespaceContext = new WsdlNamespaceContext(
+//            wsdlModel.getDefinitions());
+        xpathModel.setNamespaceContext(namespaceContext);
+        
+        xpathModel.setExternalModelResolver(new ExternalModelResolver() {
+            public Collection<SchemaModel> getModels(String schemaNamespaceUri) {
+                List<Schema> schemaList = wsdlModel.findSchemas(schemaNamespaceUri);
+                ArrayList<SchemaModel> schemaModels = new ArrayList<SchemaModel>(schemaList.size());
+                for (Schema schema : schemaList) {
+                    SchemaModel schemaModel = schema.getModel();
+                    schemaModels.add(schemaModel);
+                }
+                return schemaModels;
+            }
+
+            public Collection<SchemaModel> getVisibleModels() {
+                SchemaModel schemaModel = schemaComponents.get(0).getModel();
+                return Collections.singleton(schemaModel);
+            }
+
+            public boolean isSchemaVisible(String schemaNamespaceUri) {
+                List<Schema> schemaList = wsdlModel.findSchemas(schemaNamespaceUri);
+                return ((schemaList != null) && (schemaList.size() > 0));
+            }
+        });
+        XPathModelFactory xpathModelFactory = xpathModel.getFactory();
+        List<LocationStep> locationSteps = new ArrayList<LocationStep>(
+            schemaComponents.size());
+        SchemaModelsStack sms = new SchemaModelsStack();
+        for (SchemaComponent schemaComponent : schemaComponents) {
+//            String nsUri = sms.getEffectiveNamespace(schemaComponent, sms);
+//            String namespacePrefix = getNamespacePrefix(wsdlModel, nsUri);
+            StepNodeNameTest stepNodeNameTest = 
+                    new StepNodeNameTest(xpathModel, schemaComponent, sms);
+//            if (namespacePrefix != null) {
+//                namespacePrefix = XPathUtils.isPrefixRequired(schemaComponent) ? 
+//                    namespacePrefix : "";
+//                stepNodeNameTest = new StepNodeNameTest(xpathModel, schemaComponent, sms);
+////                stepNodeNameTest = new StepNodeNameTest(new QName(null, 
+////                        getSchemaComponentName(schemaComponent), namespacePrefix));
+//            } else {
+//                stepNodeNameTest = new StepNodeNameTest(xpathModel, schemaComponent, sms);
+//            }
+            LocationStep locationStep = xpathModelFactory.newLocationStep(null, 
+                stepNodeNameTest, null);
+            locationSteps.add(locationStep);
+            sms.appendSchemaComponent(schemaComponent);
+        }
+        XPathLocationPath locationPath = xpathModelFactory.newXPathLocationPath(
+            locationSteps.toArray(new LocationStep[locationSteps.size()]));
+        locationPath.setAbsolute(true);
+        xpathModel.setRootExpression(locationPath);
+        return locationPath.getExpressionString();
+    }
+    
+    public static String getNamespacePrefix(final WSDLModel wsdlModel, final String nsUri) {
+        String prefix = getNamespacePrefixImpl(wsdlModel, nsUri);
+        if (prefix != null) {
+            return prefix;
+        }
+        prefix = DEFAULT_NS_PREFIX;
+
+        final int i = getMaxSuffixNumber(wsdlModel, prefix) + 1;
+        final String resultPrefix = prefix + i;
+        
+        WizardUtils.doInTransaction(wsdlModel, new Runnable() {
+            public void run() {
+                if (i == 0) { 
+                    ((AbstractDocumentComponent) wsdlModel.getDefinitions()).
+                            addPrefix(resultPrefix, nsUri);
+                }
+            }
+        });
+        return resultPrefix;
+    }
+    
+    private static String getNamespacePrefixImpl(WSDLModel wsdlModel, String uri) {
+        String prefix = wsdlModel.getDefinitions().getPeer().lookupPrefix(uri);
+        if ((prefix != null) && (prefix.length() == 0)) {
+            return null;
+        }
+        return prefix;
+    }
+    
+    private static int getMaxSuffixNumber(WSDLModel wsdlModel, String checkedPrefix) {
+        assert (checkedPrefix != null);
+        Set<String> prefixes = ((AbstractDocumentComponent) 
+            wsdlModel.getDefinitions()).getPrefixes().keySet();
+        int maxSuffixNumber = -1;
+        for (String registeredPrefix : prefixes) {
+            if (registeredPrefix.startsWith(checkedPrefix)) {
+                String end = registeredPrefix.substring(checkedPrefix.length());
+                try {
+                    int suffixNumber = Integer.parseInt(end);
+                    if (suffixNumber > maxSuffixNumber) {
+                        maxSuffixNumber = suffixNumber;
+                    }
+                }
+                catch (NumberFormatException e) {}
+            }
+        }
+        return maxSuffixNumber;
+    }
+    
+    public static void doInTransaction(Model model, Runnable runnable) {
+        boolean wasInTransaction = model.isIntransaction();
+        if (!wasInTransaction) {
+            model.startTransaction();
+        }
+        try {
+            runnable.run();
+        } finally {
+            if (!wasInTransaction) {
+                model.endTransaction();
+            }
+        }
+    } 
+}
+//============================================================================//
+interface TypesCompatibilityValidator {
+    enum TypesCompatibilityResult {SOURCE_BASE_TYPE_UNKNOWN, TARGET_BASE_TYPE_UNKNOWN,
+        BASE_TYPES_UNEQUAL, BASE_TYPES_EQUAL, TYPES_EQUAL};
+
+    String 
+        MSG_PATTERN_DIFFERENT_TYPES = NbBundle.getMessage(DefineCorrelationWizard.class, 
+            "LBL_ErrMsg_Different_Types"),
+        MSG_PATTERN_UNKNOWN_BASE_TYPE = NbBundle.getMessage(DefineCorrelationWizard.class, 
+            "LBL_ErrMsg_Unknown_Base_Type"),
+        MSG_PATTERN_ONLY_BASE_TYPES_EQUAL = NbBundle.getMessage(DefineCorrelationWizard.class, 
+            "LBL_ErrMsg_Only_Base_Types_Equal");
+        
+    String getResolvedTypeName();
+    GlobalSimpleType getResolvedType();
+    TypesCompatibilityResult getTypesCompatibilityResult();
+    void checkSchemaComponentTypesCompatibility();
+    String getWarningMessage();
+}
+
+class TypesCompatibilityValidatorImpl implements TypesCompatibilityValidator {
+    private SchemaComponent sourceSchemaComponent, targetSchemaComponent;
+    private boolean isSourceBuiltInType, isTargetBuiltInType;
+    private String resolvedTypeName;
+    private TypesCompatibilityResult 
+        resultTypesCompatibility = TypesCompatibilityResult.BASE_TYPES_UNEQUAL;
+
+    public TypesCompatibilityValidatorImpl(SchemaComponent sourceSchemaComponent,
+        SchemaComponent targetSchemaComponent) {
+        this.sourceSchemaComponent = sourceSchemaComponent;
+        this.targetSchemaComponent = targetSchemaComponent;
+        isSourceBuiltInType = WizardUtils.isBuiltInType(sourceSchemaComponent);
+        isTargetBuiltInType = WizardUtils.isBuiltInType(targetSchemaComponent);
+    }
+    
+    public String getResolvedTypeName() {return resolvedTypeName;}
+    public GlobalSimpleType getResolvedType() {
+        if (resolvedTypeName == null) return null;
+        
+        // find GlobalSimpleType with the name "resolvedTypeName" in the schema, 
+        // which the "sourceSchemaComponent" belongs to
+        Collection<GlobalSimpleType> globalSimpleTypes = 
+            sourceSchemaComponent.getModel().getSchema().getSimpleTypes();
+        GlobalSimpleType globalSimpleType = ValidationUtil.findGlobalSimpleType(
+            resolvedTypeName, globalSimpleTypes);
+        if (globalSimpleType != null) return globalSimpleType;
+
+        // find GlobalSimpleType with the name "resolvedTypeName" inside 
+        // the collection of the built-in types, 
+        globalSimpleType = ValidationUtil.findGlobalSimpleType(
+            resolvedTypeName, ValidationUtil.BUILT_IN_SIMPLE_TYPES);
+        if (globalSimpleType != null) return globalSimpleType;
+
+        // find GlobalSimpleType with the name "resolvedTypeName" in the schema, 
+        // which the "targetSchemaComponent" belongs to
+        globalSimpleTypes = 
+            targetSchemaComponent.getModel().getSchema().getSimpleTypes();
+        globalSimpleType = ValidationUtil.findGlobalSimpleType(
+            resolvedTypeName, globalSimpleTypes);
+        return globalSimpleType;
+    }
+    public TypesCompatibilityResult getTypesCompatibilityResult() {
+        return resultTypesCompatibility;
+    }
+    
+    public void checkSchemaComponentTypesCompatibility() {
+        resolvedTypeName = null;
+        if (! builtInTypesExist()) return;
+        
+        resultTypesCompatibility = TypesCompatibilityResult.BASE_TYPES_UNEQUAL;
+        resolvedTypeName = checkBuiltInSimpleTypeCompatibility();
+        if ((resolvedTypeName != null) || (isSourceBuiltInType && isTargetBuiltInType)) {
+            return;
+        }
+        // resolvedTypeName == null
+        if ((isSourceBuiltInType) && (! isTargetBuiltInType)) {
+            checkBuiltInTypeAndSchemaComponentType(sourceSchemaComponent, targetSchemaComponent);
+        } else if ((! isSourceBuiltInType) && (isTargetBuiltInType)) {
+            checkBuiltInTypeAndSchemaComponentType(targetSchemaComponent, sourceSchemaComponent);
+        } else { // (! isSourceBuiltInType) && (! isTargetBuiltInType)
+            checkSchemaComponentTypeAndSchemaComponentType();
+        }
+    }
+    
+    private boolean builtInTypesExist() {
+        if ((! isSourceBuiltInType) && 
+            (ValidationUtil.getBuiltInSimpleType(sourceSchemaComponent) == null)) {
+            resultTypesCompatibility = TypesCompatibilityResult.SOURCE_BASE_TYPE_UNKNOWN;
+            return false;
+        }            
+        if ((! isTargetBuiltInType) && 
+            (ValidationUtil.getBuiltInSimpleType(targetSchemaComponent) == null)) {
+            resultTypesCompatibility = TypesCompatibilityResult.TARGET_BASE_TYPE_UNKNOWN;
+            return false;
+        }
+        return true;
+    }
+    
+    private String checkBuiltInSimpleTypeCompatibility() {
+        resultTypesCompatibility = TypesCompatibilityResult.BASE_TYPES_UNEQUAL;
+        if (! (isSourceBuiltInType && isTargetBuiltInType)) return null;
+        return checkBuiltInSimpleTypeCompatibility(sourceSchemaComponent, targetSchemaComponent);
+    }
+
+    private String checkBuiltInSimpleTypeCompatibility(SchemaComponent srcBuiltInType,
+        SchemaComponent trgBuiltInType) {
+        resultTypesCompatibility = TypesCompatibilityResult.BASE_TYPES_UNEQUAL;
+        String 
+            sourceTypeName = getSchemaComponentTypeName(srcBuiltInType),
+            targetTypeName = getSchemaComponentTypeName(trgBuiltInType);
+        if (sourceTypeName.equals(targetTypeName)) {
+            resultTypesCompatibility = TypesCompatibilityResult.TYPES_EQUAL;
+            return sourceTypeName;
+        }
+        else {
+            return null;
+        }
+    }
+
+    private void checkBuiltInTypeAndSchemaComponentType(SchemaComponent builtInType,
+        SchemaComponent schemaComponent) {
+        GlobalSimpleType trgBuiltInType = ValidationUtil.getBuiltInSimpleType(schemaComponent);
+        if (trgBuiltInType == null) {
+            resolvedTypeName = null;
+            resultTypesCompatibility = TypesCompatibilityResult.BASE_TYPES_UNEQUAL;
+            return;
+        }
+        resolvedTypeName = checkBuiltInSimpleTypeCompatibility(builtInType, trgBuiltInType);
+        resultTypesCompatibility = (resolvedTypeName != null) ? 
+            TypesCompatibilityResult.BASE_TYPES_EQUAL : TypesCompatibilityResult.BASE_TYPES_UNEQUAL;
+    }
+    
+    private void checkSchemaComponentTypeAndSchemaComponentType() {
+        resultTypesCompatibility = TypesCompatibilityResult.BASE_TYPES_UNEQUAL;
+        String 
+            sourceTypeName = getSchemaComponentTypeName(sourceSchemaComponent),
+            targetTypeName = getSchemaComponentTypeName(targetSchemaComponent);
+        if (sourceTypeName.equals(targetTypeName)) {
+            resultTypesCompatibility = TypesCompatibilityResult.TYPES_EQUAL;
+            resolvedTypeName = sourceTypeName;
+        } else {
+            GlobalSimpleType 
+                sourceBuiltInType = ValidationUtil.getBuiltInSimpleType(sourceSchemaComponent);
+            checkBuiltInTypeAndSchemaComponentType(sourceBuiltInType, targetSchemaComponent);
+        }
+    }
+    
+    private String getSchemaComponentTypeName(SchemaComponent schemaComponent) {
+        return ValidationUtil.ignoreNamespace(WizardUtils.getSchemaComponentTypeName(
+            schemaComponent));
+    }
+    
+    private String getWarningMsgDifferentTypes() {
+        String sourceComponentName = WizardUtils.getSchemaComponentName(sourceSchemaComponent),
+               targetComponentName = WizardUtils.getSchemaComponentName(targetSchemaComponent);
+        return MessageFormat.format(MSG_PATTERN_DIFFERENT_TYPES, 
+            new Object[] {sourceComponentName, targetComponentName});
+    }
+    
+    private String getWarningMsgUnknownType() {
+        String
+            schemaComponentName = WizardUtils.getSchemaComponentName(
+                resultTypesCompatibility == TypesCompatibilityResult.SOURCE_BASE_TYPE_UNKNOWN ?
+                sourceSchemaComponent : targetSchemaComponent),
+            schemaComponentTypeName = WizardUtils.getSchemaComponentTypeName(
+                resultTypesCompatibility == TypesCompatibilityResult.SOURCE_BASE_TYPE_UNKNOWN ?
+                sourceSchemaComponent : targetSchemaComponent);
+        return MessageFormat.format(MSG_PATTERN_UNKNOWN_BASE_TYPE, 
+            new Object[] {schemaComponentName, schemaComponentTypeName});
+        
+    }
+    
+    private String getWarningMsgOnlyBaseTypeEqual() {
+        String
+            srcSchemaComponentName = WizardUtils.getSchemaComponentName(sourceSchemaComponent),
+            trgSchemaComponentName = WizardUtils.getSchemaComponentName(targetSchemaComponent);
+        return MessageFormat.format(MSG_PATTERN_ONLY_BASE_TYPES_EQUAL, 
+            new Object[] {resolvedTypeName, srcSchemaComponentName, trgSchemaComponentName});
+    }
+    
+    public String getWarningMessage() {
+        if ((resultTypesCompatibility == TypesCompatibilityResult.SOURCE_BASE_TYPE_UNKNOWN) ||
+            (resultTypesCompatibility == TypesCompatibilityResult.TARGET_BASE_TYPE_UNKNOWN)) {
+            return getWarningMsgUnknownType();
+        } else if (resultTypesCompatibility == TypesCompatibilityResult.BASE_TYPES_UNEQUAL) {
+            return getWarningMsgDifferentTypes();
+        } else if (resultTypesCompatibility == TypesCompatibilityResult.BASE_TYPES_EQUAL) {
+            return getWarningMsgOnlyBaseTypeEqual();
+        }
+        return null;
+    }
+}
+//============================================================================//
+interface BpelEntityComplexName {
+    String getFirstName();
+    String getMiddleName();
+    String getLastName();
+}
+//============================================================================//
+class OnMessageComplexName implements BpelEntityComplexName {
+    private String simpleName = "", pickName = "", operationName = "";
+
+    public OnMessageComplexName(OnMessage onMessageEntity) {
+        simpleName = ((BpelEntity) onMessageEntity).getElementType().getSimpleName();
+        pickName = ((BpelEntity) onMessageEntity).getParent().getAttribute(BpelAttributes.NAME);
+        operationName = ((BpelEntity) onMessageEntity).getAttribute(BpelAttributes.OPERATION);
+    }
+    public String getSimpleName() {return simpleName;}
+    public String getOperationName() {return operationName;}
+    public String getPickName() {return pickName;}
+
+    public String getFirstName() {return getSimpleName();}
+    public String getMiddleName() {return getPickName();}
+    public String getLastName() {return getOperationName();}
+}
+//============================================================================//
+class OnEventComplexName implements BpelEntityComplexName {
+    private String simpleName = "", partnerLinkName = "", operationName = "";
+
+    public OnEventComplexName(OnEvent onEventEntity) {
+        simpleName = ((BpelEntity) onEventEntity).getElementType().getSimpleName();
+        partnerLinkName = ((BpelEntity) onEventEntity).getAttribute(
+            BpelAttributes.PARTNER_LINK);
+        operationName = ((BpelEntity) onEventEntity).getAttribute(BpelAttributes.OPERATION);
+    }
+    public String getSimpleName() {return simpleName;}
+    public String getOperationName() {return operationName;}
+    public String getPartnerLinkName() {return partnerLinkName;}
+    
+    public String getFirstName() {return getSimpleName();}
+    public String getMiddleName() {return getPartnerLinkName();}
+    public String getLastName() {return getOperationName();}
+}
+//============================================================================//
+interface WizardConstants {
+    String 
+        CORRELATION_PROPERTY_NAME_PREFIX = "wzrd_prop_", // NOI18N
+        CORRELATION_SET_NAME_PREFIX = "wzrd_set_", // NOI18N
+        DEFAULT_NS_PREFIX = "ns"; // NOI18N
+}
+//============================================================================//
+class WsdlNamespaceContext implements NamespaceContext {
+    private WSDLComponent mXPathOwner;
+    
+    public WsdlNamespaceContext(WSDLComponent xPathOwner) {
+        mXPathOwner = xPathOwner;
+    }
+
+    public String getNamespaceURI(String prefix) {
+        if (prefix == null || prefix.length() == 0) {
+            // the default namespace isn't supported by BPEL XPath
+            // so, empty prefix corresponds to empty namespace.
+            return XMLConstants.NULL_NS_URI;
+        }
+        assert (mXPathOwner instanceof AbstractDocumentComponent);
+        String nsUri = ((AbstractDocumentComponent) mXPathOwner).lookupNamespaceURI(
+            prefix, true);
+        return nsUri;
+    }
+
+    public String getPrefix(String namespaceURI) {
+        assert mXPathOwner instanceof AbstractDocumentComponent;
+        String nsPrefix = ((AbstractDocumentComponent) mXPathOwner).lookupPrefix(
+            namespaceURI);
+        return nsPrefix;
+    }
+
+    public Iterator getPrefixes(String namespaceURI) {
+        String single = getPrefix(namespaceURI);
+        return Collections.singletonList(single).iterator();
+    }
+    }
+//============================================================================//
+class CommonUtils {
+    private static final String
+        WINDOWS_OS_FAMILY_NAME = "Windows", // NOI18N
+        SUN_OS_FAMILY_NAME     = "SunOS", // NOI18N
+        MAC_OS_FAMILY_NAME     = "Mac"; // NOI18N
+
+    /**
+     * Defines a name of a current operation system.
+     * @return a name of a current operation system.
+     */
+    public static String getOperatingSystemName() {
+        return System.getProperty("os.name");
+    }
+    
+    private static boolean osBelongsToFamily(String osFamilyName) {
+        String osName = getOperatingSystemName();
+        return (osName.toUpperCase().indexOf(osFamilyName.toUpperCase()) > -1);
+    }
+    
+    /**
+     * Defines whether a current operation system belongs to Windows family.
+     * @return true if an operation system belongs to Windows family.
+     */
+    public static boolean isWindowsOS() {return osBelongsToFamily(WINDOWS_OS_FAMILY_NAME);}
+
+    /**
+     * Defines whether a current operation system belongs to SunOS (Solaris) family.
+     * @return true if an operation system belongs to SunOS (Solaris) family.
+     */
+    public static boolean isSunOS() {return osBelongsToFamily(SUN_OS_FAMILY_NAME);}
+
+    /**
+     * Defines whether a current operation system belongs to MAC OS X family.
+     * @return true if an operation system belongs to MAC OS X family.
+     */
+    public static boolean isMacOS() {return osBelongsToFamily(MAC_OS_FAMILY_NAME);}
+}
+//============================================================================//
+class UnnamedActivityNameHandler {
+    private static UnnamedActivityNameHandler activityNameHandler;
+
+    private static final String namePattern = NbBundle.getMessage(DefineCorrelationWizard.class, 
+        "LBL_Unnamed_Activity_Name_Pattern");
+    
+    private int nameCounter = 1;
+    private Map<BpelEntity, Integer> activityNameNumberMap = new HashMap<BpelEntity, Integer>();
+    
+    private UnnamedActivityNameHandler() {initialize();}
+    
+    public void initialize() {
+        nameCounter = 1;
+        activityNameNumberMap.clear();
+    }
+    
+    public String getActivityName(BpelEntity bpelEntity) {
+        Integer activityNameNumber = activityNameNumberMap.get(bpelEntity);
+        if (activityNameNumber == null) {
+            activityNameNumber = nameCounter++;
+            activityNameNumberMap.put(bpelEntity, activityNameNumber);
+        }
+        String fakeActivityName = MessageFormat.format(namePattern, new Object[] {
+            activityNameNumber});
+        return fakeActivityName;
+    }
+        
+    public static UnnamedActivityNameHandler getInstance() {
+        if (activityNameHandler == null) {
+            activityNameHandler = new UnnamedActivityNameHandler();
+        }
+        return activityNameHandler;
+    }
+}
+//============================================================================//
 interface WizardProperties {
     String
         PROPERTY_AUTO_WIZARD_STYLE = "WizardPanel_autoWizardStyle", // NOI18N
@@ -1657,4 +2757,10 @@ interface WizardProperties {
 
         PROPERTY_HELP_DISPLAYED = "WizardPanel_helpDisplayed", // NOI18N
         PROPERTY_HELP_URL = "WizardPanel_helpURL"; // NOI18N
+}
+//============================================================================//
+class CorrelationDefinitionException extends RuntimeException {
+    public CorrelationDefinitionException(String message, Throwable cause) {
+        super(message, cause);
+    } 
 }
