@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -66,6 +66,7 @@ import org.netbeans.modules.ruby.spi.project.support.rake.PropertyEvaluator;
 import org.netbeans.modules.ruby.spi.project.support.rake.ReferenceHelper;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.queries.VisibilityQuery;
+import org.netbeans.modules.ruby.rubyproject.UpdateHelper;
 
 /**
  * This class represents a project source roots. It is used to obtain roots as Ant properties, FileObject's
@@ -286,6 +287,11 @@ public final class SourceRoots {
             }
             result.add(f);
         }
+        // the 'test' folder needs to be included in the source roots as 
+        // it may contain test helpers, but we don't want to display it in the logical view
+        if (test != null) {
+            result.add(test);
+        }
         sourceRoots = Collections.unmodifiableList(result);
         
 //        assert sourceRootNames.size() == sourceRootProperties.size() && 
@@ -298,7 +304,7 @@ public final class SourceRoots {
         for (FileObject child : folder.getChildren()) {
             if (child.isFolder()) {
                 String name = child.getNameExt();
-                if (!known.contains(name) && VisibilityQuery.getDefault().isVisible(child)) {
+                if (!known.contains(name) && isVisible(child)) {
                     if (result == null) {
                         result = new ArrayList<String>();
                     }
@@ -315,7 +321,22 @@ public final class SourceRoots {
         return result;
     }
 
-    /** Initialize source roots to just match the Rails view.
+    /**
+     * XXX - copy-pasted from o.n.core.ui.options.filetypes.IgnoredFilesPreferences.
+     * Take a look into {@link #isVisible()}.
+     * <p/>
+     * Default ignored files pattern. Pattern \.(cvsignore|svn|DS_Store) is covered by ^\..*$
+     */
+    private static final String DEFAULT_IGNORED_FILES = "^(CVS|SCCS|vssver.?\\.scc|#.*#|%.*%|_svn)$|~$|^\\.(?!htaccess$).*$"; //NOI18N
+
+    private static boolean isVisible(final FileObject child) {
+        // XXX should use VisibilityQuery#isVisible, but can't in this way.
+        // See http://www.netbeans.org/nonav/issues/show_bug.cgi?id=119244
+        return !child.getNameExt().matches(DEFAULT_IGNORED_FILES);
+    }
+
+    /**
+     * Initialize source roots to just match the Rails view.
      * Note that my load path will be way wrong for unit test execution and such - and
      * possibly for require-indexing (for require completion)
      */
