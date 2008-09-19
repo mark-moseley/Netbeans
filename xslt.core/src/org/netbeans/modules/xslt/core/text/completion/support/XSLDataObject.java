@@ -38,7 +38,8 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.xsl;
+
+package org.netbeans.modules.xslt.core.text.completion.support;
 
 import org.xml.sax.InputSource;
 import javax.xml.transform.Source;
@@ -49,7 +50,6 @@ import org.openide.nodes.Node;
 import org.openide.nodes.Children;
 import org.openide.nodes.CookieSet;
 import org.openide.util.Lookup;
-import org.openide.util.lookup.Lookups;
 import org.netbeans.spi.xml.cookies.*;
 import org.netbeans.modules.xml.XMLDataObjectLook;
 import org.netbeans.modules.xml.text.TextEditorSupport;
@@ -57,7 +57,7 @@ import org.netbeans.modules.xml.sync.*;
 import org.netbeans.modules.xml.cookies.*;
 import org.netbeans.modules.xml.api.XmlFileEncodingQueryImpl;
 import org.netbeans.modules.xml.text.syntax.XMLKit;
-import org.netbeans.modules.xsl.cookies.ValidateXSLSupport;
+import org.netbeans.modules.xslt.core.text.completion.support.cookies.ValidateXSLSupport;
 import org.openide.util.NbBundle;
 
 /**
@@ -72,7 +72,7 @@ public final class XSLDataObject extends MultiDataObject implements XMLDataObjec
     /** XSLT Mime Type. */
     public static final String MIME_TYPE = "application/xslt+xml"; // NOI18N    
     private static final String XSL_ICON_BASE =
-        "org/netbeans/modules/xsl/resources/xslObject"; // NOI18N    
+        "org/netbeans/modules/xslt/core/resources/xslObject"; // NOI18N    
     private transient final DataObjectCookieManager cookieManager;
     private transient Synchronizator synchronizator;    
     
@@ -100,19 +100,17 @@ public final class XSLDataObject extends MultiDataObject implements XMLDataObjec
         set.assign(XmlFileEncodingQueryImpl.class, XmlFileEncodingQueryImpl.singleton());
     }
 
+    @Override
     public final Lookup getLookup() {
         return getCookieSet().getLookup();
     }
 
-    /**
-     */
+    @Override
     protected Node createNodeDelegate () {
         return new XSLDataNode (this);
     }
 
-    
-    /**
-     */
+    @Override
     public HelpCtx getHelpCtx() {
         //return new HelpCtx (XSLDataObject.class);
         return HelpCtx.DEFAULT_HELP;
@@ -143,8 +141,7 @@ public final class XSLDataObject extends MultiDataObject implements XMLDataObjec
             setShortDescription(NbBundle.getMessage(XSLDataObject.class, "PROP_XSLDataNode_desc"));
         }
 
-        /**
-         */
+        @Override
         public HelpCtx getHelpCtx() {
             //return new HelpCtx (XSLDataObject.class);
             return HelpCtx.DEFAULT_HELP;

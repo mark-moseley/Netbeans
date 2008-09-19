@@ -50,6 +50,7 @@ import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import javax.swing.Icon;
@@ -61,6 +62,7 @@ import org.openide.filesystems.FileStateInvalidException;
 import org.openide.loaders.*;
 import org.openide.nodes.*;
 import org.openide.ErrorManager;
+import org.openide.util.Lookup;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
@@ -105,6 +107,10 @@ public class ImageDataObject extends MultiDataObject implements CookieSet.Factor
             return getPrintSupport();        
         else
             return null;
+    }
+
+    public Lookup getLookup() {
+        return getCookieSet().getLookup();
     }
     
     /** Gets image open support. */
@@ -170,7 +176,12 @@ public class ImageDataObject extends MultiDataObject implements CookieSet.Factor
      * @return  java.io.IOException  if an error occurs during reading
      */
     public Image getImage() throws IOException {
-        return javax.imageio.ImageIO.read(getPrimaryFile().getInputStream());
+        InputStream input = getPrimaryFile().getInputStream();
+        try {
+            return javax.imageio.ImageIO.read(input);
+        } finally {
+            input.close();
+        }
     }
 
 
