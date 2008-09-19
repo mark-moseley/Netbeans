@@ -52,9 +52,7 @@ import org.netbeans.modules.uml.core.metamodel.diagrams.IDiagram;
 import org.netbeans.modules.uml.core.metamodel.diagrams.IProxyDiagram;
 import org.netbeans.modules.uml.core.support.umlsupport.FileExtensions;
 import org.netbeans.modules.uml.core.support.umlsupport.StringUtilities;
-import org.netbeans.modules.uml.ui.controls.drawingarea.IUIDiagram;
 import org.netbeans.modules.uml.ui.support.projecttreesupport.ITreeDiagram;
-import org.netbeans.modules.uml.ui.swing.drawingarea.IDrawingAreaControl;
 
 /**
  * 
@@ -110,19 +108,20 @@ public class ProjectTreeDiagramNode extends ProjectTreeNode
    /**
     * @param string
     */
-   protected void setFilename(String value)
-   {
-      IProjectTreeItem data = getData();
-      
-      if(data != null)
-      {
-         String filename = StringUtilities.ensureExtension(value, FileExtensions.DIAGRAM_LAYOUT_EXT);
-         if(filename.length() > 0)
-         {
-            data.setDescription(filename);
-         }
-      }
-   }
+    protected void setFilename(String value)
+    {
+        IProjectTreeItem data = getData();
+
+        if (data != null)
+        {
+//            String filename = StringUtilities.ensureExtension(value, FileExtensions.DIAGRAM_LAYOUT_EXT);
+//            if (filename.length() > 0)
+            if (value.length() > 0)
+            {
+                data.setDescription(value);
+            }
+        }
+    }
    
    public boolean equals(Object obj)
    {
@@ -142,15 +141,16 @@ public class ProjectTreeDiagramNode extends ProjectTreeNode
          String myDescription   = getData().getDescription();         
          retVal = myDescription.equals((String)obj);
       }
-      else if(obj instanceof IDrawingAreaControl)
-      {
-         IDrawingAreaControl control = (IDrawingAreaControl)obj;
-         
-         String testDescription = control.getFilename();
-         String myDescription   = getData().getDescription();
-
-         retVal = myDescription.equals(testDescription);
-      }
+      // TODO: meteora
+//      else if(obj instanceof IDrawingAreaControl)
+//      {
+//         IDrawingAreaControl control = (IDrawingAreaControl)obj;
+//         
+//         String testDescription = control.getFilename();
+//         String myDescription   = getData().getDescription();
+//
+//         retVal = myDescription.equals(testDescription);
+//      }
       else if(obj instanceof IProxyDiagram)
       {
          IProxyDiagram control = (IProxyDiagram)obj;
