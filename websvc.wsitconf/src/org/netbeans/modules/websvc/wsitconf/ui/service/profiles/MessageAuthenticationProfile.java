@@ -50,13 +50,13 @@ import org.netbeans.modules.websvc.wsitconf.spi.features.SecureConversationFeatu
 import org.netbeans.modules.websvc.wsitconf.spi.features.ServiceDefaultsFeature;
 import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
 import org.netbeans.modules.websvc.wsitconf.util.UndoCounter;
+import org.netbeans.modules.websvc.wsitconf.util.Util;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.AlgoSuiteModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.PolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProfilesModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProprietarySecurityPolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.RMModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityPolicyModelHelper;
-import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityTokensModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityTokensModelHelper;
 import org.netbeans.modules.websvc.wsitmodelext.policy.Policy;
 import org.netbeans.modules.websvc.wsitmodelext.policy.PolicyQName;
@@ -66,6 +66,7 @@ import org.netbeans.modules.websvc.wsitmodelext.security.TransportBinding;
 import org.netbeans.modules.websvc.wsitmodelext.security.TrustElement;
 import org.netbeans.modules.websvc.wsitmodelext.security.WssElement;
 import org.netbeans.modules.websvc.wsitmodelext.security.proprietary.CallbackHandler;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import org.netbeans.modules.xml.wsdl.model.Binding;
 import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
@@ -126,13 +127,12 @@ public class MessageAuthenticationProfile extends ProfileBase
     }
     
     public void setServiceDefaults(WSDLComponent component, Project p) {
-//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
+        ProprietarySecurityPolicyModelHelper.clearValidators(component);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
     }
  
     public void setClientDefaults(WSDLComponent component, WSDLComponent serviceBinding, Project p) {
-//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, true);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, true);
         ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);
@@ -143,6 +143,7 @@ public class MessageAuthenticationProfile extends ProfileBase
     }
     
     public boolean isServiceDefaultSetupUsed(WSDLComponent component, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String keyAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
         String trustAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, true);
         String trustLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, true);
@@ -156,9 +157,7 @@ public class MessageAuthenticationProfile extends ProfileBase
     }
 
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
-        if (ProprietarySecurityPolicyModelHelper.getCBHConfiguration((Binding) component) != null) {
-            return false;
-        }
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String trustLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, true);
         String keyLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, false);
         String keyPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, false);
@@ -168,10 +167,8 @@ public class MessageAuthenticationProfile extends ProfileBase
         if ((keyAlias == null) && (trustAlias == null)  && (trustLoc == null) && (keyLoc == null) && (trustPasswd == null) && (keyPasswd == null)) {
             String user = ProprietarySecurityPolicyModelHelper.getDefaultUsername((Binding)component);
             String passwd = ProprietarySecurityPolicyModelHelper.getDefaultPassword((Binding)component);
-            if ((DEFAULT_PASSWORD.equals(passwd)) && (DEFAULT_USERNAME.equals(user))) {
-                if ((trustLoc == null) && (trustPasswd == null) && (keyPasswd != null) && (keyLoc == null)) {
-                    return true;
-                }
+            if (Util.isEqual(DEFAULT_PASSWORD, passwd) && Util.isEqual(DEFAULT_USERNAME, user)) {
+                return true;
             }
         }
         return false;
@@ -183,7 +180,8 @@ public class MessageAuthenticationProfile extends ProfileBase
     }
 
     public void enableSecureConversation(WSDLComponent component, boolean enable) {
-//        SecurityTokensModelHelper stmh = SecurityTokensModelHelper.getInstance(cfgVersion);
+        ConfigVersion cfgVersion = PolicyModelHelper.getConfigVersion(component);
+        SecurityTokensModelHelper stmh = SecurityTokensModelHelper.getInstance(cfgVersion);
         if (enable) {
             WSDLModel model = component.getModel();
 
@@ -193,42 +191,42 @@ public class MessageAuthenticationProfile extends ProfileBase
             }
 
             try {
-//                SecurityPolicyModelHelper spmh = SecurityPolicyModelHelper.getInstance(cfgVersion);
-//                AlgoSuiteModelHelper asmh = AlgoSuiteModelHelper.getInstance(cfgVersion);
-//                RMModelHelper rmh = RMModelHelper.getInstance(cfgVersion);
-//                PolicyModelHelper pmh = PolicyModelHelper.getInstance(cfgVersion);
+                SecurityPolicyModelHelper securityPolicyModelHelper = SecurityPolicyModelHelper.getInstance(cfgVersion);
+                AlgoSuiteModelHelper asmh = AlgoSuiteModelHelper.getInstance(cfgVersion);
+                RMModelHelper rmh = RMModelHelper.getInstance(cfgVersion);
+                PolicyModelHelper ProprietarySecurityPolicyModelHelper = PolicyModelHelper.getInstance(cfgVersion);
                 
-                SecurityPolicyModelHelper.enableTrust10(component);
+                securityPolicyModelHelper.enableTrust(component, cfgVersion);
                 SecurityTokensModelHelper.removeSupportingTokens(component);
                 
-                WSDLComponent suppToken = SecurityTokensModelHelper.setSupportingTokens(component, 
+                WSDLComponent suppToken = stmh.setSupportingTokens(component, 
                         ComboConstants.SECURECONVERSATION, SecurityTokensModelHelper.ENDORSING);
-                Policy p = PolicyModelHelper.createElement(suppToken, PolicyQName.POLICY.getQName(), Policy.class, false);
-                BootstrapPolicy bp = PolicyModelHelper.createElement(p, SecurityPolicyQName.BOOTSTRAPPOLICY.getQName(), BootstrapPolicy.class, false);
-                p = PolicyModelHelper.createElement(bp, PolicyQName.POLICY.getQName(), Policy.class, false);
-                TransportBinding tb = PolicyModelHelper.createElement(p, SecurityPolicyQName.TRANSPORTBINDING.getQName(), TransportBinding.class, false);
+                Policy p = ProprietarySecurityPolicyModelHelper.createElement(suppToken, PolicyQName.POLICY.getQName(cfgVersion), Policy.class, false);
+                BootstrapPolicy bp = ProprietarySecurityPolicyModelHelper.createElement(p, SecurityPolicyQName.BOOTSTRAPPOLICY.getQName(cfgVersion), BootstrapPolicy.class, false);
+                p = ProprietarySecurityPolicyModelHelper.createElement(bp, PolicyQName.POLICY.getQName(cfgVersion), Policy.class, false);
+                TransportBinding tb = ProprietarySecurityPolicyModelHelper.createElement(p, SecurityPolicyQName.TRANSPORTBINDING.getQName(cfgVersion), TransportBinding.class, false);
 
-                boolean rm = RMModelHelper.isRMEnabled(component);
-                SecurityPolicyModelHelper.setDefaultTargets(p, true, rm);
+                boolean rm = rmh.isRMEnabled(component);
+                securityPolicyModelHelper.setDefaultTargets(p, true, rm);
                 
-                SecurityTokensModelHelper.setTokenType(tb, ComboConstants.TRANSPORT, ComboConstants.HTTPS);
-                SecurityPolicyModelHelper.setLayout(tb, ComboConstants.STRICT);
-                SecurityPolicyModelHelper.enableIncludeTimestamp(tb, true);
-                AlgoSuiteModelHelper.setAlgorithmSuite(tb, ComboConstants.BASIC128);
+                stmh.setTokenType(tb, ComboConstants.TRANSPORT, ComboConstants.HTTPS);
+                securityPolicyModelHelper.setLayout(tb, ComboConstants.STRICT);
+                securityPolicyModelHelper.enableIncludeTimestamp(tb, true);
+                asmh.setAlgorithmSuite(tb, ComboConstants.BASIC128);
 
-                SecurityTokensModelHelper.setSupportingTokens(p, 
+                stmh.setSupportingTokens(p, 
                         ComboConstants.USERNAME, SecurityTokensModelHelper.SIGNED_SUPPORTING);
                 
-                WssElement wss = SecurityPolicyModelHelper.enableWss(bp, true);
-                SecurityPolicyModelHelper.enableMustSupportRefKeyIdentifier(wss, true);
-                SecurityPolicyModelHelper.enableMustSupportRefIssuerSerial(wss, true);
-                SecurityPolicyModelHelper.enableMustSupportRefThumbprint(wss, true);
-                SecurityPolicyModelHelper.enableMustSupportRefEncryptedKey(wss, true);
+                WssElement wss = securityPolicyModelHelper.enableWss(bp, true);
+//                securityPolicyModelHelper.enableMustSupportRefKeyIdentifier(wss, true);
+                securityPolicyModelHelper.enableMustSupportRefIssuerSerial(wss, true);
+                securityPolicyModelHelper.enableMustSupportRefThumbprint(wss, true);
+                securityPolicyModelHelper.enableMustSupportRefEncryptedKey(wss, true);
 
-                TrustElement trust = SecurityPolicyModelHelper.enableTrust10(bp);
-                SecurityPolicyModelHelper.enableMustSupportIssuedTokens(trust, true);
-                SecurityPolicyModelHelper.enableRequireClientEntropy(trust, true);
-                SecurityPolicyModelHelper.enableRequireServerEntropy(trust, true);
+                TrustElement trust = securityPolicyModelHelper.enableTrust(bp, cfgVersion);
+                securityPolicyModelHelper.enableMustSupportIssuedTokens(trust, true);
+                securityPolicyModelHelper.enableRequireClientEntropy(trust, true);
+                securityPolicyModelHelper.enableRequireServerEntropy(trust, true);
                 
             } finally {
                 if (!isTransaction) {
@@ -237,7 +235,18 @@ public class MessageAuthenticationProfile extends ProfileBase
             }
         } else {
             SecurityTokensModelHelper.removeSupportingTokens(component);
-            SecurityTokensModelHelper.setSupportingTokens(component, ComboConstants.USERNAME, SecurityTokensModelHelper.SIGNED_SUPPORTING);            
+            stmh.setSupportingTokens(component, ComboConstants.USERNAME, SecurityTokensModelHelper.SIGNED_SUPPORTING);            
+        }
+    }
+    
+    @Override
+    public void profileSelected(WSDLComponent component, boolean updateServiceUrl, ConfigVersion configVersion) {
+        ProfilesModelHelper pmh = ProfilesModelHelper.getInstance(configVersion);
+        RMModelHelper rmh = RMModelHelper.getInstance(configVersion);
+        pmh.setSecurityProfile(component, getDisplayName(), updateServiceUrl);
+        boolean isRM = rmh.isRMEnabled(component);
+        if (isRM) {
+            enableSecureConversation(component, true);
         }
     }
     
