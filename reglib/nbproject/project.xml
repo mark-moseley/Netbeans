@@ -46,10 +46,11 @@ made subject to such option by the copyright holder.
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
             <code-name-base>org.netbeans.modules.reglib</code-name-base>
             <module-dependencies/>
-            <public-packages>
-                <package>com.sun.servicetag</package>
+            <friend-packages>
+                <friend>org.netbeans.modules.registration</friend>
                 <package>org.netbeans.modules.reglib</package>
-            </public-packages>
+                <package>org.netbeans.modules.servicetag</package>
+            </friend-packages>
         </data>
     </configuration>
 </project>
