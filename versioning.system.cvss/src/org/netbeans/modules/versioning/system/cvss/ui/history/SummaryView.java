@@ -43,8 +43,6 @@ package org.netbeans.modules.versioning.system.cvss.ui.history;
 
 import org.netbeans.lib.cvsclient.command.log.LogInformation;
 import org.netbeans.lib.cvsclient.command.update.UpdateCommand;
-import org.netbeans.lib.cvsclient.command.CommandException;
-import org.netbeans.lib.cvsclient.connection.AuthenticationException;
 import org.netbeans.modules.versioning.system.cvss.util.Utils;
 import org.netbeans.modules.versioning.system.cvss.util.Context;
 import org.netbeans.modules.versioning.system.cvss.ui.actions.log.SearchHistoryAction;
@@ -60,7 +58,6 @@ import org.netbeans.api.editor.settings.FontColorSettings;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
@@ -75,8 +72,6 @@ import java.awt.geom.Rectangle2D;
 import java.awt.event.*;
 import java.text.DateFormat;
 import java.io.File;
-import java.io.IOException;
-import java.io.FileOutputStream;
 import java.io.FileInputStream;
 
 /**
@@ -538,30 +533,7 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             SearchHistoryPanel.DispRevision drev = (SearchHistoryPanel.DispRevision) o;
             File file = drev.getRevision().getLogInfoHeader().getFile();
             Project project = master.getProject(file);                
-            Context context = Utils.getProjectsContext(new Project[] { master.getProject(file) });
-            if (context.getRootFiles().length == 0) {
-                // the project itself is not versioned, try to search in the broadest context possible
-                FileStatusCache cache = CvsVersioningSystem.getInstance().getStatusCache();
-                for (;;) {
-                    File parent = file.getParentFile();
-                    assert parent != null;
-                    if ((cache.getStatus(parent).getStatus() & FileInformation.STATUS_IN_REPOSITORY) == 0) {
-                        Set<File> files = new HashSet<File>(1);
-                        files.add(file);
-                        try {
-                            String cvsRoot = Utils.getCVSRootFor(file);
-                            ClientRuntime cr = CvsVersioningSystem.getInstance().getClientRuntime(cvsRoot);
-                            cr.logError(NbBundle.getMessage(SummaryView.class, "MSG_AlternativeSearch1", ProjectUtils.getInformation(project).getDisplayName()));
-                            cr.logError(NbBundle.getMessage(SummaryView.class, "MSG_AlternativeSearch2", file.getAbsolutePath()));
-                        } catch (IOException e) {
-                            // oops, no root for the file, we'll catch it later anyway
-                        }
-                        context = new Context(files, files, Collections.emptySet());
-                        break;
-                    }
-                    file = parent;
-                }
-            }
+            Context context = Utils.getProjectContext(master.getProject(file), file);
             SearchHistoryAction.openSearch(
                     context, 
                     ProjectUtils.getInformation(project).getDisplayName(),
@@ -613,6 +585,9 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         private Style noindentStyle;
         private Style hiliteStyle;
         
+        private Color selectionBackground;
+        private Color selectionForeground;
+        
         private JTextPane textPane = new JTextPane();
         private JPanel    actionsPane = new JPanel();
         private final JPanel    tagsPanel;
@@ -632,8 +607,12 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         private final JLabel    commaLabel;
 
         public SummaryCellRenderer() {
+            selectionBackground = new JList().getSelectionBackground();
+            selectionForeground = new JList().getSelectionForeground();
+            
             selectedStyle = textPane.addStyle("selected", null); // NOI18N
-            StyleConstants.setForeground(selectedStyle, UIManager.getColor("List.selectionForeground")); // NOI18N
+            StyleConstants.setForeground(selectedStyle, selectionForeground); // NOI18N
+            StyleConstants.setBackground(selectedStyle, selectionBackground); // NOI18N
             normalStyle = textPane.addStyle("normal", null); // NOI18N
             StyleConstants.setForeground(normalStyle, UIManager.getColor("List.foreground")); // NOI18N
             branchStyle = textPane.addStyle("normal", null); // NOI18N
@@ -707,8 +686,8 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
 
             Style style;
             if (isSelected) {
-                textPane.setBackground(UIManager.getColor("List.selectionBackground")); // NOI18N
-                actionsPane.setBackground(UIManager.getColor("List.selectionBackground")); // NOI18N
+                textPane.setBackground(selectionBackground);
+                actionsPane.setBackground(selectionBackground);
                 style = selectedStyle;
             } else {
                 Color c = UIManager.getColor("List.background"); // NOI18N
@@ -741,8 +720,8 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             Color foregroundColor;
             
             if (isSelected) {
-                foregroundColor = UIManager.getColor("List.selectionForeground"); // NOI18N
-                backgroundColor = UIManager.getColor("List.selectionBackground"); // NOI18N
+                foregroundColor = selectionForeground;
+                backgroundColor = selectionBackground;
                 style = selectedStyle;
             } else {
                 foregroundColor = UIManager.getColor("List.foreground"); // NOI18N
