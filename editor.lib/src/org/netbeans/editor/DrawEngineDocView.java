@@ -332,6 +332,12 @@ implements FoldHierarchyListener, PropertyChangeListener {
         }
 
         super.paint(g, allocation);
+
+        // #114712 - set the color to foreground so that the JTextComponent.ComposedTextCaret.paint()
+        // does not render white-on-white.
+        if (c != null) {
+            g.setColor(c.getForeground());
+        }
     }
     
     public void setSize(float width, float height) {
@@ -376,7 +382,12 @@ implements FoldHierarchyListener, PropertyChangeListener {
     public void propertyChange(java.beans.PropertyChangeEvent evt) {
         JTextComponent component = (JTextComponent)getContainer();
         if (component==null || evt==null || 
-            !EditorUI.LINE_HEIGHT_CHANGED_PROP.equals(evt.getPropertyName())) return;
+            (!EditorUI.LINE_HEIGHT_CHANGED_PROP.equals(evt.getPropertyName()) &&
+             !EditorUI.TAB_SIZE_CHANGED_PROP.equals(evt.getPropertyName())
+            )
+        ) {
+            return;
+        }
         
         AbstractDocument doc = (AbstractDocument)getDocument();
         if (doc!=null) {
