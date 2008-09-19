@@ -46,9 +46,12 @@ import java.util.List;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.Watch;
 import org.netbeans.modules.php.dbgp.DebugSession;
+import org.netbeans.modules.php.dbgp.DebugSession.IDESessionBridge;
 import org.netbeans.modules.php.dbgp.StartActionProviderImpl;
 import org.netbeans.modules.php.dbgp.annotations.CallStackAnnotation;
+import org.netbeans.modules.php.dbgp.breakpoints.BreakpointModel;
 import org.netbeans.modules.php.dbgp.breakpoints.Utils;
+import org.netbeans.modules.php.dbgp.models.CallStackModel;
 import org.openide.text.Line;
 import org.w3c.dom.Node;
 
@@ -98,7 +101,13 @@ public class StackGetResponse extends DbgpResponse {
 
     private void updateUIViews( DebugSession session, List<Stack> stacks ) {
         // update call stack view
-        session.getBridge().getCallStackModel().setCallStack(stacks);
+        IDESessionBridge bridge = session.getBridge();
+        if (bridge != null) {
+            CallStackModel callStackModel = bridge.getCallStackModel();
+            if (callStackModel != null) {
+                callStackModel.setCallStack(stacks);
+            }
+        }
         
         /*
          *  Send request for context names and request contexts.
@@ -117,8 +126,14 @@ public class StackGetResponse extends DbgpResponse {
         if ( stacks.size() == 0 ) {
             return;
         }
-        session.getBridge().getBreakpointModel().setCurrentStack(
-                stacks.get( 0 ) , session );
+        IDESessionBridge bridge = session.getBridge();
+        if (bridge != null) {
+            BreakpointModel breakpointModel = bridge.getBreakpointModel();
+            if (breakpointModel != null) {
+                breakpointModel.setCurrentStack(
+                        stacks.get( 0 ) , session );
+            }
+        }
     }
 
     public static void updateWatchView( DebugSession session ) {
@@ -127,7 +142,7 @@ public class StackGetResponse extends DbgpResponse {
             String expression = watch.getExpression();
             EvalCommand command = new EvalCommand( session.getTransactionId());
             command.setData( expression );
-            /* TODO : uncomment later. 
+            /* TODO : uncommented but it may cause following problems: 
              * I found a bug in XDEbug with eval command:
              * after response to eval request it performs two actions:
              * 1) Stops script execution ( and debugging ) unexpectedly
@@ -138,8 +153,8 @@ public class StackGetResponse extends DbgpResponse {
              * XDrbug bug submitted: 
              * http://bugs.xdebug.org/bug_view_page.php?bug_id=0000313
              * 
-             * session.sendCommandLater(command);
              */ 
+            session.sendCommandLater(command);
         }
     }
 
@@ -155,8 +170,9 @@ public class StackGetResponse extends DbgpResponse {
         session.getBridge().hideAnnotations();
         for (Stack stack : stacks) {
             int level = stack.getLevel();
-            Line line = Utils.getLine( stack.getLine() , stack.getFileName() ,
-                    session.getSessionId() );
+            final int lineno = stack.getLine();
+            Line line = Utils.getLine(lineno > 0 ? lineno : 1,stack.getFileName() , 
+                    session.getSessionId()  );
             if ( level == 0 ) {
                 session.getBridge().showCurrentDebuggerLine(line);
             }
