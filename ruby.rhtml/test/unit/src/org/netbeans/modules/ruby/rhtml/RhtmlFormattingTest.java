@@ -31,11 +31,9 @@ import javax.swing.JEditorPane;
 import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.BaseKit;
-import org.netbeans.modules.ruby.Formatter;
-import org.netbeans.modules.ruby.IndentPrefs;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.ruby.RubyFormatter;
 import org.openide.filesystems.FileObject;
-
-import org.netbeans.api.gsf.ParserResult;
 
 /**
  *
@@ -46,35 +44,35 @@ public class RhtmlFormattingTest extends RhtmlTestBase {
         super(testName);
     }
 
-    @SuppressWarnings("unchecked")
-    public String format(BaseDocument doc, int startPos, int endPos, IndentPrefs preferences) throws Exception {
-        
-        String text = doc.getText(0, doc.getLength());
-        JEditorPane pane = getPane(text, startPos, endPos);
-        assertEquals(RubyInstallation.RHTML_MIME_TYPE, pane.getDocument().getProperty("mimeType"));
-        
-        runKitAction(pane, BaseKit.formatAction, "");
-        
-        BaseDocument bdoc = (BaseDocument) pane.getDocument();
-
-        Formatter formatter = getFormatter(preferences);
-        String formatted = bdoc.getText(0, bdoc.getLength());
-        
-        doc.remove(0, doc.getLength());
-        doc.insertString(0, formatted, null);
-       
-        // Apply Ruby formatting separately; can't get the indent task factory to
-        // work (see RhtmlTestBase) because GsfIndentTask needs to find the RubyLanguage
-        // and the system file system doesn't seem to include it
-
-        //ParserResult result = parse(fo);
-        ParserResult result = null;
-        formatter.reformat(doc, startPos, endPos, result);
-
-        formatted = doc.getText(0, doc.getLength());
-        
-        return formatted;
-    }
+//    @SuppressWarnings("unchecked")
+//    public String format(BaseDocument doc, int startPos, int endPos, IndentPrefs preferences) throws Exception {
+//
+//        String text = doc.getText(0, doc.getLength());
+//        JEditorPane pane = getPane(text, startPos, endPos);
+//        assertEquals(RubyInstallation.RHTML_MIME_TYPE, pane.getDocument().getProperty("mimeType"));
+//
+//        runKitAction(pane, BaseKit.formatAction, "");
+//
+//        BaseDocument bdoc = (BaseDocument) pane.getDocument();
+//
+//        RubyFormatter formatter = getFormatter(preferences);
+//        String formatted = bdoc.getText(0, bdoc.getLength());
+//
+//        doc.remove(0, doc.getLength());
+//        doc.insertString(0, formatted, null);
+//
+//        // Apply Ruby formatting separately; can't get the indent task factory to
+//        // work (see RhtmlTestBase) because GsfIndentTask needs to find the RubyLanguage
+//        // and the system file system doesn't seem to include it
+//
+//        //CompilationInfo info = getInfo(fileObject);
+//        CompilationInfo info = null;
+//        formatter.reformat(doc, startPos, endPos, info);
+//
+//        formatted = doc.getText(0, doc.getLength());
+//
+//        return formatted;
+//    }
     
     @Override
     protected boolean runInEQ() {
@@ -82,43 +80,49 @@ public class RhtmlFormattingTest extends RhtmlTestBase {
         return true;
     }
 
-    public void format(String source, String reformatted, IndentPrefs preferences) throws Exception {
-        // Must run in AWT thread (BaseKit.install() checks for that)
-        String BEGIN = "%<%"; // NOI18N
-        int startPos = source.indexOf(BEGIN);
-        if (startPos != -1) {
-            source = source.substring(0, startPos) + source.substring(startPos+BEGIN.length());
-        } else {
-            startPos = 0;
-        }
-        
-        String END = "%>%"; // NOI18N
-        int endPos = source.indexOf(END);
-        if (endPos != -1) {
-            source = source.substring(0, endPos) + source.substring(endPos+END.length());
-        }
-
-        BaseDocument doc = getDocument(source);
-
-        if (endPos == -1) {
-            endPos = doc.getLength();
-        }
-        
-        String formatted = format(doc, startPos, endPos, preferences);
-        assertEquals(reformatted, formatted);
-    }
-    
+//    @Override
+//    public void format(String source, String reformatted, IndentPrefs preferences) throws Exception {
+//        // Must run in AWT thread (BaseKit.install() checks for that)
+//        String BEGIN = "%<%"; // NOI18N
+//        int startPos = source.indexOf(BEGIN);
+//        if (startPos != -1) {
+//            source = source.substring(0, startPos) + source.substring(startPos+BEGIN.length());
+//        } else {
+//            startPos = 0;
+//        }
+//        
+//        String END = "%>%"; // NOI18N
+//        int endPos = source.indexOf(END);
+//        if (endPos != -1) {
+//            source = source.substring(0, endPos) + source.substring(endPos+END.length());
+//        }
+//
+//        BaseDocument doc = getDocument(source);
+//
+//        if (endPos == -1) {
+//            endPos = doc.getLength();
+//        }
+//        
+//        String formatted = format(doc, startPos, endPos, preferences);
+//        assertEquals(reformatted, formatted);
+//    }
+//    
     public void reformatFileContents(String file) throws Exception {
         FileObject fo = getTestFile(file);
         assertNotNull(fo);
         BaseDocument doc = getDocument(fo);
         assertNotNull(doc);
 
-        IndentPrefs preferences = new IndentPrefs(2,2);
-        String formatted = format(doc, 0, doc.getLength(), preferences);
+        //IndentPrefs preferences = new IndentPrefs(2,2);
+
+        format(doc, new RubyFormatter(), null, 0, doc.getLength(), false);
+        
+        String formatted = doc.getText(0, doc.getLength());
+        
         assertDescriptionMatches(file, formatted, false, ".formatted");
     }
     
+
     public void testDummy() throws Exception {
     }
     

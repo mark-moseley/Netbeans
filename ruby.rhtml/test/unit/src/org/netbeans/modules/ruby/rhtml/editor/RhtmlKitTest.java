@@ -34,6 +34,7 @@ import javax.swing.text.Caret;
 import javax.swing.text.DefaultEditorKit;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.ruby.rhtml.RhtmlTestBase;
+import org.openide.util.Exceptions;
 
 /**
  *
@@ -65,7 +66,19 @@ public class RhtmlKitTest extends RhtmlTestBase {
     }
 
     private void insertChar(String original, char insertText, String expected, String selection) throws BadLocationException, Exception {
-        JEditorPane pane = getPane(original);
+        insertChar(original, insertText, expected, selection, false);
+    }
+
+    @Override
+    protected void insertChar(String original, char insertText, String expected, String selection, boolean codeTemplateMode) throws Exception {
+        JEditorPane pane;
+        try {
+            pane = getPane(original);
+        } catch (Exception ex) {
+            Exceptions.printStackTrace(ex);
+            fail(ex.toString());
+            return;
+        }
         int insertOffset = original.indexOf('^');
         int finalCaretPos = expected.indexOf('^');
         original = original.substring(0, insertOffset) + original.substring(insertOffset+1);
@@ -84,16 +97,24 @@ public class RhtmlKitTest extends RhtmlTestBase {
             assertEquals(selection, pane.getSelectedText());
         }
         runKitAction(pane, DefaultEditorKit.defaultKeyTypedAction, ""+insertText);
-        
+
         String formatted = doc.getText(0, doc.getLength());
         assertEquals(expected, formatted);
         if (finalCaretPos != -1) {
             assertEquals(finalCaretPos, caret.getDot());
         }
     }
-    
-    private void deleteChar(String original, String expected) throws BadLocationException, Exception {
-        JEditorPane pane = getPane(original);
+
+    @Override
+    protected void deleteChar(String original, String expected) throws Exception {
+        JEditorPane pane;
+        try {
+            pane = getPane(original);
+        } catch (Exception ex) {
+            Exceptions.printStackTrace(ex);
+            fail(ex.toString());
+            return;
+        }
         int afterRemoveOffset = original.indexOf('^');
         int finalCaretPos = expected.indexOf('^');
         original = original.substring(0, afterRemoveOffset) + original.substring(afterRemoveOffset+1);
@@ -103,15 +124,15 @@ public class RhtmlKitTest extends RhtmlTestBase {
         caret.setDot(afterRemoveOffset);
         BaseDocument doc = (BaseDocument)pane.getDocument();
         char ch = doc.getChars(afterRemoveOffset-1, 1)[0];
-        
+
         runKitAction(pane, DefaultEditorKit.deletePrevCharAction, ""+ch);
-        
+
         String formatted = doc.getText(0, doc.getLength());
         assertEquals(expected, formatted);
         if (finalCaretPos != -1) {
             assertEquals(finalCaretPos, caret.getDot());
         }
-    }    
+    }
 
     public void testInsertTag() throws Exception {
         insertChar("<^", '%', "<%^%>");
