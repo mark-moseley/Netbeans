@@ -135,9 +135,9 @@ public final class RailsServerManager {
     private static final Set<Integer> IN_USE_PORTS = new HashSet<Integer>();;
 
     /**
-     * The timeout in seconds for waiting a server to start.
+     * The timeout in milliseconds for waiting a server to start.
      */
-    private static final int SERVER_STARTUP_TIMEOUT = 120; 
+    private static final int SERVER_STARTUP_TIMEOUT = 120*1000;
     
     private ServerStatus status = ServerStatus.NOT_STARTED;
     private RubyServer server;
@@ -228,6 +228,7 @@ public final class RailsServerManager {
 
         projectName = project.getLookup().lookup(ProjectInformation.class).getDisplayName();
         String classPath = project.evaluator().getProperty(RailsProjectProperties.JAVAC_CLASSPATH);
+        String jvmArgs = project.evaluator().getProperty(RailsProjectProperties.JVM_ARGS);
         String serverId = project.evaluator().getProperty(RailsProjectProperties.RAILS_SERVERTYPE);
         RubyPlatform platform = RubyPlatform.platformFor(project);
         RubyInstance candidateInstance = ServerRegistry.getDefault().getServer(serverId, platform);
@@ -302,6 +303,7 @@ public final class RailsServerManager {
         desc.scriptPrefix(server.getScriptPrefix());
         desc.additionalArgs(buildStartupArgs());
         desc.postBuild(getFinishAction());
+        desc.jvmArguments(jvmArgs);
         desc.classPath(classPath);
         desc.addStandardRecognizers();
         desc.addOutputRecognizer(new RailsServerRecognizer(server));
@@ -450,32 +452,42 @@ public final class RailsServerManager {
                         // Try connecting repeatedly, up to time specified 
                         // by SERVER_STARTUP_TIMEOUT, then bail
                         int i = 0;
-                        for (; i <= SERVER_STARTUP_TIMEOUT; i++) {
+                        int delay = 20;
+                        while(i <= SERVER_STARTUP_TIMEOUT) {
                             try {
-                                Thread.sleep(1000);
+                                Thread.sleep(delay);
                             } catch (InterruptedException ie) {
                                 // Don't worry about it
                             }
 
                             synchronized (RailsServerManager.this) {
                                 if (status == ServerStatus.RUNNING) {
-                                    LOGGER.fine("Server " + ((server != null) ? server : instance) +
-                                            " started in " + i + " seconds.");
+                                    if(LOGGER.isLoggable(Level.FINE)) {
+                                        LOGGER.fine("Server " + ((server != null) ? server : instance) +
+                                                " started in " + (i+500)/1000 + " seconds.");
+                                    }
                                     RailsServerManager.showURL(getContextRoot(), relativeUrl, port, runClientDebug, project);
                                     return;
                                 }
 
                                 if (status == ServerStatus.NOT_STARTED) {
-                                    LOGGER.fine("Server starup failed, server type is: " +
-                                           ((server != null) ? server : instance));
                                     // Server startup somehow failed...
+                                    if(LOGGER.isLoggable(Level.FINE)) {
+                                        LOGGER.fine("Server starup failed, server type is: " +
+                                               ((server != null) ? server : instance));
+                                    }
                                     break;
                                 }
                             }
+
+                            i += delay;
+                            if(delay < 500) {
+                                delay *= 2;
+                            }
                         }
 
-                        LOGGER.fine("Could not start " + server + " in " + i +
-                                " seconds, current server status is " + status);
+                        LOGGER.fine("Could not start " + ((server != null) ? server : instance) + 
+                                " in " + (i+500)/1000 + " seconds, current server status is " + status);
 
                         StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(RailsServerManager.class,
                                     "NoServerFound", "http://localhost:" + port + "/" + relativeUrl));
@@ -738,7 +750,9 @@ public final class RailsServerManager {
 
         public ServerListModel(RubyPlatform platform) {
             this.servers = ServerRegistry.getDefault().getServers(platform);
-            this.selected = servers.get(0);
+            if (!servers.isEmpty()) {
+                this.selected = servers.get(0);
+            }
         }
 
         public int getSize() {
