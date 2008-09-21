@@ -439,6 +439,9 @@ public final class LayoutInterval implements LayoutConstants {
     }
 
     int add(LayoutInterval interval, int index) {
+        if (getParent() == interval) {
+            throw new IllegalArgumentException("Cannot add parent as a sub-interval!"); // NOI18N
+        }
         if (index < 0) {
             index = subIntervals.size();
         }
@@ -1038,10 +1041,18 @@ public final class LayoutInterval implements LayoutConstants {
             return edge;
         if (!beforeFixed && afterFixed)
             return edge^1;
-        if (beforeFixed && afterFixed)
-            return wantResize ? edge : parent.getAlignment();
+        if (beforeFixed && afterFixed) {
+            if (wantResize) {
+                return edge;
+            } else {
+                int parentAlignment = parent.getAlignment();
+                if (parentAlignment == LEADING || parentAlignment == TRAILING) {
+                    return parentAlignment;
+                }
+            }
+        }
 
-        return DEFAULT; // !leadingFixed && !trailingFixed
+        return DEFAULT;
     }
 
     /**
