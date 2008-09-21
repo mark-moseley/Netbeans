@@ -1041,7 +1041,7 @@ public class ComplibServiceProvider implements ComplibService {
                     + prjComplib.getVersionedTitle());
         } else {
             String libName = deriveUniqueLibraryName(userComplib);
-            Library libDef = LibraryManager.getDefault().getLibrary(libName);
+            Library libDef = JsfProjectUtils.getProjectLibraryManager(project).getLibrary(libName);
             if (libDef != null) {
                 JsfProjectUtils.removeLibraryReferences(project, new Library[] { libDef });
             }
@@ -1230,18 +1230,29 @@ public class ComplibServiceProvider implements ComplibService {
     public void replaceProjectComplib(Project project, ExtensionComplib origComplib,
         ExtensionComplib newComplib) throws IOException, ComplibException {
         ExtensionComplib projectComplib = null;
+        Exception exception = null;
         try {
             if (origComplib != null) {
                 removeComplibFromProject0(project, origComplib);
             }
             projectComplib = copyComplibToProject(newComplib, project);
         } catch (IOException e) {
+            exception = e;
             throw e;
         } catch (ComplibException e) {
+            exception = e;
             throw e;
         } finally {
-            // Notify listeners that the set of complibs changed
-            firePaletteChanged(new ComplibEvent(projectComplib));
+            if (projectComplib == null) {
+                if (exception == null) {
+                    IdeUtil.logWarning("org.netbeans.modules.visualweb.complib.ComplibServiceProivder: could not call firePaletteChanged due to null projectComplib"); //NOI18N
+                } else {
+                    IdeUtil.logWarning("org.netbeans.modules.visualweb.complib.ComplibServiceProivder: could not call firePaletteChanged due to null projectComplib and exception [" + exception + "]", exception); //NOI18N
+                }
+            } else {
+                // Notify listeners that the set of complibs changed
+                firePaletteChanged(new ComplibEvent(projectComplib));
+            }
         }
     }
 
@@ -1655,7 +1666,7 @@ public class ComplibServiceProvider implements ComplibService {
         LibraryDescriptor libDescriptor = deriveSharedComplibLibraryName(sharedComplib);
         String libName = libDescriptor.getLibName();
 
-        Library libDef = LibraryManager.getDefault().getLibrary(libName);
+        Library libDef = JsfProjectUtils.getProjectLibraryManager(project).getLibrary(libName);
         if (libDef != null) {
             // Existing definition so first remove any existing references
             JsfProjectUtils.removeLibraryReferences(project, new Library[] { libDef });
