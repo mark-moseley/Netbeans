@@ -58,6 +58,8 @@ import java.util.logging.Logger;
 import org.netbeans.api.java.classpath.GlobalPathRegistry;
 import org.netbeans.modules.tomcat5.TomcatManager;
 import org.netbeans.modules.tomcat5.util.LogSupport.LineInfo;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
@@ -205,7 +207,7 @@ public class LogViewer extends Thread {
     
     private File getLogFile(String timestamp) throws IOException {
         File f = new File(directory, prefix + timestamp + suffix);
-        f.createNewFile(); // create, if does not exist
+        FileUtil.createData(f);
         return f;
     }
     
@@ -228,10 +230,11 @@ public class LogViewer extends Thread {
             }
         } else {
             if (line.contains("java.lang.LinkageError: JAXB 2.0 API")) { // NOI18N
-                File file = InstalledFileLocator.getDefault().locate("modules/ext/jaxws21/api/jaxws-api.jar", null, false); // NOI18N
+                File jaxwsApi = InstalledFileLocator.getDefault().locate("modules/ext/jaxws21/api/jaxws-api.jar", null, false); // NOI18N
+                File jaxbApi = InstalledFileLocator.getDefault().locate("modules/ext/jaxb/api/jaxb-api.jar", null, false); // NOI18N
                 File endoresedDir = tomcatManager.getTomcatProperties().getJavaEndorsedDir();
-                if (file != null) {
-                    writer.println(NbBundle.getMessage(LogViewer.class, "MSG_WSSERVLET11", file.getParent(), endoresedDir));
+                if (jaxwsApi != null && jaxbApi != null) {
+                    writer.println(NbBundle.getMessage(LogViewer.class, "MSG_WSSERVLET11", jaxwsApi.getParent(), jaxbApi.getParent(), endoresedDir));
                 } else {
                     writer.println(NbBundle.getMessage(LogViewer.class, "MSG_WSSERVLET11_NOJAR", endoresedDir));
                 }
