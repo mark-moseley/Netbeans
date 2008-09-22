@@ -55,13 +55,12 @@ import javax.swing.text.StyleConstants;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.settings.FontColorSettings;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
+import org.netbeans.modules.ruby.elements.Element;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.modules.gsf.spi.GsfUtilities;
 import org.netbeans.modules.ruby.elements.ClassElement;
 import org.netbeans.modules.ruby.elements.MethodElement;
 import org.netbeans.modules.ruby.lexer.RubyCommentTokenId;
@@ -142,8 +141,8 @@ class RDocFormatter {
             noComment = false;
 
             return;
-        } else if (text.startsWith(TypeAnalyzer.PARAM_HINT_ARG) ||
-                text.startsWith(TypeAnalyzer.PARAM_HINT_RETURN)) {
+        } else if (text.startsWith(RubyTypeAnalyzer.PARAM_HINT_ARG) ||
+                text.startsWith(RubyTypeAnalyzer.PARAM_HINT_RETURN)) {
             // Don't include param hints in the documentation.
             // TODO: Try to include these correlated to the actual parameter list in the logical view.
             return;
@@ -170,17 +169,17 @@ class RDocFormatter {
 
             int n = sb.length();
             if (sb.length() > 1 && sb.charAt(sb.length()-1) == '\n') {
-                if (RubyUtils.endsWith(sb, "</pre>\n") || RubyUtils.endsWith(sb, "</h1>\n") ||
-                    RubyUtils.endsWith(sb, "</h2>\n") || RubyUtils.endsWith(sb, "</h3>\n") ||
-                    RubyUtils.endsWith(sb, "</h4>\n") || RubyUtils.endsWith(sb, "</h5>\n") ||
-                    RubyUtils.endsWith(sb, "</ul>\n") || RubyUtils.endsWith(sb, "</ol>\n") ||
-                    RubyUtils.endsWith(sb, "</table>\n") || RubyUtils.endsWith(sb, "<hr>\n")) {
+                if (GsfUtilities.endsWith(sb, "</pre>\n") || GsfUtilities.endsWith(sb, "</h1>\n") ||
+                    GsfUtilities.endsWith(sb, "</h2>\n") || GsfUtilities.endsWith(sb, "</h3>\n") ||
+                    GsfUtilities.endsWith(sb, "</h4>\n") || GsfUtilities.endsWith(sb, "</h5>\n") ||
+                    GsfUtilities.endsWith(sb, "</ul>\n") || GsfUtilities.endsWith(sb, "</ol>\n") ||
+                    GsfUtilities.endsWith(sb, "</table>\n") || GsfUtilities.endsWith(sb, "<hr>\n")) {
                     // No need for a separator
                     return;
                 }
             }
             if (sb.length() > 0) {
-                if (!(n > 4 && RubyUtils.endsWith(sb, "<br>"))) {
+                if (!(n > 4 && GsfUtilities.endsWith(sb, "<br>"))) {
                     sb.append("<br>");
                 }
                 sb.append("<br>");
@@ -255,7 +254,7 @@ class RDocFormatter {
 
             if (!inVerbatim) {
                 // Chomp off preceeding <br> to make output leaner
-                if (RubyUtils.endsWith(sb, "<br>")) {
+                if (GsfUtilities.endsWith(sb, "<br>")) {
                     sb.setLength(sb.length()-4);
                 }
                 inVerbatim = true;
@@ -279,7 +278,7 @@ class RDocFormatter {
 
             if (i <= 6) {
                 // Chomp off preceeding <br> to make output leaner
-                if (RubyUtils.endsWith(sb, "<br>")) {
+                if (GsfUtilities.endsWith(sb, "<br>")) {
                     sb.setLength(sb.length()-4);
                 }
                 sb.append("<h"); // NOI18N
@@ -725,7 +724,7 @@ class RDocFormatter {
      * way: bold the call-seq name, and also left justify all
      */
     private String getCallSeqHtml(List<String> code) {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder callSeqSb = new StringBuilder();
         
         // First determine how much to truncate from the left hand side
         int min = Integer.MAX_VALUE;
@@ -767,84 +766,84 @@ class RDocFormatter {
                         rhs = s.substring(index+seqName.length());
                     }
                     try {
-                        sb.append(XMLUtil.toElementContent(lhs));
-                        sb.append("<b>"); // NOI18N
-                        sb.append(XMLUtil.toElementContent(seqName));
-                        sb.append("</b>"); // NOI18N
-                        sb.append(XMLUtil.toElementContent(rhs));
-                        sb.append("<br>"); // NOI18N
+                        callSeqSb.append(XMLUtil.toElementContent(lhs));
+                        callSeqSb.append("<b>"); // NOI18N
+                        callSeqSb.append(XMLUtil.toElementContent(seqName));
+                        callSeqSb.append("</b>"); // NOI18N
+                        callSeqSb.append(XMLUtil.toElementContent(rhs));
+                        callSeqSb.append("<br>"); // NOI18N
                     } catch (CharConversionException cce) {
                         Exceptions.printStackTrace(cce);
                     }
                     continue;
                 }
             }
-            appendTokenized(sb, s);
-            sb.append("<br>"); // NOI18N
+            appendTokenized(callSeqSb, s);
+            callSeqSb.append("<br>"); // NOI18N
         }
-        return sb.toString();
+        return callSeqSb.toString();
     }
     
     public String getSignature(Element element) {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder signature = new StringBuilder();
         // TODO:
-        sb.append("<pre>");
+        signature.append("<pre>");
 
         if (element instanceof MethodElement) {
             MethodElement executable = (MethodElement)element;
             if (element.getIn() != null) {
                 String in = element.getIn();
-                sb.append("<i>");
-                sb.append(in);
-                sb.append("</i>");
-                sb.append("<br>");
+                signature.append("<i>");
+                signature.append(in);
+                signature.append("</i>");
+                signature.append("<br>");
             }
             // TODO - share this between Navigator implementation and here...
-            sb.append("<b>");
-            sb.append(executable.getName());
-            sb.append("</b>");
+            signature.append("<b>");
+            signature.append(element.getName());
+            signature.append("</b>");
 
             Collection<String> parameters = executable.getParameters();
 
             if ((parameters != null) && (parameters.size() > 0)) {
-                sb.append("(");
+                signature.append("(");
 
-                sb.append("<font color=\"#808080\">");
+                signature.append("<font color=\"#808080\">");
 
                 for (Iterator<String> it = parameters.iterator(); it.hasNext();) {
                     String ve = it.next();
                     // TODO - if I know types, list the type here instead. For now, just use the parameter name instead
-                    sb.append(ve);
+                    signature.append(ve);
 
                     if (it.hasNext()) {
-                        sb.append(", ");
+                        signature.append(", ");
                     }
                 }
 
-                sb.append("</font>");
+                signature.append("</font>");
 
-                sb.append(")");
+                signature.append(")");
             }
         } else if (element instanceof ClassElement) {
             ClassElement clz = (ClassElement)element;
             String name = element.getName();
             final String fqn = clz.getFqn();
             if (fqn != null && !name.equals(fqn)) {
-                sb.append("<i>");
-                sb.append(fqn);
-                sb.append("</i>");
-                sb.append("<br>");
+                signature.append("<i>");
+                signature.append(fqn);
+                signature.append("</i>");
+                signature.append("<br>");
             }
-            sb.append("<b>");
-            sb.append(name);
-            sb.append("</b>");
+            signature.append("<b>");
+            signature.append(name);
+            signature.append("</b>");
         } else {
-            sb.append(element.getName());
+            signature.append(element.getName());
         }
 
-        sb.append("</pre>\n");
+        signature.append("</pre>\n");
 
-        return sb.toString();
+        return signature.toString();
     }
 
     private static String getHtmlColor(Color c) {

@@ -41,18 +41,15 @@
 package org.netbeans.modules.ruby;
 
 import java.awt.event.ActionEvent;
-import javax.swing.AbstractAction;
-import javax.swing.JEditorPane;
 import javax.swing.text.JTextComponent;
+import org.netbeans.modules.gsf.spi.GsfUtilities;
 import org.netbeans.modules.ruby.options.CodeStyle;
 import org.openide.filesystems.FileObject;
-import org.openide.util.NbBundle;
 import javax.swing.text.BadLocationException;
-import org.netbeans.api.gsf.EditorAction;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.netbeans.api.gsf.OffsetRange;
+import org.netbeans.modules.gsf.api.OffsetRange;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.editor.BaseAction;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
@@ -66,44 +63,24 @@ import org.openide.util.Exceptions;
  * 
  * @author Tor Norbye
  */
-public class ReflowParagraphAction extends AbstractAction implements EditorAction {
+public class ReflowParagraphAction extends BaseAction {
 
     public ReflowParagraphAction() {
-        super(NbBundle.getMessage(ReflowParagraphAction.class, "ruby-reflow-paragraph")); // NOI18N
-        putValue("PopupMenuText", NbBundle.getBundle(ReflowParagraphAction.class).getString("editor-popup-ruby-reflow-paragraph")); // NOI18N
+        super("ruby-reflow-paragraph", 0); // NOI18N
     }
 
-    public void actionPerformed(ActionEvent evt, JTextComponent target) {
-        actionPerformed(target);
-    }
-
-    public String getActionName() {
-        return "ruby-reflow-paragraph";
-    }
-
+    @Override
     public Class getShortDescriptionBundleClass() {
         return ReflowParagraphAction.class;
     }
 
     @Override
-    public boolean isEnabled() {
-        return true;
-    }
-
-    public void actionPerformed(ActionEvent ev) {
-        JTextComponent pane = NbUtilities.getOpenPane();
-
-        if (pane != null) {
-            actionPerformed(pane);
-        }
-    }
-
-    void actionPerformed(final JTextComponent target) {
+    public void actionPerformed(ActionEvent evt, final JTextComponent target) {
         if (target.getCaret() == null) {
             return;
         }
 
-        FileObject fo = NbUtilities.findFileObject(target);
+        FileObject fo = GsfUtilities.findFileObject(target);
 
         if (fo != null) {
             int offset = target.getCaret().getDot();
@@ -111,7 +88,7 @@ public class ReflowParagraphAction extends AbstractAction implements EditorActio
         }
     }
     
-    public void reflowEditedComment(JTextComponent target) {
+    public static void reflowEditedComment(JTextComponent target) {
         if (target.getCaret() == null) {
             return;
         }
@@ -120,13 +97,13 @@ public class ReflowParagraphAction extends AbstractAction implements EditorActio
         new ParagraphFormatter(true, target, null, -1).reflowParagraph(offset);
     }
 
-    public void reflowComments(BaseDocument doc, int start, int end, int rightMargin) {
+    public static void reflowComments(BaseDocument doc, int start, int end, int rightMargin) {
         // Locate all comments in the given document and format them
          ParagraphFormatter formatter = new ParagraphFormatter(false, null, doc, rightMargin);
          formatter.reflow(start, end);
     }
     
-    private class ParagraphFormatter {
+    private static class ParagraphFormatter {
         private JTextComponent target;
         private BaseDocument doc;
         private int oldCaretPosition = -1;
@@ -148,16 +125,16 @@ public class ReflowParagraphAction extends AbstractAction implements EditorActio
         ParagraphFormatter(boolean currentSectionOnly, JTextComponent target, BaseDocument doc, int rightMargin) {
             this.currentSectionOnly = currentSectionOnly;
             this.target = target;
-            if (rightMargin != -1) {
-                this.rightMargin = rightMargin;
-            } else {
-                this.rightMargin = CodeStyle.getDefault(null).getRightMargin();// EditorOptions.get(RubyInstallation.RUBY_MIME_TYPE).getRightMargin();
-            }
             if (target != null) {
                 this.doc = (BaseDocument)target.getDocument();
                 this.oldCaretPosition = target.getCaret() != null ? target.getCaret().getDot() : null;
             } else {
                 this.doc = doc;
+            }
+            if (rightMargin != -1) {
+                this.rightMargin = rightMargin;
+            } else {
+                this.rightMargin = CodeStyle.get(this.doc).getRightMargin();// EditorOptions.get(RubyInstallation.RUBY_MIME_TYPE).getRightMargin();
             }
         }
 
@@ -362,8 +339,8 @@ public class ReflowParagraphAction extends AbstractAction implements EditorActio
 
         private void reflow(OffsetRange range) throws BadLocationException {
             sb.setLength(0);
-            int start = range.getStart();
-            int end = range.getEnd();
+            final int start = range.getStart();
+            final int end = range.getEnd();
             indent = LexUtilities.getLineIndent(doc, start);
 
             int offset = start;
@@ -426,27 +403,27 @@ public class ReflowParagraphAction extends AbstractAction implements EditorActio
             }
             flush();
 
-            try {
-                doc.atomicLock();
-                String replaceWith = sb.toString();
-                if (replaceWith.endsWith("\n")) {
-                    replaceWith = replaceWith.substring(0, replaceWith.length() - 1);
+            doc.runAtomic(new Runnable() {
+                public void run() {
+                    try {
+                        String replaceWith = sb.toString();
+                        if (replaceWith.endsWith("\n")) {
+                            replaceWith = replaceWith.substring(0, replaceWith.length() - 1);
+                        }
+                        int index = replaceWith.indexOf(CARET_MARKER);
+                        if (index != -1) {
+                            replaceWith = replaceWith.substring(0, index) + replaceWith.substring(index + 1);
+                        }
+                        doc.replace(start, end - start, replaceWith, null);
+                        if (index != -1 && target != null) {
+                            target.getCaret().setDot(start + index);
+                        }
+                    }
+                    catch (BadLocationException ble){
+                        Exceptions.printStackTrace(ble);
+                    }
                 }
-                int index = replaceWith.indexOf(CARET_MARKER);
-                if (index != -1) {
-                    replaceWith = replaceWith.substring(0, index) + replaceWith.substring(index + 1);
-                }
-                doc.replace(start, end - start, replaceWith, null);
-                if (index != -1 && target != null) {
-                    target.getCaret().setDot(start + index);
-                }
-            }
-            catch (BadLocationException ble){
-                Exceptions.printStackTrace(ble);
-            }
-            finally{
-                doc.atomicUnlock();
-            }
+            });
         }
 
         public void appendLine(String text) {
