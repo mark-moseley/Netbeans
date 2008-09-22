@@ -344,6 +344,38 @@ public class DetectorTest extends TestBase {
 	performTest("UsedInFor");
     }
     
+    public void testCastIsClassUse() throws Exception {
+	performTest("CastIsClassUse");
+    }
+    
+    public void testWildcardBoundIsClassUse() throws Exception {
+	performTest("WildcardBoundIsClassUse");
+    }
+    
+    public void testStaticImport128662() throws Exception {
+	performTest("StaticImport128662");
+    }
+    
+    public void testUsedImport129988() throws Exception {
+	performTest("UsedImport129988");
+    }
+    
+    public void testUsedImport132980() throws Exception {
+	performTest("UsedImport132980");
+    }
+    
+    public void testReadUse132342() throws Exception {
+	performTest("ReadUse132342");
+    }
+    
+    public void testRecursiveExecutionIsNotUse() throws Exception {
+	performTest("RecursiveExecutionIsNotUse");
+    }
+
+    public void testDeprecatedClassDeprecatesConstructor() throws Exception {
+        performTest("DeprecatedClassDeprecatesConstructor");
+    }
+
     private void performTest(String fileName) throws Exception {
         performTest(fileName, new Performer() {
             public void compute(CompilationController parameter, Document doc, ErrorDescriptionSetter setter) {
