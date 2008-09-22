@@ -68,6 +68,10 @@ public class BooleanConfiguration {
 	reset();
     }
 
+    protected BooleanConfiguration getMaster() {
+        return master;
+    }
+
     public void setValue(boolean b) {
 	this.value = b;
 	if (master != null)
@@ -98,6 +102,10 @@ public class BooleanConfiguration {
     
     public boolean getDefault() {
 	return def;
+    }
+    public void setDefault(boolean b) {
+        def = b;
+        setModified(value != def);
     }
     public void reset() {
 	value = getDefault();
