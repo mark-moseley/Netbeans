@@ -41,7 +41,8 @@
 
 package org.netbeans.modules.gsfret.source.usages;
 
-import org.netbeans.api.gsfpath.classpath.ClassPath;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
+import org.netbeans.modules.gsf.Language;
 import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
@@ -57,18 +58,24 @@ import org.openide.filesystems.FileObject;
  */
 public abstract class ClasspathInfoAccessor {
 
-    static {
-        try {
-            //Class.forName("org.netbeans.api.gsfpath.source.ClasspathInfo",true,ClasspathInfoAccessor.class.getClassLoader());
-            Class.forName("org.netbeans.napi.gsfret.source.ClasspathInfo",true,ClasspathInfoAccessor.class.getClassLoader());
-        } catch (ClassNotFoundException cnfe) {
-            ErrorManager.getDefault().notify(cnfe);
+    public static synchronized ClasspathInfoAccessor getInstance() {
+        if (INSTANCE == null) {
+            try {
+                Class.forName(ClasspathInfo.class.getName(), true, ClasspathInfo.class.getClassLoader());
+            } catch (ClassNotFoundException cnfe) {
+                ErrorManager.getDefault().notify(cnfe);
+            }
         }
+
+        return INSTANCE;
     }
 
-    public static ClasspathInfoAccessor INSTANCE;
-       
-    
+    public static void setInstance(ClasspathInfoAccessor newInstance) {
+        INSTANCE = newInstance;
+    }
+
+    private static volatile ClasspathInfoAccessor INSTANCE;
+
 //    public abstract JavaFileManager getFileManager(ClasspathInfo cpInfo);
 //    
     public abstract ClassPath getCachedClassPath (ClasspathInfo cpInfo, ClasspathInfo.PathKind kind);
