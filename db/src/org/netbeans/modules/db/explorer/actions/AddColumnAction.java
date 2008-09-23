@@ -41,11 +41,9 @@
 
 package org.netbeans.modules.db.explorer.actions;
 
-import java.text.MessageFormat;
+import org.netbeans.api.db.explorer.DatabaseException;
 import org.netbeans.modules.db.explorer.DbUtilities;
 
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
 import org.openide.nodes.Node;
 import org.openide.util.RequestProcessor;
 
@@ -74,17 +72,24 @@ public class AddColumnAction extends DatabaseAction {
 
         DatabaseNodeInfo info = (DatabaseNodeInfo) node.getCookie(DatabaseNodeInfo.class);
         final TableNodeInfo nfo = (TableNodeInfo) info.getParent(nodename);
-        RequestProcessor.getDefault().post(new Runnable() {
-            public void run () {
-                try {
-                    AddTableColumnDialog dlg = new AddTableColumnDialog((Specification) nfo.getSpecification(), nfo);
-                    if (dlg.run()) {
-                        nfo.addColumn(dlg.getColumnName());
+        try {
+            AddTableColumnDialog dlg = new AddTableColumnDialog((Specification) nfo.getSpecification(), nfo);
+            if (dlg.run()) {
+                nfo.addColumn(dlg.getColumnName());
+                RequestProcessor.getDefault().post(
+                    new Runnable() {
+                        public void run() {
+                            try {
+                                nfo.refreshChildren();
+                            } catch ( DatabaseException de ) {
+                                DbUtilities.reportError(bundle().getString("ERR_UnableToAddColumn"), de.getMessage()); // NOI18N
+                            }
+                        }
                     }
-                } catch(Exception exc) {
-                    DbUtilities.reportError(bundle().getString("ERR_UnableToAddColumn"), exc.getMessage()); // NOI18N
-                }
+                );
             }
-        }, 0);
+        } catch(Exception exc) {
+            DbUtilities.reportError(bundle().getString("ERR_UnableToAddColumn"), exc.getMessage()); // NOI18N
+        }
     }
 }
