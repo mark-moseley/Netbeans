@@ -48,6 +48,10 @@ import java.awt.event.ActionListener;
 import java.awt.EventQueue;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.lang.ref.Reference;
 import java.text.MessageFormat;
 import java.util.List;
@@ -69,6 +73,7 @@ import javax.swing.JToggleButton;
 import javax.swing.JToolBar;
 import javax.swing.JTree;
 import javax.swing.SwingConstants;
+import javax.swing.tree.TreeCellRenderer;
 import javax.swing.tree.TreePath;
 import org.openide.awt.Mnemonics;
 import org.openide.nodes.Node;
@@ -78,7 +83,6 @@ import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 import org.openidex.search.SearchType;
-import static java.lang.Thread.NORM_PRIORITY;
 
 /**
  * Panel which displays search results in explorer like manner.
@@ -138,6 +142,7 @@ final class ResultView extends TopComponent {
     private final JTree tree;
     /** listens on various actions performed on nodes in the tree */
     private final NodeListener nodeListener;
+    private final ArrowStatusUpdater arrowUpdater;
     
     /** */
     private String searchScopeType;
@@ -234,8 +239,9 @@ final class ResultView extends TopComponent {
         toolBar.setRollover(true);
         toolBar.setFloatable(false);
         
+        arrowUpdater = new ArrowStatusUpdater(this);
         treeModel = createTreeModel();
-        tree = createTree(treeModel, nodeListener = new NodeListener());
+        tree = createTree(treeModel, nodeListener = new NodeListener(), arrowUpdater);
         treeView = new JScrollPane(tree);
         treeView.getAccessibleContext().setAccessibleDescription(
                 NbBundle.getMessage(ResultView.class, "ACS_TREEVIEW")); //NOI18N
@@ -321,9 +327,23 @@ final class ResultView extends TopComponent {
     /**
      */
     private static JTree createTree(ResultTreeModel treeModel,
-                                    NodeListener nodeListener) {
+                                    NodeListener nodeListener,
+                                    ArrowStatusUpdater arrowUpdater) {
         JTree tree = new JTree(treeModel);
-        tree.setCellRenderer(new NodeRenderer(false));
+
+        TreeCellRenderer cellRenderer = new NodeRenderer(false);
+        tree.setCellRenderer(cellRenderer);
+        tree.setRowHeight(cellRenderer.getTreeCellRendererComponent(
+                                                tree,       //tree
+                                                treeModel,  //value
+                                                true,       //selected
+                                                true,       //expanded
+                                                false,      //leaf
+                                                0,          //row
+                                                true)       //hasFocus
+                          .getPreferredSize()
+                          .height + 2);
+
         tree.putClientProperty("JTree.lineStyle", "Angled");            //NOI18N
         
         tree.addMouseListener(nodeListener);
@@ -332,8 +352,75 @@ final class ResultView extends TopComponent {
         tree.addTreeExpansionListener(nodeListener);
         
         tree.setToggleClickCount(0);
+
+        tree.addMouseListener(arrowUpdater);
+        tree.addKeyListener(arrowUpdater);
         
         return tree;
+    }
+
+    /**
+     * This listener updates "enabled" property of Up and Down button
+     */
+    private class ArrowStatusUpdater implements KeyListener, MouseListener {
+
+        private ResultView resultView;
+        
+        public ArrowStatusUpdater(ResultView component) {
+            resultView = component;
+        }
+        
+        private void update() {
+            if (resultModel == null || tree == null) {
+                return;
+            }
+            
+            if (!resultView.hasResults) {
+                btnPrev.setEnabled(false);
+                btnNext.setEnabled(false);
+            } else {
+                TreePath leadPath = tree.getLeadSelectionPath();
+                if (leadPath == null) {
+                    btnPrev.setEnabled(false);
+                    btnNext.setEnabled(true);
+                } else {
+                    btnPrev.setEnabled(findNextPath(leadPath, false) != null);
+                    btnNext.setEnabled(findNextPath(leadPath, true) != null);
+                }
+            }
+        }
+
+        public void keyReleased(KeyEvent e) {
+            int key = e.getKeyCode();
+
+            if (key == KeyEvent.VK_ENTER || key == KeyEvent.VK_SPACE 
+                    || key == KeyEvent.VK_UP || key == KeyEvent.VK_DOWN 
+                    || key == KeyEvent.VK_LEFT || key == KeyEvent.VK_RIGHT) {
+                update();
+            }
+        }
+
+        public void mousePressed(MouseEvent e) {
+            update();            
+        }
+
+        public void keyPressed(KeyEvent e) {
+        }
+
+        public void keyTyped(KeyEvent e) {
+        }
+
+        public void mouseClicked(MouseEvent e) {
+        }
+
+        public void mouseReleased(MouseEvent e) {
+        }
+
+        public void mouseEntered(MouseEvent e) {
+        }
+
+        public void mouseExited(MouseEvent e) {
+        }
     }
     
     /**
@@ -556,6 +643,7 @@ final class ResultView extends TopComponent {
         btnModifySearch.setEnabled(true);
         btnStop.setEnabled(true);
         btnReplace.setEnabled(false);
+        arrowUpdater.update();        
     }
     
     /**
@@ -570,6 +658,7 @@ final class ResultView extends TopComponent {
         updateShowAllDetailsBtn();
         btnStop.setEnabled(false);
         btnReplace.setEnabled(true);
+        arrowUpdater.update();        
     }
     
     /**
@@ -592,6 +681,7 @@ final class ResultView extends TopComponent {
         updateShowAllDetailsBtn();
         btnStop.setEnabled(false);
         btnReplace.setEnabled(true);
+        arrowUpdater.update();
     }
     
     /**
@@ -603,9 +693,12 @@ final class ResultView extends TopComponent {
         
         if (resultModel.wasLimitReached()) {
             setRootDisplayName(
-                    NbBundle.getMessage(ResultView.class,
-                                        "TEXT_MSG_FOUND_X_NODES_LIMIT", //NOI18N
-                                        new Integer(resultSize)));
+                    NbBundle.getMessage(
+                            ResultView.class,
+                            "TEXT_MSG_FOUND_X_NODES_LIMIT",             //NOI18N
+                            Integer.valueOf(resultSize),
+                            Integer.valueOf(resultModel.getTotalDetailsCount()))
+                            + ' ' + resultModel.getLimitDisplayName());
             return;
         }
         
@@ -646,6 +739,9 @@ final class ResultView extends TopComponent {
      */
     private void updateShowAllDetailsBtn() {
         assert EventQueue.isDispatchThread();
+        
+        if (hasResults && !searchInProgress)
+            tree.setSelectionPath(new TreePath(tree.getModel().getRoot()));
         
         btnShowDetails.setEnabled(hasResults
                                   && !searchInProgress
@@ -915,6 +1011,8 @@ final class ResultView extends TopComponent {
             
             tree.setSelectionPath(nextPath);
             tree.scrollRectToVisible(tree.getPathBounds(nextPath));
+            
+            arrowUpdater.update();
         }
     }
     
