@@ -48,10 +48,10 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.Document;
 import org.netbeans.api.lexer.InputAttributes;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.lib.editor.util.swing.DocumentListenerPriority;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.lib.lexer.LanguageManager;
+import org.netbeans.lib.lexer.LexerApiPackageAccessor;
 import org.netbeans.spi.lexer.*;
 
 /**
@@ -137,21 +137,21 @@ extends MutableTextInput<D> implements DocumentListener {
     }
 
     public void insertUpdate(DocumentEvent e) {
-        modified(true, e);
+        textModified(e.getOffset(), 0, null, e.getLength());
     }
 
     public void removeUpdate(DocumentEvent e) {
-        modified(false, e);
+        textModified(e.getOffset(), e.getLength(),
+                DocumentUtilities.getModificationText(e), 0);
     }
 
-    private void modified(boolean insert, DocumentEvent e) {
-        int offset = e.getOffset();
-        int length = e.getLength();
-        if (insert) {
-            tokenHierarchyControl().textModified(offset, 0, null, length);
-        } else {
-            tokenHierarchyControl().textModified(offset, length,
-                    DocumentUtilities.getModificationText(e), 0);
+    private void textModified(int offset, int length, CharSequence removedText,
+    int insertedLength) {
+        try {
+            tokenHierarchyControl().textModified(offset, length, removedText, insertedLength);
+        } catch (RuntimeException e) {
+            // Log the exception and attempt to recover by recreating the token hierarchy
+            LexerApiPackageAccessor.get().tokenHierarchyOperation(tokenHierarchyControl().tokenHierarchy()).recreateAfterError(e);
         }
     }
 
