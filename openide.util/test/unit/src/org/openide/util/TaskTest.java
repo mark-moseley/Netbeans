@@ -93,7 +93,8 @@ public class TaskTest extends NbTestCase {
     public void testWaitWithTimeOutReturnsImmediatellyOnFinishedTasks () throws Exception {
         assertTrue ("Was successfully finished", Task.EMPTY.waitFinished (0));
     }
-    
+
+    @RandomlyFails
     public void testWaitWithTimeOutReturnsAfterTimeOutWhenTheTaskIsNotComputedAtAll () throws Exception {
         long time = System.currentTimeMillis ();
         Task t = new Task (new R ());
@@ -158,5 +159,24 @@ public class TaskTest extends NbTestCase {
             }
         }
     }
+    
+    /*
+     * see issue #130265
+     */
+    public void testWaitFinished0WaitsUntilFinished() throws Exception {
+        Task task = new Task(new Runnable() {
 
+            public void run() {
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        });
+        Thread thread = new Thread(task);
+        thread.start();
+        task.waitFinished(0);
+        assertTrue ("Should be finished", task.isFinished());
+    }
 }
