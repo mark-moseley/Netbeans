@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,6 +31,10 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 
@@ -44,8 +42,6 @@ package org.netbeans.modules.uml.propertysupport.options.panels;
 
 import java.util.prefs.Preferences;
 import javax.swing.JComboBox;
-import org.netbeans.modules.uml.ui.products.ad.diagramengines.sequencediagram.IShowMessageType;
-import org.netbeans.modules.uml.ui.support.drawingproperties.FontColorDialogs.ApplicationColorsAndFonts;
 import org.netbeans.modules.uml.util.DummyCorePreference;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
@@ -63,8 +59,8 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
     public final String PSK_RESIZE_ASNEEDED = "PSK_RESIZE_ASNEEDED";
     public final String PSK_RESIZE_EXPANDONLY = "PSK_RESIZE_EXPANDONLY";
     public final String PSK_RESIZE_UNLESSMANUAL = "PSK_RESIZE_UNLESSMANUAL";
-    public final String PSK_RESIZE_NEVER = "PSK_RESIZE_NEVER";
-
+    public final String PSK_RESIZE_NEVER = "PSK_RESIZE_NEVER";    
+    
     //for menu display
     private final String ALWAYS = NbBundle.getMessage(GeneralOptionsPanelForm.class, "ALWAYS");
     private final String NEVER = NbBundle.getMessage(GeneralOptionsPanelForm.class, "NEVER");
@@ -73,8 +69,7 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
     private final String EXPANDONLY = NbBundle.getMessage(GeneralOptionsPanelForm.class, "EXPANDONLY");
     private final String UNLESSMANUAL = NbBundle.getMessage(GeneralOptionsPanelForm.class, "UNLESSMANUAL");
     private final String RESIZE_NEVER = NbBundle.getMessage(GeneralOptionsPanelForm.class, "RESIZE_NEVER");
-
-            
+    
     //for Display Seq Diagram Messages
     private final String SHOW_NOTHING = NbBundle.getMessage(GeneralOptionsPanelForm.class,"SMT_NOTHING");
     private final String SHOW_OPERATION = NbBundle.getMessage(GeneralOptionsPanelForm.class, "SMT_OPERATION");
@@ -82,14 +77,15 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
             
     private final String[] SQD_MSG = { SHOW_NOTHING, SHOW_OPERATION, SHOW_NAME} ;
             
-    private final Integer[] mapped_SQD_MSG = {IShowMessageType.SMT_NONE, IShowMessageType.SMT_OPERATION, IShowMessageType.SMT_NAME};
+//    private final Integer[] mapped_SQD_MSG = {IShowMessageType.SMT_NONE, IShowMessageType.SMT_OPERATION, IShowMessageType.SMT_NAME};
+    private final Integer[] mapped_SQD_MSG = {0, 1, 2};
     
     private final String[] displayChoices = {ALWAYS, SELECTED, NEVER};
     private final String[] mappedChoices = {PSK_ALWAYS, PSK_SELECTED, PSK_NEVER};
 
     private final String[] resizeDisplayChoices = {ASNEEDED, EXPANDONLY, UNLESSMANUAL, RESIZE_NEVER};
     private final String[] resizeMappedChoices = {PSK_RESIZE_ASNEEDED, PSK_RESIZE_EXPANDONLY, PSK_RESIZE_UNLESSMANUAL, PSK_RESIZE_NEVER};
-
+    
     /** Creates new form GeneralOptionsPanel */
     public GeneralOptionsPanelForm() {
         initComponents();
@@ -116,17 +112,16 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
         prefs.putBoolean("UML_Ask_Before_Layout", askLayoutCB.isSelected());
 
         prefs.putInt("UML_SQD_DEFAULT_MSG", mapped_SQD_MSG[sqdDisplayMsgIndex]);
-
     }
 
     public void load() {
         Preferences prefs = NbPreferences.forModule(DummyCorePreference.class);
-        
+
         if (prefs.getBoolean("UML_Show_Aliases", false)) {
             showAlias.setSelected(true);
         } else {
             showAlias.setSelected(false);
-        }
+        }        
         if (prefs.getBoolean("UML_Open_Project_Diagrams", true)) {
             openProjectDiagramsCB.setSelected(true);
         } else {
@@ -162,19 +157,18 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
         } else {
             askLayoutCB.setSelected(false);
         }
-        
         String autoResizeValue = prefs.get("UML_Automatically_Size_Elements", null);
         String displayCompartmentValue = prefs.get("UML_Display_Compartment_Titles", null);
-        Integer sqdMsgVal = prefs.getInt("UML_SQD_DEFAULT_MSG", IShowMessageType.SMT_NONE) ;
-
+//        Integer sqdMsgVal = prefs.getInt("UML_SQD_DEFAULT_MSG", IShowMessageType.SMT_NONE) ;
+        Integer sqdMsgVal = prefs.getInt("UML_SQD_DEFAULT_MSG", 0);
+        
         int autoResizeIndex = getMappedIndex(resizeMappedChoices, autoResizeValue);
         int compartmentIndex = getMappedIndex(mappedChoices, displayCompartmentValue);
         int sqdMsgIndex = getMappedIndex(mapped_SQD_MSG, sqdMsgVal);
-
+        
         autoResizeElementsComboBox.setSelectedIndex(autoResizeIndex);
         seqDiagMsgCB.setSelectedIndex(sqdMsgIndex);
         displayCompartmentTitlesComboBox.setSelectedIndex(compartmentIndex);
-       
     }
 
     public void cancel() {
@@ -194,10 +188,7 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
         return 0;
     }
 
-    public void showFontsAndColorsDialog() {
-        new ApplicationColorsAndFonts().setVisible(true);
-    }
-
+   
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
@@ -216,7 +207,6 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
         gradient = new javax.swing.JCheckBox();
         askLayoutCB = new javax.swing.JCheckBox();
         jLabel5 = new javax.swing.JLabel();
-        jButton1 = new javax.swing.JButton();
         jPanel1 = new javax.swing.JPanel();
         jLabel2 = new javax.swing.JLabel();
         autoResizeElementsComboBox = new JComboBox(resizeDisplayChoices);
@@ -228,56 +218,44 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
         jLabel4 = new javax.swing.JLabel();
         jSeparator1 = new javax.swing.JSeparator();
 
-        showAlias.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanelForm.showAlias.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(showAlias, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanelForm.showAlias.text")); // NOI18N
 
         openProjectDiagramsCB.setSelected(true);
-        openProjectDiagramsCB.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.openProjectDiagramsCB.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(openProjectDiagramsCB, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.openProjectDiagramsCB.text")); // NOI18N
 
         displayEmpty.setSelected(true);
-        displayEmpty.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.displayEmpty.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(displayEmpty, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.displayEmpty.text")); // NOI18N
 
         reconnect.setSelected(true);
-        reconnect.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.reconnect.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(reconnect, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.reconnect.text")); // NOI18N
 
-        resizeCB.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.resizeCB.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(resizeCB, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.resizeCB.text")); // NOI18N
 
         showStereotype.setSelected(true);
-        showStereotype.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.showStereotype.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(showStereotype, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.showStereotype.text")); // NOI18N
 
         gradient.setSelected(true);
-        gradient.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.gradient.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(gradient, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.gradient.text")); // NOI18N
 
         askLayoutCB.setSelected(true);
-        askLayoutCB.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanelForm.askLayoutCB.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(askLayoutCB, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanelForm.askLayoutCB.text")); // NOI18N
 
         jLabel5.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanelForm.jLabel5.text")); // NOI18N
-
-        jButton1.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.jButton1.text")); // NOI18N
-        jButton1.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton1ActionPerformed(evt);
-            }
-        });
 
         org.jdesktop.layout.GroupLayout jPanel4Layout = new org.jdesktop.layout.GroupLayout(jPanel4);
         jPanel4.setLayout(jPanel4Layout);
         jPanel4Layout.setHorizontalGroup(
             jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(jPanel4Layout.createSequentialGroup()
+                .add(jLabel5)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(jPanel4Layout.createSequentialGroup()
-                        .add(jLabel5)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(askLayoutCB, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 252, Short.MAX_VALUE)
-                            .add(reconnect, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 252, Short.MAX_VALUE)
-                            .add(displayEmpty, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 252, Short.MAX_VALUE)
-                            .add(resizeCB, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 252, Short.MAX_VALUE)
-                            .add(showStereotype, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 252, Short.MAX_VALUE)
-                            .add(gradient, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 252, Short.MAX_VALUE)))
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, jPanel4Layout.createSequentialGroup()
-                        .add(114, 114, 114)
-                        .add(jButton1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 248, Short.MAX_VALUE)))
+                    .add(askLayoutCB, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 273, Short.MAX_VALUE)
+                    .add(reconnect, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 273, Short.MAX_VALUE)
+                    .add(displayEmpty, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 273, Short.MAX_VALUE)
+                    .add(resizeCB, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 273, Short.MAX_VALUE)
+                    .add(showStereotype, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 273, Short.MAX_VALUE)
+                    .add(gradient, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 273, Short.MAX_VALUE))
                 .addContainerGap())
         );
         jPanel4Layout.setVerticalGroup(
@@ -297,24 +275,26 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
                 .add(gradient)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(askLayoutCB)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
-                .add(jButton1)
-                .addContainerGap(22, Short.MAX_VALUE))
+                .addContainerGap(52, Short.MAX_VALUE))
         );
 
-        jLabel2.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.jLabel2.text")); // NOI18N
+        displayEmpty.getAccessibleContext().setAccessibleDescription(displayEmpty.getText());
+        reconnect.getAccessibleContext().setAccessibleDescription(reconnect.getText());
+        resizeCB.getAccessibleContext().setAccessibleDescription(resizeCB.getText());
+        showStereotype.getAccessibleContext().setAccessibleDescription(showStereotype.getText());
+        gradient.getAccessibleContext().setAccessibleDescription(gradient.getText());
+        askLayoutCB.getAccessibleContext().setAccessibleDescription(askLayoutCB.getText());
+
+        jLabel2.setLabelFor(displayCompartmentTitlesComboBox);
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel2, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.jLabel2.text")); // NOI18N
 
         autoResizeElementsComboBox.setDoubleBuffered(true);
 
-        jLabel1.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.jLabel1.text")); // NOI18N
+        jLabel1.setLabelFor(autoResizeElementsComboBox);
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanel.jLabel1.text")); // NOI18N
 
-        jLabel6.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanelForm.jLabel6.text")); // NOI18N
-
-        seqDiagMsgCB.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                seqDiagMsgCBActionPerformed(evt);
-            }
-        });
+        jLabel6.setLabelFor(seqDiagMsgCB);
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel6, org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanelForm.jLabel6.text")); // NOI18N
 
         org.jdesktop.layout.GroupLayout jPanel1Layout = new org.jdesktop.layout.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
@@ -348,6 +328,10 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
                     .add(seqDiagMsgCB, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .addContainerGap())
         );
+
+        displayCompartmentTitlesComboBox.getAccessibleContext().setAccessibleDescription(jLabel2.getText());
+        jLabel1.getAccessibleContext().setAccessibleDescription(jLabel1.getText());
+        seqDiagMsgCB.getAccessibleContext().setAccessibleDescription(jLabel6.getText());
 
         jLabel3.setText(org.openide.util.NbBundle.getMessage(GeneralOptionsPanelForm.class, "GeneralOptionsPanelForm.jLabel3.text")); // NOI18N
 
@@ -393,15 +377,10 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
                 .add(jPanel4, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap(35, Short.MAX_VALUE))
         );
+
+        showAlias.getAccessibleContext().setAccessibleDescription(showAlias.getText());
+        openProjectDiagramsCB.getAccessibleContext().setAccessibleDescription(openProjectDiagramsCB.getText());
     }// </editor-fold>//GEN-END:initComponents
-
-    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-        showFontsAndColorsDialog();
-}//GEN-LAST:event_jButton1ActionPerformed
-
-    private void seqDiagMsgCBActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_seqDiagMsgCBActionPerformed
-        // TODO add your handling code here:
-}//GEN-LAST:event_seqDiagMsgCBActionPerformed
 
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
@@ -410,7 +389,6 @@ public class GeneralOptionsPanelForm extends javax.swing.JPanel {
     private javax.swing.JComboBox displayCompartmentTitlesComboBox;
     private javax.swing.JCheckBox displayEmpty;
     private javax.swing.JCheckBox gradient;
-    private javax.swing.JButton jButton1;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
