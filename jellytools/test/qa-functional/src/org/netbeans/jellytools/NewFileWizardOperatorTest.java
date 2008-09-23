@@ -40,13 +40,13 @@
  */
 package org.netbeans.jellytools;
 
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.actions.DeleteAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.operators.JComboBoxOperator;
 
 /**
@@ -64,10 +64,14 @@ public class NewFileWizardOperatorTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
+    public static final String[] tests = new String[] {
+        "testInvokeTitle", "testInvoke", "testSelectProjectAndCategoryAndFileType", 
+        "testGetDescription", "testCreate"};    
     /** Method used for explicit testsuite definition
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new NewFileWizardOperatorTest("testInvokeTitle"));
         suite.addTest(new NewFileWizardOperatorTest("testInvoke"));
@@ -75,10 +79,16 @@ public class NewFileWizardOperatorTest extends JellyTestCase {
         suite.addTest(new NewFileWizardOperatorTest("testGetDescription"));
         suite.addTest(new NewFileWizardOperatorTest("testCreate"));
         return suite;
+         */
+        return createModuleTest(NewFileWizardOperatorTest.class, 
+                tests);
     }
     
-    protected void setUp() {
+    @Override
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
+        JemmyProperties.setCurrentDispatchingModel(JemmyProperties.ROBOT_MODEL_MASK);
     }
     
     /** Constructor required by JUnit.

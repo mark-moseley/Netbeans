@@ -128,10 +128,12 @@ public abstract class NbTestCase extends TestCase implements NbTest {
     public boolean canRun() {
         if (NbTestSuite.ignoreRandomFailures()) {
             if (getClass().isAnnotationPresent(RandomlyFails.class)) {
+                System.err.println("Skipping " + getClass().getName());
                 return false;
             }
             try {
                 if (getClass().getMethod(getName()).isAnnotationPresent(RandomlyFails.class)) {
+                    System.err.println("Skipping " + getClass().getName() + "." + getName());
                     return false;
                 }
             } catch (NoSuchMethodException x) {
@@ -859,15 +861,15 @@ public abstract class NbTestCase extends TestCase implements NbTest {
 
         private synchronized void add(int i) throws IOException {
             bytes += i;
-            if (bytes >= 1048576L) { // 1mb
-                out.close();
-                File trim = new File(f.getParent(), "TRIMMED_" + f.getName());
-                trim.delete();
-                f.renameTo(trim);
-                f.delete();
-                out = new FileOutputStream(f);
-                bytes = 0;
-            }
+//            if (bytes >= 2097152L) { // 2mb
+//                out.close();
+//                File trim = new File(f.getParent(), "TRIMMED_" + f.getName());
+//                trim.delete();
+//                f.renameTo(trim);
+//                f.delete();
+//                out = new FileOutputStream(f);
+//                bytes = 0;
+//            }
         }
         
         
