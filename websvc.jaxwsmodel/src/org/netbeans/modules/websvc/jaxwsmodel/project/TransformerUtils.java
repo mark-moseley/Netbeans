@@ -61,7 +61,6 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.websvc.api.jaxws.project.JAXWSVersionProvider;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Mutex;
 import org.openide.util.MutexException;
@@ -133,7 +132,7 @@ public class TransformerUtils {
             if (setJaxWsVersion) {
                 if(!isJAXWS21(projectDirectory)) {
                     t.setParameter(JAXWS_VERSION, JAXWS_20_LIB );
-                }                
+                }
             }
             File jaxws_xml_F = FileUtil.toFile(jaxws_xml);
             assert jaxws_xml_F != null;
@@ -184,12 +183,14 @@ public class TransformerUtils {
         Project project = FileOwnerQuery.getOwner(projectDirectory);
         if(project != null){
             JAXWSVersionProvider jvp = project.getLookup().lookup(JAXWSVersionProvider.class);
-            if(jvp != null &&
-                    jvp.getJAXWSVersion().equals(JAXWSVersionProvider.JAXWS20)){
-                return false;
+            if (jvp != null) {
+                String version = jvp.getJAXWSVersion();
+                if (version != null && !isVersionOK(version, "2.1")) { //NOI18N
+                    return false;
+                }
             }
         }
-        // Defaultly return true
+        // By default return true
         return true;
     }
     
@@ -224,6 +225,21 @@ public class TransformerUtils {
             hex = "0" + hex; // NOI18N
         }
         return hex;
+    }
+    
+    private static boolean isVersionOK(String version, String requiredVersion) {
+        int len1 = version.length();
+        int len2 = requiredVersion.length();
+        for (int i=0;i<Math.min(len1, len2);i++) {
+            if (version.charAt(i) < requiredVersion.charAt(i)) {
+                return false;
+            } else if (version.charAt(i) > requiredVersion.charAt(i)) {
+                return true;
+            }
+        }
+        if (len1 > len2) return true;
+        else if (len1 < len2) return false;
+        return true;
     }
 
 }
