@@ -38,20 +38,15 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.vmd.midpnb.propertyeditors;
 
-package org.netbeans.modules.vmd.midp.propertyeditors;
-
-import java.awt.Dimension;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
+import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.util.Collections;
 import java.util.regex.Pattern;
-import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
@@ -60,33 +55,30 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
+import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
-import org.netbeans.modules.vmd.midp.components.items.GaugeCD;
-import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorUserCode;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorElement;
+import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorUserCode;
 import org.openide.awt.Mnemonics;
 import org.openide.util.NbBundle;
 
 /**
  *
- * @author Anton Chechel
+ * @author Karol Harezlak
  */
-public final class PropertyEditorGaugeMaxValue extends PropertyEditorUserCode implements PropertyEditorElement {
-
-    private static final String INDEFINITE_TEXT = NbBundle.getMessage(PropertyEditorGaugeMaxValue.class, "LBL_MAX_VALUE_INDEFINITE_TXT"); // NOI18N
-    private static final String INDEFINITE_NUM_TEXT = String.valueOf(GaugeCD.VALUE_INDEFINITE);
+public class PropertyEditorPhoneNumber extends PropertyEditorUserCode implements PropertyEditorElement {
 
     private CustomEditor customEditor;
     private JRadioButton radioButton;
+    private String label;
+    private TypeID parentTypeID;
 
-    private PropertyEditorGaugeMaxValue() {
-        super(NbBundle.getMessage(PropertyEditorGaugeMaxValue.class, "LBL_GAUGE_MAX_VALUE_UCLABEL")); // NOI18N
+    private PropertyEditorPhoneNumber(String label, String ucLabel, TypeID parentTypeID) {
+        super(ucLabel);
+        this.label = label;
+        this.parentTypeID = parentTypeID;
         initComponents();
         initElements(Collections.<PropertyEditorElement>singleton(this));
-    }
-
-    public static final PropertyEditorGaugeMaxValue createInstance() {
-        return new PropertyEditorGaugeMaxValue();
     }
 
     @Override
@@ -97,11 +89,26 @@ public final class PropertyEditorGaugeMaxValue extends PropertyEditorUserCode im
             customEditor = null;
         }
         radioButton = null;
+        label = null;
+    }
+
+    public static PropertyEditorPhoneNumber createInstance(String label, String ucLabel) {
+        return new PropertyEditorPhoneNumber(label, ucLabel, null);
+    }
+
+    public static PropertyEditorPhoneNumber createInstance(String label, String ucLabel, TypeID parentTypeID) {
+        return new PropertyEditorPhoneNumber(label, ucLabel, parentTypeID);
     }
 
     private void initComponents() {
         radioButton = new JRadioButton();
-        Mnemonics.setLocalizedText(radioButton, NbBundle.getMessage(PropertyEditorGaugeMaxValue.class, "LBL_GAUGE_MAX_VALUE_STR")); // NOI18N
+        Mnemonics.setLocalizedText(radioButton, label);
+
+        radioButton.getAccessibleContext().setAccessibleName(
+                radioButton.getText());
+        radioButton.getAccessibleContext().setAccessibleDescription(
+                radioButton.getText());
+
         customEditor = new CustomEditor();
     }
 
@@ -128,15 +135,8 @@ public final class PropertyEditorGaugeMaxValue extends PropertyEditorUserCode im
             return superText;
         }
 
-        PropertyValue value = (PropertyValue) super.getValue();
-        if (value == null) {
-            return INDEFINITE_TEXT;
-        }
-        int intValue = MidpTypes.getInteger(value);
-        if (intValue == GaugeCD.VALUE_INDEFINITE) {
-            return INDEFINITE_TEXT;
-        }
-        return String.valueOf(intValue);
+        Object valueValue = ((PropertyValue) super.getValue()).getPrimitiveValue();
+        return String.valueOf(valueValue);
     }
 
     public void setTextForPropertyValue(String text) {
@@ -148,42 +148,16 @@ public final class PropertyEditorGaugeMaxValue extends PropertyEditorUserCode im
     }
 
     public void updateState(PropertyValue value) {
-        if (isCurrentValueANull() || value == null) {
-            customEditor.unsetForever(true);
-        } else if (MidpTypes.getInteger(value) == GaugeCD.VALUE_INDEFINITE) {
-            customEditor.setForever(true);
-        } else {
-            customEditor.unsetForever(true);
+        if (value != null) {
             customEditor.setText(String.valueOf(value.getPrimitiveValue()));
-        }
+        } else
+            customEditor.setText(""); //NOI18N
         radioButton.setSelected(!isCurrentValueAUserCodeType());
     }
 
     private void saveValue(String text) {
-        if (text.length() <= 0) {
-            return;
-        }
-
-        if (INDEFINITE_TEXT.equals(text) || INDEFINITE_NUM_TEXT.equals(text)) {
-            if (component != null && component.get() != null) {
-                final DesignComponent _component = component.get();
-                _component.getDocument().getTransactionManager().writeAccess(new Runnable() {
-
-                    public void run() {
-                        _component.writeProperty(GaugeCD.PROP_VALUE, MidpTypes.createIntegerValue(GaugeCD.VALUE_CONTINUOUS_IDLE));
-                    }
-                });
-            }
-            super.setValue(MidpTypes.createIntegerValue(GaugeCD.VALUE_INDEFINITE));
-        } else {
-            int intValue = 0;
-            try {
-                text = text.replaceAll("[^0-9\\-]+", ""); // NOI18N
-                intValue = Integer.parseInt(text);
-            } catch (NumberFormatException e) {
-            }
-            super.setValue(MidpTypes.createIntegerValue(intValue));
-        }
+        text = text.replaceAll("[^0-9]", ""); // NOI18N
+        super.setValue(MidpTypes.createStringValue(text));
     }
 
     @Override
@@ -192,6 +166,7 @@ public final class PropertyEditorGaugeMaxValue extends PropertyEditorUserCode im
         if (radioButton.isSelected()) {
             saveValue(customEditor.getText());
         }
+
     }
 
     @Override
@@ -201,45 +176,83 @@ public final class PropertyEditorGaugeMaxValue extends PropertyEditorUserCode im
             if (value == null) {
                 return false;
             }
-            int intValue = MidpTypes.getInteger(value);
-            return intValue != GaugeCD.VALUE_INDEFINITE;
+
         }
         return false;
     }
 
-    private class CustomEditor extends JPanel implements ActionListener, DocumentListener, FocusListener {
+    @Override
+    public boolean canWrite() {
+        if (!isWriteableByParentType()) {
+            return false;
+        }
+
+        return super.canWrite();
+    }
+
+    @Override
+    public boolean supportsCustomEditor() {
+        if (!isWriteableByParentType()) {
+            return false;
+        }
+
+        return super.supportsCustomEditor();
+    }
+
+    private boolean isWriteableByParentType() {
+        if (component == null || component.get() == null) {
+            return false;
+        }
+
+        if (parentTypeID != null) {
+            final DesignComponent _component = component.get();
+            final DesignComponent[] parent = new DesignComponent[1];
+            _component.getDocument().getTransactionManager().readAccess(new Runnable() {
+
+                public void run() {
+                    parent[0] = _component.getParentComponent();
+                }
+            });
+
+            if (parent[0] != null && parentTypeID.equals(parent[0].getType())) {
+                return false;
+            }
+
+        }
+        return true;
+    }
+
+    private class CustomEditor
+            extends JPanel implements ActionListener, DocumentListener, FocusListener {
 
         private JTextField textField;
-        private JCheckBox foreverCheckBox;
 
         public CustomEditor() {
             radioButton.addFocusListener(this);
             initComponents();
         }
 
-         void cleanUp() {
-            radioButton.removeActionListener(this);
+       void cleanUp() {
+            if (textField != null && textField.getDocument() != null) {
+                textField.getDocument().removeDocumentListener(this);
+            }
             textField = null;
-            foreverCheckBox = null;
             this.removeAll();
         }
 
         private void initComponents() {
-            setLayout(new GridBagLayout());
-
+            setLayout(new BorderLayout());
             textField = new JTextField();
             textField.getDocument().addDocumentListener(this);
             textField.addFocusListener(this);
-            textField.setPreferredSize(new Dimension (100, textField.getPreferredSize().height));
-            add(textField, new GridBagConstraints (0, 0, 1, 1, 0.0, 0.0, GridBagConstraints.WEST, GridBagConstraints.NONE, new Insets (0, 0, 0, 0), 0, 0));
-
-            foreverCheckBox = new JCheckBox();
-            Mnemonics.setLocalizedText(foreverCheckBox, NbBundle.getMessage(PropertyEditorGaugeMaxValue.class, "LBL_MAX_VALUE_INDEFINITE")); // NOI18N
-            foreverCheckBox.addActionListener(this);
-            foreverCheckBox.addFocusListener(this);
-            add(foreverCheckBox, new GridBagConstraints (1, 0, 1, 1, 0.0, 0.0, GridBagConstraints.WEST, GridBagConstraints.NONE, new Insets (0, 6, 0, 0), 0, 0));
             
-            add (new JPanel (), new GridBagConstraints (2, 0, 1, 1, 1.0, 0.0, GridBagConstraints.WEST, GridBagConstraints.NONE, new Insets (0, 0, 0, 0), 0, 0));
+            textField.getAccessibleContext().setAccessibleName( 
+                    radioButton.getAccessibleContext().getAccessibleName());
+            
+            textField.getAccessibleContext().setAccessibleDescription(
+                    radioButton.getAccessibleContext().getAccessibleDescription());
+            
+            add(textField, BorderLayout.SOUTH);
         }
 
         public void setText(String text) {
@@ -250,28 +263,8 @@ public final class PropertyEditorGaugeMaxValue extends PropertyEditorUserCode im
             return textField.getText();
         }
 
-        public void setForever(boolean changeCheckBox) {
-            setText(INDEFINITE_NUM_TEXT);
-            textField.setEditable(false);
-            if (changeCheckBox) {
-                foreverCheckBox.setSelected(true);
-            }
-        }
-
-        public void unsetForever(boolean changeCheckBox) {
-            setText(null);
-            textField.setEditable(true);
-            if (changeCheckBox) {
-                foreverCheckBox.setSelected(false);
-            }
-        }
-
         public void actionPerformed(ActionEvent evt) {
-            if (foreverCheckBox.isSelected()) {
-                setForever(false);
-            } else {
-                unsetForever(false);
-            }
+
         }
 
         public void insertUpdate(DocumentEvent evt) {
@@ -292,15 +285,16 @@ public final class PropertyEditorGaugeMaxValue extends PropertyEditorUserCode im
         }
 
         private void checkNumberStatus() {
-            if (!Pattern.matches("[\\d\\-]+", textField.getText())) { // NOI18N
-                displayWarning(PropertyEditorNumber.NON_DIGITS_TEXT);
+            if (!Pattern.matches("[+\\d\\-]+", textField.getText())) { //NOI18N
+                displayWarning(NbBundle.getMessage(PropertyEditorPhoneNumber.class, "LBL_PhoneNumber_Warning")); //NOI18N
             } else {
                 clearErrorStatus();
             }
+
         }
 
         public void focusGained(FocusEvent e) {
-            if (e.getSource() == radioButton || e.getSource() == textField || e.getSource() == foreverCheckBox) {
+            if (e.getSource() == radioButton || e.getSource() == textField) {
                 checkNumberStatus();
             }
         }

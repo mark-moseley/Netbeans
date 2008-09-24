@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.vmd.midp.propertyeditors;
 
+import java.awt.event.FocusEvent;
 import java.awt.event.ItemEvent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
@@ -54,6 +55,7 @@ import java.awt.Graphics;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusListener;
 import java.awt.event.ItemListener;
 import java.util.Collections;
 import javax.swing.*;
@@ -75,6 +77,8 @@ public class PropertyEditorBooleanUC extends PropertyEditorUserCode implements P
     private TypeID parentTypeID;
     private String rbLabel;
 
+   
+
     private PropertyEditorBooleanUC(boolean supportsCustomEditor, TypeID parentTypeID, String rbLabel) {
         super(NbBundle.getMessage(PropertyEditorBooleanUC.class, "LBL_VALUE_BOOLEAN_UCLABEL")); // NOI18N
         this.supportsCustomEditor = supportsCustomEditor;
@@ -82,6 +86,15 @@ public class PropertyEditorBooleanUC extends PropertyEditorUserCode implements P
         this.rbLabel = rbLabel;
 
         initElements(Collections.<PropertyEditorElement>singleton(this));
+        super.getUserCodeRadioButton().addFocusListener(new FocusListener() {
+
+            public void focusGained(FocusEvent e) {
+                customEditor.checkBox.setSelected(false);
+            }
+            
+            public void focusLost(FocusEvent e) {
+            }
+        });
     }
 
     public static PropertyEditorBooleanUC createInstance() {
@@ -94,6 +107,20 @@ public class PropertyEditorBooleanUC extends PropertyEditorUserCode implements P
 
     public static PropertyEditorBooleanUC createInstance(TypeID parentTypeID, String rbLabel) {
         return new PropertyEditorBooleanUC(true, parentTypeID, rbLabel);
+    }
+
+    @Override
+    public void cleanUp(DesignComponent component) {
+        super.cleanUp(component);
+        if (customEditor != null) {
+            customEditor.cleanUp();
+        }
+        customEditor = null;
+        radioButton = null;
+        if (inplaceEditor != null) {
+            inplaceEditor.cleanUp();
+        }
+        parentTypeID = null;
     }
 
     @Override
@@ -111,7 +138,7 @@ public class PropertyEditorBooleanUC extends PropertyEditorUserCode implements P
                     JCheckBox checkBox = (JCheckBox) inplaceEditor.getComponent();
                     PropertyValue value = MidpTypes.createBooleanValue(checkBox.isSelected());
                     PropertyEditorBooleanUC.this.setValue(value);
-                    PropertyEditorBooleanUC.this.invokeSaveToModel();
+                    //PropertyEditorBooleanUC.this.invokeSaveToModel();
                 }
             });
         } else {
@@ -159,6 +186,13 @@ public class PropertyEditorBooleanUC extends PropertyEditorUserCode implements P
         if (radioButton == null) {
             radioButton = new JRadioButton();
             Mnemonics.setLocalizedText(radioButton, NbBundle.getMessage(PropertyEditorBooleanUC.class, "LBL_VALUE_BOOLEAN")); // NOI18N
+            
+            radioButton.getAccessibleContext().setAccessibleName(
+                    NbBundle.getMessage(PropertyEditorBooleanUC.class, 
+                            "ACSN_VALUE_BOOLEAN")); // NOI18N
+            radioButton.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorBooleanUC.class, 
+                            "ACSD_VALUE_BOOLEAN")); // NOI18N
         }
         return radioButton;
     }
@@ -270,11 +304,22 @@ public class PropertyEditorBooleanUC extends PropertyEditorUserCode implements P
             initComponents();
         }
 
+        void cleanUp() {
+            checkBox.removeActionListener(this);
+            checkBox = null;
+            this.removeAll();
+        }
+
         private void initComponents() {
             setLayout(new BorderLayout());
             checkBox = new JCheckBox();
             if (rbLabel != null) {
                 Mnemonics.setLocalizedText(checkBox, rbLabel);
+                
+                checkBox.getAccessibleContext().setAccessibleName( 
+                        checkBox.getText());
+                checkBox.getAccessibleContext().setAccessibleDescription( 
+                        checkBox.getText());
             }
             checkBox.addActionListener(this);
             add(checkBox, BorderLayout.CENTER);
