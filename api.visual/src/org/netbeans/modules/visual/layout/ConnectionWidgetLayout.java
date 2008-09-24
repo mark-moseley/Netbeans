@@ -129,7 +129,9 @@ public final class ConnectionWidgetLayout implements Layout {
             if (currentlyResolving == null)
                 continue;
             Point point;
-            if (placement.isPercentage) {
+            if (empty) {
+                point = new Point();
+            } else if (placement.isPercentage) {
                 float percentage = placement.placementInPercentage;
                 if (percentage <= 0.0)
                     point = connectionWidget.getFirstControlPoint ();
@@ -221,17 +223,15 @@ public final class ConnectionWidgetLayout implements Layout {
             }
             switch (adjustedAlignment) {
                 case CENTER_LEFT:
-                    yCursor += preferredBounds.height;
                     break;
                 case CENTER_RIGHT:
                     x += areaWidth - preferredBounds.width;
-                    yCursor += preferredBounds.height;
                     break;
                 case CENTER:
                     x += (areaWidth - preferredBounds.width) / 2;
-                    yCursor += preferredBounds.height;
                     break;
             }
+            yCursor += preferredBounds.height;
             childWidget.resolveBounds (new Point (x, y), preferredBounds);
         }
     }
