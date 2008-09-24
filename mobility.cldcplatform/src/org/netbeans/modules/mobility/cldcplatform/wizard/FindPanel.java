@@ -100,7 +100,7 @@ final public class FindPanel extends javax.swing.JPanel implements SearchRunnabl
     
     public void showError(final String message) {
         if (wizardDescriptor != null) {
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", message); // NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, message); // NOI18N
         }
     }
     
@@ -170,10 +170,8 @@ final public class FindPanel extends javax.swing.JPanel implements SearchRunnabl
             final File[] roots = File.listRoots();
             if (roots.length > 0) DEFAULT_DIR = roots[0];
         }
-        final JFileChooser jfc = new JFileChooser(DEFAULT_DIR);
+        final LocationChooser jfc = new LocationChooser(DEFAULT_DIR);
         jfc.setDialogType(JFileChooser.OPEN_DIALOG);
-        jfc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        jfc.setMultiSelectionEnabled(false);
         jfc.setControlButtonsAreShown(true);
         jfc.setDialogTitle(NbBundle.getMessage(FindPanel.class, "Title_FindPanel_Choose_To_Search")); //NOI18N
         if (jfc.showDialog(this, NbBundle.getMessage(FindPanel.class, "LBL_FindPanel_Search")) == JFileChooser.APPROVE_OPTION) { //NOI18N
