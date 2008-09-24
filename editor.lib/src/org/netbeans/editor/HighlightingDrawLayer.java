@@ -73,6 +73,7 @@ import org.netbeans.spi.editor.highlighting.HighlightsChangeListener;
 import org.netbeans.spi.editor.highlighting.HighlightsContainer;
 import org.netbeans.spi.editor.highlighting.HighlightsLayer;
 import org.netbeans.spi.editor.highlighting.HighlightsSequence;
+import org.netbeans.spi.editor.highlighting.ZOrder;
 import org.openide.util.WeakListeners;
 
 /**
@@ -85,11 +86,17 @@ import org.openide.util.WeakListeners;
     // -J-Dorg.netbeans.editor.HighlightingDrawLayer.level=FINE
     private static final Logger LOG = Logger.getLogger(HighlightingDrawLayer.class.getName());
 
+    // Above CaretRowHighlighting.LAYER_TYPE_ID
     private static final String LAYER_A_NAME = "org-netbeans-lib-editor-nview-HighlightingDrawLayer/A"; //NOI18N
+    // above ZOrder.SYNTAX_RACK and below (including) CaretRowHighlighting.LAYER_TYPE_ID
     // Using the original name for the caret row highlighting, some clients use it to remove the layer.
     private static final String LAYER_B_NAME = ExtCaret.HIGHLIGHT_ROW_LAYER_NAME; 
+    // Only ZOrder.SYNTAX_RACK
     private static final String LAYER_C_NAME = "org-netbeans-lib-editor-nview-HighlightingDrawLayer/C"; //NOI18N
+    // ZOrder.BOTTOM_RACK
+    private static final String LAYER_D_NAME = "org-netbeans-lib-editor-nview-HighlightingDrawLayer/D"; //NOI18N
     
+    // Above CaretRowHighlighting.LAYER_TYPE_ID
     private static final HighlightsLayerFilter FILTER_A = new HighlightsLayerFilter() {
         public List<? extends HighlightsLayer> filterLayers(List<? extends HighlightsLayer> layers) {
             ArrayList<HighlightsLayer> filteredLayers = new ArrayList<HighlightsLayer>();
@@ -113,16 +120,21 @@ import org.openide.util.WeakListeners;
         }
     }; // End of FILTER_A constant
     
+    // above ZOrder.SYNTAX_RACK and below (including) CaretRowHighlighting.LAYER_TYPE_ID
     private static final HighlightsLayerFilter FILTER_B = new HighlightsLayerFilter() {
         public List<? extends HighlightsLayer> filterLayers(List<? extends HighlightsLayer> layers) {
             ArrayList<HighlightsLayer> filteredLayers = new ArrayList<HighlightsLayer>();
             
+            int syntaxRack = HighlightingSpiPackageAccessor.get().getZOrderRack(ZOrder.SYNTAX_RACK);
             for(HighlightsLayer layer : layers) {
                 HighlightsLayerAccessor layerAccessor = 
                     HighlightingSpiPackageAccessor.get().getHighlightsLayerAccessor(layer);
                 
-                if (CaretRowHighlighting.LAYER_TYPE_ID.equals(layerAccessor.getLayerTypeId())) {
+                if (HighlightingSpiPackageAccessor.get().getZOrderRack(layerAccessor.getZOrder()) > syntaxRack) {
                     filteredLayers.add(layer);
+                }
+                
+                if (CaretRowHighlighting.LAYER_TYPE_ID.equals(layerAccessor.getLayerTypeId())) {
                     break;
                 }
             }
@@ -131,15 +143,41 @@ import org.openide.util.WeakListeners;
         }
     }; // End of FILTER_B constant
     
+    // Only ZOrder.SYNTAX_RACK
     private static final HighlightsLayerFilter FILTER_C = new HighlightsLayerFilter() {
         public List<? extends HighlightsLayer> filterLayers(List<? extends HighlightsLayer> layers) {
             ArrayList<HighlightsLayer> filteredLayers = new ArrayList<HighlightsLayer>();
             
+            int syntaxRack = HighlightingSpiPackageAccessor.get().getZOrderRack(ZOrder.SYNTAX_RACK);
             for(HighlightsLayer layer : layers) {
                 HighlightsLayerAccessor layerAccessor = 
                     HighlightingSpiPackageAccessor.get().getHighlightsLayerAccessor(layer);
                 
-                if (CaretRowHighlighting.LAYER_TYPE_ID.equals(layerAccessor.getLayerTypeId())) {
+                if (HighlightingSpiPackageAccessor.get().getZOrderRack(layerAccessor.getZOrder()) < syntaxRack) {
+                    continue;
+                } else if (HighlightingSpiPackageAccessor.get().getZOrderRack(layerAccessor.getZOrder()) == syntaxRack) {
+                    filteredLayers.add(layer);
+                } else {
+                    break;
+                }
+                
+            }
+
+            return filteredLayers;
+        }
+    }; // End of FILTER_C constant
+
+    // ZOrder.BOTTOM_RACK
+    private static final HighlightsLayerFilter FILTER_D = new HighlightsLayerFilter() {
+        public List<? extends HighlightsLayer> filterLayers(List<? extends HighlightsLayer> layers) {
+            ArrayList<HighlightsLayer> filteredLayers = new ArrayList<HighlightsLayer>();
+            
+            int syntaxRack = HighlightingSpiPackageAccessor.get().getZOrderRack(ZOrder.SYNTAX_RACK);
+            for(HighlightsLayer layer : layers) {
+                HighlightsLayerAccessor layerAccessor = 
+                    HighlightingSpiPackageAccessor.get().getHighlightsLayerAccessor(layer);
+                
+                if (HighlightingSpiPackageAccessor.get().getZOrderRack(layerAccessor.getZOrder()) == syntaxRack) {
                     break;
                 }
                 
@@ -148,13 +186,13 @@ import org.openide.util.WeakListeners;
 
             return filteredLayers;
         }
-    }; // End of FILTER_C constant
+    }; // End of FILTER_D constant
     
     public static void hookUp(EditorUI eui) {
         DrawLayer layerA = eui.findLayer(LAYER_A_NAME);
         if (layerA == null) {
             layerA = new HighlightingDrawLayer(LAYER_A_NAME, FILTER_A);
-            eui.addLayer(layerA, 10000); // the old caret row draw layer's z-order
+            eui.addLayer(layerA, 10000); // the old text selection layer's z-order (DrawLayerFactory.CaretLayer)
 
             if (LOG.isLoggable(Level.FINE)) {
                 LOG.fine("Successfully registered layerA in " + simpleToString(eui)); //NOI18N
@@ -168,7 +206,7 @@ import org.openide.util.WeakListeners;
         DrawLayer layerB = eui.findLayer(LAYER_B_NAME);
         if (layerB == null) {
             layerB = new HighlightingDrawLayer(LAYER_B_NAME, FILTER_B);
-            eui.addLayer(layerB, 2050); // the old caret row draw layer's z-order
+            eui.addLayer(layerB, 2050); // the old caret row highlight layer's z-order
 
             if (LOG.isLoggable(Level.FINE)) {
                 LOG.fine("Successfully registered layerB in " + simpleToString(eui)); //NOI18N
@@ -182,7 +220,7 @@ import org.openide.util.WeakListeners;
         DrawLayer layerC = eui.findLayer(LAYER_C_NAME);
         if (layerC == null) {
             layerC = new HighlightingDrawLayer(LAYER_C_NAME, FILTER_C);
-            eui.addLayer(layerC, 1000); // the old syntax draw layer's z-order
+            eui.addLayer(layerC, 1000); // the old syntax draw layer's z-order (DrawLayerFactory.SyntaxLayer)
 
             if (LOG.isLoggable(Level.FINE)) {
                 LOG.fine("Successfully registered layerC in " + simpleToString(eui)); //NOI18N
@@ -190,6 +228,20 @@ import org.openide.util.WeakListeners;
         } else {
             if (LOG.isLoggable(Level.FINE)) {
                 LOG.fine("LayerC is already registered in " + simpleToString(eui)); //NOI18N
+            }
+        }
+
+        DrawLayer layerD = eui.findLayer(LAYER_D_NAME);
+        if (layerD == null) {
+            layerD = new HighlightingDrawLayer(LAYER_D_NAME, FILTER_D);
+            eui.addLayer(layerD, 500);
+
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.fine("Successfully registered layerD in " + simpleToString(eui)); //NOI18N
+            }
+        } else {
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.fine("LayerD is already registered in " + simpleToString(eui)); //NOI18N
             }
         }
     }
@@ -233,7 +285,7 @@ import org.openide.util.WeakListeners;
                 Document doc = ctx.getEditorUI().getDocument();
                 
                 // Get the document's mime type
-                String mimeType = (String) doc.getProperty("mimeType"); //NOI18N
+                String mimeType = (String) doc.getProperty(BaseDocument.MIME_TYPE_PROP); //NOI18N
                 assert mimeType != null : "Document's mime type can't be null: " + doc; //NOI18N
 
 // HACK: can't set the kit on fakePane, because it needs to run in AWT, which
@@ -433,6 +485,7 @@ import org.openide.util.WeakListeners;
     }
      
     private void invokeDamageRange(final int startOffset, final int endOffset) {
+//        LOG.log(Level.INFO, "invokeDamageRange: [" + startOffset + ", " + endOffset + "]", new Exception());
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 setNextActivityChangeOffset(0);
