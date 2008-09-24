@@ -11,31 +11,24 @@ package org.netbeans.test.subversion.main.archeology;
 
 import java.io.File;
 import java.io.PrintStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
-import org.netbeans.test.subversion.operators.RepositoryBrowserOperator;
-import org.netbeans.test.subversion.operators.RepositoryBrowserSearchHistoryOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.SearchHistoryOperator;
-import org.netbeans.test.subversion.operators.VersioningOperator;
 import org.netbeans.test.subversion.operators.WorkDirStepOperator;
 import org.netbeans.test.subversion.utils.RepositoryMaintenance;
 import org.netbeans.test.subversion.utils.TestKit;
-import org.netbeans.junit.ide.ProjectSupport;
-import junit.textui.TestRunner;
-import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jemmy.QueueTool;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.test.subversion.operators.RepositoryBrowserOperator;
+import org.netbeans.test.subversion.utils.MessageHandler;
 
 /**
  *
@@ -51,18 +44,24 @@ public class SearchHistoryUITest extends JellyTestCase{
     public PrintStream stream;
     String os_name;
     Operator.DefaultStringComparator comOperator; 
-    Operator.DefaultStringComparator oldOperator; 
+    Operator.DefaultStringComparator oldOperator;
+    static Logger log;
     
     /** Creates a new instance of SearchHistoryUITest */
     public SearchHistoryUITest(String name) {
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {        
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
-        
+        if (log == null) {
+            log = Logger.getLogger(TestKit.LOGGER_NAME);
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
+        }
     }
     
     protected boolean isUnix() {
@@ -73,28 +72,28 @@ public class SearchHistoryUITest extends JellyTestCase{
         return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new SearchHistoryUITest("testInvokeSearch"));
-        return suite;
-    }
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(SearchHistoryUITest.class).addTest(
+                    "testInvokeSearch"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void testInvokeSearch() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);    
         try {
-            TestKit.closeProject(PROJECT_NAME);
-        
+            MessageHandler mh = new MessageHandler("Checking out");
+            log.addHandler(mh);
+
+            TestKit.showStatusLabels();
+            
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             comOperator = new Operator.DefaultStringComparator(true, true);
             oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
             Operator.setDefaultStringComparator(comOperator);
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            CheckoutWizardOperator.invoke();
             Operator.setDefaultStringComparator(oldOperator);
             RepositoryStepOperator rso = new RepositoryStepOperator();           
 
@@ -103,7 +102,6 @@ public class SearchHistoryUITest extends JellyTestCase{
             new File(TMP_PATH).mkdirs();
             work.mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);   
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");      
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
@@ -114,43 +112,20 @@ public class SearchHistoryUITest extends JellyTestCase{
             wdso.setLocalFolder(work.getCanonicalPath());
             wdso.checkCheckoutContentOnly(false);
             wdso.finish();
-            OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-//            oto.clear();            
-            //open project
-            oto.waitText("Checking out... finished.");
+
+            TestKit.waitText(mh);
+
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-
             TestKit.waitForScanFinishedAndQueueEmpty();
 
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
+            mh = new MessageHandler("Searching History");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
             Node node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|Main.java");
-            SearchHistoryOperator sho = SearchHistoryOperator.invoke(node);
-
-            oto.waitText("Searching History... finished.");
-            /*oto = new OutputTabOperator("file:///tmp/repo");
-            oto.clear();
-            sho.verify();
-            RepositoryBrowserOperator rbo = sho.getRevisionFrom();
-            oto.waitText("Loading... finished.");
-            //rbo.verify();
-            rbo.cancel();
-
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.clear();
-            rbo = sho.getRevisionTo();
-            oto.waitText("Loading... finished.");
-            //rbo.verify();
-            rbo.cancel();
-
-            sho.setUsername("test");
-            sho.setFrom("1");
-            sho.setTo("2");*/
-
+            SearchHistoryOperator.invoke(node);
+            TestKit.waitText(mh);
             stream.flush();
             stream.close();
         } catch (Exception e) {

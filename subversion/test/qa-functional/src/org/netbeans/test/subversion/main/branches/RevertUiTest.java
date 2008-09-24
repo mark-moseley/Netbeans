@@ -10,18 +10,20 @@
 package org.netbeans.test.subversion.main.branches;
 
 import java.io.File;
-import junit.textui.TestRunner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.TimeoutExpiredException;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CommitStepOperator;
 import org.netbeans.test.subversion.operators.FolderToImportStepOperator;
 import org.netbeans.test.subversion.operators.ImportWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.RevertModificationsOperator;
+import org.netbeans.test.subversion.utils.MessageHandler;
 import org.netbeans.test.subversion.utils.RepositoryMaintenance;
 import org.netbeans.test.subversion.utils.TestKit;
 
@@ -36,6 +38,7 @@ public class RevertUiTest extends JellyTestCase{
     public static final String WORK_PATH = "work";
     public static final String PROJECT_NAME = "SVNApplication";
     public File projectPath;
+    static Logger log;
     
     String os_name;
     
@@ -44,10 +47,16 @@ public class RevertUiTest extends JellyTestCase{
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {        
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
-        System.out.println("### "+getName()+" ###");
+        System.out.println("### " + getName() + " ###");
+        if (log == null) {
+            log = Logger.getLogger(TestKit.LOGGER_NAME);
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
+        }
         
     }
     
@@ -59,22 +68,20 @@ public class RevertUiTest extends JellyTestCase{
         return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new RevertUiTest("testInvokeCloseRevert"));
-        return suite;
-    }
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(RevertUiTest.class).addTest(
+                    "testInvokeCloseRevert"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void testInvokeCloseRevert() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 3000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 3000);
         try {
-            TestKit.closeProject(PROJECT_NAME);
+            MessageHandler mh = new MessageHandler("Committing");
+            log.addHandler(mh);
 
             new File(TMP_PATH).mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
@@ -97,8 +104,9 @@ public class RevertUiTest extends JellyTestCase{
             CommitStepOperator cso = new CommitStepOperator();
             cso.finish();
 
+            TestKit.waitText(mh);
+
             Node projNode = new Node(new ProjectsTabOperator().tree(), PROJECT_NAME);
-            //Node projNode = new Node(new ProjectsTabOperator().tree(), "AnagramGame");
             RevertModificationsOperator rmo = RevertModificationsOperator.invoke(projNode);
             rmo.verify();
             TimeoutExpiredException tee = null;
@@ -154,7 +162,7 @@ public class RevertUiTest extends JellyTestCase{
             }
             assertNotNull("Components shouldn't be accessed", tee);
 
-            rmo.cancel(); 
+            rmo.cancel();
         } catch (Exception e) {
             throw new Exception("Test failed: " + e);
         } finally {

@@ -11,25 +11,24 @@ package org.netbeans.test.subversion.main.branches;
 
 import java.io.File;
 import java.io.PrintStream;
-import junit.textui.TestRunner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jemmy.JemmyProperties;
-import org.netbeans.jemmy.QueueTool;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.CopyToOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.SwitchOperator;
 import org.netbeans.test.subversion.operators.WorkDirStepOperator;
+import org.netbeans.test.subversion.utils.MessageHandler;
 import org.netbeans.test.subversion.utils.RepositoryMaintenance;
 import org.netbeans.test.subversion.utils.TestKit;
 
@@ -47,18 +46,24 @@ public class CopyTest extends JellyTestCase {
     public PrintStream stream;
     Operator.DefaultStringComparator comOperator;
     Operator.DefaultStringComparator oldOperator;
-    
     String os_name;
+    static Logger log;
     
     /** Creates a new instance of CopyTest */
     public CopyTest(String name) {
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
+        if (log == null) {
+            log = Logger.getLogger(TestKit.LOGGER_NAME);
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
+        }
         
     }
     
@@ -70,23 +75,23 @@ public class CopyTest extends JellyTestCase {
         return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new CopyTest("testCreateNewCopySwitch"));
-        suite.addTest(new CopyTest("testCreateNewCopy"));
-        return suite;
-    }
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(CopyTest.class).addTest(
+                    "testCreateNewCopySwitch",
+                    "testCreateNewCopy"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void testCreateNewCopySwitch() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);
         try {
-            TestKit.closeProject(PROJECT_NAME);
+            MessageHandler mh = new MessageHandler("Checking out");
+            log.addHandler(mh);
+
+            TestKit.showStatusLabels();
             
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             comOperator = new Operator.DefaultStringComparator(true, true);
@@ -101,7 +106,6 @@ public class CopyTest extends JellyTestCase {
             new File(TMP_PATH).mkdirs();
             work.mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
@@ -112,42 +116,37 @@ public class CopyTest extends JellyTestCase {
             wdso.setLocalFolder(work.getCanonicalPath());
             wdso.checkCheckoutContentOnly(false);
             wdso.finish();
-            OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            //            oto.clear();
-            //open project
-            oto.waitText("Checking out... finished.");
+
+            TestKit.waitText(mh);
+
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-            
             TestKit.waitForScanFinishedAndQueueEmpty();
-            
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
+
+            mh = new MessageHandler("Copying");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             Node projNode = new Node(new ProjectsTabOperator().tree(), PROJECT_NAME);
             CopyToOperator cto = CopyToOperator.invoke(projNode);
             cto.setRepositoryFolder("branches/release01/" + PROJECT_NAME);
             cto.setCopyPurpose("New branch for project.");
             cto.checkSwitchToCopy(true);
             cto.copy();
-            Thread.sleep(2000);
-            oto.waitText("Copy");
-            oto.waitText("finished.");
             
+            TestKit.waitText(mh);
+            Thread.sleep(2000);
+
             Node nodeFile = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp" + "|Main.java");
             org.openide.nodes.Node nodeIDE = (org.openide.nodes.Node) nodeFile.getOpenideNode();
-            //String color = TestKit.getColor(nodeIDE.getHtmlDisplayName());
             String status = TestKit.getStatus(nodeIDE.getHtmlDisplayName());
             assertEquals("Wrong annotation of node!!!", "[ release01]", status);
             
             nodeFile = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp");
             nodeIDE = (org.openide.nodes.Node) nodeFile.getOpenideNode();
-            //String color = TestKit.getColor(nodeIDE.getHtmlDisplayName());
             status = TestKit.getStatus(nodeIDE.getHtmlDisplayName());
             assertEquals("Wrong annotation of node!!!", "[ release01]", status);
-            //to do
             stream.flush();
             stream.close();
         } catch (Exception e) {
@@ -161,7 +160,11 @@ public class CopyTest extends JellyTestCase {
         //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
         //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);
         try {
+            MessageHandler mh = new MessageHandler("Checking out");
+            log.addHandler(mh);
+
             TestKit.closeProject(PROJECT_NAME);
+            TestKit.showStatusLabels();
             
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             comOperator = new Operator.DefaultStringComparator(true, true);
@@ -188,26 +191,27 @@ public class CopyTest extends JellyTestCase {
             wdso.checkCheckoutContentOnly(false);
             wdso.finish();
             //open project
-            OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-            //            oto.clear();
-            oto.waitText("Checking out... finished.");
+
+            TestKit.waitText(mh);
+
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
             
             TestKit.waitForScanFinishedAndQueueEmpty();
             
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
+            mh = new MessageHandler("Copying");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             Node projNode = new Node(new ProjectsTabOperator().tree(), PROJECT_NAME);
             CopyToOperator cto = CopyToOperator.invoke(projNode);
             cto.setRepositoryFolder("branches/release01");
             cto.setCopyPurpose("New branch for project.");
             cto.checkSwitchToCopy(false);
             cto.copy();
-            oto.waitText("Copy");
-            oto.waitText("finished.");
+            TestKit.waitText(mh);
+            Thread.sleep(1000);
             
             Node nodeFile = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp" + "|Main.java");
             org.openide.nodes.Node nodeIDE = (org.openide.nodes.Node) nodeFile.getOpenideNode();
@@ -223,16 +227,17 @@ public class CopyTest extends JellyTestCase {
             //to do
             
             //switch to branch
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
+            mh = new MessageHandler("Switching");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             projNode = new Node(new ProjectsTabOperator().tree(), PROJECT_NAME);
             SwitchOperator so = SwitchOperator.invoke(projNode);
             so.setRepositoryFolder("branches/release01/" + PROJECT_NAME);
             so.switchBt();
-            oto.waitText("Switch");
-            oto.waitText("finished.");
-            
+
+            TestKit.waitText(mh);
+                        
             nodeFile = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp" + "|Main.java");
             nodeIDE = (org.openide.nodes.Node) nodeFile.getOpenideNode();
             //String color = TestKit.getColor(nodeIDE.getHtmlDisplayName());
@@ -245,15 +250,17 @@ public class CopyTest extends JellyTestCase {
             status = TestKit.getStatus(nodeIDE.getHtmlDisplayName());
             assertEquals("Wrong annotation of node!!!", "[ release01]", status);
             
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
+            mh = new MessageHandler("Switching");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             projNode = new Node(new ProjectsTabOperator().tree(), PROJECT_NAME);
             so = SwitchOperator.invoke(projNode);
             so.setRepositoryFolder("trunk/" + PROJECT_NAME);
             so.switchBt();
-            oto.waitText("Switch");
-            oto.waitText("finished.");
+
+            TestKit.waitText(mh);
+
             Thread.sleep(2000);
             
             nodeFile = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp" + "|Main.java");

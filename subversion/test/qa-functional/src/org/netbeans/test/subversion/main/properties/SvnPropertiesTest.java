@@ -29,20 +29,21 @@ package org.netbeans.test.subversion.main.properties;
 
 import java.io.File;
 import java.io.PrintStream;
-import junit.textui.TestRunner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JTableOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.SvnPropertiesOperator;
 import org.netbeans.test.subversion.operators.VersioningOperator;
 import org.netbeans.test.subversion.operators.WorkDirStepOperator;
+import org.netbeans.test.subversion.utils.MessageHandler;
 import org.netbeans.test.subversion.utils.RepositoryMaintenance;
 import org.netbeans.test.subversion.utils.TestKit;
 
@@ -59,15 +60,22 @@ public class SvnPropertiesTest extends JellyTestCase {
     public File projectPath;
     public PrintStream stream;
     String os_name;
+    static Logger log;
 
     public SvnPropertiesTest(String name) {
         super(name);
     }
 
+    @Override
     protected void setUp() throws Exception {
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### " + getName() + " ###");
+        if (log == null) {
+            log = Logger.getLogger(TestKit.LOGGER_NAME);
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
+        }
     }
 
     protected boolean isUnix() {
@@ -77,25 +85,26 @@ public class SvnPropertiesTest extends JellyTestCase {
         }
         return unix;
     }
-
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new SvnPropertiesTest("SvnPropertiesTest"));
-        return suite;
-    }
+    
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(SvnPropertiesTest.class).addTest(
+                    "SvnPropertiesTest"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
 
     public void SvnPropertiesTest() throws Exception {
         try {
-            TestKit.closeProject(PROJECT_NAME);
+            MessageHandler mh = new MessageHandler("Checking out");
+            log.addHandler(mh);
 
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
-            VersioningOperator vo = VersioningOperator.invoke();
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            VersioningOperator.invoke();
+            TestKit.showStatusLabels();
+            CheckoutWizardOperator.invoke();
             RepositoryStepOperator rso = new RepositoryStepOperator();
 
             //create repository...
@@ -115,26 +124,36 @@ public class SvnPropertiesTest extends JellyTestCase {
             wdso.finish();
 
             //open project
-            OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.waitText("Checking out... finished.");
+            TestKit.waitText(mh);
+
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-
             TestKit.waitForScanFinishedAndQueueEmpty();
-
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
 
             // set svnProperty for file
             Node node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|Main.java");
+
+            Thread.sleep(3000);
+            mh = new MessageHandler("Scanning svn properties");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             SvnPropertiesOperator spo = SvnPropertiesOperator.invoke(node);
+
+            TestKit.waitText(mh);
+
             spo.typePropertyName("fileName");
             spo.typePropertyValue("fileValue");
+
+            mh = new MessageHandler("Scanning svn properties");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             spo.add();
-            oto.waitText("property 'fileName' set on");
+
+            TestKit.waitText(mh);
+
             Thread.sleep(1000);
             assertEquals("1. Wrong row count of table.", 1, spo.propertiesTable().getRowCount());
             assertFalse("Recursively checkbox should be disabled on file! ", spo.cbRecursively().isEnabled());
@@ -143,37 +162,66 @@ public class SvnPropertiesTest extends JellyTestCase {
             Thread.sleep(1000);
             //  set svnProperty for folder - one recursive and one nonrecursive
             node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp");
+
+            mh = new MessageHandler("Scanning svn properties");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             spo = SvnPropertiesOperator.invoke(node);
+
+            TestKit.waitText(mh);
+
             assertTrue("Recursively checkbox should be enabled on package! ", spo.cbRecursively().isEnabled());
             spo.checkRecursively(false);
             spo.typePropertyName("nonrecursiveName");
             spo.typePropertyValue("nonrecursiveValue");
             spo.add();
-            oto.waitText("property 'nonrecursiveName' set on");
             Thread.sleep(1000);
             spo.checkRecursively(true);
             spo.typePropertyName("recursiveName");
             spo.typePropertyValue("recursiveValue");
+
+            mh = new MessageHandler("Scanning svn properties");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             spo.add();
-            oto.waitText("property 'recursiveName' set (recursively) on");
             spo.refresh();
-            oto.waitText("Scanning svn properties finished.");
+
+            mh = new MessageHandler("Scanning svn properties");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             Thread.sleep(1000);
             assertEquals("2. Wrong row count of table.", 2, spo.propertiesTable().getRowCount());
             spo.cancel();
 
             //  verify whether the recursive property is present on file
             node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|Main.java");
+
+            mh = new MessageHandler("Scanning svn properties");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             spo = SvnPropertiesOperator.invoke(node);
+
+            TestKit.waitText(mh);
+
             Thread.sleep(1000);
             assertEquals("3. Wrong row count of table.", 2, spo.propertiesTable().getRowCount());
             assertEquals("Expected file is missing.", "recursiveName", spo.propertiesTable().getModel().getValueAt(1, 0).toString());
             spo.propertiesTable().selectCell(1, 0);
+
+            mh = new MessageHandler("Scanning svn properties");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             spo.remove();
-            oto.waitText("property 'recursiveName' deleted");
-            oto.clear();
             spo.refresh();
-            oto.waitText("Scanning svn properties finished.");
+
+            TestKit.waitText(mh);
+
+            Thread.sleep(5000);
             assertEquals("4. Wrong row count of table.", 1, spo.propertiesTable().getRowCount());
             spo.cancel();
         } catch (Exception e) {
