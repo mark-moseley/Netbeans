@@ -58,6 +58,7 @@ import org.netbeans.api.diff.*;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.subversion.Subversion;
 import org.netbeans.modules.subversion.client.*;
+import org.netbeans.modules.versioning.util.Utils;
 
 import org.tigris.subversion.svnclientadapter.*;
 
@@ -82,6 +83,7 @@ public class ResolveConflictsExecutor extends SvnProgressSupport {
     private String rightFileRevision = null;
 
     private final File file;
+    private static final String NESTED_CONFLICT = "NESTED_CONFLICT";
 
     public ResolveConflictsExecutor(File file) {
         super();
@@ -97,21 +99,41 @@ public class ResolveConflictsExecutor extends SvnProgressSupport {
         
         try {
             FileObject fo = FileUtil.toFileObject(file);
-            handleMergeFor(file, fo, fo.lock(), merge);
-        } catch (FileAlreadyLockedException e) {
-            Set components = TopComponent.getRegistry().getOpened();
-            for (Iterator i = components.iterator(); i.hasNext();) {
-                TopComponent tc = (TopComponent) i.next();
-                if (tc.getClientProperty(ResolveConflictsExecutor.class.getName()) != null) {
-                    tc.requestActive();
-                }
+            assert fo != null : "no fileobject for file " + file;
+            FileLock lock = fo.lock();
+            boolean mergeWriterCreated = false;
+            try { 
+                mergeWriterCreated = handleMergeFor(file, fo, lock, merge);
+            } finally {
+                if(!mergeWriterCreated && lock != null) {
+                    lock.releaseLock();
+                }    
             }
+        } catch (FileAlreadyLockedException e) {
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    Set components = TopComponent.getRegistry().getOpened();
+                    for (Iterator i = components.iterator(); i.hasNext();) {
+                        TopComponent tc = (TopComponent) i.next();
+                        if (tc.getClientProperty(ResolveConflictsExecutor.class.getName()) != null) {
+                            tc.requestActive();
+                        }
+                    }
+                }
+            });
         } catch (IOException ioex) {
-            Subversion.LOG.log(Level.SEVERE, null, ioex);;
+            if (NESTED_CONFLICT.equals(ioex.getMessage())) {
+                JOptionPane.showMessageDialog(null, NbBundle.getMessage(ResolveConflictsExecutor.class, "MSG_NestedConflicts"), 
+                                              NbBundle.getMessage(ResolveConflictsExecutor.class, "MSG_NestedConflicts_Title"), 
+                                              JOptionPane.WARNING_MESSAGE);
+                Utils.openFile(file);
+            } else {
+                Subversion.LOG.log(Level.SEVERE, null, ioex);;
+            }
         }
     }
     
-    private void handleMergeFor(final File file, FileObject fo, FileLock lock,
+    private boolean handleMergeFor(final File file, FileObject fo, FileLock lock,
                                 final MergeVisualizer merge) throws IOException {
         String mimeType = (fo == null) ? "text/plain" : fo.getMIMEType(); // NOI18N
         String ext = "."+fo.getExt(); // NOI18N
@@ -134,7 +156,7 @@ public class ResolveConflictsExecutor extends SvnProgressSupport {
                     lock.releaseLock();
                 }
             }
-            return;
+            return false;
         }
 
         copyParts(false, file, f2, false);
@@ -157,6 +179,8 @@ public class ResolveConflictsExecutor extends SvnProgressSupport {
         final StreamSource s1;
         final StreamSource s2;
         Charset encoding = FileEncodingQuery.getEncoding(fo);
+        Utils.associateEncoding(file, f1);
+        Utils.associateEncoding(file, f2);
         s1 = StreamSource.createSource(file.getName(), leftFileRevision, mimeType, f1);
         s2 = StreamSource.createSource(file.getName(), rightFileRevision, mimeType, f2);
         final StreamSource result = new MergeResultWriterInfo(f1, f2, f3, file, mimeType,
@@ -172,6 +196,7 @@ public class ResolveConflictsExecutor extends SvnProgressSupport {
         } catch (IOException ioex) {
             Subversion.LOG.log(Level.SEVERE, null, ioex);;
         }
+        return true;
     }
 
     /**
@@ -195,6 +220,10 @@ public class ResolveConflictsExecutor extends SvnProgressSupport {
             int i = 1, j = 1;
             while ((line = r.readLine()) != null) {
                 if (line.startsWith(CHANGE_LEFT)) {
+                    if (isChangeLeft || isChangeRight) {
+                        // nested conflicts are not supported
+                        throw new IOException(NESTED_CONFLICT);
+                    }
                     if (generateDiffs) {
                         if (leftFileRevision == null) {
                             leftFileRevision = line.substring(CHANGE_LEFT.length());
