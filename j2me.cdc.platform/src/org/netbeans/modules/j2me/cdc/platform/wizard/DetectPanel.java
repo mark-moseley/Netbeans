@@ -110,7 +110,7 @@ public class DetectPanel extends javax.swing.JPanel {
         sourcesList.setModel(new DefaultListModel());
         javadocList.setModel(new DefaultListModel());        
         postInitComponents ();
-        putClientProperty("WizardPanel_contentData", //NOI18N
+        putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, //NOI18N
             new String[] {
                 NbBundle.getMessage(DetectPanel.class,"TITLE_PlatformName"), //NOI18N
         });
@@ -362,6 +362,7 @@ public class DetectPanel extends javax.swing.JPanel {
     }
 
     void setSources (String sources) {
+        ((DefaultListModel)sourcesList.getModel()).removeAllElements();
         if (sources == null){
             return;
         }
@@ -370,6 +371,19 @@ public class DetectPanel extends javax.swing.JPanel {
             ((DefaultListModel)sourcesList.getModel()).addElement(st.nextToken());
         }
         removeSourceButton.setEnabled(sourcesList.getModel().getSize() != 0);
+    }
+
+    void setSources (ClassPath sources) {
+        String srcPath = null;
+        if (sources.entries().size()>0) {
+            URL folderRoot = ((ClassPath.Entry)sources.entries().get(0)).getURL();
+            if ("jar".equals(folderRoot.getProtocol())) {   //NOI18N
+                folderRoot = FileUtil.getArchiveFile (folderRoot);
+            }
+            srcPath = new File(URI.create(folderRoot.toExternalForm())).getAbsolutePath();
+        }
+
+        setSources (srcPath);
     }
 
     String getJavadoc () {
@@ -386,6 +400,7 @@ public class DetectPanel extends javax.swing.JPanel {
     }
 
     void setJavadoc (String jdoc) {
+        ((DefaultListModel)javadocList.getModel()).removeAllElements();
         if (jdoc == null){
             return;
         }
@@ -397,6 +412,7 @@ public class DetectPanel extends javax.swing.JPanel {
     }
 
     void setJavadoc (List jdocFolders) {
+        ((DefaultListModel)javadocList.getModel()).removeAllElements();
         if (jdocFolders == null){
             return;
         }
@@ -713,6 +729,7 @@ public class DetectPanel extends javax.swing.JPanel {
                     if (detected)
                     {
                         component.setJavadoc (platform.getJavadocFolders());
+                        component.setSources(platform.getSourceFolders());
                         component.updateData (platform.getDisplayName());
                         component.jdkName.setEditable(true);
 
@@ -732,7 +749,7 @@ public class DetectPanel extends javax.swing.JPanel {
         }
 
         protected void checkValid () {
-            this.wiz.putProperty( "WizardPanel_errorMessage", "");   //NO18N                                                               //NOI18N
+            this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE, "");   //NO18N                                                               //NOI18N
             
             boolean v = true;
             boolean usedDisplayName = false;
@@ -747,25 +764,25 @@ public class DetectPanel extends javax.swing.JPanel {
             if (!configured){
                 CDCPlatformConfigurator configurator = detector.getConfigurator(installedFolder);
                 if ( configurator != null ){
-                this.wiz.putProperty( "WizardPanel_errorMessage", configurator.getInfo()); //NOI18N
+                this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE, configurator.getInfo()); //NOI18N
                 } else { 
-                    this.wiz.putProperty( "WizardPanel_errorMessage", NbBundle.getMessage(DetectPanel.class,"ERROR_PlatformNotSet"));         //NOI18N
+                    this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(DetectPanel.class,"ERROR_PlatformNotSet"));         //NOI18N
                 }
                 v = false;
             } else {
                 boolean validDisplayName = name.length() > 0;
                 if (!detected) {
-                    this.wiz.putProperty( "WizardPanel_errorMessage",NbBundle.getMessage(DetectPanel.class,"ERROR_NoSDKRegistry"));         //NOI18N
+                    this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE,NbBundle.getMessage(DetectPanel.class,"ERROR_NoSDKRegistry"));         //NOI18N
                 }
                 else if (!validDisplayName) {
-                    this.wiz.putProperty( "WizardPanel_errorMessage",NbBundle.getMessage(DetectPanel.class,"ERROR_InvalidDisplayName"));    //NOI18N
+                    this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE,NbBundle.getMessage(DetectPanel.class,"ERROR_InvalidDisplayName"));    //NOI18N
                 }
                 else {
                     JavaPlatform[] platforms = JavaPlatformManager.getDefault().getInstalledPlatforms();
                     for (int i=0; i<platforms.length; i++) {
                         if (name.equals (platforms[i].getDisplayName())) {
                             usedDisplayName = true;
-                            this.wiz.putProperty( "WizardPanel_errorMessage",NbBundle.getMessage(DetectPanel.class,"ERROR_UsedDisplayName"));    //NOI18N
+                            this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE,NbBundle.getMessage(DetectPanel.class,"ERROR_UsedDisplayName"));    //NOI18N
                             break;
                         }
                     }
