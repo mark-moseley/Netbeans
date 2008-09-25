@@ -42,10 +42,8 @@
 package org.netbeans.modules.java.freeform;
 
 import java.io.File;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery;
@@ -85,9 +83,12 @@ final class JavadocQuery implements JavadocForBinaryQueryImplementation {
                         assert rawtext != null;
                         String evaltext = eval.evaluate(rawtext);
                         if (evaltext != null) {
-                            if (evalTextToURL(evaltext).equals(binaryRoot)) {
-                                rightCU = true;
-                                break;
+                            URL url = evalTextToURL(evaltext);
+                            if (url != null) {
+                                if (url.equals(binaryRoot)) {
+                                    rightCU = true;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -116,26 +117,7 @@ final class JavadocQuery implements JavadocForBinaryQueryImplementation {
     
     private URL evalTextToURL(String evaltext) {
         File location = helper.resolveFile(evaltext);
-        URL u;
-        try {
-            u = location.toURI().toURL();
-        } catch (MalformedURLException e) {
-            throw new AssertionError(e);
-        }
-        if (FileUtil.isArchiveFile(u)) {
-            return FileUtil.getArchiveRoot(u);
-        } else {
-            String us = u.toExternalForm();
-            if (us.endsWith("/")) {
-                return u;
-            } else {
-                try {
-                    return new URL(us + '/');
-                } catch (MalformedURLException e) {
-                    throw new AssertionError(e);
-                }
-            }
-        }
+        return FileUtil.urlForArchiveOrDir(location);
     }
     
     private static final class FixedResult implements JavadocForBinaryQuery.Result {
