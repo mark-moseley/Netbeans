@@ -95,14 +95,7 @@ public class GdbAttachPanel extends JPanel implements Controller, ProcessListRea
             filterCB.addItem(item);
         }
         filterCB.setSelectedItem(selectedFilter);
-        
-        // last column should be the command column and needs to be enlarged
-        try {
-            TableColumn tc = processTable.getColumn(procList.getArgsHeader());
-            tc.setPreferredWidth(300);
-            tc.setMinWidth(75);
-        } finally {
-        }
+        setupCommandColumn();
         
         // Fill the Projects combo box
         Project main = OpenProjects.getDefault().getMainProject();
@@ -122,19 +115,27 @@ public class GdbAttachPanel extends JPanel implements Controller, ProcessListRea
             processModel.addColumn(hdr);
         }
     }
+
+    private void setupCommandColumn() {
+        // last column should be the command column and needs to be enlarged
+        //TableColumn tc = processTable.getColumn(procList.getArgsHeader());
+        //tc.setPreferredWidth(300);
+        //tc.setMinWidth(75);
+        int size = processTable.getColumnModel().getColumnCount();
+        for (int i = 0; i < size; i++) {
+            TableColumn column = processTable.getColumnModel().getColumn(i);
+            if (column.getIdentifier() != null && column.getIdentifier().equals(procList.getArgsHeader())) {
+                column.setPreferredWidth(300);
+                column.setMinWidth(75);
+                break;
+            }
+        }
+    }
     
     private void updateProcessList() {
         initProcessModel();
         processTable.setModel(processModel);
-        
-        // last column should be the command column and needs to be enlarged
-        try {
-            TableColumn tc = processTable.getColumn(procList.getArgsHeader());
-            tc.setPreferredWidth(300);
-            tc.setMinWidth(75);
-        } finally {
-        }
-        
+        setupCommandColumn();
         // Now get the process list
         procList = new ProcessList(this);
     }
@@ -203,6 +204,8 @@ public class GdbAttachPanel extends JPanel implements Controller, ProcessListRea
         StringBuilder tmp = new StringBuilder();
         Vector<String> nurow = new Vector<String>(oldrow.size() - 2);
         String status = oldrow.get(0);
+        String stime;
+        int i;
         
         if (status.length() == 1 && (status.equals("I") ||  status.equals("C") || status.equals("O"))) { // NOI18N
             // The status field is optional...
@@ -211,17 +214,32 @@ public class GdbAttachPanel extends JPanel implements Controller, ProcessListRea
             nurow.add(2, oldrow.get(1));  // PID
             nurow.add(3, oldrow.get(2));  // PPID
             nurow.add(4, oldrow.get(7));  // STIME
-            for (int i = 8; i < oldrow.size(); i++) {
-                tmp.append(oldrow.get(i));
+            stime = oldrow.get(7);
+            if (Character.isDigit(stime.charAt(0))) {
+                i = 8;
+            } else {
+                stime = stime + ' ' + oldrow.get(8);
+                i = 9;
+            }
+            nurow.add(4, stime);  // STIME
+            while (i < oldrow.size()) {
+                tmp.append(oldrow.get(i++));
             }
         } else {
             nurow.add(0, oldrow.get(5));  // UID
             nurow.add(1, oldrow.get(3));  // WINPID
             nurow.add(2, oldrow.get(0));  // PID
             nurow.add(3, oldrow.get(1));  // PPID
-            nurow.add(4, oldrow.get(6));  // STIME
-            for (int i = 7; i < oldrow.size(); i++) {
-                tmp.append(oldrow.get(i));
+            stime = oldrow.get(6);
+            if (Character.isDigit(stime.charAt(0))) {
+                i = 7;
+            } else {
+                stime = stime + ' ' + oldrow.get(7);
+                i = 8;
+            }
+            nurow.add(4, stime);  // STIME
+            while (i < oldrow.size()) {
+                tmp.append(oldrow.get(i++));
             }
         }
         nurow.add(5, tmp.toString());  // CMD
@@ -369,7 +387,6 @@ public class GdbAttachPanel extends JPanel implements Controller, ProcessListRea
         projectCB = new javax.swing.JComboBox();
 
         processTable.setModel(processModel);
-        processTable.setCellSelectionEnabled(false);
         processTable.setColumnSelectionAllowed(false);
         processTable.setRowSelectionAllowed(true);
         processTable.setShowVerticalLines(false);
@@ -382,6 +399,8 @@ public class GdbAttachPanel extends JPanel implements Controller, ProcessListRea
         filterCB.setEditable(true);
         filterCB.setSelectedItem(selectedFilter);
 
+        procLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/debugger/gdb/attach/Bundle").getString("GdbAttachProcessMNEM").charAt(0));
+        procLabel.setLabelFor(jScrollPane1);
         procLabel.setText(org.openide.util.NbBundle.getMessage(GdbAttachPanel.class, "GdbAttachProcessLabel")); // NOI18N
 
         projectLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/debugger/gdb/attach/Bundle").getString("GdbAttachProjectMNEM").charAt(0));
@@ -395,15 +414,15 @@ public class GdbAttachPanel extends JPanel implements Controller, ProcessListRea
             .add(layout.createSequentialGroup()
                 .add(filterLabel)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
-                .add(filterCB, 0, 486, Short.MAX_VALUE))
+                .add(filterCB, 0, 495, Short.MAX_VALUE))
             .add(layout.createSequentialGroup()
                 .add(projectLabel)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(projectCB, 0, 482, Short.MAX_VALUE))
+                .add(projectCB, 0, 488, Short.MAX_VALUE))
             .add(layout.createSequentialGroup()
                 .add(procLabel)
                 .addContainerGap())
-            .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 530, Short.MAX_VALUE)
+            .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 544, Short.MAX_VALUE)
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
