@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby.rhtml.editor.completion;
+package org.netbeans.modules.javascript.editing.embedding;
 
 import java.io.File;
 import java.util.Collection;
@@ -47,33 +47,34 @@ import org.netbeans.lib.lexer.test.TestLanguageProvider;
 import org.netbeans.modules.gsf.api.CompilationInfo;
 import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.gsf.LanguageRegistry;
 import org.netbeans.modules.gsf.api.EditHistory;
 import org.netbeans.modules.gsf.api.EmbeddingModel;
+import org.netbeans.modules.gsf.api.IncrementalEmbeddingModel.UpdateState;
 import org.netbeans.modules.gsf.api.TranslatedSource;
 import org.netbeans.modules.html.editor.HTMLKit;
 import org.netbeans.modules.gsf.api.Error;
-import org.netbeans.modules.gsf.api.IncrementalEmbeddingModel.UpdateState;
 import org.netbeans.modules.gsf.api.Severity;
 import org.netbeans.modules.gsfret.hints.infrastructure.Pair;
-import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.RubyTestBase;
+import org.netbeans.modules.javascript.editing.AstUtilities;
+import org.netbeans.modules.javascript.editing.JsTestBase;
+import org.netbeans.modules.javascript.editing.lexer.JsTokenId;
 import org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 
-public class RhtmlModelTest extends RubyTestBase {
+public class JsModelTest extends JsTestBase {
 
-    public RhtmlModelTest(String testName) {
+    public JsModelTest(String testName) {
         super(testName);
     }
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
+
         try {
             TestLanguageProvider.register(RhtmlTokenId.language());
         } catch (IllegalStateException ise) {
@@ -112,7 +113,7 @@ public class RhtmlModelTest extends RubyTestBase {
             return null;
         }
 
-        EmbeddingModel model = LanguageRegistry.getInstance().getEmbedding(RubyInstallation.RUBY_MIME_TYPE, mimeType);
+        EmbeddingModel model = LanguageRegistry.getInstance().getEmbedding(JsTokenId.JAVASCRIPT_MIME_TYPE, mimeType);
         assertNotNull(model);
         BaseDocument doc = getDocument(getTestFile(relFilePath));
 
@@ -127,19 +128,19 @@ public class RhtmlModelTest extends RubyTestBase {
         return translatedSource;
     }
 
-    private void checkEruby(String relFilePath) throws Exception {
+    private void checkJavaScriptTranslation(String relFilePath) throws Exception {
         TranslatedSource translatedSource = getTranslatedSource(relFilePath);
-        String generatedRuby = translatedSource.getSource();
+        String generatedJs = translatedSource.getSource();
 
-        assertDescriptionMatches(relFilePath, generatedRuby.toString(), false, ".rb");
+        assertDescriptionMatches(relFilePath, generatedJs.toString(), false, ".js");
 
         // Make sure the generated file doesn't have errors
-        File rubyFile = new File(getDataDir(), relFilePath + ".rb");
-        FileObject rubyFo = FileUtil.toFileObject(rubyFile);
-        assertNotNull(rubyFo);
-        CompilationInfo info = getInfo(rubyFo);
+        File rubyFile = new File(getDataDir(), relFilePath + ".js");
+        FileObject jsFo = FileUtil.toFileObject(rubyFile);
+        assertNotNull(jsFo);
+        CompilationInfo info = getInfo(jsFo);
         assertNotNull(info);
-        assertNotNull("Parse error on translated source; " + info.getErrors(), AstUtilities.getRoot(info));
+        assertNotNull("Parse error on translated source", AstUtilities.getRoot(info));
         // Warnings are okay:
         //assertTrue(info.getErrors().toString(), info.getErrors().size() == 0);
         for (Error error : info.getErrors()) {
@@ -210,7 +211,7 @@ public class RhtmlModelTest extends RubyTestBase {
         }
     }
 
-    private Pair<RubyTranslatedSource,String> checkIncrementalUpdate(String relFilePath, UpdateState expectedState, String... edits) throws Exception {
+    private Pair<JsTranslatedSource,String> checkIncrementalUpdate(String relFilePath, UpdateState expectedState, String... edits) throws Exception {
         // TODO
         // Translate source... then iterate through the source positions and assert
         // that everything in the source matches. Also make sure that the stuff that
@@ -223,8 +224,8 @@ public class RhtmlModelTest extends RubyTestBase {
         EditHistory history = pair.getA();
         String modifiedText = pair.getB();
 
-        assertTrue(translatedSource instanceof RubyTranslatedSource);
-        RubyTranslatedSource jts = (RubyTranslatedSource)translatedSource;
+        assertTrue(translatedSource instanceof JsTranslatedSource);
+        JsTranslatedSource jts = (JsTranslatedSource)translatedSource;
         UpdateState state = jts.incrementalUpdate(history);
         assertEquals(expectedState, state);
 
@@ -247,47 +248,59 @@ public class RhtmlModelTest extends RubyTestBase {
         }
 
         // For additional checks
-        return new Pair<RubyTranslatedSource,String>(jts, modifiedText);
+        return new Pair<JsTranslatedSource,String>(jts, modifiedText);
     }
 
-    public void testEruby() throws Exception {
-        checkEruby("testfiles/conv.rhtml");
+    public void testJs1() throws Exception {
+        checkJavaScriptTranslation("testfiles/embedding/rails-index.html");
     }
 
-    public void testEruby2() throws Exception {
-        checkEruby("testfiles/test2.rhtml");
+    public void testJs2() throws Exception {
+        checkJavaScriptTranslation("testfiles/embedding/mixed.erb");
     }
 
-    public void testEruby108990() throws Exception {
-        checkEruby("testfiles/quotes.rhtml");
+    public void testJs3() throws Exception {
+        checkJavaScriptTranslation("testfiles/embedding/fileinclusion.html");
     }
 
-    public void testEruby112877() throws Exception {
-        checkEruby("testfiles/other-112877.rhtml");
+    public void testJs124916() throws Exception {
+        checkJavaScriptTranslation("testfiles/embedding/embed124916.erb");
     }
-    public void testDashes121229() throws Exception {
-        checkEruby("testfiles/dashes.rhtml");
+
+    public void testYuiSample() throws Exception {
+        checkJavaScriptTranslation("testfiles/embedding/yuisample.html");
+    }
+
+    public void testConvertScript() throws Exception {
+        checkJavaScriptTranslation("testfiles/embedding/convertscript.html");
+    }
+
+    public void testSideEffects() throws Exception {
+        // Scenario for 131667 - Overly aggressive "code has no side effects" warning
+        checkJavaScriptTranslation("testfiles/embedding/sideeffects.html");
     }
 
     public void testPositions1() throws Exception {
-        checkPositionTranslations("testfiles/conv.rhtml", "<li><%=^ link_to", "^ %></li>");
+        checkPositionTranslations("testfiles/embedding/rails-index.html", "f^unction about", " ^</script>");
     }
 
     public void testPositions2() throws Exception {
-        checkPositionTranslations("testfiles/conv.rhtml", "^<div id=\"page-nav\">", "<div id=\"page-nav\">^");
+        checkPositionTranslations("testfiles/embedding/rails-index.html",
+                "<script type=\"text/javascript\" src=\"javascripts/prototype.js\">^</script>",
+                "<script type=\"text/javascript\" src=\"javascripts/prototype.js\">^</script>");
     }
 
     public void testIncrementalUpdate1() throws Exception {
-        Pair<RubyTranslatedSource,String> pair = checkIncrementalUpdate("testfiles/conv.rhtml", UpdateState.UPDATED,
-                "Create ^new article", REMOVE+"new ",
-                "Create ^article", INSERT+"old"
+        Pair<JsTranslatedSource,String> pair = checkIncrementalUpdate("testfiles/embedding/rails-index.html", UpdateState.COMPLETED,
+                "font-^family:", INSERT+"foo",
+                "pa^dding: 0", REMOVE+"dd"
                 );
 
         // Check offsets
-        RubyTranslatedSource source = pair.getA();
+        JsTranslatedSource source = pair.getA();
         String text = pair.getB();
 
-        int offset = getCaretOffset(text, "Create ^old");
+        int offset = getCaretOffset(text, "window^.onload");
         assertTrue(offset != -1);
         int astOffset = source.getAstOffset(offset);
         assertTrue(astOffset != -1);
@@ -295,10 +308,99 @@ public class RhtmlModelTest extends RubyTestBase {
         assertEquals(offset, lexOffset);
     }
 
+    public void testIncrementalUpdate2() throws Exception {
+        Pair<JsTranslatedSource,String> pair = checkIncrementalUpdate("testfiles/embedding/rails-index.html", UpdateState.UPDATED,
+                "function ^about", REMOVE+"about",
+                "function ^", INSERT+"aboooot"
+                );
+
+        // Check offsets
+        JsTranslatedSource source = pair.getA();
+        String text = pair.getB();
+
+        int offset = getCaretOffset(text, "^function aboo");
+        assertTrue(offset != -1);
+        int astOffset = source.getAstOffset(offset);
+        assertTrue(astOffset != -1);
+        int lexOffset = source.getLexicalOffset(astOffset);
+        assertEquals(offset, lexOffset);
+    }
+
+    public void testIncrementalUpdate3() throws Exception {
+        Pair<JsTranslatedSource,String> pair = checkIncrementalUpdate("testfiles/embedding/emptyattr.html", UpdateState.UPDATED,
+                "<input onclick=\"^\"/>", INSERT+"f"
+                );
+
+        // Check offsets
+        JsTranslatedSource source = pair.getA();
+        String text = pair.getB();
+
+        int offset = getCaretOffset(text, "<input onclick=\"f^\"/>");
+        assertTrue(offset != -1);
+        int astOffset = source.getAstOffset(offset);
+        assertTrue(astOffset != -1);
+        int lexOffset = source.getLexicalOffset(astOffset);
+        assertEquals(offset, lexOffset);
+
+        offset = getCaretOffset(text, "<input onclick=\"^f\"/>");
+        assertTrue(offset != -1);
+        astOffset = source.getAstOffset(offset);
+        assertTrue(astOffset != -1);
+        lexOffset = source.getLexicalOffset(astOffset);
+        assertEquals(offset, lexOffset);
+    }
+
     public void testIncrementalUpdate4() throws Exception {
         // Edits outside should be completed without parse result updates
-        checkIncrementalUpdate("testfiles/conv.rhtml", UpdateState.UPDATED,
-                "^begin action", INSERT+"bbb"
+        checkIncrementalUpdate("testfiles/embedding/emptyattr.html", UpdateState.COMPLETED,
+                "<input onclick=\"\"/^>", INSERT+"f"
                 );
+    }
+
+    public void testIncrementalUpdate5() throws Exception {
+        // Edits outside should be completed without parse result updates
+        checkIncrementalUpdate("testfiles/embedding/emptyattr.html", UpdateState.COMPLETED,
+                "<input onclick=^\"\"/>", INSERT+"f"
+                );
+    }
+
+    // Not sure about this one
+    //public void testIncrementalUpdate6() throws Exception {
+    //    // Edits outside should be completed without parse result updates
+    //    checkIncrementalUpdate("testfiles/embedding/emptyattr.html", UpdateState.COMPLETED,
+    //            "<input onclick=\"\"^/>", INSERT+"f"
+    //            );
+    //}
+
+    public void testIncrementalUpdate7() throws Exception {
+        // Edits outside should be completed without parse result updates
+        Pair<JsTranslatedSource,String> pair = checkIncrementalUpdate("testfiles/embedding/emptyattr.html", UpdateState.UPDATED,
+                "<form onsubmit=\"C^\"/>", INSERT+"D"
+                );
+
+        // Check offsets
+        JsTranslatedSource source = pair.getA();
+        String text = pair.getB();
+
+        int offset = getCaretOffset(text, "C^D");
+        assertTrue(offset != -1);
+        int astOffset = source.getAstOffset(offset);
+        assertTrue(astOffset != -1);
+        int lexOffset = source.getLexicalOffset(astOffset);
+        assertEquals(offset, lexOffset);
+
+        offset = getCaretOffset(text, "CD^");
+        assertTrue(offset != -1);
+        astOffset = source.getAstOffset(offset);
+        assertTrue(astOffset != -1);
+        lexOffset = source.getLexicalOffset(astOffset);
+        assertEquals(offset, lexOffset);
+
+        // Ensure that D is the end of the block
+        int blockEnd = lexOffset + 1; // +1: The end-quote seem to be included
+        assertEquals(blockEnd, source.getLexicalOffset(astOffset+1));
+        assertEquals(blockEnd, source.getLexicalOffset(astOffset+2));
+        assertEquals(blockEnd, source.getLexicalOffset(astOffset+3));
+
     }
 }
