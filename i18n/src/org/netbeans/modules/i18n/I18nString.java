@@ -220,7 +220,10 @@ public class I18nString {
         DataObject sourceDataObject = getSupport().getSourceDataObject();
 
         FileObject fo = getSupport().getResourceHolder().getResource().getPrimaryFile();
-        ClassPath cp = Util.getExecClassPath(sourceDataObject.getPrimaryFile(), fo); 
+        ClassPath cp = Util.getExecClassPath(sourceDataObject.getPrimaryFile(), fo);
+        if (cp == null) {
+            return null; // #148081 properties file not found on classpath, likely invalid
+        }
         Map<String,String> map = new HashMap<String,String>(4);
 
         map.put("key", getKey()); // NOI18N
@@ -229,8 +232,13 @@ public class I18nString {
         map.put("sourceFileName", sourceDataObject == null ? "" : sourceDataObject.getPrimaryFile().getName()); // NOI18N
 
         fillFormatMap(map);
-
-        return MapFormat.format(replaceFormat, map);
+        String res = null;
+        try {
+            res = MapFormat.format(replaceFormat, map);
+        } catch (IllegalArgumentException ilae) {
+            return null;
+        }
+        return res;
     }
 
     /**
