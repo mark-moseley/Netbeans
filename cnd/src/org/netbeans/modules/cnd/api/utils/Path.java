@@ -41,9 +41,13 @@
 
 package org.netbeans.modules.cnd.api.utils;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.StringTokenizer;
+import java.util.regex.Pattern;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.openide.util.Utilities;
 
 /**
@@ -158,5 +162,48 @@ public final class Path {
             pathName = "PATH"; // NOI18N
         }
         return pathName;
+    }
+    
+    public static String getPathName(int platform) {
+        // TODO: we can't cache this
+        // and this class should become non-static with an instance per devhost 
+        if (pathName == null) {
+            if (PlatformTypes.PLATFORM_WINDOWS == platform) {
+                for (String key : System.getenv().keySet()) {
+                    if (key.toLowerCase().equals("path")) { // NOI18N
+                        pathName = key.substring(0, 4);
+                        return pathName;
+                    }
+                }
+            }
+            pathName = "PATH"; // NOI18N
+        }
+        return pathName;
+    }
+    
+    public static String findCommand(String cmd) {
+        File file;
+        String cmd2 = null;
+        ArrayList<String> dirlist = getPath();
+        
+        if (cmd.length() > 0) {
+            if (Utilities.isWindows() && !cmd.endsWith(".exe")) { // NOI18N
+                cmd2 = cmd + ".exe"; // NOI18N
+            }
+
+            for (String dir : dirlist) {
+                file = new File(dir, cmd);
+                if (file.exists()) {
+                    return file.getAbsolutePath();
+                }
+                if (cmd2 != null) {
+                    file = new File(dir, cmd2);
+                    if (file.exists()) {
+                        return file.getAbsolutePath();
+                    }
+                }
+            }
+        }
+        return null;
     }
 }
