@@ -38,10 +38,16 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.html.editor.gsf.embedding;
 
-package org.netbeans.modules.ruby.rhtml.editor.completion;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.text.Document;
+import org.netbeans.api.html.lexer.HTMLTokenId;
+import org.netbeans.api.lexer.LanguagePath;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenHierarchyEvent;
@@ -50,47 +56,60 @@ import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.gsf.api.EditHistory;
 import org.netbeans.modules.gsf.api.IncrementalEmbeddingModel;
-import org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId;
 
 /**
- * Creates a Ruby model for an RHTML file. Simulates ERB to generate Ruby from
- * the RHTML.
- *
- * This class attaches itself to a document, and listens on changes. When
- * a client asks for the Ruby source of the RHTML file, it lazily generates it
- * if and only if the document has been modified.
- *
- * @author Marek Fukala
- * @author Tor Norbye
+ * Creates a CSS model from html source code. 
+ * (originally copied from JsModel from javascript.editor module written by Tor Norbye)
+ * 
+ * A generic implemenatation without any templating languages heuristics. 
+ * Can work on top of any language embedding html code inside. It simply
+ * extracts the html code using lexer API and creates a source from it.
+ * 
+ * @todo (marek) There is a problem how to generically resolve the templating 
+ * problem - the top level(templating) language may generate parts of the code 
+ * so we need to replace these by something meaningful. This impl. provides a 
+ * simple mechanism how to replace this holes, but some king of plugin API 
+ * is necessary here so the templating language can say what should be generated 
+ * instead of the templating part.
+ * 
+ * @todo (tor) Preserve script includes in the index somehow so I can figure out what files are included
+ * @todo (tor) Preserve DOM elements somehow
+ * 
+ * @author Tor Norbye, Marek Fukala
  */
-public class RhtmlModel {
+public class HtmlModel {
+
+    private static final Logger LOGGER = Logger.getLogger(HtmlModel.class.getName());
+    private static final boolean LOG = LOGGER.isLoggable(Level.FINE);
+    
+    public static final String HTML_MIME_TYPE = "text/html"; //NOI18N
     private final Document doc;
     private final ArrayList<CodeBlockData> codeBlocks = new ArrayList<CodeBlockData>();
-    private String rubyCode;
+    private String htmlCode;
     //private String rhtmlCode; // For debugging purposes
     private boolean documentDirty = true;
-    
     /** Caching */
     private int prevAstOffset; // Don't need to initialize: the map 0 => 0 is correct
     /** Caching */
     private int prevLexOffset;
- 
-    public static RhtmlModel get(Document doc) {
-        RhtmlModel model = (RhtmlModel)doc.getProperty(RhtmlModel.class);
-        if(model == null) {
-            model = new RhtmlModel(doc);
-            doc.putProperty(RhtmlModel.class, model);
+
+    public static HtmlModel get(Document doc) {
+        HtmlModel model = (HtmlModel) doc.getProperty(HtmlModel.class);
+        if (model == null) {
+            model = new HtmlModel(doc);
+            doc.putProperty(HtmlModel.class, model);
         }
 
         return model;
     }
-    
-    private RhtmlModel(Document doc) {
+
+    HtmlModel(Document doc) {
         this.doc = doc;
 
         if (doc != null) { // null in some unit tests
             TokenHierarchy hi = TokenHierarchy.get(doc);
             hi.addTokenHierarchyListener(new TokenHierarchyListener() {
+
                 public void tokenHierarchyChanged(TokenHierarchyEvent evt) {
                     documentDirty = true;
                 }
@@ -98,10 +117,10 @@ public class RhtmlModel {
         }
     }
 
-    public String getRubyCode() {
+    public String getHtmlCode() {
         if (documentDirty) {
             documentDirty = false;
-            
+
             // Debugging
             //try {
             //    rhtmlCode = doc.getText(0, doc.getLength());
@@ -110,178 +129,134 @@ public class RhtmlModel {
             //}
             codeBlocks.clear();
             StringBuilder buffer = new StringBuilder();
-            
+
             BaseDocument d = (BaseDocument) doc;
             try {
                 d.readLock();
-                TokenHierarchy<Document> tokenHierarchy = TokenHierarchy.get(doc);
-                TokenSequence<RhtmlTokenId> tokenSequence = tokenHierarchy.tokenSequence(RhtmlTokenId.language()); //get top level token sequence
-
-                eruby(buffer, tokenHierarchy, tokenSequence);
+                extractHtml(d, buffer, false);
             } finally {
                 d.readUnlock();
             }
-            rubyCode = buffer.toString();
+            htmlCode = buffer.toString();
+        }
+
+        if (LOG) {
+            LOGGER.log(Level.FINE, "===== VIRTUAL HTML SOURCE =====");
+            LOGGER.log(Level.FINE, htmlCode);
+            LOGGER.log(Level.FINE, "===============================");
+
+        }
+
+        return htmlCode;
+    }
+
+    /**Finds first language path with HTML language at the end (e.g. text/html or text/x-jsp/text/html)
+     *  
+     * @DocumenLock(type=READ) */
+    private LanguagePath findLanguagePath(TokenHierarchy th, String mimeType) {
+        LanguagePath foundPath = null;
+        Set<LanguagePath> lpaths = th.languagePaths();
+        for (LanguagePath path : lpaths) {
+            if (path.language(path.size() - 1).mimeType().equals(mimeType)) {
+                foundPath = path;
+                break;
+            }
+        //XXX do some testing of multiple language paths matching the criteria (e.g. html in javadoc in java in JSP).
+        }
+        return foundPath;
+    }
+
+    /** @return True iff we're still in the middle of an embedded token */
+    //XXX this should probably depend on HTML parser result and not just on lexical analysis
+    //XXX the input source should be translated source - either directly created from pure html
+    // or indirectly from JSP, PHP etc..
+    /** @DocumenLock(type=READ) */
+    void extractHtml(Document doc, StringBuilder buffer, boolean inCss) {
+        TokenHierarchy th = TokenHierarchy.get(doc);
+        LanguagePath lpath = findLanguagePath(th, HTML_MIME_TYPE);
+        
+        //issue #127778
+        if(!th.isActive() || lpath == null) {
+            return;
         }
         
-        return rubyCode;
-    }
-    
-    /** Perform eruby translation 
-     * @param outputBuffer The buffer to emit the translation to
-     * @param tokenHierarchy The token hierarchy for the RHTML code
-     * @param tokenSequence  The token sequence for the RHTML code
-     */
-    private void eruby(StringBuilder outputBuffer,
-            TokenHierarchy<Document> tokenHierarchy,            
-            TokenSequence<RhtmlTokenId> tokenSequence) {
-        StringBuilder buffer = outputBuffer;
-        // Add a super class such that code completion, goto declaration etc.
-        // knows where to pull the various link_to etc. methods from
-        
-        // Pretend that this code is an extension to ActionView::Base such that
-        // code completion, go to declaration etc. sees the inherited methods from
-        // ActionView -- link_to and friends.
-        buffer.append("class ActionView::Base\n"); // NOI18N
-        // TODO Try to include the helper class as well as the controller fields too;
-        // for now this logic is hardcoded into Ruby's code completion engine (CodeCompleter)
+        List<TokenSequence> tsl = th.tokenSequenceList(lpath, 0, doc.getLength());
+        Token<HTMLTokenId> htmlToken = null;
+        for (TokenSequence ts : tsl) {
+            ts.moveStart();
 
-        // Erubis uses _buf; I've seen eruby using something else (_erbout?)
-        buffer.append("_buf='';"); // NOI18N
-        codeBlocks.add(new CodeBlockData(0, 0, 0, buffer.length()));
-
-        boolean skipNewline = false;
-        while(tokenSequence.moveNext()) {
-            Token<RhtmlTokenId> token = tokenSequence.token();
-
-            if (token.id() == RhtmlTokenId.HTML){
-                int sourceStart = token.offset(tokenHierarchy);
-                int sourceEnd = sourceStart + token.length();
-                int generatedStart = buffer.length();
-
-                String text = token.text().toString();
-                
-                // If there is leading whitespace in this token followed by a newline,
-                // emit it directly first, then insert my buffer append. Otherwise,
-                // insert a semicolon if we're on the same line as the previous output.
-                boolean found = false;
-                int i = 0;
-                for (; i < text.length(); i++) {
-                    char c = text.charAt(i);
-                    if (c == '\n') {
-                        i++; // include it
-                        found = true;
-                        break;
-                    } else if (!Character.isWhitespace(c)) {
-                        break;
+            if (ts.moveNext()) {
+                if (htmlToken != null) {
+                    //second or subsequent token sequence
+                    int endOfLastSequence = htmlToken.offset(th) + htmlToken.length();
+                    if (endOfLastSequence < ts.offset()) {
+                        //if the token sequence are not continous (probably they never are, just for sure)
+                        //replace the hole by some reasonable text
+                        //TODO - identify the html tokens before and after the gap 
+                        //and try to generate appropriate fixing code inside
+                        //
+                        //for example: <div id=${"myid"}/> needs to be fixed otherwise the lexing and thus
+                        //parsing will faild here. In contrast to that cases like
+                        // <div id="${myid}"/> or <p>${"blabla"}<p>blabla2 are ok
                     }
                 }
 
-                if (found) {
-                    buffer.append(text.substring(0, i));
-                    text = text.substring(i);
-                } else {
-                    buffer.append(';');
-                }
-                buffer.append("_buf << '"); // NOI18N
-                if (skipNewline && text.startsWith("\n")) { // NOI18N
-                    text = text.substring(1);
-                    sourceEnd--;
-                }
-                // Escape 's in the document so they don't escape out of the ruby code
-                // I don't have to do this on lines that are in comments... But no big harm
-                text = text.replace("'", "\\'");
-                buffer.append(text);
-                // TODO: This "\n" shouldn't be there if the next "<%" is a "<%-" !
-                buffer.append("';\n"); // NOI18N
-                int generatedEnd = buffer.length();
-
-                CodeBlockData blockData = new CodeBlockData(sourceStart, sourceEnd, generatedStart, generatedEnd);
-                codeBlocks.add(blockData);
-
-                skipNewline = false;
-            } else if (token.id() == RhtmlTokenId.RUBY){
-                int sourceStart = token.offset(tokenHierarchy);
-                int sourceEnd = sourceStart + token.length();
+                //beginning of the html code
+                int sourceStart = ts.offset();
                 int generatedStart = buffer.length();
 
-                String text = token.text().toString();
-                skipNewline = false;
-                if (text.endsWith("-")) { // NOI18N
-                    text = text.substring(0, text.length()-1);
-                    skipNewline = true;
+                //reset ts to the beginning
+                ts.moveStart();
+
+                //copy the content
+                while (ts.moveNext()) {
+                    htmlToken = ts.token();
+                    buffer.append(htmlToken.text());
                 }
 
-                buffer.append(text);
-
+                int sourceEnd = htmlToken.offset(th) + htmlToken.length();
                 int generatedEnd = buffer.length();
 
-                CodeBlockData blockData = new CodeBlockData(sourceStart, sourceEnd, generatedStart, generatedEnd);
+                CodeBlockData blockData = new CodeBlockData(sourceStart, sourceEnd, generatedStart,
+                        generatedEnd);
                 codeBlocks.add(blockData);
 
-                skipNewline = false;
-            } else if (token.id() == RhtmlTokenId.RUBY_EXPR) {
-                buffer.append("_buf << ("); // NOI18N
-                int sourceStart = token.offset(tokenHierarchy);
-                int sourceEnd = sourceStart + token.length();
-                int generatedStart = buffer.length();
-
-                String text = token.text().toString();
-                skipNewline = false;
-                if (text.endsWith("-")) { // NOI18N
-                    text = text.substring(0, text.length()-1);
-                    skipNewline = true;
-                }
-                buffer.append(text);
-                int generatedEnd = buffer.length();
-
-                CodeBlockData blockData = new CodeBlockData(sourceStart, sourceEnd, generatedStart, generatedEnd);
-                codeBlocks.add(blockData);
-
-// Make code sanitizing work better:  buffer.append("\n).to_s;"); // NOI18N
-                buffer.append(").to_s;"); // NOI18N
             }
+
         }
 
-        // Close off the class
-        // eruby also ends with this statement: _buf.to_s
-        String end = "\nend\n"; // NOI18N
-        buffer.append(end);
-        if (doc != null) {
-            codeBlocks.add(new CodeBlockData(doc.getLength(), doc.getLength(), buffer.length()-end.length(), buffer.length()));
-        }
     }
-    
-    public int sourceToGeneratedPos(int sourceOffset){
+
+    public int sourceToGeneratedPos(int sourceOffset) {
         // Caching
         if (prevLexOffset == sourceOffset) {
             return prevAstOffset;
         }
         prevLexOffset = sourceOffset;
-        
+
         // TODO - second level of caching on the code block to catch
         // nearby searches
-        
+
         // Not checking dirty flag here; sourceToGeneratedPos() should apply
         // to the positions as they were when we generated the ruby code
-        
+
         CodeBlockData codeBlock = getCodeBlockAtSourceOffset(sourceOffset);
-        
-        if (codeBlock == null){
+
+        if (codeBlock == null) {
             return -1; // no embedded java code at the offset
         }
-        
+
         int offsetWithinBlock = sourceOffset - codeBlock.sourceStart;
-        int generatedOffset = codeBlock.generatedStart+offsetWithinBlock;
+        int generatedOffset = codeBlock.generatedStart + offsetWithinBlock;
         if (generatedOffset <= codeBlock.generatedEnd) {
             prevAstOffset = generatedOffset;
         } else {
             prevAstOffset = codeBlock.generatedEnd;
         }
-        
+
         return prevAstOffset;
     }
-    
+
     public int generatedToSourcePos(int generatedOffset) {
         // Caching
         if (prevAstOffset == generatedOffset) {
@@ -291,51 +266,81 @@ public class RhtmlModel {
         // TODO - second level of caching on the code block to catch
         // nearby searches
 
-        
+
         // Not checking dirty flag here; generatedToSourcePos() should apply
         // to the positions as they were when we generated the ruby code
 
         CodeBlockData codeBlock = getCodeBlockAtGeneratedOffset(generatedOffset);
-        
-        if (codeBlock == null){
+
+        if (codeBlock == null) {
             return -1; // no embedded java code at the offset
         }
-        
+
         int offsetWithinBlock = generatedOffset - codeBlock.generatedStart;
-        int sourceOffset = codeBlock.sourceStart+offsetWithinBlock;
+        int sourceOffset = codeBlock.sourceStart + offsetWithinBlock;
         if (sourceOffset <= codeBlock.sourceEnd) {
             prevLexOffset = sourceOffset;
         } else {
             prevLexOffset = codeBlock.sourceEnd;
         }
-        
+
         return prevLexOffset;
     }
-    
-    private CodeBlockData getCodeBlockAtSourceOffset(int offset){
-        for (CodeBlockData codeBlock : codeBlocks){
-            if (codeBlock.sourceStart <= offset && codeBlock.sourceEnd >= offset){
+
+    private CodeBlockData getCodeBlockAtSourceOffset(int offset) {
+            for(int i = 0; i < codeBlocks.size(); i++) {
+            CodeBlockData codeBlock = codeBlocks.get(i);
+            if (codeBlock.sourceStart <= offset && codeBlock.sourceEnd > offset) {
                 return codeBlock;
+            } else if(codeBlock.sourceEnd == offset) {
+                //test if there the following code blocks starts with the same offset
+                if(i < codeBlocks.size() - 1) {
+                    CodeBlockData next = codeBlocks.get(i+1);
+                    if(next.sourceStart == offset) {
+                        return next;
+                    } else {
+                        return codeBlock;
+                    }
+                } else {
+                    //the code block is last element, return it
+                    return codeBlock;
+                }
             }
         }
+
+        
         return null;
     }
 
-    private CodeBlockData getCodeBlockAtGeneratedOffset(int offset){
-        // TODO - binary search!! they are ordered!
-        for (CodeBlockData codeBlock : codeBlocks){
-            if (codeBlock.generatedStart <= offset && codeBlock.generatedEnd >= offset){
+    private CodeBlockData getCodeBlockAtGeneratedOffset(int offset) {
+        for(int i = 0; i < codeBlocks.size(); i++) {
+            CodeBlockData codeBlock = codeBlocks.get(i);
+            if (codeBlock.generatedStart <= offset && codeBlock.generatedEnd > offset) {
                 return codeBlock;
+            } else if(codeBlock.generatedEnd == offset) {
+                //test if there the following code blocks starts with the same offset
+                if(i < codeBlocks.size() - 1) {
+                    CodeBlockData next = codeBlocks.get(i+1);
+                    if(next.generatedStart == offset) {
+                        return next;
+                    } else {
+                        return codeBlock;
+                    }
+                } else {
+                    //the code block is last element, return it
+                    return codeBlock;
+                }
             }
         }
+        
         return null;
     }
-    
+
     IncrementalEmbeddingModel.UpdateState incrementalUpdate(EditHistory history) {
         // Clear cache
-        //prevLexOffset = prevAstOffset = 0;
+        // prevLexOffset = prevAstOffset = 0;
         prevLexOffset = history.convertOriginalToEdited(prevLexOffset);
-
+        
         int offset = history.getStart();
         int limit = history.getOriginalEnd();
         int delta = history.getSizeDelta();
@@ -363,41 +368,42 @@ public class RhtmlModel {
     }
 
     private class CodeBlockData {
+
         /** Start of section in RHTML file */
         private int sourceStart;
         /** End of section in RHTML file */
         private int sourceEnd;
-        /** Start of section in generated Ruby */
+        /** Start of section in generated Js */
         private int generatedStart;
-        /** End of section in generated Ruby */
+        /** End of section in generated Js */
         private int generatedEnd;
-        
+
         public CodeBlockData(int sourceStart, int sourceEnd, int generatedStart, int generatedEnd) {
             this.sourceStart = sourceStart;
             this.generatedStart = generatedStart;
             this.sourceEnd = sourceEnd;
             this.generatedEnd = generatedEnd;
         }
-        
+
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder();
             sb.append("CodeBlockData[");
-            sb.append("\n  RHTML(" + sourceStart+","+sourceEnd+")");
+            sb.append("\n  SOURCE(" + sourceStart + "," + sourceEnd + ")");
             //sb.append("=\"");
             //sb.append(rhtmlCode.substring(sourceStart, sourceEnd));
             //sb.append("\"");
-            sb.append(",\n  RUBY(" + generatedStart + "," + generatedEnd + ")");
+            sb.append(",\n  HTML(" + generatedStart + "," + generatedEnd + ")");
             //sb.append("=\"");
             //sb.append(rubyCode.substring(generatedStart,generatedEnd));
             //sb.append("\"");
             sb.append("]");
-            
+
             return sb.toString();
         }
     }
 
-    // For debugging only; pass in "rubyCode" or "rhtmlCode" in RhtmlModel to print
+    // For debugging only; pass in "rubyCode" or "rhtmlCode" in JsModel to print
     //private String debugPos(String code, int pos) {
     //    if (pos == -1) {
     //        return "<-1:notfound>";

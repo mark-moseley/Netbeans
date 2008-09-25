@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby.rhtml.editor.completion;
+package org.netbeans.modules.languages.yaml;
 import java.util.ArrayList;
 import javax.swing.text.Document;
 import org.netbeans.api.lexer.Token;
@@ -50,24 +50,23 @@ import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.gsf.api.EditHistory;
 import org.netbeans.modules.gsf.api.IncrementalEmbeddingModel;
-import org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId;
 
 /**
- * Creates a Ruby model for an RHTML file. Simulates ERB to generate Ruby from
- * the RHTML.
+ * Creates a Ruby model for a YAML file. Simulates ERB to generate Ruby from
+ * the YAML.
  *
  * This class attaches itself to a document, and listens on changes. When
- * a client asks for the Ruby source of the RHTML file, it lazily generates it
+ * a client asks for the Ruby source of the Yaml file, it lazily generates it
  * if and only if the document has been modified.
  *
  * @author Marek Fukala
  * @author Tor Norbye
  */
-public class RhtmlModel {
+public class RubyModel {
     private final Document doc;
     private final ArrayList<CodeBlockData> codeBlocks = new ArrayList<CodeBlockData>();
     private String rubyCode;
-    //private String rhtmlCode; // For debugging purposes
+    //private String yamlCode; // For debugging purposes
     private boolean documentDirty = true;
     
     /** Caching */
@@ -75,17 +74,17 @@ public class RhtmlModel {
     /** Caching */
     private int prevLexOffset;
  
-    public static RhtmlModel get(Document doc) {
-        RhtmlModel model = (RhtmlModel)doc.getProperty(RhtmlModel.class);
+    public static RubyModel get(Document doc) {
+        RubyModel model = (RubyModel)doc.getProperty(RubyModel.class);
         if(model == null) {
-            model = new RhtmlModel(doc);
-            doc.putProperty(RhtmlModel.class, model);
+            model = new RubyModel(doc);
+            doc.putProperty(RubyModel.class, model);
         }
 
         return model;
     }
     
-    private RhtmlModel(Document doc) {
+    RubyModel(Document doc) {
         this.doc = doc;
 
         if (doc != null) { // null in some unit tests
@@ -104,7 +103,7 @@ public class RhtmlModel {
             
             // Debugging
             //try {
-            //    rhtmlCode = doc.getText(0, doc.getLength());
+            //    yamlCode = doc.getText(0, doc.getLength());
             //} catch (Exception e) {
             //    e.printStackTrace();
             //}
@@ -115,7 +114,7 @@ public class RhtmlModel {
             try {
                 d.readLock();
                 TokenHierarchy<Document> tokenHierarchy = TokenHierarchy.get(doc);
-                TokenSequence<RhtmlTokenId> tokenSequence = tokenHierarchy.tokenSequence(RhtmlTokenId.language()); //get top level token sequence
+                TokenSequence<YamlTokenId> tokenSequence = tokenHierarchy.tokenSequence(YamlTokenId.language()); //get top level token sequence
 
                 eruby(buffer, tokenHierarchy, tokenSequence);
             } finally {
@@ -129,32 +128,25 @@ public class RhtmlModel {
     
     /** Perform eruby translation 
      * @param outputBuffer The buffer to emit the translation to
-     * @param tokenHierarchy The token hierarchy for the RHTML code
-     * @param tokenSequence  The token sequence for the RHTML code
+     * @param tokenHierarchy The token hierarchy for the yaml code
+     * @param tokenSequence  The token sequence for the yaml code
      */
-    private void eruby(StringBuilder outputBuffer,
+    void eruby(StringBuilder outputBuffer,
             TokenHierarchy<Document> tokenHierarchy,            
-            TokenSequence<RhtmlTokenId> tokenSequence) {
+            TokenSequence<YamlTokenId> tokenSequence) {
         StringBuilder buffer = outputBuffer;
         // Add a super class such that code completion, goto declaration etc.
         // knows where to pull the various link_to etc. methods from
         
-        // Pretend that this code is an extension to ActionView::Base such that
-        // code completion, go to declaration etc. sees the inherited methods from
-        // ActionView -- link_to and friends.
-        buffer.append("class ActionView::Base\n"); // NOI18N
-        // TODO Try to include the helper class as well as the controller fields too;
-        // for now this logic is hardcoded into Ruby's code completion engine (CodeCompleter)
-
         // Erubis uses _buf; I've seen eruby using something else (_erbout?)
         buffer.append("_buf='';"); // NOI18N
         codeBlocks.add(new CodeBlockData(0, 0, 0, buffer.length()));
 
         boolean skipNewline = false;
         while(tokenSequence.moveNext()) {
-            Token<RhtmlTokenId> token = tokenSequence.token();
+            Token<YamlTokenId> token = tokenSequence.token();
 
-            if (token.id() == RhtmlTokenId.HTML){
+            if (token.id() == YamlTokenId.TEXT || token.id() == YamlTokenId.COMMENT){
                 int sourceStart = token.offset(tokenHierarchy);
                 int sourceEnd = sourceStart + token.length();
                 int generatedStart = buffer.length();
@@ -200,7 +192,7 @@ public class RhtmlModel {
                 codeBlocks.add(blockData);
 
                 skipNewline = false;
-            } else if (token.id() == RhtmlTokenId.RUBY){
+            } else if (token.id() == YamlTokenId.RUBY){
                 int sourceStart = token.offset(tokenHierarchy);
                 int sourceEnd = sourceStart + token.length();
                 int generatedStart = buffer.length();
@@ -220,7 +212,7 @@ public class RhtmlModel {
                 codeBlocks.add(blockData);
 
                 skipNewline = false;
-            } else if (token.id() == RhtmlTokenId.RUBY_EXPR) {
+            } else if (token.id() == YamlTokenId.RUBY_EXPR) {
                 buffer.append("_buf << ("); // NOI18N
                 int sourceStart = token.offset(tokenHierarchy);
                 int sourceEnd = sourceStart + token.length();
@@ -245,11 +237,11 @@ public class RhtmlModel {
 
         // Close off the class
         // eruby also ends with this statement: _buf.to_s
-        String end = "\nend\n"; // NOI18N
-        buffer.append(end);
-        if (doc != null) {
-            codeBlocks.add(new CodeBlockData(doc.getLength(), doc.getLength(), buffer.length()-end.length(), buffer.length()));
-        }
+//        String end = "\nend\n"; // NOI18N
+//        buffer.append(end);
+//        if (doc != null) {
+//            codeBlocks.add(new CodeBlockData(doc.getLength(), doc.getLength(), buffer.length()-end.length(), buffer.length()));
+//        }
     }
     
     public int sourceToGeneratedPos(int sourceOffset){
@@ -363,9 +355,9 @@ public class RhtmlModel {
     }
 
     private class CodeBlockData {
-        /** Start of section in RHTML file */
+        /** Start of section in yaml file */
         private int sourceStart;
-        /** End of section in RHTML file */
+        /** End of section in yaml file */
         private int sourceEnd;
         /** Start of section in generated Ruby */
         private int generatedStart;
@@ -383,9 +375,9 @@ public class RhtmlModel {
         public String toString() {
             StringBuilder sb = new StringBuilder();
             sb.append("CodeBlockData[");
-            sb.append("\n  RHTML(" + sourceStart+","+sourceEnd+")");
+            sb.append("\n  yaml(" + sourceStart+","+sourceEnd+")");
             //sb.append("=\"");
-            //sb.append(rhtmlCode.substring(sourceStart, sourceEnd));
+            //sb.append(yamlCode.substring(sourceStart, sourceEnd));
             //sb.append("\"");
             sb.append(",\n  RUBY(" + generatedStart + "," + generatedEnd + ")");
             //sb.append("=\"");
@@ -397,7 +389,7 @@ public class RhtmlModel {
         }
     }
 
-    // For debugging only; pass in "rubyCode" or "rhtmlCode" in RhtmlModel to print
+    // For debugging only; pass in "rubyCode" or "yamlCode" in yamlModel to print
     //private String debugPos(String code, int pos) {
     //    if (pos == -1) {
     //        return "<-1:notfound>";
