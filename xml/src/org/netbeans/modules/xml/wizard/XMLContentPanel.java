@@ -6,14 +6,17 @@
 
 package org.netbeans.modules.xml.wizard;
 
+import org.netbeans.modules.xml.wizard.SchemaParser;
+import org.netbeans.modules.xml.wizard.XMLContentAttributes;
 import java.io.File;
 import java.util.Iterator;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.SpinnerModel;
 import javax.swing.SpinnerNumberModel;
-import org.openide.WizardDescriptor;
+import org.netbeans.modules.xml.util.Util;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.NbBundle;
 
 
 /**
@@ -23,17 +26,29 @@ import org.openide.filesystems.FileUtil;
 public class XMLContentPanel extends AbstractPanel {
     private DefaultComboBoxModel rootModel;
     private boolean visible= false;
+    SchemaParser.SchemaInfo schemaInfo;
     
     /** Creates new form XMLContentPanel */
     public XMLContentPanel() {
         initComponents(); 
+        initAccessibility();
     }
-    
-    public XMLContentPanel(boolean value) {
-        visible = value;
-        initComponents(); 
         
-    } 
+    public XMLContentPanel(boolean value) {
+        this.visible = value;
+        initComponents(); 
+        initAccessibility();
+    }
+
+    private void initAccessibility() {
+        Util util = Util.THIS;
+        getAccessibleContext().setAccessibleDescription(titleLabel.getText());
+        attributes.setMnemonic(util.getChar(
+                XMLContentPanel.class, "XMLContentPanel.attributes.mne"));
+        elements.setMnemonic(util.getChar(
+                XMLContentPanel.class, "XMLContentPanel.elements.mne"));
+        
+    }
      
     /** This method is called from within the constructor to
      * initialize the form.
@@ -63,7 +78,7 @@ public class XMLContentPanel extends AbstractPanel {
         rootElementComboBox = new javax.swing.JComboBox();
         rootElementComboBox.setVisible(visible);
 
-        setName("XML Model Generation Options"); // NOI18N
+        setName(org.openide.util.NbBundle.getMessage(XMLContentPanel.class, "PROP_xml_content_panel_name")); // NOI18N
 
         titleLabel.setText(org.openide.util.NbBundle.getMessage(XMLContentPanel.class, "XMLContentPanel.titleLabel.text")); // NOI18N
 
@@ -105,36 +120,52 @@ public class XMLContentPanel extends AbstractPanel {
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(jSeparator2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 725, Short.MAX_VALUE)
-                    .add(jSeparator1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 725, Short.MAX_VALUE)
+                    .add(jSeparator2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 726, Short.MAX_VALUE)
+                    .add(jSeparator1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 726, Short.MAX_VALUE)
                     .add(layout.createSequentialGroup()
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(attributes)
-                            .add(elements, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 187, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                            .add(layout.createSequentialGroup()
+                                .add(attributes, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 191, Short.MAX_VALUE)
+                                .add(523, 523, 523))
+                            .add(layout.createSequentialGroup()
+                                .add(elements, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 187, Short.MAX_VALUE)
+                                .add(527, 527, 527))
                             .add(layout.createSequentialGroup()
                                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                                    .add(jLabel7)
-                                    .add(jLabel5)
-                                    .add(jLabel3))
+                                    .add(layout.createSequentialGroup()
+                                        .add(jLabel7, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 79, Short.MAX_VALUE)
+                                        .add(46, 46, 46))
+                                    .add(layout.createSequentialGroup()
+                                        .add(jLabel5, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 95, Short.MAX_VALUE)
+                                        .add(30, 30, 30))
+                                    .add(jLabel3, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE))
                                 .add(7, 7, 7)
                                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                                     .add(layout.createSequentialGroup()
                                         .add(17, 17, 17)
-                                        .add(rootElementComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                                        .add(rootElementComboBox, 0, 65, Short.MAX_VALUE)
+                                        .add(500, 500, 500))
                                     .add(layout.createSequentialGroup()
                                         .add(42, 42, 42)
                                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                                            .add(depthSpinner, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                                            .add(occurSpinner, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                                            .add(depthSpinner, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 62, Short.MAX_VALUE)
+                                            .add(occurSpinner, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 62, Short.MAX_VALUE))
                                         .add(66, 66, 66)
                                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                                            .add(jLabel4)
-                                            .add(jLabel6))))
-                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                            .add(titleLabel)
-                            .add(jLabel1)
-                            .add(jLabel2))
-                        .addContainerGap())))
+                                            .add(layout.createSequentialGroup()
+                                                .add(jLabel4, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 398, Short.MAX_VALUE)
+                                                .add(14, 14, 14))
+                                            .add(jLabel6, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 412, Short.MAX_VALUE)))))
+                            .add(layout.createSequentialGroup()
+                                .add(titleLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 373, Short.MAX_VALUE)
+                                .add(341, 341, 341))
+                            .add(layout.createSequentialGroup()
+                                .add(jLabel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 91, Short.MAX_VALUE)
+                                .add(623, 623, 623))
+                            .add(layout.createSequentialGroup()
+                                .add(jLabel2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 113, Short.MAX_VALUE)
+                                .add(601, 601, 601)))
+                        .add(12, 12, 12))))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -170,6 +201,11 @@ public class XMLContentPanel extends AbstractPanel {
                     .add(jLabel6))
                 .addContainerGap(72, Short.MAX_VALUE))
         );
+
+        attributes.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(XMLContentPanel.class, "XMLContentPanel.attributes.text")); // NOI18N
+        attributes.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(XMLContentPanel.class, "XMLContentPanel.attributes.text")); // NOI18N
+        elements.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(XMLContentPanel.class, "XMLContentPanel.elements.text")); // NOI18N
+        elements.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(XMLContentPanel.class, "XMLContentPanel.elements.text")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
     private void attributesActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_attributesActionPerformed
@@ -229,26 +265,65 @@ public class XMLContentPanel extends AbstractPanel {
         rootModel = new DefaultComboBoxModel();
         rootElementComboBox.setModel(rootModel);       
         
-        File f = new File(model.getPrimarySchema());
-        if(f == null)
+        if(getSchemaInfo() == null)
             return;
-        FileObject fobj = FileUtil.toFileObject(f);
-        SchemaParser.SchemaInfo info = Util.getRootElements(fobj);
-        if(info == null || info.roots.size() ==0){
-            //no root elements
+        
+        if(schemaInfo.roots.size() ==0){
+            //TODO: should have some error message
+            //String errMsg =  NbBundle.getMessage(XMLContentPanel.class, "MSG_XMLContentPanel_No_Root");
+            //templateWizard.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, errMsg);
             return;
         }
-        Iterator it = info.roots.iterator();
+        Iterator it = schemaInfo.roots.iterator();
             while (it.hasNext()) {
                  String next = (String) it.next();
                  rootModel.addElement(next);
-            }        
+            }    
+    }
+    
+    private SchemaParser.SchemaInfo getSchemaInfo() {
+        if(schemaInfo != null)
+            return schemaInfo;
+        
+        File f = new File(model.getPrimarySchema());
+        if(f == null )
+            return null;
+        //for http based xsd files
+        //this combo box in this panel is pnly visible for files
+        //on disk, so ignore http based xsd files
+       if( !f.exists() ) {
+           return null;
+        } 
+        FileObject fobj = FileUtil.toFileObject(f);
+        schemaInfo = SchemaParser.getRootElements(fobj);
+        return schemaInfo;
     }
 
     @Override
     protected void updateView() {
         
     }
+    
+    @Override
+    public String getName() {
+        return NbBundle.getMessage(XMLContentPanel.class, "PROP_xml_content_panel_name");//noi18n
+    }
+    
+    public boolean isPanelValid() {
+        //valid if root selected in previous panel
+        if(model.getRoot() != null)
+            return true;
+        
+        if(getSchemaInfo() == null)
+            return false;
+        
+        if(schemaInfo.roots.size() == 0){
+            //no root elements
+            return false;
+        }
+        
+        return true;
+    }    
     
     SpinnerModel occurencesModel;
     SpinnerModel depthModel;

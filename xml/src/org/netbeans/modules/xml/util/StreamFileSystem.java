@@ -38,8 +38,9 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.xml.lib;
+package org.netbeans.modules.xml.util;
 
+import org.netbeans.modules.xml.lib.*;
 import org.openide.filesystems.*;
 
 /**
@@ -80,7 +81,8 @@ class StreamFileSystem extends FileSystem {
     }
     
     public java.lang.String getDisplayName() {
-        return Util.THIS.getString ("PROP_StreamFileSystem");
+        return Util.THIS.getString (
+                StreamFileSystem.class, "PROP_StreamFileSystem");
     }
     
 }
