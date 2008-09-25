@@ -44,6 +44,7 @@ package org.netbeans.modules.java.freeform.ui;
 import java.awt.Component;
 import java.awt.event.ItemEvent;
 import java.io.File;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.text.Collator;
 import java.util.ArrayList;
@@ -64,6 +65,9 @@ import javax.swing.plaf.UIResource;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.java.platform.PlatformsCustomizer;
+import org.netbeans.api.project.ant.FileChooser;
+import org.netbeans.api.queries.CollocationQuery;
+import org.netbeans.modules.ant.freeform.spi.ProjectConstants;
 import org.netbeans.modules.ant.freeform.spi.support.Util;
 import org.netbeans.modules.java.freeform.JavaProjectGenerator;
 import org.netbeans.modules.java.freeform.jdkselection.JdkConfiguration;
@@ -71,6 +75,7 @@ import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
@@ -330,6 +335,7 @@ public class ClasspathPanel extends javax.swing.JPanel implements HelpCtx.Provid
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 2;
+        gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
         gridBagConstraints.insets = new java.awt.Insets(4, 0, 0, 0);
         add(jPanel1, gridBagConstraints);
@@ -411,6 +417,8 @@ public class ClasspathPanel extends javax.swing.JPanel implements HelpCtx.Provid
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 12, 0);
         javaPlatformPanel.add(javaPlatformIntro, gridBagConstraints);
+        javaPlatformIntro.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ClasspathPanel.class, "ACSN_ClasspathPanel_PlatformIntro")); // NOI18N
+        javaPlatformIntro.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ClasspathPanel.class, "ACSD_ClasspathPanel_PlatformIntro")); // NOI18N
 
         javaPlatformLabel.setLabelFor(javaPlatform);
         org.openide.awt.Mnemonics.setLocalizedText(javaPlatformLabel, org.openide.util.NbBundle.getMessage(ClasspathPanel.class, "ClasspathPanel.javaPlatformLabel")); // NOI18N
@@ -469,6 +477,8 @@ public class ClasspathPanel extends javax.swing.JPanel implements HelpCtx.Provid
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.insets = new java.awt.Insets(4, 10, 4, 4);
         jPanel2.add(jTextArea2, gridBagConstraints);
+        jTextArea2.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(ClasspathPanel.class, "ACSN_Freeform_Warning_Message")); // NOI18N
+        jTextArea2.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ClasspathPanel.class, "ACSD_Freeform_Warning_Message")); // NOI18N
 
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -604,9 +614,21 @@ public class ClasspathPanel extends javax.swing.JPanel implements HelpCtx.Provid
         }
         StringBuffer sb = new StringBuffer();
         for (int i=0; i<classpath.getModel().getSize(); i++) {
-            File f = new File((String)classpath.getModel().getElementAt(i));
-            String path = Util.relativizeLocation(model.getBaseFolder(), model.getNBProjectFolder(), f);
+            String path = (String) classpath.getModel().getElementAt(i);
+            File resolvedFile = PropertyUtils.resolveFile(model.getBaseFolder(), path);
+            // first check if they are collocated, it's more important than relative path
+            if (CollocationQuery.areCollocated(model.getBaseFolder(), resolvedFile)) {
+                path = Util.relativizeLocation(model.getBaseFolder(), model.getNBProjectFolder(), resolvedFile);
+            } else {
+                File unresolvedFile = new File(path);
+                // if base folder is not project folder then prefix ${project.dir}/
+                if (!unresolvedFile.isAbsolute() && !model.getBaseFolder().equals(model.getNBProjectFolder())) {
+                    path = ProjectConstants.PROJECT_LOCATION_PREFIX + path;
+                }
+            }
+            // otherwise store value provided by user, either absolute or relative
             sb.append(path);
+
             if (i+1<classpath.getModel().getSize()) {
                 sb.append(File.pathSeparatorChar);
             }
@@ -632,8 +654,15 @@ public class ClasspathPanel extends javax.swing.JPanel implements HelpCtx.Provid
         for (JavaProjectGenerator.JavaCompilationUnit.CP cp : cps) {
             if (cp.mode.equals(ProjectModel.CLASSPATH_MODE_COMPILE)) {
                 for (String path : PropertyUtils.tokenizePath(model.getEvaluator().evaluate(cp.classpath))) {
-                    path = PropertyUtils.resolveFile(model.getNBProjectFolder(), path).getAbsolutePath();
+                    // we want to show relative paths to user in customizer => following line commented out
+                    // path = PropertyUtils.resolveFile(model.getNBProjectFolder(), path).getAbsolutePath();
                     if (path != null) {
+                        // if the file is inside base folder then remove base folder path prefix
+                        // and show only the relative location in the list
+                        String baseFolderPath = model.getBaseFolder().getAbsolutePath();
+                        if (path.startsWith(baseFolderPath)) {
+                            path = path.substring(baseFolderPath.length() + 1);
+                        }
                         listModel.addElement(path);
                     }
                 }
@@ -659,42 +688,36 @@ public class ClasspathPanel extends javax.swing.JPanel implements HelpCtx.Provid
     }//GEN-LAST:event_removeClasspathActionPerformed
 
     private void addClasspathActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addClasspathActionPerformed
-        JFileChooser chooser = new JFileChooser();
+        FileChooser chooser;
+        chooser = new FileChooser(model.getBaseFolder(), null);
+
         FileUtil.preventFileChooserSymlinkTraversal(chooser, null);
         chooser.setFileSelectionMode (JFileChooser.FILES_AND_DIRECTORIES);
         chooser.setMultiSelectionEnabled(true);
-        if (lastChosenFile != null) {
-            chooser.setSelectedFile(lastChosenFile);
-        } else {
-            File files[] = model.getBaseFolder().listFiles();
-            if (files != null && files.length > 0) {
-                chooser.setSelectedFile(files[0]);
-            } else {
-                chooser.setSelectedFile(model.getBaseFolder());
-            }
-        }
         chooser.setDialogTitle(NbBundle.getMessage(ClasspathPanel.class, "LBL_Browse_Classpath"));
-        
+        if (lastChosenFile != null) {
+            chooser.setCurrentDirectory(lastChosenFile);
+        } else {
+            chooser.setCurrentDirectory(model.getBaseFolder());
+        }
         //#65354: prevent adding a non-folder element on the classpath:
         FileFilter fileFilter = new SimpleFileFilter (
             NbBundle.getMessage( ClasspathPanel.class, "LBL_ZipJarFolderFilter" ),   // NOI18N
             new String[] {"ZIP","JAR"} );   // NOI18N
         //#61789 on old macosx (jdk 1.4.1) these two method need to be called in this order.
         chooser.setAcceptAllFileFilterUsed( false );
-        chooser.setFileFilter(fileFilter);                                                                 
-            
+        chooser.setFileFilter(fileFilter);
+
         if (JFileChooser.APPROVE_OPTION == chooser.showOpenDialog(this)) {
-            for (File file : chooser.getSelectedFiles()) {
-                file = FileUtil.normalizeFile(file);
-                
-                //Check if the file is acceted by the FileFilter,
-                //user may enter the name of non displayed file into JFileChooser
-                if (!fileFilter.accept(file)) {
-                    continue;
-                }
-                
-                listModel.addElement(file.getAbsolutePath());
-                lastChosenFile = file;
+            String[] filePaths = null;
+            try {
+                filePaths = chooser.getSelectedPaths();
+            } catch (IOException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+            for (String filePath : filePaths) {
+                listModel.addElement(filePath);
+                lastChosenFile = chooser.getCurrentDirectory();
             }
             applyChanges();
             updateButtons();
