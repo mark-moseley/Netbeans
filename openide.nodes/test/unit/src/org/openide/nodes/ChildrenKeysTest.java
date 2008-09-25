@@ -46,6 +46,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -59,10 +60,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.SwingUtilities;
 import junit.framework.AssertionFailedError;
 import org.netbeans.junit.Log;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.junit.RandomlyFails;
+import org.openide.util.Exceptions;
 import org.openide.util.Utilities;
 
 public class ChildrenKeysTest extends NbTestCase {
@@ -1532,7 +1535,181 @@ public class ChildrenKeysTest extends NbTestCase {
         nodes = root.getChildren().getNodes();
         assertEquals("1st is a", "a", nodes[0].getName());
         assertEquals("2nd is b", "b", nodes[1].getName());
-    }    
+    }
+
+    // test for issue #145892
+    public void testSnapshotIsUpdated() {
+
+        class K extends Keys {
+
+            K() {
+                super(lazy());
+            }
+
+            @Override
+            protected Node[] createNodes(Object key) {
+                if (key.toString().startsWith("-")) {
+                    return null;
+                }
+                return super.createNodes(key);
+            }
+        }
+        
+        class HoldingListener extends NodeAdapter {
+            List<Node> snapshot;
+            
+            void storeSnapshotLater(final NodeMemberEvent ev) {
+                
+                SwingUtilities.invokeLater(new Runnable() {
+
+                    public void run() {
+                        snapshot = ev.getSnapshot();
+                    }
+                });
+            }
+            @Override
+            public void childrenAdded(final NodeMemberEvent ev) {
+                storeSnapshotLater(ev);
+            }
+
+            @Override
+            public void childrenRemoved(NodeMemberEvent ev) {
+                storeSnapshotLater(ev);
+            }
+        }
+
+        K ch = new K();
+        Node root = createNode(ch);
+        root.getChildren().getNodesCount();
+        HoldingListener listener = new HoldingListener();
+        root.addNodeListener(listener);
+        ch.keys("a", "-a", "b");
+        AwtBlock awtBlock = new AwtBlock();
+        awtBlock.block();
+        Node[] nodes = root.getChildren().getNodes();
+        WeakReference<Node> ref = new WeakReference<Node>(nodes[0]);
+        nodes = null;
+        try {
+            assertGC("", ref);
+        } catch (Error ex) {
+            // OK
+        }
+        awtBlock.unblock();
+        ch.keys("c");
+        awtBlock.clearQueue();
+        Node n = listener.snapshot.get(0);
+        assertEquals("1st is c", "c", n.getName());
+    }
+
+    public void testOldSnapshotIsUpdated() throws InterruptedException {
+
+        class K extends Keys {
+
+            K() {
+                super(lazy());
+            }
+
+            @Override
+            protected Node[] createNodes(Object key) {
+                if (key.toString().startsWith("-")) {
+                    return null;
+                }
+                return super.createNodes(key);
+            }
+
+            @Override
+            protected void removeNotify() {
+                super.removeNotify();
+            }
+            
+        }
+        
+        class Listener extends NodeAdapter {
+            int cnt;
+            @Override
+            public void childrenAdded(final NodeMemberEvent ev) {
+                cnt++;
+            }
+
+            @Override
+            public void childrenRemoved(NodeMemberEvent ev) {
+                cnt++;
+            }
+        }
+
+        K ch = new K();
+        Node root = createNode(ch);
+        root.getChildren().getNodesCount();
+        List<Node> snapshot = root.getChildren().snapshot();
+        ch.keys("a", "-a", "b");
+        Node[] nodes = root.getChildren().getNodes();
+
+        Listener listener = new Listener();
+        root.addNodeListener(listener);
+
+        WeakReference<Node> ref = new WeakReference<Node>(nodes[0]);
+        nodes = null;
+        try {
+            assertGC("", ref);
+        } catch (Error ex) {
+            if (lazy()) {
+                fail("Lazy node should be GCed");
+            }
+            // OK, default (eager) are GCed only before removeNotify()
+        }
+        ch.keys("b");
+        assertEquals(1, listener.cnt);
+    }
+    
+    public void testOriginalSnapshotIsHeldByFilterNode() throws InterruptedException {
+
+        class K extends Keys {
+            boolean removeNot;
+
+            K() {
+                super(lazy());
+            }
+
+            @Override
+            protected Node[] createNodes(Object key) {
+                if (key.toString().startsWith("-")) {
+                    return null;
+                }
+                return super.createNodes(key);
+            }
+
+            @Override
+            protected void removeNotify() {
+                removeNot = true;
+                super.removeNotify();
+            }
+            
+        }
+
+        K ch = new K();
+        Node root = new FilterNode(createNode(ch));
+        root.getChildren().getNodesCount();
+        List<Node> snapshot = root.getChildren().snapshot();
+        List<Node> origSnapshot = ch.snapshot();
+        ch.keys("a", "-a", "b");
+
+        origSnapshot = null;
+        Node[] nodes = root.getChildren().getNodes();
+        WeakReference<Node> ref = new WeakReference<Node>(nodes[0]);
+        nodes = null;
+        try {
+            assertGC("", ref);
+        } catch (Error ex) {
+            if (lazy()) {
+                fail("Lazy node should be GCed");
+            }
+            // OK, default (eager) are GCed only before removeNotify()
+        }
+        if (ch.removeNot) {
+            fail("Original snapshot should be held by FilterNode to prevent removeNotify");
+        }
+    }
+
     
     @RandomlyFails // assumed to suffer from same random problem as testGetNodesFromTwoThreads57769; see Thread.sleep
     public void testGetNodesFromTwoThreads57769WhenBlockingAtRightPlaces() throws Exception {
@@ -1885,5 +2062,45 @@ public class ChildrenKeysTest extends NbTestCase {
         }
     }
 
-    
+    static class AwtBlock implements Runnable {
+
+        public synchronized void run() {
+            notify();
+            try {
+                wait();
+            } catch (InterruptedException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+
+        synchronized void block() {
+            SwingUtilities.invokeLater(this);
+            try {
+                wait();
+            } catch (InterruptedException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+
+        void unblock() {
+            synchronized (this) {
+                notifyAll();
+            }
+            clearQueue();
+        }
+        
+        void clearQueue() {
+            try {
+                SwingUtilities.invokeAndWait(new Runnable() {
+
+                    public void run() {
+                    }
+                });
+            } catch (InterruptedException ex) {
+                Exceptions.printStackTrace(ex);
+            } catch (InvocationTargetException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+    }
 }
