@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.refactoring.ruby.ui.tree;
+package org.netbeans.modules.refactoring.javascript.ui.tree;
 
 import java.util.Map;
 import java.util.WeakHashMap;
