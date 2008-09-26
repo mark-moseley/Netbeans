@@ -47,7 +47,7 @@
 
 package org.netbeans.modules.css.visual.model;
 
-import org.netbeans.modules.css.model.CssRuleContent;
+import org.netbeans.modules.css.editor.model.CssRuleContent;
 import java.awt.Font;
 import java.awt.GraphicsEnvironment;
 import java.util.ArrayList;
@@ -156,7 +156,7 @@ public class FontModel{
         }
 
         public String getValue(){
-            if(Utils.isInteger(fontSize)){
+            if(Utils.isFloat(fontSize)){
                 return fontSize;
             }else{
                 return null;

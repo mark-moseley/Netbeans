@@ -47,7 +47,7 @@
 
 package org.netbeans.modules.css.visual.model;
 
-import org.netbeans.modules.css.model.CssRuleContent;
+import org.netbeans.modules.css.editor.model.CssRuleContent;
 import javax.swing.DefaultComboBoxModel;
 
 /**
@@ -92,7 +92,7 @@ public class PropertyWithUnitData extends PropertyData{
 
     public String toString(){
         String valueString = super.toString();
-        if(Utils.isInteger(valueString)){
+        if(Utils.isFloat(valueString)){
             valueString += unit;
         }
         return valueString;
