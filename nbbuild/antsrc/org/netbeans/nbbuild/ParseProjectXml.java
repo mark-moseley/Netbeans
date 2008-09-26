@@ -476,7 +476,7 @@ public final class ParseProjectXml extends Task {
                        }
                        if (testType.getCompileCP() != null) {
                            String cp = td.getCompileClassPath();
-                           if (cp != null && cp.trim().length() > 0) {
+                       if (cp != null && cp.trim().length() > 0) {
                                define(testType.getCompileCP(), cp);
                            }
                        }
@@ -612,6 +612,9 @@ public final class ParseProjectXml extends Task {
                 String implVers = implementationVersionOf(modules, codenamebase);
                 if (implVers == null) {
                     throw new BuildException("No OpenIDE-Module-Implementation-Version found in " + codenamebase);
+                }
+                if (implVers.equals(getProject().getProperty("buildnumber"))) {
+                    throw new BuildException("Cannot depend on module " + codenamebase + " using build number as an implementation version");
                 }
                 b.append(implVers);
             }
@@ -1018,12 +1021,11 @@ public final class ParseProjectXml extends Task {
                 }
             }
             if (sb.length() > 0) {
-                sb.append(","); // NOI18N
+                sb.append(File.pathSeparator);
             }
-            // XXX it works only for netbeans.org modules :(
-            String nborgPath = entry.getNetbeansOrgPath();
-            if (nborgPath != null) {
-                sb.append(nborgPath);
+            File srcPath = entry.getSourceLocation();
+            if (srcPath != null) {
+                sb.append(srcPath.getAbsolutePath());
             }
         }
         cnbs.add(cnb);
