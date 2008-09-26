@@ -42,6 +42,7 @@
 package org.netbeans.modules.favorites;
 
 import java.awt.Image;
+import java.awt.datatransfer.Transferable;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -69,6 +70,7 @@ import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
+import org.openide.util.datatransfer.PasteType;
 
 /**
  *
@@ -83,6 +85,12 @@ final class Favorites extends FilterNode implements Index {
     /** Creates new ProjectRootFilterNode. */
     private Favorites(Node node) {
         super(node, new Chldrn (node, false));
+    }
+
+    @Override
+    public PasteType getDropType(Transferable t, int action, int index) {
+        //Disable drop till it is not specified what we should do.
+        return null;
     }
     
     @Override
@@ -329,6 +337,19 @@ final class Favorites extends FilterNode implements Index {
             super (node, children);
         }
         
+        @Override
+        public void setName(String name) {
+            // #113859 - keep order of children in favorites folder after rename
+            final DataFolder favoritesFolder = Favorites.getFolder();
+            final DataObject[] children = favoritesFolder.getChildren();
+            super.setName(name);
+            try {
+                favoritesFolder.setOrder(children);
+            } catch (IOException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+
         @Override
         public String getDisplayName () {
             //Change display name only for favorite nodes (links) under Favorites node.
