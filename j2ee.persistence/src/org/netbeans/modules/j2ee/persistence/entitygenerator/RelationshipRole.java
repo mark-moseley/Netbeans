@@ -49,11 +49,14 @@ package org.netbeans.modules.j2ee.persistence.entitygenerator;
 public class RelationshipRole {
     
     private String roleName;
+    // The Java package the entity is in. Need to remember it - see issue 139804
+    private String entityPkgName; 
     private String entityName;
     private String fieldName;
     private boolean many;
     private boolean toMany;
     private boolean cascade;
+    private boolean optional;
     
     private EntityRelation parent;
  
@@ -63,12 +66,23 @@ public class RelationshipRole {
             boolean many,
             boolean toMany,
             boolean cascade) {
+        this(roleName, entityName, fieldName, many, toMany, cascade, true);
+    }
+    
+    public RelationshipRole (String roleName,
+            String entityName,
+            String fieldName,
+            boolean many,
+            boolean toMany,
+            boolean cascade,
+            boolean optional) {
         this.setRoleName(roleName);
         this.setEntityName(entityName);
         this.setFieldName(fieldName);
         this.setMany(many);
         this.setToMany(toMany);
         this.setCascade(cascade);
+        this.optional = optional;
     }
     
     public RelationshipRole (EntityRelation parentRelation) {
@@ -81,6 +95,14 @@ public class RelationshipRole {
 
     public void setRoleName(String roleName) {
         this.roleName = roleName;
+    }
+
+    public String getEntityPkgName() {
+        return entityPkgName;
+    }
+
+    public void setEntityPkgName(String pkgName) {
+        this.entityPkgName = pkgName;
     }
 
     public String getEntityName() {
@@ -121,6 +143,10 @@ public class RelationshipRole {
 
     public void setCascade(boolean cascade) {
         this.cascade = cascade;
+    }
+    
+    public boolean isOptional() {
+        return this.optional;
     }
 
     public EntityRelation getParent() {
