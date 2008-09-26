@@ -129,10 +129,9 @@ public final class Util {
      * @param parent a parent element
      * @param name the intended local name
      * @param namespace the intended namespace (or null)
-     * @return the one child element with that name, or null if none or more than one
+     * @return the first child element with that name, or null if none
      */
     public static Element findElement(Element parent, String name, String namespace) {
-        Element result = null;
         NodeList l = parent.getChildNodes();
         for (int i = 0; i < l.getLength(); i++) {
             if (l.item(i).getNodeType() == Node.ELEMENT_NODE) {
@@ -140,15 +139,11 @@ public final class Util {
                 if ((namespace == null && name.equals(el.getTagName())) ||
                         (namespace != null && name.equals(el.getLocalName()) &&
                         namespace.equals(el.getNamespaceURI()))) {
-                    if (result == null) {
-                        result = el;
-                    } else {
-                        return null;
-                    }
+                    return el;
                 }
             }
         }
-        return result;
+        return null;
     }
     
     /**
@@ -224,59 +219,6 @@ public final class Util {
         return to;
     }
 
-    // CANDIDATES FOR FileUtil (#59311):
-    
-    /**
-     * Creates a URL for a directory on disk.
-     * Works correctly even if the directory does not currently exist.
-     */
-    public static URL urlForDir(File dir) {
-        try {
-            URL u = FileUtil.normalizeFile(dir).toURI().toURL();
-            String s = u.toExternalForm();
-            if (s.endsWith("/")) { // NOI18N
-                return u;
-            } else {
-                return new URL(s + "/"); // NOI18N
-            }
-        } catch (MalformedURLException e) {
-            throw new AssertionError(e);
-        }
-    }
-    
-    /**
-     * Creates a URL for the root of a JAR on disk.
-     */
-    public static URL urlForJar(File jar) {
-        try {
-            return FileUtil.getArchiveRoot(FileUtil.normalizeFile(jar).toURI().toURL());
-        } catch (MalformedURLException e) {
-            throw new AssertionError(e);
-        }
-    }
-    
-    /**
-     * Creates a URL for a directory on disk or the root of a JAR.
-     * Works correctly whether or not the directory or JAR currently exists.
-     * Detects whether the file is supposed to be a directory or a JAR.
-     */
-    public static URL urlForDirOrJar(File location) {
-        try {
-            URL u = FileUtil.normalizeFile(location).toURI().toURL();
-            if (FileUtil.isArchiveFile(u)) {
-                u = FileUtil.getArchiveRoot(u);
-            } else {
-                String us = u.toExternalForm();
-                if (!us.endsWith("/")) { // NOI18N
-                    u = new URL(us + "/"); // NOI18N
-                }
-            }
-            return u;
-        } catch (MalformedURLException e) {
-            throw new AssertionError(e);
-        }
-    }
-    
     /**
      * Tries to find {@link Project} in the given directory. If succeeds
      * delegates to {@link ProjectInformation#getDisplayName}. Returns {@link
@@ -603,7 +545,7 @@ public final class Util {
             File[] javadocs = builtJavadoc.listFiles();
             javadocURLs = new URL[javadocs.length];
             for (int i = 0; i < javadocs.length; i++) {
-                javadocURLs[i] = Util.urlForDirOrJar(javadocs[i]);
+                javadocURLs[i] = FileUtil.urlForArchiveOrDir(javadocs[i]);
             }
         }
         return javadocURLs == null ? null : findJavadocURL(
