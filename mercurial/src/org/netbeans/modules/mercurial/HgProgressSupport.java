@@ -41,11 +41,16 @@
 
 package org.netbeans.modules.mercurial;
 
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.logging.Level;
+import javax.swing.JComponent;
+import javax.swing.JButton;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
+import org.netbeans.modules.mercurial.util.HgUtils;
 import org.openide.util.Cancellable;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -63,8 +68,23 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
     private ProgressHandle progressHandle = null;    
     private String displayName = ""; // NOI18N
     private String originalDisplayName = ""; // NOI18N
+    private OutputLogger logger;
     private String repositoryRoot;
     private RequestProcessor.Task task;
+    
+    public HgProgressSupport() {
+    }
+
+    public HgProgressSupport(String displayName, JButton cancel) {
+        this.displayName = displayName;
+        if(cancel != null) {
+            cancel.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    cancel();
+                }
+            });
+        }
+    }
     
     public RequestProcessor.Task start(RequestProcessor rp, String repositoryRoot, String displayName) {
         setDisplayName(displayName);
@@ -80,8 +100,19 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
         return task;
     }
 
+    public RequestProcessor.Task start(RequestProcessor rp) {
+        startProgress();
+        task = rp.post(this);
+        return task;
+    }
+
+    public JComponent getProgressComponent() {
+        return ProgressHandleFactory.createProgressComponent(getProgressHandle());
+    }
+
     public void setRepositoryRoot(String repositoryRoot) {
         this.repositoryRoot = repositoryRoot;
+        logger = null;
     }
 
     public void run() {        
@@ -91,13 +122,14 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
 
     protected void performIntern() {
         try {
-            Mercurial.LOG.log(Level.FINE, "Start - ", displayName); // NOI18N
+            log("Start - " + displayName); // NOI18N
             if(!canceled) {
                 perform();
             }
-            Mercurial.LOG.log(Level.FINE, "End - ", displayName); // NOI18N
-        } finally {            
+        } finally {
+            log("End - " + displayName); // NOI18N
             finnishProgress();
+            getLogger().closeLog();
         }
     }
 
@@ -108,14 +140,15 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
     }
 
     public synchronized boolean cancel() {
+        if(delegate != null) {
+            if(!delegate.cancel()) 
+                return false;
+        }
         if (canceled) {
             return false;
         }        
         if(task != null) {
             task.cancel();
-        }
-        if(delegate != null) {
-            delegate.cancel();
         }
         Mercurial.getInstance().clearRequestProcessor(repositoryRoot);
         getProgressHandle().finish();
@@ -123,7 +156,7 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
         return true;
     }
 
-    void setCancellableDelegate(Cancellable cancellable) {
+    public void setCancellableDelegate(Cancellable cancellable) {
         this.delegate = cancellable;
     }
 
@@ -131,6 +164,7 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
         if(originalDisplayName.equals("")) { // NOI18N
             originalDisplayName = displayName;
         }
+        logChangedDisplayName(this.displayName, displayName);
         this.displayName = displayName;
         setProgress();
     }
@@ -166,13 +200,33 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
         getProgressHandle().finish();
     }
     
-    
+    public OutputLogger getLogger() {
+        if (logger == null) {
+            logger = Mercurial.getInstance().getLogger(repositoryRoot);
+        }
+        return logger;
+    }
+
     public void annotate(HgException ex) {        
         ExceptionHandler eh = new ExceptionHandler(ex);
         if(isCanceled()) {
             eh.notifyException(false);
         } else {
             eh.notifyException();    
+        }
+    }
+    
+    private static void log(String msg) {
+        HgUtils.logT9Y(msg);
+        Mercurial.LOG.log(Level.FINE, msg); 
+    }
+
+    private void logChangedDisplayName(String thisDisplayName, String displayName) {
+        if(thisDisplayName != null && !thisDisplayName.equals(displayName)) {
+            if(!thisDisplayName.equals("")) {
+                log("End - " + thisDisplayName); // NOI18N
+                log("Start - " + displayName); // NOI18N
+            }
         }
     }
 }
