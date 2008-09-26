@@ -51,9 +51,15 @@ import java.awt.Shape;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import javax.accessibility.Accessible;
 import javax.accessibility.AccessibleContext;
 import javax.accessibility.AccessibleRole;
@@ -62,6 +68,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.AbstractDocument;
+import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
@@ -72,7 +79,19 @@ import org.netbeans.api.editor.fold.FoldHierarchy;
 import org.netbeans.api.editor.fold.FoldHierarchyEvent;
 import org.netbeans.api.editor.fold.FoldHierarchyListener;
 import org.netbeans.api.editor.fold.FoldUtilities;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.AttributesUtilities;
+import org.netbeans.api.editor.settings.FontColorNames;
+import org.netbeans.api.editor.settings.FontColorSettings;
+import org.netbeans.api.editor.settings.SimpleValueNames;
+import org.netbeans.editor.CodeFoldingSideBar.PaintInfo;
+import org.netbeans.modules.editor.lib.EditorPreferencesDefaults;
+import org.netbeans.modules.editor.lib.SettingsConversions;
+import org.openide.util.Lookup;
+import org.openide.util.LookupEvent;
+import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
 
 /**
  *  Code Folding Side Bar. Component responsible for drawing folding signs and responding 
@@ -80,16 +99,41 @@ import org.openide.util.NbBundle;
  *
  *  @author  Martin Roskanin
  */
-public class CodeFoldingSideBar extends JComponent implements SettingsChangeListener, Accessible {
-    
-    protected JTextComponent component;    
-    
-    protected Font font;
-    protected Color foreColor;
+public class CodeFoldingSideBar extends JComponent implements Accessible {
+
+    private static final Logger LOG = Logger.getLogger(CodeFoldingSideBar.class.getName());
+
+    /** This field should be treated as final. Subclasses are forbidden to change it. 
+     * @deprecated Without any replacement.
+     */
     protected Color backColor;
-    private boolean enabled;
+    /** This field should be treated as final. Subclasses are forbidden to change it. 
+     * @deprecated Without any replacement.
+     */
+    protected Color foreColor;
+    /** This field should be treated as final. Subclasses are forbidden to change it. 
+     * @deprecated Without any replacement.
+     */
+    protected Font font;
     
-    protected List visibleMarks = new ArrayList();
+    /** This field should be treated as final. Subclasses are forbidden to change it. */
+    protected /*final*/ JTextComponent component;
+    private volatile AttributeSet attribs;
+    private Lookup.Result<? extends FontColorSettings> fcsLookupResult;
+    private final LookupListener fcsTracker = new LookupListener() {
+        public void resultChanged(LookupEvent ev) {
+            attribs = null;
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    CodeFoldingSideBar.this.repaint();
+                }
+            });
+        }
+    };
+    
+    private boolean enabled = false;
+    
+    protected List<Mark> visibleMarks = new ArrayList<Mark>();
     
     /** Paint operations */
     public static final int PAINT_NOOP             = 0;
@@ -98,18 +142,35 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
     public static final int PAINT_END_MARK         = 3;
     public static final int SINGLE_PAINT_MARK      = 4;
     
+    private final Preferences prefs;
+    private final PreferenceChangeListener prefsListener = new PreferenceChangeListener() {
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            String key = evt == null ? null : evt.getKey();
+            if (key == null || SimpleValueNames.CODE_FOLDING_ENABLE.equals(key)) {
+                updateColors();
+                
+                boolean newEnabled = prefs.getBoolean(SimpleValueNames.CODE_FOLDING_ENABLE, EditorPreferencesDefaults.defaultCodeFoldingEnable);
+                if (enabled != newEnabled) {
+                    enabled = newEnabled;
+                    updatePreferredSize();
+                }
+            }
+            SettingsConversions.callSettingsChange(CodeFoldingSideBar.this);
+        }
+    };
     
-    /** Creates a new instance of CodeFoldingSideBar */
+    /**
+     * @deprecated Don't use this constructor, it does nothing!
+     */
     public CodeFoldingSideBar() {
-        setOpaque(true);
+        component = null;
+        prefs = null;
+        throw new IllegalStateException("Do not use this constructor!"); //NOI18N
     }
-    
+
     public CodeFoldingSideBar(JTextComponent component){
         super();
         this.component = component;
-
-        Settings.addSettingsChangeListener(this);
-        settingsChange(null); // ensure that the settings get initialized
 
         FoldingMouseListener listener = new FoldingMouseListener();
         addMouseListener(listener);
@@ -140,168 +201,80 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
                 
             });
         setOpaque(true);
-    }
-    
-    /**
-     * Enable or disable visibility of the side bar.
-     *
-     * @param enable whether the side bar should be enabled or not.
-     * @return whether visibility change occurred or not.
-     */
-    private boolean enableSideBarComponent(boolean enable){
-        if (enable == enabled) {
-            return false;
-        }
-        enabled = enable;
-        updatePreferredSize();
-        return true;
+        
+        prefs = MimeLookup.getLookup(org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(component)).lookup(Preferences.class);
+        prefs.addPreferenceChangeListener(WeakListeners.create(PreferenceChangeListener.class, prefsListener, prefs));
+        prefsListener.preferenceChange(null);
     }
     
     private void updatePreferredSize() {
         if (enabled) {
-            setPreferredSize(new Dimension(getColoringFont().getSize(), component.getHeight()));    
+            setPreferredSize(new Dimension(getColoring().getFont().getSize(), component.getHeight()));
             setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
         }else{
             setPreferredSize(new Dimension(0,0));
             setMaximumSize(new Dimension(0,0));
         }
         revalidate();
-}
-    
-    private Font getDefaultColoringFont(){
-        // font in folding coloring not available, get default (or inherited)
-        EditorUI eui = getEditorUI();
-        if (eui != null) {
-            Coloring defaultColoring = eui.getDefaultColoring();
-            if (defaultColoring!=null) {
-                if (defaultColoring.getFont() != null) {
-                    return defaultColoring.getFont(); 
-                }
-            }
+    }
+
+    private void updateColors() {
+        Coloring c = getColoring();
+        this.backColor = c.getBackColor();
+        this.foreColor = c.getForeColor();
+        this.font = c.getFont();
+    }
+
+    /**
+     * This method should be treated as final. Subclasses are forbidden to override it.
+     * @return The background color used for painting this component.
+     * @deprecated Without any replacement.
+     */
+    protected Color getBackColor() {
+        if (backColor == null) {
+            updateColors();
         }
-        return SettingsDefaults.defaultFont;
+        return backColor;
     }
     
-    protected Font getColoringFont(){
+    /**
+     * This method should be treated as final. Subclasses are forbidden to override it.
+     * @return The foreground color used for painting this component.
+     * @deprecated Without any replacement.
+     */
+    protected Color getForeColor() {
+        if (foreColor == null) {
+            updateColors();
+        }
+        return foreColor;
+    }
+    
+    /**
+     * This method should be treated as final. Subclasses are forbidden to override it.
+     * @return The font used for painting this component.
+     * @deprecated Without any replacement.
+     */
+    protected Font getColoringFont() {
         if (font == null) {
-            EditorUI eui = getEditorUI();
-            if (eui != null) {
-                Coloring foldColoring = eui.getColoring(SettingsNames.CODE_FOLDING_BAR_COLORING);
-                if (foldColoring != null) {
-                    if (foldColoring.getFont() != null) {
-                        font = foldColoring.getFont();
-                    }
-                }
-            }
-            
-            if (font == null) {
-                font = getDefaultColoringFont();
-            }
+            updateColors();
         }
         return font;
     }
-
+    
     // overriding due to issue #60304
     public @Override void update(Graphics g) {
     }
     
-    
-    protected Color getForeColor(){
-        if (foreColor != null) return foreColor;
-        Coloring foldColoring = getEditorUI().getColoring(SettingsNames.CODE_FOLDING_BAR_COLORING);
-        if (foldColoring != null && foldColoring.getForeColor()!=null){
-            foreColor = foldColoring.getForeColor();
-            return foreColor;
-        }
-        foreColor = getDefaultForeColor();
-        return foreColor;
-    }
-    
-    private Color getDefaultForeColor(){
-        // font in folding coloring not available, get default (or inherited)
-        Coloring defaultColoring = getEditorUI().getDefaultColoring();
-        if (defaultColoring!=null && defaultColoring.getForeColor()!=null){
-            return defaultColoring.getForeColor();
-        }
-        return SettingsDefaults.defaultForeColor;
-    }
-    
-    private Color getDefaultBackColor(){
-        // font in folding coloring not available, get default (or inherited)
-        EditorUI eui = getEditorUI();
-        if (eui != null) {
-            Coloring defaultColoring = eui.getDefaultColoring();
-            if (defaultColoring != null) {
-                return defaultColoring.getBackColor();
+    protected void collectPaintInfos(View rootView, Fold fold, Map<Integer, PaintInfo> map, int level, int startIndex, int endIndex){
+        for(int i = 0; i < fold.getFoldCount(); i++) {
+            Fold childFold = fold.getFold(i);
+            int startViewIndex = rootView.getViewIndex(childFold.getStartOffset(), Position.Bias.Forward);
+            int endViewIndex = rootView.getViewIndex(childFold.getEndOffset(), Position.Bias.Forward);
+            if (endViewIndex>=startIndex && startViewIndex<=endIndex && startViewIndex <= endViewIndex
+                    && level < 20 // #90931 - prevent stack overflow by a max fold nesting level
+            ) {
+                collectPaintInfos(rootView, childFold, map, level+1, startIndex, endIndex);
             }
-        }
-        return SettingsDefaults.defaultBackColor;
-    }
-    
-    protected Color getBackColor(){
-        if (backColor != null) return backColor;
-        Coloring foldColoring = getEditorUI().getColoring(SettingsNames.CODE_FOLDING_BAR_COLORING);
-        if (foldColoring != null && foldColoring.getBackColor()!=null){
-            backColor = foldColoring.getBackColor();
-            return backColor;
-        }
-        backColor = getDefaultBackColor();
-        return backColor;
-    }
-    
-    public void settingsChange(SettingsChangeEvent evt) {
-        EditorUI editorUI = getEditorUI();
-        if (editorUI == null) {
-            return;
-        }
-
-        // enable/disable the side bar
-        Document doc = component.getDocument();
-        Class kitClass = (doc instanceof BaseDocument)
-            ? Utilities.getKitClass(component)
-            : BaseKit.class;
-        
-        Font origFont = font;
-        
-        Coloring foldingColoring = editorUI.getColoring(SettingsNames.CODE_FOLDING_BAR_COLORING);
-        
-        if (foldingColoring != null) {
-            font = foldingColoring.getFont();
-            foreColor = foldingColoring.getForeColor();
-            backColor = foldingColoring.getBackColor();
-        }
-        
-        if (font == null) {
-            font = getDefaultColoringFont();
-        }
-        if (foreColor == null) {
-            this.foreColor = getDefaultForeColor();
-        }
-        if (backColor == null) {
-            backColor = getDefaultBackColor();
-        }
-
-        Boolean newEnabled = (Boolean)Settings.getValue(kitClass, SettingsNames.CODE_FOLDING_ENABLE);
-        boolean change = enableSideBarComponent((newEnabled != null) ? newEnabled.booleanValue() : false);
-
-        if (!change) { // not revalidated yet
-            if (font != null && font.equals(origFont)) {
-                repaint();
-            } else {
-                updatePreferredSize();
-                revalidate();
-            }
-        }
-    }
-    
-    protected void collectPaintInfos(Fold fold, Map map, int level, int startIndex, int endIndex){
-        View rootView = Utilities.getDocumentView(component);
-        if (rootView == null) return;
-        for (int i=0; i<fold.getFoldCount(); i++){
-            int startViewIndex = rootView.getViewIndex(fold.getFold(i).getStartOffset(), Position.Bias.Forward);
-            int endViewIndex = rootView.getViewIndex(fold.getFold(i).getEndOffset(), Position.Bias.Forward);
-            if (endViewIndex>=startIndex && startViewIndex<=endIndex)
-                collectPaintInfos((Fold)fold.getFold(i), map, level+1, startIndex, endIndex);
         }
         int foldStartOffset = fold.getStartOffset();
         int foldEndOffset = fold.getEndOffset();
@@ -328,14 +301,29 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
                     viewRect = viewShape.getBounds();
                     y = viewRect.y + viewRect.height;
                     boolean isSingleLineFold = startViewIndex == endViewIndex;
+                    //emi: the check bellow seems to be redundant, fold.isCollaped determines isSingleLineFold to be true
                     if (fold.isCollapsed() || isSingleLineFold){
-                        map.put(new Integer(viewRect.y), 
-                            new CodeFoldingSideBar.PaintInfo((isSingleLineFold?SINGLE_PAINT_MARK:PAINT_MARK), level, viewRect.y, viewRect.height, fold.isCollapsed()));
+                        boolean foldedSinglePaint = fold.isCollapsed(); //parents end here too ?
+                        if(foldedSinglePaint){
+                            //see if the parents ends on the same line and mark it as SINGLE_PAINT_MARK 
+                            int off = fold.getEndOffset();
+                            int rowEnd = javax.swing.text.Utilities.getRowEnd(component, off);
+                            Fold parent = fold.getParent();
+                            while(parent!=null && !FoldUtilities.isRootFold(parent)){
+                                if(rowEnd!=javax.swing.text.Utilities.getRowEnd(component, parent.getEndOffset())){
+                                    foldedSinglePaint = false;
+                                    break;
+                                }
+                                parent = parent.getParent();
+                            }
+                        }
+                        boolean singleMarkKind = fold.isCollapsed() ? foldedSinglePaint : isSingleLineFold;
+                        map.put(viewRect.y, new CodeFoldingSideBar.PaintInfo((singleMarkKind?SINGLE_PAINT_MARK:PAINT_MARK), level, viewRect.y, viewRect.height, fold.isCollapsed()));
                         return;
                     }
 
                     markY = viewRect.y;
-                    map.put(new Integer(viewRect.y), new CodeFoldingSideBar.PaintInfo(PAINT_MARK, level, viewRect.y, viewRect.height, fold.isCollapsed()));
+                    map.put(viewRect.y, new CodeFoldingSideBar.PaintInfo(PAINT_MARK, level, viewRect.y, viewRect.height, fold.isCollapsed()));
                 }
             }
             
@@ -360,8 +348,8 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
                             }
                         }
                     }
-                    if (viewRect != null && !map.containsKey(new Integer(viewRect.y))){
-                        map.put(new Integer(viewRect.y), new CodeFoldingSideBar.PaintInfo(PAINT_LINE, level, viewRect.y, viewRect.height));
+                    if (viewRect != null && !map.containsKey(viewRect.y)) {
+                        map.put(viewRect.y, new CodeFoldingSideBar.PaintInfo(PAINT_LINE, level, viewRect.y, viewRect.height));
                     }
                 }
             }
@@ -383,62 +371,50 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
                     }
                 }
                 if (viewRect !=null && markY!=viewRect.y){
-                    PaintInfo pi = (PaintInfo)map.get(new Integer(viewRect.y));
-                    if (pi==null || (pi.getPaintOperation() != PAINT_MARK && pi.getPaintOperation() != SINGLE_PAINT_MARK) || level>=pi.getInnerLevel()){
-                        map.put(new Integer(viewRect.y), new CodeFoldingSideBar.PaintInfo(PAINT_END_MARK, level, viewRect.y, viewRect.height));
+                    PaintInfo pi = map.get(viewRect.y);
+                    if (pi == null || (pi.getPaintOperation() != PAINT_MARK && pi.getPaintOperation() != SINGLE_PAINT_MARK) || level >= pi.getInnerLevel()) {
+                        map.put(viewRect.y, new CodeFoldingSideBar.PaintInfo(PAINT_END_MARK, level, viewRect.y, viewRect.height));
                     }
                 }
             }
-        }catch(BadLocationException ble){
-            ble.printStackTrace();
+        } catch (BadLocationException ble) {
+            LOG.log(Level.WARNING, null, ble);
         }
-        
     }
     
-    protected List getPaintInfo(int startPos, int endPos){
-        List ret = new ArrayList();
-        
-        List foldList = getFoldList(startPos, endPos);
-        if (foldList.size() == 0) {
-            return ret;
+    protected List<? extends PaintInfo> getPaintInfo(int startPos, int endPos) {
+        BaseDocument bdoc = Utilities.getDocument(component);
+        if (bdoc == null) {
+            return Collections.<PaintInfo>emptyList();
         }
 
-        BaseTextUI textUI = (BaseTextUI)component.getUI();
-        javax.swing.text.Element rootElem = textUI.getRootView(component).getElement();
-        View rootView = Utilities.getDocumentView(component);
-        if (rootView == null) return ret;
-
-        Document doc = component.getDocument();
-        if (!(doc instanceof BaseDocument)) return ret;
-
-        BaseDocument bDoc = (BaseDocument) doc;
-        
-        Map map = new HashMap();
-
-        bDoc.readLock();
-
+        bdoc.readLock();
         try {
             FoldHierarchy hierarchy = FoldHierarchy.get(component);
             hierarchy.lock();
             try {
+                Map<Integer, PaintInfo> map = new HashMap<Integer, PaintInfo>();
 
-                int startViewIndex = rootView.getViewIndex(startPos,Position.Bias.Forward);
-                int endViewIndex = rootView.getViewIndex(endPos,Position.Bias.Forward);
+                View rootView = Utilities.getDocumentView(component);
+                if (rootView != null) {
+                    int startViewIndex = rootView.getViewIndex(startPos,Position.Bias.Forward);
+                    int endViewIndex = rootView.getViewIndex(endPos,Position.Bias.Forward);
 
-                for (int i=0; i<foldList.size(); i++){
-                    Fold fold = (Fold)foldList.get(i);
-                    collectPaintInfos(fold, map, 0, startViewIndex, endViewIndex);
+                    List foldList = getFoldList(hierarchy, startPos, endPos);
+                    for (int i = 0; i < foldList.size(); i++) {
+                        Fold fold = (Fold) foldList.get(i);
+                        collectPaintInfos(rootView, fold, map, 0, startViewIndex, endViewIndex);
+                    }
                 }
 
+                return new ArrayList<PaintInfo>(map.values());
+                
             } finally {
                 hierarchy.unlock();
             }
-                
         } finally {
-            bDoc.readUnlock();
+            bdoc.readUnlock();
         }
-        
-        return new ArrayList(map.values());
     }
 
     protected EditorUI getEditorUI(){
@@ -497,14 +473,14 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
                 adoc.readUnlock();
             }
             //System.out.println((mark.isFolded ? "Unfold" : "Fold") + " action performed on:"+view); //[TEMP]
-        }catch(BadLocationException ble){
-            ble.printStackTrace();
+        } catch (BadLocationException ble) {
+            LOG.log(Level.WARNING, null, ble);
         }
     }
     
     protected int getMarkSize(Graphics g){
         if (g != null){
-            FontMetrics fm = g.getFontMetrics(getColoringFont());
+            FontMetrics fm = g.getFontMetrics(getColoring().getFont());
             if (fm != null){
                 int ret = fm.getAscent() - fm.getDescent();
                 return ret - ret%2;
@@ -514,96 +490,100 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
     }
 
     protected @Override void paintComponent(Graphics g) {
+        if (!enabled) {
+            return;
+        }
         
-        if (!enabled) return;
         Rectangle clip = getVisibleRect();//g.getClipBounds();
         visibleMarks.clear();
-        g.setColor(getBackColor());
+        
+        Coloring coloring = getColoring();
+        g.setColor(coloring.getBackColor());
         g.fillRect(clip.x, clip.y, clip.width, clip.height);
-        g.setColor(getForeColor());
+        g.setColor(coloring.getForeColor());
 
         javax.swing.plaf.TextUI textUI = component.getUI(); 
         if (!(textUI instanceof BaseTextUI)) return;
         BaseTextUI baseTextUI = (BaseTextUI)textUI;
         
-        try{
+        try {
             int startPos = baseTextUI.getPosFromY(clip.y);
-            int endPos = baseTextUI.viewToModel(component, Short.MAX_VALUE/2, clip.y+clip.height);
+            int endPos = baseTextUI.viewToModel(component, Short.MAX_VALUE / 2, clip.y + clip.height);
         
-            List ps = getPaintInfo(startPos, endPos);
-            Font defFont = getColoringFont();
+            List<? extends PaintInfo> ps = getPaintInfo(startPos, endPos);
+            Font defFont = coloring.getFont();
             
-            for (int i = 0; i <ps.size(); i++){
-
-                PaintInfo paintInfo = (PaintInfo)ps.get(i);
-                
-                if (paintInfo.getPaintOperation() == PAINT_NOOP && paintInfo.getInnerLevel() == 0) continue; //No painting for this view
+            for(PaintInfo paintInfo : ps) {
+                if (paintInfo.getPaintOperation() == PAINT_NOOP && paintInfo.getInnerLevel() == 0) {
+                    //No painting for this view
+                    continue;
+                }
                 
                 boolean isFolded = paintInfo.isCollapsed();
                 int y = paintInfo.getPaintY();
                 int height = paintInfo.getPaintHeight();
                 int markSize = getMarkSize(g);
-                int halfMarkSize = markSize/2;
-                int markX = (defFont.getSize()-markSize)/2; // x position of mark rectangle
+                int halfMarkSize = markSize / 2;
+                int markX = (defFont.getSize() - markSize) / 2; // x position of mark rectangle
                 int markY = y + g.getFontMetrics(defFont).getDescent(); // y position of mark rectangle
-                int plusGap = (int)Math.round(markSize/3.8); // distance between mark rectangle vertical side and start/end of minus sign
+                int plusGap = (int)Math.round(markSize / 3.8); // distance between mark rectangle vertical side and start/end of minus sign
                 int lineX = markX + halfMarkSize; // x position of the centre of mark
                 
                 int paintOperation = paintInfo.getPaintOperation();
-                if (paintOperation == PAINT_MARK || paintOperation == SINGLE_PAINT_MARK){
+                if (paintOperation == PAINT_MARK || paintOperation == SINGLE_PAINT_MARK) {
                     g.drawRect(markX, markY, markSize, markSize);
-                    g.drawLine(plusGap+markX, markY+halfMarkSize, markSize+markX-plusGap, markY+halfMarkSize);
-                    if (isFolded){
-                        g.drawLine(lineX, markY+plusGap, lineX, markY+markSize-plusGap);
-                    }else{
-                        if (paintOperation != SINGLE_PAINT_MARK) g.drawLine(lineX, markY + markSize, lineX, y + height);
+                    g.drawLine(plusGap + markX, markY + halfMarkSize, markSize + markX - plusGap, markY + halfMarkSize);
+                    if (isFolded) {
+                        g.drawLine(lineX, markY + plusGap, lineX, markY + markSize - plusGap);
+                    } else {
+                        if (paintOperation != SINGLE_PAINT_MARK) {
+                            g.drawLine(lineX, markY + markSize, lineX, y + height);
+                        }
                     }
-                    if (paintInfo.getInnerLevel() > 0){ //[PENDING]
+                    if (paintInfo.getInnerLevel() > 0) { //[PENDING]
                         g.drawLine(lineX, y, lineX, markY);
-                        g.drawLine(lineX, markY + markSize, lineX, y + height);
+                        if (paintOperation != CodeFoldingSideBar.SINGLE_PAINT_MARK) {
+                            g.drawLine(lineX, markY + markSize, lineX, y + height);
+                        }
                     }
                     visibleMarks.add(new Mark(markX, markY, markSize, isFolded));
-                } else if (paintOperation == PAINT_LINE){
+
+                } else if (paintOperation == PAINT_LINE) {
                     g.drawLine(lineX, y, lineX, y + height );
-                } else if (paintOperation == PAINT_END_MARK){
-                    g.drawLine(lineX, y, lineX, y + height/2);
-                    g.drawLine(lineX, y + height/2, lineX + halfMarkSize, y + height/2);
-                    if (paintInfo.getInnerLevel() > 0){//[PENDING]
-                        g.drawLine(lineX, y + height/2, lineX, y + height);
+
+                } else if (paintOperation == PAINT_END_MARK) {
+                    g.drawLine(lineX, y, lineX, y + height / 2);
+                    g.drawLine(lineX, y + height / 2, lineX + halfMarkSize, y + height / 2);
+                    if (paintInfo.getInnerLevel() > 0) {//[PENDING]
+                        g.drawLine(lineX, y + height / 2, lineX, y + height);
                     }
                 }
                 
             }
-        }catch(BadLocationException ble){
-            ble.printStackTrace();
+        } catch (BadLocationException ble) {
+            LOG.log(Level.WARNING, null, ble);
         }
     }
 
-    private List getFoldList(int start, int end) {
-        FoldHierarchy hierarchy = FoldHierarchy.get(component);
-        
-        hierarchy.lock();
-        try {
-            List ret = new ArrayList();
-            Fold rootFold = hierarchy.getRootFold();
-            int index = FoldUtilities.findFoldEndIndex(rootFold, start);
-            int foldCount = rootFold.getFoldCount();
-            while (index < foldCount) {
-                Fold f = rootFold.getFold(index);
-                if (f.getStartOffset() <= end) {
-                    ret.add(f);
-                } else {
-                    break; // no more relevant folds
-                }
-                index++;
+    private List<? extends Fold> getFoldList(FoldHierarchy hierarchy, int start, int end) {
+        List<Fold> ret = new ArrayList<Fold>();
+
+        Fold rootFold = hierarchy.getRootFold();
+        int index = FoldUtilities.findFoldEndIndex(rootFold, start);
+        int foldCount = rootFold.getFoldCount();
+        while (index < foldCount) {
+            Fold f = rootFold.getFold(index);
+            if (f.getStartOffset() <= end) {
+                ret.add(f);
+            } else {
+                break; // no more relevant folds
             }
-            return ret;
-        } finally {
-            hierarchy.unlock();
+            index++;
         }
+
+        return ret;
     }
-    
-    
+
     public class PaintInfo{
         
         int paintOperation;
@@ -692,12 +672,14 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
         }
 
         private Mark getClickedMark(MouseEvent e){
-            if (e == null || !SwingUtilities.isLeftMouseButton(e)) return null;
+            if (e == null || !SwingUtilities.isLeftMouseButton(e)) {
+                return null;
+            }
+
             int x = e.getX();
             int y = e.getY();
-            for (int i=0; i<visibleMarks.size(); i++){
-                Mark mark = (Mark)visibleMarks.get(i);
-                if (x >= mark.x && x <= (mark.x + mark.size) && y >= mark.y && y <= (mark.y + mark.size)){
+            for (Mark mark : visibleMarks) {
+                if (x >= mark.x && x <= (mark.x + mark.size) && y >= mark.y && y <= (mark.y + mark.size)) {
                     return mark;
                 }
             }
@@ -712,7 +694,14 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
                 performAction(mark);
             }
         }
-        
+
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            // #102288 - missing event consuming caused quick doubleclicks to break
+            // fold expanding/collapsing and move caret to the particular line
+            e.consume();
+        }
+
     }
 
     class SideBarFoldHierarchyListener implements FoldHierarchyListener{
@@ -739,4 +728,24 @@ public class CodeFoldingSideBar extends JComponent implements SettingsChangeList
         return accessibleContext;
     }
 
+    private Coloring getColoring() {
+        if (attribs == null) {
+            if (fcsLookupResult == null) {
+                fcsLookupResult = MimeLookup.getLookup(org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(component))
+                        .lookupResult(FontColorSettings.class);
+                fcsLookupResult.addLookupListener(WeakListeners.create(LookupListener.class, fcsTracker, fcsLookupResult));
+            }
+            
+            FontColorSettings fcs = fcsLookupResult.allInstances().iterator().next();
+            AttributeSet attr = fcs.getFontColors(FontColorNames.CODE_FOLDING_BAR_COLORING);
+            if (attr == null) {
+                attr = fcs.getFontColors(FontColorNames.DEFAULT_COLORING);
+            } else {
+                attr = AttributesUtilities.createComposite(attr, fcs.getFontColors(FontColorNames.DEFAULT_COLORING));
+            }
+            attribs = attr;
+        }        
+        return Coloring.fromAttributeSet(attribs);
+    }
+    
 }
