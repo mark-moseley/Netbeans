@@ -43,9 +43,9 @@ package org.netbeans.modules.web.core.jsploader;
 
 import java.beans.*;
 import java.awt.Image;
-
 import org.openide.loaders.UniFileLoader;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 
 /** JSP loader bean info.
 *
@@ -53,6 +53,7 @@ import org.openide.util.Exceptions;
 */
 public class JspLoaderBeanInfo extends SimpleBeanInfo {
 
+    @Override
     public BeanInfo[] getAdditionalBeanInfo () {
         try {
             return new BeanInfo[] { Introspector.getBeanInfo (UniFileLoader.class) };
@@ -65,12 +66,13 @@ public class JspLoaderBeanInfo extends SimpleBeanInfo {
     /** @param type Desired type of the icon
     * @return returns the Image loader's icon
     */
+    @Override
     public Image getIcon(final int type) {
         if ((type == java.beans.BeanInfo.ICON_COLOR_16x16) ||
                 (type == java.beans.BeanInfo.ICON_MONO_16x16)) {
-            return org.openide.util.Utilities.loadImage ("org/netbeans/modules/web/core/resources/jspObject.gif"); // NOI18N
+            return ImageUtilities.loadImage ("org/netbeans/modules/web/core/resources/jspObject.gif"); // NOI18N
         } else {
-            return org.openide.util.Utilities.loadImage ("org/netbeans/modules/web/core/resources/jspObject32.gif"); // NOI18N
+            return ImageUtilities.loadImage ("org/netbeans/modules/web/core/resources/jspObject32.gif"); // NOI18N
         }
     }
 

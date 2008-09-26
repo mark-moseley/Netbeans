@@ -57,7 +57,10 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
 import org.netbeans.modules.websvc.design.configuration.WSConfiguration;
 import org.netbeans.modules.websvc.wsitconf.api.DesignerListenerProvider;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.RMModelHelper;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
+import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.PolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.WSITModelSupport;
 import org.netbeans.modules.xml.wsdl.model.Binding;
 import org.netbeans.modules.xml.xam.ComponentEvent;
@@ -66,6 +69,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -102,7 +106,7 @@ public class RMConfiguration implements WSConfiguration {
             this.cl = new ComponentListener() {
 
                 private void update() {
-                    boolean enabled = RMModelHelper.isRMEnabled(binding);
+                    boolean enabled = RMModelHelper.getInstance(PolicyModelHelper.getConfigVersion(binding)).isRMEnabled(binding);
                     for (PropertyChangeListener pcl : listeners) {
                         PropertyChangeEvent pce = new PropertyChangeEvent(RMConfiguration.this, WSConfiguration.PROPERTY, null, enabled);
                         pcl.propertyChange(pce);
@@ -154,7 +158,7 @@ public class RMConfiguration implements WSConfiguration {
     }
     
     public Image getIcon() {
-        return Utilities.loadImage("org/netbeans/modules/websvc/wsitconf/resources/designer-rm.gif");
+        return ImageUtilities.loadImage("org/netbeans/modules/websvc/wsitconf/resources/designer-rm.gif");
     }
 
     public String getDisplayName() {
@@ -163,75 +167,43 @@ public class RMConfiguration implements WSConfiguration {
   
     public boolean isSet() {
         if (binding != null) {
-            return RMModelHelper.isRMEnabled(binding);
+            boolean enabled = RMModelHelper.getInstance(PolicyModelHelper.getConfigVersion(binding)).isRMEnabled(binding);
+            return enabled;
         }
         return false;
     }
         
     public void set() {
-        final ProgressPanel progressPanel = new ProgressPanel(
-                NbBundle.getMessage(RMConfiguration.class, "LBL_Wait")); //NOI18N
-        
-        final ProgressHandle progressHandle = ProgressHandleFactory.createHandle(null);
-        final JComponent progressComponent = ProgressHandleFactory.createProgressComponent(progressHandle);
-                
-        SwingUtilities.invokeLater(new Runnable() {
-                public void run() {
-                    progressHandle.start();
-                    progressHandle.switchToIndeterminate();
-                    progressPanel.open(progressComponent);
-                }
-        });
+        switchIt(true);
+    }
 
-        RequestProcessor.getDefault().post(new Runnable() {
+    public void unset() {
+        switchIt(false);
+    }
+
+    private void switchIt(final boolean enable) {
+       final ConfigRunnable r = new ConfigRunnable();        
+       SwingUtilities.invokeLater(r);
+       RequestProcessor.getDefault().post(new Runnable() {
                 public void run() {
                     try {
                         binding = WSITModelSupport.getBinding(service, implementationFile.getPrimaryFile(), project, true, createdFiles);
                         if (binding == null) return;
                         binding.getModel().addComponentListener(cl);
-                        if (!(RMModelHelper.isRMEnabled(binding))) {
-                            RMModelHelper.enableRM(binding);
+                        ConfigVersion cfgVersion = PolicyModelHelper.getConfigVersion(binding);
+                        RMModelHelper rmh = RMModelHelper.getInstance(cfgVersion);
+                        boolean rmStatus = rmh.isRMEnabled(binding);
+                        if (!(rmStatus == enable)) {
+                            rmh.enableRM(binding, enable);
                             WSITModelSupport.save(binding);            
                         }
                     } finally {
-                        progressHandle.finish();
-                        progressPanel.close();
+                        r.stop();
                     }
                 }
         });
     }
-
-    public void unset() {
-        final ProgressPanel progressPanel = new ProgressPanel(
-                NbBundle.getMessage(RMConfiguration.class, "LBL_Wait")); //NOI18N
-        
-        final ProgressHandle progressHandle = ProgressHandleFactory.createHandle(null);
-        final JComponent progressComponent = ProgressHandleFactory.createProgressComponent(progressHandle);
-                
-        SwingUtilities.invokeLater(new Runnable() {
-                public void run() {
-                    progressHandle.start();
-                    progressHandle.switchToIndeterminate();
-                    progressPanel.open(progressComponent);
-                }
-        });
-
-        RequestProcessor.getDefault().post(new Runnable() {
-                public void run() {
-                    try {
-                        if (binding == null) return;
-                        if (RMModelHelper.isRMEnabled(binding)) {
-                            RMModelHelper.disableRM(binding);
-                            WSITModelSupport.save(binding);
-                        }
-                    } finally {
-                        progressHandle.finish();
-                        progressPanel.close();
-                    }
-                }
-        });
-    }
-
+    
     public void registerListener(PropertyChangeListener listener) {
         listeners.add(listener);
     }

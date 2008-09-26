@@ -44,6 +44,7 @@ package org.netbeans.modules.identity.server.manager.ui;
 import java.awt.Image;
 import java.beans.BeanInfo;
 import java.util.Collection;
+import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import org.netbeans.modules.identity.profile.api.configurator.SecurityMechanism;
@@ -55,6 +56,7 @@ import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -69,7 +71,7 @@ public class ProfilesNode extends AbstractNode {
     
     private static final String PROFILES_NODE_BADGE = "org/netbeans/modules/identity/server/manager/ui/resources/ProfilesNodeBadge.png";//NOI18N
     
-    private static final Image ICON_BADGE = Utilities.loadImage(PROFILES_NODE_BADGE);  
+    private static final Image ICON_BADGE = ImageUtilities.loadImage(PROFILES_NODE_BADGE);
     
     private static final String HELP_ID = "idmtools_am_config_am_sec_mech";     //NOI18N
   
@@ -119,8 +121,15 @@ public class ProfilesNode extends AbstractNode {
     private Image computeIcon( boolean opened, int type ) {
         Icon icon = getFolderIcon(opened);
         Image image = ((ImageIcon)icon).getImage();
-        image = Utilities.mergeImages(image, ICON_BADGE, 7, 7 );
+        image = ImageUtilities.mergeImages(image, ICON_BADGE, 7, 7 );
         return image;
+    }
+    
+    public Action[] getActions(boolean context) {
+        Action[] actions = new Action[] {
+        };
+        
+        return actions;
     }
     
     private static class ProfilesNodeChildren extends Children.Keys {

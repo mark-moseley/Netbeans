@@ -65,6 +65,7 @@ import org.netbeans.modules.websvc.design.view.DesignView;
 import org.netbeans.modules.websvc.design.view.DesignViewPopupProvider;
 import org.netbeans.modules.websvc.design.view.actions.GotoSourceAction;
 import org.netbeans.modules.websvc.design.view.actions.RemoveOperationAction;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -132,13 +133,13 @@ public class OperationWidget extends AbstractTitledWidget {
         Image image = null;
         if(operation.isOneWay()) {
             typeOfOperation = NbBundle.getMessage(OperationWidget.class, "LBL_OneWay");
-            image = Utilities.loadImage(IMAGE_ONE_WAY);
+            image = ImageUtilities.loadImage(IMAGE_ONE_WAY);
         } else if (!operation.getParams().isEmpty()) {
             typeOfOperation = NbBundle.getMessage(OperationWidget.class, "LBL_RequestResponse");
-            image = Utilities.loadImage(IMAGE_REQUEST_RESPONSE);
+            image = ImageUtilities.loadImage(IMAGE_REQUEST_RESPONSE);
         } else {
             typeOfOperation = NbBundle.getMessage(OperationWidget.class, "LBL_Notification");
-            image = Utilities.loadImage(IMAGE_NOTIFICATION);
+            image = ImageUtilities.loadImage(IMAGE_NOTIFICATION);
         }
         headerLabelWidget = new ImageLabelWidget(getScene(), image, operation.getOperationName()) {
             private Object key = new Object();
@@ -250,6 +251,11 @@ public class OperationWidget extends AbstractTitledWidget {
             getHeaderWidget().addChild(getExpanderWidget());
         }
         super.collapseWidget();
+        // set this operation as selected and focused
+        if(hashKey()!=null) {
+            getObjectScene().setSelectedObjects(Collections.singleton(hashKey()));
+            getObjectScene().setFocusedObject(hashKey());
+        }
     }
 
     protected void expandWidget() {
@@ -260,6 +266,11 @@ public class OperationWidget extends AbstractTitledWidget {
             getHeaderWidget().addChild(buttons);
         }
         super.expandWidget();
+        // set this operation as selected and focused
+        if(hashKey()!=null) {
+            getObjectScene().setSelectedObjects(Collections.singleton(hashKey()));
+            getObjectScene().setFocusedObject(hashKey());
+        }
     }
 
     public Object hashKey() {

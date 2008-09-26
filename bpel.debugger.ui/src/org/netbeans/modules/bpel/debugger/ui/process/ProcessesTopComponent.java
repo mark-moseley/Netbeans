@@ -23,6 +23,7 @@ import java.awt.BorderLayout;
 import javax.swing.JComponent;
 import org.netbeans.spi.viewmodel.Models;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
@@ -38,15 +39,18 @@ public class ProcessesTopComponent extends TopComponent {
 
     /**{@inheritDoc}*/
     public ProcessesTopComponent () {
-        setIcon (Utilities.loadImage (
+        setIcon (ImageUtilities.loadImage (
           "org/netbeans/modules/bpel/debugger/ui/" + // NOI18N
           "resources/image/process.gif")); // NOI18N
+        // Remember the location of the component when closed.
+        putClientProperty("KeepNonPersistentTCInModelWhenClosed", Boolean.TRUE); // NOI18N
     }
 
     /**{@inheritDoc}*/
     @Override
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(ProcessesTopComponent.class);
+        return new HelpCtx("org.netbeans.modules.bpel.debugger." + // NOI18N
+                "ui.process.BpelProcessTopComponent"); // NOI18N
     }
 
     @Override

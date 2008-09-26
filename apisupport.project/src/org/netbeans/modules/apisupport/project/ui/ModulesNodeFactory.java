@@ -50,6 +50,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.event.ChangeEvent;
@@ -75,7 +77,9 @@ import org.openide.awt.StatusDisplayer;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -123,8 +127,8 @@ public class ModulesNodeFactory implements NodeFactory {
         }
 
         private Image getIcon(boolean opened) {
-            Image badge = Utilities.loadImage("org/netbeans/modules/apisupport/project/suite/resources/module-badge.png", true);
-            return Utilities.mergeImages(UIUtil.getTreeFolderIcon(opened), badge, 9, 9);
+            Image badge = ImageUtilities.loadImage("org/netbeans/modules/apisupport/project/suite/resources/module-badge.png", true);
+            return ImageUtilities.mergeImages(UIUtil.getTreeFolderIcon(opened), badge, 9, 9);
         }
 
         public @Override Image getIcon(int type) {
@@ -298,9 +302,9 @@ public class ModulesNodeFactory implements NodeFactory {
                 final NbModuleProject suiteComponent =
                         activatedNodes[i].getLookup().lookup(NbModuleProject.class);
                 assert suiteComponent != null : "NbModuleProject in lookup"; // NOI18N
+                boolean remove = true;
                 try {
                     NbModuleProject[] modules = SuiteUtils.getDependentModules(suiteComponent);
-                    boolean remove = true;
                     if (modules.length > 0) {
                         StringBuffer sb = new StringBuffer("<ul>"); // NOI18N
                         for (int j = 0; j < modules.length; j++) {
@@ -314,11 +318,16 @@ public class ModulesNodeFactory implements NodeFactory {
                                 NbBundle.getMessage(SuiteLogicalView.class, "CTL_RemovingModuleTitle", displayName),
                                 confirmMessage, getMessage("CTL_RemoveDependency"), null, NotifyDescriptor.QUESTION_MESSAGE);
                     }
-                    if (remove) {
-                        SuiteUtils.removeModuleFromSuiteWithDependencies(suiteComponent);
-                    }
                 } catch (IOException ex) {
-                    ErrorManager.getDefault().notify(ex);
+                    Logger.getLogger(ModulesNodeFactory.class.getName()).log(Level.INFO, null, ex);
+                    // #137021: suite may have broken platform dependency, so just continue
+                }
+                if (remove) {
+                    try {
+                        SuiteUtils.removeModuleFromSuiteWithDependencies(suiteComponent);
+                    } catch (Exception x) {
+                        Exceptions.printStackTrace(x);
+                    }
                 }
             }
         }

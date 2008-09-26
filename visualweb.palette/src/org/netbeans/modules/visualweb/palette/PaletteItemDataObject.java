@@ -71,6 +71,7 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.datatransfer.ExTransferable;
 
@@ -81,7 +82,6 @@ import org.openide.loaders.*;
 import org.openide.filesystems.*;
 import org.openide.nodes.*;
 import org.openide.xml.XMLUtil;
-import org.openide.actions.*;
 import org.openide.util.Utilities;
 import org.openide.util.NbBundle;
 import org.openide.ErrorManager;
@@ -139,6 +139,7 @@ public class PaletteItemDataObject extends MultiDataObject {
     PaletteItemDataObject(FileObject fo, MultiFileLoader loader)
     throws DataObjectExistsException {
         super(fo, loader);
+        getCookieSet().add(new PaletteItemInfoImpl(this));
     }
 
     boolean isFileRead() {
@@ -161,14 +162,10 @@ public class PaletteItemDataObject extends MultiDataObject {
     public Node createNodeDelegate() {
         return new ItemNode();
     }
-    
+
     @Override
-    public <T extends Node.Cookie> T getCookie(Class<T> cookieClass) {
-        
-        if (PaletteItemInfoCookie.class.isAssignableFrom(cookieClass)){
-            return cookieClass.cast(new PaletteItemInfoImpl( this ));
-        }                
-        return cookieClass.cast(super.getCookie(cookieClass));
+    public Lookup getLookup() {
+        return getCookieSet().getLookup();
     }
     
     // -------
@@ -262,14 +259,11 @@ public class PaletteItemDataObject extends MultiDataObject {
     /** DataLoader for the palette item files. */
     public static final class PaletteItemDataLoader extends UniFileLoader {
         
-        static final String ITEM_EXT = "comp_palette_item"; // NOI18N
+        //static final String ITEM_EXT = "comp_palette_item"; // NOI18N
         
         PaletteItemDataLoader() {
             super("org.netbeans.modules.visualweb.palette.PaletteItemDataObject"); // NOI18N
-            
-            ExtensionList ext = new ExtensionList();
-            ext.addExtension(ITEM_EXT);
-            setExtensions(ext);
+            getExtensions().addMimeType("text/x-comp-palette+xml");
         }
         
         /** Gets default display name. Overides superclass method. */
@@ -298,7 +292,7 @@ public class PaletteItemDataObject extends MultiDataObject {
         }
         
         public java.awt.Image getIcon(final int type) {
-            return Utilities.loadImage(iconURL);
+            return ImageUtilities.loadImage(iconURL);
         }
 
         
@@ -359,7 +353,7 @@ public class PaletteItemDataObject extends MultiDataObject {
 //                    if (icon32 == null && isItemValid())
 //                        icon32 = paletteItem.getIcon(type);
                     if (icon32 == null)
-                        icon32 = Utilities.loadImage("org/netbeans/modules/visualweb/palette/resources/custom_component_32.png"); // NOI18N
+                        icon32 = ImageUtilities.loadImage("org/netbeans/modules/visualweb/palette/resources/custom_component_32.png"); // NOI18N
                 }
                 return icon32;
             } else { // small icon by default
@@ -371,7 +365,7 @@ public class PaletteItemDataObject extends MultiDataObject {
 //                        icon16 = paletteItem.getIcon(type);
                     if (icon16 == null) {                        
 //                        System.out.println("Small Icon is null after assignment");
-                        icon16 = Utilities.loadImage("org/netbeans/modules/visualweb/palette/resources/custom_component.png"); // NOI18N
+                        icon16 = ImageUtilities.loadImage("org/netbeans/modules/visualweb/palette/resources/custom_component.png"); // NOI18N
                     }
                 }
                 return icon16;
@@ -465,7 +459,7 @@ public class PaletteItemDataObject extends MultiDataObject {
   	    UI_LOG.log(rec);
 
             // XXX NB#82645, when the issue is fixed, remove this.
-            hackExplorerDnD(this, t);
+            //hackExplorerDnD(this, t);
             
             return t;
             
@@ -669,6 +663,8 @@ public class PaletteItemDataObject extends MultiDataObject {
         }
         
         public String getClassName() {
+            // XXX should ensure that the field is set (e.g., by making sure
+            // loadFile() has already been called)!
             return pido.componentClassName;
         }
 
@@ -686,15 +682,15 @@ public class PaletteItemDataObject extends MultiDataObject {
     //////////////////////
     // >>> Hack workaround.
     /** XXX Workaround of NB #82645. */
-    private static void hackExplorerDnD(ItemNode itemNode, Transferable trans) {
-        Object explorerDnDManager = getExplorerDnDManager();
-        if (explorerDnDManager != null) {
-            setNodeAllowedActions(explorerDnDManager, DnDConstants.ACTION_MOVE);
-            setDraggedTransferable(explorerDnDManager, trans, true);
-            setDraggedNodes(explorerDnDManager, new Node[] {itemNode});
-            setDnDActive(explorerDnDManager, true);
-        }
-    }
+//    private static void hackExplorerDnD(ItemNode itemNode, Transferable trans) {
+//        Object explorerDnDManager = getExplorerDnDManager();
+//        if (explorerDnDManager != null) {
+//            setNodeAllowedActions(explorerDnDManager, DnDConstants.ACTION_MOVE);
+//            setDraggedTransferable(explorerDnDManager, trans, true);
+//            setDraggedNodes(explorerDnDManager, new Node[] {itemNode});
+//            setDnDActive(explorerDnDManager, true);
+//        }
+//    }
     
     private static void setNodeAllowedActions(Object explorerDnDManager, int actions) {
         invokeOnExplorerDnDManager(explorerDnDManager,

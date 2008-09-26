@@ -64,6 +64,7 @@ import org.netbeans.spi.navigator.NavigatorPanel;
 import org.openide.ErrorManager;
 import org.openide.awt.UndoRedo;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -98,7 +99,7 @@ public final class NavigatorTC extends TopComponent {
         initComponents();
         
         setName(NbBundle.getMessage(NavigatorTC.class, "LBL_Navigator")); //NOI18N
-        setIcon(Utilities.loadImage("org/netbeans/modules/navigator/resources/navigator.png")); //NOI18N        
+        setIcon(ImageUtilities.loadImage("org/netbeans/modules/navigator/resources/navigator.png")); //NOI18N
         // accept focus when empty to work correctly in nb winsys
         setFocusable(true);
         // special title for sliding mode
@@ -175,14 +176,16 @@ public final class NavigatorTC extends TopComponent {
         return panels;
     }
     
-    /** Sets content of navigator to given panels, selecting the first one
+    /** Sets content of navigator to given panels, selecting given one
+     * @param panels List of panels
+     * @param select Panel to be selected, shown
      */ 
-    public void setPanels (List<NavigatorPanel> panels) {
+    public void setPanels (List<NavigatorPanel> panels, NavigatorPanel select) {
         this.panels = panels;
         int panelsCount = panels == null ? -1 : panels.size();
+        selectedPanel = null;
         // no panel, so make UI look empty
         if (panelsCount <= 0) {
-            selectedPanel = null;
             setToEmpty();
         } else {
             // clear regular content 
@@ -193,6 +196,7 @@ public final class NavigatorTC extends TopComponent {
             // fill with new content
             JComponent curComp = null;
             int i = 0;
+            boolean selectFound = false;
             for (NavigatorPanel curPanel : panels) {
                 panelSelector.addItem(curPanel.getDisplayName());
                 curComp = curPanel.getComponent();
@@ -206,10 +210,15 @@ public final class NavigatorTC extends TopComponent {
                 } else {
                     contentArea.add(curComp, String.valueOf(i));
                 }
-                if (i == 0) {
-                    selectedPanel = curPanel;
+                if (curPanel == select) {
+                    selectFound = true;
                 }
                 i++;
+            }
+            if (selectFound) {
+                setSelectedPanel(select);
+            } else {
+                selectedPanel = panels.get(0);
             }
             // show if was hidden
             resetFromEmpty();

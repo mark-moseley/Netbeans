@@ -46,6 +46,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.netbeans.modules.compapp.casaeditor.Constants;
 import org.netbeans.modules.compapp.casaeditor.nodes.actions.WSDLEndpointAction;
+import org.netbeans.modules.compapp.casaeditor.nodes.actions.LoadWSDLPortsAction;
+import org.netbeans.modules.compapp.casaeditor.nodes.actions.CloneWSDLPortAction;
 import org.netbeans.modules.compapp.casaeditor.model.casa.CasaWrapperModel;
 import org.netbeans.modules.compapp.casaeditor.model.casa.CasaPort;
 import org.netbeans.modules.compapp.casaeditor.properties.PropertyUtils;
@@ -55,6 +57,7 @@ import org.netbeans.modules.xml.wsdl.ui.view.treeeditor.NodesFactory;
 import org.openide.nodes.Node;
 import org.openide.nodes.PropertySupport;
 import org.openide.nodes.Sheet;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
@@ -72,7 +75,7 @@ import javax.swing.Action;
  */
 public class WSDLEndpointNode extends CasaNode {
     
-    private static final Image ICON = Utilities.loadImage(
+    private static final Image ICON = ImageUtilities.loadImage(
             "org/netbeans/modules/compapp/casaeditor/nodes/resources/WSDLEndpointNode.png");    // NOI18N
     
     private static final String CHILD_ID_PROVIDES = "Provides"; // NOI18N
@@ -119,11 +122,14 @@ public class WSDLEndpointNode extends CasaNode {
     @Override
     protected void addCustomActions(List<Action> actions) {
         CasaPort cp = (CasaPort) this.getData();
-        if (((CasaWrapperModel) cp.getModel()).isEditable(cp)) {
+        CasaWrapperModel model = (CasaWrapperModel) cp.getModel();
+        if (model.isEditable(cp)) {
             // only add this for soap port...
-            if (cp.getBindingType().equalsIgnoreCase(SOAP_BINDING)) {
+            if (model.getBindingType(cp).equalsIgnoreCase(SOAP_BINDING)) {
                 actions.add(new WSDLEndpointAction());
             }
+        } else { // non-editable port
+            actions.add(SystemAction.get(CloneWSDLPortAction.class));
         }
     }
 
@@ -166,6 +172,12 @@ public class WSDLEndpointNode extends CasaNode {
                 break;
             }
         }
+
+
+        // Add JBI extensions on connection
+        String bcName = this.getModel().getBindingComponentName(casaPort);
+        ExtensionPropertyHelper.setupExtensionPropertySheet(this,
+                casaPort, sheet, "port", bcName); // NOI18N
     }
     
     private static void addPortChildrenProperties(Sheet sheet, Children children, boolean bEditable) {

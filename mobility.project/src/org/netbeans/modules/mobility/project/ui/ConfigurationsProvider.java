@@ -63,6 +63,7 @@ import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.KeyStroke;
+import javax.swing.filechooser.FileSystemView;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.spi.project.ProjectConfiguration;
@@ -84,6 +85,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Utilities;
 import org.openide.ErrorManager;
@@ -200,7 +202,7 @@ class ConfigurationsProvider
                     if ("jar".equals(roots[i].getURL().getProtocol()))
                     { //NOI18N
                         file = FileUtil.getArchiveFile(roots[i]);
-                        icon = openedIcon = new ImageIcon(Utilities.loadImage(ARCHIVE_ICON));
+                        icon = openedIcon = new ImageIcon(ImageUtilities.loadImage(ARCHIVE_ICON));
                         node=PackageView.createPackageView(new LibrariesSourceGroup(roots[i],file.getNameExt(),icon, openedIcon));
                     }
                     //Add a file or folder
@@ -321,6 +323,10 @@ class ConfigurationsProvider
                         File parent=f.getParentFile();
                         while (parent != null && !(parent.isFile() || parent.isDirectory()))
                             parent=parent.getParentFile();
+                        
+                        if (parent == null){ //can not be found at all
+                            parent = FileSystemView.getFileSystemView().getDefaultDirectory();//fallback fix for 122648 
+                        }                        
                         fRoot=FileUtil.toFileObject(parent);
                     }
                     else 

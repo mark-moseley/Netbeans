@@ -69,11 +69,12 @@ import org.openide.DialogDisplayer;
 
 import org.openide.NotifyDescriptor;
 import org.openide.NotifyDescriptor.Message;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import net.java.hulp.i18n.Logger;
 import org.netbeans.modules.etl.logger.Localizer;
-import org.netbeans.modules.etl.logger.LogUtil;
+
 
 /**
  * @author Ahimanikya Satapathy
@@ -81,7 +82,7 @@ import org.netbeans.modules.etl.logger.LogUtil;
  */
 public class FlatfileResulSetPanel extends JPanel implements ActionListener, PropertyChangeListener {
 
-    private static transient final Logger mLogger = LogUtil.getLogger(FlatfileResulSetPanel.class.getName());
+    private static transient final Logger mLogger = Logger.getLogger(FlatfileResulSetPanel.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
 
     private class FlatfileTableQuery {
@@ -134,14 +135,14 @@ public class FlatfileResulSetPanel extends JPanel implements ActionListener, Pro
                     conn = db.getJDBCConnection();
                     stmt = conn.createStatement();
                     String selectSQL = table.getSelectStatementSQL(ct);
-                    mLogger.infoNoloc(mLoc.t("PRSR084: FlatfileResulSetPanel.class.getName(){0}", selectSQL));
+                    mLogger.infoNoloc(mLoc.t("EDIT084: FlatfileResulSetPanel.class.getName(){0}", selectSQL));
                     rs = stmt.executeQuery(selectSQL);
                     recordViewer.clearView();
                     recordViewer.setResultSet(rs);
 
                     // get the count of all rows
                     String countSql = "Select count(*) From " + table.getName();
-                    mLogger.infoNoloc(mLoc.t("PRSR085: Select count(*) statement used for total rows: {0}", countSql));
+                    mLogger.infoNoloc(mLoc.t("EDIT085: Select count(*) statement used for total rows: {0}", countSql));
                     stmt = conn.createStatement();
                     cntRs = stmt.executeQuery(countSql);
 
@@ -162,7 +163,7 @@ public class FlatfileResulSetPanel extends JPanel implements ActionListener, Pro
 
             } catch (Exception e) {
                 this.ex = e;
-                mLogger.errorNoloc(mLoc.t("PRSR086: Can't get contents for table:{0}", FlatfileResulSetPanel.class.getName()), e);
+                mLogger.errorNoloc(mLoc.t("EDIT086: Can't get contents for table:{0}", FlatfileResulSetPanel.class.getName()), e);
                 recordViewer.clearView();
                 totalRowsLabel.setText("0");
             }
@@ -174,7 +175,8 @@ public class FlatfileResulSetPanel extends JPanel implements ActionListener, Pro
         public void finished() {
             try {
                 if (this.ex != null) {
-                    String errorMsg = NbBundle.getMessage(FlatfileResulSetPanel.class, "MSG_error_fetch_failed", this.ex.getMessage());
+                    String nbBundle3 = mLoc.t("BUND260: Error fetching data for tableCause: {0}",this.ex.getMessage());
+                    String errorMsg = nbBundle3.substring(15); // NOI18N
                     DialogDisplayer.getDefault().notify(new Message(errorMsg, NotifyDescriptor.ERROR_MESSAGE));
                 }
 
@@ -186,7 +188,7 @@ public class FlatfileResulSetPanel extends JPanel implements ActionListener, Pro
                 }
 
             } catch (SQLException sqle) {
-                mLogger.errorNoloc(mLoc.t("PRSR087: Could not close statement after retrieving table contents {0}", FlatfileResulSetPanel.class.getName()), sqle);
+                mLogger.errorNoloc(mLoc.t("EDIT087: Could not close statement after retrieving table contents {0}", FlatfileResulSetPanel.class.getName()), sqle);
             } finally {
                 if (conn != null) {
                     try {
@@ -204,7 +206,7 @@ public class FlatfileResulSetPanel extends JPanel implements ActionListener, Pro
     public static Icon getDbIcon() {
         Icon icon = null;
         try {
-            icon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/mashup/db/ui/resource/images/root.png"));
+            icon = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/mashup/db/ui/resource/images/root.png"));
         } catch (Exception ex) {
             // Log exception
         }
@@ -274,15 +276,19 @@ public class FlatfileResulSetPanel extends JPanel implements ActionListener, Pro
         // add refresh button
         URL url = getClass().getResource("/org/netbeans/modules/sql/framework/ui/resources/images/refresh16.png");
         showDataBtn = new JButton(new ImageIcon(url));
-        showDataBtn.setMnemonic('S');
-        showDataBtn.setToolTipText("Show data for selected flat file table node");
+        String nbBundle30 = mLoc.t("BUND261: Show data for selected flat file table node");
+        showDataBtn.getAccessibleContext().setAccessibleName(nbBundle30.substring(15));
+        showDataBtn.setToolTipText(nbBundle30.substring(15));
+        showDataBtn.setMnemonic(nbBundle30.substring(15).charAt(0));
         showDataBtn.setActionCommand(CMD_SHOW_DATA);
 
         JPanel recordCountPanel = new JPanel();
         recordCountPanel.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 0));
 
-        JLabel lbl = new JLabel("Limit number of rows");
-        lbl.setDisplayedMnemonic('r');
+        String nbBundle31 = mLoc.t("BUND262: Limit number of rows");
+        JLabel lbl = new JLabel(nbBundle31.substring(15));
+        lbl.getAccessibleContext().setAccessibleName(nbBundle31.substring(15));
+        lbl.setDisplayedMnemonic(nbBundle31.substring(15).charAt(0));
 
         recordCountPanel.add(lbl);
         recordCount = new JTextField("25", 5);
@@ -295,7 +301,9 @@ public class FlatfileResulSetPanel extends JPanel implements ActionListener, Pro
         fl.setAlignment(FlowLayout.LEFT);
         totalRowsPanel.setLayout(fl);
 
-        JLabel totalRowsNameLabel = new JLabel("Total rows:");
+        String nbBundle51 = mLoc.t("BUND263: Total rows:");
+        JLabel totalRowsNameLabel = new JLabel(nbBundle51.substring(15));
+        totalRowsNameLabel.getAccessibleContext().setAccessibleName(nbBundle51.substring(15));
         totalRowsNameLabel.setBorder(BorderFactory.createEmptyBorder(0, 100, 0, 8));
         totalRowsPanel.add(totalRowsNameLabel);
 

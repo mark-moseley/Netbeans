@@ -50,16 +50,22 @@ import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import javax.swing.Action;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
+import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.Sources;
 import org.netbeans.api.queries.VisibilityQuery;
-import org.netbeans.modules.web.project.UpdateHelper;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.web.api.webmodule.WebProjectConstants;
 import org.netbeans.modules.web.project.WebProject;
+import org.netbeans.modules.web.project.WebSources;
 import org.netbeans.modules.web.project.ui.SourceNodeFactory.PreselectPropertiesAction;
 import org.netbeans.modules.web.project.ui.customizer.WebProjectProperties;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
@@ -78,6 +84,7 @@ import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -110,10 +117,16 @@ public final class DocBaseNodeFactory implements NodeFactory {
         private final PropertyEvaluator evaluator;
         private final UpdateHelper helper;
         
+        private SourceGroup webDocRoot;
+        
         DocBaseNodeList(WebProject proj) {
             project = proj;
             evaluator = project.evaluator();
             helper = project.getUpdateHelper();
+            Sources s = project.getLookup().lookup(Sources.class);
+            assert s != null;
+            assert s.getSourceGroups(WebProjectConstants.TYPE_DOC_ROOT).length > 0;
+            webDocRoot = s.getSourceGroups(WebProjectConstants.TYPE_DOC_ROOT)[0];
         }
         
         public List<String> keys() {
@@ -140,7 +153,7 @@ public final class DocBaseNodeFactory implements NodeFactory {
                 FileObject webDocBaseDir = nodeFolders.getWebDocBaseDir();
                 DataFolder webFolder = getFolder(webDocBaseDir);
                 if (webFolder != null) {
-                    return new DocBaseNode(webFolder, project);
+                    return new DocBaseNode(webFolder, project, new VisibilityQueryDataFilter(webDocRoot));
                 }
                 return null;
             } else if (key.startsWith(WEB_INF)) {
@@ -150,7 +163,7 @@ public final class DocBaseNodeFactory implements NodeFactory {
                 FileObject webInfDir = nodeFolders.getWebInfDir();
                 DataFolder webInfFolder = getFolder(webInfDir);
                 if (webInfFolder != null) {
-                    return new WebInfNode(webInfFolder, project);
+                    return new WebInfNode(webInfFolder, project, new VisibilityQueryDataFilter(null));
                 }
                 return null;
             }
@@ -248,8 +261,8 @@ public final class DocBaseNodeFactory implements NodeFactory {
     
     private static final class DocBaseNode extends BaseNode {
         
-        DocBaseNode (DataFolder folder, Project project) {
-            super(folder, project);
+        DocBaseNode (DataFolder folder, WebProject project, VisibilityQueryDataFilter filter) {
+            super(folder, project, filter);
         }
         
         @Override
@@ -260,8 +273,8 @@ public final class DocBaseNodeFactory implements NodeFactory {
 
     private static final class WebInfNode extends BaseNode {
         
-        WebInfNode (DataFolder folder, Project project) {
-            super (folder, project);
+        WebInfNode (DataFolder folder, WebProject project, VisibilityQueryDataFilter filter) {
+            super (folder, project, filter);
         }
         
         @Override
@@ -271,16 +284,16 @@ public final class DocBaseNodeFactory implements NodeFactory {
     }
 
     private static abstract class BaseNode extends FilterNode {
-        private static Image WEB_PAGES_BADGE = Utilities.loadImage( "org/netbeans/modules/web/project/ui/resources/webPagesBadge.gif" ); //NOI18N
+        private static Image WEB_PAGES_BADGE = ImageUtilities.loadImage( "org/netbeans/modules/web/project/ui/resources/webPagesBadge.gif" ); //NOI18N
         /**
          * The MIME type of Java files.
          */
         private static final String JAVA_MIME_TYPE = "text/x-java"; //NO18N
         private Action actions[];
-        protected final Project project;
+        protected final WebProject project;
         
-        BaseNode(DataFolder folder, Project project) {
-            super(folder.getNodeDelegate(), folder.createNodeChildren(new VisibilityQueryDataFilter()));
+        BaseNode(final DataFolder folder, WebProject project, VisibilityQueryDataFilter filter) {
+            super(folder.getNodeDelegate(), folder.createNodeChildren(filter));
             this.project = project;
         }
 
@@ -302,7 +315,7 @@ public final class DocBaseNodeFactory implements NodeFactory {
             Image image;
 
             image = opened ? getDataFolderNodeDelegate().getOpenedIcon(type) : getDataFolderNodeDelegate().getIcon(type);
-            image = Utilities.mergeImages(image, WEB_PAGES_BADGE, 7, 7);
+            image = ImageUtilities.mergeImages(image, WEB_PAGES_BADGE, 7, 7);
 
             return image;        
         }
@@ -318,11 +331,11 @@ public final class DocBaseNodeFactory implements NodeFactory {
                 actions = new Action[9];
                 actions[0] = CommonProjectActions.newFileAction();
                 actions[1] = null;
-                actions[2] = SystemAction.get(FileSystemAction.class);
+                actions[2] = SystemAction.get(FindAction.class);
                 actions[3] = null;
-                actions[4] = SystemAction.get(FindAction.class);
+                actions[4] = SystemAction.get(PasteAction.class);
                 actions[5] = null;
-                actions[6] = SystemAction.get(PasteAction.class);
+                actions[6] = SystemAction.get(FileSystemAction.class);
                 actions[7] = null;
                 actions[8] = new PreselectPropertiesAction(project, "Sources"); //NOI18N
             }
@@ -338,7 +351,7 @@ public final class DocBaseNodeFactory implements NodeFactory {
                         List list = (List) data;
                         for (Object each : list) {
                             FileObject file = FileUtil.toFileObject((File) each);
-                            if (JAVA_MIME_TYPE.equals(file.getMIMEType())) { //NO18N
+                            if (file != null && JAVA_MIME_TYPE.equals(file.getMIMEType())) { //NO18N
                                 // don't allow java files, see #119968
                                 return null;
                             }
@@ -354,18 +367,32 @@ public final class DocBaseNodeFactory implements NodeFactory {
         }
     }
 
-    static final class VisibilityQueryDataFilter implements ChangeListener, ChangeableDataFilter {
+    static final class VisibilityQueryDataFilter implements ChangeListener, ChangeableDataFilter, PropertyChangeListener {
         private static final long serialVersionUID = 1L;
         
         private final ChangeSupport changeSupport = new ChangeSupport(this);
+        private SourceGroup sourceGroup;
         
-        public VisibilityQueryDataFilter() {
+        public VisibilityQueryDataFilter(SourceGroup sourceGroup) {
+            this.sourceGroup = sourceGroup;
+            if (this.sourceGroup != null) {
+                this.sourceGroup.addPropertyChangeListener(this);
+            }
             VisibilityQuery.getDefault().addChangeListener( this );
         }
                 
         public boolean acceptDataObject(DataObject obj) {                
             FileObject fo = obj.getPrimaryFile();                
-            return VisibilityQuery.getDefault().isVisible( fo );
+            boolean show = true;
+            try {
+                if (sourceGroup != null && !sourceGroup.contains(fo)) {
+                    show = false;
+                }
+            } catch (IllegalArgumentException ex) {
+                // sourceGroup is not parent of fo -> do not show file:
+                show = false;
+            }
+            return show && VisibilityQuery.getDefault().isVisible(fo);
         }
         
         public void stateChanged( ChangeEvent e) {            
@@ -378,6 +405,10 @@ public final class DocBaseNodeFactory implements NodeFactory {
                         
         public void removeChangeListener( ChangeListener listener ) {
             changeSupport.removeChangeListener(listener);
+        }
+
+        public void propertyChange(PropertyChangeEvent arg0) {
+            changeSupport.fireChange();
         }
         
     }

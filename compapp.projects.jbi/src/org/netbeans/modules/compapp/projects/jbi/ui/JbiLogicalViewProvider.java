@@ -45,7 +45,6 @@ import javax.swing.event.ChangeEvent;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.modules.compapp.projects.jbi.JbiProject;
 import org.netbeans.modules.compapp.projects.jbi.ui.actions.AddProjectAction;
-import org.netbeans.modules.compapp.projects.jbi.ui.actions.OpenEditorAction;
 import org.netbeans.modules.compapp.projects.jbi.ui.customizer.JbiProjectProperties;
 import org.netbeans.modules.compapp.test.ui.TestNode;
 
@@ -150,7 +149,7 @@ public class JbiLogicalViewProvider implements LogicalViewProvider {
         this.resolver = resolver;
         
         if (mEmpty != null) {
-            mEmptyIcon = Utilities.mergeImages(mIcon, mEmpty, 8, 0);
+            mEmptyIcon = ImageUtilities.mergeImages(mIcon, mEmpty, 8, 0);
         }
         
 //        isEmpty = isProjectEmpty();
@@ -482,18 +481,7 @@ public class JbiLogicalViewProvider implements LogicalViewProvider {
             
             actions.add(CommonProjectActions.newFileAction());
             
-            // Create CASA on demand            
-            actions.add(null);
-            actions.add(ProjectSensitiveActions.projectSensitiveAction(
-                    new OpenEditorAction(), 
-                    bundle.getString("LBL_EditAction_Name"), // NOI18N
-                    null
-                    ));
-            actions.add(ProjectSensitiveActions.projectCommandAction(
-                    JbiProjectConstants.COMMAND_JBICLEANCONFIG,
-                    bundle.getString("LBL_JbiCleanConfigAction_Name"),  // NOI18N
-                    null
-                    ));         
+            // Create CASA on demand  //chikkala: moved to service composition node action.
             
             actions.add(null);
 
@@ -560,7 +548,7 @@ public class JbiLogicalViewProvider implements LogicalViewProvider {
             actions.add(SystemAction.get(FindAction.class));
             
             // honor 57874 contact
-            addFromLayers(actions, "Projects/Actions"); // NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Actions")); // NOI18N
                         
             if (broken) {
                 actions.add(brokenLinksAction);
@@ -570,17 +558,6 @@ public class JbiLogicalViewProvider implements LogicalViewProvider {
             actions.add(CommonProjectActions.customizeProjectAction());
                         
             return actions.toArray(new Action[actions.size()]);            
-        }
-        
-        private void addFromLayers(List<Action> actions, String path) {
-            Lookup look = Lookups.forPath(path);
-            for (Object next : look.lookupAll(Object.class)) {
-                if (next instanceof Action) {
-                    actions.add((Action) next);
-                } else if (next instanceof JSeparator) {
-                    actions.add(null);
-                }
-            }
         }
         
         /**

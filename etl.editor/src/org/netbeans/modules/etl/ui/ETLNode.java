@@ -34,9 +34,10 @@ package org.netbeans.modules.etl.ui;
 
 import java.awt.Image;
 
-import java.awt.Image;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import net.java.hulp.i18n.Logger;
+import org.netbeans.modules.etl.logger.Localizer;
 import org.netbeans.modules.etl.ui.view.cookies.ExecuteTestCookie;
 import org.netbeans.modules.etl.ui.view.cookies.SelectTablesCookie;
 import org.openide.ErrorManager;
@@ -46,6 +47,7 @@ import org.openide.nodes.Children;
 import org.openide.nodes.CookieSet;
 import org.openide.nodes.PropertySupport;
 import org.openide.nodes.Sheet;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 
 /** A node to represent this object. */
@@ -54,11 +56,13 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
     public static final int VALID = 1;
     public static final int ERROR = 0;
     public static final int WARNING = 2;
-    static Image eTLImg = Utilities.loadImage("org/netbeans/modules/etl/ui/resources/images/ETLDefinition.png");
-    static Image errorImg = Utilities.loadImage("org/netbeans/modules/etl/ui/resources/images/ETLDefinitionError.png");
-    static Image warningImg = Utilities.loadImage("org/netbeans/modules/etl/ui/resources/images/ETLDefinitionWarning.png");
+    static Image eTLImg = ImageUtilities.loadImage("org/netbeans/modules/etl/ui/resources/images/ETLDefinition.png");
+    static Image errorImg = ImageUtilities.loadImage("org/netbeans/modules/etl/ui/resources/images/ETLDefinitionError.png");
+    static Image warningImg = ImageUtilities.loadImage("org/netbeans/modules/etl/ui/resources/images/ETLDefinitionWarning.png");
     private ETLDataObject dObj;
     private int state = VALID;
+    private static transient final Logger mLogger = Logger.getLogger(ETLNode.class.getName());
+    private static transient final Localizer mLoc = Localizer.get();
 
     public ETLNode(ETLDataObject obj) {
         this(obj, Children.LEAF);
@@ -67,6 +71,7 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
 
     private ETLNode(DataObject obj, Children ch) {
         super(obj, ch);
+        this.dObj = (ETLDataObject) obj;
         obj.addPropertyChangeListener(this);
         setIconBaseWithExtension("org/netbeans/modules/etl/ui/resources/images/ETLDefinition.png");
         init();
@@ -74,6 +79,7 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
 
     private void init() {
         CookieSet cs = getCookieSet();
+		cs.add(dObj);
         cs.add(new ExecuteTestCookie());
         cs.add(new SelectTablesCookie());
     }
@@ -89,13 +95,14 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
         try {
             Property nameProp = new PropertySupport.Reflection(this.dObj, String.class,
                     "getName", null);
-            Property execProp = new PropertySupport.Reflection(this.dObj.getETLDefinition().getSQLDefinition(),
-                    String.class, "getExecutionStrategyStr", null);
-
-            nameProp.setName("Collaboration Name");
-            execProp.setName("Execution Strategy");
+            //Property execProp = new PropertySupport.Reflection(this.dObj.getETLDefinition().getSQLDefinition(),
+                    //String.class, "getExecutionStrategyStr", null);
+            String nbBundle1 = mLoc.t("BUND179: Collaboration Name"); 
+            //String nbBundle2 = mLoc.t("PRSR001: Execution Strategy"); 
+            nameProp.setName(nbBundle1.substring(15));
+            //execProp.setName(Localizer.parse(nbBundle2));
             set.put(nameProp);
-            set.put(execProp);
+            //set.put(execProp);
         } catch (Exception ex) {
             ErrorManager.getDefault().notify(ex);
         }
@@ -108,9 +115,9 @@ public class ETLNode extends DataNode implements PropertyChangeListener {
         Image img = eTLImg;
         try {
             if (state == ERROR) {
-                img = Utilities.mergeImages(eTLImg, errorImg, 1, 0);
+                img = ImageUtilities.mergeImages(eTLImg, errorImg, 1, 0);
             } else if (state == WARNING) {
-                img = Utilities.mergeImages(eTLImg, warningImg, 1, 0);
+                img = ImageUtilities.mergeImages(eTLImg, warningImg, 1, 0);
             }
         } catch (Exception ex) {
             ErrorManager.getDefault().notify(ex);

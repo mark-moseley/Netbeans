@@ -46,7 +46,7 @@ package org.netbeans.modules.spring.beans.loader;
 import java.awt.Image;
 import org.openide.loaders.DataNode;
 import org.openide.nodes.Children;
-import org.openide.util.Lookup;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 
 public class SpringXMLConfigDataNode extends DataNode {
@@ -55,12 +55,8 @@ public class SpringXMLConfigDataNode extends DataNode {
         super(obj, Children.LEAF);
     }
 
-    SpringXMLConfigDataNode(SpringXMLConfigDataObject obj, Lookup lookup) {
-        super(obj, Children.LEAF, lookup);
-    }
-
     @Override
     public Image getIcon(int i) {
-        return Utilities.loadImage("org/netbeans/modules/spring/beans/resources/spring.png");
+        return ImageUtilities.loadImage("org/netbeans/modules/spring/beans/resources/spring.png");
     }
 }

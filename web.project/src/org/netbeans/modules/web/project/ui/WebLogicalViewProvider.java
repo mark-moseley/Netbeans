@@ -48,36 +48,24 @@ import java.beans.PropertyChangeListener;
 import java.io.CharConversionException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.ResourceBundle;
-import java.util.Set;
 import java.util.StringTokenizer;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.JSeparator;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.db.explorer.ConnectionListener;
 import org.netbeans.api.db.explorer.ConnectionManager;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileStatusEvent;
-import org.openide.filesystems.FileStatusListener;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.*;
 import org.openide.util.ContextAwareAction;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -94,8 +82,8 @@ import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
 import org.netbeans.spi.java.project.support.ui.PackageView;
 import org.netbeans.api.project.FileOwnerQuery;
-import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
+import org.netbeans.api.project.ProjectManager;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectProperties;
 import org.netbeans.modules.j2ee.common.ui.BrokenDatasourceSupport;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
@@ -108,12 +96,13 @@ import org.netbeans.modules.j2ee.common.ui.BrokenServerSupport;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.InstanceListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.web.api.webmodule.WebProjectConstants;
-import org.netbeans.modules.web.project.SourceRoots;
-import org.netbeans.modules.web.project.UpdateHelper;
 import org.netbeans.modules.web.project.WebProject;
 import org.netbeans.modules.web.project.ui.customizer.WebProjectProperties;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
+import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.ui.support.NodeFactorySupport;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Exceptions;
@@ -191,8 +180,14 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
             relPath = relPath.substring(0, idx);
         StringTokenizer st = new StringTokenizer(relPath, "/"); //NOI18N
         Node result = NodeOp.findChild(root,rootfo.getName());
+        if (result == null) {
+            return null;
+        }
         while (st.hasMoreTokens()) {
             result = NodeOp.findChild(result, st.nextToken());
+            if (result == null) {
+                return null;
+            }
         }
         
         return result;
@@ -235,11 +230,11 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
     // Private innerclasses ----------------------------------------------------
 
     private static final String[] BREAKABLE_PROPERTIES = new String[] {
-        WebProjectProperties.JAVAC_CLASSPATH,
+        ProjectProperties.JAVAC_CLASSPATH,
         WebProjectProperties.DEBUG_CLASSPATH,
-        WebProjectProperties.RUN_TEST_CLASSPATH, 
+        ProjectProperties.RUN_TEST_CLASSPATH, 
         WebProjectProperties.DEBUG_TEST_CLASSPATH, 
-        WebProjectProperties.JAVAC_TEST_CLASSPATH,
+        ProjectProperties.JAVAC_TEST_CLASSPATH,
         WebProjectProperties.WAR_CONTENT_ADDITIONAL,
         WebProjectProperties.WEB_DOCBASE_DIR
     };
@@ -261,29 +256,15 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
         return result;
     }        
     
-    private static Image brokenProjectBadge = Utilities.loadImage( "org/netbeans/modules/web/project/ui/resources/brokenProjectBadge.gif" ); // NOI18N
-    
     /** Filter node containin additional features for the J2SE physical
      */
-    private final class WebLogicalViewRootNode extends AbstractNode implements Runnable, FileStatusListener, ChangeListener, PropertyChangeListener {
+    private final class WebLogicalViewRootNode extends AbstractNode {
 
         private final Action brokenLinksAction;
         private final BrokenServerAction brokenServerAction;
         private final BrokenDatasourceAction brokenDatasourceAction;
         private boolean broken;
 
-        // icon badging >>>
-        private Set<FileObject> files;
-        private Map<FileSystem,FileStatusListener> fileSystemListeners;
-        private RequestProcessor.Task task;
-        private final Object privateLock = new Object();
-        private boolean iconChange;
-        private boolean nameChange;        
-        private ChangeListener sourcesListener;
-        private Map<SourceGroup,PropertyChangeListener> groupsListeners;
-        // icon badging <<<
-
-        
         public WebLogicalViewRootNode() {
 //            super( new WebViews.LogicalViewChildren( project, helper, evaluator, resolver ), createLookup( project ) );
             super(NodeFactorySupport.createCompositeChildren(project, "Projects/org-netbeans-modules-web-project/Nodes"), 
@@ -299,169 +280,24 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
             J2eeModuleProvider moduleProvider = (J2eeModuleProvider)project.getLookup().lookup(J2eeModuleProvider.class);
             moduleProvider.addInstanceListener((InstanceListener)WeakListeners.create(
                         InstanceListener.class, brokenServerAction, moduleProvider));
-            setProjectFiles(project);
         }
 
-        protected void setProjectFiles(Project project) {
-            Sources sources = ProjectUtils.getSources(project);  // returns singleton
-            if (sourcesListener == null) {                
-                sourcesListener = WeakListeners.change(this, sources);
-                sources.addChangeListener(sourcesListener);                                
-            }
-            setGroups(Arrays.asList(sources.getSourceGroups(Sources.TYPE_GENERIC)));
-        }
-
-
-        private void setGroups(Collection<SourceGroup> groups) {
-            if (groupsListeners != null) {
-                for (Map.Entry<SourceGroup,PropertyChangeListener> e : groupsListeners.entrySet()) {
-                    e.getKey().removePropertyChangeListener(e.getValue());
-                }
-            }
-            groupsListeners = new HashMap<SourceGroup,PropertyChangeListener>();
-            Set<FileObject> roots = new HashSet<FileObject>();
-            for (SourceGroup group : groups) {
-                PropertyChangeListener pcl = WeakListeners.propertyChange(this, group);
-                groupsListeners.put(group, pcl);
-                group.addPropertyChangeListener(pcl);
-                FileObject fo = group.getRootFolder();
-                if (project.getProjectDirectory().equals(fo)) {
-                    // add rather children of project's root folder than the
-                    // folder itself (cf. #78994)
-                    Enumeration en = project.getProjectDirectory().getChildren(false);
-                    while (en.hasMoreElements()) {
-                        FileObject child = (FileObject) en.nextElement();
-                        if (FileOwnerQuery.getOwner(child) == project) {
-                            roots.add(child);
-                        }
-                    }
-                } else {
-                    roots.add(fo);
-                }
-            }
-            setFiles(roots);
-        }
-
-        protected void setFiles(Set<FileObject> files) {
-            if (fileSystemListeners != null) {
-                for (Map.Entry<FileSystem,FileStatusListener> e : fileSystemListeners.entrySet()) {
-                    e.getKey().removeFileStatusListener(e.getValue());
-                }
-            }
-                        
-            fileSystemListeners = new HashMap<FileSystem,FileStatusListener>();
-            this.files = files;
-            if (files == null)
-                return;
-
-            Set<FileSystem> hookedFileSystems = new HashSet<FileSystem>();
-            for (FileObject fo : files) {
-                try {
-                    FileSystem fs = fo.getFileSystem();
-                    if (hookedFileSystems.contains(fs)) {
-                        continue;
-                    }
-                    hookedFileSystems.add(fs);
-                    FileStatusListener fsl = FileUtil.weakFileStatusListener(this, fs);
-                    fs.addFileStatusListener(fsl);
-                    fileSystemListeners.put(fs, fsl);
-                } catch (FileStateInvalidException e) {
-                    Exceptions.printStackTrace(Exceptions.attachMessage(e, "Cannot get " + fo + " filesystem, ignoring...")); // NO18N
-                }
-            }
-        }
-        
-        public Image getIcon (int type) {
-            Image img = getMyIcon (type);
-
-            if (files != null && !files.isEmpty()) {
-                try {
-                    FileObject fo = files.iterator().next();
-                    img = fo.getFileSystem().getStatus().annotateIcon(img, type, files);
-                } catch (FileStateInvalidException e) {
-                    Logger.getLogger("global").log(Level.INFO, null, e);
-                }
-            }
-
-            return img;
-        }
-
-        public Image getOpenedIcon (int type) {
-            Image img = getMyOpenedIcon(type);
-
-            if (files != null && !files.isEmpty()) {
-                try {
-                    FileObject fo = files.iterator().next();
-                    img = fo.getFileSystem().getStatus().annotateIcon(img, type, files);
-                } catch (FileStateInvalidException e) {
-                    Logger.getLogger("global").log(Level.INFO, null, e);
-                }
-            }
-
-            return img;
-        }
-        
         @Override                                                                                                            
         public String getShortDescription() {                                                                                
             String prjDirDispName = FileUtil.getFileDisplayName(project.getProjectDirectory());                              
             return NbBundle.getMessage(WebLogicalViewProvider.class, "HINT_project_root_node", prjDirDispName); // NO18N             
         }   
 
-        public void run() {
-            boolean fireIcon;
-            boolean fireName;
-            synchronized (privateLock) {
-                fireIcon = iconChange;
-                fireName = nameChange;
-                iconChange = false;
-                nameChange = false;
-            }
-            if (fireIcon) {
-                fireIconChange();
-                fireOpenedIconChange();
-            }
-            if (fireName) {
-                fireDisplayNameChange(null, null);
-            }
-        }
-
-        public void annotationChanged(FileStatusEvent event) {
-            if (task == null) {
-                task = RequestProcessor.getDefault().create(this);
-            }
-
-            synchronized (privateLock) {
-                if ((!iconChange && event.isIconChange())  || (!nameChange && event.isNameChange())) {
-                    for (FileObject fo : files) {
-                        if (event.hasChanged(fo)) {
-                            iconChange |= event.isIconChange();
-                            nameChange |= event.isNameChange();
-                        }
-                    }
-                }
-            }
-
-            task.schedule(50);  // batch by 50 ms
-        }
-
-        // sources change
-        public void stateChanged(ChangeEvent e) {
-            setProjectFiles(project);
-        }
-
-        // group change
-        public void propertyChange(PropertyChangeEvent evt) {
-            setProjectFiles(project);
-        }
-        
-        public Image getMyIcon( int type ) {
+        public Image getIcon( int type ) {
             Image original = super.getIcon( type );                
-            return broken || brokenServerAction.isEnabled() || brokenDatasourceAction.isEnabled() ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;
+            return broken || brokenServerAction.isEnabled() || brokenDatasourceAction.isEnabled() ? 
+                ImageUtilities.mergeImages(original, ProjectProperties.ICON_BROKEN_BADGE.getImage(), 8, 0) : original;
         }
 
-        public Image getMyOpenedIcon( int type ) {
+        public Image getOpenedIcon( int type ) {
             Image original = super.getOpenedIcon(type);                
-            return broken || brokenServerAction.isEnabled() || brokenDatasourceAction.isEnabled() ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;            
+            return broken || brokenServerAction.isEnabled() || brokenDatasourceAction.isEnabled() ? 
+                ImageUtilities.mergeImages(original, ProjectProperties.ICON_BROKEN_BADGE.getImage(), 8, 0) : original;
         }            
 
         public String getHtmlDisplayName() {
@@ -512,9 +348,9 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
             actions.add(ProjectSensitiveActions.projectCommandAction( WebProjectConstants.COMMAND_REDEPLOY, bundle.getString( "LBL_RedeployAction_Name" ), null )); // NOI18N
             actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_DEBUG, bundle.getString( "LBL_DebugAction_Name" ), null )); // NOI18N
 
-            addFromLayers(actions, "Projects/Profiler_Actions_temporary"); //NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Profiler_Actions_temporary")); //NOI18N
             
-            addFromLayers(actions, "Projects/Rest_Actions_holder"); //NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Rest_Actions_holder")); //NOI18N
             actions.add(null);
             actions.add(CommonProjectActions.setAsMainProjectAction());
             actions.add(CommonProjectActions.openSubprojectsAction());
@@ -529,7 +365,7 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
             
             // honor 57874 contact
             
-            addFromLayers(actions, "Projects/Actions"); //NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Actions")); //NOI18N
             
             actions.add(null);
             
@@ -547,17 +383,6 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
             return actions.toArray(new Action[actions.size()]);
         }
         
-        private void addFromLayers(List<Action> actions, String path) {
-            Lookup look = Lookups.forPath(path);
-            for (Object next : look.lookupAll(Object.class)) {
-                if (next instanceof Action) {
-                    actions.add((Action) next);
-                } else if (next instanceof JSeparator) {
-                    actions.add(null);
-                }
-            }
-        }        
-
         /** This action is created only when project has broken references.
          * Once these are resolved the action is disabled.
          */
@@ -581,7 +406,7 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
 
             public void actionPerformed(ActionEvent e) {
                 try {
-                    helper.requestSave();
+                    helper.requestUpdate();
                     BrokenReferencesSupport.showCustomizer(helper.getAntProjectHelper(), resolver, getBreakableProperties(), new String[]{WebProjectProperties.JAVA_PLATFORM});
                     run();
                 } catch (IOException ioe) {
@@ -638,6 +463,13 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
             public void actionPerformed(ActionEvent e) {
                 String j2eeSpec = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH).
                         getProperty(WebProjectProperties.J2EE_PLATFORM);
+                if (j2eeSpec == null) {
+                    j2eeSpec = ProjectProperties.JAVA_EE_5; // NOI18N
+                    Logger.getLogger(WebLogicalViewProvider.class.getName()).warning(
+                            "project ["+project.getProjectDirectory()+"] is missing "+WebProjectProperties.J2EE_PLATFORM+". " + // NOI18N
+                            "default value will be used instead: "+j2eeSpec); // NOI18N
+                    updateJ2EESpec(project, project.getAntProjectHelper(), j2eeSpec);
+                }
                 String instance = BrokenServerSupport.selectServer(j2eeSpec, J2eeModule.WAR);
                 if (instance != null) {
                     WebProjectProperties.setServerInstance(
@@ -646,6 +478,21 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
                 checkMissingServer();
             }
 
+            private void updateJ2EESpec(final Project project, final AntProjectHelper helper, final String j2eeSpec) {
+                ProjectManager.mutex().postWriteRequest(new Runnable() {
+                    public void run() {
+                        try {
+                            EditableProperties projectProps = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
+                            projectProps.put(WebProjectProperties.J2EE_PLATFORM, j2eeSpec);
+                            helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, projectProps);
+                            ProjectManager.getDefault().saveProject(project);
+                        } catch (IOException e) {
+                            Exceptions.printStackTrace(e);
+                        }
+                    }
+                });
+            }
+            
             public void propertyChange(PropertyChangeEvent evt) {
                 if (WebProjectProperties.J2EE_SERVER_INSTANCE.equals(evt.getPropertyName())) {
                     checkMissingServer();
@@ -698,7 +545,7 @@ public class WebLogicalViewProvider implements LogicalViewProvider {
                 boolean isLegacyProject = false;
                 
                 // Check if Web module is a visualweb 5.5.x or Creator project
-                AuxiliaryConfiguration ac = (AuxiliaryConfiguration)project.getLookup().lookup(AuxiliaryConfiguration.class);
+                AuxiliaryConfiguration ac = ProjectUtils.getAuxiliaryConfiguration(project);
                 Element auxElement = ac.getConfigurationFragment("creator-data", "http://www.sun.com/creator/ns", true); //NOI18N
                 
                 // if project is a visualweb or creator project then find out whether it is a legacy project

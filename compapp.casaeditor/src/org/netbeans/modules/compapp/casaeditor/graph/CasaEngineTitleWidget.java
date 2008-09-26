@@ -49,6 +49,7 @@ import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import javax.swing.border.LineBorder;
 import org.netbeans.api.visual.action.WidgetAction;
 import org.netbeans.api.visual.action.WidgetAction.State;
 import org.netbeans.api.visual.action.WidgetAction.WidgetMouseEvent;
@@ -60,8 +61,9 @@ import org.netbeans.api.visual.widget.ImageWidget;
 import org.netbeans.api.visual.widget.LabelWidget;
 import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
-import org.netbeans.modules.compapp.casaeditor.design.CasaModelGraphScene;
 import org.netbeans.modules.compapp.casaeditor.graph.actions.EditablePropertiesAction;
+import org.netbeans.modules.compapp.casaeditor.nodes.ServiceUnitNode;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 
 /**
@@ -70,15 +72,18 @@ import org.openide.util.Utilities;
  */
 public class CasaEngineTitleWidget extends Widget implements CasaMinimizable {
     
+    private static final Image DEFAULT_ICON = ImageUtilities.loadImage(
+            "org/netbeans/modules/compapp/casaeditor/nodes/resources/ServiceUnitNode.png");     // NOI18N
+    
     private static final int   TITLE_GAP          = 3;
     
     private static final int TITLE_MINIMIZE_BUTTON_DISPLACEMENT = CasaNodeWidgetEngine.MARGIN_SE_ROUNDED_RECTANGLE + 8;
     
-    private static final Image IMAGE_EXPAND       = Utilities.loadImage(
+    private static final Image IMAGE_EXPAND       = ImageUtilities.loadImage(
             "org/netbeans/modules/compapp/casaeditor/graph/resources/expand.png"); // NOI18N
-    private static final Image IMAGE_COLLAPSE     = Utilities.loadImage(
+    private static final Image IMAGE_COLLAPSE     = ImageUtilities.loadImage(
             "org/netbeans/modules/compapp/casaeditor/graph/resources/collapse.png"); // NOI18N
-    private static final Image IMAGE_UNCONFIGURED = Utilities.loadImage(
+    private static final Image IMAGE_UNCONFIGURED = ImageUtilities.loadImage(
             "org/netbeans/modules/compapp/casaeditor/palette/resources/question_violet.png");   // NOI18N
     
     private static final Border BORDER_MINIMIZE = BorderFactory.createRoundedBorder(
@@ -90,6 +95,7 @@ public class CasaEngineTitleWidget extends Widget implements CasaMinimizable {
     
     private ImageWidget configureWidget;
     private ImageWidget minimizeWidget;
+//    private ImageWidget mProjectIconImageWidget;
     private LabelWidget mNameWidget;
     private LabelWidget typeWidget;
     
@@ -98,6 +104,7 @@ public class CasaEngineTitleWidget extends Widget implements CasaMinimizable {
     private boolean mConfigurationStatus = true;
     private Widget mTitleWidget;
     
+    private static final boolean DEBUG = false;
     
     public CasaEngineTitleWidget(Scene scene, StateModel stateModel) {
         super(scene);
@@ -126,6 +133,10 @@ public class CasaEngineTitleWidget extends Widget implements CasaMinimizable {
         configureWidget = new ImageWidget(scene);
         mTitleWidget.addChild(configureWidget);
         
+//        mProjectIconImageWidget = new ImageWidget(scene);
+//        mProjectIconImageWidget.setImage(DEFAULT_ICON);
+//        mTitleWidget.addChild(mProjectIconImageWidget);
+        
         mNameWidget = new LabelWidget(scene);
         mNameWidget.setFont(scene.getDefaultFont().deriveFont(Font.BOLD));
         mNameWidget.setForeground(CasaFactory.getCasaCustomizer().getCOLOR_SU_REGION_TITLE());
@@ -150,6 +161,16 @@ public class CasaEngineTitleWidget extends Widget implements CasaMinimizable {
         topHolderWidget.addChild(bottomEmptyWidget);
         
         addChild(topHolderWidget);
+        
+        if (DEBUG) {
+            setBorder(new LineBorder(Color.black));
+            mTitleWidget.setBorder(new LineBorder(Color.blue));
+            minimizeWidget.setBorder(new LineBorder(Color.red));
+            mDeleteWidget.setBorder(new LineBorder(Color.blue));
+            configureWidget.setBorder(new LineBorder(Color.red));
+            mNameWidget.setBorder(new LineBorder(Color.blue));
+            typeWidget.setBorder(new LineBorder(Color.red));
+        }
     }
 
     public void setTitleColor(Color color) {
@@ -163,6 +184,15 @@ public class CasaEngineTitleWidget extends Widget implements CasaMinimizable {
     public void setLabel(String label) {
         mNameWidget.setLabel(label);
     }
+    
+//    public void setComponentName(String compName) {
+//        Image image = ServiceUnitNode.getProjectIconImage(compName);
+//        mProjectIconImageWidget.setImage(image);
+//    }
+//        
+//    public void setIcon(Image image) {
+//        mProjectIconImageWidget.setImage(image);
+//    }
     
     public boolean getConfigurationStatus(){
         return mConfigurationStatus;

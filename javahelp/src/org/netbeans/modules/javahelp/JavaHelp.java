@@ -70,6 +70,9 @@ import java.util.logging.LogRecord;
 import javax.help.HelpSet;
 import javax.help.HelpSetException;
 import javax.help.JHelp;
+import javax.help.NavigatorView;
+import javax.help.search.MergingSearchEngine;
+import javax.help.search.SearchEngine;
 import javax.swing.BorderFactory;
 import javax.swing.BoundedRangeModel;
 import javax.swing.DefaultBoundedRangeModel;
@@ -80,6 +83,7 @@ import javax.swing.SwingUtilities;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Task;
@@ -177,6 +181,42 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
         return master;
     }
     
+    /**
+     * 
+     * @return SearchEngine for QuickSearch
+     */
+    synchronized SearchEngine createSearchEngine() {
+        //this is not very nice but i didn't any better way to create search engine
+        MergingSearchEngine result = null;
+        Collection<? extends HelpSet> sets = getHelpSets();
+        for (HelpSet hs: sets) {
+            if (shouldMerge(hs)) {
+                NavigatorView nv = findNavigatorView(hs);
+                if( null == nv )
+                    continue;
+                if( null == result ) {
+                    result = new MergingSearchEngine( nv );
+                } else {
+                    result.merge( nv );
+                }
+            }
+        }
+        return result;
+    }
+    
+    /**
+     * @param hs
+     * @return 'Search' NavigatorView from the given HelpSet
+     */
+    private static NavigatorView findNavigatorView( HelpSet hs ) {
+        for( NavigatorView nv : hs.getNavigatorViews() ) {
+            if( null != nv.getParameters() && nv.getParameters().get("engine") != null) { //NOI18N
+                return nv;
+            }
+        }
+        return null;
+    }
+    
     /** Called when set of helpsets changes.
      * Here, clear the master helpset, since it may
      * need to have different contents (or a different
@@ -216,7 +256,7 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
         if (frameViewer == null) {
             Installer.log.fine("\tcreating new");
             frameViewer = new JFrame();
-            frameViewer.setIconImage(Utilities.loadImage("org/netbeans/modules/javahelp/resources/help.gif")); // NOI18N
+            frameViewer.setIconImage(ImageUtilities.loadImage("org/netbeans/modules/javahelp/resources/help.gif")); // NOI18N
             frameViewer.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(JavaHelp.class, "ACSD_JavaHelp_viewer"));
             
             if (isModalExcludedSupported()) {
@@ -387,6 +427,14 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
         r.setLoggerName(Installer.UI.getName());
         Installer.log.log(r);
         Installer.UI.log(r);
+        
+        LogRecord rUsg = new LogRecord(Level.INFO, "USG_HELP_SHOW"); // NOI18N
+        rUsg.setParameters(new Object[] { ctx2.getHelpID() } );
+        rUsg.setResourceBundleName("org.netbeans.modules.javahelp.Bundle"); // NOI18N
+        rUsg.setResourceBundle(NbBundle.getBundle(JavaHelp.class));
+        rUsg.setLoggerName(Installer.USG.getName());
+        Installer.USG.log(rUsg);
+                
         final HelpSet[] hs_ = new HelpSet[1];
         Runnable run = new Runnable() {
             public void run() {
@@ -423,9 +471,30 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
             // Interrupted dialog?
             return;
         }
-        JHelp jh = createJHelp(hs);
+        JHelp jh = createAndDisplayJHelp(hs);
         if (jh == null) {
             return;
+        }
+        displayInJHelp(jh, ctx2.getHelpID(), ctx2.getHelp());
+    }
+    
+    /**
+     * Display help topic from QuickSearch
+     * @param url Help URL
+     */
+    void showHelp( URL url ) {
+        JHelp jh = createAndDisplayJHelp(getMaster());
+        if (jh == null) {
+            return;
+        }
+
+        displayInJHelp(jh, null, url);
+    }
+    
+    private JHelp createAndDisplayJHelp( HelpSet hs ) {
+        JHelp jh = createJHelp(hs);
+        if (jh == null) {
+            return null;
         }
 
         if (isModalExcludedSupported()) {
@@ -439,7 +508,7 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
                 displayHelpInDialog(jh);
             }
         }
-        displayInJHelp(jh, ctx2.getHelpID(), ctx2.getHelp());
+        return jh;
     }
 
     /** Handle modal dialogs opening and closing. Note reparentToFrameLater state = rTFL.

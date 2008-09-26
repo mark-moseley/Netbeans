@@ -41,9 +41,7 @@
 
 package org.netbeans.modules.java.j2seproject.ui;
 
-import java.awt.Component;
 import java.awt.Image;
-import java.awt.Panel;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
@@ -67,6 +65,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -80,11 +79,11 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
-import org.netbeans.modules.java.j2seproject.UpdateHelper;
 
 
 
@@ -128,10 +127,10 @@ class ProjectNode extends AbstractNode {
             ProjectInformation info = getProjectInformation();
             if (info != null) {
                 Icon icon = info.getIcon();
-                cachedIcon = Utilities.icon2Image(icon);
+                cachedIcon = ImageUtilities.icon2Image(icon);
             }
             else {
-                cachedIcon = Utilities.loadImage(PROJECT_ICON);
+                cachedIcon = ImageUtilities.loadImage(PROJECT_ICON);
             }
         }
         return cachedIcon;

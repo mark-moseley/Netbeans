@@ -49,18 +49,22 @@ import java.util.List;
 import java.util.Set;
 import javax.swing.Action;
 import javax.swing.Icon;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementHandle;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Modifier;
-import org.netbeans.api.gsf.StructureItem;
-import org.netbeans.api.gsf.StructureItem;
+import javax.swing.text.Document;
+import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.gsf.GsfHtmlFormatter;
+import org.netbeans.modules.gsf.Language;
+import org.netbeans.modules.gsf.LanguageRegistry;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.ElementHandle;
+import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.modules.gsf.api.Modifier;
+import org.netbeans.modules.gsf.api.StructureItem;
 import org.netbeans.modules.gsfret.navigation.actions.OpenAction;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
-import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 
 /** 
@@ -90,10 +94,11 @@ public class ElementNode extends AbstractNode {
     private StructureItem description;
     private ClassMemberPanelUI ui;
     private FileObject fileObject; // For the root description
+    private static NavigatorFormatter FORMATTER = new NavigatorFormatter();
            
     /** Creates a new instance of TreeNode */
     public ElementNode( StructureItem description, ClassMemberPanelUI ui, FileObject fileObject) {
-        super(description.isLeaf() ? Children.LEAF: new ElementChilren((List<StructureItem>)description.getNestedItems(), ui.getFilters(), ui, fileObject));
+        super(description.isLeaf() ? Children.LEAF: new ElementChildren((List<StructureItem>)description.getNestedItems(), ui.getFilters(), ui, fileObject));
         this.description = description;
         setDisplayName( description.getName() ); 
         this.ui = ui;
@@ -103,9 +108,12 @@ public class ElementNode extends AbstractNode {
     
     @Override
     public Image getIcon(int type) {
+        if (description.getCustomIcon() != null) {
+            return ImageUtilities.icon2Image(description.getCustomIcon());
+        }
         Icon icon = Icons.getElementIcon(description.getKind(), description.getModifiers());
         if (icon != null) {
-            return Utilities.icon2Image(icon);
+            return ImageUtilities.icon2Image(icon);
         } else {
             return super.getIcon(type);
         }
@@ -123,7 +131,8 @@ public class ElementNode extends AbstractNode {
             
     @Override
     public String getHtmlDisplayName() {
-        return description.getHtml();
+        FORMATTER.reset();
+        return description.getHtml(FORMATTER);
     }
     
     @Override
@@ -154,7 +163,7 @@ public class ElementNode extends AbstractNode {
     private synchronized Action getOpenAction() {
         if ( openAction == null ) {
             FileObject fo = ui.getFileObject();
-            openAction = new OpenAction(description.getElementHandle(), fo);
+            openAction = new OpenAction(description.getElementHandle(), fo, description.getPosition());
         }
         return openAction;
     }
@@ -168,8 +177,8 @@ public class ElementNode extends AbstractNode {
     
     public void refreshRecursively() {
         Children ch = getChildren();
-        if ( ch instanceof ElementChilren ) {
-           ((ElementChilren)ch).resetKeys((List<StructureItem>)description.getNestedItems(), ui.getFilters());
+        if ( ch instanceof ElementChildren ) {
+           ((ElementChildren)ch).resetKeys((List<StructureItem>)description.getNestedItems(), ui.getFilters());
            for( Node sub : ch.getNodes() ) {
                ui.expandNode(sub);
                ((ElementNode)sub).refreshRecursively();
@@ -177,6 +186,44 @@ public class ElementNode extends AbstractNode {
         }        
     }
 
+    public ElementNode getMimeRootNodeForOffset(CompilationInfo info, int offset) {
+        if (getDescription().getPosition() > offset) {
+            return null;
+        }
+        
+        // Look up the current mime type
+        Document document = info.getDocument();
+        if (document == null) {
+            return null;
+        }
+        BaseDocument doc = (BaseDocument)document;
+        List<Language> languages = LanguageRegistry.getInstance().getEmbeddedLanguages(doc, offset);
+
+        // Look specifically within the
+        if (languages.size() > 1) {
+            for (Language language : languages) {
+                // Inefficient linear search because the children may not be
+                // ordered according to the source
+                Children ch = getChildren();
+                if ( ch instanceof ElementChildren ) {
+                    Node[] children = ch.getNodes();
+                    for (int i = 0; i < children.length; i++) {
+                        ElementNode c = (ElementNode) children[i];
+                        if (c.getDescription() instanceof ElementScanningTask.MimetypeRootNode) {
+                            ElementScanningTask.MimetypeRootNode mr = (ElementScanningTask.MimetypeRootNode)c.getDescription();
+                            if (mr.language == language) {
+                                return c.getNodeForOffset(offset);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // No match in embedded languages - do normal offset search
+        return getNodeForOffset(offset);
+    }
+    
     public ElementNode getNodeForOffset(int offset) {
         if (getDescription().getPosition() > offset) {
             return null;
@@ -185,7 +232,7 @@ public class ElementNode extends AbstractNode {
         // Inefficient linear search because the children may not be
         // ordered according to the source
         Children ch = getChildren();
-        if ( ch instanceof ElementChilren ) {
+        if ( ch instanceof ElementChildren ) {
             Node[] children = ch.getNodes();
             for (int i = 0; i < children.length; i++) {
                 ElementNode c = (ElementNode) children[i];
@@ -204,7 +251,7 @@ public class ElementNode extends AbstractNode {
 
     public void updateRecursively( StructureItem newDescription ) {
         Children ch = getChildren();
-        if ( ch instanceof ElementChilren ) {           
+        if ( ch instanceof ElementChildren ) {           
            HashSet<StructureItem> oldSubs = new HashSet<StructureItem>( description.getNestedItems() );
 
            
@@ -218,7 +265,7 @@ public class ElementNode extends AbstractNode {
            }
            
            // Now refresh keys
-           ((ElementChilren)ch).resetKeys((List<StructureItem>)newDescription.getNestedItems(), ui.getFilters());
+           ((ElementChildren)ch).resetKeys((List<StructureItem>)newDescription.getNestedItems(), ui.getFilters());
 
            
            // Reread nodes
@@ -237,9 +284,13 @@ public class ElementNode extends AbstractNode {
                         
         StructureItem oldDescription = description; // Remember old description        
         description = newDescription; // set new descrioption to the new node
-        if ( oldDescription.getHtml() != null && !oldDescription.getHtml().equals(description.getHtml())) {
+        FORMATTER.reset();
+        String oldHtml = oldDescription.getHtml(FORMATTER);
+        FORMATTER.reset();
+        String descHtml = description.getHtml(FORMATTER);
+        if ( oldHtml != null && !oldHtml.equals(descHtml)) {
             // Different headers => we need to fire displayname change
-            fireDisplayNameChange(oldDescription.getHtml(), description.getHtml());
+            fireDisplayNameChange(oldHtml, descHtml);
         }
         if( oldDescription.getModifiers() != null &&  !oldDescription.getModifiers().equals(newDescription.getModifiers())) {
             fireIconChange();
@@ -255,12 +306,11 @@ public class ElementNode extends AbstractNode {
         return fileObject;
     }
     
-    // XXX There's a typo in this name
-    private static final class ElementChilren extends Children.Keys<StructureItem> {
+    private static final class ElementChildren extends Children.Keys<StructureItem> {
         private ClassMemberPanelUI ui;
         private FileObject fileObject;
         
-        public ElementChilren(List<StructureItem> descriptions, ClassMemberFilters filters, ClassMemberPanelUI ui, FileObject fileObject) {
+        public ElementChildren(List<StructureItem> descriptions, ClassMemberFilters filters, ClassMemberPanelUI ui, FileObject fileObject) {
             resetKeys( descriptions, filters );            
             this.ui = ui;
             this.fileObject = fileObject;
@@ -289,7 +339,7 @@ public class ElementNode extends AbstractNode {
         //FileObject fileObject; // For the root description
         
         String name;
-        ElementHandle<? extends Element> elementHandle;
+        ElementHandle elementHandle;
         ElementKind kind;
         Set<Modifier> modifiers;        
         List<Description> subs; 
@@ -366,7 +416,7 @@ public class ElementNode extends AbstractNode {
                         return k2i(d1.getKind()) - k2i(d2.getKind());
                     } 
                     
-                    return d1.getName().compareTo(d2.getName());
+                    return d1.getSortText().compareTo(d2.getSortText());
                 }
                 else {
                     return d1.getPosition() == d2.getPosition() ? 0 : d1.getPosition() < d2.getPosition() ? -1 : 1;
@@ -399,7 +449,7 @@ public class ElementNode extends AbstractNode {
         
     private static class WaitNode extends AbstractNode {
         
-        private Image waitIcon = Utilities.loadImage("org/netbeans/modules/gsfret/navigation/resources/wait.gif"); // NOI18N
+        private Image waitIcon = ImageUtilities.loadImage("org/netbeans/modules/gsfret/navigation/resources/wait.gif"); // NOI18N
         
         WaitNode( ) {
             super( Children.LEAF );
@@ -419,8 +469,12 @@ public class ElementNode extends AbstractNode {
         public java.lang.String getDisplayName() {
             return "Please Wait...";
         }
-        
     }
     
-    
+    private static class NavigatorFormatter extends GsfHtmlFormatter {
+        @Override
+        public void name(ElementKind kind, boolean start) {
+            // No special formatting for names
+        }
+    }
 }

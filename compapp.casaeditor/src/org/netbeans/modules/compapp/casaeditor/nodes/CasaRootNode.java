@@ -58,6 +58,7 @@ import org.netbeans.modules.compapp.casaeditor.model.casa.CasaWrapperModel;
 import org.netbeans.modules.compapp.casaeditor.nodes.actions.AddWSDLPortsAction;
 import org.netbeans.modules.compapp.casaeditor.nodes.actions.AutoLayoutAction;
 import org.netbeans.modules.compapp.casaeditor.nodes.actions.AddExternalServiceUnitAction;
+import org.netbeans.modules.compapp.casaeditor.nodes.actions.LoadWSDLPortsAction;
 import org.netbeans.modules.compapp.casaeditor.nodes.actions.AddJBIModuleAction;
 import org.netbeans.modules.compapp.casaeditor.properties.LookAndFeelProperty;
 import org.netbeans.modules.compapp.casaeditor.properties.PropertyUtils;
@@ -66,6 +67,7 @@ import org.openide.ErrorManager;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
 import org.openide.nodes.Sheet;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
@@ -76,7 +78,7 @@ import org.openide.util.actions.SystemAction;
  */
 public class CasaRootNode extends CasaNode {
 
-    private static final Image ICON = Utilities.loadImage(
+    private static final Image ICON = ImageUtilities.loadImage(
             "org/netbeans/modules/compapp/casaeditor/nodes/resources/CasaRootNode.png"); // NOI18N
 
     private static final String CHILD_ID_WSDL_ENDPOINTS  = "WSDLEndpoints";     // NOI18N
@@ -142,7 +144,8 @@ public class CasaRootNode extends CasaNode {
             return false;
         }
 
-        else if (action instanceof AddWSDLPortsAction) {
+        else if ((action instanceof AddWSDLPortsAction)
+              || (action instanceof LoadWSDLPortsAction)) {
             CasaModelGraphScene scene = (CasaModelGraphScene) widget.getScene();
             Widget bindingRegion = scene.getBindingRegion();
             Rectangle bindingRegionRect =
@@ -170,6 +173,7 @@ public class CasaRootNode extends CasaNode {
     protected void addCustomActions(List<Action> actions) {
         final Project jbiProject = getModel().getJBIProject();
         actions.add(new AddJBIModuleAction(jbiProject));
+        actions.add(SystemAction.get(LoadWSDLPortsAction.class));
         actions.add(SystemAction.get(AddWSDLPortsAction.class));
         actions.add(SystemAction.get(AddExternalServiceUnitAction.class));
         actions.add(null);

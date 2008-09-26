@@ -77,6 +77,7 @@ import static javax.swing.SwingConstants.*;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 import org.netbeans.Util;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 import org.openide.util.NbBundle;
 
@@ -118,19 +119,19 @@ public final class Splash {
     private static final String ICON_48 = "org/netbeans/core/startup/frame48.gif"; // NOI18N
     
     static Image createIDEImage() {
-        return Utilities.loadImage(ICON_16, true);
+        return ImageUtilities.loadImage(ICON_16, true);
     }
     
     static List<Image> createIDEImages() {
         List<Image> l = new ArrayList<Image>();
-        l.add(Utilities.loadImage(ICON_16, true));
-        l.add(Utilities.loadImage(ICON_32, true));
-        l.add(Utilities.loadImage(ICON_48, true));
+        l.add(ImageUtilities.loadImage(ICON_16, true));
+        l.add(ImageUtilities.loadImage(ICON_32, true));
+        l.add(ImageUtilities.loadImage(ICON_48, true));
         return l;
     }
     
     private void initFrameIcons (Frame f) {
-        Class clazz = null;
+        Class<?> clazz = null;
         try {
             clazz = Class.forName("java.awt.Window");
         } catch (ClassNotFoundException ex) {
@@ -253,12 +254,12 @@ public final class Splash {
      */
     public static Image loadContent(boolean about) {
         if (about) {
-            Image img = Utilities.loadImage("org/netbeans/core/startup/about.png", true);
+            Image img = ImageUtilities.loadImage("org/netbeans/core/startup/about.png", true);
             if (img != null) {
                 return img;
             }
         }
-        return Utilities.loadImage("org/netbeans/core/startup/splash.gif", true);
+        return ImageUtilities.loadImage("org/netbeans/core/startup/splash.gif", true);
     }
 
     /**

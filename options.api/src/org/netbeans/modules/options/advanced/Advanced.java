@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,8 +43,10 @@ package org.netbeans.modules.options.advanced;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
+import org.netbeans.api.options.OptionsDisplayer;
 import org.netbeans.spi.options.OptionsCategory;
 import org.netbeans.spi.options.OptionsPanelController;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -57,16 +59,19 @@ import org.openide.util.Utilities;
  */
 public final class Advanced extends OptionsCategory {
 
+    private OptionsPanelController controller;
+    
     private static String loc (String key) {
         return NbBundle.getMessage (Advanced.class, key);
     }
 
     private static Icon icon;
     
+    @Override
     public Icon getIcon () {
         if (icon == null)
             icon = new ImageIcon (
-                Utilities.loadImage 
+                ImageUtilities.loadImage
                     ("org/netbeans/modules/options/resources/advanced.png")
             );
         return icon;
@@ -85,6 +90,9 @@ public final class Advanced extends OptionsCategory {
     }
 
     public OptionsPanelController create () {
-        return new AdvancedPanelController ();
-    }
+        if (controller == null) {
+            controller = new AdvancedPanelController(OptionsDisplayer.ADVANCED);
+        }
+        return controller;
+    }  
 }

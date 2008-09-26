@@ -42,6 +42,8 @@ package org.netbeans.modules.xml;
 
 import java.beans.*;
 import java.awt.Image;
+import org.netbeans.modules.xml.lib.Util;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 import org.openide.loaders.MultiFileLoader;
 import org.openide.util.Exceptions;
@@ -64,7 +66,8 @@ public class EntityDataLoaderBeanInfo extends SimpleBeanInfo {
      */
     public BeanDescriptor getBeanDescriptor() {
         BeanDescriptor beanDescriptor = new BeanDescriptor  ( EntityDataLoader.class , null );
-        beanDescriptor.setDisplayName ( Util.THIS.getString ("PROP_EntityLoader_Name") );
+        beanDescriptor.setDisplayName ( Util.THIS.getString (
+                EntityDataLoaderBeanInfo.class, "PROP_EntityLoader_Name") );
         return beanDescriptor;
     }
     
@@ -86,8 +89,10 @@ public class EntityDataLoaderBeanInfo extends SimpleBeanInfo {
 
         try {
             properties[PROPERTY_extensions] = new PropertyDescriptor ( "extensions", EntityDataLoader.class, "getExtensions", "setExtensions" );
-            properties[PROPERTY_extensions].setDisplayName ( Util.THIS.getString ("PROP_Entity_Extensions") );
-            properties[PROPERTY_extensions].setShortDescription ( Util.THIS.getString ("HINT_Entity_Extensions") );
+            properties[PROPERTY_extensions].setDisplayName (
+                    Util.THIS.getString (EntityDataLoaderBeanInfo.class, "PROP_Entity_Extensions") );
+            properties[PROPERTY_extensions].setShortDescription (
+                    Util.THIS.getString (EntityDataLoaderBeanInfo.class, "HINT_Entity_Extensions") );
         }
         catch( IntrospectionException e) {
             Exceptions.printStackTrace(e);
@@ -127,9 +132,9 @@ public class EntityDataLoaderBeanInfo extends SimpleBeanInfo {
         if ((type == java.beans.BeanInfo.ICON_COLOR_16x16) ||
             (type == java.beans.BeanInfo.ICON_MONO_16x16)) {
 
-            return Utilities.loadImage (ICON_DIR_BASE + "entObject.gif"); // NOI18N
+            return ImageUtilities.loadImage (ICON_DIR_BASE + "entObject.gif"); // NOI18N
         } else {
-            return Utilities.loadImage (ICON_DIR_BASE + "entObject32.gif"); // NOI18N
+            return ImageUtilities.loadImage (ICON_DIR_BASE + "entObject32.gif"); // NOI18N
         }
     }
 

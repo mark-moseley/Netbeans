@@ -107,6 +107,7 @@ import org.openide.explorer.ExplorerUtils;
 import org.openide.explorer.view.Visualizer;
 import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
@@ -173,13 +174,13 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     
     /** Creates new form DebuggingView */
     public DebuggingView() {
-        setIcon(Utilities.loadImage ("org/netbeans/modules/debugger/jpda/resources/debugging.png")); // NOI18N
+        setIcon(ImageUtilities.loadImage ("org/netbeans/modules/debugger/jpda/resources/debugging.png")); // NOI18N
         // Remember the location of the component when closed.
         putClientProperty("KeepNonPersistentTCInModelWhenClosed", Boolean.TRUE); // NOI18N
         
         initComponents();
     
-        resumeIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_16.png"));
+        resumeIcon = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_16.png"));
         focusedResumeIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_focused_16.png"));
         pressedResumeIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_pressed_16.png"));
         suspendIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/suspend_button_16.png"));
@@ -321,12 +322,14 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         }
         if (threadsListener == null) {
             threadsListener = ThreadsListener.getDefault();
-            if (threadsListener != null) {
-                threadsListener.setDebuggingView(this);
-            }
         }
         if (engine != null) {
             final JPDADebugger deb = engine.lookupFirst(null, JPDADebugger.class);
+            if (deb != null) {
+                if (threadsListener != null) {
+                    threadsListener.setDebuggingView(this);
+                }
+            }
             synchronized (this) {
                 if (previousDebugger != null) {
                     previousDebugger.removePropertyChangeListener(this);
@@ -368,7 +371,11 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         manager.setRootContext(root);
         refreshView();
         updateSessionsComboBox();
-        adjustTreeScrollBar();
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                adjustTreeScrollBar(-1);
+            }
+        });
     }
     
     public ExplorerManager getExplorerManager() {
@@ -600,35 +607,34 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         }, 20);
     }
 
-    private void adjustTreeScrollBar() {
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                JViewport viewport = treeView.getViewport();
-                Point point = viewport.getViewPosition();
-                if (point.y < 0) {
-                    viewport.setViewPosition(new Point(point.x, 0));
-                }
-                Dimension viewSize = viewport.getExtentSize();
-                Dimension treeSize = viewport.getViewSize();
-                int unitHeight = treeView.getUnitHeight();
-                if (unitHeight > 0) {
-                    JScrollBar sbar = mainScrollPane.getVerticalScrollBar();
-                    if (sbar.getUnitIncrement() != unitHeight) {
-                        sbar.setUnitIncrement(unitHeight);
-                    }
-                }
-                if (treeSize.width <= viewSize.width) {
-                    scrollBarPanel.setVisible(false);
-                } else {
-                    scrollBarPanel.setVisible(true);
-                    treeScrollBar.setMaximum(treeSize.width);
-                    treeScrollBar.setVisibleAmount(viewSize.width);
-                    if (unitHeight > 0) {
-                        treeScrollBar.setUnitIncrement(unitHeight / 2);
-                    }
-                } // else
-            } // run()
-        });
+    private void adjustTreeScrollBar(int treeViewWidth) {
+        JViewport viewport = treeView.getViewport();
+        Point point = viewport.getViewPosition();
+        if (point.y < 0) {
+            viewport.setViewPosition(new Point(point.x, 0));
+        }
+        Dimension viewSize = viewport.getExtentSize();
+        Dimension treeSize = viewport.getViewSize();
+        if (treeViewWidth < 0) {
+            treeViewWidth = treeSize.width;
+        }
+        int unitHeight = treeView.getUnitHeight();
+        if (unitHeight > 0) {
+            JScrollBar sbar = mainScrollPane.getVerticalScrollBar();
+            if (sbar.getUnitIncrement() != unitHeight) {
+                sbar.setUnitIncrement(unitHeight);
+            }
+        }
+        if (treeViewWidth <= viewSize.width) {
+            scrollBarPanel.setVisible(false);
+        } else {
+            treeScrollBar.setMaximum(treeViewWidth);
+            treeScrollBar.setVisibleAmount(viewSize.width);
+            if (unitHeight > 0) {
+                treeScrollBar.setUnitIncrement(unitHeight / 2);
+            }
+            scrollBarPanel.setVisible(true);
+        } // else
     }
     
     // **************************************************************************
@@ -645,11 +651,15 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     }
     
     // **************************************************************************
-    // implementation of ComponentListener on treeView
+    // implementation of ChangeListener on treeView
     // **************************************************************************
     
     public void stateChanged(ChangeEvent e) {
-        adjustTreeScrollBar();
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                adjustTreeScrollBar(-1);
+            }
+        });
     }
 
     // **************************************************************************
@@ -772,6 +782,8 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             mainScrollPane.revalidate();
             mainPanel.revalidate();
             treeView.repaint();
+
+            adjustTreeScrollBar(treeViewWidth);
         }
 
         private void addPanels(Object jpdaObject, boolean current, boolean atBreakpoint,

@@ -44,8 +44,8 @@ import java.beans.SimpleBeanInfo;
 
 import net.java.hulp.i18n.Logger;
 import org.netbeans.modules.etl.logger.Localizer;
-import org.netbeans.modules.etl.logger.LogUtil;
 import org.openide.ErrorManager;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 
 /** Description of {@link WSDLDataLoader}.
@@ -53,13 +53,13 @@ import org.openide.util.Utilities;
  * @author Jerry Waldorf
  */
 public class ETLDataLoaderBeanInfo extends SimpleBeanInfo {
-    private static transient final Logger mLogger = LogUtil.getLogger(ETLDataLoaderBeanInfo.class.getName());
+    private static transient final Logger mLogger = Logger.getLogger(ETLDataLoaderBeanInfo.class.getName());
     private static transient final Localizer mLoc = Localizer.get();
 	/**
 	 * copied from Ant Module
 	 */
-        String nbBundle1 = mLoc.t("PRSR001: MIME Type");
-        String nbBundle2 = mLoc.t("PRSR001: The MIME type used for ETL files in the IDE. The ETL MIME resolver recognizes this.");
+        String nbBundle1 = mLoc.t("BUND154: MIME Type");
+        String nbBundle2 = mLoc.t("BUND155: The MIME type used for ETL files in the IDE. The ETL MIME resolver recognizes this.");
     public PropertyDescriptor[] getPropertyDescriptors() {
         // Make extensions into a r/o property.
         // It will only contain the WSDL MIME type.
@@ -72,9 +72,9 @@ public class ETLDataLoaderBeanInfo extends SimpleBeanInfo {
             PropertyDescriptor extensions = new PropertyDescriptor(
 				"extensions", ETLDataLoader.class, "getExtensions", null); // NOI18N
             extensions.setDisplayName(
-				Localizer.parse(nbBundle1));
+				nbBundle1.substring(15));
             extensions.setShortDescription(
-				Localizer.parse(nbBundle2));
+				nbBundle2.substring(15));
             extensions.setExpert(true);
             return new PropertyDescriptor[] {extensions};
         } catch (IntrospectionException ie) {
@@ -111,9 +111,9 @@ public class ETLDataLoaderBeanInfo extends SimpleBeanInfo {
 
     public Image getIcon (int type) {
         if (type == BeanInfo.ICON_COLOR_16x16 || type == BeanInfo.ICON_MONO_16x16) {
-            return Utilities.loadImage ("org/netbeans/modules/etl/ui/resources/images/ETLDefinition.png");
+            return ImageUtilities.loadImage ("org/netbeans/modules/etl/ui/resources/images/ETLDefinition.png");
         } else {
-            return Utilities.loadImage ("org/netbeans/modules/etl/ui/resources/images/ETLDefinition.png");
+            return ImageUtilities.loadImage ("org/netbeans/modules/etl/ui/resources/images/ETLDefinition.png");
         }
     }
 

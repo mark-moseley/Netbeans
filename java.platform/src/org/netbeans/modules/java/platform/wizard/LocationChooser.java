@@ -73,6 +73,7 @@ import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.ChangeSupport;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -88,7 +89,7 @@ public class LocationChooser extends JFileChooser implements PropertyChangeListe
     private WizardDescriptor.InstantiatingIterator<WizardDescriptor> iterator;
     private LocationChooser.Panel firer;
     private PlatformFileView platformFileView;
-    private PlatformAccessory accessory;
+//    private PlatformAccessory accessory;  Turned off to make the dialog nicer - issue #72608
     
 
     public LocationChooser (LocationChooser.Panel firer) {
@@ -98,9 +99,9 @@ public class LocationChooser extends JFileChooser implements PropertyChangeListe
         this.setFileSelectionMode(DIRECTORIES_ONLY);
         this.setMultiSelectionEnabled(false);
         this.setControlButtonsAreShown(false);
-        this.accessory = new PlatformAccessory ();
+//        this.accessory = new PlatformAccessory ();
         this.setFileFilter (new PlatformFileFilter());
-        this.setAccessory (this.accessory);
+//        this.setAccessory (this.accessory);
         this.firer = firer;
         this.platformFileView = new PlatformFileView( this.getFileSystemView());
         this.setFileView(this.platformFileView);
@@ -120,7 +121,7 @@ public class LocationChooser extends JFileChooser implements PropertyChangeListe
                         }
         }});
         getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put (KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
-     
+        this.setBorder(null);
     }
 
     
@@ -133,7 +134,7 @@ public class LocationChooser extends JFileChooser implements PropertyChangeListe
     public void propertyChange(PropertyChangeEvent evt) {
         if (SELECTED_FILE_CHANGED_PROPERTY.equals(evt.getPropertyName())) {
             this.iterator = null;
-            this.accessory.setType ("");    //NOI18N
+//            this.accessory.setType ("");    //NOI18N
             File file = this.getSelectedFile();
             if (file != null) {
                 file = FileUtil.normalizeFile(file);
@@ -141,7 +142,7 @@ public class LocationChooser extends JFileChooser implements PropertyChangeListe
                 if (fo != null) {                    
                     PlatformInstall install = this.platformFileView.getPlatformInstall();                    
                     if (install != null && install.accept(fo)) {
-                        this.accessory.setType (install.getDisplayName());
+//                        this.accessory.setType (install.getDisplayName());
                         this.iterator = install.createIterator(fo);
                     }
                 }
@@ -347,8 +348,8 @@ public class LocationChooser extends JFileChooser implements PropertyChangeListe
     
     private static class PlatformFileView extends FileView {
         
-        private static final Icon BADGE = new ImageIcon(Utilities.loadImage("org/netbeans/modules/java/platform/resources/platformBadge.gif")); // NOI18N
-        private static final Icon EMPTY = new ImageIcon(Utilities.loadImage("org/netbeans/modules/java/platform/resources/empty.gif")); // NOI18N
+        private static final Icon BADGE = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/java/platform/resources/platformBadge.gif")); // NOI18N
+        private static final Icon EMPTY = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/java/platform/resources/empty.gif")); // NOI18N
         
         private FileSystemView fsv;
         private Icon lastOriginal;

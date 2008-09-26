@@ -78,7 +78,7 @@ public class HgVersioningTopComponent extends TopComponent {
         putClientProperty("SlidingName", NbBundle.getMessage(HgVersioningTopComponent.class, "CTL_Versioning_TopComponent_Title")); //NOI18N
 
         setName(NbBundle.getMessage(HgVersioningTopComponent.class, "CTL_Versioning_TopComponent_Title")); // NOI18N
-        setIcon(org.openide.util.Utilities.loadImage("org/netbeans/modules/mercurial/resources/icons/versioning-view.png"));  // NOI18N
+        setIcon(ImageUtilities.loadImage("org/netbeans/modules/mercurial/resources/icons/versioning-view.png"));  // NOI18N
         setLayout(new BorderLayout());
         getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(HgVersioningTopComponent.class, "CTL_Versioning_TopComponent_Title")); // NOI18N
         syncPanel = new VersioningPanel(this);
@@ -198,7 +198,8 @@ public class HgVersioningTopComponent extends TopComponent {
     }
 
     public int getPersistenceType() {
-        return TopComponent.PERSISTENCE_ALWAYS;
+        // #129268: Need VCSContext to be persistable for this to be set to PERSISTENCE_ALWAYS
+        return TopComponent.PERSISTENCE_NEVER; 
     }
     
     /** replaces this in object stream */

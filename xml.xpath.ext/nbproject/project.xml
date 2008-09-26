@@ -46,7 +46,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.9</specification-version>
+                        <specification-version>7.15</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -63,11 +63,13 @@
                 <friend>org.netbeans.modules.bpel.editors</friend>
                 <friend>org.netbeans.modules.bpel.mapper</friend>
                 <friend>org.netbeans.modules.bpel.model</friend>
+                <friend>org.netbeans.modules.bpel.validation</friend>
                 <friend>org.netbeans.modules.xml.wsdl.extensions</friend>
                 <package>org.netbeans.modules.xml.xpath.ext</package>
                 <package>org.netbeans.modules.xml.xpath.ext.metadata</package>
                 <package>org.netbeans.modules.xml.xpath.ext.metadata.impl.images</package>
                 <package>org.netbeans.modules.xml.xpath.ext.schema</package>
+                <package>org.netbeans.modules.xml.xpath.ext.schema.resolver</package>
                 <package>org.netbeans.modules.xml.xpath.ext.spi</package>
                 <package>org.netbeans.modules.xml.xpath.ext.spi.validation</package>
                 <package>org.netbeans.modules.xml.xpath.ext.visitor</package>

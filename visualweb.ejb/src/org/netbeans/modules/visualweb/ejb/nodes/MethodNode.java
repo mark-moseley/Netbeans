@@ -76,6 +76,7 @@ import org.openide.nodes.PropertySupport;
 import org.openide.nodes.Sheet;
 import org.openide.nodes.Sheet.Set;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
@@ -125,15 +126,15 @@ public class MethodNode extends AbstractNode implements Node.Cookie {
 
     private Image getMethodIcon() {
         if (!methodInfo.getReturnType().isVoid()) {
-            Image image1 = Utilities
+            Image image1 = ImageUtilities
                     .loadImage("org/netbeans/modules/visualweb/ejb/resources/methodPublic.gif");
-            Image image2 = Utilities
+            Image image2 = ImageUtilities
                     .loadImage("org/netbeans/modules/visualweb/ejb/resources/table_dp_badge.png");
             int x = image1.getWidth(null) - image2.getWidth(null);
             int y = image1.getHeight(null) - image2.getHeight(null);
-            return Utilities.mergeImages(image1, image2, x, y);
+            return ImageUtilities.mergeImages(image1, image2, x, y);
         } else
-            return Utilities
+            return ImageUtilities
                     .loadImage("org/netbeans/modules/visualweb/ejb/resources/methodPublic.gif");
     }
 
@@ -272,6 +273,7 @@ public class MethodNode extends AbstractNode implements Node.Cookie {
         if (methodInfo.getParameters() != null && methodInfo.getParameters().size() != 0) {
             for (int i = 0; i < methodInfo.getParameters().size(); i++) {
                 final MethodParam p = (MethodParam) methodInfo.getParameters().get(i);
+                final int row = i;
 
                 // Parameter name
                 paramSet.put(new PropertySupport.ReadWrite(p.getName(), String.class, NbBundle
@@ -292,7 +294,7 @@ public class MethodNode extends AbstractNode implements Node.Cookie {
 
                         // Make sure it is a legal parameter name
                         try {
-                            MethodParamValidator.validate(name);
+                            MethodParamValidator.validate(name, methodInfo, row);
                         } catch (InvalidParameterNameException e) {
                             NotifyDescriptor d = new NotifyDescriptor.Message(e.getMessage(),
                                     NotifyDescriptor.ERROR_MESSAGE);

@@ -45,6 +45,8 @@ import java.util.*;
 import java.io.*;
 import java.beans.*;
 
+import org.openide.util.ImageUtilities;
+import org.openide.util.Lookup;
 import org.xml.sax.*;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -66,7 +68,7 @@ import org.netbeans.modules.form.project.ClassSource;
  * @author Tomas Pavek
  */
 
-class PaletteItemDataObject extends MultiDataObject {
+class PaletteItemDataObject extends MultiDataObject implements CookieSet.Factory {
 
     static final String XML_ROOT = "palette_item"; // NOI18N
     static final String ATTR_VERSION = "version"; // NOI18N
@@ -111,6 +113,7 @@ class PaletteItemDataObject extends MultiDataObject {
         throws DataObjectExistsException
     {
         super(fo, loader);
+        getCookieSet().add(PaletteItem.class, this);
     }
 
     boolean isFileRead() {
@@ -151,14 +154,13 @@ class PaletteItemDataObject extends MultiDataObject {
         return new ItemNode();
     }
 
-    @Override
-    public <T extends Node.Cookie> T getCookie(Class<T> cookieClass) {
+    public <T extends Node.Cookie> T createCookie(Class<T> cookieClass) {
         if (PaletteItem.class.equals(cookieClass)) {
             if (!fileLoaded)
                 loadFile();
             return cookieClass.cast(paletteItem);
         }
-        return super.getCookie(cookieClass);
+        return null;
     }
 
     // -------
@@ -238,7 +240,7 @@ class PaletteItemDataObject extends MultiDataObject {
         FileLock lock = itemFile.lock();
         OutputStream os = itemFile.getOutputStream(lock);
         try {
-            os.write(buff.toString().getBytes());
+            os.write(buff.toString().getBytes("UTF-8")); // NOI18N
         }
         finally {
             os.close();
@@ -252,12 +254,13 @@ class PaletteItemDataObject extends MultiDataObject {
     public static final class PaletteItemDataLoader extends UniFileLoader {
 
         static final String ITEM_EXT = "palette_item"; // NOI18N
+        static final String ITEM_MIME = "text/x-palette-item"; // NOI18N
 
         PaletteItemDataLoader() {
             super("org.netbeans.modules.form.palette.PaletteItemDataObject"); // NOI18N
 
             ExtensionList ext = new ExtensionList();
-            ext.addExtension(ITEM_EXT);
+            ext.addMimeType(ITEM_MIME);
             setExtensions(ext);
         }
         
@@ -291,7 +294,7 @@ class PaletteItemDataObject extends MultiDataObject {
         
         @Override
         public java.awt.Image getIcon(final int type) {
-            return Utilities.loadImage(iconURL);
+            return ImageUtilities.loadImage(iconURL);
         }
         
     }
@@ -369,7 +372,7 @@ class PaletteItemDataObject extends MultiDataObject {
                     if (icon32 == null && isItemValid())
                         icon32 = paletteItem.getIcon(type);
                     if (icon32 == null)
-                        icon32 = Utilities.loadImage("org/netbeans/modules/form/resources/palette/unknown32.gif"); // NOI18N
+                        icon32 = ImageUtilities.loadImage("org/netbeans/modules/form/resources/palette/unknown32.gif"); // NOI18N
                 }
                 return icon32;
             }
@@ -379,7 +382,7 @@ class PaletteItemDataObject extends MultiDataObject {
                     if (icon16 == null && isItemValid())
                         icon16 = paletteItem.getIcon(type);
                     if (icon16 == null)
-                        icon16 = Utilities.loadImage("org/netbeans/modules/form/resources/palette/unknown.gif"); // NOI18N
+                        icon16 = ImageUtilities.loadImage("org/netbeans/modules/form/resources/palette/unknown.gif"); // NOI18N
                 }
                 return icon16;
             }
@@ -526,4 +529,8 @@ class PaletteItemDataObject extends MultiDataObject {
         }
     }
     
+    @Override
+    public Lookup getLookup() {
+        return getCookieSet().getLookup();
+    }
 }

@@ -39,19 +39,13 @@
  * made subject to such option by the copyright holder.
  */
 
-/*
-* CasaEngineProvidesPinWidget.java
-*
-* Created on November 7, 2006, 4:07 PM
-*
-* To change this template, choose Tools | Template Manager
-* and open the template in the editor.
-*/
-
 package org.netbeans.modules.compapp.casaeditor.graph;
 
+import java.awt.Image;
 import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.modules.compapp.casaeditor.graph.RegionUtilities.Directions;
+import org.openide.util.ImageUtilities;
+import org.openide.util.Utilities;
 
 /**
  *
@@ -59,11 +53,17 @@ import org.netbeans.modules.compapp.casaeditor.graph.RegionUtilities.Directions;
  */
 public class CasaPinWidgetEngineProvides extends CasaPinWidgetEngine {
     
-    /** Creates a new instance of CasaEngineProvidesPinWidget */
+    private static final Image IMAGE_ARROW_RIGHT_PROVIDES = ImageUtilities.loadImage(
+            "org/netbeans/modules/compapp/casaeditor/graph/resources/providesRight.png"); // NOI18N
+    private static final Image IMAGE_ARROW_RIGHT_PROVIDES_CLASSIC = ImageUtilities.loadImage(
+            "org/netbeans/modules/compapp/casaeditor/graph/resources/providesRightClassic.png"); // NOI18N
+    
+    /** Creates a new instance of CasaPinWidgetEngineProvides */
     public CasaPinWidgetEngineProvides(Scene scene) {
-        super(scene, CasaPinWidget.IMAGE_ARROW_RIGHT_PROVIDES);
+        super(scene, IMAGE_ARROW_RIGHT_PROVIDES, IMAGE_ARROW_RIGHT_PROVIDES_CLASSIC);
     }
 
+    @Override
     protected Directions getDirection() {
         return Directions.LEFT;
     }

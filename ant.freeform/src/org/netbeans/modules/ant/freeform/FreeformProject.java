@@ -61,6 +61,7 @@ import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.netbeans.spi.project.ui.support.UILookupMergerSupport;
 import org.openide.filesystems.FileObject;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
 import org.openide.util.Utilities;
@@ -86,7 +87,6 @@ public final class FreeformProject implements Project {
         eval = new FreeformEvaluator(this);
         lookup = initLookup();
         Logger.getLogger(FreeformProject.class.getName()).log(Level.FINER, "Initializing project in {0} with {1}", new Object[] {helper, lookup});
-        new ProjectXmlValidator(helper.resolveFileObject(AntProjectHelper.PROJECT_XML_PATH));
     }
     
     public AntProjectHelper helper() {
@@ -129,7 +129,7 @@ public final class FreeformProject implements Project {
 	    new FreeformSharabilityQuery(helper()), //SharabilityQueryImplementation
             Accessor.DEFAULT.createProjectAccessor(this), //Access to AntProjectHelper and PropertyEvaluator
             FEQImpl, // FileEncodingQueryImplementation
-            new FreeformTemplateAttributesProvider(helper())
+            new FreeformTemplateAttributesProvider(helper(), eval, FEQImpl)
         );
         return LookupProviderSupport.createCompositeLookup(baseLookup, "Projects/org-netbeans-modules-ant-freeform/Lookup"); //NOI18N
     }
@@ -199,9 +199,9 @@ public final class FreeformProject implements Project {
         
         public Icon getIcon() {
             if (usesAntScripting()) {
-                return new ImageIcon(Utilities.loadImage("org/netbeans/modules/ant/freeform/resources/freeform-project.png", true)); // NOI18N
+                return new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/ant/freeform/resources/freeform-project.png", true)); // NOI18N
             } else {
-                return new ImageIcon(Utilities.loadImage("org/netbeans/modules/project/ui/resources/projectTab.png", true)); // NOI18N
+                return new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/project/ui/resources/projectTab.png", true)); // NOI18N
             }
         }
         

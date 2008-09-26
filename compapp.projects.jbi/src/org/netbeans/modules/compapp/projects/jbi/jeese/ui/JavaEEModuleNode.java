@@ -53,6 +53,7 @@ import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import org.netbeans.modules.compapp.projects.jbi.JbiProject;
+import org.netbeans.modules.compapp.projects.jbi.jeese.actions.AppVerifierAction;
 import org.netbeans.modules.compapp.projects.jbi.jeese.actions.DeleteJavaEEModuleAction;
 import org.netbeans.modules.compapp.projects.jbi.jeese.actions.JavaEEModulePropertiesAction;
 import org.netbeans.modules.compapp.projects.jbi.jeese.actions.ServerResourcesAction;
@@ -61,6 +62,7 @@ import org.openide.actions.DeleteAction;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.Lookups;
@@ -109,7 +111,8 @@ public class JavaEEModuleNode extends AbstractNode {
             null,
             SystemAction.get( JavaEEModulePropertiesAction.class),
             null,
-            SystemAction.get(ServerResourcesAction.class)
+            SystemAction.get(AppVerifierAction.class),
+            //SystemAction.get(ServerResourcesAction.class)
         };
     }
     
@@ -141,7 +144,7 @@ public class JavaEEModuleNode extends AbstractNode {
     public Image getIcon(int type) {
         Image ret = getProjIcon();
         if (ret == null){
-            ret = Utilities.loadImage(
+            ret = ImageUtilities.loadImage(
                 "org/netbeans/modules/compapp/projects/jbi/ui/resources/j2seProject.gif"); // NOI18N;
         }
         return ret;
@@ -150,7 +153,7 @@ public class JavaEEModuleNode extends AbstractNode {
     public Image getOpenedIcon(int type) {
         Image ret = getProjIcon();
         if (ret == null){
-            ret = Utilities.loadImage(
+            ret = ImageUtilities.loadImage(
                 "org/netbeans/modules/compapp/projects/jbi/ui/resources/j2seProject.gif"); // NOI18N;            
         }
         return ret;        

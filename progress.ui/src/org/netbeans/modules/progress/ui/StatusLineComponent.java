@@ -92,6 +92,7 @@ import org.netbeans.progress.spi.ProgressUIWorkerWithModel;
 import org.netbeans.progress.spi.TaskModel;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.windows.WindowManager;
@@ -345,14 +346,10 @@ public class StatusLineComponent extends JPanel implements ProgressUIWorkerWithM
             return formatEstimate(estimatedCompletion);
         }
         if (percentage != -1) {
-            //#
-//            if (percentage < 1 || percentage > 99) {
-//                int x = (int)(percentage * 100);
-//                int y = (int)percentage;
-//                return "" + y + "." + (x - y * 100) + "%";
-//            } 
-            int rounded = (int)Math.round(percentage);
-            rounded = Math.min(99, rounded);
+            int rounded = (int) Math.round(percentage);
+            if (rounded > 100) {
+                rounded = 100;
+            }
             return "" + rounded + "%"; //NOI18N
         }
         return "";
@@ -579,7 +576,7 @@ public class StatusLineComponent extends JPanel implements ProgressUIWorkerWithM
                 Image icon = (Image)UIManager.get("nb.progress.cancel.icon");
                 if (icon == null) {
                        // for custom L&F?
-                   icon = Utilities.loadImage("org/netbeans/progress/module/resources/buton.png");
+                   icon = ImageUtilities.loadImage("org/netbeans/progress/module/resources/buton.png");
                 }
                 putValue(Action.SMALL_ICON, new ImageIcon(icon));
             }

@@ -94,7 +94,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.8.22</specification-version>
+                        <specification-version>7.15</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -125,7 +125,6 @@
                 <package>org.netbeans.modules.soa.mapper.common.palette</package>
                 <package>org.netbeans.modules.soa.mapper.common.ui.palette</package>
                 <package>org.netbeans.modules.soa.mapper.common.util</package>
-                <package>org.netbeans.modules.soa.mapper.util</package>
             </public-packages>
         </data>
     </configuration>

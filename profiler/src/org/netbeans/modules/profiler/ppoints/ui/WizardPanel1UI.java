@@ -47,12 +47,11 @@ import org.netbeans.lib.profiler.ui.components.JExtendedTable;
 import org.netbeans.lib.profiler.ui.components.table.JExtendedTablePanel;
 import org.netbeans.modules.profiler.ppoints.ProfilingPointFactory;
 import org.netbeans.modules.profiler.ppoints.Utils;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -72,6 +71,7 @@ import javax.swing.UIManager;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
+import org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities;
 
 
 /**
@@ -132,9 +132,9 @@ public class WizardPanel1UI extends ValidityAwarePanel implements HelpCtx.Provid
                                                                                                                           // -----
     private static final String HELP_CTX_KEY = "PPointsWizardPanel1UI.HelpCtx"; // NOI18N
     private static final HelpCtx HELP_CTX = new HelpCtx(HELP_CTX_KEY);
-    private static final Icon MONITOR_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/telemetryWindow.png")); // NOI18N
-    private static final Icon CPU_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/cpu.png")); // NOI18N
-    private static final Icon MEMORY_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/memory.png")); // NOI18N
+    private static final Icon MONITOR_ICON = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/resources/telemetryWindow.png")); // NOI18N
+    private static final Icon CPU_ICON = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/resources/cpu.png")); // NOI18N
+    private static final Icon MEMORY_ICON = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/resources/memory.png")); // NOI18N
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 

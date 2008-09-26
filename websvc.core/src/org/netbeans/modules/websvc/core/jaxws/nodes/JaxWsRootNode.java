@@ -45,15 +45,13 @@ import java.awt.Image;
 import java.beans.BeanInfo;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.Map;
 import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.common.Util;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;
+import org.netbeans.modules.websvc.core.WSStackUtils;
 import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.ui.support.CommonProjectActions;
@@ -68,6 +66,7 @@ import org.openide.loaders.DataFolder;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
@@ -89,7 +88,8 @@ public class JaxWsRootNode extends AbstractNode implements PropertyChangeListene
         this.project=project;
         if(!Util.isJavaEE5orHigher(project)){
             listenToServerChanges();
-            jsr109Supported = isJsr109Supported();
+            WSStackUtils stackUtils = new WSStackUtils(project);
+            jsr109Supported = stackUtils.isJsr109Supported();
         }
     }
     
@@ -105,7 +105,7 @@ public class JaxWsRootNode extends AbstractNode implements PropertyChangeListene
     
     private java.awt.Image getServicesImage() {
         if (cachedServicesBadge == null) {
-            cachedServicesBadge = Utilities.loadImage(SERVICES_BADGE);
+            cachedServicesBadge = ImageUtilities.loadImage(SERVICES_BADGE);
         }            
         return cachedServicesBadge;        
     }
@@ -132,7 +132,7 @@ public class JaxWsRootNode extends AbstractNode implements PropertyChangeListene
     private Image computeIcon( boolean opened) {        
         Icon icon = getFolderIcon(opened);
         Image image = ((ImageIcon)icon).getImage();
-        image = Utilities.mergeImages(image, getServicesImage(), 7, 7 );
+        image = ImageUtilities.mergeImages(image, getServicesImage(), 7, 7 );
         return image;        
     }
 
@@ -163,32 +163,12 @@ public class JaxWsRootNode extends AbstractNode implements PropertyChangeListene
         }
     }
     
-    private boolean isJsr109Supported() {
-        JAXWSSupport wss = JAXWSSupport.getJAXWSSupport(project.getProjectDirectory());
-        if (wss != null) {
-            return isJsr109Supported(wss);
-        }
-        return false;
-    }
-    
-    private boolean isJsr109Supported(JAXWSSupport wss) {
-        Map properties = wss.getAntProjectHelper().getStandardPropertyEvaluator().getProperties();
-        String serverInstance = (String)properties.get("j2ee.server.instance"); //NOI18N
-        if (serverInstance != null) {
-            J2eePlatform j2eePlatform = Deployment.getDefault().getJ2eePlatform(serverInstance);
-            if (j2eePlatform != null) {
-                return j2eePlatform.isToolSupported(J2eePlatform.TOOL_JSR109);
-            }
-        }
-        return false;
-    }
-    
-    
     public void propertyChange(PropertyChangeEvent evt){
         JAXWSSupport wss = JAXWSSupport.getJAXWSSupport(project.getProjectDirectory());
         if (wss!=null && wss.getServices().size()>0) {
             if ("j2ee.server.instance".equals(evt.getPropertyName())){
-                boolean newJsr109Supported = isJsr109Supported(wss);
+                WSStackUtils stackUtils = new WSStackUtils(project);
+                boolean newJsr109Supported = stackUtils.isJsr109Supported();
                 if(jsr109Supported != newJsr109Supported) {
                     JaxWsModel jaxWsModel = (JaxWsModel)project.getLookup().lookup(JaxWsModel.class);
                     boolean isJsr109Project = jaxWsModel.getJsr109().booleanValue();

@@ -47,7 +47,9 @@ import javax.swing.Action;
 import org.netbeans.modules.compapp.casaeditor.model.casa.CasaComponent;
 import org.netbeans.modules.compapp.casaeditor.model.casa.CasaPort;
 import org.netbeans.modules.compapp.casaeditor.nodes.actions.AddWSDLPortsAction;
+import org.netbeans.modules.compapp.casaeditor.nodes.actions.LoadWSDLPortsAction;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
@@ -58,7 +60,7 @@ import org.openide.util.actions.SystemAction;
  */
 public class WSDLEndpointsNode extends CasaNode {
 
-    private static final Image ICON = Utilities.loadImage(
+    private static final Image ICON = ImageUtilities.loadImage(
             "org/netbeans/modules/compapp/casaeditor/nodes/resources/WSDLEndpointsNode.png");   // NOI18N
 
     public WSDLEndpointsNode(List<CasaPort> data, CasaNodeFactory factory) {
@@ -72,6 +74,7 @@ public class WSDLEndpointsNode extends CasaNode {
 
     @Override
     protected void addCustomActions(List<Action> actions) {
+        actions.add(SystemAction.get(LoadWSDLPortsAction.class));
         actions.add(SystemAction.get(AddWSDLPortsAction.class));
     }
 

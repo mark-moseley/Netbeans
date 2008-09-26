@@ -46,13 +46,17 @@ import java.beans.BeanInfo;
 import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
+import org.netbeans.modules.j2ee.earproject.EarProject;
 import org.netbeans.modules.j2ee.earproject.ui.actions.AddModuleAction;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
@@ -67,13 +71,14 @@ import org.openide.util.lookup.Lookups;
 public final class LogicalViewNode extends AbstractNode {
     
     static final String J2EE_MODULES_NAME = "j2ee.modules"; // NOI18N    
-    private static Image J2EE_MODULES_BADGE = Utilities.loadImage( "org/netbeans/modules/j2ee/earproject/ui/resources/application_16.gif", true ); // NOI18N
+    private static Image J2EE_MODULES_BADGE = ImageUtilities.loadImage( "org/netbeans/modules/j2ee/earproject/ui/resources/application_16.gif", true ); // NOI18N
     private static Icon folderIconCache;
     private static Icon openedFolderIconCache;	
     private final AntProjectHelper model;
     
-    public LogicalViewNode(AntProjectHelper model) {
-        super(new LogicalViewChildren(model), Lookups.fixed( new Object[] { model }));
+    public LogicalViewNode(AntProjectHelper model, EarProject project, 
+            UpdateHelper updateHelper, ClassPathSupport cs) {
+        super(new LogicalViewChildren(model, project, updateHelper, cs), Lookups.fixed( new Object[] { model }));
         this.model = model;
         // Set FeatureDescriptor stuff:
         setName(J2EE_MODULES_NAME);
@@ -112,7 +117,7 @@ public final class LogicalViewNode extends AbstractNode {
     private Image computeIcon( boolean opened, int type ) {        
         Icon icon = getFolderIcon(opened);
         Image image = ((ImageIcon)icon).getImage();
-        image = Utilities.mergeImages(image, J2EE_MODULES_BADGE, 7, 7 );
+        image = ImageUtilities.mergeImages(image, J2EE_MODULES_BADGE, 7, 7 );
         return image;        
     }
 

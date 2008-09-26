@@ -49,6 +49,7 @@ import javax.swing.ImageIcon;
 import org.netbeans.modules.xml.schema.model.SchemaComponent;
 import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
+import org.netbeans.modules.xml.wsdl.ui.cookies.RefreshExtensibilityElementNodeCookie;
 import org.netbeans.modules.xml.wsdl.ui.netbeans.module.WSDLSettings.ViewMode;
 import org.netbeans.modules.xml.wsdl.ui.search.AttributeNameSearchProvider;
 import org.netbeans.modules.xml.wsdl.ui.search.AttributeValueSearchProvider;
@@ -57,6 +58,7 @@ import org.netbeans.modules.xml.wsdl.ui.search.ComponentTypeSearchProvider;
 import org.netbeans.modules.xml.wsdl.ui.view.treeeditor.TreeEditorView;
 import org.netbeans.modules.xml.xam.Component;
 import org.netbeans.modules.xml.xam.ui.category.AbstractCategory;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -90,8 +92,17 @@ public class WSDLTreeCategory extends AbstractCategory {
             new AttributeNameSearchProvider(model, this),
             new AttributeValueSearchProvider(model, this),
         };
+        RefreshExtensibilityElementNodeCookie reenc = new RefreshExtensibilityElementNodeCookie() {
+
+            public void refresh() {
+                if (component != null) {
+                    component.refreshNodes();
+                }
+            }
+        };
         this.lookup = new ProxyLookup(new Lookup[] {
             lookup,
+            Lookups.fixed(reenc),
             Lookups.fixed(searchers)
         });
     }
@@ -117,7 +128,7 @@ public class WSDLTreeCategory extends AbstractCategory {
     public Icon getIcon() {
         String url = NbBundle.getMessage(WSDLTreeCategory.class,
                 "IMG_WsdlCategory_Tree");
-        Image img = Utilities.loadImage(url);
+        Image img = ImageUtilities.loadImage(url);
         return new ImageIcon(img);
     }
 

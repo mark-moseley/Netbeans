@@ -67,6 +67,7 @@ import org.netbeans.api.java.source.ui.ElementIcons;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 import org.openide.util.lookup.Lookups;
 
@@ -99,7 +100,7 @@ public class ElementNode extends AbstractNode {
     public Image getIcon(int type) {
         if (description.elementHandle == null)
             return super.getIcon(type);
-        return Utilities.icon2Image(ElementIcons.getElementIcon(description.elementHandle.getKind(), description.modifiers));
+        return ImageUtilities.icon2Image(ElementIcons.getElementIcon(description.elementHandle.getKind(), description.modifiers));
     }
 
     @Override
@@ -285,7 +286,11 @@ public class ElementNode extends AbstractNode {
             hash = 29 * hash + (this.name != null ? this.name.hashCode() : 0);
             hash = 29 * hash + (this.elementHandle != null ? this.elementHandle.getKind().hashCode() : 0);
             return hash;
-        }                       
+        }
+        
+        public String getName() {
+            return name;
+        }
         
         public static Description deepCopy( Description d ) {
          
@@ -318,7 +323,12 @@ public class ElementNode extends AbstractNode {
             sb.append("("); // NOI18N
             for(Iterator<? extends VariableElement> it = e.getParameters().iterator(); it.hasNext(); ) {
                 VariableElement param = it.next();
-                sb.append(print(param.asType()));
+                if (!it.hasNext() && e.isVarArgs() && param.asType().getKind() == TypeKind.ARRAY) {
+                    sb.append(print(((ArrayType) param.asType()).getComponentType()));
+                    sb.append("...");
+                } else {
+                    sb.append(print(param.asType()));
+                }
                 sb.append(" "); // NOI18N
                 sb.append(param.getSimpleName());
                 if (it.hasNext()) {

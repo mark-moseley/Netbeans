@@ -45,6 +45,7 @@ import java.awt.Color;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.logging.Level;
@@ -61,6 +62,7 @@ import org.netbeans.modules.css.visual.ui.preview.CssPreviewable;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
@@ -88,15 +90,15 @@ public final class CssPreviewTopComponent extends TopComponent {
     
     private CssPreviewable lastSelectedPreviewable;
     
-    private PropertyChangeListener WINDOW_REGISTRY_LISTENER = new PropertyChangeListener() {
-        public void propertyChange(PropertyChangeEvent evt) {
-            if (TopComponent.Registry.PROP_ACTIVATED.equals(evt.getPropertyName())) {
-                checkPreview((TopComponent)evt.getNewValue());
-            }
-        }
-    };
+//    private PropertyChangeListener WINDOW_REGISTRY_LISTENER = new PropertyChangeListener() {
+//        public void propertyChange(PropertyChangeEvent evt) {
+//            if (TopComponent.Registry.PROP_ACTIVATED.equals(evt.getPropertyName())) {
+//                checkPreview((TopComponent)evt.getNewValue());
+//            }
+//        }
+//    };
     
-    private CssPreviewable.Listener PREVIEWABLE_LISTENER = new CssPreviewable.Listener() {
+//    private CssPreviewable.Listener PREVIEWABLE_LISTENER = new CssPreviewable.Listener() {
         public void activate(final CssRuleContext content) {
             LOGGER.log(Level.FINE, "Previewable activated - POSTING activate task " + content);//NOI18N
             SwingUtilities.invokeLater(new Runnable() {
@@ -116,7 +118,7 @@ public final class CssPreviewTopComponent extends TopComponent {
             });
             
         }
-    };
+//    };
     
     private static final String DEFAULT_TC_NAME = NbBundle.getMessage(CssPreviewTopComponent.class, "CTL_CssPreviewTopComponent");
     
@@ -128,7 +130,7 @@ public final class CssPreviewTopComponent extends TopComponent {
     private CssPreviewTopComponent() {
         initComponents();
         setToolTipText(NbBundle.getMessage(CssPreviewTopComponent.class, "HINT_CssPreviewTopComponent")); //NOI18N
-        setIcon(Utilities.loadImage(ICON_PATH, true));
+        setIcon(ImageUtilities.loadImage(ICON_PATH, true));
 
         NO_PREVIEW_PANEL = makeMsgPanel(NbBundle.getBundle("org/netbeans/modules/css/visual/ui/preview/Bundle").getString("No_Preview"));
         add(NO_PREVIEW_PANEL, BorderLayout.CENTER);
@@ -137,6 +139,8 @@ public final class CssPreviewTopComponent extends TopComponent {
 
         PREVIEW_ERROR_PANEL = makeMsgPanel(NbBundle.getBundle("org/netbeans/modules/css/visual/ui/preview/Bundle").getString("Preview_Error"));
 
+        setName(DEFAULT_TC_NAME); //set default TC name
+        
         //init SAX parser
         try {
             SAXParserFactory factory = SAXParserFactory.newInstance();
@@ -150,21 +154,21 @@ public final class CssPreviewTopComponent extends TopComponent {
         
     }
     
-    private void checkPreview(TopComponent tc) {
-        if(tc != null) {
-            Node[] activatedNodes = tc.getActivatedNodes();
-            if(activatedNodes != null) {
-                for(Node n : activatedNodes) {
-                    CssPreviewable previewable = n.getCookie(CssPreviewable.class);
-                    if(previewable != null) {
-                        LOGGER.log(Level.FINE, "Previewable selected " + previewable);//NOI18N
-                        previewableSelected(previewable);
-                        break; //use the first selected previewable
-                    }
-                }
-            }
-        }
-    }
+//    private void checkPreview(TopComponent tc) {
+//        if(tc != null) {
+//            Node[] activatedNodes = tc.getActivatedNodes();
+//            if(activatedNodes != null) {
+//                for(Node n : activatedNodes) {
+//                    CssPreviewable previewable = n.getCookie(CssPreviewable.class);
+//                    if(previewable != null) {
+//                        LOGGER.log(Level.FINE, "Previewable selected " + previewable);//NOI18N
+//                        previewableSelected(previewable);
+//                        break; //use the first selected previewable
+//                    }
+//                }
+//            }
+//        }
+//    }
 
     
     private JPanel makeMsgPanel(String message) {
@@ -305,12 +309,9 @@ public final class CssPreviewTopComponent extends TopComponent {
         try {
             //resolve relative URL base for the preview component
             String relativeURL = null;
-            FileObject source = content.fileObject();
+            File source = content.base();
             if (source != null) {
-                if (!source.isFolder()) {
-                    source = source.getParent();
-                }
-                relativeURL = source.getURL().toExternalForm();
+                relativeURL = source.toURL().toExternalForm();
             }
 
             LOGGER.log(Level.FINE, "preview - setting content " + htmlCode); //NOI18N
@@ -324,50 +325,50 @@ public final class CssPreviewTopComponent extends TopComponent {
         }
     }
     
-    private void previewableSelected(final CssPreviewable previewable) {
-        if(lastSelectedPreviewable != null) {
-            if(lastSelectedPreviewable.equals(previewable)) {
-                return ; //ignore
-            } else {
-                LOGGER.log(Level.FINE, "removed listener from " + lastSelectedPreviewable);//NOI18N
-                lastSelectedPreviewable.removeListener(PREVIEWABLE_LISTENER);
-            }
-        }
-        lastSelectedPreviewable = previewable;
-        LOGGER.log(Level.FINE, "added listener to " + previewable);//NOI18N
-        lastSelectedPreviewable.addListener(PREVIEWABLE_LISTENER);
-        
-        //preview the content is available
-        final CssRuleContext context = previewable.content();
-        if(context != null) {
-            SwingUtilities.invokeLater(new Runnable() {
-                public void run() {
-                    preview(context);
-                }
-            });
-        } else {
-            //no content to preview
-            setNoSelectedRule();
-        }
-        
-    }
+//    private void previewableSelected(final CssPreviewable previewable) {
+//        if(lastSelectedPreviewable != null) {
+//            if(lastSelectedPreviewable.equals(previewable)) {
+//                return ; //ignore
+//            } else {
+//                LOGGER.log(Level.FINE, "removed listener from " + lastSelectedPreviewable);//NOI18N
+//                lastSelectedPreviewable.removeListener(PREVIEWABLE_LISTENER);
+//            }
+//        }
+//        lastSelectedPreviewable = previewable;
+//        LOGGER.log(Level.FINE, "added listener to " + previewable);//NOI18N
+//        lastSelectedPreviewable.addListener(PREVIEWABLE_LISTENER);
+//        
+//        //preview the content is available
+//        final CssRuleContext context = previewable.content();
+//        if(context != null) {
+//            SwingUtilities.invokeLater(new Runnable() {
+//                public void run() {
+//                    preview(context);
+//                }
+//            });
+//        } else {
+//            //no content to preview
+//            setNoSelectedRule();
+//        }
+//        
+//    }
     
-    @Override
-    public void componentOpened() {
-        WindowManager.getDefault().getRegistry().addPropertyChangeListener(WINDOW_REGISTRY_LISTENER);
-        checkPreview(org.openide.windows.WindowManager.getDefault().getRegistry().getActivated());
-
-    }
-    
-    @Override
-    protected void componentActivated() {
-        super.componentActivated();
-    }
-    
-    @Override
-    public void componentClosed() {
-        WindowManager.getDefault().getRegistry().removePropertyChangeListener(WINDOW_REGISTRY_LISTENER);
-    }
+//    @Override
+//    public void componentOpened() {
+//        WindowManager.getDefault().getRegistry().addPropertyChangeListener(WINDOW_REGISTRY_LISTENER);
+//        checkPreview(org.openide.windows.WindowManager.getDefault().getRegistry().getActivated());
+//
+//    }
+//    
+//    @Override
+//    protected void componentActivated() {
+//        super.componentActivated();
+//    }
+//    
+//    @Override
+//    public void componentClosed() {
+//        WindowManager.getDefault().getRegistry().removePropertyChangeListener(WINDOW_REGISTRY_LISTENER);
+//    }
     
     /** replaces this in object stream */
     public Object writeReplace() {

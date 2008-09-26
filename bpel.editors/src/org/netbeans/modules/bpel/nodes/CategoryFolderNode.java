@@ -18,12 +18,14 @@
  */
 package org.netbeans.modules.bpel.nodes;
 
+import org.netbeans.modules.bpel.nodes.BpelNode;
 import java.awt.Image;
 import java.util.concurrent.atomic.AtomicReference;
 import org.netbeans.modules.bpel.editors.api.nodes.NodeType;
 import org.netbeans.modules.bpel.editors.api.nodes.images.FolderIcon;
 import static org.netbeans.modules.bpel.properties.PropertyType.*;
 import org.openide.nodes.Children;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Utilities;
 
@@ -57,7 +59,7 @@ public class CategoryFolderNode extends BpelNode<NodeType> {
             if (NodeType.isValidImage(badgeImage)) {
                 resultImage = FolderIcon.getIcon(type);
                 if (resultImage != null) {
-                    resultImage = Utilities.mergeImages(
+                    resultImage = ImageUtilities.mergeImages(
                             resultImage, badgeImage, 8, 8);
                     processed = true;
                 }
@@ -95,7 +97,7 @@ public class CategoryFolderNode extends BpelNode<NodeType> {
             if (NodeType.isValidImage(badgeImage)) {
                 resultImage = FolderIcon.getOpenedIcon(type);
                 if (resultImage != null) {
-                    resultImage = Utilities.mergeImages(
+                    resultImage = ImageUtilities.mergeImages(
                             resultImage, badgeImage, 8, 8);
                     processed = true;
                 }

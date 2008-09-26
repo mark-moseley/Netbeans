@@ -69,6 +69,7 @@ import org.netbeans.modules.xml.xam.Reference;
 import org.openide.ErrorManager;
 import org.openide.nodes.Node;
 import org.openide.nodes.PropertySupport;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.datatransfer.NewType;
@@ -82,11 +83,11 @@ import org.openide.util.datatransfer.NewType;
  */
 public class BindingOperationInputNode extends WSDLExtensibilityElementNode<BindingInput> {
     
-    private static Image ICON  = Utilities.loadImage
+    private static Image ICON  = ImageUtilities.loadImage
             ("org/netbeans/modules/xml/wsdl/ui/view/resources/bindinginput.png");
     
     public BindingOperationInputNode(BindingInput wsdlConstruct) {
-        super(new GenericWSDLComponentChildren<BindingInput>(wsdlConstruct), wsdlConstruct, new BindingOperationInputNewTypesFactory());
+        super(wsdlConstruct, new BindingOperationInputNewTypesFactory());
     }
     
     @Override
@@ -111,15 +112,17 @@ public class BindingOperationInputNode extends WSDLExtensibilityElementNode<Bind
     
     @Override
     protected void updateDisplayName() {
+        super.updateDisplayName();
         // Need a component connected to a model to work properly.
         if (isValid()) {
             // Automatically keep the name in sync for named components.
             BindingInput param = getWSDLComponent();
             String name = param.getAttribute(new StringAttribute(Named.NAME_PROPERTY));
-            // Prevent getting an NPE from ExplorerManager.
-            super.setName(name == null ? "" : name);
             if (name == null || name.length() == 0) {
-                name = param.getInput().get().getName();
+                Reference<Input> ref = param.getInput();
+                if (ref != null && ref.get() != null) {
+                    name = ref.get().getName();
+                }
             }
             setDisplayName(name);
         }

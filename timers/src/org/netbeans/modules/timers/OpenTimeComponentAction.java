@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,6 +43,7 @@ package org.netbeans.modules.timers;
 import java.awt.event.ActionEvent;
 import javax.swing.AbstractAction;
 import javax.swing.ImageIcon;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
@@ -54,7 +55,7 @@ public class OpenTimeComponentAction extends AbstractAction {
     
     public OpenTimeComponentAction() {
         super(NbBundle.getMessage(OpenTimeComponentAction.class, "CTL_OpenTimeComponentAction"));
-        putValue(SMALL_ICON, new ImageIcon(Utilities.loadImage(TimeComponent.ICON_PATH)));
+        putValue(SMALL_ICON, new ImageIcon(ImageUtilities.loadImage(TimeComponent.ICON_PATH)));
     }
     
     public void actionPerformed(ActionEvent evt) {
@@ -62,5 +63,12 @@ public class OpenTimeComponentAction extends AbstractAction {
         win.open();
         win.requestActive();
     }
-    
+
+    public static Object create() {
+        if (Install.ENABLED) {
+            return new OpenTimeComponentAction();
+        } else {
+            return new Object();
+        }
+    }
 }

@@ -55,7 +55,9 @@ import org.netbeans.modules.cnd.navigation.services.IncludedModel;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 
 /**
  *
@@ -65,10 +67,12 @@ public class IncludeNode extends AbstractCsmNode {
     private Image icon;
     private CsmFile object;
     private IncludedModel model;
+    private boolean isRoot = false;
     
     /** Creates a new instance of IncludeNode */
     public IncludeNode(CsmFile element, IncludedModel model, IncludedChildren parent) {
         this(element, new IncludedChildren(element,model,parent), model, false);
+        isRoot = parent == null;
     }
     
     public IncludeNode(CsmFile element, Children children, IncludedModel model, boolean recursion) {
@@ -88,11 +92,26 @@ public class IncludeNode extends AbstractCsmNode {
     
     @Override
     public Image getIcon(int param) {
+        Image image = null;
         DataObject dataObject =CsmUtilities.getDataObject(object);
         if (dataObject != null){
-            return dataObject.getNodeDelegate().getIcon(param);
+            image = dataObject.getNodeDelegate().getIcon(param);
+        } else {
+            image =  super.getIcon(param);
         }
-        return super.getIcon(param);
+        return mergeBadge(image);
+    }
+
+    private Image mergeBadge(Image original) {
+        if (model.isDownDirection()) {
+            return ImageUtilities.mergeImages(original, downBadge, 0, 0);
+        } else {
+            if (isRoot){
+                return original;
+            }
+            Image res = ImageUtilities.mergeImages(emptyBadge, original, 4, 0);
+            return ImageUtilities.mergeImages(res, upBadge, 0, 0);
+        }
     }
     
     public int compareTo(Object o) {
@@ -152,4 +171,8 @@ public class IncludeNode extends AbstractCsmNode {
         }
         return super.getShortDescription();
     }
+
+    private static Image downBadge = ImageUtilities.loadImage( "org/netbeans/modules/cnd/navigation/includeview/resources/down_20.png" ); // NOI18N
+    private static Image upBadge = ImageUtilities.loadImage( "org/netbeans/modules/cnd/navigation/includeview/resources/up_8.png" ); // NOI18N
+    private static Image emptyBadge = ImageUtilities.loadImage( "org/netbeans/modules/cnd/navigation/includeview/resources/empty_20.png" ); // NOI18N
 }
