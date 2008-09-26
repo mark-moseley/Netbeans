@@ -44,8 +44,11 @@ package org.netbeans.api.java.source;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.TypeParameterTree;
+import com.sun.source.util.SimpleTreeVisitor;
+import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.TreeScanner;
 import java.io.File;
@@ -53,7 +56,6 @@ import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Field;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -63,7 +65,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import javax.lang.model.element.Modifier;
+import javax.swing.text.Document;
 import javax.swing.text.StyledDocument;
 import javax.tools.JavaFileObject;
 import junit.framework.*;
@@ -78,15 +84,16 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Handler;
 import javax.swing.text.BadLocationException;
 import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.java.source.ClassIndex;
+import org.netbeans.api.java.classpath.GlobalPathRegistry;
+import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.source.ClassIndex.NameKind;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.modules.java.source.parsing.SourceFileObject;
 import org.netbeans.modules.java.source.usages.ClassIndexImpl.UsageType;
-import org.netbeans.modules.java.source.usages.Index;
 import org.netbeans.modules.java.source.usages.Index;
 import org.netbeans.modules.java.source.usages.Pair;
 import org.netbeans.modules.java.source.usages.ResultConvertor;
@@ -102,6 +109,9 @@ import org.openide.util.lookup.Lookups;
 import org.openide.util.lookup.ProxyLookup;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.JavaSource.Priority;
+import org.netbeans.api.lexer.Language;
+import org.netbeans.api.lexer.TokenHierarchy;
+import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.modules.java.preprocessorbridge.spi.JavaFileFilterImplementation;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
 import org.netbeans.modules.java.source.classpath.CacheClassPath;
@@ -171,9 +181,9 @@ public class JavaSourceTest extends NbTestCase {
     }
 
     public static Test suite() {
-        TestSuite suite = new NbTestSuite(JavaSourceTest.class);        
+        TestSuite suite = new NbTestSuite(JavaSourceTest.class);
 //        TestSuite suite = new NbTestSuite ();
-//        suite.addTest(new JavaSourceTest("testMultiJavaSource"));
+//        suite.addTest(new JavaSourceTest("testCreateTaggedController"));
         return suite;
     }
     
@@ -186,6 +196,9 @@ public class JavaSourceTest extends NbTestCase {
         DataObject dobj = DataObject.find(test);
         EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);                        
         final StyledDocument doc = ec.openDocument();
+        doc.putProperty(Language.class, JavaTokenId.language());
+        TokenHierarchy h = TokenHierarchy.get(doc);
+        TokenSequence ts = h.tokenSequence(JavaTokenId.language());        
         Thread.sleep(500);
         CountDownLatch[] latches1 = new CountDownLatch[] {
             new CountDownLatch (1),
@@ -254,6 +267,9 @@ public class JavaSourceTest extends NbTestCase {
         DataObject dobj = DataObject.find(testFile1);
         EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);                        
         final StyledDocument doc = ec.openDocument();
+        doc.putProperty(Language.class, JavaTokenId.language());
+        TokenHierarchy h = TokenHierarchy.get(doc);
+        TokenSequence ts = h.tokenSequence(JavaTokenId.language());        
         Thread.sleep(500);
         CountDownLatch[] latches1 = new CountDownLatch[] {
             new CountDownLatch (1),
@@ -338,6 +354,9 @@ public class JavaSourceTest extends NbTestCase {
         final DataObject dobj = DataObject.find(testFile1);        
         final EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);                        
         final StyledDocument doc = ec.openDocument();                
+        doc.putProperty(Language.class, JavaTokenId.language());
+        TokenHierarchy h = TokenHierarchy.get(doc);
+        TokenSequence ts = h.tokenSequence(JavaTokenId.language());        
         for (int i=0; i<10; i++) {
             if (i == 9) {
                 last.set(true);
@@ -380,6 +399,9 @@ public class JavaSourceTest extends NbTestCase {
         DataObject dobj = DataObject.find(test);
         EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);                        
         final StyledDocument doc = ec.openDocument();
+        doc.putProperty(Language.class, JavaTokenId.language());
+        TokenHierarchy h = TokenHierarchy.get(doc);
+        TokenSequence ts = h.tokenSequence(JavaTokenId.language());        
         Thread.sleep(500);  //It may happen that the js is invalidated before the dispatch of task is done and the test of timers may fail        
         CountDownLatch[] latches = new CountDownLatch[] {
             new CountDownLatch (1),
@@ -421,6 +443,9 @@ public class JavaSourceTest extends NbTestCase {
         DataObject dobj = DataObject.find(test);
         EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);                        
         final StyledDocument[] doc = new StyledDocument[] {ec.openDocument()};
+        doc[0].putProperty(Language.class, JavaTokenId.language());
+        TokenHierarchy h = TokenHierarchy.get(doc[0]);
+        TokenSequence ts = h.tokenSequence(JavaTokenId.language());        
         Thread.sleep(500);
         CountDownLatch[] latches = new CountDownLatch[] {
             new CountDownLatch (1),
@@ -494,6 +519,9 @@ public class JavaSourceTest extends NbTestCase {
             DataObject dobj = DataObject.find(test);
             EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);
             final StyledDocument[] doc = new StyledDocument[] {ec.openDocument()};
+            doc[0].putProperty(Language.class, JavaTokenId.language());
+            TokenHierarchy h = TokenHierarchy.get(doc[0]);
+            TokenSequence ts = h.tokenSequence(JavaTokenId.language());        
             Thread.sleep(500);  //Making test a more deterministic, when the task is cancelled by DocListener, it's hard for test to recover from it
             NbDocument.runAtomic (doc[0],
                     new Runnable () {
@@ -534,7 +562,7 @@ public class JavaSourceTest extends NbTestCase {
             }
         }
     }
-    
+        
     //this test is quite unreliable (it often passes even in cases it should fail):
     public void testInvalidatesCorrectly() throws MalformedURLException, InterruptedException, IOException, BadLocationException {
         FileObject test = createTestFile ("Test1");
@@ -544,6 +572,9 @@ public class JavaSourceTest extends NbTestCase {
         DataObject dobj = DataObject.find(test);
         EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);
         final StyledDocument[] doc = new StyledDocument[] {ec.openDocument()};
+        doc[0].putProperty(Language.class, JavaTokenId.language());
+        TokenHierarchy h = TokenHierarchy.get(doc[0]);
+        TokenSequence ts = h.tokenSequence(JavaTokenId.language());        
         Thread.sleep (500);
         CountDownLatch[] latches = new CountDownLatch[] {
             new CountDownLatch (1),
@@ -1166,7 +1197,7 @@ public class JavaSourceTest extends NbTestCase {
         CountDownLatch rutLatch = new CountDownLatch (1);
         CountDownLatch rutStart = new CountDownLatch (1);        
         RUT rut = new RUT (rutStart, rutLatch);
-        JavaSourceAccessor.INSTANCE.runSpecialTask(rut, JavaSource.Priority.MAX);
+        JavaSourceAccessor.getINSTANCE().runSpecialTask(rut, JavaSource.Priority.MAX);
         latch = new CountDownLatch (1);
         rutStart.await();
         res = js.runWhenScanFinished(new T(latch), true);
@@ -1183,7 +1214,7 @@ public class JavaSourceTest extends NbTestCase {
         rutLatch = new CountDownLatch (1);
         rutStart = new CountDownLatch (1);
         rut = new RUT (rutStart, rutLatch);
-        JavaSourceAccessor.INSTANCE.runSpecialTask(rut, JavaSource.Priority.MAX);
+        JavaSourceAccessor.getINSTANCE().runSpecialTask(rut, JavaSource.Priority.MAX);
         latch = new CountDownLatch (1);
         rutStart.await();
         res = js.runWhenScanFinished(new T(latch), true);
@@ -1250,7 +1281,7 @@ public class JavaSourceTest extends NbTestCase {
         }, true);
     }
     
-    
+        
     public void testIndexCancel() throws Exception {
         PersistentClassIndex.setIndexFactory(new TestIndexFactory());
         try {
@@ -1258,77 +1289,330 @@ public class JavaSourceTest extends NbTestCase {
             final ClassPath bootPath = createBootPath ();
             final ClassPath compilePath = createCompilePath ();        
             final ClassPath sourcePath = createSourcePath ();
-            
-            
-            ClassLoader l = JavaSourceTest.class.getClassLoader();
-            Lkp.DEFAULT.setLookupsWrapper(
-                Lookups.metaInfServices(l),
-                Lookups.singleton(l),
-                Lookups.singleton(new ClassPathProvider() {
-                public ClassPath findClassPath(FileObject file, String type) {
-                    if (ClassPath.BOOT == type) {
-                        return bootPath;
+            final GlobalPathRegistry regs = GlobalPathRegistry.getDefault();
+            regs.register(ClassPath.SOURCE, new ClassPath[]{sourcePath});
+            try {
+                ClassLoader l = JavaSourceTest.class.getClassLoader();
+                Lkp.DEFAULT.setLookupsWrapper(
+                    Lookups.metaInfServices(l),
+                    Lookups.singleton(l),
+                    Lookups.singleton(new ClassPathProvider() {
+                    public ClassPath findClassPath(FileObject file, String type) {
+                        if (ClassPath.BOOT == type) {
+                            return bootPath;
+                        }
+
+                        if (ClassPath.SOURCE == type) {
+                            return sourcePath;
+                        }
+
+                        if (ClassPath.COMPILE == type) {
+                            return compilePath;
+                        }                    
+                        return null;
+                    }            
+                }));
+
+
+                JavaSource js = JavaSource.create(ClasspathInfo.create(bootPath, compilePath, sourcePath), test);
+                CountDownLatch rl = RepositoryUpdater.getDefault().scheduleCompilationAndWait(sourcePath.getRoots()[0], sourcePath.getRoots()[0]);
+                rl.await();
+                DataObject dobj = DataObject.find(test);
+                EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);                        
+                final StyledDocument doc = ec.openDocument();
+                doc.putProperty(Language.class, JavaTokenId.language());
+                TokenHierarchy h = TokenHierarchy.get(doc);
+                TokenSequence ts = h.tokenSequence(JavaTokenId.language());
+                Thread.sleep(500);  //It may happen that the js is invalidated before the dispatch of task is done and the test of timers may fail        
+
+                final CountDownLatch[] ready = new CountDownLatch[]{new CountDownLatch(1)};
+                final CountDownLatch[] end = new CountDownLatch[]{new CountDownLatch (1)};
+                final Object[] result = new Object[1];
+
+                CancellableTask<CompilationInfo> task = new CancellableTask<CompilationInfo>() {
+
+                    public void cancel() {                
                     }
 
-                    if (ClassPath.SOURCE == type) {
-                        return sourcePath;
+                    public void run(CompilationInfo p) throws Exception {
+                        ready[0].countDown();
+                        ClassIndex index = p.getClasspathInfo().getClassIndex();
+                        result[0] = index.getPackageNames("javax", true, EnumSet.allOf(ClassIndex.SearchScope.class));                    
+                        end[0].countDown();
                     }
 
-                    if (ClassPath.COMPILE == type) {
-                        return compilePath;
-                    }                    
-                    return null;
-                }            
-            }));
-            
-            
-            JavaSource js = JavaSource.create(ClasspathInfo.create(bootPath, compilePath, sourcePath), test);
-            CountDownLatch rl = RepositoryUpdater.getDefault().scheduleCompilationAndWait(sourcePath.getRoots()[0], sourcePath.getRoots()[0]);
-            rl.await();
-            DataObject dobj = DataObject.find(test);
-            EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);                        
-            final StyledDocument doc = ec.openDocument();
-            Thread.sleep(500);  //It may happen that the js is invalidated before the dispatch of task is done and the test of timers may fail        
-
-            final CountDownLatch[] end = new CountDownLatch[]{new CountDownLatch (1)};
-            final Object[] result = new Object[1];
-            
-            CancellableTask<CompilationInfo> task = new CancellableTask<CompilationInfo>() {
-
-                public void cancel() {                
-                }
-
-                public void run(CompilationInfo p) throws Exception {
-                    ClassIndex index = p.getClasspathInfo().getClassIndex();
-                    result[0] = index.getPackageNames("javax", true, EnumSet.allOf(ClassIndex.SearchScope.class));                    
-                    end[0].countDown();
-                }
-
-            };
-            js.addPhaseCompletionTask (task,Phase.PARSED, Priority.HIGH);
-            Thread.sleep(500);  //Making test a more deterministic, when the task is cancelled by DocListener, it's hard for test to recover from it
-            NbDocument.runAtomic (doc,
-                new Runnable () {
-                    public void run () {                        
-                        try {
-                            String text = doc.getText(0,doc.getLength());
-                            int index = text.indexOf(REPLACE_PATTERN);
-                            assertTrue (index != -1);
-                            doc.remove(index,REPLACE_PATTERN.length());
-                            doc.insertString(index,"System.out.println();",null);
-                        } catch (BadLocationException ble) {
-                            ble.printStackTrace(System.out);
-                        }                 
-                    }
-            });               
-            end[0].await();
-            assertNull(result[0]);
-            js.removePhaseCompletionTask (task);
+                };
+                js.addPhaseCompletionTask (task,Phase.PARSED, Priority.HIGH);
+                assertTrue(ready[0].await(5, TimeUnit.SECONDS));
+                NbDocument.runAtomic (doc,
+                    new Runnable () {
+                        public void run () {                        
+                            try {
+                                String text = doc.getText(0,doc.getLength());
+                                int index = text.indexOf(REPLACE_PATTERN);
+                                assertTrue (index != -1);
+                                doc.remove(index,REPLACE_PATTERN.length());
+                                doc.insertString(index,"System.out.println();",null);
+                            } catch (BadLocationException ble) {
+                                ble.printStackTrace(System.out);
+                            }                 
+                        }
+                });               
+                assertTrue(end[0].await(5, TimeUnit.SECONDS));
+                assertNull(result[0]);
+                js.removePhaseCompletionTask (task);
+            } finally {
+                regs.unregister(ClassPath.SOURCE, new ClassPath[]{sourcePath});
+            }
         } finally {
             PersistentClassIndex.setIndexFactory(null);
         }
     }
     
+    public void testRegisterSameTask() throws Exception {        
+        final FileObject testFile1 = createTestFile("Test1");
+        final ClassPath bootPath = createBootPath();
+        final ClassPath compilePath = createCompilePath();
+        final ClasspathInfo cpInfo = ClasspathInfo.create(bootPath,compilePath,null);
+              JavaSource js = JavaSource.create(cpInfo, testFile1);
+        final CountDownLatch latch1 = new CountDownLatch (1);
+        final CountDownLatch latch2 = new CountDownLatch (1);
+        CancellableTask<CompilationInfo> task = new CancellableTask<CompilationInfo>() {
+            public void cancel() {}
+            public void run(CompilationInfo parameter) throws Exception {
+                if (latch1.getCount() > 0) {
+                    latch1.countDown();
+                    return ;
+                }
+                
+                latch2.countDown();
+            }
+        };
+        js.addPhaseCompletionTask(task, Phase.PARSED, Priority.NORMAL);
+        assertTrue(latch1.await(10, TimeUnit.SECONDS));
+        js.removePhaseCompletionTask(task);
+        Reference<JavaSource> r = new WeakReference<JavaSource>(js);
+        js = null;
+        
+        assertGC("", r);
+        
+        js = JavaSource.create(cpInfo, testFile1);
+        js.addPhaseCompletionTask(task, Phase.PARSED, Priority.NORMAL);
+        assertTrue(latch2.await(10, TimeUnit.SECONDS));
+    }
+
+    public void testIncrementalReparse () throws Exception {
+        final FileObject testFile = createTestFile ("Test");
+        final ClassPath bootPath = createBootPath ();
+        final ClassPath compilePath = createCompilePath ();
+        final JavaSource js = JavaSource.create(ClasspathInfo.create(bootPath, compilePath, null), testFile);
+        final DataObject dobj = DataObject.find(testFile);
+        final EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);
+        final StyledDocument doc = ec.openDocument();
+        doc.putProperty(Language.class, JavaTokenId.language());
+        final TokenHierarchy h = TokenHierarchy.get(doc);
+        final TokenSequence ts = h.tokenSequence(JavaTokenId.language());
+        //Run sync task
+        final CompilationInfoImpl[] impls = new CompilationInfoImpl[1];
+        final Pair[] res = new Pair[1];
+        js.runUserActionTask(new Task<CompilationController> () {
+            public void run (final CompilationController c) throws IOException {
+                c.toPhase(JavaSource.Phase.RESOLVED);
+                CompilationUnitTree cu = c.getCompilationUnit();
+                FindMethodRegionsVisitor v = new FindMethodRegionsVisitor(doc, c.getTrees().getSourcePositions(), "main");
+                v.visit(cu, null);
+                impls[0] = c.impl;
+                res[0] = v.result;
+            }
+        }, true);
+        final boolean[] loggerResult = new boolean[1];
+        final Handler handler = new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                String msg = record.getMessage();
+                if (msg.startsWith("Reflowed method in: ")) {
+                    loggerResult[0] = true;
+                }
+            }
+            @Override
+            public void flush() {
+            }
+            @Override
+            public void close() throws SecurityException {
+            }
+        };
+        final Logger logger = Logger.getLogger(JavaSource.class.getName());
+        logger.setLevel (Level.FINEST);
+        logger.addHandler(handler);
+        try {
+            assertNotNull(impls[0]);
+            assertNotNull(res[0]);
+            //Do modification
+            NbDocument.runAtomic (doc,
+            new Runnable () {
+                public void run () {
+                    try {
+                        String text = doc.getText(0,doc.getLength());
+                        int index = text.indexOf(REPLACE_PATTERN);
+                        assertTrue (index != -1);
+                        doc.remove(index,REPLACE_PATTERN.length());
+                        doc.insertString(index,"System.out.println();",null);
+                    } catch (BadLocationException ble) {
+                        ble.printStackTrace(System.out);
+                    }
+                }
+            });
+            //Workaround, in test lexer events return wrong affected range
+            impls[0].setChangedMethod(res[0]);
+            //Run sync task
+            js.runUserActionTask(new Task<CompilationController> () {
+                public void run (final CompilationController c) throws IOException {
+                    c.toPhase(JavaSource.Phase.PARSED);
+                }
+            }, true);
+            //Check that there was an incremental reparse
+            assertTrue(loggerResult[0]);
+            loggerResult[0] = false;
+
+            //Do modification
+            NbDocument.runAtomic (doc,
+            new Runnable () {
+                public void run () {
+                    try {
+                        doc.insertString(0,"/** Hello **/",null);
+                    } catch (BadLocationException ble) {
+                        ble.printStackTrace(System.out);
+                    }
+                }
+            });
+            //Run sync task
+            js.runUserActionTask(new Task<CompilationController> () {
+                public void run (final CompilationController c) throws IOException {
+                    c.toPhase(JavaSource.Phase.PARSED);
+                }
+            }, true);
+            //Check that there was not an incremental reparse
+            assertFalse(loggerResult[0]);
+        } finally {
+            logger.removeHandler(handler);
+        }
+    }
+    
+    public void testCreateTaggedController () throws Exception {
+        FileObject testFile1 = createTestFile ("Test1");
+        ClassPath bootPath = createBootPath ();
+        ClassPath compilePath = createCompilePath ();
+        JavaSource js1 = JavaSource.create(ClasspathInfo.create(bootPath, compilePath, null), testFile1);
+
+        final Object[] result = new Object[1];
+        final long res1 = js1.createTaggedController(-1, result);
+        assertTrue (result[0] instanceof CompilationController);
+        ((CompilationController)result[0]).getTrees();        
+        Thread.sleep(500);
+        
+        final long res2 = js1.createTaggedController(-1, result);
+        assertTrue (result[0] instanceof CompilationController);
+        assertEquals(res1, res2);
+        
+        
+        final DataObject dobj = DataObject.find(testFile1);        
+        final EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);                        
+        final StyledDocument doc = ec.openDocument();                
+        doc.putProperty(Language.class, JavaTokenId.language());
+        TokenHierarchy h = TokenHierarchy.get(doc);
+        TokenSequence ts = h.tokenSequence(JavaTokenId.language());        
+        NbDocument.runAtomic (doc,
+            new Runnable () {
+                public void run () {                        
+                    try {                                                
+                        doc.insertString(0," ",null);
+                    } catch (BadLocationException ble) {
+                        ble.printStackTrace(System.out);
+                    }                 
+                }
+        });
+        
+        final long res3 = js1.createTaggedController(-1, result);
+        assertTrue (result[0] instanceof CompilationController);
+        assertFalse(res2 == res3);
+        Thread.sleep(500);
+        
+        final long res4 = js1.createTaggedController(-1, result);
+        assertTrue (result[0] instanceof CompilationController);
+        assertEquals(res3, res4);
+        
+        NbDocument.runAtomic (doc,
+            new Runnable () {
+                public void run () {                        
+                    try {                                                
+                        doc.insertString(0," ",null);
+                    } catch (BadLocationException ble) {
+                        ble.printStackTrace(System.out);
+                    }                 
+                }
+        });
+        final long res5 = js1.createTaggedController(-1, result);
+        assertTrue (result[0] instanceof CompilationController);
+        assertFalse(res4 == res5);
+        Thread.sleep(500);
+        
+        final long res6 = js1.createTaggedController(-1, result);
+        assertTrue (result[0] instanceof CompilationController);
+        assertEquals(res5, res6);
+    }
+
+    private static class FindMethodRegionsVisitor extends SimpleTreeVisitor<Void,Void> {
+
+        final Document doc;
+        final SourcePositions pos;
+        final String methodName;
+        CompilationUnitTree cu;
+
+        Pair<JavaSource.DocPositionRegion,MethodTree> result;
+
+        public FindMethodRegionsVisitor (final Document doc, final SourcePositions pos, String methodName) {
+            assert doc != null;
+            assert pos != null;
+            assert methodName != null;
+            this.doc = doc;
+            this.pos = pos;
+            this.methodName = methodName;
+        }
+
+        @Override
+        public Void visitCompilationUnit(CompilationUnitTree node, Void p) {
+            cu = node;
+            for (Tree t : node.getTypeDecls()) {
+                visit (t,p);
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitClass(ClassTree node, Void p) {
+            for (Tree t : node.getMembers()) {
+                visit(t, p);
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitMethod(MethodTree node, Void p) {
+            assert cu != null;
+            int startPos = (int) pos.getStartPosition(cu, node.getBody());
+            int endPos = (int) pos.getEndPosition(cu, node.getBody());
+            if (methodName.equals(node.getName().toString()) && startPos >=0) {
+                try {
+                    result = Pair.<JavaSource.DocPositionRegion,MethodTree>of(new JavaSource.DocPositionRegion(doc,startPos,endPos),node);
+                } catch (BadLocationException e) {
+                    //todo: reocvery
+                    e.printStackTrace();
+                }
+            }
+            return null;
+        }
+
+    }
     
     private static class TestProvider implements JavaSource.JavaFileObjectProvider {
         
@@ -1341,7 +1625,11 @@ public class JavaSourceTest extends NbTestCase {
         
         public JavaFileObject createJavaFileObject(FileObject fo, FileObject root, JavaFileFilterImplementation filter) throws IOException {
             return new TestJavaFileObject (fo, root, lock);
-        }        
+        }
+
+        public void update(JavaFileObject jfo) throws IOException {
+            //do nothing
+        }
     }
     
     private static class TestJavaFileObject extends SourceFileObject {
@@ -1666,10 +1954,10 @@ public class JavaSourceTest extends NbTestCase {
             return null;
         }
 
-        public void store(Map<Pair<String,String>, List<String>> refs, Set<Pair<String,String>> toDelete) throws IOException {            
+        public void store(Map<Pair<String,String>, Object[]> refs, Set<Pair<String,String>> toDelete) throws IOException {            
         }
 
-        public void store(Map<Pair<String,String>, List<String>> refs, List<Pair<String,String>> topLevels) throws IOException {            
+        public void store(Map<Pair<String,String>, Object[]> refs, List<Pair<String,String>> topLevels) throws IOException {            
         }
 
         public boolean isUpToDate(String resourceName, long timeStamp) throws IOException {
@@ -1690,6 +1978,11 @@ public class JavaSourceTest extends NbTestCase {
                 }
                 Thread.sleep(100);
             }
+        }
+
+        @Override
+        public <T> void getDeclaredElements(String ident, NameKind kind, ResultConvertor<T> convertor, Map<T, Set<String>> result) throws IOException, InterruptedException {
+            await();
         }
         
     }
