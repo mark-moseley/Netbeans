@@ -40,17 +40,67 @@
 package org.netbeans.modules.cnd.makeproject.packaging;
 
 import java.util.List;
+import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.PackagingConfiguration;
+import org.openide.util.NbBundle;
 
-public interface PackagerDescriptor {
-    public String getName();
-    public String getDisplayName();
-    public boolean hasInfoList();
-    public List<PackagerInfoElement> getDefaultInfoList(MakeConfiguration makeConfiguration);
-    public boolean isOutputAFolder();
-    public String getOutputFileName(MakeConfiguration makeConfiguration);
-    public String getOutputFileSuffix();
-    public String getDefaultTool();
-    public String getDefaultOptions();
-    public String getTopDir(MakeConfiguration makeConfiguration);
+/**
+ *
+ * @author thp
+ */
+public class ZipPackager implements PackagerDescriptor {
+    public static String PACKAGER_NAME = "Zip"; // NOI18N
+
+    public String getName() {
+        return PACKAGER_NAME;
+    }
+
+    public String getDisplayName() {
+        return getString("Zip");
+    }
+    
+    public boolean hasInfoList() {
+        return false;
+    }
+    
+    public List<PackagerInfoElement> getDefaultInfoList(MakeConfiguration makeConfiguration) {
+        return null;
+    }
+
+    public String getDefaultOptions() {
+        return ""; // NOI18N
+    }
+
+    public String getDefaultTool() {
+        return "zip"; // NOI18N
+    }
+
+    public boolean isOutputAFolder() {
+        return false;
+    }
+    
+    public String getOutputFileName(MakeConfiguration makeConfiguration) {
+        return makeConfiguration.getPackagingConfiguration().getOutputName();
+    }
+    
+    public String getOutputFileSuffix() {
+        return "zip";  // NOI18N
+    }
+
+    public String getTopDir(MakeConfiguration makeConfiguration) {
+        String topDir = IpeUtils.getBaseName(makeConfiguration.getPackagingConfiguration().getOutputValue());
+        
+        int i = topDir.lastIndexOf("."); // NOI18N
+        if (i > 0) {
+            topDir = topDir.substring(0, i);
+        }
+        return topDir;
+    }
+
+    
+    /** Look up i18n strings here */
+    private static String getString(String s) {
+        return NbBundle.getMessage(PackagingConfiguration.class, s); // FIXUP: Using Bundl in .../api.configurations. Too latet to move bundles around
+    }
 }
