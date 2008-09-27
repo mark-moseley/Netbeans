@@ -43,14 +43,13 @@ package org.netbeans.modules.gsfret.source;
 
 import java.io.IOException;
 import org.netbeans.napi.gsfret.source.ParserTaskImpl;
-import org.netbeans.api.gsf.CancellableTask;
+import org.netbeans.modules.gsf.api.CancellableTask;
 import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.napi.gsfret.source.Phase;
 import org.netbeans.napi.gsfret.source.Source;
 import org.netbeans.modules.gsf.Language;
-import org.netbeans.modules.gsfret.source.parsing.SourceFileObject;
-import org.openide.ErrorManager;
+import org.openide.util.Exceptions;
 
 /**
  * This class is based on JavaSourceAccessor in Retouche
@@ -65,15 +64,29 @@ import org.openide.ErrorManager;
 public abstract class SourceAccessor {
 
     
-    static {
-        try {
-            Class.forName("org.netbeans.napi.gsfret.source.Source", true, SourceAccessor.class.getClassLoader());   //NOI18N
-        } catch (ClassNotFoundException e) {
-            ErrorManager.getDefault().notify (e);
+    public static synchronized SourceAccessor getINSTANCE () {
+        if (INSTANCE == null) {
+            try {
+                Class.forName("org.netbeans.napi.gsfret.source.Source", true, SourceAccessor.class.getClassLoader());   //NOI18N
+                assert INSTANCE != null;
+            } catch (ClassNotFoundException e) {
+                Exceptions.printStackTrace(e);
+            }
         }
+        return INSTANCE;
     }
     
-    public static SourceAccessor INSTANCE;
+    public static void setINSTANCE (SourceAccessor instance) {
+        assert instance != null;
+        INSTANCE = instance;
+    }
+
+    // This was a quickfix for a similar bug to 126558; see
+    //  http://hg.netbeans.org/main/rev/63c10f6d307b
+    // for a better way to fix it
+    public static int dummy;
+    
+    private static volatile SourceAccessor INSTANCE;
     
     
     public void runSpecialTask (final CancellableTask<CompilationInfo> task, final Source.Priority priority) {
@@ -82,7 +95,7 @@ public abstract class SourceAccessor {
     
     protected abstract void runSpecialTaskImpl (CancellableTask<CompilationInfo> task, Source.Priority priority);
         
-    public abstract ParserTaskImpl createParserTask(Language language, ClasspathInfo cpInfo,/* DiagnosticListener<? super SourceFileObject> diagnosticListener,*/ String sourceLevel);
+    public abstract ParserTaskImpl createParserTask(Language language, ClasspathInfo cpInfo);
     
     
 //    /**
@@ -111,4 +124,19 @@ public abstract class SourceAccessor {
      */
     public abstract boolean isDispatchThread ();
     
+    /**
+     * Expert: Locks java compiler. Private API for indentation engine only!
+     */
+    public abstract void lockParser();
+    
+    /**
+     * Expert: Unlocks java compiler. Private API for indentation engine only!
+     */
+    public abstract void unlockParser();
+    
+    /**
+     * For check confinement.
+     * @return
+     */
+    public abstract boolean isParserLocked();
 }
