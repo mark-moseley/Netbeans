@@ -11,25 +11,18 @@ package org.netbeans.test.mercurial.main.commit;
 
 import java.io.File;
 import java.io.PrintStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.table.TableModel;
-import junit.textui.TestRunner;
-import org.netbeans.jellytools.Bundle;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputOperator;
-import org.netbeans.jellytools.OutputTabOperator;
+import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jellytools.actions.ActionNoBlock;
-import org.netbeans.jemmy.JemmyProperties;
-import org.netbeans.jemmy.EventTool;
-import org.netbeans.jemmy.QueueTool;
-import org.netbeans.jemmy.TimeoutExpiredException;
-import org.netbeans.jemmy.operators.Operator;
-import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.junit.ide.ProjectSupport;
 import org.netbeans.test.mercurial.operators.VersioningOperator;
-import org.netbeans.test.mercurial.utils.RepositoryMaintenance;
+import org.netbeans.test.mercurial.utils.MessageHandler;
 import org.netbeans.test.mercurial.utils.TestKit;
 
 /**
@@ -38,107 +31,113 @@ import org.netbeans.test.mercurial.utils.TestKit;
  */
 public class IgnoreTest extends JellyTestCase {
     
-    public static final String PROJECT_NAME = "JavaApp";
+    public static final String PROJECT_NAME = "JavaAppIgnUnign";
     public File projectPath;
     public PrintStream stream;
     String os_name;
+    static Logger log;
     
     /** Creates a new instance of IgnoreTest */
     public IgnoreTest(String name) {
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {        
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
-        
-    }
-    
-    protected boolean isUnix() {
-        boolean unix = false;
-        if (os_name.indexOf("Windows") == -1) {
-            unix = true;
+        if (log == null) {
+            log = Logger.getLogger(TestKit.LOGGER_NAME);
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
         }
-        return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
+   
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(IgnoreTest.class).addTest("testIgnoreUnignoreFile" /*, "testFinalRemove" */).enableModules(".*").clusters(".*"));
     }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new IgnoreTest("testIgnoreUnignoreFile"));
-        //suite.addTest(new IgnoreTest("testFinalRemove"));
-        return suite;
-    }
-    
+        
     public void testIgnoreUnignoreFile() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);    
         try {
-            TestKit.showStatusLabels();
-            TestKit.closeProject(PROJECT_NAME);
+            MessageHandler mh = new MessageHandler("Ignoring");
+            log.addHandler(mh);
             
-            OutputOperator oo = OutputOperator.invoke();
+            TestKit.showStatusLabels();
+            TestKit.prepareProject(TestKit.PROJECT_CATEGORY, TestKit.PROJECT_TYPE, PROJECT_NAME);
+            ProjectSupport.waitScanFinished();
+            Thread.sleep(1000);
+            new ProjectsTabOperator().getProjectRootNode(TestKit.PROJECT_NAME).performPopupActionNoBlock("Versioning|Initialize Mercurial Project");
             
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
-            TestKit.loadOpenProject(PROJECT_NAME, getDataDir());
 
-            TestKit.createNewElement(PROJECT_NAME, "javaapp", "NewClass");
-            Node node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|NewClass");
-            node.performPopupAction("Mercurial|Ignore");
-            OutputTabOperator oto = new OutputTabOperator("Mercurial");
-            oto.waitText("INFO: End of Ignore");
+            TestKit.createNewElement(PROJECT_NAME, "javaappignunign", "NewClassIgnUnign");
+
+            Node node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|NewClassIgnUnign");
+            node.select();
+            node.performPopupAction("Mercurial|Toggle Ignore");
+            String outputTabName=TestKit.getProjectAbsolutePath(PROJECT_NAME);
+
+            TestKit.waitText(mh);
+
+            Thread.sleep(1000);
             
-            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|NewClass");
+            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaappignunign|NewClassIgnUnign");
+            node.select();
             org.openide.nodes.Node nodeIDE = (org.openide.nodes.Node) node.getOpenideNode();
+            Thread.sleep(1000);
             String color = TestKit.getColor(nodeIDE.getHtmlDisplayName());
             String status = TestKit.getStatus(nodeIDE.getHtmlDisplayName());
             assertEquals("Wrong color of node - file color should be ignored!!!", TestKit.IGNORED_COLOR, color);
             assertEquals("Wrong annotation of node - file status should be ignored!!!", TestKit.IGNORED_STATUS, status);
             
-            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|NewClass");
-            TimeoutExpiredException tee = null;
-            try {
-                node.performPopupAction("Mercurial|Ignore");
-            } catch (Exception e) {
-                tee = (TimeoutExpiredException) e;
-            }
-            assertNotNull("Ignore action should be disabled!!!", tee);
-            
+            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaappignunign|NewClassIgnUnign");
+            node.select();
+
             //unignore file
-            oto = new OutputTabOperator("Mercurial");
-            oto.clear();
-            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|NewClass");
-            node.performPopupAction("Mercurial|Unignore");
-            oto.waitText("INFO: End of Unignore");
-            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|NewClass");
+            mh = new MessageHandler("Ignoring");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
+            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaappignunign|NewClassIgnUnign");
+            node.select();
+            node.performPopupAction("Mercurial|Toggle Ignore");
+            TestKit.waitText(mh);
+            Thread.sleep(1000);
+            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaappignunign|NewClassIgnUnign");
+            node.select();
             nodeIDE = (org.openide.nodes.Node) node.getOpenideNode();
+            Thread.sleep(1000);
             color = TestKit.getColor(nodeIDE.getHtmlDisplayName());
             status = TestKit.getStatus(nodeIDE.getHtmlDisplayName());
             assertEquals("Wrong color of node - file color should be new!!!", TestKit.NEW_COLOR, color);
             assertEquals("Wrong annotation of node - file status should be new!!!", TestKit.NEW_STATUS, status);
             
             //verify content of Versioning view
-            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|NewClass");
+            node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaappignunign|NewClassIgnUnign");
+
+            mh = new MessageHandler("Refreshing");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
+            node.select();
             node.performPopupAction("Mercurial|Status");
-            new EventTool().waitNoEvent(1000);
+            TestKit.waitText(mh);
+            Thread.sleep(1000);
             VersioningOperator vo = VersioningOperator.invoke();
             TableModel model = vo.tabFiles().getModel();
             assertEquals("Versioning view should be empty", 1, model.getRowCount());
-            assertEquals("File should be listed in Versioning view", "NewClass.java", model.getValueAt(0, 0).toString());
+            assertEquals("File should be listed in Versioning view", "NewClassIgnUnign.java", model.getValueAt(0, 0).toString());
             
             stream.flush();
             stream.close();
-            
-        } catch (Exception e) {
-            throw new Exception("Test failed: " + e);
-        } finally {
             TestKit.closeProject(PROJECT_NAME);
-        }    
+        } catch (Exception e) {
+            TestKit.closeProject(PROJECT_NAME);
+            throw new Exception("Test failed: " + e);
+        }
     }
     
     public void testFinalRemove() throws Exception {
