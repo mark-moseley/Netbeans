@@ -28,13 +28,14 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 
+import java.util.logging.Logger;
 import javax.swing.JToolTip;
 
 import org.netbeans.modules.php.dbgp.DebugSession;
 import org.netbeans.modules.php.dbgp.StartActionProviderImpl;
-import org.netbeans.modules.php.dbgp.api.ModelNode;
-import org.netbeans.modules.php.dbgp.api.SessionId;
-import org.netbeans.modules.php.dbgp.api.UnsufficientValueException;
+import org.netbeans.modules.php.dbgp.ModelNode;
+import org.netbeans.modules.php.dbgp.SessionId;
+import org.netbeans.modules.php.dbgp.UnsufficientValueException;
 import org.netbeans.modules.php.dbgp.models.nodes.AbstractModelNode;
 import org.netbeans.modules.php.dbgp.models.nodes.VariableNode;
 import org.netbeans.modules.php.dbgp.packets.Property;
@@ -137,8 +138,10 @@ public class VariablesModel extends ViewModelSupport
         else if (node instanceof ModelNode) {
             ModelNode modelNode = (ModelNode)node;
             DebugSession session = getSession();
-            childrenRequest(modelNode, session);
-            fillChildrenList( modelNode , session);
+            if (session != null) {
+                childrenRequest(modelNode, session);
+                fillChildrenList( modelNode , session);
+            }
             return modelNode.isLeaf();
         }
 
@@ -261,14 +264,19 @@ public class VariablesModel extends ViewModelSupport
      * @see org.netbeans.spi.viewmodel.NodeModel#getDisplayName(java.lang.Object)
      */
     public String getDisplayName(Object node) throws UnknownTypeException {
-        if(node == null) {
-            return NULL;
-        } else if(node == ROOT) {
-            return ROOT;
+        String retval = null;
+        if(node == ROOT) {
+            retval = ROOT;
         } else if(node instanceof ModelNode) {
-            return ((ModelNode) node).getName();
+            retval =  ((ModelNode) node).getName();
+        } else if (node != null) {
+            throw new UnknownTypeException(node);
         }
-        throw new UnknownTypeException(node);
+        if (retval == null && node != null) {
+            Logger.getLogger(VariablesModel.class.getName()).warning("display name isn't expected to be null: "+//NOI18N
+                    node.getClass().getName());
+        }
+        return (retval != null) ? retval : NULL;
     }
 
     /* (non-Javadoc)
@@ -300,7 +308,6 @@ public class VariablesModel extends ViewModelSupport
         try {
             if (myNodes.size() == 0) {
                 myNodes.add(node);
-                fireTreeChanged();
             }
             else {
                 boolean found = false;
@@ -315,9 +322,9 @@ public class VariablesModel extends ViewModelSupport
                 }
                 if (!found) {
                     myNodes.add(node);
-                    fireTreeChanged(new ModelEvent.NodeChanged(this, ROOT));
                 }
             }
+            fireTreeChanged();
         }
         finally {
             myWritelock.unlock();
@@ -459,7 +466,7 @@ public class VariablesModel extends ViewModelSupport
             return;
         }
         AbstractVariableNode var = (AbstractVariableNode) modelNode;
-        if ( !var.isChildrenFilled()) {
+        if (session != null && !var.isChildrenFilled()) {
             PropertyGetCommand command = 
                 new PropertyGetCommand( session.getTransactionId());
             var.setupFillChildrenCommand( command );
