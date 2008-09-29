@@ -55,6 +55,10 @@ import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 
 import org.netbeans.modules.j2ee.sun.api.ServerLocationManager;
 import org.netbeans.modules.j2ee.sun.api.SunURIManager;
+import org.netbeans.modules.j2ee.sun.ide.j2ee.PlatformValidator;
+import org.netbeans.modules.j2ee.sun.ide.j2ee.PluginProperties;
+
+import org.openide.util.NbPreferences;
 
 /** This deploymenmt factory can creates an alternate deployment manager for
  * S1AS.
@@ -176,7 +180,8 @@ public class SunDeploymentFactory implements Constants, DeploymentFactory, Insta
             return false;
         }
         if(uri.startsWith("[")){//NOI18N
-            if (uri.indexOf(SunURIManager.SUNSERVERSURI)!=-1){
+            boolean validServer = checkServer(uri);
+            if (uri.indexOf(SunURIManager.SUNSERVERSURI)!=-1 && validServer){
                 return true;
             }
         }
@@ -226,6 +231,7 @@ public class SunDeploymentFactory implements Constants, DeploymentFactory, Insta
         synchronized (dms) {
             // serverInstanceID is really the URI of this installed server :)
             dms.remove(serverInstanceID);
+            NbPreferences.forModule(PluginProperties.class).putBoolean(PluginProperties.REMOVED_DEFAULT_GFV2, true);
         }
     }
     
@@ -235,6 +241,20 @@ public class SunDeploymentFactory implements Constants, DeploymentFactory, Insta
     
     public void changeDefaultInstance(String oldServerInstanceID, String newServerInstanceID) {
         // n/a
+    }
+    
+    public boolean checkServer(String uri){
+        boolean corrServer = false;
+        if(uri.startsWith("[")){//NOI18N
+            String loc = uri.substring(1,uri.indexOf("]"));
+            File location = new File(loc);
+            PlatformValidator pv = new PlatformValidator();
+            String serverVersion = pv.getServerVersionByName(this.displayName);
+            if(serverVersion != null){
+                corrServer = pv.isDescriminatorPresent(location, serverVersion);
+            }   
+        }
+        return corrServer;
     }
     
 }
