@@ -46,7 +46,6 @@ import com.sun.jdi.Mirror;
 import com.sun.jdi.ObjectReference;
 import com.sun.jdi.PrimitiveValue;
 import com.sun.jdi.ReferenceType;
-import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadGroupReference;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.Value;
@@ -120,7 +119,7 @@ public final class ObjectTranslation {
                 if (o instanceof LocalVariable && (v == null || v instanceof Value)) {
                     LocalVariable lv = (LocalVariable) o;
                     org.netbeans.api.debugger.jpda.LocalVariable local;
-                    if (v instanceof ObjectReference) {
+                    if (v instanceof ObjectReference || v == null) {
                         local = new ObjectLocalVariable (
                             debugger, 
                             (ObjectReference) v, 
@@ -133,6 +132,22 @@ public final class ObjectTranslation {
                         local = new Local (debugger, (PrimitiveValue) v, null, lv, null);
                     }
                     return local;
+                }
+            default:
+                throw new IllegalStateException(""+o);
+        }
+    }
+    
+    private void verifyTranslation (Object t, Object o, Object v) {
+        switch (translationID) {
+            case LOCALS_ID:
+                if (t instanceof AbstractVariable) {
+                    AbstractVariable local = ((AbstractVariable) t);
+                    Value lv = local.getInnerValue();
+                    if (lv == null && v != null || lv != null && !lv.equals(v)) {
+                        local.setInnerValue((Value) v);
+                    }
+                    return ;
                 }
             default:
                 throw new IllegalStateException(""+o);
@@ -205,6 +220,7 @@ public final class ObjectTranslation {
      */
     public Object translate (Mirror o, Object v) {
         Object r = null;
+        boolean verify = false;
         synchronized (cache) {
             WeakReference wr = cache.get (o);
             if (wr != null)
@@ -212,7 +228,12 @@ public final class ObjectTranslation {
             if (r == null) {
                 r = createTranslation (o, v);
                 cache.put (o, new WeakReference<Object>(r));
+            } else {
+                verify = true;
             }
+        }
+        if (verify) {
+            verifyTranslation(r, o, v);
         }
         return r;
     }
