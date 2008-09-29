@@ -60,15 +60,12 @@ function initialize() {
             var start_page_string = (string.indexOf("?")==-1) ? string : string.substring(0, string.indexOf("?"));            
             parent_folder  = start_page_string.substring(0, start_page_string.lastIndexOf("/") + 1);
 
-	    if(query!="" && query != string && query.indexOf(sep)!=-1)  {
-	            url      = query.substring(0, query.indexOf(sep));	                
-		    filename = url.substring(url.lastIndexOf("/") + 1, url.length);
-		    query = query.substring(query.indexOf(sep) + 1, query.length);
-		    
+	    if(query!="" && query != string/* && query.indexOf(sep)!=-1*/)  {
 		    while(query!="") {
 		            var lang_sep     = "lang=";
 			    var platform_sep = "platform=";
 			    var option_sep   = "option=";
+                            var filename_sep = "filename=";
                             
 
 			    if(query.indexOf(lang_sep)==0) { 
@@ -127,6 +124,14 @@ function initialize() {
 					contact = query.substring(contact_sep.length, query.length);
 					query = "";
 				 }		 
+		            } else if(query.indexOf(filename_sep)==0) { 
+				 if(query.indexOf(sep)!=-1) {
+					filename = query.substring(filename_sep.length, query.indexOf(sep));
+					query = query.substring(query.indexOf(sep) + 1, query.length);
+	                	 } else {	
+					filename = query.substring(filename_sep.length, query.length);
+					query = "";
+				 }
 		            } else {
 				query = "";
 			    }
@@ -142,6 +147,36 @@ function initialize() {
 			image.src = phpRequest;
 			image.style.display="none";
 		    } 
+	            if(filename!="") {
+			for(var i=0;i<PLATFORM_IDS.length;i++) {
+			    for(var j=0;j<BUNDLE_IDS.length;j++) {
+				var testFileName = get_file_name(PLATFORM_IDS[i], BUNDLE_IDS[j]);
+				
+				if(testFileName==filename) {
+				    platform_id = PLATFORM_IDS[i];
+				    option_id   = BUNDLE_IDS[j];
+				    lang_id     = get_language(LANGUAGE_IDS);
+				    if(lang_id=="") lang_id = "en";
+				    i = PLATFORM_IDS.length;
+				    j = BUNDLE_IDS.length;	
+				    filename = "";
+                                }
+                            }
+                        }
+		    }
+
+		    if(option_id != "" && platform_id != "") {
+	    	        if (USE_BOUNCER == 1) {
+                            url      = get_file_bouncer_url(platform_id, option_id);
+                        } else {
+                            url      = get_file_url(get_file_name(platform_id, option_id));
+		        }
+                        filename     = get_file_name(platform_id, option_id);
+		    } else if(filename!="") {
+	    	        USE_BOUNCER = 0;
+                        url      = get_file_url(filename);
+		    }
+
             	    window.onload = delayedredirect;
             }
 }
@@ -154,7 +189,7 @@ function redirect() {
 }
 
 function write_download_header() {
-	document.write('<p id="download_link_p">');
+	document.write('<p>');
 	document.write(AUTOMATIC_DOWNLOAD_MESSAGE.replace('{0}',url));
 	document.write('</p>');
 }
@@ -168,17 +203,6 @@ function getMD5(name) {
 		}
         }
 	return md5;
-}
-
-function getSize(name) {
-	var size = "";
-        for (var i = 0; i < file_names.length; i++) {		
-		if(file_names[i] == filename) {		
-			size = file_sizes[i];
-			break;
-		}
-        }
-	return size;
 }
 
 function write_download_info() {
@@ -197,38 +221,26 @@ function write_download_info() {
 	document.write('<br>');
         document.write('<p class="file_information">');
 
+        var info = "";
 	if (platform_display_name!="" && lang_display_name!="" && filename!="") {
-		 var info = INFO_MESSAGE.
-				replace('{0}', PRODUCT_NAME).
+		 info = INFO_MESSAGE.
+				replace('{0}', PRODUCT_NAME.replace('{0}',BUILD_DISPLAY_VERSION)).
 		 		replace('{1}', ((option_display_name != "") ? (' ' + option_display_name) : '')).
 		 		replace('{2}', ((platform_id == 'zip') ? (platform_display_name) : (INSTALLER_MESSAGE.replace('{0}',platform_display_name)))).
 		 		replace('{3}', lang_display_name).
 		 		replace('{4}', lang_id).
-		 		replace('{5}', filename).
+		 		replace('{5}', get_file_name_short(platform_id,option_id)).
 				replace('{6}', size).
 		 		replace('{7}', md5);
-		 document.write(info);
-    	} else {
-		document.write(NOFILE_MESSAGE);
+    	} else if(filename!="") {
+		var filename_short = filename.substring(filename.lastIndexOf("/") + 1, filename.length);
+		info = INFO_MESSAGE_OTHER.
+		 		replace('{0}', filename_short).
+				replace('{1}', size).
+		 		replace('{2}', md5);
+	} else {
+		info = NOFILE_MESSAGE;
 	}
+        document.write(info);
 	document.write('</p>');
-}
-
-function omniture_download_link() {
-    var anchorElement = document.getElementById("download_link_p").getElementsByTagName("a")[0];//there is only one anchor in that paragraph
-    if(s_siteid) { // this variable is defined only if s_code_remote.js was downloaded
-        s_linkType = "d";
-        s_linkName = s_siteid + option_id;
-        s_events   = "event7";
-        s_products = "Downloaded Products;NetBeans IDE";
-        s_eVar3    = "netbeans";
-        s_eVar8    = option_id;
-        s_prop19   = platform_id;
-        s_prop20   = lang_id;
-        s_prop21   = BUILD_DISPLAY_VERSION;
-        s_linkTrackVars   = "events,products,eVar3,eVar8,prop19,prop20,prop21";
-        s_linkTrackEvents = "event7";
-        s_lnk=s_co(anchorElement);
-        s_gs(s_account); 
-    }
 }

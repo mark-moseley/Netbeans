@@ -34,32 +34,32 @@
  * copyright holder.
  */
 
-var AUTOMATIC_DOWNLOAD_MESSAGE  = "Your download should start automatically.<br>If not, <a href=\"{0}\" class=\"download_link\">download it here</a>.<br>";
 
-var PRODUCT_NAME      = "NetBeans {0}";
-var INSTALLER_MESSAGE = "Installer for {0}";
-var NOFILE_MESSAGE    = "No file requested" ;
+var BUILD_DISPLAY_VERSION       = "{build.display.version}";
+var BUILD_DISPLAY_VERSION_SHORT = "{build.display.version.short}";
 
-var NETBEANS_DOWNLOAD_STARTED_PAGE_TITLE       = "NetBeans IDE Download Started";
-var NETBEANS_DOWNLOAD_STARTER_PAGE_DESCRIPTION = "NetBeans IDE Download Started";
+var ZIP_FILES_PREFIX            = "{nb.zip.files.prefix}";
+var BUNDLE_FILES_PREFIX         = "{nb.bundle.files.prefix}";
+var BOUNCER_PRODUCT_PREFIX      = "{nb.bundle.files.prefix}";
 
-var NETBEANS_DOWNLOAD_STARTED_HEADER = "NetBeans IDE {0} Download Started";
-var RELEASE_NOTES_LABEL = "Release Notes";
-var INSTALL_NOTES_LABEL = "Installation Instructions";
-var FIND_OUT_MORE_LABEL = "Find Out More";
-var PLUGINS_LABEL       = "Plugins";
-var PLUGINS_DESCRIPTION = "Contributed by the NetBeans community and 3rd party vendors.";
-var TUTORIALS_LABEL     = "Tutorials";
-var TUTORIALS_DESCRIPTION = "Written and recorded by the NetBeans community and professionals.";
-var TRAINING_LABEL = "Training";
-var TRAINING_DESCRIPTION = "Courses to help you improve your skills.";
-var SUPPORT_LABEL        = "Support";
-var SUPPORT_DESCRIPTION  = "Flexible support options to help you stay focused on innovation.";
+var COMMUNITY_BUILD             = "{community.mlbuild}";
+var ADD_MORE_REDIRECT_VALUE     = "{enable.languages.redirect}";
+var MORE_LANGUAGES_REDIRECT_URL = "{alternative.languages.page.url}";
 
-// $PRODUCT_NAME $TYPE (Installer for $PLATFORM/Zip)/$Language ($Language_ID) $filename ($SIZE) MD5: $MD5
-var INFO_MESSAGE = "{0}{1} {2}/{3} ({4})<br>{5} ({6} MB)<br>MD5: {7}";
-var INFO_MESSAGE_OTHER = "{0} ({1} MB)<br>MD5: {2}";
+var BUILD_LOCATION = "";
 
-//DO NOT TRANSLATE
-var SUBSCRIPTION_PHP_URL = "http://services.netbeans.org/sub.php";
+var LOAD_OMNITURE_CODE = 0;
+var LOAD_GOOGLE_ANALYTICS_CODE = 0;
+var USE_BOUNCER = 0;
 
+var BOUNCER_URL = "http://services.netbeans.org/bouncer/index.php";
+
+//var SOURCES_AND_BINARIES_URL = "javascript: open_zip_link()";
+var SOURCES_AND_BINARIES_URL = BUILD_LOCATION + "zip/";
+
+function add_download_tabs() {
+	add_download_tab("6.1", "http://download.netbeans.org/netbeans/6.1/final/");
+	add_download_tab("6.5 Beta", "http://download.netbeans.org/netbeans/6.5/beta/");
+	add_download_tab(DEVELOPMENT_TITLE /*,DEVELOPMENT_BUILDS_LINK*/);
+	add_download_tab(ARCHIVE_TITLE,ARCHIVE_BUILDS_LINK);
+}
