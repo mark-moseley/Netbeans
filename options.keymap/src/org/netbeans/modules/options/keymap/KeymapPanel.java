@@ -81,6 +81,7 @@ TreeSelectionListener, ListSelectionListener {
         initComponents();
         loc (bDuplicate,        "Duplicate");
         loc (bDelete,       "Delete");
+        loc (lProfile,       "Keymap_Name");
 //        loc (rbAction,      "Show_Actions");
 //        loc (rbShortcut,    "Show_Shortcuts");
         liShortcuts.getAccessibleContext ().setAccessibleName (loc ("AN_Shortcuts"));
@@ -342,6 +343,9 @@ TreeSelectionListener, ListSelectionListener {
                 cbProfile.addItem (keymaps.get (i));
             listen = true;
         }
+        //refresh -- #65199
+        getModel().refreshActions();
+        
         cbProfile.setSelectedItem (getModel ().getCurrentProfile ());
     }
     
