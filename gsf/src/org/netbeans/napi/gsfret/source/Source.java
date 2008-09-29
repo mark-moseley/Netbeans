@@ -58,7 +58,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -73,10 +73,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.AbstractDocument;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.StyledDocument;
 import javax.swing.event.CaretEvent;
@@ -84,34 +84,32 @@ import javax.swing.event.CaretListener;
 import javax.swing.event.ChangeListener;
 import javax.swing.text.JTextComponent;
 import org.netbeans.api.editor.EditorRegistry;
-import org.netbeans.api.gsf.ParserFile;
-import org.netbeans.api.gsfpath.classpath.ClassPath;
-import org.netbeans.api.gsfpath.platform.JavaPlatformManager;
-import org.netbeans.api.gsfpath.queries.SourceLevelQuery;
-import org.netbeans.api.gsf.Error;
-import org.netbeans.api.gsf.ParseEvent;
-import org.netbeans.api.gsf.ParseListener;
-import org.netbeans.api.gsf.Parser;
-import org.netbeans.api.gsf.ParserResult;
-import org.netbeans.api.gsf.SourceFileReader;
-import org.netbeans.api.gsf.CancellableTask;
+import org.netbeans.modules.gsf.api.ParserFile;
+import org.netbeans.modules.gsf.api.TranslatedSource;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
+import org.netbeans.modules.gsf.api.Error;
+import org.netbeans.modules.gsf.api.ParseEvent;
+import org.netbeans.modules.gsf.api.ParseListener;
+import org.netbeans.modules.gsf.api.Parser;
+import org.netbeans.modules.gsf.api.SourceFileReader;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsf.api.EmbeddingModel;
 import org.netbeans.napi.gsfret.source.ClasspathInfo.PathKind;
-import org.netbeans.napi.gsfret.source.CompilationUnitTree;
 import org.netbeans.napi.gsfret.source.ModificationResult.Difference;
-import org.netbeans.napi.gsfret.source.ParserTaskImpl;
-import org.netbeans.napi.gsfret.source.support.CaretAwareSourceTaskFactory;
-//import org.netbeans.api.timers.TimesCollector;
-import org.netbeans.editor.Registry;
 import org.netbeans.modules.gsf.Language;
 import org.netbeans.modules.gsf.LanguageRegistry;
+import org.netbeans.modules.gsf.api.DataLoadersBridge;
+import org.netbeans.modules.gsf.api.EditHistory;
+import org.netbeans.modules.gsf.api.IncrementalEmbeddingModel;
+import org.netbeans.modules.gsf.api.IncrementalParser;
+import org.netbeans.modules.gsf.api.ParserResult;
 import org.netbeans.modules.gsfret.source.SourceAccessor;
-import org.netbeans.modules.gsfret.source.parsing.SourceFileObject;
 import org.netbeans.modules.gsfret.source.usages.ClassIndexImpl;
 import org.netbeans.modules.gsfret.source.usages.ClassIndexManager;
 import org.netbeans.modules.gsfret.source.util.LowMemoryEvent;
 import org.netbeans.modules.gsfret.source.util.LowMemoryListener;
 import org.netbeans.modules.gsfret.source.util.LowMemoryNotifier;
-import org.netbeans.spi.gsf.DefaultParserFile;
+import org.netbeans.modules.gsf.spi.DefaultParserFile;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileChangeListener;
@@ -119,8 +117,6 @@ import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
@@ -135,7 +131,7 @@ import org.openide.util.WeakListeners;
  * possible. 
  *
  *
- * This file is based on the JavaSource class in Retouche's org.netbeans.api.gsfpath.source package.
+ * This file is based on the JavaSource class in Retouche's org.netbeans.modules.gsfpath.api.source package.
  * It represents an open source file in the editor.
  *
  * @author Petr Hrebejk
@@ -210,7 +206,7 @@ public final class Source {
      * Init the maps
      */
     static {
-        SourceAccessor.INSTANCE = new JavaSourceAccessorImpl ();
+        SourceAccessor.setINSTANCE (new JavaSourceAccessorImpl ());
         phase2Key.put(Phase.PARSED,"parsed");                                   //NOI18N
         phase2Message.put (Phase.PARSED,"Parsed");                              //NOI18N
 
@@ -236,11 +232,14 @@ public final class Source {
     private final FileObject rootFo;
     private final FileChangeListener fileChangeListener;
     private DocListener listener;
-    private DataObjectListener dataObjectListener;
-    private String sourceLevel;
+    private PropertyChangeListener dataObjectListener;
 
     private final ClasspathInfo classpathInfo;
     private CompilationInfo currentInfo;
+    private Map<String,ParserResult> recentParseResult = new HashMap<String,ParserResult>();
+    private Map<EmbeddingModel,Collection<? extends TranslatedSource>> recentEmbeddingTranslations = 
+            new IdentityHashMap<EmbeddingModel,Collection<? extends TranslatedSource>>();
+    private EditHistory editHistory = new EditHistory();
     private java.util.Stack<CompilationInfo> infoStack = new java.util.Stack<CompilationInfo> ();
 
     private int flags = 0;
@@ -313,13 +312,9 @@ public final class Source {
         if (fileObject == null) {
             throw new IllegalArgumentException ("fileObject == null");  //NOI18N
         }
-        if (!fileObject.isValid()) {
+        if (!fileObject.isValid() || fileObject.isFolder()) {
             return null;
         }
-//        if (!"text/x-java".equals(FileUtil.getMIMEType(fileObject)) && !"java".equals(fileObject.getExt())) {  //NOI18N
-//            //TODO: Source cannot be created for all kinds of files, but text/x-java is too restrictive:
-//            return null;
-//        }
         if (!LanguageRegistry.getInstance().isSupported(fileObject.getMIMEType())) {
             return null;
         }
@@ -351,9 +346,9 @@ public final class Source {
         Reference<Source> ref = (Reference<Source>)doc.getProperty(Source.class);
         Source js = ref != null ? ref.get() : null;
         if (js == null) {
-            DataObject dObj = (DataObject)doc.getProperty(Document.StreamDescriptionProperty);
-            if (dObj != null)
-                js = forFileObject(dObj.getPrimaryFile());
+            FileObject fo = DataLoadersBridge.getDefault().getFileObject(doc);
+            if (fo != null)
+                js = forFileObject(fo);
         }
         return js;
     }
@@ -377,7 +372,20 @@ public final class Source {
                 if (!multipleSources) {
                     file.addFileChangeListener(FileUtil.weakFileChangeListener(this.fileChangeListener,file));
                     this.assignDocumentListener(file);
-                    this.dataObjectListener = new DataObjectListener(file);
+                    this.dataObjectListener = DataLoadersBridge.getDefault().getDataObjectListener(file, new FileChangeAdapter() {
+                        @Override
+                        public void fileChanged(FileEvent fe) {
+                            try {
+                                assignDocumentListener(fe.getFile());
+                                resetState(true, true);
+                            } catch (IOException ex) {
+                                // should not occur
+                                Logger.getLogger(Source.class.getName()).log(Level.SEVERE,
+                                        ex.getMessage(),
+                                        ex);
+                            }
+                        }
+                    });
                 }
                 //if (!filterAssigned) {
                 //    filterAssigned = true;
@@ -424,7 +432,7 @@ public final class Source {
             throw new IllegalArgumentException ("Task cannot be null");     //NOI18N
         }
         
-        assert !holdsDocumentWriteLock(files) : "Source.runCompileControlTask called under Document write lock.";    //NOI18N
+        assert javacLock.isHeldByCurrentThread() || !holdsDocumentWriteLock(files) : "Source.runCompileControlTask called under Document write lock.";    //NOI18N
         
         if (this.files.size()<=1) {                        
             final Source.Request request = currentRequest.getTaskToCancel();
@@ -552,7 +560,7 @@ public final class Source {
             throw new IllegalArgumentException ("Task cannot be null");     //NOI18N
         }
         
-        assert !holdsDocumentWriteLock(files) : "Source.runModificationTask called under Document write lock.";    //NOI18N
+        assert javacLock.isHeldByCurrentThread() || !holdsDocumentWriteLock(files) : "Source.runCompileControlTask called under Document write lock.";    //NOI18N
         
         ModificationResult result = new ModificationResult(this);
         if (this.files.size()<=1) {
@@ -630,6 +638,7 @@ public final class Source {
                         task.run(copy);
                         if (!ci.needsRestart) {
                             jt = ci.getParserTask();
+                            //jt = ci.getParserTask();
 //                            Log.instance(jt.getContext()).nerrors = 0;
                             List<Difference> diffs = copy.getChanges();
                             if (diffs != null && diffs.size() > 0)
@@ -770,7 +779,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         //assert diagnosticListener == null;
         Language language = compilationInfo.getLanguage();
         assert language != null;
-        ParserTaskImpl javacTask = createParserTask(language, compilationInfo, getClasspathInfo(), /*diagnosticListener,*/ sourceLevel, false);
+        ParserTaskImpl javacTask = createParserTask(language, compilationInfo, getClasspathInfo(), /*diagnosticListener,*/ false);
 //        Context context = javacTask.getContext();
 //        Messager.preRegister(context, null);
 //        ErrorHandlingJavadocEnter.preRegister(context);
@@ -781,23 +790,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         return javacTask;
     }
 
-    private static ParserTaskImpl createParserTask(Language language, final CompilationInfo currentInfo, final ClasspathInfo cpInfo, /*final DiagnosticListener<? super SourceFileObject> diagnosticListener,*/ final String sourceLevel, final boolean backgroundCompilation) {
-        ArrayList<String> options = new ArrayList<String>();
-
-
-        //        CompilationUnitTree unit = new CompilationUnitTree();
-
-        Parser parser = language.getParser();
-        assert parser != null;
+    private static ParserTaskImpl createParserTask(Language language, final CompilationInfo currentInfo, final ClasspathInfo cpInfo, /*final DiagnosticListener<? super SourceFileObject> diagnosticListener,*/ final boolean backgroundCompilation) {
         ParserTaskImpl jti = new ParserTaskImpl(language);
-        jti.setParser(parser);
-        if (currentInfo != null) {
-            currentInfo.setParser(parser);
-        }
 
         return jti;
     }
-
 
     /**
      * Not synchronized, only the CompilationJob's thread can call it!!!!
@@ -826,72 +823,269 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                     return Phase.MODIFIED;
                 }
                 long start = System.currentTimeMillis();
-                Language language = currentInfo.getLanguage();
+
+                ParserFile file = new DefaultParserFile(currentInfo.getFileObject(), null, false);
+                List<ParserFile> sourceFiles = Collections.singletonList(file);
+                final FileObject bufferFo = currentInfo.getFileObject();
+
+                final ParserResult[] resultHolder = new ParserResult[1];
+                ParseListener listener = new ParseListener() {
+                    final List<Error> errors = new ArrayList<Error>();
+
+                    public void started(ParseEvent e) {
+                        errors.clear();
+                    }
+
+                    public void error(Error error) {
+                        errors.add(error);
+                    }
+
+                    public void exception(Exception exception) {
+                        Exceptions.printStackTrace(exception);
+                    }
+
+                    public void finished(ParseEvent e) {
+                        // TODO - check state
+                        if (e.getKind() == ParseEvent.Kind.PARSE) {
+                            ParserResult result = e.getResult();
+                            for (Error error : errors) {
+                                result.addError(error);
+                            }
+                            resultHolder[0] = result;
+                        }
+                    }
+                };
+                
+                LanguageRegistry registry = LanguageRegistry.getInstance();
+                String mimeType = currentInfo.getFileObject().getMIMEType();
+                List<Language> languages = registry.getApplicableLanguages(mimeType);
+                Source source = currentInfo.getSource();
+                currentInfo.setHistory(source.editHistory);
+                
+            for (Language language : languages) {
+                EmbeddingModel model = registry.getEmbedding(language.getMimeType(), mimeType);
                 assert language != null;
-                CompilationUnitTree unit = new CompilationUnitTree();
                 Parser parser = language.getParser(); // Todo - call createParserTask here?
+                IncrementalParser incrementalParser = parser instanceof IncrementalParser ? (IncrementalParser)parser : null;
+
+if (cancellable && currentRequest.isCanceled()) {
+    // Keep the currentPhase unchanged, it may happen that an userActionTask
+    // running after the phace completion task may still use it.
+    return Phase.MODIFIED;
+}
+// <editor-fold defaultstate="collapsed" desc="Peformance">                
+long vsTime = -1;
+long parseTime = -1;
+// </editor-fold>
                 if (parser != null) {
-                    final String buffer = currentInfo.getText();
-                    
-                    final ParserResult[] resultHolder = new ParserResult[1];
-                    ParseListener listener = new ParseListener() {
-                        public void started(ParseEvent e) {
-                        }
-                        
-                        public void error(Error error) {
-                            currentInfo.addError(error);
-                        }
-                        
-                        public void exception(Exception exception) {
-                            Exceptions.printStackTrace(exception);
-                        }
-
-                        public void finished(ParseEvent e) {
-                            // TODO - check state
-                            if (e.getKind() == ParseEvent.Kind.PARSE) {
-                                resultHolder[0] = e.getResult();
+                    if (model != null) {
+                        Document document = currentInfo.getDocument();
+                            
+                        if (document == null) {
+                            // Ensure document is forced open such that info.getDocument() will not yield null
+                            UiUtils.getDocument(currentInfo.getFileObject(), true);
+                            document = currentInfo.getDocument();
+                        } else {
+                            // If you have a plain text file and try to assign a new mime type
+                            // to it, we end up in a scenario where the file mime type and the
+                            // document mime type do not (at least not yet) match - with bad results
+                            // later on (mime type lookup, TokenHierarchy lookup etc) all return
+                            // objects with a wrong/unexpected text/plain mimetype.
+                            // See http://www.netbeans.org/issues/show_bug.cgi?id=138948 for details.
+                            // It looks like the infrastructure closes the file shortly after this,
+                            // so presumably live-changing files like this isn't supported..
+                            if ("text/plain".equals(document.getProperty("mimeType"))) { // NOI18N
+                                return Phase.MODIFIED;
                             }
                         }
                         
-                    };
-                    List<ParserFile> sourceFiles = new ArrayList<ParserFile>(1);
-                    sourceFiles.add(new DefaultParserFile(currentInfo.getFileObject(), null, false));
-                    final FileObject bufferFo = currentInfo.getFileObject();
-                    SourceFileReader reader = new SourceFileReader() {
-                        public CharSequence read(ParserFile fileObject) {
-                            assert fileObject.getFileObject() == bufferFo;
-                            return buffer;
+                        if (document == null) {
+                            // TODO - log problem
+                            continue;
                         }
-                        
-                        public int getCaretOffset(ParserFile file) {
-                            assert file.getFileObject() == bufferFo;
+if (cancellable && currentRequest.isCanceled()) {
+    // Keep the currentPhase unchanged, it may happen that an userActionTask
+    // running after the phace completion task may still use it.
+    return Phase.MODIFIED;
+}
+// <editor-fold defaultstate="collapsed" desc="Peformance">                     
+long vsStart = System.currentTimeMillis();  
+// </editor-fold>
 
-                            int offset = CaretAwareSourceTaskFactory.getLastPosition(file.getFileObject());
-                            if (offset == 0) {
-                                // CaretAwareSourceTaskFactory return 0 for unknown positions. These
-                                // could also be actual positions, but for now, treat 0 as an unknown
-                                // position since it's unlikely we have errors there.
-                                return -1;
-                            } else {
-                                return offset;
+                        Collection<? extends TranslatedSource> translations = null;
+
+                        boolean incremental = false;
+                        if (model instanceof IncrementalEmbeddingModel && (source.files == null || source.files.size() <= 1)) {
+                            incremental = true;
+                            IncrementalEmbeddingModel incrementalModel = (IncrementalEmbeddingModel)model;
+                            translations = source.recentEmbeddingTranslations.get(model);
+                            if (translations != null) {
+                                EditHistory history = source.editHistory;
+                                if (translations.size() > 0) {
+                                    history = EditHistory.getCombinedEdits(translations.iterator().next().getEditVersion(), source.editHistory);
+                                }
+                                if (history != null) {
+                                    IncrementalEmbeddingModel.UpdateState updated = incrementalModel.update(history, translations);
+                                    if (updated == IncrementalEmbeddingModel.UpdateState.COMPLETED) {
+                                        // No need to parse - nothing else to be done for this mime type
+                                        ParserResult result = source.recentParseResult.get(language.getMimeType());
+                                        for (TranslatedSource translated : translations) {
+                                            translated.setEditVersion(source.editHistory.getVersion());
+                                        }
+                                        if (result != null) {
+                                            currentInfo.addEmbeddingResult(language.getMimeType(), result);
+                                            result.setUpdateState(ParserResult.UpdateState.NO_CHANGE);
+                                            continue;
+                                        }
+                                    } else if (updated == IncrementalEmbeddingModel.UpdateState.FAILED) {
+                                        // Force update!
+                                        translations = null;
+                                    } else {
+                                        assert updated == IncrementalEmbeddingModel.UpdateState.UPDATED;
+                                        // Continue to parse below
+                                        for (TranslatedSource translated : translations) {
+                                            translated.setEditVersion(source.editHistory.getVersion());
+                                        }
+                                    }
+                                } else {
+                                    // Force update
+                                    translations = null;
+                                }
                             }
                         }
-                    };
-                    parser.parseFiles(sourceFiles, listener, reader);
-                    ParserResult result = resultHolder[0];
-              
-                    assert result != null;
-                    currentInfo.setParser(parser);
-                    currentInfo.setParserResult(result);
-                    currentInfo.setPositionManager(parser.getPositionManager());
-                    currentInfo.setCompilationUnit(unit);
+
+                        if (translations == null) {
+                            // No incremental support or previous result
+                            translations = model.translate(document);
+                            if (incremental) {
+                                source.recentEmbeddingTranslations.put(model, translations);
+                                for (TranslatedSource translated : translations) {
+                                    translated.setEditVersion(source.editHistory.getVersion());
+                                }
+                            }
+                        }
+if (cancellable && currentRequest.isCanceled()) {
+    // Keep the currentPhase unchanged, it may happen that an userActionTask
+    // running after the phace completion task may still use it.
+    return Phase.MODIFIED;
+}
+// <editor-fold defaultstate="collapsed" desc="Peformance">                                        
+vsTime = System.currentTimeMillis() - vsStart; //some impls. may compute and cache the results just on model.translate(document)
+parseTime = 0;
+// </editor-fold>
+                        for (TranslatedSource translatedSource : translations) {
+// <editor-fold defaultstate="collapsed" desc="Peformance">                                                 
+vsStart = System.currentTimeMillis();
+// </editor-fold>
+                            String buffer = translatedSource.getSource();
+// <editor-fold defaultstate="collapsed" desc="Peformance">                                                 
+vsTime += System.currentTimeMillis() - vsStart;
+long parseStart = System.currentTimeMillis();
+// </editor-fold>
+                            SourceFileReader reader = new StringSourceFileReader(buffer, bufferFo);
+                            ParserResult result = null;
+                            if (incrementalParser != null && (source.files == null || source.files.size() <= 1)) {
+                                ParserResult previousResult = source.recentParseResult.get(language.getMimeType());
+                                if (previousResult != null) {
+                                    EditHistory history = EditHistory.getCombinedEdits(previousResult.getEditVersion(), source.editHistory);
+                                    if (history != null) {
+                                        ParserResult ir = incrementalParser.parse(file, reader, translatedSource, history, previousResult);
+                                        if (ir != null) {
+                                            ParserResult.UpdateState state = ir.getUpdateState();
+                                            if (state != ParserResult.UpdateState.FAILED) {
+                                                result = ir;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (result == null) {
+                                Parser.Job job = new Parser.Job(sourceFiles, listener, reader, translatedSource);
+                                parser.parseFiles(job);
+                                result = resultHolder[0];
+                            }
+                            if (incrementalParser != null || (incremental && translations != null)) {
+                                // Hmm, this will only work correctly for the FIRST element if the collections are > 1
+                                source.recentParseResult.put(language.getMimeType(), result);
+                                result.setEditVersion(source.editHistory.getVersion());
+                            }
+// <editor-fold defaultstate="collapsed" desc="Peformance">                                                 
+parseTime += System.currentTimeMillis() - parseStart;     
+// </editor-fold>
+if (cancellable && currentRequest.isCanceled()) {
+    // Keep the currentPhase unchanged, it may happen that an userActionTask
+    // running after the phace completion task may still use it.
+    return Phase.MODIFIED;
+}
+                            result.setTranslatedSource(translatedSource);
+                            assert result != null;
+                            currentInfo.addEmbeddingResult(language.getMimeType(), result);
+                        }
+                    } else {
+// <editor-fold defaultstate="collapsed" desc="Peformance">                                             
+long parseStart = System.currentTimeMillis();    
+// </editor-fold>
+                        String buffer = currentInfo.getText();
+                        SourceFileReader reader = new StringSourceFileReader(buffer, bufferFo);
+
+                        ParserResult result = null;
+                        if (incrementalParser != null && (source.files == null || source.files.size() <= 1)) {
+                            ParserResult previousResult = source.recentParseResult.get(language.getMimeType());
+                            if (previousResult != null) {
+                                EditHistory history = EditHistory.getCombinedEdits(previousResult.getEditVersion(), source.editHistory);
+                                if (history != null) {
+                                    result = incrementalParser.parse(file, reader, null, history, previousResult);
+                                    if (result != null) {
+                                        ParserResult.UpdateState state = result.getUpdateState();
+                                        if (state == ParserResult.UpdateState.FAILED) {
+                                            result = null;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (result == null) {
+                            Parser.Job job = new Parser.Job(sourceFiles, listener, reader, null);
+                            parser.parseFiles(job);
+                            result = resultHolder[0];
+                        }
+                        if (incrementalParser != null) {
+                            source.recentParseResult.put(language.getMimeType(), result);
+                            result.setEditVersion(source.editHistory.getVersion());
+                        }
+// <editor-fold defaultstate="collapsed" desc="Peformance">                     
+parseTime = System.currentTimeMillis() - parseStart;
+// </editor-fold>
+if (cancellable && currentRequest.isCanceled()) {
+    // Keep the currentPhase unchanged, it may happen that an userActionTask
+    // running after the phace completion task may still use it.
+    return Phase.MODIFIED;
+}
+                        assert result != null;
+                        currentInfo.addEmbeddingResult(language.getMimeType(), result);
+                    }
                 }
+// <editor-fold defaultstate="collapsed" desc="Peformance">                     
 
+if(vsTime > 0) {                
+    Logger.getLogger("TIMER").log(Level.FINE, "Virtual Source (" + language.getMimeType() + ")", 
+        new Object[] {currentInfo.getFileObject(), vsTime});
+}
+if(parseTime > 0) {                
+    Logger.getLogger("TIMER").log(Level.FINE, "Parsing (" + language.getMimeType() + ")",
+        new Object[] {currentInfo.getFileObject(), parseTime});
+}
+// </editor-fold>
+            }
                 currentPhase = Phase.PARSED;
-                long end = System.currentTimeMillis();
-                FileObject file = currentInfo.getFileObject();
-                //TimesCollector.getDefault().reportReference(file, "compilationUnit", "[M] Compilation Unit", unit);     //NOI18N
-                logTime (file,currentPhase,(end-start));
+                EditHistory oldHistory = source.editHistory;
+                source.editHistory = new EditHistory();
+                oldHistory.add(source.editHistory);
+
+//                long end = System.currentTimeMillis();
+//                FileObject file = currentInfo.getFileObject();
+//                //TimesCollector.getDefault().reportReference(file, "compilationUnit", "[M] Compilation Unit", unit);     //NOI18N
+//                logTime (file,currentPhase,(end-start));
             }
             if (lmListener != null && lmListener.lowMemory.getAndSet(false)) {
                 currentInfo.needsRestart = true;
@@ -1027,9 +1221,13 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
     private void updateIndex () {
         if (this.rootFo != null) {
             try {
-                ClassIndexImpl ciImpl = ClassIndexManager.getDefault().getUsagesQuery(this.rootFo.getURL());
-                if (ciImpl != null) {
-                    ciImpl.setDirty(this);
+                for (Language language : LanguageRegistry.getInstance()) {
+                    if (language.getIndexer() != null) {
+                        ClassIndexImpl ciImpl = ClassIndexManager.get(language).getUsagesQuery(this.rootFo.getURL());
+                        if (ciImpl != null) {
+                            ciImpl.setDirty(this);
+                        }
+                    }
                 }
             } catch (IOException ioe) {
                 Exceptions.printStackTrace(ioe);
@@ -1043,8 +1241,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
     }
 
     private void assignDocumentListener(FileObject fo) throws IOException {
-        DataObject od = DataObject.find(fo);
-        EditorCookie.Observable ec = (EditorCookie.Observable) od.getCookie(EditorCookie.Observable.class);
+        EditorCookie.Observable ec =  DataLoadersBridge.getDefault().getCookie(fo,EditorCookie.Observable.class);
         if (ec != null) {
             this.listener = new DocListener (ec);
         } else {
@@ -1289,6 +1486,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             //the callback cannot be in synchronized section
             //since NbDocument.runAtomic fires under lock
             Source.this.resetState(true, true);
+            editHistory.insertUpdate(e);
         }
 
         public void removeUpdate(DocumentEvent e) {
@@ -1296,6 +1494,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             //the callback cannot be in synchronized section
             //since NbDocument.runAtomic fires under lock
             Source.this.resetState(true, true);
+            editHistory.removeUpdate(e);
         }
 
         public void changedUpdate(DocumentEvent e) {
@@ -1307,6 +1506,9 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 if (old instanceof Document && docListener != null) {
                     ((Document) old).removeDocumentListener(docListener);
                     docListener = null;
+                    // Document closed - don't hang on to parse results
+                    recentParseResult.clear();
+                    recentEmbeddingTranslations.clear();
                 }
                 Document doc = ec.getDocument();
                 if (doc != null) {
@@ -1322,28 +1524,46 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
 
     }
 
-    private static class EditorRegistryListener implements ChangeListener, CaretListener {
-
-        private JTextComponent lastEditor;
-
-        public EditorRegistryListener () {
-            Registry.addChangeListener(this);
+    private static class EditorRegistryListener implements CaretListener/*, PropertyChangeListener*/ {
+                        
+        //private Request request;
+        private Reference<JTextComponent> lastEditorRef;
+        
+        public EditorRegistryListener() {
+            EditorRegistry.addPropertyChangeListener(new PropertyChangeListener() {
+                public void propertyChange(PropertyChangeEvent evt) {
+                    editorRegistryChanged();
+                }
+            });
+            editorRegistryChanged();
         }
-
-        public void stateChanged(ChangeEvent event) {
-            final JTextComponent editor = Registry.getMostActiveComponent();
+                
+        public void editorRegistryChanged() {
+            final JTextComponent editor = EditorRegistry.lastFocusedComponent();
+            final JTextComponent lastEditor = lastEditorRef == null ? null : lastEditorRef.get();
             if (lastEditor != editor) {
                 if (lastEditor != null) {
                     lastEditor.removeCaretListener(this);
+                    //lastEditor.removePropertyChangeListener(this);
+                    final Document doc = lastEditor.getDocument();
+                    Source js = null;
+                    if (doc != null) {
+                        js = forDocument(doc);
+                    }
+                    //if (js != null) {
+                    //    js.k24 = false;
+                    //}                   
                 }
-                lastEditor = editor;
-                if (lastEditor != null) {
-                    lastEditor.addCaretListener(this);
+                lastEditorRef = new WeakReference<JTextComponent>(editor);
+                if (editor != null) {
+                    editor.addCaretListener(this);
+                    //lastEditor.addPropertyChangeListener(this);
                 }
             }
         }
-
+        
         public void caretUpdate(CaretEvent event) {
+            final JTextComponent lastEditor = lastEditorRef == null ? null : lastEditorRef.get();
             if (lastEditor != null) {
                 Document doc = lastEditor.getDocument();
                 if (doc != null) {
@@ -1354,6 +1574,39 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 }
             }
         }
+
+//        public void propertyChange(final PropertyChangeEvent evt) {
+//            String propName = evt.getPropertyName();
+//            if ("completion-active".equals(propName)) {
+//                Source js = null;
+//                final Document doc = lastEditor.getDocument();
+//                if (doc != null) {
+//                    js = forDocument(doc);
+//                }
+//                if (js != null) {
+//                    Object rawValue = evt.getNewValue();
+//                    assert rawValue instanceof Boolean;
+//                    if (rawValue instanceof Boolean) {
+//                        final boolean value = (Boolean)rawValue;
+//                        if (value) {
+//                            assert this.request == null;
+//                            this.request = currentRequest.getTaskToCancel(false);
+//                            if (this.request != null) {
+//                                this.request.task.cancel();
+//                            }
+//                            js.k24 = true;
+//                        }
+//                        else {                    
+//                            Request _request = this.request;
+//                            this.request = null;                            
+//                            js.k24 = false;
+//                            js.resetTask.schedule(js.reparseDelay);
+//                            currentRequest.cancelCompleted(_request);
+//                        }
+//                    }
+//                }
+//            }
+//        }
     }
 
     private class FileChangeListenerImpl extends FileChangeAdapter {
@@ -1367,55 +1620,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         }
     }
 
-    private final class DataObjectListener implements PropertyChangeListener {
-
-        private DataObject dobj;
-        private final FileObject fobj;
-        private PropertyChangeListener wlistener;
-
-        public DataObjectListener(FileObject fo) throws DataObjectNotFoundException {
-            this.fobj = fo;
-            this.dobj = DataObject.find(fo);
-            wlistener = WeakListeners.propertyChange(this, dobj);
-            this.dobj.addPropertyChangeListener(wlistener);
-        }
-
-        public void propertyChange(PropertyChangeEvent pce) {
-            DataObject invalidDO = (DataObject) pce.getSource();
-            if (invalidDO != dobj)
-                return;
-            if (DataObject.PROP_VALID.equals(pce.getPropertyName())) {
-                handleInvalidDataObject(invalidDO);
-            } else if (pce.getPropertyName() == null && !dobj.isValid()) {
-                handleInvalidDataObject(invalidDO);
-            }
-        }
-
-        private void handleInvalidDataObject(DataObject invalidDO) {
-            invalidDO.removePropertyChangeListener(wlistener);
-            if (fobj.isValid()) {
-                // file object still exists try to find new data object
-                try {
-                    dobj = DataObject.find(fobj);
-                    dobj.addPropertyChangeListener(wlistener);
-                    assignDocumentListener(fobj);
-                    resetState(true, true);
-                } catch (IOException ex) {
-                    // should not occur
-                    Logger.getLogger(Source.class.getName()).log(Level.SEVERE,
-                                                                     ex.getMessage(),
-                                                                     ex);
-                }
-            }
-        }
-
-    }
-
     private static CompilationInfo createCurrentInfo (final Source js, final FileObject fo, final Object/*FilterListener*/ filterListener, final ParserTaskImpl javac) throws IOException {
-        if (js.sourceLevel == null && fo != null)
-            js.sourceLevel = SourceLevelQuery.getSourceLevel(fo);
-        if (js.sourceLevel == null)
-            js.sourceLevel = JavaPlatformManager.getDefault().getDefaultPlatform().getSpecification().getVersion().toString();
         CompilationInfo info = new CompilationInfo (js, fo, javac);
 
         //TimesCollector.getDefault().reportReference(fo, CompilationInfo.class.toString(), "[M] CompilationInfo", info);     //NOI18N
@@ -1452,19 +1657,16 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
     }
 
     private static class JavaSourceAccessorImpl extends SourceAccessor {
+        private StackTraceElement[] javacLockedStackTrace;
 
         protected @Override void runSpecialTaskImpl (CancellableTask<CompilationInfo> task, Priority priority) {
             handleAddRequest(new Request (task, null, null, priority, false));
         }
 
         @Override
-        public ParserTaskImpl createParserTask(Language language, ClasspathInfo cpInfo, /*DiagnosticListener<? super SourceFileObject> diagnosticListener,*/ String sourceLevel) {
-            if (sourceLevel == null)
-                sourceLevel = JavaPlatformManager.getDefault().getDefaultPlatform().getSpecification().getVersion().toString();
-//            return Source.createParserTask(cpInfo, diagnosticListener, sourceLevel, true);
-//            throw new RuntimeException("Not yet implemented - I need the CompilationInfo here so I can pass in the language etc.");
+        public ParserTaskImpl createParserTask(Language language, ClasspathInfo cpInfo) {
             boolean backgroundCompilation = true; // Is this called from anywhere else?
-            return Source.createParserTask(language, null, cpInfo, sourceLevel, backgroundCompilation);
+            return Source.createParserTask(language, null, cpInfo, backgroundCompilation);
         }
 
         @Override
@@ -1499,7 +1701,30 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         public boolean isDispatchThread () {
             return factory.isDispatchThread(Thread.currentThread());
          }
-    
+
+        @Override
+        public void lockParser() {            
+            javacLock.lock();
+            try {
+                this.javacLockedStackTrace = Thread.currentThread().getStackTrace();
+            } catch (RuntimeException e) {
+                //Not important, thrown by logging code
+            }
+        }
+        
+        @Override
+        public void unlockParser() {
+            try {
+                this.javacLockedStackTrace = null;
+            } finally {
+                javacLock.unlock();
+            }
+        }
+        
+        @Override
+        public boolean isParserLocked() {
+            return javacLock.isLocked();
+        }
     }
 
     private static class CurrentRequestReference {
@@ -1639,17 +1864,13 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             final Thread currentThread = Thread.currentThread();
             for (FileObject fo : files) {
                 try {
-                final DataObject dobj = DataObject.find(fo);
-                final EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);
-                if (ec != null) {
-                    final StyledDocument doc = ec.getDocument();
+                    final StyledDocument doc = DataLoadersBridge.getDefault().getDocument(fo);
                     if (doc instanceof AbstractDocument) {
                         Object result = method.invoke(doc);
                         if (result == currentThread) {
                             return true;
                         }
                     }
-                }
                 } catch (Exception e) {
                     Exceptions.printStackTrace(e);
                 }
@@ -1671,10 +1892,29 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
      */
     private static void dumpSource(CompilationInfo info, Throwable exc) {
         String dumpDir = System.getProperty("netbeans.user") + "/var/log/"; //NOI18N
-        String src = info.getText();
+        String src = null;
+        try {
+            src = info.getText();
+        } catch (IllegalStateException ise) {
+            Document doc = info.getDocument();
+            if (doc != null) {
+                try {
+                    src = doc.getText(0, doc.getLength());
+                } catch (BadLocationException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        }
+        if (src == null) {
+            src = "";
+        }
         FileObject file = info.getFileObject();
-        String fileName = FileUtil.getFileDisplayName(info.getFileObject());
-        String origName = file.getName();
+        String origName = "unknown";
+        String fileName = origName;
+        if (file != null) {
+            fileName = FileUtil.getFileDisplayName(file);
+            origName = file.getNameExt();
+        }
         File f = new File(dumpDir + origName + ".dump"); // NOI18N
         boolean dumpSucceeded = false;
         int i = 1;
@@ -1710,8 +1950,12 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 Logger.getLogger("global").log(Level.INFO, "Error when writing parser dump file!", ioe); // NOI18N
             }
         }
+        String language = "ruby";
+        if (info.getLanguage() != null) {
+            language = info.getLanguage().getDisplayName();
+        }
         if (dumpSucceeded) {
-            Throwable t = Exceptions.attachMessage(exc, "An error occurred during parsing of \'" + fileName + "\'. Please report a bug against ruby and attach dump file '"  // NOI18N
+            Throwable t = Exceptions.attachMessage(exc, "An error occurred during parsing of \'" + fileName + "\'. Please report a bug against " + language + " and attach dump file '"  // NOI18N
                     + f.getAbsolutePath() + "'."); // NOI18N
             Exceptions.printStackTrace(t);
         } else {
