@@ -45,6 +45,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import org.netbeans.modules.web.jsf.api.facesmodel.JSFConfigVisitor;
 import org.netbeans.modules.web.jsf.api.facesmodel.ManagedBean;
 import org.w3c.dom.Element;
@@ -97,42 +98,42 @@ public class ManagedBeanImpl extends DescriptionGroupImpl implements ManagedBean
     
     public String getManagedBeanName() {
         if (beanName == null) {
-            beanName = getChildElementText(JSFConfigQNames.MANAGED_BEAN_NAME.getQName(getModel().getVersion()));
+            beanName = getChildElementText(JSFConfigQNames.MANAGED_BEAN_NAME.getQName(getNamespaceURI()));
         }
         return beanName;
     }
     
     public void setManagedBeanName(String name) {
-        setChildElementText(MANAGED_BEAN_NAME, name, JSFConfigQNames.MANAGED_BEAN_NAME.getQName(getModel().getVersion()));
+        setChildElementText(MANAGED_BEAN_NAME, name, JSFConfigQNames.MANAGED_BEAN_NAME.getQName(getNamespaceURI()));
     }
     
     public String getManagedBeanClass() {
         if (beanClass ==  null) {
-            beanClass = getChildElementText(JSFConfigQNames.MANAGED_BEAN_CLASS.getQName(getModel().getVersion()));
+            beanClass = getChildElementText(JSFConfigQNames.MANAGED_BEAN_CLASS.getQName(getNamespaceURI())).trim();
         }
         return beanClass;
     }
     
     public void setManagedBeanClass(String beanClass) {
-        setChildElementText(MANAGED_BEAN_CLASS, beanClass, JSFConfigQNames.MANAGED_BEAN_CLASS.getQName(getModel().getVersion()));
+        setChildElementText(MANAGED_BEAN_CLASS, beanClass, JSFConfigQNames.MANAGED_BEAN_CLASS.getQName(getNamespaceURI()));
     }
     
     public ManagedBean.Scope getManagedBeanScope() {
         if (beanScope == null) {
-            String scopeText = getChildElementText(JSFConfigQNames.MANAGED_BEAN_SCOPE.getQName(getModel().getVersion()));
-            scopeText = scopeText.trim().toUpperCase();
+            String scopeText = getChildElementText(JSFConfigQNames.MANAGED_BEAN_SCOPE.getQName(getNamespaceURI()));
+            scopeText = scopeText.trim().toUpperCase(Locale.ENGLISH);
             try{
                 beanScope = ManagedBean.Scope.valueOf(scopeText);
             }
             catch (IllegalArgumentException exception){
-                // do nothing. The value is wrong and the method should return null. 
+                // do nothing. The value is wrong and the method should return null.
             }
         }
         return beanScope;
     }
     
     public void setManagedBeanScope(ManagedBean.Scope scope) {
-        setChildElementText(MANAGED_BEAN_SCOPE, scope.toString(), JSFConfigQNames.MANAGED_BEAN_SCOPE.getQName(getModel().getVersion()));
+        setChildElementText(MANAGED_BEAN_SCOPE, scope.toString(), JSFConfigQNames.MANAGED_BEAN_SCOPE.getQName(getPeer().getNamespaceURI()));
     }
     
     protected List<String> getSortedListOfLocalNames(){
