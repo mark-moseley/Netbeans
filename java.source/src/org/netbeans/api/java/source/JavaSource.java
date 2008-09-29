@@ -50,12 +50,15 @@ import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreeScanner;
 import com.sun.source.util.Trees;
+import com.sun.tools.javac.api.ClassNamesForFileOraculum;
 import com.sun.tools.javac.api.JavacTaskImpl;
 import com.sun.tools.javac.api.JavacTrees;
 import com.sun.tools.javac.code.Source;
-import com.sun.tools.javac.code.Source;
+import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.CompletionFailure;
+import com.sun.tools.javac.comp.AttrContext;
 import com.sun.tools.javac.comp.Enter;
+import com.sun.tools.javac.comp.Env;
 import com.sun.tools.javac.parser.DocCommentScanner;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCBlock;
@@ -67,7 +70,10 @@ import com.sun.tools.javac.util.CancelAbort;
 import com.sun.tools.javac.util.CancelService;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.CouplingAbort;
+import com.sun.tools.javac.util.FlowListener;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 import com.sun.tools.javac.util.Log;
+import com.sun.tools.javadoc.JavadocClassReader;
 import com.sun.tools.javadoc.JavadocEnter;
 import com.sun.tools.javadoc.JavadocMemberEnter;
 import com.sun.tools.javadoc.Messager;
@@ -84,6 +90,7 @@ import java.io.Writer;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -117,13 +124,12 @@ import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import javax.swing.event.ChangeListener;
-import javax.swing.event.DocumentEvent;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.StyledDocument;
+import javax.tools.Diagnostic;
 import javax.tools.DiagnosticListener;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
@@ -141,6 +147,8 @@ import org.netbeans.api.lexer.TokenHierarchyEvent;
 import org.netbeans.api.lexer.TokenHierarchyEventType;
 import org.netbeans.api.lexer.TokenHierarchyListener;
 import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
 import org.netbeans.lib.editor.util.swing.PositionRegion;
 import org.netbeans.modules.java.source.JavaFileFilterQuery;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
@@ -148,7 +156,9 @@ import org.netbeans.modules.java.source.JavadocEnv;
 import org.netbeans.modules.java.source.parsing.FileObjects;
 import org.netbeans.modules.java.preprocessorbridge.spi.JavaFileFilterImplementation;
 import org.netbeans.modules.java.preprocessorbridge.spi.JavaSourceProvider;
+import org.netbeans.modules.java.source.PostFlowAnalysis;
 import org.netbeans.modules.java.source.TreeLoader;
+import org.netbeans.modules.java.source.parsing.OutputFileManager;
 import org.netbeans.modules.java.source.parsing.SourceFileObject;
 import org.netbeans.modules.java.source.tasklist.CompilerSettings;
 import org.netbeans.modules.java.source.usages.ClassIndexImpl;
@@ -159,7 +169,6 @@ import org.netbeans.modules.java.source.usages.RepositoryUpdater;
 import org.netbeans.modules.java.source.util.LowMemoryEvent;
 import org.netbeans.modules.java.source.util.LowMemoryListener;
 import org.netbeans.modules.java.source.util.LowMemoryNotifier;
-import org.netbeans.modules.java.source.usages.SymbolClassReader;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileChangeAdapter;
@@ -168,7 +177,6 @@ import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -246,6 +254,7 @@ public final class JavaSource {
     private static final int RESCHEDULE_FINISHED_TASKS = CHANGE_EXPECTED<<1;
     private static final int UPDATE_INDEX = RESCHEDULE_FINISHED_TASKS<<1;
     private static final int IS_CLASS_FILE = UPDATE_INDEX<<1;
+    private static final int FIXED_CLASSPATH_INFO = IS_CLASS_FILE<<1;
     
     private static final Pattern excludedTasks;
     private static final Pattern includedTasks;
@@ -256,6 +265,7 @@ public final class JavaSource {
 
     private static final int REPARSE_DELAY = 500;
     private int reparseDelay;
+    private long eventCounter;
     
     /**Used by unit tests*/
     static JavaFileObjectProvider jfoProvider = new DefaultJavaFileObjectProvider (); 
@@ -274,7 +284,7 @@ public final class JavaSource {
      * Init the maps
      */
     static {
-        JavaSourceAccessor.INSTANCE = new JavaSourceAccessorImpl ();
+        JavaSourceAccessor.setINSTANCE (new JavaSourceAccessorImpl ());
         phase2Message.put (Phase.PARSED,"Parsed");                              //NOI18N
         phase2Message.put (Phase.ELEMENTS_RESOLVED,"Signatures Attributed");    //NOI18N
         phase2Message.put (Phase.RESOLVED, "Attributed");                       //NOI18N
@@ -320,7 +330,7 @@ public final class JavaSource {
     private DocListener listener;
     private DataObjectListener dataObjectListener;
     
-    private final ClasspathInfo classpathInfo;    
+    private ClasspathInfo classpathInfo;    
     private CompilationInfoImpl currentInfo;
     private java.util.Stack<CompilationInfoImpl> infoStack = new java.util.Stack<CompilationInfoImpl> ();
     
@@ -334,7 +344,7 @@ public final class JavaSource {
     
     private PositionConverter binding;
     private final boolean supportsReparse;
-    
+        
     private static final Logger LOGGER = Logger.getLogger(JavaSource.class.getName());
         
     static {
@@ -354,7 +364,7 @@ public final class JavaSource {
         if (files == null || cpInfo == null) {
             throw new IllegalArgumentException ();
         }
-        return create(cpInfo, null, files);
+        return create(cpInfo, null, files, true);
     }
     
     
@@ -370,12 +380,13 @@ public final class JavaSource {
         if (files == null || cpInfo == null) {
             throw new IllegalArgumentException ();
         }
-        return create(cpInfo, null, Arrays.asList(files));
+        return create(cpInfo, null, Arrays.asList(files), true);
     }
     
-    private static JavaSource create(final ClasspathInfo cpInfo, final PositionConverter binding, final Collection<? extends FileObject> files) throws IllegalArgumentException {
+    private static JavaSource create(final ClasspathInfo cpInfo, final PositionConverter binding,
+            final Collection<? extends FileObject> files, final boolean fixedCpInfo) throws IllegalArgumentException {
         try {
-            return new JavaSource(cpInfo, binding, files);
+            return new JavaSource(cpInfo, binding, files, fixedCpInfo);
         } catch (DataObjectNotFoundException donf) {
             Logger.getLogger("global").warning("Ignoring non existent file: " + FileUtil.getFileDisplayName(donf.getFileObject()));     //NOI18N
         } catch (IOException ex) {            
@@ -465,7 +476,7 @@ public final class JavaSource {
                 if (binding == null)
                     return null;
             }
-            js = create(ClasspathInfo.create(fileObject), binding, Collections.singletonList(fileObject));
+            js = create(ClasspathInfo.create(fileObject), binding, Collections.singletonList(fileObject), false);
             }
             file2JavaSource.put(fileObject, new WeakReference<JavaSource>(js));
         }
@@ -504,7 +515,8 @@ public final class JavaSource {
      * @param files to create JavaSource for
      * @param cpInfo classpath info
      */
-    private JavaSource (ClasspathInfo cpInfo, PositionConverter binding, Collection<? extends FileObject> files) throws IOException {
+    private JavaSource (ClasspathInfo cpInfo, PositionConverter binding, Collection<? extends FileObject> files,
+            final boolean fixedCpInfo) throws IOException {
         this.reparseDelay = REPARSE_DELAY;
         this.files = Collections.unmodifiableList(new ArrayList<FileObject>(files));   //Create a defensive copy, prevent modification
         this.fileChangeListener = new FileChangeListenerImpl ();
@@ -549,6 +561,9 @@ public final class JavaSource {
             this.rootFo = null;
         }
         this.classpathInfo.addChangeListener(WeakListeners.change(this.listener, this.classpathInfo));
+        if (fixedCpInfo) {
+            flags |=  FIXED_CLASSPATH_INFO;
+        }
     }
     
     private JavaSource (final ClasspathInfo info, final FileObject classFileObject, final FileObject root) throws IOException {
@@ -563,7 +578,7 @@ public final class JavaSource {
         this.classpathInfo =  info;
         this.rootFo = root;
         this.classpathInfo.addChangeListener(WeakListeners.change(this.listener, this.classpathInfo));
-        this.flags|= IS_CLASS_FILE;
+        this.flags|= (IS_CLASS_FILE|FIXED_CLASSPATH_INFO);
         this.supportsReparse = false;
         this.binding = new PositionConverter(classFileObject, null);
     }
@@ -589,6 +604,10 @@ public final class JavaSource {
      * </div>
      */
     public void runUserActionTask( final Task<CompilationController> task, final boolean shared) throws IOException {
+        runUserActionTaskImpl(task, shared);
+    }
+    
+    private long runUserActionTaskImpl ( final Task<CompilationController> task, final boolean shared) throws IOException {
         if (task == null) {
             throw new IllegalArgumentException ("Task cannot be null");     //NOI18N
         }
@@ -603,7 +622,7 @@ public final class JavaSource {
                 LOGGER.warning("JavaSource.runUserActionTask called in AWT event thread by: " + stackTraceElement); // NOI18N
             }
         }
-        
+        long currentId = -1;
         if (this.files.size()<=1) {                        
             final JavaSource.Request request = currentRequest.getTaskToCancel();
             try {
@@ -617,6 +636,7 @@ public final class JavaSource {
                     Pair<DocPositionRegion, MethodTree> changedMethod = null;
                     synchronized (this) {                        
                         jsInvalid = this.currentInfo == null || (this.flags & INVALID)!=0;
+                        currentId = eventCounter;
                         currentInfo = this.currentInfo;
                         changedMethod = (currentInfo == null ? null : this.currentInfo.getChangedTree());
                         if (!shared) {
@@ -751,6 +771,7 @@ public final class JavaSource {
                 currentRequest.cancelCompleted(request);
             }
         }
+        return currentId;
     }
 
     private void runUserActionTask( final CancellableTask<CompilationController> task, final boolean shared) throws IOException {
@@ -758,6 +779,28 @@ public final class JavaSource {
         this.runUserActionTask (_task, shared);
     }
     
+    
+    long createTaggedController (final long timestamp, final Object[] controller) throws IOException {        
+        assert controller.length == 1;
+        if (isCurrent(timestamp)) {
+            assert controller[0] instanceof CompilationController;
+            return timestamp;
+        }
+        else {
+            final Task<CompilationController> wrapperTask = new Task<CompilationController>() {
+                public void run(CompilationController parameter) throws Exception {
+                    controller[0] = parameter;
+                }
+            };            
+            final long newTimestamp = runUserActionTaskImpl(wrapperTask, false);
+            assert controller[0] != null;
+            return newTimestamp;
+        }        
+    }
+    //where
+    private boolean isCurrent (long timestamp) {        
+        return eventCounter == timestamp;
+    }
     
     /**
      * Performs the given task when the scan finished. When no background scan is running
@@ -851,7 +894,7 @@ public final class JavaSource {
      * @see Task for information about implementation requirements
      * @param task The task which.
      */    
-    public ModificationResult runModificationTask(Task<WorkingCopy> task) throws IOException {        
+    public ModificationResult runModificationTask(Task<WorkingCopy> task) throws IOException {
         if (task == null) {
             throw new IllegalArgumentException ("Task cannot be null");     //NOI18N
         }
@@ -908,7 +951,7 @@ public final class JavaSource {
                     assert currentInfo != null;                    
                     WorkingCopy copy = new WorkingCopy (currentInfo);
                     task.run (copy);
-                    List<Difference> diffs = copy.getChanges();
+                    List<Difference> diffs = copy.getChanges(result.tag2Span);
                     if (diffs != null && diffs.size() > 0)
                         result.diffs.put(currentInfo.getFileObject(), diffs);
                 }
@@ -959,7 +1002,7 @@ public final class JavaSource {
                         if (!ci.needsRestart) {
                             jt = ci.getJavacTask();
                             Log.instance(jt.getContext()).nerrors = 0;
-                            List<Difference> diffs = copy.getChanges();
+                            List<Difference> diffs = copy.getChanges(result.tag2Span);
                             if (diffs != null && diffs.size() > 0)
                                 result.diffs.put(ci.getFileObject(), diffs);
                             activeFile = null;
@@ -1041,7 +1084,23 @@ public final class JavaSource {
             }
         }
         synchronized (INTERNAL_LOCK) {
-            toRemove.add (task);
+            boolean found = false;
+            Collection<Request> rqs = finishedRequests.get(this);
+            if (rqs != null) {
+                for (Iterator<Request> it = rqs.iterator(); it.hasNext(); ) {
+                    Request rq = it.next();
+                    if (rq.task == task) {
+                        it.remove();
+                        found = true;
+//Some tasks are duplicated (racecondition?), remove even them.
+//todo: Prevent duplication of tasks
+//                        break;
+                    }
+                }
+            }
+            if (!found) {
+                toRemove.add (task);
+            }
         }
     }
     
@@ -1102,9 +1161,12 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         return files;
     }
     
-    JavacTaskImpl createJavacTask(final DiagnosticListener<? super JavaFileObject> diagnosticListener) {
+    JavacTaskImpl createJavacTask(final DiagnosticListener<? super JavaFileObject> diagnosticListener, ClassNamesForFileOraculum oraculum) {
         String sourceLevel = null;
         if (!this.files.isEmpty()) {
+            if (LOGGER.isLoggable(Level.FINER)) {
+                LOGGER.finer("Created new JavacTask for: " + this.files);
+            }
             FileObject file = files.iterator().next();
             
             sourceLevel = SourceLevelQuery.getSourceLevel(file);
@@ -1122,9 +1184,10 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         if (sourceLevel == null) {
             sourceLevel = JavaPlatformManager.getDefault().getDefaultPlatform().getSpecification().getVersion().toString();
         }
-        JavacTaskImpl javacTask = createJavacTask(getClasspathInfo(), diagnosticListener, sourceLevel, false);
+        JavacTaskImpl javacTask = createJavacTask(getClasspathInfo(), diagnosticListener, sourceLevel, false, oraculum);
         Context context = javacTask.getContext();
         JSCancelService.preRegister(context);
+        JSFlowListener.preRegister(context);
         TreeLoader.preRegister(context, getClasspathInfo());
         Messager.preRegister(context, null, DEV_NULL, DEV_NULL, DEV_NULL);
         ErrorHandlingJavadocEnter.preRegister(context);
@@ -1135,26 +1198,40 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         return javacTask;
     }
     
-    private static JavacTaskImpl createJavacTask(final ClasspathInfo cpInfo, final DiagnosticListener<? super JavaFileObject> diagnosticListener, final String sourceLevel, final boolean backgroundCompilation) {
+    private static JavacTaskImpl createJavacTask(final ClasspathInfo cpInfo, final DiagnosticListener<? super JavaFileObject> diagnosticListener, final String sourceLevel, final boolean backgroundCompilation, ClassNamesForFileOraculum cnih) {
         ArrayList<String> options = new ArrayList<String>();
         String lintOptions = CompilerSettings.getCommandLine();
         
         if (lintOptions.length() > 0) {
             options.addAll(Arrays.asList(lintOptions.split(" ")));
         }
+        Source validatedSourceLevel = validateSourceLevel(sourceLevel);
         if (!backgroundCompilation) {
             options.add("-Xjcov"); //NOI18N, Make the compiler store end positions
             options.add("-XDdisableStringFolding"); //NOI18N
         } else {
             options.add("-XDbackgroundCompilation");    //NOI18N
             options.add("-XDcompilePolicy=byfile");     //NOI18N
+            options.add("-target");                     //NOI18N
+            options.add(validatedSourceLevel.requiredTarget().name);
         }
         options.add("-XDide");   // NOI18N, javac runs inside the IDE
+        options.add("-XDsave-parameter-names");   // NOI18N, javac runs inside the IDE
         options.add("-g:");      // NOI18N, Enable some debug info
+        options.add("-g:source"); // NOI18N, Make the compiler to maintian source file info
         options.add("-g:lines"); // NOI18N, Make the compiler to maintain line table
         options.add("-g:vars");  // NOI18N, Make the compiler to maintain local variables table
         options.add("-source");  // NOI18N
-        options.add(validateSourceLevel(sourceLevel));
+        options.add(validatedSourceLevel.name);
+
+        //for dev builds, fill stack trace for CompletionFailures (see #146026):
+        boolean assertsEnabled = false;
+
+        assert assertsEnabled = true;
+
+        if (assertsEnabled) {
+            options.add("-XDide");   // NOI18N
+        }
 
         ClassLoader orig = Thread.currentThread().getContextClassLoader();
         try {            
@@ -1165,12 +1242,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             JavacTaskImpl task = (JavacTaskImpl)tool.getTask(null, cpInfo.getFileManager(), diagnosticListener, options, null, Collections.<JavaFileObject>emptySet());
             Context context = task.getContext();
             
-            if (backgroundCompilation) {
-                SymbolClassReader.preRegister(context, false);
-            } else {
-                SymbolClassReader.preRegister(context, true);
-            }
+            JavadocClassReader.preRegister(context, !backgroundCompilation);
             
+            if (cnih != null) {
+                context.put(ClassNamesForFileOraculum.class, cnih);
+            }
             return task;
         } finally {
             Thread.currentThread().setContextClassLoader(orig);
@@ -1199,6 +1275,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             //are not changed.
             this.complete(trees, null);
         }
+
+        @Override
+        protected void duplicateClass(DiagnosticPosition pos, ClassSymbol c) {
+            messager.error(pos, "duplicate.class", c.fullname);
+        }
     }
 
     /**
@@ -1206,11 +1287,13 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
      *
      */
     static Phase moveToPhase (final Phase phase, final CompilationInfoImpl currentInfo, final boolean cancellable) throws IOException {
-        boolean parserError = currentInfo.parserCrashed;
-        Phase currentPhase = currentInfo.getPhase();
-        if (parserError) {
-            return currentPhase;
+        if (currentInfo.jfo.getKind() != JavaFileObject.Kind.SOURCE) {
+            currentInfo.setPhase(phase);
+            return phase;
         }
+        Phase parserError = currentInfo.parserCrashed;
+        assert parserError != null;
+        Phase currentPhase = currentInfo.getPhase();        
         final boolean isMultiFiles = currentInfo.getJavaSource().files.size()>1;
         LowMemoryNotifier lm = null;
         LMListener lmListener = null;
@@ -1225,7 +1308,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 currentInfo.needsRestart = true;
                 return currentPhase;
             }
-            if (currentPhase.compareTo(Phase.PARSED)<0 && phase.compareTo(Phase.PARSED)>=0) {
+            if (currentPhase.compareTo(Phase.PARSED)<0 && phase.compareTo(Phase.PARSED)>=0 && phase.compareTo(parserError)<=0) {
                 if (cancellable && currentRequest.isCanceled()) {
                     //Keep the currentPhase unchanged, it may happen that an userActionTask
                     //runnig after the phace completion task may still use it.
@@ -1261,7 +1344,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 currentInfo.needsRestart = true;
                 return currentPhase;
             }
-            if (currentPhase == Phase.PARSED && phase.compareTo(Phase.ELEMENTS_RESOLVED)>=0) {
+            if (currentPhase == Phase.PARSED && phase.compareTo(Phase.ELEMENTS_RESOLVED)>=0 && phase.compareTo(parserError)<=0) {
                 if (cancellable && currentRequest.isCanceled()) {
                     return Phase.MODIFIED;
                 }
@@ -1275,12 +1358,13 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 currentInfo.needsRestart = true;
                 return currentPhase;
             }
-            if (currentPhase == Phase.ELEMENTS_RESOLVED && phase.compareTo(Phase.RESOLVED)>=0) {
+            if (currentPhase == Phase.ELEMENTS_RESOLVED && phase.compareTo(Phase.RESOLVED)>=0 && phase.compareTo(parserError)<=0) {
                 if (cancellable && currentRequest.isCanceled()) {
                     return Phase.MODIFIED;
                 }
                 long start = System.currentTimeMillis ();
-                currentInfo.getJavacTask().analyze();
+                JavacTaskImpl jti = currentInfo.getJavacTask();
+                PostFlowAnalysis.analyze(jti.analyze(), jti.getContext());
                 currentPhase = Phase.RESOLVED;
                 long end = System.currentTimeMillis ();
                 logTime(currentInfo.getFileObject(),currentPhase,(end-start));
@@ -1299,21 +1383,17 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         } catch (CancelAbort ca) {
             currentPhase = Phase.MODIFIED;
         } catch (Abort abort) {
-            parserError = true;
-            currentPhase = Phase.MODIFIED;
+            parserError = currentPhase;
         } catch (IOException ex) {
-            currentInfo.parserCrashed = true;
-            currentPhase = Phase.MODIFIED;
+            currentInfo.parserCrashed = currentPhase;
             dumpSource(currentInfo, ex);
             throw ex;
         } catch (RuntimeException ex) {
-            parserError = true;
-            currentPhase = Phase.MODIFIED;
+            parserError = currentPhase;
             dumpSource(currentInfo, ex);
             throw ex;        
         } catch (Error ex) {
-            parserError = true;
-            currentPhase = Phase.MODIFIED;
+            parserError = currentPhase;
             dumpSource(currentInfo, ex);
             throw ex;
         }
@@ -1350,23 +1430,32 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
     });
     
     private void resetState (boolean invalidate, boolean updateIndex) {
-        resetState (invalidate, updateIndex, null);
+        resetState (invalidate, updateIndex, false, null);
     }
                
-    private void resetState(boolean invalidate, boolean updateIndex, Pair<DocPositionRegion,MethodTree> changedMethod) {
+    private void resetState(boolean invalidate, boolean updateIndex, boolean filterOutFileManager, Pair<DocPositionRegion,MethodTree> changedMethod) {
         boolean invalid;
         synchronized (this) {
             invalid = (this.flags & INVALID) != 0;
             this.flags|=CHANGE_EXPECTED;
-            if (invalidate) {
+            if (invalidate) {                
                 this.flags|=(INVALID|RESCHEDULE_FINISHED_TASKS);
                 if (this.currentInfo != null) {
                     this.currentInfo.setChangedMethod (changedMethod);
                 }
+                eventCounter++;
             }
             if (updateIndex) {
                 this.flags|=UPDATE_INDEX;
-            }            
+            }
+            if (filterOutFileManager && binding != null && rootFo != null) {
+                //No need to be fully synchronized OutputFileManager.setFilteredFiles is idempotent
+                OutputFileManager ofm = this.classpathInfo.getOutputFileManager();
+                if (ofm != null && !ofm.isFiltered()) {
+                    Set<File> files = RepositoryUpdater.getAffectedCacheFiles(binding.getFileObject(), rootFo);
+                    ofm.setFilteredFiles(files);                    
+                }
+            }
         }
         if (updateIndex && !invalid) {
             //First change set the index as dirty
@@ -1809,14 +1898,14 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                     }
                 }
             }
-            JavaSource.this.resetState(true, changedMethod==null, changedMethod);
+            JavaSource.this.resetState(true, changedMethod==null, true, changedMethod);
         }        
     }
     
     private static class EditorRegistryListener implements CaretListener, PropertyChangeListener {
                         
         private Request request;
-        private JTextComponent lastEditor;
+        private Reference<JTextComponent> lastEditorRef;
         
         public EditorRegistryListener () {
             EditorRegistry.addPropertyChangeListener(new PropertyChangeListener() {
@@ -1829,6 +1918,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 
         public void editorRegistryChanged() {
             final JTextComponent editor = EditorRegistry.lastFocusedComponent();
+            final JTextComponent lastEditor = lastEditorRef == null ? null : lastEditorRef.get();
             if (lastEditor != editor) {
                 if (lastEditor != null) {
                     lastEditor.removeCaretListener(this);
@@ -1840,17 +1930,21 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                     }
                     if (js != null) {
                         js.k24 = false;
+                        Request _request = request; 
+                        request = null;
+                        currentRequest.cancelCompleted(_request);
                     }                   
                 }
-                lastEditor = editor;
-                if (lastEditor != null) {                    
-                    lastEditor.addCaretListener(this);
-                    lastEditor.addPropertyChangeListener(this);
+                lastEditorRef = new WeakReference<JTextComponent>(editor);
+                if (editor != null) {
+                    editor.addCaretListener(this);
+                    editor.addPropertyChangeListener(this);
                 }
             }
         }
         
         public void caretUpdate(CaretEvent event) {
+            final JTextComponent lastEditor = lastEditorRef == null ? null : lastEditorRef.get();
             if (lastEditor != null) {
                 Document doc = lastEditor.getDocument();
                 if (doc != null) {
@@ -1863,6 +1957,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         }
 
         public void propertyChange(final PropertyChangeEvent evt) {
+            final JTextComponent lastEditor = lastEditorRef == null ? null : lastEditorRef.get();
             String propName = evt.getPropertyName();
             if ("completion-active".equals(propName)) {
                 JavaSource js = null;
@@ -1925,11 +2020,16 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             DataObject invalidDO = (DataObject) pce.getSource();
             if (invalidDO != dobj)
                 return;
-            if (DataObject.PROP_VALID.equals(pce.getPropertyName())) {
+            final String propName = pce.getPropertyName();
+            if (DataObject.PROP_VALID.equals(propName)) {
                 handleInvalidDataObject(invalidDO);
+                resetOutputFileManagerFilter();
+            } else if (DataObject.PROP_MODIFIED.equals(propName) && !invalidDO.isModified()) {
+                resetOutputFileManagerFilter();
             } else if (pce.getPropertyName() == null && !dobj.isValid()) {
                 handleInvalidDataObject(invalidDO);
-            }
+                resetOutputFileManagerFilter();
+            }            
         }
         
         private void handleInvalidDataObject(final DataObject invalidDO) {
@@ -1938,6 +2038,15 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                     handleInvalidDataObjectImpl(invalidDO);
                 }
             });
+        }
+        
+        private void resetOutputFileManagerFilter () {
+            if (binding != null) {
+                OutputFileManager ofm = classpathInfo.getOutputFileManager();
+                if (ofm != null) {                    
+                    ofm.clearFilteredFiles();                    
+                }
+            }
         }
         
         private void handleInvalidDataObjectImpl(DataObject invalidDO) {
@@ -1977,7 +2086,21 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         }
     }
         
-    private static CompilationInfoImpl createCurrentInfo (final JavaSource js, final PositionConverter binding, final JavacTaskImpl javac) throws IOException {                
+    private static CompilationInfoImpl createCurrentInfo (final JavaSource js, final PositionConverter binding, final JavacTaskImpl javac) throws IOException {
+        FileObject fo = null;
+        if (js.files.size() == 1) {
+            fo = js.files.iterator().next();
+        }
+        if ((js.flags & FIXED_CLASSPATH_INFO) == 0 && fo != null) {
+            final ClassPath scp = ClassPath.getClassPath(fo, ClassPath.SOURCE);
+            if (scp != js.classpathInfo.getClassPath(PathKind.SOURCE)) {
+                //Revalidate
+                final Project owner = FileOwnerQuery.getOwner(fo);
+                LOGGER.warning("ClassPath identity changed for " + fo + ", class path owner: " +       //NOI18N
+                        (owner == null ? "null" : (FileUtil.getFileDisplayName(owner.getProjectDirectory())+" ("+owner.getClass()+")")));       //NOI18N
+                js.classpathInfo = ClasspathInfo.create(fo);
+            }
+        }
         CompilationInfoImpl info = new CompilationInfoImpl(js, binding, javac);
         if (binding != null) {
             Logger.getLogger("TIMER").log(Level.FINE, "CompilationInfo",
@@ -1988,7 +2111,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
 
     private static void handleAddRequest (final Request nr) {
         assert nr != null;
-        requests.add (nr);
+        //Issue #102073 - removed running task which is readded is not performed
+        synchronized (INTERNAL_LOCK) {            
+            toRemove.remove(nr.task);
+            requests.add (nr);
+        }
         JavaSource.Request request = currentRequest.getTaskToCancel(nr.priority);
         try {
             if (request != null) {
@@ -2040,10 +2167,10 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         }                
 
         @Override
-        public JavacTaskImpl createJavacTask(ClasspathInfo cpInfo, DiagnosticListener<? super JavaFileObject> diagnosticListener, String sourceLevel) {
+        public JavacTaskImpl createJavacTask(ClasspathInfo cpInfo, DiagnosticListener<? super JavaFileObject> diagnosticListener, String sourceLevel, ClassNamesForFileOraculum oraculum) {
             if (sourceLevel == null)
                 sourceLevel = JavaPlatformManager.getDefault().getDefaultPlatform().getSpecification().getVersion().toString();
-            return JavaSource.createJavacTask(cpInfo, diagnosticListener, sourceLevel, true);
+            return JavaSource.createJavacTask(cpInfo, diagnosticListener, sourceLevel, true, oraculum);
         }
                 
         @Override
@@ -2067,6 +2194,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             }
             Phase currentPhase = moveToPhase(phase, info, true);                
             return currentPhase.compareTo(phase)<0 ? null : new CompilationInfo(info);
+        }
+
+        public CompilationController createCompilationController (final JavaSource js) throws IOException {            
+            CompilationInfoImpl info = createCurrentInfo(js, js.binding, js.createJavacTask(null, null));
+            return new CompilationController(info);
         }
 
         @Override
@@ -2104,11 +2236,16 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         }
 
         public JavaSource create(ClasspathInfo cpInfo, PositionConverter binding, Collection<? extends FileObject> files) throws IllegalArgumentException {
-            return JavaSource.create(cpInfo, binding, files);
+            return JavaSource.create(cpInfo, binding, files, true);
         }
 
         public PositionConverter create(FileObject fo, int offset, int length, JTextComponent component) {
             return new PositionConverter(fo, offset, length, component);
+        }
+
+        @Override
+        public long createTaggedCompilationController(JavaSource js, long currentTag, Object[] out) throws IOException {
+            return js.createTaggedController(currentTag, out);
         }
     }
     
@@ -2427,6 +2564,45 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                
     }
     
+    private static class JSFlowListener extends FlowListener {
+        
+        private final Set<URL> flowCompleted = new HashSet<URL>();
+        
+        public static JSFlowListener instance (final Context context) {
+            final FlowListener flowListener = FlowListener.instance(context);
+            return (flowListener instanceof JSFlowListener) ? (JSFlowListener) flowListener : null;
+        }
+        
+        static void preRegister(final Context context) {
+            context.put(flowListenerKey, new JSFlowListener());
+        }
+        
+        final boolean hasFlowCompleted (final FileObject fo) {
+            if (fo == null) {
+                return false;
+            }
+            else {
+                try {
+                    return this.flowCompleted.contains(fo.getURL());
+                } catch (FileStateInvalidException e) {
+                    return false;
+                }
+            }
+        }
+        
+        @Override
+        public void flowFinished (final Env<AttrContext> env) {
+            if (env.toplevel != null && env.toplevel.sourcefile != null) {
+                try {
+                    this.flowCompleted.add (env.toplevel.sourcefile.toUri().toURL());
+                } catch (MalformedURLException e) {
+                    //never thrown
+                    Exceptions.printStackTrace(e);
+                }
+            }
+        }
+    }
+    
     /**
      *Ugly and slow, called only when -ea
      *
@@ -2460,25 +2636,25 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
         return false;
     }    
     
-    private static String validateSourceLevel (String sourceLevel) {        
+    private static Source validateSourceLevel (String sourceLevel) {        
         Source[] sources = Source.values();
         if (sourceLevel == null) {
             //Should never happen but for sure
-            return sources[sources.length-1].name;
+            return sources[sources.length-1];
         }
         for (Source source : sources) {
             if (source.name.equals(sourceLevel)) {
-                return sourceLevel;
+                return source;
             }
         }
         SpecificationVersion specVer = new SpecificationVersion (sourceLevel);
         SpecificationVersion JAVA_12 = new SpecificationVersion ("1.2");   //NOI18N
         if (JAVA_12.compareTo(specVer)>0) {
             //Some SourceLevelQueries return 1.1 source level which is invalid, use 1.2
-            return sources[0].name;
+            return sources[0];
         }
         else {
-            return sources[sources.length-1].name;
+            return sources[sources.length-1];
         }
     }
     
@@ -2609,7 +2785,11 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
     }
     
     private static boolean reparseMethod (final CompilationInfoImpl ci, final MethodTree orig, final String newBody) throws IOException {        
-        assert ci != null; 
+        assert ci != null;         
+        final FileObject fo = ci.getFileObject();
+        if (LOGGER.isLoggable(Level.FINER)) {
+            LOGGER.finer("Reparse method in: " + fo);          //NOI18N
+        }
         if (!ci.getJavaSource().supportsReparse) {
             return false;
         }
@@ -2629,57 +2809,113 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
             }
             final JavacTaskImpl task = ci.getJavacTask();
             final JavacTrees jt = JavacTrees.instance(task);
+            final int origStartPos = (int) jt.getSourcePositions().getStartPosition(cu, orig.getBody());
+            final int origEndPos = (int) jt.getSourcePositions().getEndPosition(cu, orig.getBody());
+            if (origStartPos > origEndPos) {
+                LOGGER.warning("Javac returned startpos: "+origStartPos+" > endpos: "+origEndPos);  //NOI18N
+                return false;
+            }
             final FindAnnonVisitor fav = new FindAnnonVisitor();
             fav.scan(orig.getBody(), null);
             if (fav.hasLocalClass) {
+                if (LOGGER.isLoggable(Level.FINER)) {
+                    LOGGER.finer("Skeep reparse method (old local classes): " + fo);   //NOI18N
+                }
                 return false;
             }
             final int firstInner = fav.firstInner;
             final int noInner = fav.noInner;
-            final int origStartPos = (int) jt.getSourcePositions().getStartPosition(cu, orig.getBody());
-            final int origEndPos = (int) jt.getSourcePositions().getEndPosition(cu, orig.getBody());
-            final Context ctx = task.getContext();        
-            final Log l = Log.instance(ctx);
-            l.startPartialReparse();
-            final JavaFileObject prevLogged = l.useSource(cu.getSourceFile());
-            JCBlock block;
-            try {
-                DiagnosticListener dl = ctx.get(DiagnosticListener.class);
-                assert dl instanceof CompilationInfoImpl.DiagnosticListenerImpl;
-                ((CompilationInfoImpl.DiagnosticListenerImpl)dl).startPartialReparse(origStartPos, origEndPos);
-                block = task.reparseMethodBody(cu, orig, newBody, firstInner);
-                assert block != null;
-                fav.reset();
-                fav.scan(block, null);
-                final int newNoInner = fav.noInner;
-                if (fav.hasLocalClass || noInner != newNoInner) {
-                    return false;
-                }
-                final int newEndPos = (int) jt.getSourcePositions().getEndPosition(cu, block);
-                final int delta = newEndPos - origEndPos;
-                final Map<JCTree,Integer> endPos = ((JCCompilationUnit)cu).endPositions;
-                final TranslatePosVisitor tpv = new TranslatePosVisitor(orig, endPos, delta);
-                tpv.scan(cu, null);
-                ((JCMethodDecl)orig).body = block;
-                if (Phase.RESOLVED.compareTo(currentPhase)<=0) {
-                    task.reattrMethodBody(orig, block);
-                    if (!((CompilationInfoImpl.DiagnosticListenerImpl)dl).hasPartialReparseErrors()) {
-                        TreePath tp = TreePath.getPath(cu, orig);       //todo: store treepath in changed method => improve speed
-                        Tree t = tp.getParentPath().getLeaf();
-                        task.reflowMethodBody(cu, (ClassTree) t, orig);
-                    }
-                }
-                ((CompilationInfoImpl.DiagnosticListenerImpl)dl).endPartialReparse (delta);
-            } finally {
-                l.endPartialReparse();
-                l.useSource(prevLogged);
+            final Context ctx = task.getContext();
+            final TreeLoader treeLoader = TreeLoader.instance(ctx);
+            if (treeLoader != null) {
+                treeLoader.startPartialReparse();
             }
-            jfoProvider.update(ci.jfo);
+            try {
+                final Log l = Log.instance(ctx);
+                l.startPartialReparse();
+                final JavaFileObject prevLogged = l.useSource(cu.getSourceFile());
+                JCBlock block;
+                try {
+                    DiagnosticListener dl = ctx.get(DiagnosticListener.class);
+                    assert dl instanceof CompilationInfoImpl.DiagnosticListenerImpl;
+                    ((CompilationInfoImpl.DiagnosticListenerImpl)dl).startPartialReparse(origStartPos, origEndPos);
+                    long start = System.currentTimeMillis();
+                    block = task.reparseMethodBody(cu, orig, newBody, firstInner);                
+                    if (LOGGER.isLoggable(Level.FINER)) {
+                        LOGGER.finer("Reparsed method in: " + fo);     //NOI18N
+                    }
+                    assert block != null;
+                    fav.reset();
+                    fav.scan(block, null);
+                    final int newNoInner = fav.noInner;
+                    if (fav.hasLocalClass || noInner != newNoInner) {
+                        if (LOGGER.isLoggable(Level.FINER)) {
+                            LOGGER.finer("Skeep reparse method (new local classes): " + fo);   //NOI18N
+                        }
+                        return false;
+                    }
+                    long end = System.currentTimeMillis();                
+                    if (fo != null) {
+                        logTime (fo,Phase.PARSED,(end-start));
+                    }
+                    final int newEndPos = (int) jt.getSourcePositions().getEndPosition(cu, block);
+                    final int delta = newEndPos - origEndPos;
+                    final Map<JCTree,Integer> endPos = ((JCCompilationUnit)cu).endPositions;
+                    final TranslatePosVisitor tpv = new TranslatePosVisitor(orig, endPos, delta);
+                    tpv.scan(cu, null);
+                    ((JCMethodDecl)orig).body = block;
+                    if (Phase.RESOLVED.compareTo(currentPhase)<=0) {
+                        start = System.currentTimeMillis();
+                        task.reattrMethodBody(orig, block);
+                        if (LOGGER.isLoggable(Level.FINER)) {
+                            LOGGER.finer("Resolved method in: " + fo);     //NOI18N
+                        }
+                        if (!((CompilationInfoImpl.DiagnosticListenerImpl)dl).hasPartialReparseErrors()) {
+                            final JSFlowListener fl = JSFlowListener.instance(ctx);
+                            if (fl != null && fl.hasFlowCompleted(fo)) {
+                                if (LOGGER.isLoggable(Level.FINER)) {
+                                    final List<? extends Diagnostic> diag = ci.getDiagnostics();
+                                    if (!diag.isEmpty()) {
+                                        LOGGER.finer("Reflow with errors: " + fo + " " + diag);     //NOI18N
+                                    }                            
+                                }
+                                TreePath tp = TreePath.getPath(cu, orig);       //todo: store treepath in changed method => improve speed
+                                Tree t = tp.getParentPath().getLeaf();
+                                task.reflowMethodBody(cu, (ClassTree) t, orig);
+                                if (LOGGER.isLoggable(Level.FINER)) {
+                                    LOGGER.finer("Reflowed method in: " + fo); //NOI18N
+                                }
+                            }
+                        }
+                        end = System.currentTimeMillis();
+                        if (fo != null) {
+                            logTime (fo, Phase.ELEMENTS_RESOLVED,0L);
+                            logTime (fo,Phase.RESOLVED,(end-start));
+                        }
+                    }
+                    ((CompilationInfoImpl.DiagnosticListenerImpl)dl).endPartialReparse (delta);
+                } finally {
+                    l.endPartialReparse();
+                    l.useSource(prevLogged);
+                }
+                jfoProvider.update(ci.jfo);
+            } finally {
+              if (treeLoader != null) {
+                  treeLoader.endPartialReparse();
+              }  
+            }
+        } catch (CouplingAbort ca) {
+            //Needs full reparse
+            return false;
         } catch (Throwable t) {
             if (t instanceof ThreadDeath) {
                 throw (ThreadDeath) t;
             }
-            Exceptions.printStackTrace(t);
+            boolean a = false;
+            assert a = true; 
+            if (a) {
+                dumpSource(ci, t);
+            }
             return false;
         }
         return true;
@@ -2707,7 +2943,7 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
                 hasLocalClass = true;
             }
             noInner++;
-            return null;
+            return super.visitClass(node, p);
         }                
         
     }
@@ -2793,29 +3029,28 @@ out:            for (Iterator<Collection<Request>> it = finishedRequests.values(
     
     static final class DocPositionRegion extends PositionRegion {
         
-        private final Document doc;
+        private final Reference<Document> doc;
         
         public DocPositionRegion (final Document doc, final int startPos, final int endPos) throws BadLocationException {
             super (doc,startPos,endPos);
             assert doc != null;
-            this.doc = doc;
-        }
-        
-        public Document getDocument () {
-            return this.doc;
-        }
+            this.doc = new WeakReference<Document>(doc);
+        }                
         
         public String getText () {
             final String[] result = new String[1];
-            this.doc.render(new Runnable() {
-                public void run () {
+            final Document _doc = doc.get();
+            if (_doc != null) {
+                _doc.render(new Runnable() {
+                    public void run () {
                     try {
-                        result[0] = doc.getText(getStartOffset(), getLength());
-                    } catch (BadLocationException ex) {
-                        Exceptions.printStackTrace(ex);
+                            result[0] = _doc.getText(getStartOffset(), getLength());
+                        } catch (BadLocationException ex) {
+                            Exceptions.printStackTrace(ex);
+                        }
                     }
-                }
-            });
+                });
+            }
             return result[0];
         }
         
