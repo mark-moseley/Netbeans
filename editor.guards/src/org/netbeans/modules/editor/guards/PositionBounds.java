@@ -74,16 +74,26 @@ public final class PositionBounds {
         }
     }
     
-    private static final class BackwardPosition implements Position {
+    private static final class BiasedPosition implements Position {
         
         private Position delegate;
+        private Bias bias;
         
-        public BackwardPosition(Position delegate) {
+        public BiasedPosition(Position delegate, Bias bias) {
             this.delegate = delegate;
+            this.bias = bias;
         }
     
         public int getOffset() {
-            return this.delegate.getOffset() + 1;
+            return bias == Bias.Backward
+                    ? this.delegate.getOffset() + 1
+                    : this.delegate.getOffset() - 1;
+        }
+
+        void resolve(StyledDocument doc) throws BadLocationException {
+            if (delegate instanceof UnresolvedPosition) {
+                delegate = doc.createPosition(delegate.getOffset());
+            }
         }
     }
 
@@ -95,6 +105,7 @@ public final class PositionBounds {
         this.begin = begin;
         this.end = end;
         this.guards = guards;
+        assertPositionBounds();
     }
     
     public static PositionBounds create(int begin, int end, GuardedSectionsImpl guards) throws BadLocationException {
@@ -109,7 +120,10 @@ public final class PositionBounds {
      */
     public static PositionBounds createBodyBounds(int begin, int end, GuardedSectionsImpl guards) throws BadLocationException {
         StyledDocument doc = guards.getDocument();
-        return new PositionBounds(new BackwardPosition(doc.createPosition(begin - 1)), doc.createPosition(end), guards);
+        return new PositionBounds(
+                new BiasedPosition(doc.createPosition(begin - 1), Position.Bias.Backward),
+                new BiasedPosition(doc.createPosition(end + 1), Position.Bias.Forward),
+                guards);
     }
     
     /**
@@ -126,23 +140,27 @@ public final class PositionBounds {
      * @see #resolvePositions
      */
     public static PositionBounds createBodyUnresolved(int begin, int end, GuardedSectionsImpl guards) throws BadLocationException {
-        return new PositionBounds(new BackwardPosition(new UnresolvedPosition(begin - 1)), new UnresolvedPosition(end), guards);
+        return new PositionBounds(
+                new BiasedPosition(new UnresolvedPosition(begin - 1), Position.Bias.Backward),
+                new BiasedPosition(new UnresolvedPosition(end + 1), Position.Bias.Forward),
+                guards);
     }
     
     public void resolvePositions() throws BadLocationException {
         StyledDocument doc = guards.getDocument();
-        Position b, e;
-        if (end instanceof UnresolvedPosition) {
-            if (begin instanceof BackwardPosition) {
-                b = ((BackwardPosition) begin).delegate = doc.createPosition(
-                        ((BackwardPosition) begin).delegate.getOffset());
-            } else {
-                b = doc.createPosition(begin.getOffset());
-            }
-            e = doc.createPosition(end.getOffset());
-            this.begin = b;
-            this.end = e;
+
+        if (begin instanceof UnresolvedPosition) {
+            begin = doc.createPosition(begin.getOffset());
+        } else if (begin instanceof BiasedPosition) {
+            ((BiasedPosition) begin).resolve(doc);
         }
+
+        if (end instanceof UnresolvedPosition) {
+            end = doc.createPosition(end.getOffset());
+        } else if (end instanceof BiasedPosition) {
+            ((BiasedPosition) end).resolve(doc);
+        }
+        assertPositionBounds();
     }
 
     /**
@@ -215,6 +233,7 @@ public final class PositionBounds {
                                 if ((end.getOffset() - p1) != len) {
                                     end = doc.createPosition(p1 + len);
                                 }
+                                assertPositionBounds();
                             }
                         }
                     } catch (BadLocationException e) {
@@ -240,6 +259,11 @@ public final class PositionBounds {
         int p2 = end.getOffset();
 
         return doc.getText(p1, p2 - p1);
+    }
+
+    private void assertPositionBounds() {
+        assert (begin.getOffset() <= end.getOffset()) :
+            "Invalid position bounds: begin-offset=" + begin.getOffset() + " > end-offset=" + end.getOffset();
     }
 
     /* @return the bounds as the string. */
