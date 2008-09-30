@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,72 +31,63 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 
-package org.netbeans.lib.jsp.lexer;
+package org.netbeans.lib.html.lexer;
 
-import java.io.File;
-import java.io.IOException;
-import javax.swing.text.BadLocationException;
-import org.netbeans.api.jsp.lexer.JspTokenId;
-import org.netbeans.api.lexer.Token;
+import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.lib.lexer.test.LexerTestUtilities;
 
-
-/**Jsp Lexer Test
+/**
  *
- * @author Marek.Fukala@Sun.COM
+ * @author Tor Norbye
  */
-public class JspLexerTest extends NbTestCase {
+public class HTMLLexerTest extends NbTestCase {
     
-    public JspLexerTest() {
-        super("JspLexerTest");
+    public HTMLLexerTest(String testName) {
+        super(testName);
+    }            
+
+    @Override
+    protected void setUp() throws java.lang.Exception {
+        // Set-up testing environment
+        LexerTestUtilities.setTesting(true);
+    }
+
+    public void testInput() throws Exception {
+        LexerTestUtilities.checkTokenDump(this, "testfiles/testInput.rb.txt",
+                HTMLTokenId.language());
     }
     
-    private CharSequence readFile(String fileName) throws IOException {
-        File inputFile = new File(getDataDir(), fileName);
-        return Utils.readFileContentToString(inputFile);
-    }
-    
-    private static String getTokenInfo(Token token, TokenHierarchy tokenHierarchy) {
-        return "TOKEN[text=\"" + token.text() + "\"; tokenId=" + token.id().name() + "; offset=" + token.offset(tokenHierarchy) + "]";
-    }
-    
-    private void dumpTokens(CharSequence charSequence) {
-        TokenHierarchy tokenHierarchy = TokenHierarchy.create(charSequence, JspTokenId.language());
-        TokenSequence tokenSequence = tokenHierarchy.tokenSequence();
-        tokenSequence.moveStart();
-        while (tokenSequence.moveNext()) {
-            getRef().println(getTokenInfo(tokenSequence.token(), tokenHierarchy));
-        } 
-    }
-    
-    //test methods -----------
-    
-    public void testComplexJSP() throws BadLocationException, IOException {
-        dumpTokens(readFile("input/JspLexerTest/testComplexJSP.jsp"));
-        compareReferenceFiles();
-    }
-    
-     public void test146930() {
-        TokenHierarchy th = TokenHierarchy.create("<${}", JspTokenId.language());
+    public void test146930() {
+        TokenHierarchy th = TokenHierarchy.create("<<body>", HTMLTokenId.language());
         TokenSequence ts = th.tokenSequence();
         ts.moveStart();
         
         assertTrue(ts.moveNext());
-        
         assertEquals("<", ts.token().text().toString());
-        assertEquals(JspTokenId.TEXT, ts.token().id());
+        assertEquals(HTMLTokenId.TEXT, ts.token().id());
         
         assertTrue(ts.moveNext());
+        assertEquals("<", ts.token().text().toString());
+        assertEquals(HTMLTokenId.TAG_OPEN_SYMBOL, ts.token().id());
+
+        assertTrue(ts.moveNext());
+        assertEquals("body", ts.token().text().toString());
+        assertEquals(HTMLTokenId.TAG_OPEN, ts.token().id());
         
-        assertEquals("${}", ts.token().text().toString());
-        assertEquals(JspTokenId.EL, ts.token().id());
+        assertTrue(ts.moveNext());
+        assertEquals(">", ts.token().text().toString());
+        assertEquals(HTMLTokenId.TAG_CLOSE_SYMBOL, ts.token().id());
         
         assertFalse(ts.moveNext());
     }
-    
     
 }
