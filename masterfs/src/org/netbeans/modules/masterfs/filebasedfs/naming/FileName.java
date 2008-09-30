@@ -44,8 +44,8 @@ package org.netbeans.modules.masterfs.filebasedfs.naming;
 
 import java.io.File;
 import java.io.IOException;
+import org.netbeans.modules.masterfs.filebasedfs.utils.FileChangedManager;
 import org.netbeans.modules.masterfs.providers.ProvidedExtensions;
-import org.openide.util.Exceptions;
 
 /**
  * @author Radek Matous
@@ -57,27 +57,23 @@ public class FileName implements FileNaming {
 
     protected FileName(final FileNaming parent, final File file) {
         this.parent = parent;
-        this.name = parseName(file);
+        this.name = parseName(parent, file);
         id = NamingFactory.createID(file);
     }
 
-    private static String parseName(final File file) {
-        return (file.getParentFile() == null) ? file.getPath() : file.getName();
+    private static String parseName(final FileNaming parent, final File file) {
+        return parent == null ? file.getPath() : file.getName();
     }
 
-    public boolean rename(String name, ProvidedExtensions.IOHandler handler) {
+    public boolean rename(String name, ProvidedExtensions.IOHandler handler) throws IOException {
         boolean retVal = false;
         final File f = getFile();
 
-        if (f.exists()) {
+        if (FileChangedManager.getInstance().exists(f)) {
             File newFile = new File(f.getParentFile(), name);
             if (handler != null) {
-                try {
-                    handler.handle();
-                    retVal = true;
-                } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
-                }
+                handler.handle();
+                retVal = true;
             } else {
                 retVal = f.renameTo(newFile);
             }
@@ -93,7 +89,7 @@ public class FileName implements FileNaming {
         return retVal;
     }
 
-    public final boolean rename(final String name) {        
+    public final boolean rename(final String name) throws IOException {
         return rename(name, null);
     }
 
@@ -103,8 +99,8 @@ public class FileName implements FileNaming {
 
 
     public File getFile() {
-        final FileNaming parent = this.getParent();
-        return (parent != null) ? new File(parent.getFile(), getName()) : new File(getName());
+        final FileNaming myParent = this.getParent();
+        return (myParent != null) ? new File(myParent.getFile(), getName()) : new File(getName());
     }
 
 

@@ -41,14 +41,12 @@
 
 package org.netbeans.modules.masterfs.filebasedfs.naming;
 
-import org.netbeans.modules.masterfs.filebasedfs.utils.FileInfo;
-
 import java.io.File;
+import java.io.IOException;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.*;
 import org.netbeans.modules.masterfs.providers.ProvidedExtensions;
-import org.openide.util.Utilities;
 
 /**
  * @author Radek Matous
@@ -57,7 +55,7 @@ public final class NamingFactory {
     private static final Map nameMap = new WeakHashMap();
 
     public static synchronized FileNaming fromFile(final File file) {
-        final LinkedList list = new LinkedList();
+        final LinkedList<File> list = new LinkedList<File>();
         File current = file;
         while (current != null) {
             list.addFirst(current);
@@ -66,8 +64,13 @@ public final class NamingFactory {
 
         FileNaming fileName = null;
         for (int i = 0; i < list.size(); i++) {
-            File f = (File) list.get(i);
-            //TODO: UNC?
+            File f = list.get(i);
+            if("\\\\".equals(f.getPath())) {
+                // UNC file - skip \\, \\computerName
+                i++;
+                continue;
+            }
+            // returns unknown if last in the list, otherwise directory
             FileType type = (i == list.size() - 1) ? FileType.unknown : FileType.directory;
             fileName = NamingFactory.registerInstanceOfFileNaming(fileName, f, type);
         }
@@ -83,7 +86,7 @@ public final class NamingFactory {
         return NamingFactory.registerInstanceOfFileNaming(parentFn, file, FileType.unknown);
     }
     
-    public static synchronized void checkCaseSensitivity(final FileNaming childName, final File f) {
+    public static synchronized void checkCaseSensitivity(final FileNaming childName, final File f) throws IOException {
         if (!childName.getFile().getName().equals(f.getName())) {
             boolean isCaseSensitive = !new File(f,"a").equals(new File(f,"A"));//NOI18N
             if (!isCaseSensitive) {
@@ -92,19 +95,25 @@ public final class NamingFactory {
         }                        
     }
 
-    private static synchronized FileNaming[] rename (FileNaming fNaming, String newName) {        
+    private static synchronized FileNaming[] rename (FileNaming fNaming, String newName) throws IOException {
         return rename(fNaming, newName, null);
     }
     
-    public static synchronized FileNaming[] rename (FileNaming fNaming, String newName, ProvidedExtensions.IOHandler handler) {
+    public static FileNaming[] rename (FileNaming fNaming, String newName, ProvidedExtensions.IOHandler handler) throws IOException {
         final ArrayList all = new ArrayList();
         boolean retVal = false;
-        remove(fNaming, null);
+        synchronized(NamingFactory.class) {
+            remove(fNaming, null);
+        }
+        
         retVal = fNaming.rename(newName, handler);
-        all.add(fNaming);
-        NamingFactory.registerInstanceOfFileNaming(fNaming.getParent(), fNaming.getFile(), fNaming,true, FileType.unknown);
-        renameChildren(all);
-        return (retVal) ? ((FileNaming[])all.toArray(new FileNaming[all.size()])) : null;
+        
+        synchronized(NamingFactory.class) {        
+            all.add(fNaming);
+            NamingFactory.registerInstanceOfFileNaming(fNaming.getParent(), fNaming.getFile(), fNaming, true, FileType.unknown);
+            renameChildren(all);
+            return (retVal) ? ((FileNaming[]) all.toArray(new FileNaming[all.size()])) : null;
+        }
     }
 
     private static void renameChildren(final ArrayList all) {
@@ -146,7 +155,7 @@ public final class NamingFactory {
         }
     }
 
-    private static void remove(final FileNaming fNaming, Integer id) {
+    public static void remove(final FileNaming fNaming, Integer id) {
         id = (id != null) ? id : fNaming.getId();         
         Object value = NamingFactory.nameMap.get(id);
         if (value instanceof List) {
@@ -248,26 +257,17 @@ public final class NamingFactory {
         return retVal;
     }
 
-    public static enum FileType {file, directory, unc, unknown}
-    private static FileNaming createFileNaming(final File f, final FileNaming parentName) {    
-        return createFileNaming(f, parentName, FileType.unknown);
-    }
+    public static enum FileType {file, directory, unknown}
     
     private static FileNaming createFileNaming(final File f, final FileNaming parentName, FileType type) {
         FileName retVal = null;
         //TODO: check all tests for isFile & isDirectory
-        final FileInfo fInfo = new FileInfo(f);
         if (type.equals(FileType.unknown)) {
             if (f.isDirectory()) {
                 type = FileType.directory;
             } else {
                 //important for resolving  named pipes
                  type = FileType.file;
-                 /*else {
-                    if (fInfo.isUNCFolder()) {
-                        type = FileType.unc;
-                    }
-                }*/ //UNC doesn't work now anyway
             }            
         }
         
@@ -278,14 +278,8 @@ public final class NamingFactory {
             case directory:
                 retVal = new FolderName(parentName, f);
                 break;
-            case unc:
-                retVal = new UNCName(parentName, f);
-                break;
-                                
         }
-
-        assert retVal != null /*|| !fInfo.isConvertibleToFileObject()*/ : f.getAbsolutePath() + " isDirectory: " + f.isDirectory() + " isFile: " + f.isFile() + " exists: " + f.exists();//NOI18N
         return retVal;
     }
 
-                }
+}
