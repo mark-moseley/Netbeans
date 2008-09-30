@@ -41,35 +41,36 @@
 
 package org.netbeans.performance.languages;
 
-
 import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
-import org.netbeans.performance.languages.windows.AddJavaScriptLibraryDialog;
-import org.netbeans.performance.languages.windows.PhpPropertiesDialog;
-import org.netbeans.performance.languages.windows.RailsGeneratorDialog;
-import org.netbeans.performance.languages.windows.RubyGemsDialog;
-import org.netbeans.performance.languages.windows.RubyPropertiesDialog;
+import org.netbeans.performance.languages.actions.*;
+
 
 /**
  *
- * @author mkhramov@netbeans.org
+ * @author mkhramov@netbeans.org, mrkam@netbeans.org
  */
-public class ScriptingMeasureDialogsTest {
+public class ScriptingMeasureActionsTest1 {
     public static NbTestSuite suite() {
         PerformanceTestCase.prepareForMeasurements();
 
-        NbTestSuite suite = new NbTestSuite("Scripting UI Responsiveness Dialogs suite");
-        System.setProperty("suitename", ScriptingMeasureDialogsTest.class.getCanonicalName());
+        NbTestSuite suite = new NbTestSuite("Scripting UI Responsiveness Actions suite");
+        System.setProperty("suitename", ScriptingMeasureActionsTest1.class.getCanonicalName());
 
-        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(RubyPropertiesDialog.class)
-        .addTest(RailsGeneratorDialog.class)
-        .addTest(RubyGemsDialog.class)
-        .addTest(PhpPropertiesDialog.class)
-        .addTest(AddJavaScriptLibraryDialog.class)
-        .enableModules(".*").clusters(".*").reuseUserDir(true)));
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(CreateRubyProject.class)
+                .addTest(CreatePHPProject.class)
+                // TODO: Enable once browser problem is fixed (Issue 148463)
+//                .addTest(CreatePHPSampleProject.class)
                 
-        return suite;
-    }
+                .addTest(SavingPHPProjectProperties.class)
+                .addTest(CreateScriptingPackFiles.class)
+                .addTest(ScriptingExpandFolder.class)
+                .addTest(PHPNavigatorTest.class)
+                .addTest(GoToSourceTest.class)
+                .addTest(NavigateGoToSourceTest.class)
+                .enableModules(".*").clusters(".*").reuseUserDir(true)));
 
+        return suite;        
+    }
 }

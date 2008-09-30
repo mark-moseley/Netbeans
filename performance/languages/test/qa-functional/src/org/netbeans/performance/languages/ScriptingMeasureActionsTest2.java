@@ -41,35 +41,41 @@
 
 package org.netbeans.performance.languages;
 
-
 import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
-import org.netbeans.performance.languages.windows.AddJavaScriptLibraryDialog;
-import org.netbeans.performance.languages.windows.PhpPropertiesDialog;
-import org.netbeans.performance.languages.windows.RailsGeneratorDialog;
-import org.netbeans.performance.languages.windows.RubyGemsDialog;
-import org.netbeans.performance.languages.windows.RubyPropertiesDialog;
+import org.netbeans.performance.languages.actions.*;
+
 
 /**
  *
- * @author mkhramov@netbeans.org
+ * @author mkhramov@netbeans.org, mrkam@netbeans.org
  */
-public class ScriptingMeasureDialogsTest {
+public class ScriptingMeasureActionsTest2 {
     public static NbTestSuite suite() {
         PerformanceTestCase.prepareForMeasurements();
 
-        NbTestSuite suite = new NbTestSuite("Scripting UI Responsiveness Dialogs suite");
-        System.setProperty("suitename", ScriptingMeasureDialogsTest.class.getCanonicalName());
+        NbTestSuite suite = new NbTestSuite("Scripting UI Responsiveness Actions suite");
+        System.setProperty("suitename", ScriptingMeasureActionsTest2.class.getCanonicalName());
 
-        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(RubyPropertiesDialog.class)
-        .addTest(RailsGeneratorDialog.class)
-        .addTest(RubyGemsDialog.class)
-        .addTest(PhpPropertiesDialog.class)
-        .addTest(AddJavaScriptLibraryDialog.class)
-        .enableModules(".*").clusters(".*").reuseUserDir(true)));
-                
-        return suite;
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(EditorMenuPopup.class)
+                .addTest(FormatFileTest.class)
+                .addTest(CloseProjectTest.class)
+                .addTest(CloseScriptingFiles.class)
+                .addTest(TypingInScriptingEditor.class)
+                .addTest(ScriptingCodeCompletionInEditor.class)
+                .addTest(OpenScriptingFiles.class)
+
+                // Saving modified document
+                .addTest(SaveModifiedScriptingFiles.class)
+
+                // Page Up and Down in scripting editor
+                .addTest(PageUpPageDownScriptingEditor.class)
+
+                // Can cause RubyProject to be closed in case of failure
+                .addTest(OpenRubyProject.class)
+                .enableModules(".*").clusters(".*").reuseUserDir(true)));
+
+        return suite;        
     }
-
 }
