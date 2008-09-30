@@ -56,6 +56,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
@@ -64,6 +67,7 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.modules.j2ee.api.ejbjar.Car;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbJar;
+import org.netbeans.modules.j2ee.common.project.classpath.ClassPathSupport;
 import org.netbeans.modules.j2ee.dd.api.application.Application;
 import org.netbeans.modules.j2ee.dd.api.application.ApplicationMetadata;
 import org.netbeans.modules.j2ee.dd.api.application.DDProvider;
@@ -73,13 +77,14 @@ import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeApplication;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleChangeReporter;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleListener;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.ArtifactListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeApplicationProvider;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeApplicationImplementation;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleFactory;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider.DeployOnSaveSupport;
 import org.netbeans.modules.j2ee.earproject.model.ApplicationMetadataModelImpl;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.EarProjectProperties;
-import org.netbeans.modules.j2ee.earproject.ui.customizer.VisualClassPathItem;
 import org.netbeans.modules.j2ee.earproject.util.EarProjectUtil;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
 import org.netbeans.modules.j2ee.metadata.model.spi.MetadataModelFactory;
@@ -108,7 +113,9 @@ public final class ProjectEar extends J2eeApplicationProvider
         J2eeApplicationImplementation {
     
     public static final String FILE_DD        = "application.xml";//NOI18N
-    
+
+    private static final Logger LOGGER = Logger.getLogger(ProjectEar.class.getName());
+
     private final EarProject project;
     
     private PropertyChangeSupport propertyChangeSupport;
@@ -117,6 +124,8 @@ public final class ProjectEar extends J2eeApplicationProvider
     /* application reference for JAVA EE 5 only (if application.xml doesn't exist)  */
     private Application application;
     private MetadataModel<ApplicationMetadata> metadataModel;
+    
+    private final DeployOnSaveSupport deployOnSaveSupport = new DeployOnSaveSupportProxy();
     
     ProjectEar (EarProject project) { // ], AntProjectHelper helper) {
         this.project = project;
@@ -168,11 +177,6 @@ public final class ProjectEar extends J2eeApplicationProvider
     }
     
     @Override
-    public boolean useDefaultServer () {
-        return false;
-    }
-    
-    @Override
     public String getServerID () {
         return project.getServerID(); //helper.getStandardPropertyEvaluator ().getProperty (EarProjectProperties.J2EE_SERVER_TYPE);
     }
@@ -192,7 +196,9 @@ public final class ProjectEar extends J2eeApplicationProvider
      * contain module archives.
      */
     public Iterator getArchiveContents () throws IOException {
-        return new IT (this, getContentDirectory ());
+        FileObject content = getContentDirectory();
+        content.refresh();
+        return new IT(this, content);
     }
 
     public FileObject getContentDirectory() {
@@ -286,9 +292,8 @@ public final class ProjectEar extends J2eeApplicationProvider
 
         application = DDProvider.getDefault().getDDRoot(dd);
         application.setDisplayName(ProjectUtils.getInformation(project).getDisplayName());
-        EarProjectProperties epp = project.getProjectProperties();
-        for (VisualClassPathItem vcpi : epp.getJarContentAdditional()) {
-            epp.addItemToAppDD(application, vcpi);
+        for (ClassPathSupport.Item item : EarProjectProperties.getJarContentAdditional(project)) {
+            EarProjectProperties.addItemToAppDD(project, application, item);
         }
         
         return application;
@@ -514,6 +519,11 @@ public final class ProjectEar extends J2eeApplicationProvider
     public  J2eeModuleProvider[] getChildModuleProviders() {
         return mods.values().toArray(new J2eeModuleProvider[mods.size()]);
     }
+   
+    @Override
+    public DeployOnSaveSupport getDeployOnSaveSupport() {
+        return deployOnSaveSupport;
+    }
     
     public File getDeploymentConfigurationFile(String name) {
         String path = getConfigSupport().getContentRelativePath(name);
@@ -558,10 +568,9 @@ public final class ProjectEar extends J2eeApplicationProvider
             owner = FileOwnerQuery.getOwner(childFO);
         }
         if (owner == null) {
-            Logger.getLogger("global").log(Level.INFO,
-                                           "Unable to add module to the Enterpise Application. Owner project not found."); // NOI18N
+            LOGGER.log(Level.INFO, "Unable to add module to the Enterpise Application. Owner project not found."); // NOI18N
         } else {
-            project.getProjectProperties().addJ2eeSubprojects(new Project [] {owner});
+            EarProjectProperties.addJ2eeSubprojects(project, new Project [] {owner});
         }
     }
 
@@ -589,6 +598,81 @@ public final class ProjectEar extends J2eeApplicationProvider
                 }
             }
             return propertyChangeSupport;
+        }
+    }
+
+    /**
+     * This class is proxying events from child listeners and perform
+     * <i>library-inclusion-in-manifest</i> (out of EJB and WEB) logic. Soo ugly but
+     * inevitable :(
+     */
+    private class DeployOnSaveSupportProxy implements ArtifactListener, DeployOnSaveSupport {
+
+        private final List<ArtifactListener> listeners = new ArrayList<ArtifactListener>();
+
+        
+        
+        public DeployOnSaveSupportProxy() {
+            super();
+        }
+
+        public synchronized void addArtifactListener(ArtifactListener listner) {
+            boolean register = listeners.isEmpty();
+            if (listner != null) {
+                listeners.add(listner);
+            }
+
+            if (register) {
+                for (J2eeModuleProvider provider : getChildModuleProviders()) {
+                    DeployOnSaveSupport support = provider.getDeployOnSaveSupport();
+                    if (support != null) {
+                        support.addArtifactListener(this);
+                    }
+                }
+            }
+        }
+
+        public synchronized void removeArtifactListener(ArtifactListener listener) {
+            if (listener != null) {
+                listeners.remove(listener);
+            }
+
+            if (listeners.isEmpty()) {
+                for (J2eeModuleProvider provider : getChildModuleProviders()) {
+                    DeployOnSaveSupport support = provider.getDeployOnSaveSupport();
+                    if (support != null) {
+                        support.removeArtifactListener(this);
+                    }
+                }
+            }
+        }
+
+        public void artifactsUpdated(Iterable<Artifact> artifacts) {
+            List<Artifact> recomputed = new ArrayList<Artifact>();
+            for (Artifact artifact : artifacts) {
+                if (artifact.isReferencedLibrary() && artifact.isRelocatable()) {
+                    // FIXME manifest ant TLD magic
+                    File buildDir = project.getAntProjectHelper().resolveFile(
+                            project.evaluator().getProperty(EarProjectProperties.BUILD_DIR));
+                    File destFile = new File(buildDir, artifact.getFile().getName());
+                    try {
+                        FileUtil.createData(destFile);
+                    } catch (IOException ex) {
+                        LOGGER.log(Level.INFO, "Could not prepare data file", ex);
+                        continue;
+                    }
+                    recomputed.add(artifact.distributionPath(destFile));
+                } else {
+                    recomputed.add(artifact);
+                }
+            }
+            List<ArtifactListener> toFire = null;
+            synchronized (this) {
+                toFire = new ArrayList<ArtifactListener>(listeners);
+            }
+            for (ArtifactListener listener : toFire) {
+                listener.artifactsUpdated(recomputed);
+            }
         }
     }
 }
