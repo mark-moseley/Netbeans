@@ -76,32 +76,50 @@ public abstract class ActionUtils {
         
         List<Action> actions = new ArrayList<Action>();
         if(kind == Constants.MODE_KIND_EDITOR) {
-            actions.add(new CloseAllDocumentsAction(false));
-            CloseAllButThisAction allBut = new CloseAllButThisAction(tc);
-            if (mode != null && mode.getOpenedTopComponents().size() == 1) {
-                allBut.setEnabled(false);
+            if( Switches.isEditorTopComponentClosingEnabled() ) {
+                actions.add(new CloseAllDocumentsAction(true));
+                CloseAllButThisAction allBut = new CloseAllButThisAction(tc, true);
+                if (mode != null && mode.getOpenedTopComponents().size() == 1) {
+                    allBut.setEnabled(false);
+                }
+                actions.add(allBut);
+                actions.add(null); // Separator
             }
-            actions.add(allBut);
-            actions.add(null); // Separator
             actions.add(new SaveDocumentAction(tc));
             actions.add(new CloneDocumentAction(tc));
             actions.add(null); // Separator
-            actions.add(new CloseWindowAction(tc));
-            actions.add(new MaximizeWindowAction(tc));
-            actions.add(new UndockWindowAction(tc));
+            if( Switches.isEditorTopComponentClosingEnabled() ) {
+                actions.add(new CloseWindowAction(tc));
+            }
+            if( Switches.isTopComponentMaximizationEnabled() ) {
+                actions.add(new MaximizeWindowAction(tc));
+            }
+            if( Switches.isTopComponentUndockingEnabled() ) {
+                actions.add(new UndockWindowAction(tc));
+            }
         } else if (kind == Constants.MODE_KIND_VIEW) {
-            actions.add(new CloseWindowAction(tc));
+            if( Switches.isViewTopComponentClosingEnabled() ) {
+                actions.add(new CloseWindowAction(tc));
+            }
             // #82053: don't include maximize action for floating (separate) views
-            if (mode.getState() == Constants.MODE_STATE_JOINED) {
+            if (mode.getState() == Constants.MODE_STATE_JOINED
+                    && Switches.isTopComponentMaximizationEnabled() ) {
                 actions.add(new MaximizeWindowAction(tc));
             }
-            actions.add(new UndockWindowAction(tc));
+            if( Switches.isTopComponentUndockingEnabled() ) {
+                actions.add(new UndockWindowAction(tc));
+            }
         } else if (kind == Constants.MODE_KIND_SLIDING) {
-            actions.add(new CloseWindowAction(tc));
-            if (mode.getState() == Constants.MODE_STATE_JOINED) {
+            if( Switches.isViewTopComponentClosingEnabled() ) {
+                actions.add(new CloseWindowAction(tc));
+            }
+            if (mode.getState() == Constants.MODE_STATE_JOINED
+                    && Switches.isTopComponentMaximizationEnabled() ) {
                 actions.add(new MaximizeWindowAction(tc));
             }
-            actions.add(new UndockWindowAction(tc));
+            if( Switches.isTopComponentUndockingEnabled() ) {
+                actions.add(new UndockWindowAction(tc));
+            }
         }
         
         return actions.toArray(new Action[actions.size()]);
@@ -264,21 +282,54 @@ public abstract class ActionUtils {
     } // End of class CloneDocumentAction.
     
     // Utility methods >>
-    public static void closeAllDocuments () {
-        TopComponent activeTC = TopComponent.getRegistry().getActivated();
-        List<TopComponent> tcs = getOpened(activeTC);
-        
-        for(TopComponent tc: tcs) {
-            tc.close();
+    /** Closes all documents, based on isContext flag
+     * 
+     * @param isContext when true, closes all documents in active mode only,
+     * otherwise closes all documents in the system
+     */
+    public static void closeAllDocuments (boolean isContext) {
+        if (isContext) {
+            TopComponent activeTC = TopComponent.getRegistry().getActivated();
+            List<TopComponent> tcs = getOpened(activeTC);
+
+            for(TopComponent tc: tcs) {
+                tc.putClientProperty("inCloseAll", Boolean.TRUE);
+                tc.close();
+            }
+        } else {
+            TopComponent[] tcs = WindowManagerImpl.getInstance().getEditorTopComponents();
+
+            for(TopComponent tc: tcs) {
+                tc.putClientProperty("inCloseAll", Boolean.TRUE);
+                tc.close();
+            }
         }
     }
 
-    public static void closeAllExcept (TopComponent tc) {
-        List<TopComponent> tcs = getOpened(tc);
+    /** Closes all documents except given param, according to isContext flag
+     * 
+     * @param isContext when true, closes all documents except given 
+     * in active mode only, otherwise closes all documents in the system except
+     * given
+     */
+    public static void closeAllExcept (TopComponent tc, boolean isContext) {
+        if (isContext) {
+            List<TopComponent> tcs = getOpened(tc);
 
-        for(TopComponent curTC: tcs) {
-            if (curTC != tc) {
-                curTC.close();
+            for(TopComponent curTC: tcs) {
+                if (curTC != tc) {
+                    curTC.putClientProperty("inCloseAll", Boolean.TRUE);
+                    curTC.close();
+                }
+            }
+        } else {
+            TopComponent[] tcs = WindowManagerImpl.getInstance().getEditorTopComponents();
+
+            for(TopComponent curTC: tcs) {
+                if (curTC != tc) {
+                    curTC.putClientProperty("inCloseAll", Boolean.TRUE);
+                    curTC.close();
+                }
             }
         }
     }
