@@ -41,9 +41,10 @@
 
 package org.openide.text;
 
-
 import java.beans.PropertyChangeListener;
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,11 +52,16 @@ import java.util.Collections;
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
 import javax.swing.text.EditorKit;
-import junit.framework.*;
-import org.netbeans.junit.*;
+import junit.framework.AssertionFailedError;
+import junit.framework.Test;
+import junit.framework.TestSuite;
+import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.RandomlyFails;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
-import org.openide.util.lookup.*;
+import org.openide.util.lookup.AbstractLookup;
+import org.openide.util.lookup.InstanceContent;
 
 
 /** Testing different features of CloneableEditorSupport
@@ -72,7 +78,8 @@ implements CloneableEditorSupport.Env {
     /** the content of lookup of support */
     private InstanceContent ic;
 
-    public void testDocumentBeGarbageCollectedWhenNotModifiedButOpened () throws Exception {
+    @RandomlyFails // NB-Core-Build #1437
+    public void testDocCanBeGCdWhenNotModifiedButOpened() throws Exception {
         content = "Ahoj\nMyDoc";
         javax.swing.text.Document doc = support.openDocument ();
         assertNotNull (doc);
@@ -82,18 +89,18 @@ implements CloneableEditorSupport.Env {
         
         assertGC ("Document can dissapear", ref, Collections.singleton(support));
 
-        assertFalse ("Document is not loaded", support.isDocumentLoaded ());
         assertTrue ("Can be closed without problems", support.close ());
+        assertFalse ("Document is not loaded", support.isDocumentLoaded ());
     }
-
+    
     public void testDocumentIsNotGCedIfModified () throws Exception {
         content = "Ahoj\nMyDoc";
         javax.swing.text.Document doc = support.openDocument ();
         assertNotNull (doc);
         doc.insertString (0, "Zmena", null);
-        
+
         assertTrue ("Is modified", support.isModified ());
-        
+
         WeakReference<Object> ref = new WeakReference<Object>(doc);
         doc = null;
 
@@ -109,7 +116,7 @@ implements CloneableEditorSupport.Env {
         }
         
         assertTrue ("Document remains loaded", support.isDocumentLoaded ());
-        
+
     }
     
     public void testDocumentIsNotGCedIfOpenedInEditor () throws Exception {
@@ -219,8 +226,7 @@ implements CloneableEditorSupport.Env {
         i = l.getLookup().lookup(Integer.class);
         assertNull ("Lookup is dynamic, so now there is nothing", i);
     }
-    
-    
+
     public void testGetInputStream () throws Exception {
         content = "goes\nto\nInputStream";
         String added = "added before\n";
@@ -309,6 +315,22 @@ implements CloneableEditorSupport.Env {
         assertTrue("Same bytes as would result from the string: " + s, Arrays.equals(b1, b2));
     }
     
+    public void testDocumentBeforeSaveRunnableProcessed() throws Exception {
+        content = "Ahoj\nMyDoc";
+        javax.swing.text.Document doc = support.openDocument ();
+        assertNotNull (doc);
+        final boolean[] processed = { false };
+        doc.putProperty("beforeSaveRunnable", new Runnable() {
+            public void run() {
+                processed[0] = true;
+            }
+        });
+        doc.insertString(0, "Nazdar", null); // Modify doc to allow save
+        support.saveDocument();
+        assertTrue("CES.saveDocument() did not execute a runnable in \"beforeSaveRunnable\" document property",
+                processed[0]);
+    }
+
     //
     // Implementation of the CloneableEditorSupport.Env
     //
