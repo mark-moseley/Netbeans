@@ -2,7 +2,7 @@
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
-Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
 
 
 The contents of this file are subject to the terms of either the GNU
@@ -26,7 +26,7 @@ your own identifying information:
 Contributor(s):
 
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
 Microsystems, Inc. All Rights Reserved.
 
 If you wish your version of this file to be governed by only the CDDL
@@ -107,6 +107,91 @@ is the proper place.
 
     <changes>
         
+        <change id="javadoc-root-and-source-root-detection">
+            <api name="general"/>
+            <summary>Detection of Javadoc root and source root</summary>
+            <version major="1" minor="20"/>
+            <date day="22" month="7" year="2008"/>
+            <author login="dkonecny"/>
+            <compatibility addition="yes"/>
+            <description>
+                <p>
+                    Class <code>JavadocAndSourceRootDetection</code> added with couple of
+                    helper methods to detect Javadoc and/or sources root.
+                </p>
+            </description>
+            <class package="org.netbeans.spi.java.project.support" name="JavadocAndSourceRootDetection"/>
+            <issue number="124779"/>
+        </change>
+
+        <change id="JavaRunner">
+            <api name="general"/>
+            <summary>Added JavaRunner</summary>
+            <version major="1" minor="22"/>
+            <date day="29" month="9" year="2008"/>
+            <author login="jlahoda"/>
+            <compatibility addition="yes"/>
+            <description>
+                <p>
+                    Class <code>JavaRunner</code> added.
+                </p>
+            </description>
+            <class package="org.netbeans.api.java.project.runner" name="JavaRunner"/>
+            <issue number="138504"/>
+        </change>
+        
+        <change id="LookupMerger">
+            <api name="classpath"/>
+            <summary>Create LookupMerger implementation for ClassPathProvider</summary>
+            <version major="1" minor="18"/>
+            <date day="19" month="5" year="2008"/>
+            <author login="mkleint"/>
+            <compatibility addition="yes"/>
+            <description>
+                <p>
+                    <code>LookupMergerSupport.createClassPathProviderMerger(ClassPathProvider)</code>
+                    can be used to allow composing the project's classpath from multiple sources (modules).
+                </p>
+            </description>
+            <class package="org.netbeans.spi.java.project.support" name="LookupMergerSupport"/>
+            <issue number="134341"/>
+        </change>
+        
+        <change id="use-uri-for-relative-paths">
+            <api name="general"/>
+            <summary>Support for adding/removing relative classpath entries</summary>
+            <version major="1" minor="16"/>
+            <date day="27" month="3" year="2008"/>
+            <author login="dkonecny"/>
+            <compatibility addition="yes"/>
+            <description>
+                <p>Allow to add/remove relative classpath entries.
+                </p>
+            </description>
+            <class package="org.netbeans.spi.java.project.classpath" name="ProjectClassPathModifierImplementation"/>
+            <class package="org.netbeans.api.java.project.classpath" name="ProjectClassPathModifier"/>
+            <issue number="129628"/>
+        </change>        
+        <change id="ant-project-libraries">
+            <api name="general"/>
+            <summary>Support for project-specific libraries</summary>
+            <version major="1" minor="15"/>
+            <date day="7" month="2" year="2008"/>
+            <author login="mkleint"/>
+            <compatibility addition="yes"/>
+            <description>
+                <p> A new utility class for helping project types create UI for
+                sharable Libraries.
+                </p>
+                <p> An additional protected method for use in <code>ProjectClassPathModifierImplementation</code> subclasses named
+                <code>performSharabilityHeuristics(URL,AntProjectHelper)</code> that takes classpath roots and tries to find the best way to reference that jar/folder.
+                </p>
+                
+            </description>
+            <class package="org.netbeans.spi.java.project.support.ui" name="SharableLibrariesUtils"/>
+            <class package="org.netbeans.spi.java.project.classpath" name="ProjectClassPathModifierImplementation"/>
+            <issue number="44035"/>
+        </change>        
     <change id="AttachJavadocSourceToJar">
         <api name="ui"/>
         <summary>Added support classes for attaching javadoc/source to jar-based classpath items</summary>
@@ -115,18 +200,22 @@ is the proper place.
         <author login="mkleint"/>
         <compatibility addition="yes"/>
         <description>
-            2 new utility classes to allow attaching javadoc/source to existing jar dependencies of an Ant-based project.
+            3 new utility classes to allow attaching javadoc/source to existing jar dependencies of an Ant-based project.
             These classes are for use by project type owners. Specifically
             <ul>
                 <li><code>ExtraSourceJavadocSupport.createExtraSourceQueryImplementation()</code> and 
                 <code>ExtraSourceJavadocSupport.createExtraJavadocQueryImplementation()</code> 
                 create instances to be added to project's Lookup.</li>
+                <li><code>LookupMergerSupport.createSFBLookupMerger()</code> and <code>LookupMergerSupport.createJFBLookupMerger()</code>
+                provide simple implementations of lookup mergers for respective query implementations. 
+                A typical project implementation will put the lookup merger and the Extra*Support's instance in the project's lookup.</li>
                 <li><code>EditJarSupport.showEditDialog()</code> is a facotry method for creating editing UI. To be added to Project's properties dialog
                 preferably the "Libraries" panel. Client code (project type owner) is assumed to write down the ant properties
                source.reference.__name__ and javadoc.reference.__name__ in the same manner as file.reference.__name__ is persisted.</li>
             </ul>
         </description>
         <class package="org.netbeans.spi.java.project.support" name="ExtraSourceJavadocSupport"/>
+        <class package="org.netbeans.spi.java.project.support" name="LookupMergerSupport"/>
         <class package="org.netbeans.spi.java.project.support.ui" name="EditJarSupport"/>
         <issue number="70497"/>
     </change>
