@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -62,12 +63,13 @@ import java.util.logging.Logger;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.Session;
-import org.netbeans.modules.php.dbgp.api.SessionId;
-import org.netbeans.modules.php.dbgp.api.StartActionProvider;
+import org.netbeans.modules.php.dbgp.DebugSession.IDESessionBridge;
+import org.netbeans.modules.php.dbgp.models.ThreadsModel;
 import org.netbeans.modules.php.dbgp.packets.StatusCommand;
 import org.netbeans.spi.debugger.DebuggerEngineProvider;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
@@ -76,13 +78,10 @@ import org.openide.util.RequestProcessor;
  * @author ads
  *
  */
-public class StartActionProviderImpl  implements StartActionProvider
-{
+public class StartActionProviderImpl {
 
     private static final String LOCALHOST   = "localhost";          // NOI18N
 
-    private static final int DEFAULT_PORT   = 9000; 
-    
     private static final int PORT_RANGE     = 100;
     
     private static final int TIMEOUT        = 60000;
@@ -98,35 +97,12 @@ public class StartActionProviderImpl  implements StartActionProvider
         return INSTANCE;
     }
 
-    /* (non-Javadoc)
-     * @see org.netbeans.modules.php.dbgp.api.StartActionProvider#start()
-     */
-    public synchronized void start( ) {
-        if ( myThread == null ){
-            /*
-             *  TODO : port may be red from options, found free port via 
-             *  #findFreePort(), suggest to user via option about free port.
-             */
-            int port = DEFAULT_PORT;
-            myThread = new ServerThread( port );
+    
+    public synchronized Semaphore start( DebugSession session) {
+            int port = session.getOptions().getPort();
+            myThread = new ServerThread( port, session.getSessionId() );
             RequestProcessor.getDefault().post( myThread );
-        }
-        else {
-            /*
-             *  Case stopping thread ( situation when debug session was 
-             *  started right after previous stopping ).
-             */ 
-            if ( myThread.isStop() ){
-                /*
-                 *  Not accurate stop accepting from other thread.
-                 *  But otherwise one need to wait TIMEOUT seconds 
-                 *  for stopping listening thread.
-                 */
-                myThread.closeSocket();
-                myThread = null;
-                start();
-            }
-        }
+            return myThread.getSemaphore();
     }
     
     public synchronized DebugSession getSessionById( String id ) {
@@ -147,15 +123,7 @@ public class StartActionProviderImpl  implements StartActionProvider
         if ( id == null ) {
             return null;
         }
-        Session[] sessions = DebuggerManager.getDebuggerManager().getSessions();
-        for (Session session : sessions) {
-            SessionId sessId = (SessionId)
-                    session.lookupFirst( null , SessionId.class);
-            if ( id.equals(sessId) ) {
-                return myCurrentSessions.get( session );
-            }
-        }
-        return null;
+        return ConversionUtils.toDebugSession(id);
     }
     
     public synchronized Collection<DebugSession> getSessions( SessionId id ){
@@ -169,11 +137,11 @@ public class StartActionProviderImpl  implements StartActionProvider
     }
     
     public synchronized void stop( Session session ) {
-        SessionId id = (SessionId)session.lookupFirst( null , SessionId.class );
+        SessionId id = session.lookupFirst(null, SessionId.class);
         List<DebugSession> list = new ArrayList<DebugSession>( mySessions);
         for( DebugSession debSess : list) {
             if ( debSess.getSessionId() == id ) {
-                debSess.setStop();
+                debSess.stop();
                 mySessions.remove(debSess);
             }
         }
@@ -188,7 +156,7 @@ public class StartActionProviderImpl  implements StartActionProvider
             }
         }
         if ( last ) {
-            myThread.setStop();
+            myThread.stop();
         }
 
         stopEngines( session );
@@ -204,19 +172,26 @@ public class StartActionProviderImpl  implements StartActionProvider
             DebugSession debugSession )
     {
         myCurrentSessions.put(session, debugSession);
-        debugSession.getBridge().hideAnnotations();
-        debugSession.getBridge().setSuspended(false);
-        debugSession.getBridge().getThreadsModel().update();
+        IDESessionBridge bridge = debugSession.getBridge();
+        if (bridge != null) {
+            bridge.hideAnnotations();
+            bridge.setSuspended(false);
+            ThreadsModel threadsModel = bridge.getThreadsModel();
+            if (threadsModel != null) {
+                threadsModel.update();
+            }
+        }
     }
     
     synchronized void removeSession( DebugSession session ){
-        Session sess = (Session)
-            session.getBridge().getEngine().lookupFirst(null, Session.class );
         SessionId id = session.getSessionId();
         mySessions.remove( session );
         if ( id!= null ){
             Collection<DebugSession> collection = getSessions(id);
             if ( collection.size() >0 ){
+                IDESessionBridge bridge = session.getBridge();
+                DebuggerEngine engine = (bridge != null) ? bridge.getEngine() : null;
+                Session sess = engine != null ? ((Session) engine.lookupFirst(null, Session.class)) : null;
                 DebugSession debugSession = collection.iterator().next();
                 setCurrentSession(sess, debugSession);
                 StatusCommand command = new StatusCommand( 
@@ -241,7 +216,8 @@ public class StartActionProviderImpl  implements StartActionProvider
     }
     
     private int findFreePort() {
-        for (int port = DEFAULT_PORT ; port < DEFAULT_PORT + PORT_RANGE; port++) {
+        int dbgPort = DebuggerOptions.getGlobalInstance().getPort();
+        for (int port = dbgPort ; port < dbgPort + PORT_RANGE; port++) {
             Socket testClient = null;
             
             try {
@@ -289,102 +265,136 @@ public class StartActionProviderImpl  implements StartActionProvider
         new StartActionProviderImpl();
     
     private class ServerThread implements Runnable {
+        private Semaphore accepting;
         
-        ServerThread( int port ){
+        ServerThread( int port, SessionId sessionId ){
+            this.sessionId = sessionId;            
             myPort = port;
-            isStop  = new AtomicBoolean( false );
+            isStopped  = new AtomicBoolean( false );
+            accepting = new Semaphore(1);
+            setAcceptingState(false);
         }
 
         public void run() {
             if ( !createServer() ) {
                 return;
             }
-            while( !isStop.get() ){
-                Socket sessionSocket = null;
-                
-                try {
-                    sessionSocket = myServer.accept();
+            Socket sessionSocket = null;
+            while( !isStopped()){
+                if (sessionSocket == null) {
+                    try {
+                        setAcceptingState(true);
+                        sessionSocket = myServer.accept();
+                    } catch ( SocketException e ){
+                        /*
+                         *  This can be result of inaccurate closing socket from
+                         *  other thread. Just log with inforamtion severity.
+                         */
+                        log(e);
+                    } catch( SocketTimeoutException e ){
+                        // skip this exception, it's normal
+                        log(e);
+                    } catch( IOException e ){
+                        log(e );
+                    } finally {
+                        setAcceptingState(false);
+                    }
                 }
-                catch ( SocketException e ){
-                    /*
-                     *  This can be result of inaccurate closing socket from
-                     *  other thread. Just log with inforamtion severity. 
-                     */  
-                    logInforamtion(e);
-                }
-                catch( SocketTimeoutException e ){
-                    // skip this exception, it's normal
-                }
-                catch( IOException e ){
-                    log( e );
-                }
-                if (sessionSocket != null) {
-                    DebugSession session = 
-                        new DebugSession( sessionSocket );
-                    RequestProcessor.getDefault().post( session );
-                    setupCurrentSession( session );
+                if (!isStopped.get() && sessionSocket != null) {
+                    DebugSession xdebugSession = DebuggerManager.getDebuggerManager().getCurrentEngine().lookupFirst(null, DebugSession.class);
+                    if (xdebugSession != null) {
+                        xdebugSession.start(sessionSocket);
+                        setupCurrentSession( xdebugSession );
+                        sessionSocket = null;
+                        break;
+                    } else {
+                        Session currentSession = DebuggerManager.getDebuggerManager().getCurrentSession();
+                        Session[] sessions = DebuggerManager.getDebuggerManager().getSessions();
+                        for (Session session : sessions) {
+                            if (session != currentSession) {
+                                DebuggerManager.getDebuggerManager().setCurrentSession(session);
+                            }
+                        }
+                        log(new AssertionError(sessionSocket));//NOI18N
+                    }
                 }
             }
             
             closeSocket();
         }
 
-        private void log( Exception exception ){
+        private void log( Throwable exception ){
             Logger.getLogger( StartActionProviderImpl.class.getName() ).log( 
                     Level.FINE, null, exception );
         }
-        
-        private void logInforamtion( SocketException e ){
-            Logger.getLogger( StartActionProviderImpl.class.getName() ).log( 
-                    Level.FINE, null, e );
-        }
-        
-        private synchronized boolean createServer(){
-            try {
-                myServer = new ServerSocket( myPort );
-                myServer.setSoTimeout(TIMEOUT);
-            }
-            catch (IOException e) {
-                String mesg = NbBundle.getMessage( 
-                        StartActionProviderImpl.class, PORT_OCCUPIED);
-                mesg = MessageFormat.format(mesg, myPort);
-                NotifyDescriptor descriptor =
-                    new NotifyDescriptor.Message( mesg , 
+                
+        private boolean createServer() {
+            synchronized (StartActionProviderImpl.this) {
+                try {
+                    myServer = new ServerSocket(myPort);
+                    myServer.setSoTimeout(TIMEOUT);
+                } catch (IOException e) {
+                    String mesg = NbBundle.getMessage(
+                            StartActionProviderImpl.class, PORT_OCCUPIED);
+                    mesg = MessageFormat.format(mesg, myPort);
+                    NotifyDescriptor descriptor =
+                            new NotifyDescriptor.Message(mesg,
                             NotifyDescriptor.INFORMATION_MESSAGE);
-                DialogDisplayer.getDefault().notify(descriptor);
-                log( e );
-                return false;
+                    DialogDisplayer.getDefault().notify(descriptor);
+                    log(e);
+                    return false;
+                }
+                return true;
             }
-            return true;
         }
         
-        private synchronized void closeSocket() {
-            if ( myServer == null ){
-                return;
-            }
-            try {
-                if (!myServer.isClosed()) {
-                    myServer.close();
+        private void closeSocket() {
+            synchronized(StartActionProviderImpl.this) {
+                if ( myServer == null ){
+                    return;
+                }
+                try {
+                    if (!myServer.isClosed()) {
+                        myServer.close();
+                    }
+                }
+                catch (IOException e) {
+                    log(e);
                 }
             }
-            catch (IOException e) {
-                log(e);
-            }
         }
         
-        private void setStop(){
-            isStop.set( true );
+        private void stop(){
+            isStopped.set( true );
+            closeSocket();
         }
         
-        private boolean isStop(){
-            return isStop.get();
+        private boolean isStopped(){
+            return isStopped.get();
         }
         
         private int myPort;
         
         private ServerSocket myServer;
         
-        private AtomicBoolean isStop;
+        private AtomicBoolean isStopped;
+        private SessionId sessionId;
+
+        private synchronized Semaphore getSemaphore() {
+            return accepting;
+        }
+
+        private synchronized void setAcceptingState(boolean acceptingState) {
+            try {
+                if (acceptingState) {
+                    getSemaphore().release();
+                } else {
+                    getSemaphore().acquire();
+                }
+            } catch (InterruptedException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
         
     }
 
