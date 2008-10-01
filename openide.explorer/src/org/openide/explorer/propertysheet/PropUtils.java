@@ -45,7 +45,6 @@ import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javax.accessibility.Accessible;
 import javax.accessibility.AccessibleContext;
-import org.openide.*;
 import org.openide.nodes.*;
 import org.openide.nodes.Node.*;
 import org.openide.util.*;
@@ -587,7 +586,15 @@ final class PropUtils {
 
         try {
             if (value instanceof String) {
-                ed.setAsText((String) value);
+                try {
+                    ed.setAsText((String) value);
+                } catch( IllegalArgumentException iaE ) {
+                    //#137706 - always treat iae from setAsText as a an invalid
+                    //user input instead of broken code and display nice error message to the user
+                    if( null == Exceptions.findLocalizedMessage(iaE) )
+                        Exceptions.attachLocalizedMessage(iaE, NbBundle.getMessage(PropUtils.class, "MSG_SetAsText_InvalidValue", value));
+                    result = iaE;
+                }
             } else {
                 ed.setValue(value);
             }
@@ -844,7 +851,7 @@ final class PropUtils {
                             result = new Boolean3WayEditor();
                         }
 
-                        if (updateEditor) {
+                        if (updateEditor || null == result.getValue()) {
                             updateEdFromProp(p, result, p.getDisplayName());
                         }
                     } catch (ProxyNode.DifferentValuesException dve) {
@@ -1012,8 +1019,17 @@ final class PropUtils {
 
         boolean aqua = "Aqua".equals(UIManager.getLookAndFeel().getID());
 
+        boolean nimbus = "Nimbus".equals(UIManager.getLookAndFeel().getID());
+
+        boolean gtk = "GTK".equals(UIManager.getLookAndFeel().getID());
+
         setRendererColor = UIManager.getColor(KEY_SETBG); //NOI18N
         selectedSetRendererColor = UIManager.getColor(KEY_SELSETBG); //NOI18N
+
+        if( nimbus || gtk ) {
+            setRendererColor = UIManager.getColor( "Menu.background" );//NOI18N
+            selectedSetRendererColor = UIManager.getColor("Tree.selectionBackground"); //NOI18N
+        }
 
         if (setRendererColor == null) {
             if (aqua) {
@@ -1053,6 +1069,9 @@ final class PropUtils {
         }
 
         setForegroundColor = UIManager.getColor(KEY_SETFG);
+
+        if( nimbus || gtk )
+            setForegroundColor = new Color( UIManager.getColor( "Menu.foreground" ).getRGB() ); //NOI18N
 
         if (setForegroundColor == null) {
             setForegroundColor = UIManager.getColor("Table.foreground"); //NOI18N
