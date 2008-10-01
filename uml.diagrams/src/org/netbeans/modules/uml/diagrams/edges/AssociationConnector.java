@@ -147,6 +147,7 @@ public class AssociationConnector extends AbstractUMLConnectionWidget
             updateAssociationEnds(element);
         }
 
+        showQualifiers(element);
         setControlPointShape(PointShape.SQUARE_FILLED_BIG);
     }
 
@@ -233,6 +234,61 @@ public class AssociationConnector extends AbstractUMLConnectionWidget
         }
     }
 
+    private void showQualifiers(IAssociation element)
+    {
+         for (IAssociationEnd curEnd : element.getEnds())
+        {
+            if (isSourceEnd(this, curEnd) == true)
+            {
+                if(curEnd.getQualifiers().size() > 0)
+                {
+                    QualifierLabelWidget qualifier = showSourceQualifier((GraphScene)getScene());
+                    qualifier.refreshQualifiers(curEnd);
+                }
+            }
+            else
+            {
+                if(curEnd.getQualifiers().size() > 0)
+                {
+                    QualifierLabelWidget qualifier = showTargetQualifier((GraphScene)getScene());
+                    qualifier.refreshQualifiers(curEnd);
+                }
+            }
+        }
+    }
+
+    private QualifierLabelWidget showSourceQualifier(GraphScene scene)
+    {
+        QualifierLabelWidget qualifier;
+        if (sourceQualifier == null)
+        {
+            sourceQualifier = new QualifierLabelWidget(scene);
+            addChild(sourceQualifier);
+            setConstraint(sourceQualifier, LayoutFactory.ConnectionWidgetLayoutAlignment.CENTER_SOURCE, 0);
+            sourceLocationResolver = new DirectRoutingAnchorResolver(sourceQualifier, true);
+            AnchorShape shape = AnchorShapeFactory.createAdjustableAnchorShape(getSourceAnchorShape(), sourceLocationResolver);
+            setSourceAnchorShape(shape);
+        }
+        qualifier = sourceQualifier;
+        return qualifier;
+    }
+
+    private QualifierLabelWidget showTargetQualifier(GraphScene scene)
+    {
+        QualifierLabelWidget qualifier;
+        if (targetQualifier == null)
+        {
+            targetQualifier = new QualifierLabelWidget(scene);
+            addChild(targetQualifier);
+            setConstraint(targetQualifier, LayoutFactory.ConnectionWidgetLayoutAlignment.CENTER_TARGET, -1);
+            targetLocationResolver = new DirectRoutingAnchorResolver(targetQualifier, false);
+            AnchorShape shape = AnchorShapeFactory.createAdjustableAnchorShape(getTargetAnchorShape(), targetLocationResolver);
+            setTargetAnchorShape(shape);
+        }
+        qualifier = targetQualifier;
+        return qualifier;
+    }
+
     private void updateQualifier(PropertyChangeEvent evt)
     {
         GraphScene scene = (GraphScene)getScene();
@@ -242,45 +298,11 @@ public class AssociationConnector extends AbstractUMLConnectionWidget
         
         if(isSourceEnd(this, (IAssociationEnd) evt.getSource()) == true)
         {
-            
-            if(sourceQualifier == null)
-            {
-                sourceQualifier = new QualifierLabelWidget(scene);
-                
-                addChild(sourceQualifier);
-                
-                setConstraint(sourceQualifier, 
-                              LayoutFactory.ConnectionWidgetLayoutAlignment.CENTER_SOURCE,
-                              0);
-
-                sourceLocationResolver = new DirectRoutingAnchorResolver(sourceQualifier, true);
-
-                AnchorShape shape = 
-                        AnchorShapeFactory.createAdjustableAnchorShape(getSourceAnchorShape(), 
-                                                                       sourceLocationResolver);
-                setSourceAnchorShape(shape);
-            }
-            qualifier = sourceQualifier;
+            qualifier = showSourceQualifier(scene);
         }
         else
         {
-            if(targetQualifier == null)
-            {
-                targetQualifier = new QualifierLabelWidget(scene);
-
-                addChild(targetQualifier);
-                
-                setConstraint(targetQualifier, 
-                              LayoutFactory.ConnectionWidgetLayoutAlignment.CENTER_TARGET,
-                              -1);
-                
-                targetLocationResolver = new DirectRoutingAnchorResolver(targetQualifier, false);
-                AnchorShape shape = 
-                        AnchorShapeFactory.createAdjustableAnchorShape(getTargetAnchorShape(), 
-                                                                       targetLocationResolver);
-                setTargetAnchorShape(shape);
-            }
-            qualifier = targetQualifier;
+            qualifier = showTargetQualifier(scene);
         }
         
         qualifier.propertyChange(evt);
@@ -830,41 +852,46 @@ public class AssociationConnector extends AbstractUMLConnectionWidget
                 relatedWidget = getTargetAnchor().getRelatedWidget();
             }
 
-            Rectangle relatedBounds = relatedWidget.convertLocalToScene(relatedWidget.getClientArea());
+            // When in the process of reconnecting the edge there will not be a
+            // related widget.
             Line2D[] retVal = new Line2D[3];
-            int right = bounds.x + bounds.width;
-            int bottom = bounds.y + bounds.height;
+            if(relatedWidget != null)
+            {
+                Rectangle relatedBounds = relatedWidget.convertLocalToScene(relatedWidget.getClientArea());
+                int right = bounds.x + bounds.width;
+                int bottom = bounds.y + bounds.height;
 
-            int relatedRight = relatedBounds.x + relatedBounds.width;
-            int relatedBottom = relatedBounds.y + relatedBounds.height;
+                int relatedRight = relatedBounds.x + relatedBounds.width;
+                int relatedBottom = relatedBounds.y + relatedBounds.height;
 
-            if(right <= relatedBounds.x)
-            {
-                // LEFT
-                retVal[0] = new Line2D.Float(bounds.x, bounds.y, right, bounds.y);
-                retVal[1] = new Line2D.Float(bounds.x, bounds.y, bounds.x, bottom);
-                retVal[2] = new Line2D.Float(bounds.x, bottom, right, bottom);
-            }
-            else if (bounds.x >= relatedRight)
-            {
-                // RIGHT
-                retVal[0] = new Line2D.Float(bounds.x, bounds.y, right, bounds.y);
-                retVal[1] = new Line2D.Float(right, bounds.y, right, bottom);
-                retVal[2] = new Line2D.Float(bounds.x, bottom, right, bottom);
-            }
-            else if (bounds.y >= relatedBottom)
-            {
-                // BOTTOM
-                retVal[0] = new Line2D.Float(bounds.x, bottom, right, bottom);
-                retVal[1] = new Line2D.Float(bounds.x, bounds.y, bounds.x, bottom);
-                retVal[2] = new Line2D.Float(right, bounds.y, right, bottom);
-            }
-            else if (bottom <= relatedBounds.y)
-            {
-                // TOP
-                retVal[0] = new Line2D.Float(bounds.x, bounds.y, right, bounds.y);
-                retVal[1] = new Line2D.Float(bounds.x, bounds.y, bounds.x, bottom);
-                retVal[2] = new Line2D.Float(right, bounds.y, right, bottom);
+                if(right <= relatedBounds.x)
+                {
+                    // LEFT
+                    retVal[0] = new Line2D.Float(bounds.x, bounds.y, right, bounds.y);
+                    retVal[1] = new Line2D.Float(bounds.x, bounds.y, bounds.x, bottom);
+                    retVal[2] = new Line2D.Float(bounds.x, bottom, right, bottom);
+                }
+                else if (bounds.x >= relatedRight)
+                {
+                    // RIGHT
+                    retVal[0] = new Line2D.Float(bounds.x, bounds.y, right, bounds.y);
+                    retVal[1] = new Line2D.Float(right, bounds.y, right, bottom);
+                    retVal[2] = new Line2D.Float(bounds.x, bottom, right, bottom);
+                }
+                else if (bounds.y >= relatedBottom)
+                {
+                    // BOTTOM
+                    retVal[0] = new Line2D.Float(bounds.x, bottom, right, bottom);
+                    retVal[1] = new Line2D.Float(bounds.x, bounds.y, bounds.x, bottom);
+                    retVal[2] = new Line2D.Float(right, bounds.y, right, bottom);
+                }
+                else if (bottom <= relatedBounds.y)
+                {
+                    // TOP
+                    retVal[0] = new Line2D.Float(bounds.x, bounds.y, right, bounds.y);
+                    retVal[1] = new Line2D.Float(bounds.x, bounds.y, bounds.x, bottom);
+                    retVal[2] = new Line2D.Float(right, bounds.y, right, bottom);
+                }
             }
             return retVal;
         }
