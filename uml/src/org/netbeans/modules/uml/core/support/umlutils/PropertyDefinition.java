@@ -752,7 +752,8 @@ public IStrings getValidValue(IPropertyElement elem){
 				}
 				else
 				{
-					retStr = "DataType Class Interface Enumeration ParameterableElement";
+                                    System.out.println("PropertyDefinition");
+					retStr = "DataType Class Interface Enumeration ParameterableElement DerivationClassifier";
 				}
 			}
 		}
