@@ -49,8 +49,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.netbeans.modules.gsf.Language;
+import org.netbeans.modules.gsf.LanguageRegistry;
 import org.openide.util.Exceptions;
 
 /**
@@ -62,51 +63,87 @@ import org.openide.util.Exceptions;
  *
  * @author Tomas Zezula
  */
-public class ClassIndexManager {
+public final class ClassIndexManager {
+    
+    //private static final byte OP_ADD    = 1;
+    //private static final byte OP_REMOVE = 2;
 
-    private static ClassIndexManager instance;
+    //private static ClassIndexManager instance;
     private final Map<URL, ClassIndexImpl> instances = new HashMap<URL, ClassIndexImpl> ();
-    private ReadWriteLock lock;
-    private boolean invalid;
+    
+    // GSF - using a single lock shared among all index managers
+    private static final ReentrantReadWriteLock lock = new ReentrantReadWriteLock (false);
+    //private final List<ClassIndexManagerListener> listeners = new CopyOnWriteArrayList<ClassIndexManagerListener> ();
+    private static boolean invalid;
+    //private static Set<URL> added;
+    //private static Set<URL> removed;
+    //private static int depth = 0;
     
     
-    private ClassIndexManager() {
-        this.lock = new ReentrantReadWriteLock (false);
+    private ClassIndexManager(Language language) {
+        this.language = language;
     }
     
-    public <T> T writeLock (final ExceptionAction<T> r) throws IOException {
-        this.lock.writeLock().lock();
+//    public void addClassIndexManagerListener (final ClassIndexManagerListener listener) {
+//        assert listener != null;
+//        this.listeners.add(listener);
+//    }
+//    
+//    public void removeClassIndexManagerListener (final ClassIndexManagerListener listener) {
+//        assert listener != null;
+//        this.listeners.remove(listener);
+//    }
+
+    public static <T> T writeLock (final ExceptionAction<T> r) throws IOException/*, InterruptedException*/ {
+        lock.writeLock().lock();
+        try {
+//            depth++;
+//            try {
+//                if (depth == 1) {
+//                    added = new HashSet<URL>();
+//                    removed = new HashSet<URL>();
+//                }
+//                try {
+                    return r.run();
+//                } finally {
+//                    if (depth == 1) {
+//                        if (!removed.isEmpty()) {
+//                            /fire (removed, OP_REMOVE);
+//                            removed.clear();
+//                        }
+//                        if (!added.isEmpty()) {
+//                            fire (added, OP_ADD);
+//                            added.clear();
+//                        }
+//                    }
+//                }
+//            } finally {
+//                depth--;
+//            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public static <T> T readLock (final ExceptionAction<T> r) throws IOException/*, InterruptedException*/ {
+        lock.readLock().lock();
         try {
             return r.run();
         } finally {
-            this.lock.writeLock().unlock();
+            lock.readLock().unlock();
         }
     }
-    
-    public <T> T readLock (final ExceptionAction<T> r) throws IOException {
-        this.lock.readLock().lock();
-        try {
-            return r.run();
-        } finally {
-            this.lock.readLock().unlock();
-        }
+
+    public static boolean holdsWriteLock () {
+        return lock.isWriteLockedByCurrentThread();
     }
-    
+
     public synchronized ClassIndexImpl getUsagesQuery (final URL root) throws IOException {
         assert root != null;
         if (invalid) {
             return null;
         }        
-        // BEGIN TOR MODIFICATIONS
-        // XXX Figure out why I often get this on boot class paths
-        //return this.instances.get (root);
-        ClassIndexImpl ci = this.instances.get (root);
-//        if (ci == null) {
-//            ci = createUsagesQuery(root, false);
-//        }
-        
-        return ci;
-        // END TOR MODIFICATIONS
+        return this.instances.get (root);
     }
     
     public synchronized ClassIndexImpl createUsagesQuery (final URL root, final boolean source) throws IOException {
@@ -116,19 +153,36 @@ public class ClassIndexManager {
         }        
         ClassIndexImpl qi = this.instances.get (root);
         if (qi == null) {  
-            qi = PersistentClassIndex.create (root, Index.getDataFolder(root), source);
-            this.instances.put(root,qi);            
+            qi = PersistentClassIndex.create (language, root, Index.getDataFolder(language, root), source);
+            this.instances.put(root,qi);
+            //if (added != null) {
+            //    added.add (root);
+            //}
         }
+//        else if (source && !qi.isSource()){
+//            //Wrongly set up freeform project, which is common for it, prefer source
+//            qi.close ();
+//            qi = PersistentClassIndex.create (root, Index.getDataFolder(root), source);
+//            this.instances.put(root,qi);
+//            if (added != null) {
+//                added.add (root);
+//            }
+//        }
         return qi;
     }
     
     synchronized void removeRoot (final URL root) throws IOException {
+        // BEGIN TOR MODIFICATIONS
         if (bootRoots.contains(root)) {
             return;
         }
+        // END TOR MODIFICATIONS
         ClassIndexImpl ci = this.instances.remove(root);
         if (ci != null) {
             ci.close();
+            //if (removed != null) {
+            //    removed.add (root);
+            //}
         }
     }
     
@@ -144,18 +198,48 @@ public class ClassIndexManager {
     }
     
     public static interface ExceptionAction<T> {
-        public T run () throws IOException;
+        public T run () throws IOException/*, InterruptedException*/;
     }
     
+//    private void fire (final Set<? extends URL> roots, final byte op) {
+//        if (!this.listeners.isEmpty()) {
+//            final ClassIndexManagerEvent event = new ClassIndexManagerEvent (this, roots);
+//            for (ClassIndexManagerListener listener : this.listeners) {
+//                if (op == OP_ADD) {
+//                    listener.classIndexAdded(event);
+//                }
+//                else if (op == OP_REMOVE) {
+//                    listener.classIndexRemoved(event);
+//                }
+//                else {
+//                    assert false : "Unknown op: " + op;     //NOI18N
+//                }
+//            }
+//        }
+//    }
     
-    public static synchronized ClassIndexManager getDefault () {
-        if (instance == null) {
-            instance = new ClassIndexManager ();            
-        }
-        return instance;
-    }
+    
+//    public static synchronized ClassIndexManager getDefault () {
+//        if (instance == null) {
+//            instance = new ClassIndexManager ();            
+//        }
+//        return instance;
+//    }        
 
     // BEGIN TOR MODIFICATIONS
+    private Language language;
+    private static Map<Language,ClassIndexManager> instanceMap = new HashMap<Language, ClassIndexManager>();
+
+    public static synchronized ClassIndexManager get(Language language) {
+        ClassIndexManager manager = instanceMap.get(language);
+        if (manager == null) {
+            manager = new ClassIndexManager(language);
+            instanceMap.put(language, manager);
+        }
+        
+        return manager;
+    }
+
     // This is for development use only (the index browser)
     public synchronized Map<URL, ClassIndexImpl> getAllIndices() {
         if (invalid) {
@@ -165,19 +249,31 @@ public class ClassIndexManager {
     }
     
     // To avoid excessive compilation at startup etc.
+    private static final Set<URL> allBootRoots = new HashSet<URL>();
     private final Set<URL> bootRoots = new HashSet<URL>();
     private Set<ClassIndexImpl> bootIndices;
     
-    public boolean isBootRoot(URL root) {
-        return bootRoots.contains(root);
+    public static boolean isBootRoot(URL root) {
+        return allBootRoots.contains(root);
+    }
+    
+    public void addBootRoot(URL root) {
+        bootRoots.add(root);
+        allBootRoots.add(root);
     }
     
     public void setBootRoots(List<URL> urls) {
         if (bootRoots.size() > 0) {
+            allBootRoots.removeAll(bootRoots);
             bootRoots.clear();
+        }
+        for (URL url : LanguageRegistry.getInstance().getLibraryUrls()) {
+            bootRoots.add(url);
+            allBootRoots.add(url);
         }
         for (URL url : urls) {
             bootRoots.add(url);
+            allBootRoots.add(url);
         }
         
         bootIndices = null;
@@ -185,6 +281,10 @@ public class ClassIndexManager {
     
     public Set<URL> getBootRoots() {
         return bootRoots;
+    }
+
+    public static Set<URL> getAllBootRoots() {
+        return allBootRoots;
     }
     
     /** 
@@ -196,8 +296,8 @@ public class ClassIndexManager {
     public Set<ClassIndexImpl> getBootIndices() {
         if (bootIndices == null) {
             bootIndices = new HashSet<ClassIndexImpl>();
-            Set<URL> bootRoots = getBootRoots();
-            for (URL u : bootRoots) {
+            Set<URL> roots = getBootRoots();
+            for (URL u : roots) {
                 try {
                     ClassIndexImpl ci = getUsagesQuery(u);
                     if (ci != null) {
