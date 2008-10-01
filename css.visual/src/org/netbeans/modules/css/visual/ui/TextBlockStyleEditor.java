@@ -48,7 +48,7 @@
 package org.netbeans.modules.css.visual.ui;
 
 import org.netbeans.modules.css.visual.model.CssProperties;
-import org.netbeans.modules.css.model.CssRuleContent;
+import org.netbeans.modules.css.editor.model.CssRuleContent;
 import org.netbeans.modules.css.visual.model.PropertyData;
 import org.netbeans.modules.css.visual.model.PropertyWithUnitData;
 import org.netbeans.modules.css.visual.model.TextBlockData;
@@ -241,7 +241,7 @@ public class TextBlockStyleEditor extends StyleEditor {
         if(textDirection != null){
             directionCombo.setSelectedItem(textDirection);
         }else{
-            directionCombo.setSelectedItem("px");
+            directionCombo.setSelectedIndex(0);
         }
         
         wordSpacingUnitCombo.setModel(textBlockModel.getTextBlockUnitList());
