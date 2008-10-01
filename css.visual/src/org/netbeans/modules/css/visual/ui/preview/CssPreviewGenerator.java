@@ -45,8 +45,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.StringTokenizer;
-import org.netbeans.modules.css.model.CssModel;
-import org.netbeans.modules.css.model.CssRule;
+import org.netbeans.modules.css.editor.model.CssModel;
+import org.netbeans.modules.css.editor.model.CssRule;
 import org.netbeans.modules.css.visual.api.CssRuleContext;
 import org.openide.util.NbBundle;
 
@@ -122,10 +122,26 @@ public class CssPreviewGenerator {
         while(st.hasMoreTokens()) {
             //check if the selector contains just characters or numbers (what else is allowed in selector name?)
             String selector = st.nextToken();
-            selectors.add("*".equals(selector.trim()) ? "div" : selector);
+            selectors.add("*".equals(selector.trim()) ? "div" : selector); //NOI18N
         }
         if (selectors.size() == 0){
-            selectors.add("div");
+            selectors.add("div"); //NOI18N
+        } else if(selectors.size() == 1) {
+            //#135823 fix
+            String single = selectors.get(0);
+            if("table".equalsIgnoreCase(single)) {
+                selectors.add("tr"); //NOI18N
+                selectors.add("td"); //NOI18N
+                selectors.add("div"); //NOI18N
+            } else if("tr".equalsIgnoreCase(single)) {
+                selectors.add(0, "table");
+                selectors.add("td"); //NOI18N
+                selectors.add("div"); //NOI18N
+            } else if("td".equalsIgnoreCase(single)) {
+                selectors.add(0, "table");
+                selectors.add(1, "tr"); //NOI18N
+                selectors.add("div"); //NOI18N
+            }
         }
 
         int previewFocus = preview.length();
