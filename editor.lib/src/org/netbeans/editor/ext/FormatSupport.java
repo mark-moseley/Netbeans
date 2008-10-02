@@ -92,11 +92,21 @@ public class FormatSupport {
     }
 
     public boolean expandTabs() {
-        return formatWriter.getFormatter().expandTabs();
+        ExtFormatter.pushFormattingContextDocument(formatWriter.getDocument());
+        try {
+            return formatWriter.getFormatter().expandTabs();
+        } finally {
+            ExtFormatter.popFormattingContextDocument(formatWriter.getDocument());
+        }
     }
 
     public int getSpacesPerTab() {
-        return formatWriter.getFormatter().getSpacesPerTab();
+        ExtFormatter.pushFormattingContextDocument(formatWriter.getDocument());
+        try {
+            return formatWriter.getFormatter().getSpacesPerTab();
+        } finally {
+            ExtFormatter.popFormattingContextDocument(formatWriter.getDocument());
+        }
     }
 
     public Object getSettingValue(String settingName) {
@@ -715,7 +725,7 @@ public class FormatSupport {
         int offset = lineStart.getOffset();
 
         int col = 0;
-        int tabSize = formatWriter.getFormatter().getTabSize();
+        int tabSize = getTabSize();
 
         while (token != null) {
             String text = token.getImage();

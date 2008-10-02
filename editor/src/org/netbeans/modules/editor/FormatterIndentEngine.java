@@ -43,17 +43,19 @@ package org.netbeans.modules.editor;
 
 import java.io.*;
 import javax.swing.text.Document;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.editor.BaseKit;
-import org.netbeans.editor.SettingsNames;
 import org.netbeans.editor.ext.ExtFormatter;
-import org.netbeans.editor.SettingsDefaults;
 import org.openide.text.IndentEngine;
 
 /**
-* Indent engine that delegates to formatter
-*
-* @author Miloslav Metelka
-*/
+ * Indent engine that delegates to formatter
+ *
+ * @author Miloslav Metelka
+ *
+ * @deprecated Please use Editor Indentation API instead, for details see
+ *   <a href="@org-netbeans-modules-editor-indent@/overview-summary.html">Editor Indentation</a>.
+ */
 
 public abstract class FormatterIndentEngine extends IndentEngine {
 
@@ -125,7 +127,7 @@ public abstract class FormatterIndentEngine extends IndentEngine {
         return getFormatter().createWriter(doc, offset, writer);
     }
 
-    protected boolean acceptMimeType(String mimeType) {
+    protected @Override boolean acceptMimeType(String mimeType) {
         if (acceptedMimeTypes != null) {
             for (int i = acceptedMimeTypes.length - 1; i >= 0; i--) {
                 if (acceptedMimeTypes[i].equals(mimeType)) {
@@ -146,7 +148,7 @@ public abstract class FormatterIndentEngine extends IndentEngine {
         // Must call setter because of turning into custom property
         getFormatter().setExpandTabs(expandTabs);
         if (old != expandTabs) {
-            setValue(SettingsNames.EXPAND_TABS,
+            setValue(SimpleValueNames.EXPAND_TABS,
                 Boolean.valueOf(expandTabs), EXPAND_TABS_PROP);
             
             firePropertyChange(EXPAND_TABS_PROP,
@@ -170,7 +172,7 @@ public abstract class FormatterIndentEngine extends IndentEngine {
         int old = getFormatter().getSpacesPerTab();
         getFormatter().setSpacesPerTab(spacesPerTab);
         if (old != spacesPerTab) {
-            setValue(SettingsNames.SPACES_PER_TAB,
+            setValue(SimpleValueNames.SPACES_PER_TAB,
                 new Integer(spacesPerTab), SPACES_PER_TAB_PROP);
             
             firePropertyChange(SPACES_PER_TAB_PROP,
@@ -200,8 +202,8 @@ public abstract class FormatterIndentEngine extends IndentEngine {
     private void readObject(java.io.ObjectInputStream ois)
     throws IOException, ClassNotFoundException {
         ObjectInputStream.GetField fields = ois.readFields();
-        setExpandTabs(fields.get(EXPAND_TABS_PROP, SettingsDefaults.defaultExpandTabs.booleanValue()));
-        setSpacesPerTab(fields.get(SPACES_PER_TAB_PROP, SettingsDefaults.defaultSpacesPerTab.intValue()));
+        setExpandTabs(fields.get(EXPAND_TABS_PROP, true));
+        setSpacesPerTab(fields.get(SPACES_PER_TAB_PROP, 4));
     }
 
     private void writeObject(java.io.ObjectOutputStream oos)
