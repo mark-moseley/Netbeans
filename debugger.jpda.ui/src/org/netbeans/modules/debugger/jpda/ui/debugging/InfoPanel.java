@@ -100,8 +100,6 @@ public class InfoPanel extends javax.swing.JPanel {
     private TapPanel tapPanel;
     private Item[] items;
 
-    private RequestProcessor requestProcessor = new RequestProcessor("Debugging View Info Panel"); // NOI18N
-
     private JButton arrowButton;
     private JPopupMenu arrowMenu;
     private Map<JPDAThread, JMenuItem> threadToMenuItem = new HashMap<JPDAThread, JMenuItem>();
@@ -487,19 +485,28 @@ public class InfoPanel extends javax.swing.JPanel {
         // add toggle buttons
         Dimension space = new Dimension(3, 0);
         for (int i = 0; i < toggles.size(); i++) {
-            final int index = i;
-            final JToggleButton curToggle = toggles.get(i);
-            curToggle.addActionListener(new ActionListener() {
-                public void actionPerformed(ActionEvent e) {
-                    filtersDesc.setSelected(index, curToggle.isSelected());
-                }
-            });
+            JToggleButton curToggle = toggles.get(i);
+            curToggle.addActionListener(new ToggleButtonActionListener(i));
             toolbar.add(curToggle);
             if (i != toggles.size() - 1) {
                 toolbar.addSeparator(space);
             }
         }
         return toolbar;
+    }
+
+    private static class ToggleButtonActionListener implements ActionListener {
+
+        private int index;
+
+        public ToggleButtonActionListener(int index) {
+            this.index = index;
+        }
+
+        public void actionPerformed(ActionEvent e) {
+            JToggleButton curToggle = (JToggleButton) e.getSource();
+            FiltersDescriptor.getInstance().setSelected(index, curToggle.isSelected());
+        }
     }
 
     private JToggleButton createToggle (FiltersDescriptor filtersDesc, int index) {
@@ -843,22 +850,18 @@ public class InfoPanel extends javax.swing.JPanel {
                 outerPanel.setPreferredSize(new Dimension(0, height));
                 animationRunning = true;
                 isTop = top;
-                SwingUtilities.invokeLater(new Runnable() {
-                    public void run() {
-                        if (isTop && lastTop != null) {
-                            lastTop.setTop(false);
-                        }
-                        topGapPanel.setVisible(!isTop);
-                        if (animationRunning) {
-                            scrollPane.setVisible(true);
-                            separator.setVisible(true);
-                            tapPanel.revalidate();
-                        }
-                        if (isTop) {
-                            tapPanel.setBackground(backgroundColor);
-                        }
-                    }
-                });
+                if (isTop && lastTop != null) {
+                    lastTop.setTop(false);
+                }
+                topGapPanel.setVisible(!isTop);
+                if (animationRunning) {
+                    scrollPane.setVisible(true);
+                    separator.setVisible(true);
+                    tapPanel.revalidate();
+                }
+                if (isTop) {
+                    tapPanel.setBackground(backgroundColor);
+                }
                 int delta = 1;
                 int currHeight = 1;
                 Timer animationTimer = new Timer(20, null);
@@ -910,7 +913,7 @@ public class InfoPanel extends javax.swing.JPanel {
             }
         }
 
-        private void setTop(boolean isTop) {
+        private synchronized void setTop(boolean isTop) {
             this.isTop = isTop;
             if (isTop) {
                 topGapPanel.setVisible(false);
