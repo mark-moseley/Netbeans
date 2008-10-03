@@ -64,8 +64,6 @@ import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.project.FileOwnerQuery;
-import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
@@ -76,6 +74,7 @@ import org.netbeans.modules.i18n.java.JavaResourceHolder;
 
 import org.netbeans.modules.form.I18nService;
 import org.netbeans.modules.form.I18nValue;
+import org.openide.filesystems.FileUtil;
 
 /**
  * Implementation of form module's I18nService - used by form editor to control
@@ -102,6 +101,26 @@ public class I18nServiceImpl implements I18nService {
         i18nString.setKey(key);
         i18nString.setValue(value);
         return i18nString;
+    }
+
+    /**
+     * Creates a copy of I18nValue, including data from all locales corresponding
+     * to the actual key. The copied value does not refer to the original
+     * properties file - i.e. can be added to another one.
+     * @param value I18nValue to be copied
+     * @return the copied I18nValue
+     */
+    public I18nValue copy(I18nValue value) {
+        FormI18nString i18nString = (FormI18nString) value;
+        FormI18nString copy = new FormI18nString(i18nString);
+        copy.getSupport().getResourceHolder().setResource(null);
+        if (i18nString.allData == null && i18nString.getKey() != null)  {
+            JavaResourceHolder jrh = (JavaResourceHolder) i18nString.getSupport().getResourceHolder();
+            copy.allData = jrh.getAllData(i18nString.getKey());
+        } else {
+            copy.allData = i18nString.allData;
+        }
+        return copy;
     }
 
     /**
@@ -191,7 +210,7 @@ public class I18nServiceImpl implements I18nService {
                     jrh.removeProperty(oldKey);
                     if (newI18nString != null)
                         newI18nString.allData = oldI18nString.allData;
-                }
+                    }
                 else if (localeSuffix != null && !localeSuffix.equals("")) { // NOI18N
                     // remember all locale data (to be able to undo adding new specific value to a locale)
                     oldI18nString.allData = allData;
@@ -208,6 +227,7 @@ public class I18nServiceImpl implements I18nService {
         if (newI18nString != null && newI18nString.getKey() != null) {
             // valid new value - make sure it is up-to-date in the properties file
             JavaResourceHolder rh = (JavaResourceHolder) newI18nString.getSupport().getResourceHolder();
+            String key = newI18nString.getKey();
 
             if (rh.getResource() == null) { // find or create properties file
                 DataObject propertiesDO = getPropertiesDataObject(srcDataObject.getPrimaryFile(), bundleName);
@@ -215,22 +235,33 @@ public class I18nServiceImpl implements I18nService {
                     propertiesDO = createPropertiesDataObject(srcDataObject.getPrimaryFile(), bundleName);
                     if (propertiesDO == null)
                         return;
+                } else if (oldI18nString == null && newI18nString.getValue() == null) {
+                    // if the value itself is null we actually want to update it from the properties file
+                    rh.setResource(propertiesDO);
+                    newI18nString.setValue(rh.getValueForKey(key));
+                    newI18nString.setComment(rh.getCommentForKey(key));
+                    return;
                 }
                 rh.setResource(propertiesDO);
 
                 // make sure we use free (unique) key
-                newI18nString.setKey(rh.findFreeKey(newI18nString.getKey()));
+                key = rh.findFreeKey(key);
+                newI18nString.setKey(key);
             }
 
             rh.setLocalization(localeSuffix);
-            String key = newI18nString.getKey();
             if (!isValueUpToDate(rh, newI18nString)) {
                 if (newI18nString.allData != null) { // restore complete data across all locales
                     rh.setAllData(key, newI18nString.allData);
                     newI18nString.allData = null;
-                    // update also the current value - might have come from a different locale
-                    newI18nString.setValue(rh.getValueForKey(key));
-                    newI18nString.setComment(rh.getCommentForKey(key));
+                    if (oldI18nString == null) {
+                        // update also the current value - might have come from a different locale
+                        newI18nString.setValue(rh.getValueForKey(key));
+                        newI18nString.setComment(rh.getCommentForKey(key));
+                    } else if (newI18nString.getValue() != null) {
+                        // besides changing place (key/file) there might also be a new value
+                        rh.addProperty(key, newI18nString.getValue(), newI18nString.getComment(), true);
+                    }
                 }
                 else {
                     rh.addProperty(key, newI18nString.getValue(), newI18nString.getComment(), true);
@@ -484,7 +515,8 @@ public class I18nServiceImpl implements I18nService {
                 FileObject root = getResourcesRoot(srcFile);
                 if (root != null) {
                     return Collections.singletonList(
-                            new File(root.getPath()+File.separator + bundleName + ".properties").toURL()); // NOI18N
+                        new File(FileUtil.toFile(root).getPath()
+                            + File.separator + bundleName + ".properties").toURI().toURL()); // NOI18N
                 }
             }
         } catch (IOException ex) {
