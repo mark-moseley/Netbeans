@@ -76,6 +76,7 @@ import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.Trees;
 
+import java.util.WeakHashMap;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -105,6 +106,7 @@ import org.netbeans.api.java.source.Task;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.editor.JumpList;
 
+import org.netbeans.modules.java.preprocessorbridge.api.JavaSourceUtil;
 import org.openide.ErrorManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
@@ -135,6 +137,7 @@ public class EditorContextImpl extends EditorContext {
     private Map                     annotationToURL = new HashMap ();
     private PropertyChangeListener  dispatchListener;
     private EditorContextDispatcher contextDispatcher;
+    private final Map<JavaSource, JavaSourceUtil.Handle> sourceHandles = new WeakHashMap<JavaSource, JavaSourceUtil.Handle>();
     
     
     {
@@ -1098,6 +1101,24 @@ public class EditorContextImpl extends EditorContext {
         return "";
          */
     }
+
+    private CompilationController getPreferredCompilationController(FileObject fo, JavaSource js) throws IOException {
+        CompilationController preferredCI;
+        if (fo != null) {
+            JavaSourceUtil.Handle handle;
+            synchronized (sourceHandles) {
+                handle = sourceHandles.get(js);
+            }
+            handle = JavaSourceUtil.createControllerHandle(fo, handle);
+            synchronized (sourceHandles) {
+                sourceHandles.put(js, handle);
+            }
+            preferredCI = (CompilationController) handle.getCompilationController();
+        } else {
+            preferredCI = null;
+        }
+        return preferredCI;
+    }
         
     @Override
     public Operation[] getOperations(String url, final int lineNumber,
@@ -1123,11 +1144,18 @@ public class EditorContextImpl extends EditorContext {
         final Tree[] methodTreePtr = new Tree[1];
         final int[] treeStartLinePtr = new int[1];
         final int[] treeEndLinePtr = new int[1];
+        //long t1, t2, t3, t4;
+        //t1 = System.nanoTime();
         try {
+            final CompilationController preferredCI = getPreferredCompilationController(dataObject.getPrimaryFile(), js);
+            //t2 = System.nanoTime();
             js.runUserActionTask(new CancellableTask<CompilationController>() {
                 public void cancel() {
                 }
                 public void run(CompilationController ci) throws Exception {
+                    if (preferredCI != null) {
+                        ci = preferredCI;
+                    }
                     if (ci.toPhase(Phase.RESOLVED).compareTo(Phase.RESOLVED) < 0) {//TODO: ELEMENTS_RESOLVED may be sufficient
                         ErrorManager.getDefault().log(ErrorManager.WARNING,
                                 "Unable to resolve "+ci.getFileObject()+" to phase "+Phase.RESOLVED+", current phase = "+ci.getPhase()+
@@ -1167,7 +1195,8 @@ public class EditorContextImpl extends EditorContext {
                                 sp.getEndPosition(cu, expTrees.get(expTrees.size() - 1)));
                     
                 }
-            },false);
+            }, false);
+            //t3 = System.nanoTime();
             if (ops[0] != null) {
                 return ops[0];
             }
@@ -1192,6 +1221,8 @@ public class EditorContextImpl extends EditorContext {
             if (ops[0] != null) {
                 assignNextOperations(methodTreePtr[0], cu, ci, bytecodeProvider, expTrees, infoPtr[0], nodeOperations);
             }
+            //t4 = System.nanoTime();
+            //System.err.println("PARSE TIMES 2: "+(t2-t1)/1000000+", "+(t3-t2)/1000000+", "+(t4-t3)/1000000+" TOTAL: "+(t4-t1)/1000000+" ms.");
         } catch (IOException ioex) {
             ErrorManager.getDefault().notify(ioex);
             return null;
@@ -1460,9 +1491,10 @@ public class EditorContextImpl extends EditorContext {
                                    final TreePathScanner<R,D> visitor, final D context,
                                    final SourcePathProvider sp) {
         JavaSource js = null;
+        FileObject fo = null;
         if (url != null) {
             try {
-                FileObject fo = URLMapper.findFileObject(new URL(url));
+                fo = URLMapper.findFileObject(new URL(url));
                 if (fo != null) {
                     js = JavaSource.forFileObject(fo);
                 }
@@ -1475,9 +1507,16 @@ public class EditorContextImpl extends EditorContext {
         }
         final TreePath[] treePathPtr = new TreePath[] { null };
         final Tree[] treePtr = new Tree[] { null };
+        //long t1, t2, t3, t4;
+        //t1 = System.nanoTime();
         try {
+            final CompilationController preferredCI = getPreferredCompilationController(fo, js);
+            //t2 = System.nanoTime();
             js.runUserActionTask(new Task<CompilationController>() {
                 public void run(CompilationController ci) throws Exception {
+                    if (preferredCI != null) {
+                        ci = preferredCI;
+                    }
                     if (ci.toPhase(Phase.PARSED).compareTo(Phase.PARSED) < 0)
                         return;
                     Scope scope = null;
@@ -1522,6 +1561,7 @@ public class EditorContextImpl extends EditorContext {
                     treePtr[0] = tree;
                 }
             }, false);
+            //t3 = System.nanoTime();
             TreePath treePath = treePathPtr[0];
             Tree tree = treePtr[0];
             R retValue;
@@ -1530,6 +1570,8 @@ public class EditorContextImpl extends EditorContext {
             } else {
                 retValue = tree.accept(visitor, context);
             }
+            //t4 = System.nanoTime();
+            //System.err.println("PARSE TIMES 1: "+(t2-t1)/1000000+", "+(t3-t2)/1000000+", "+(t4-t3)/1000000+" TOTAL: "+(t4-t1)/1000000+" ms.");
             return retValue;
         } catch (IOException ioex) {
             ErrorManager.getDefault().notify(ioex);
