@@ -49,20 +49,22 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.prefs.Preferences;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
+import javax.swing.text.EditorKit;
 import org.netbeans.api.editor.fold.Fold;
 import org.netbeans.api.editor.fold.FoldHierarchy;
-import org.netbeans.editor.SettingsChangeEvent;
-import org.netbeans.editor.SettingsChangeListener;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.modules.cnd.editor.parser.CppFile;
 import org.netbeans.modules.cnd.editor.parser.CppFoldRecord;
 import org.netbeans.modules.cnd.editor.parser.CppMetaModel;
 import org.netbeans.modules.cnd.editor.parser.ParsingEvent;
 import org.netbeans.modules.cnd.editor.parser.ParsingListener;
+import org.netbeans.modules.editor.NbEditorKit;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.spi.editor.fold.FoldHierarchyTransaction;
 import org.netbeans.spi.editor.fold.FoldManager;
@@ -81,7 +83,7 @@ import org.openide.util.RequestProcessor;
  */
 
 final class CppFoldManager extends CppFoldManagerBase
-	implements SettingsChangeListener, Runnable, ParsingListener {
+	implements Runnable, ParsingListener {
 
     private FoldOperation operation;
 
@@ -224,7 +226,7 @@ final class CppFoldManager extends CppFoldManagerBase
 	    return null;
 	}
 
-	CppFile cpf = (CppFile) CppMetaModel.getDefault().
+	CppFile cpf = CppMetaModel.getDefault().
 		    get(doc.getProperty(Document.TitleProperty).toString());
 	if (cpf == null) {
 	    return null;
@@ -281,7 +283,7 @@ final class CppFoldManager extends CppFoldManagerBase
                     try {
                         info.addToHierarchy(transaction);
                     } catch (BadLocationException e) {
-                        ErrorManager.getDefault().notify(e);
+                        // it is OK to skip such exceptions
                     }
                 } else {
                     blockFoldInfos.remove(orig);
@@ -336,7 +338,20 @@ final class CppFoldManager extends CppFoldManagerBase
     // Implementing FoldManager...
     /** Initialize this manager */
     public void init(FoldOperation operation) {
-	this.operation = operation;
+        this.operation = operation;
+        EditorKit kit = org.netbeans.editor.Utilities.getKit(operation.getHierarchy().getComponent());
+        if (kit instanceof NbEditorKit) {
+            String contentType = ((NbEditorKit)kit).getContentType();
+            if (contentType != null) {
+                Preferences prefs = MimeLookup.getLookup(contentType).lookup(Preferences.class);
+                if (prefs != null) {
+                    foldInitialCommentsPreset =  prefs.getBoolean(CODE_FOLDING_COLLAPSE_INITIAL_COMMENT, false);
+                    foldIncludesPreset = prefs.getBoolean(CODE_FOLDING_COLLAPSE_IMPORT, false);
+                    foldCodeBlocksPreset = prefs.getBoolean(CODE_FOLDING_COLLAPSE_METHOD, false);
+                    foldCommentPreset = prefs.getBoolean(CODE_FOLDING_COLLAPSE_JAVADOC, false);
+                }
+            }
+        }
     }
 
     public void initFolds(FoldHierarchyTransaction transaction) {
@@ -418,19 +433,6 @@ final class CppFoldManager extends CppFoldManagerBase
 	}
     }
 
-    public void settingsChange(SettingsChangeEvent evt) {
-        // TODO: Get folding presets
-//        foldInitialCommentsPreset = getSetting(CCSettingsNames.CODE_FOLDING_COLLAPSE_INITIAL_COMMENT);
-//        foldIncludesPreset = getSetting(CCSettingsNames.CODE_FOLDING_COLLAPSE_IMPORT);
-//        foldCodeBlocksPreset = getSetting(CCSettingsNames.CODE_FOLDING_COLLAPSE_METHOD);
-//        foldInnerClassesPreset = getSetting(CCSettingsNames.CODE_FOLDING_COLLAPSE_INNERCLASS);
-//        foldCommentPreset = getSetting(CCSettingsNames.CODE_FOLDING_COLLAPSE_JAVADOC);       
-        foldInitialCommentsPreset = false;
-        foldIncludesPreset = false;
-        foldCodeBlocksPreset = false;
-        foldCommentPreset = false;  
-    }
-
     // Worker classes...
 
     /** Gather update information in this class */
@@ -468,7 +470,9 @@ final class CppFoldManager extends CppFoldManagerBase
 
     private final class BlockFoldInfo {
         private Fold fold = null;
-        private FoldTemplate template;
+        private final FoldTemplate template;
+        private final int type;
+        private final boolean collapse;
         
         private final int startOffset;
         private final int endOffset;
@@ -476,12 +480,15 @@ final class CppFoldManager extends CppFoldManagerBase
         public BlockFoldInfo(CppFoldRecord fi) throws BadLocationException {
             this.startOffset = fi.getStartOffset();
             this.endOffset = fi.getEndOffset();
+            this.type = fi.getType();
             switch (fi.getType()) {
                 case CppFoldRecord.INITIAL_COMMENT_FOLD:
                     template = INITIAL_COMMENT_FOLD_TEMPLATE;
+                    collapse = foldInitialCommentsPreset;
                     break;
                 case CppFoldRecord.INCLUDES_FOLD:
                     template = INCLUDES_FOLD_TEMPLATE;
+                    collapse = foldIncludesPreset;
                     break;
                 case CppFoldRecord.FUNCTION_FOLD:
                 case CppFoldRecord.CONSTRUCTOR_FOLD:
@@ -489,18 +496,24 @@ final class CppFoldManager extends CppFoldManagerBase
                 case CppFoldRecord.CLASS_FOLD:
                 case CppFoldRecord.NAMESPACE_FOLD:
                     template = CODE_BLOCK_FOLD_TEMPLATE;
+                    collapse = foldCodeBlocksPreset;
                     break;
                 case CppFoldRecord.BLOCK_COMMENT_FOLD:
                     template = COMMENT_FOLD_TEMPLATE;
+                    collapse = foldCommentPreset;
                     break;
                 case CppFoldRecord.COMMENTS_FOLD:
                     template = LINE_COMMENT_FOLD_TEMPLATE;
+                    collapse = false;
                     break;
                 case CppFoldRecord.IFDEF_FOLD:
                     template = IFDEF_FOLD_TEMPLATE;
+                    collapse = false;
                     break;
                 default:
                     assert (false) : "unsupported block type " + fi; // NOI18N
+                    collapse = false;
+                    template = null;
             }
 	}
 
@@ -544,7 +557,7 @@ final class CppFoldManager extends CppFoldManagerBase
                 log.log(Level.FINE, "CFM.BlockFoldInfo.updateHierarchy: Creating fold at (" +  // NOI18N
                         startOffset + ", " + endOffset + ")"); // NOI18N
                 fold = getOperation().addToHierarchy(
-                    template.getType(), template.getDescription(), false,
+                    template.getType(), template.getDescription(), collapse,
                     startOffset, endOffset,
                     template.getStartGuardedLength(), template.getEndGuardedLength(),
                     this,
@@ -563,16 +576,16 @@ final class CppFoldManager extends CppFoldManagerBase
 
         @Override
         public String toString() {
-            return "BlockFoldInfo:" + template.getType() + " at[" + getRealStartOffset() + "," + getRealEndOffset() + "]";
+            return "BlockFoldInfo:" + template.getType() + " at[" + getRealStartOffset() + "," + getRealEndOffset() + "]";  // NOI18N
         }
     }
 
     private static final class WeakParsingListener implements ParsingListener {
         
-        private WeakReference ref;
+        private WeakReference<ParsingListener> ref;
         
         WeakParsingListener(ParsingListener listener) {
-            ref = new WeakReference(listener);
+            ref = new WeakReference<ParsingListener>(listener);
         }
         
         public void startListening() {
@@ -580,7 +593,7 @@ final class CppFoldManager extends CppFoldManagerBase
         }
         
         public void objectParsed(ParsingEvent evt) {
-            ParsingListener listener = (ParsingListener)ref.get();
+            ParsingListener listener = ref.get();
             if (listener != null) {
                 listener.objectParsed(evt);
             } else {

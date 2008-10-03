@@ -39,56 +39,30 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.editor.fortran;
+package org.netbeans.modules.cnd.editor.makefile;
 
-import java.awt.event.KeyEvent;
-import java.awt.event.InputEvent;
-import javax.swing.KeyStroke;
-
-
-import org.netbeans.editor.*;
-import org.netbeans.editor.ext.ExtSettingsDefaults;
+import java.util.Collections;
+import java.util.List;
+import org.netbeans.editor.Acceptor;
+import org.netbeans.editor.AcceptorFactory;
+import org.netbeans.editor.TokenContext;
+import org.openide.text.IndentEngine;
 
 /**
-* Default settings values for Fortran.
-*
-*/
+ * Extended settings for Makefile.
+ */
+public class MakefileSettingsFactory {
 
-public class FSettingsDefaults extends ExtSettingsDefaults {
+    public static Acceptor getAbbrevResetAcceptor() {
+        return AcceptorFactory.NON_JAVA_IDENTIFIER;
+    }
 
-    public static final Boolean defaultFortranWordMatchMatchCase = Boolean.TRUE;
+    public static List<? extends TokenContext> getTokenContext() {
+        return Collections.singletonList(MakefileTokenContext.context);
+    }
 
-    // Formatting
-    public static final Boolean defaultFormatSpaceAfterComma = Boolean.TRUE;
-    public static final Boolean defaultFreeFormat = Boolean.TRUE;
+    public static IndentEngine getIndentEngine() {
+        return new MakefileIndentEngine();
+    }
 
-    //maximum nmber of columns allowed in a line
-    public static final int maximumTextWidth = 132;    //for f95
-
-    public static final Acceptor defaultIndentHotCharsAcceptor
-	= new Acceptor() {
-		public boolean accept(char ch) {
-		    switch (ch) {
-		    case '\n':
-			return true;
-		    }
-		    return false;
-		}
-	    };
-
-
-    // DO WE NEED IT?
-    public static final String defaultWordMatchStaticWords
-	= "Exception IntrospectionException FileNotFoundException IOException" //NOI18N
-	+ " ArrayIndexOutOfBoundsException ClassCastException ClassNotFoundException" //NOI18N
-	+ " CloneNotSupportedException NullPointerException NumberFormatException" //NOI18N
-	+ " SQLException IllegalAccessException IllegalArgumentException"; //NOI18N
-
-    public static final MultiKeyBinding[] defaultKeyBindings
-	= new MultiKeyBinding[] {
-	    new MultiKeyBinding(KeyStroke.getKeyStroke(KeyEvent.VK_F, 
-				InputEvent.CTRL_MASK | InputEvent.SHIFT_MASK ),
-				BaseKit.formatAction)
-		};
-
-}//FSettingsDefaults
+}

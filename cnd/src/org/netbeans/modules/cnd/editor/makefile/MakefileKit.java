@@ -41,15 +41,11 @@
 
 package org.netbeans.modules.cnd.editor.makefile;
 
-import javax.swing.JEditorPane;
 import javax.swing.text.Document;
 import org.netbeans.editor.*;
-import org.netbeans.editor.ext.*;
 import org.netbeans.modules.editor.*;
-import org.openide.filesystems.FileUtil;
-import org.openide.util.NbBundle;
 
-import org.netbeans.modules.cnd.MIMENames;
+import org.netbeans.modules.cnd.utils.MIMENames;
 
 /**
 * Makefile editor kit with appropriate document
@@ -58,19 +54,18 @@ import org.netbeans.modules.cnd.MIMENames;
 
 public class MakefileKit extends NbEditorKit {
 
+    @Override
     public String getContentType() {
         return MIMENames.MAKEFILE_MIME_TYPE;
-    }
-
-    public void install(JEditorPane c) {
-        super.install(c);
     }
 
     /** Create new instance of syntax coloring scanner
     * @param doc document to operate on. It can be null in the cases the syntax
     *   creation is not related to the particular document
     */
+    @Override
     public Syntax createSyntax(Document doc) {
         return new MakefileSyntax();
     }
+
 }
