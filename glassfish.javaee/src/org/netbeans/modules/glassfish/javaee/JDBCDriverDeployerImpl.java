@@ -2,7 +2,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -25,7 +25,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,63 +40,71 @@
  * made subject to such option by the copyright holder.
  */
 //</editor-fold>
-
-package org.netbeans.modules.j2ee.sun.ide.dm;
+package org.netbeans.modules.glassfish.javaee;
 
 import java.io.File;
 import java.util.List;
 import java.util.Set;
-import javax.enterprise.deploy.spi.DeploymentManager;
 import javax.enterprise.deploy.spi.Target;
 import javax.enterprise.deploy.spi.status.ProgressEvent;
 import javax.enterprise.deploy.spi.status.ProgressListener;
 import javax.enterprise.deploy.spi.status.ProgressObject;
 import org.netbeans.modules.glassfish.eecommon.api.JDBCDriverDeployHelper;
+import org.netbeans.modules.glassfish.spi.GlassfishModule;
 import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.JDBCDriverDeployer;
-import org.netbeans.modules.j2ee.sun.ide.j2ee.DeploymentManagerProperties;
+import org.netbeans.modules.j2ee.deployment.plugins.spi.OptionalDeploymentManagerFactory;
 import org.openide.util.RequestProcessor;
 
-public class SunJDBCDriverDeployer implements JDBCDriverDeployer {
+public class JDBCDriverDeployerImpl implements JDBCDriverDeployer {
 
-    private DeploymentManager dm;
-    private SunDeploymentManager sunDm;
-    
-    public SunJDBCDriverDeployer(DeploymentManager dm) {
-        this.dm = dm;
-        this.sunDm = (SunDeploymentManager)this.dm;
+    final private File driverLoc;
+    final private GlassfishModule commonSupport;
+    final private boolean isLocal;
+
+    public JDBCDriverDeployerImpl(Hk2DeploymentManager dm, OptionalDeploymentManagerFactory odmf) {
+        commonSupport = dm.getCommonServerSupport();
+        String domainDir = commonSupport.getInstanceProperties().get(GlassfishModule.DOMAINS_FOLDER_ATTR);
+        if (null == domainDir || domainDir.trim().length() < 1) {
+            isLocal = false;
+        } else {
+            isLocal = true;
+        }        
+        String domain = commonSupport.getInstanceProperties().get(GlassfishModule.DOMAIN_NAME_ATTR);
+        driverLoc = new File(domainDir + File.separator + domain + File.separator + "lib");
     }
 
     public boolean supportsDeployJDBCDrivers(Target target) {
-        boolean supported = true;
-        if(! this.sunDm.isLocal()){
-            supported = false;
-        }
-        DeploymentManagerProperties dmp = new DeploymentManagerProperties(this.dm);
-        if(! dmp.isDriverDeploymentEnabled()){
-            supported = false;
+        boolean supported = isLocal;
+        // todo -- allow the user to turn this deployment operation OFF.
+        if (supported) {
+            supported = Boolean.parseBoolean(commonSupport.getInstanceProperties().get(GlassfishModule.DRIVER_DEPLOY_FLAG));
         }
         return supported;
     }
 
     public ProgressObject deployJDBCDrivers(Target target, Set<Datasource> datasources) {
-        DeploymentManagerProperties dmp = new DeploymentManagerProperties(this.dm);
-        File driverLoc = dmp.getDriverLocation();
-        File installLib = new File (this.sunDm.getPlatformRoot().getAbsolutePath() + File.separator + "lib");
-        File[] locs = {driverLoc, installLib};
-        List urls = JDBCDriverDeployHelper.getMissingDrivers(locs, datasources);
+        List urls = JDBCDriverDeployHelper.getMissingDrivers(getDriverLocations(), datasources);
         ProgressObject retVal = JDBCDriverDeployHelper.getProgressObject(driverLoc, urls);
         if (urls.size() > 0) {
             retVal.addProgressListener(new ProgressListener() {
+
                 public void handleProgressEvent(ProgressEvent arg0) {
+                    // todo -- enable when this is ready
                     if (arg0.getDeploymentStatus().isCompleted()) {
-                        sunDm.setRestartForDriverDeployment(true);
+                        commonSupport.restartServer(null);
                     }
                 }
             });
         }
-        RequestProcessor.getDefault().post((Runnable) retVal, 200);
+        RequestProcessor.getDefault().post((Runnable) retVal);
         return retVal; // new JDBCDriverDeployHelper.getProgressObject(dmp.getDriverLocation(), datasources);
     }
 
+    private File[] getDriverLocations(){
+        String installLoc = commonSupport.getInstanceProperties().get(GlassfishModule.INSTALL_FOLDER_ATTR);
+        File installLib = new File (installLoc + File.separator + "lib"); //NOI18N
+        File[] locs = {driverLoc, installLib};
+        return locs;
+    }
 }
