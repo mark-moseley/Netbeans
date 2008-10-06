@@ -154,19 +154,17 @@ public class Hk2PluginProperties {
      */
     public List<URL> getClasses() {
         List<String> jars = new ArrayList<String>();
-        jars.add("web/jsf-connector-10.0");
-        jars.add("webservices-api");
-        jars.add("webservices-tools");
-        jars.add("webservices-rt");
 
         List<URL> list = new ArrayList<URL>();
         File serverDir = new File(getGlassfishRoot());
 
         try {
-            File javaEEJar = ServerUtilities.getJarName(serverDir.getAbsolutePath(), "javax.javaee-10.0");
+            File javaEEJar = ServerUtilities.getJarName(serverDir.getAbsolutePath(), 
+                    "javax.javaee" + ServerUtilities.GFV3_VERSION_MATCHER);
             Logger.getLogger("glassfish.javaee").log(Level.FINER,
                     "JavaEE jar is " + (javaEEJar != null ? javaEEJar.getAbsolutePath() : "null"));
             if(javaEEJar != null && javaEEJar.exists()) {
+                jars.add("web/jsf-connector-10.0"); // NOI18N -- watchout for builds older than b25
                 JarFile jarFile = new JarFile(javaEEJar);
                 Manifest manifest = jarFile.getManifest();
                 if(manifest != null) {
@@ -188,7 +186,15 @@ public class Hk2PluginProperties {
                             javaEEJar.getAbsolutePath() + " contains null classpath or subjars not found.  Using directly.");
                     list.add(fileToUrl(javaEEJar));
                 }
+            } else {
+                // Prelude doesn't have the javax.javaee jar, since it is not a
+                // complete Java EE 5 implementation.
+                File modulesDir = new File(serverDir.getAbsolutePath() + File.separatorChar + ServerUtilities.GFV3_MODULES_DIR_NAME);
+                jars = ServerUtilities.filterByManifest(jars, modulesDir, 0, true);
             }
+            
+            // add webservices.jar if exists
+            jars.add("webservices"+ServerUtilities.GFV3_VERSION_MATCHER); //NOI18N
 
             for (String jarStr : jars) {
                 File jar = ServerUtilities.getJarName(serverDir.getAbsolutePath(), jarStr);
@@ -321,7 +327,7 @@ public class Hk2PluginProperties {
     public static String buildPath(List<URL> path) {
         String PATH_SEPARATOR = System.getProperty("path.separator"); // NOI18N
 
-        StringBuffer sb = new StringBuffer(path.size() * 16);
+        StringBuilder sb = new StringBuilder(path.size() * 16);
         for (Iterator<URL> i = path.iterator(); i.hasNext();) {
             sb.append(urlToString(i.next()));
             if (i.hasNext()) {
