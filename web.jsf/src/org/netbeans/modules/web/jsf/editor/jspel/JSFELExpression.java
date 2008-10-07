@@ -58,9 +58,11 @@ import javax.lang.model.util.ElementFilter;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.CompilationController;
-import org.netbeans.api.java.source.CompilationInfo;
+import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.JavaSource;
-import org.netbeans.api.java.source.Task;
+import org.netbeans.api.java.source.JavaSource.Phase;
+import org.netbeans.api.java.source.SourceUtils;
+import org.netbeans.api.java.source.ui.ElementOpen;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.modules.web.core.syntax.JspSyntaxSupport;
 import org.netbeans.modules.web.core.syntax.completion.ELExpression;
@@ -69,11 +71,14 @@ import org.netbeans.modules.web.jsf.api.facesmodel.FacesConfig;
 import org.netbeans.modules.web.jsf.api.facesmodel.ManagedBean;
 import org.netbeans.modules.web.jsf.api.facesmodel.ResourceBundle;
 import org.netbeans.spi.editor.completion.CompletionItem;
+import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileObject;
+import org.openide.loaders.DataObject;
 
 /**
  *
  * @author Petr Pisl
+ * @author Po-Ting Wu
  */
 public class JSFELExpression extends ELExpression{
     
@@ -84,7 +89,7 @@ public class JSFELExpression extends ELExpression{
     
     private WebModule webModule;
     
-    protected String bundle;
+    protected String bundleName;
     
     public JSFELExpression(WebModule wm, JspSyntaxSupport sup){
         super(sup);
@@ -101,8 +106,8 @@ public class JSFELExpression extends ELExpression{
             
             // look through all registered managed beans
             List <ManagedBean> beans = JSFBeanCache.getBeans(webModule);
-            for (int i = 0; i < beans.size(); i++) {
-                if (beans.get(i).getManagedBeanName().equals(first)){
+            for (ManagedBean bean : beans) {
+                if (first.equals(bean.getManagedBeanName())) {
                     value = EL_JSF_BEAN;
                     break;
                 }
@@ -110,10 +115,10 @@ public class JSFELExpression extends ELExpression{
             
             // look trhough all registered resource bundles
             List <ResourceBundle> bundles = getJSFResourceBundles(webModule);
-            for (int i = 0; i < bundles.size(); i++) {
-                if (first.equals(bundles.get(i).getVar())) {
+            for (ResourceBundle bundle : bundles) {
+                if (first.equals(bundle.getVar())) {
                     value = EL_JSF_RESOURCE_BUNDLE;
-                    bundle = bundles.get(i).getBaseName();
+                    bundleName = bundle.getBaseName();
                     break;
                 }
             }
@@ -160,7 +165,7 @@ public class JSFELExpression extends ELExpression{
         return bundles;
     }
     
-    public  List<CompletionItem> getPropertyKeys(String propertyFile, String prefix) {
+    public  List<CompletionItem> getPropertyKeys(String propertyFile, int anchorOffset, String prefix) {
         ArrayList<CompletionItem> items = new ArrayList<CompletionItem>();
         java.util.ResourceBundle labels = null;
         ClassPath classPath;
@@ -190,7 +195,7 @@ public class JSFELExpression extends ELExpression{
                     StringBuffer helpText = new StringBuffer();
                     helpText.append(key).append("=<font color='#ce7b00'>"); //NOI18N
                     helpText.append(labels.getString(key)).append("</font>"); //NOI18N
-                    items.add(new JSFResultItem.JSFResourceItem(key, helpText.toString()));
+                    items.add(new JSFResultItem.JSFResourceItem(key, anchorOffset, helpText.toString()));
                 }
             }
         }
@@ -198,8 +203,8 @@ public class JSFELExpression extends ELExpression{
         return items;
     }
     
-    public List<CompletionItem> getListenerMethodCompletionItems(String beanType){
-        JSFCompletionItemsTask task = new JSFCompletionItemsTask(beanType);
+    public List<CompletionItem> getListenerMethodCompletionItems(String beanType, int anchor){
+        JSFCompletionItemsTask task = new JSFCompletionItemsTask(beanType, anchor);
         runTask(task);
         return task.getCompletionItems();
     }
@@ -207,12 +212,14 @@ public class JSFELExpression extends ELExpression{
     public class JSFCompletionItemsTask extends ELExpression.BaseELTaskClass implements CancellableTask<CompilationController> {
         
         private List<CompletionItem> completionItems = new ArrayList<CompletionItem>();
+        private int anchor;
         
-        
-        JSFCompletionItemsTask(String beanType){
+        JSFCompletionItemsTask(String beanType, int anchor){
             super(beanType);
+            this.anchor = anchor;
         }
         
+        @Override
         public void cancel() {}
         
         public void run(CompilationController parameter) throws Exception {
@@ -228,7 +235,7 @@ public class JSFELExpression extends ELExpression{
                         String methodName = method.getSimpleName().toString();
                             if (methodName != null && methodName.startsWith(prefix)){
                                 CompletionItem item = new JSFResultItem.JSFMethod(
-                                    methodName, "void");
+                                    methodName, anchor, "void");
 
                             completionItems.add(item);
                         }
@@ -254,6 +261,83 @@ public class JSFELExpression extends ELExpression{
 
         public List<CompletionItem> getCompletionItems(){
             return completionItems;
+        }
+    }
+
+    @Override
+    public boolean gotoPropertyDeclaration(String beanType){
+        GoToSourceTask task = new GoToSourceTask(beanType);
+        runTask(task);
+        return task.wasSuccessful();
+    }
+
+    /**
+     * Go to the java source code of expression
+     * - a getter in case of
+     */
+    private class GoToSourceTask extends BaseELTaskClass implements CancellableTask<CompilationController>{
+        private boolean success = false;
+
+        GoToSourceTask(String beanType){
+            super(beanType);
+        }
+
+        public void run(CompilationController parameter) throws Exception {
+            parameter.toPhase(Phase.ELEMENTS_RESOLVED);
+            TypeElement bean = getTypePreceedingCaret(parameter);
+
+            if (bean != null){
+                String suffix = getPropertyBeingTypedName();
+
+                for (ExecutableElement method : ElementFilter.methodsIn(bean.getEnclosedElements())){
+                    String propertyName = getExpressionSuffix(method);
+
+                    if (propertyName != null && propertyName.equals(suffix)){
+                        ElementHandle el = ElementHandle.create(method);
+                        FileObject fo = SourceUtils.getFile(el, parameter.getClasspathInfo());
+
+                        // Not a regular Java data object (may be a multi-view data object), open it first
+                        DataObject od = DataObject.find(fo);
+                        if (!"org.netbeans.modules.java.JavaDataObject".equals(od.getClass().getName())) { // NOI18N
+                            OpenCookie oc = od.getCookie(org.openide.cookies.OpenCookie.class);
+                            oc.open();
+                        }
+                      
+                        success = ElementOpen.open(fo, el);
+                        break;
+                    }
+                }
+            }
+        }
+
+        public boolean wasSuccessful(){
+            return success;
+        }
+
+        /**
+         * @return property name is <code>accessorMethod<code> is property accessor, otherwise null
+         */
+        @Override
+        protected String getExpressionSuffix(ExecutableElement method){
+
+            if (method.getModifiers().contains(Modifier.PUBLIC)){
+                String methodName = method.getSimpleName().toString();
+
+                if (methodName.startsWith("get")){ //NOI18N
+                    return Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+                }
+
+                if (methodName.startsWith("is")){ //NOI18N
+                    return Character.toLowerCase(methodName.charAt(2)) + methodName.substring(3);
+                }
+
+                if (isDefferedExecution()){
+                    //  also return values for method expressions
+                    return methodName;
+                }
+            }
+
+            return null; // not a property accessor
         }
     }
 }
