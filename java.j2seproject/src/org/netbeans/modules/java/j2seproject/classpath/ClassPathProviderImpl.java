@@ -46,15 +46,17 @@ import java.io.File;
 import java.util.Map;
 import java.util.HashMap;
 import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.modules.java.api.common.SourceRoots;
 import org.netbeans.spi.java.classpath.ClassPathFactory;
 import org.netbeans.spi.java.classpath.ClassPathProvider;
 import org.netbeans.spi.java.project.classpath.support.ProjectClassPathSupport;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
-import org.netbeans.modules.java.j2seproject.SourceRoots;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.Mutex;
 import org.openide.util.WeakListeners;
 
 /**
@@ -92,18 +94,22 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PropertyC
         evaluator.addPropertyChangeListener(WeakListeners.propertyChange(this, evaluator));
     }
 
-    private synchronized FileObject getDir(String propname) {
-        FileObject fo = (FileObject) this.dirCache.get (propname);
-        if (fo == null ||  !fo.isValid()) {
-            String prop = evaluator.getProperty(propname);
-            if (prop != null) {
-                fo = helper.resolveFileObject(prop);
-                this.dirCache.put (propname, fo);
-            }
-        }
-        return fo;
+    private FileObject getDir(final String propname) {
+        return ProjectManager.mutex().readAccess(new Mutex.Action<FileObject>() {
+            public FileObject run() {
+                synchronized (ClassPathProviderImpl.this) {
+                    FileObject fo = (FileObject) ClassPathProviderImpl.this.dirCache.get (propname);
+                    if (fo == null ||  !fo.isValid()) {
+                        String prop = evaluator.getProperty(propname);
+                        if (prop != null) {
+                            fo = helper.resolveFileObject(prop);
+                            ClassPathProviderImpl.this.dirCache.put (propname, fo);
+                        }
+                    }
+                    return fo;
+                }
+            }});
     }
-
     
     private FileObject[] getPrimarySrcPath() {
         return this.sourceRoots.getRoots();
@@ -195,7 +201,7 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PropertyC
         return cp;
     }
     
-    private synchronized ClassPath getRunTimeClasspath(FileObject file) {
+    private ClassPath getRunTimeClasspath(FileObject file) {
         int type = getType(file);
         if (type < 0 || type > 4) {
             // Unregistered file, or in a JAR.
@@ -206,6 +212,10 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PropertyC
         } else if (type > 1) {
             type-=2;            //Compiled source transform into source
         }
+        return getRunTimeClasspath(type);
+    }
+    
+    private synchronized ClassPath getRunTimeClasspath(final int type) {
         ClassPath cp = cache[4+type];
         if ( cp == null) {
             if (type == 0) {
@@ -281,24 +291,28 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PropertyC
      * Returns array of all classpaths of the given type in the project.
      * The result is used for example for GlobalPathRegistry registrations.
      */
-    public ClassPath[] getProjectClassPaths(String type) {
-        if (ClassPath.BOOT.equals(type)) {
-            return new ClassPath[]{getBootClassPath()};
-        }
-        if (ClassPath.COMPILE.equals(type)) {
-            ClassPath[] l = new ClassPath[2];
-            l[0] = getCompileTimeClasspath(0);            
-            l[1] = getCompileTimeClasspath(1);
-            return l;
-        }
-        if (ClassPath.SOURCE.equals(type)) {
-            ClassPath[] l = new ClassPath[2];
-            l[0] = getSourcepath(0);
-            l[1] = getSourcepath(1);
-            return l;
-        }
-        assert false;
-        return null;
+    public ClassPath[] getProjectClassPaths(final String type) {
+        return ProjectManager.mutex().readAccess(new Mutex.Action<ClassPath[]>() {
+            public ClassPath[] run() {
+                if (ClassPath.BOOT.equals(type)) {
+                    return new ClassPath[]{getBootClassPath()};
+                }
+                if (ClassPath.COMPILE.equals(type)) {
+                    ClassPath[] l = new ClassPath[2];
+                    l[0] = getCompileTimeClasspath(0);            
+                    l[1] = getCompileTimeClasspath(1);
+                    return l;
+                }
+                if (ClassPath.SOURCE.equals(type)) {
+                    ClassPath[] l = new ClassPath[2];
+                    l[0] = getSourcepath(0);
+                    l[1] = getSourcepath(1);
+                    return l;
+                }
+                assert false;
+                return null;
+            }
+        });
     }
 
     /**
@@ -315,12 +329,40 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PropertyC
         if (ClassPath.SOURCE.equals(type)) {
             return getSourcepath(0);
         }
-        assert false;
+        if (ClassPath.EXECUTE.equals(type)) {
+            return getRunTimeClasspath(0);
+        }
+        assert false : "Unknown classpath type: " + type;   //NOI18N
         return null;
     }
 
     public synchronized void propertyChange(PropertyChangeEvent evt) {
         dirCache.remove(evt.getPropertyName());
+    }
+    
+    public String getPropertyName (final SourceRoots roots, final String type) {
+        if (roots.isTest()) {
+            if (ClassPath.COMPILE.equals(type)) {
+                return JAVAC_TEST_CLASSPATH;
+            }
+            else if (ClassPath.EXECUTE.equals(type)) {
+                return RUN_TEST_CLASSPATH;
+            }
+            else {
+                return null;
+            }
+        }
+        else {
+            if (ClassPath.COMPILE.equals(type)) {
+                return JAVAC_CLASSPATH;
+            }
+            else if (ClassPath.EXECUTE.equals(type)) {
+                return RUN_CLASSPATH;
+            }
+            else {
+                return null;
+            }
+        }
     }
     
     public String getPropertyName (SourceGroup sg, String type) {
