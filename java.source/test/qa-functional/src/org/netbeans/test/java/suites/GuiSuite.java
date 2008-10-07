@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,26 +31,35 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.jellytools.modules.java;
+package org.netbeans.test.java.suites;
 
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.MainWindowOperator;
-import org.netbeans.jemmy.EventTool;
-import org.netbeans.jemmy.operators.Operator;
+import junit.framework.Test;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.test.java.gui.copypaste.ClassNodeTest;
+import org.netbeans.test.java.gui.copypaste.PackageNodeTest;
+import org.netbeans.test.java.gui.errorannotations.ErrorAnnotations;
+import org.netbeans.test.java.gui.fiximports.FixImportsTest;
+import org.netbeans.test.java.gui.wizards.NewFileWizardTest;
 
 /**
  *
  * @author Jiri Prox
  */
-public class SimpleCopyAction {
-    
-    protected static final String POPUP = Bundle.getStringTrimmed("org.openide.actions.Bundle", "Paste");
-    protected static final String MENU = "Edit|" + POPUP + "|Copy";
-    
-    public void perform() {
-        new EventTool().waitNoEvent(500);        
-        MainWindowOperator.getDefault().menuBar().pushMenu(MENU, "|", new Operator.DefaultStringComparator(true, true));
+public class GuiSuite {
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(ClassNodeTest.class)
+                .addTest(ClassNodeTest.class,"testCopyPaste","testCutPaste","testCopyPasteInterface","testCutPasteInterface")
+                .addTest(PackageNodeTest.class)
+                .addTest(ErrorAnnotations.class)
+                .addTest(FixImportsTest.class)
+                .addTest(NewFileWizardTest.class)
+                );
     }
 }

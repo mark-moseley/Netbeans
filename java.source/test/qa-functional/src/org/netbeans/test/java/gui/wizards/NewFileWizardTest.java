@@ -50,16 +50,17 @@ import org.netbeans.jemmy.operators.*;
 import org.netbeans.test.java.Utilities;
 import org.netbeans.test.java.gui.GuiUtilities;
 import java.io.*;
+import junit.framework.Test;
 import org.netbeans.jemmy.TimeoutExpiredException;
-import org.netbeans.junit.AssertionFailedErrorException;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.java.Common;
+import org.netbeans.test.java.JavaTestCase;
 
 /**
  * Tests the New File Wizard.
  * @author Roman Strobl
  */
-public class NewFileWizardTest extends JellyTestCase {
+public class NewFileWizardTest extends JavaTestCase {
     
     // default path to bundle file
     private static final String JAVA_BUNDLE_PATH = "org.netbeans.modules.java.project.Bundle";
@@ -92,37 +93,7 @@ public class NewFileWizardTest extends JellyTestCase {
     private String workDir = "/tmp";
     
     static String projectDir;
-    
-    /**
-     * Adds tests into the test suite.
-     * @return suite
-     */
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new NewFileWizardTest("testCreateProject"));
-        // test requires an opened project
-        suite.addTest(new NewFileWizardTest("testCreatePackage"));
-        // test requires an opened project and created package
-        suite.addTest(new NewFileWizardTest("testDeletePackage"));
-        // test requires an opened project
-        suite.addTest(new NewFileWizardTest("testDeleteProject"));
-        suite.addTest(new NewFileWizardTest("testNewFileWizardComplex"));
-        suite.addTest(new NewFileWizardTest("testCreatePackageFailure"));
-        suite.addTest(new NewFileWizardTest("testCreateClass"));
-        suite.addTest(new NewFileWizardTest("testCreateInterface"));
-        suite.addTest(new NewFileWizardTest("testCreateAnnotation"));
-        suite.addTest(new NewFileWizardTest("testCreateEnum"));
-        suite.addTest(new NewFileWizardTest("testCreateException"));
-        suite.addTest(new NewFileWizardTest("testCreateJApplet"));
-        suite.addTest(new NewFileWizardTest("testCreateEmptyFile"));
-        suite.addTest(new NewFileWizardTest("testCreateMainClass"));
-        suite.addTest(new NewFileWizardTest("testCreatePackageInfo"));
-        suite.addTest(new NewFileWizardTest("testInvalidName"));
-        suite.addTest(new NewFileWizardTest("testExistingName"));
         
-        return suite;
-    }
-    
     /**
      * Main method for standalone execution.
      * @param args the command line arguments
@@ -180,11 +151,12 @@ public class NewFileWizardTest extends JellyTestCase {
      * Tests creating of a package.
      */
     public void testCreatePackage() {
-        GuiUtilities.createPackage(TEST_PROJECT_NAME,TEST_PACKAGE_NAME);
+        createIfNotOpened(TEST_PROJECT_NAME, TEST_PACKAGE_NAME);
+        GuiUtilities.createPackage(TEST_PROJECT_NAME,TEST_PACKAGE_NAME+TEST_PACKAGE_NAME);
     }
     
-    public void testCreatePackage(String projName,String packName) {
-        GuiUtilities.createPackage(projName,packName);
+    public void testCreatePackage(String projName,String packName) {        
+        GuiUtilities.createPackage(projName,packName);        
     }
     
     /**
@@ -192,6 +164,7 @@ public class NewFileWizardTest extends JellyTestCase {
      */
     public void testDeletePackage() {
         // delete a package
+        createIfNotOpened(TEST_PROJECT_NAME, TEST_PACKAGE_NAME);
         Node pn = new ProjectsTabOperator().getProjectRootNode(TEST_PROJECT_NAME);
         pn.select();
         
@@ -218,11 +191,13 @@ public class NewFileWizardTest extends JellyTestCase {
      */
     public void testNewFileWizardComplex() {
         // create test project
-        testCreateProject(TEST_PROJECT_NAME);
+        //testCreateProject(TEST_PROJECT_NAME);
         
         // create test package
-        testCreatePackage(TEST_PROJECT_NAME,TEST_PACKAGE_NAME);
-        
+        //testCreatePackage(TEST_PROJECT_NAME,TEST_PACKAGE_NAME);
+
+        createIfNotOpened(TEST_PROJECT_NAME, TEST_PACKAGE_NAME);
+
         // select project node
         Node pn = new ProjectsTabOperator().getProjectRootNode(TEST_PROJECT_NAME);
         pn.select();
@@ -264,6 +239,7 @@ public class NewFileWizardTest extends JellyTestCase {
      * Negative test for creating of a package.
      */
     public void testCreatePackageFailure() {
+        createIfNotOpened(TEST_PROJECT_NAME, TEST_PACKAGE_NAME);
         NewFileWizardOperator op = NewFileWizardOperator.invoke();
         
         // wait till all fields are loaded
@@ -498,4 +474,8 @@ public class NewFileWizardTest extends JellyTestCase {
         return null;
     }
     
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(NewFileWizardTest.class).enableModules(".*").clusters(".*"));
+    }
 }
