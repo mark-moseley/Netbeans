@@ -44,8 +44,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.netbeans.api.gsf.ElementKind;
+import org.netbeans.modules.gsf.api.ElementKind;
 import org.netbeans.modules.ruby.RubyIndex;
+import org.openide.filesystems.FileObject;
 
 
 /**
@@ -78,15 +79,15 @@ public final class IndexedMethod extends IndexedElement implements MethodElement
     private MethodType methodType = MethodType.METHOD;
     
     private IndexedMethod(String signature, RubyIndex index, String fileUrl, String fqn,
-        String clz, String require, String attributes, int flags) {
-        super(index, fileUrl, fqn, clz, require, attributes, flags);
+        String clz, String require, String attributes, int flags, FileObject context) {
+        super(index, fileUrl, fqn, clz, require, attributes, flags, context);
         this.signature = signature;
     }
 
     public static IndexedMethod create(RubyIndex index, String signature, String fqn, String clz,
-        String fileUrl, String require, String attributes, int flags) {
+        String fileUrl, String require, String attributes, int flags, FileObject context) {
         IndexedMethod m =
-            new IndexedMethod(signature, index, fileUrl, fqn, clz, require, attributes, flags);
+            new IndexedMethod(signature, index, fileUrl, fqn, clz, require, attributes, flags, context);
 
         return m;
     }
@@ -141,12 +142,12 @@ public final class IndexedMethod extends IndexedElement implements MethodElement
 
     public List<String> getParameters() {
         if (parameters == null) {
-            String[] args = getArgs();
+            String[] argArray = getArgs();
 
-            if ((args != null) && (args.length > 0)) {
-                parameters = new ArrayList<String>(args.length);
+            if ((argArray != null) && (argArray.length > 0)) {
+                parameters = new ArrayList<String>(argArray.length);
 
-                for (String arg : args) {
+                for (String arg : argArray) {
                     parameters.add(arg);
                 }
             } else {

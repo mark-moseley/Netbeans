@@ -40,18 +40,17 @@
  */
 package org.netbeans.modules.ruby.elements;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
 import javax.swing.text.Document;
 
-import org.netbeans.api.gsf.Modifier;
-import org.netbeans.api.gsf.ParserFile;
-import org.netbeans.modules.ruby.AstUtilities;
+import org.netbeans.modules.gsf.api.Modifier;
+import org.netbeans.modules.gsf.api.ParserFile;
 import org.netbeans.modules.ruby.RubyIndex;
-import org.netbeans.spi.gsf.DefaultParserFile;
+import org.netbeans.modules.gsf.spi.DefaultParserFile;
+import org.netbeans.modules.gsf.spi.GsfUtilities;
 import org.openide.filesystems.FileObject;
 
 
@@ -85,9 +84,10 @@ public abstract class IndexedElement extends RubyElement {
     protected int docLength = -1;
     private Document document;
     private FileObject fileObject;
+    private FileObject context;
 
     protected IndexedElement(RubyIndex index, String fileUrl, String fqn,
-        String clz, String require, String attributes, int flags) {
+        String clz, String require, String attributes, int flags, FileObject context) {
         this.index = index;
         this.fileUrl = fileUrl;
         this.fqn = fqn;
@@ -96,6 +96,7 @@ public abstract class IndexedElement extends RubyElement {
         // XXX Why do methods need to know their clz (since they already have fqn)
         this.clz = clz;
         this.flags = flags;
+        this.context = context;
     }
 
     public abstract String getSignature();
@@ -125,6 +126,7 @@ public abstract class IndexedElement extends RubyElement {
         return index;
     }
 
+    @Override
     public String getIn() {
         return getClz();
     }
@@ -133,7 +135,7 @@ public abstract class IndexedElement extends RubyElement {
         return fileUrl;
     }
 
-    public Document getDocument() throws IOException {
+    public Document getDocument() {
         if (document == null) {
             FileObject fo = getFileObject();
 
@@ -141,7 +143,7 @@ public abstract class IndexedElement extends RubyElement {
                 return null;
             }
 
-            document = AstUtilities.getBaseDocument(fileObject, true);
+            document = GsfUtilities.getDocument(fileObject, true);
         }
 
         return document;
@@ -153,9 +155,10 @@ public abstract class IndexedElement extends RubyElement {
         return new DefaultParserFile(getFileObject(), null, platform);
     }
 
+    @Override
     public FileObject getFileObject() {
         if ((fileObject == null) && (fileUrl != null)) {
-            fileObject = RubyIndex.getFileObject(fileUrl);
+            fileObject = RubyIndex.getFileObject(fileUrl, context);
 
             if (fileObject == null) {
                 // Don't try again
@@ -166,6 +169,7 @@ public abstract class IndexedElement extends RubyElement {
         return fileObject;
     }
 
+    @Override
     public final Set<Modifier> getModifiers() {
         if (modifiers == null) {
             Modifier access = Modifier.PUBLIC;
@@ -294,6 +298,16 @@ public abstract class IndexedElement extends RubyElement {
         }
         
         return sb.toString();
+    }
+
+    /**
+     * Returns whether this method pertains to the Module class, which is handle
+     * in a kind of special manner in Ruby.
+     *
+     * @return whether the element is declared in the Module
+     */
+    public boolean doesBelongToModule() {
+        return "Module".equals(getFqn()); // NOI18N
     }
 
 }
