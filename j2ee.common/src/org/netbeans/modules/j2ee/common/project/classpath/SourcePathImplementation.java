@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,7 +38,8 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.j2ee.ejbjarproject.classpath;
+
+package org.netbeans.modules.j2ee.common.project.classpath;
 
 import java.beans.PropertyChangeEvent;
 import java.io.File;
@@ -48,15 +49,19 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.net.URI;
 import java.net.URL;
 import java.util.Iterator;
 import java.util.StringTokenizer;
-import org.netbeans.modules.j2ee.ejbjarproject.SourceRoots;
-import org.netbeans.modules.j2ee.ejbjarproject.ui.customizer.EjbJarProjectProperties;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectProperties;
+import org.netbeans.modules.java.api.common.SourceRoots;
 import org.netbeans.spi.java.classpath.ClassPathImplementation;
+import org.netbeans.spi.java.classpath.FilteringPathResourceImplementation;
 import org.netbeans.spi.java.classpath.PathResourceImplementation;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
+import org.netbeans.spi.project.support.ant.PathMatcher;
+import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
@@ -64,32 +69,38 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
+import org.openide.util.WeakListeners;
 
 /**
  * Implementation of a single classpath that is derived from one Ant property.
  */
-final class SourcePathImplementation implements ClassPathImplementation, PropertyChangeListener {
+final public class SourcePathImplementation implements ClassPathImplementation, PropertyChangeListener {
     private static final String DIR_GEN_BINDINGS = "generated/addons"; // NOI18N
+    private static final String BUILD_DIR = "build.dir"; // NOI18N
     private static RequestProcessor REQ_PROCESSOR = new RequestProcessor(); // No I18N
-
+    
     private PropertyChangeSupport support = new PropertyChangeSupport(this);
     private List<PathResourceImplementation> resources;
     private SourceRoots sourceRoots;
     private AntProjectHelper projectHelper;
-    private FileChangeListener fcl = null;
+    private FileChangeListener fcl = null;      
+    private PropertyEvaluator evaluator;
     
     /**
      * Construct the implementation.
      * @param sourceRoots used to get the roots information and events
+     * @param projectHelper used to obtain the project root
      */
-    public SourcePathImplementation(SourceRoots sourceRoots, AntProjectHelper projectHelper) {
-        assert sourceRoots != null;
+    public SourcePathImplementation(SourceRoots sourceRoots, AntProjectHelper projectHelper, PropertyEvaluator evaluator) {
+        assert sourceRoots != null && projectHelper != null && evaluator != null;
         this.sourceRoots = sourceRoots;
-        this.projectHelper=projectHelper;
         this.sourceRoots.addPropertyChangeListener (this);
+        this.projectHelper=projectHelper;
+        this.evaluator = evaluator;
+        evaluator.addPropertyChangeListener(this);
     }
 
-    private synchronized void createAddOnGenSrcRootsListener(String buildDir, String[] paths){
+    private synchronized void createListener(String buildDir, String[] paths){
         if (this.fcl == null){
             // Need to keep reference to fcl.
             // See JavaDoc for org.openide.util.WeakListeners
@@ -100,7 +111,7 @@ final class SourcePathImplementation implements ClassPathImplementation, Propert
         }
     }
     
-    private List<PathResourceImplementation> getAddOnGeneratedSrcRoots(String buildDir, String[] paths){
+    private List<PathResourceImplementation> getGeneratedSrcRoots(String buildDir, String[] paths){
         List<PathResourceImplementation> ret = 
                 new ArrayList<PathResourceImplementation>();
         
@@ -118,19 +129,19 @@ final class SourcePathImplementation implements ClassPathImplementation, Propert
                         }
                         ret.add(ClassPathSupport.createResource(url));
                     } catch (MalformedURLException ex) {
-                            Exceptions.printStackTrace(ex);
+                        Exceptions.printStackTrace(ex);
                     }                
                 }
             } 
         }
         return ret;
     }
-
+    
     private void invalidate() {
         synchronized (this) {
             this.resources = null;
         }
-        this.support.firePropertyChange (PROP_RESOURCES,null,null);        
+        this.support.firePropertyChange (PROP_RESOURCES, null, null);        
     } 
     
     public List<PathResourceImplementation> getResources() {
@@ -140,46 +151,96 @@ final class SourcePathImplementation implements ClassPathImplementation, Propert
             }
         }        
         URL[] roots = this.sourceRoots.getRootURLs();                                
-        String buildDir = projectHelper.getStandardPropertyEvaluator().getProperty(EjbJarProjectProperties.BUILD_DIR);
         synchronized (this) {
             if (this.resources == null) {
                 List<PathResourceImplementation> result = new ArrayList<PathResourceImplementation>(roots.length);
-                for (int i = 0; i < roots.length; i++) {
-                    PathResourceImplementation res = ClassPathSupport.createResource(roots[i]);
-                    result.add (res);
-                }
-                // adds build/generated/wsimport/client and build/generated/wsimport/service to resources to be available for code completion
-                if (projectHelper!=null) {
-                    try {
-                        if (buildDir!=null) {
-                            // generated/wsimport/client
-                            File f = new File (projectHelper.resolveFile(buildDir),"generated/wsimport/client"); //NOI18N
-                            URL url = f.toURI().toURL();
-                            if (!f.exists()) {  //NOI18N
-                                assert !url.toExternalForm().endsWith("/");  //NOI18N
-                                url = new URL (url.toExternalForm()+'/');   //NOI18N
-                            }
-                            result.add(ClassPathSupport.createResource(url));
-                            // generated/wsimport/service
-                            f = new File (projectHelper.resolveFile(buildDir),"generated/wsimport/service"); //NOI18N
-                            url = f.toURI().toURL();
-                            if (!f.exists()) {  //NOI18N
-                                assert !url.toExternalForm().endsWith("/");  //NOI18N
-                                url = new URL (url.toExternalForm()+'/');   //NOI18N
-                            }
-                            result.add(ClassPathSupport.createResource(url));
-                            
-                            // generated/addons/<subDirs>
-                            result.addAll(getAddOnGeneratedSrcRoots(buildDir, 
-                                    new String[] {DIR_GEN_BINDINGS}));
-                            // Listen for any new Source root creation.
-                            createAddOnGenSrcRootsListener(buildDir, 
-                                    new String[] {DIR_GEN_BINDINGS});                            
+                for (final URL root : roots) {
+                    class PRI implements FilteringPathResourceImplementation, PropertyChangeListener {
+
+                        PropertyChangeSupport pcs = new PropertyChangeSupport(this);
+                        PathMatcher matcher;
+
+                        PRI() {
+                            evaluator.addPropertyChangeListener(WeakListeners.propertyChange(this, evaluator));
                         }
+
+                        public URL[] getRoots() {
+                            return new URL[]{root};
+                        }
+
+                        public boolean includes(URL root, String resource) {
+                            if (matcher == null) {
+                                matcher = new PathMatcher(
+                                        evaluator.getProperty(ProjectProperties.INCLUDES),
+                                        evaluator.getProperty(ProjectProperties.EXCLUDES),
+                                        new File(URI.create(root.toExternalForm())));
+                            }
+                            return matcher.matches(resource, true);
+                        }
+
+                        public ClassPathImplementation getContent() {
+                            return null;
+                        }
+
+                        public void addPropertyChangeListener(PropertyChangeListener listener) {
+                            pcs.addPropertyChangeListener(listener);
+                        }
+
+                        public void removePropertyChangeListener(PropertyChangeListener listener) {
+                            pcs.removePropertyChangeListener(listener);
+                        }
+
+                        public void propertyChange(PropertyChangeEvent ev) {
+                            String prop = ev.getPropertyName();
+                            if (prop == null || prop.equals(ProjectProperties.INCLUDES) || prop.equals(ProjectProperties.EXCLUDES)) {
+                                matcher = null;
+                                PropertyChangeEvent ev2 = new PropertyChangeEvent(this, FilteringPathResourceImplementation.PROP_INCLUDES, null, null);
+                                ev2.setPropagationId(ev);
+                                pcs.firePropertyChange(ev2);
+                            }
+                        }
+                    }
+                    result.add(new PRI());
+                }
+                // adds build/generated/wsclient and build/generated/wsimport to resources to be available for code completion
+                try {
+                    String buildDir = evaluator.getProperty(BUILD_DIR);
+                    if (buildDir!=null) {
+                        // generated/wsclient
+                        File f = new File (projectHelper.resolveFile(buildDir),"generated/wsclient"); //NOI18N
+                        URL url = f.toURI().toURL();
+                        if (!f.exists()) {  //NOI18N
+                            assert !url.toExternalForm().endsWith("/");  //NOI18N
+                            url = new URL (url.toExternalForm()+'/');   //NOI18N
+                        }
+                        result.add(ClassPathSupport.createResource(url));
+                        // generated/wsimport/client
+                        f = new File (projectHelper.resolveFile(buildDir),"generated/wsimport/client"); //NOI18N
+                        url = f.toURI().toURL();
+                        if (!f.exists()) {  //NOI18N
+                            assert !url.toExternalForm().endsWith("/");  //NOI18N
+                            url = new URL (url.toExternalForm()+'/');   //NOI18N
+                        }
+                        result.add(ClassPathSupport.createResource(url));
+                        // generated/wsimport/service
+                        f = new File (projectHelper.resolveFile(buildDir),"generated/wsimport/service"); //NOI18N
+                        url = f.toURI().toURL();
+                        if (!f.exists()) {  //NOI18N
+                            assert !url.toExternalForm().endsWith("/");  //NOI18N
+                            url = new URL (url.toExternalForm()+'/');   //NOI18N
+                        }
+                        result.add(ClassPathSupport.createResource(url));
+
+                        // generated/addons/<subDirs>
+                        result.addAll(getGeneratedSrcRoots(buildDir,
+                                new String[] {DIR_GEN_BINDINGS}));
+                        // Listen for any new Source root creation.
+                        createListener(buildDir,
+                                new String[] {DIR_GEN_BINDINGS});
+                    }
                     } catch (MalformedURLException ex) {
                         Exceptions.printStackTrace(ex);
                     }
-                }
                 this.resources = Collections.unmodifiableList(result);
             }
         }
@@ -198,11 +259,14 @@ final class SourcePathImplementation implements ClassPathImplementation, Propert
     public void propertyChange(PropertyChangeEvent evt) {
         if (SourceRoots.PROP_ROOTS.equals (evt.getPropertyName())) {
             invalidate();
+        } else if (this.evaluator != null && evt.getSource() == this.evaluator &&
+                (evt.getPropertyName() == null || BUILD_DIR.equals(evt.getPropertyName()))) {
+            invalidate();
         }
     }
 
     /**
-     * Thread/task to check newly created source root for each File/Folder create event. 
+     * Thread to check newly created source root for each File/Folder create event. 
      **/
     private static class SourceRootScannerTask implements Runnable {
         SourcePathImplementation spi = null;
@@ -223,7 +287,7 @@ final class SourcePathImplementation implements ClassPathImplementation, Propert
         }
 
         private void firePropertyChange(){
-            spi.invalidate();
+            this.spi.invalidate();
         }
         
         private void addListeners(List<String> path, int cIndx){
@@ -289,8 +353,8 @@ final class SourcePathImplementation implements ClassPathImplementation, Propert
     private class AddOnGeneratedSourceRootListener extends FileChangeAdapter {
         // Path is relative to project root, starting with project specific
         // build directory.
-        private List<List<String>> paths = 
-                Collections.synchronizedList(new ArrayList<List<String>>());
+        private List<List<String>> paths = Collections.synchronizedList(
+                new ArrayList<List<String>>());
         private FileObject projRoot;
         
         AddOnGeneratedSourceRootListener(FileObject pr, String bd, String[] addOnPaths){
@@ -316,8 +380,8 @@ final class SourcePathImplementation implements ClassPathImplementation, Propert
             List<String> dirsAdded = new ArrayList<String>();
             String relativePath = null;
             FileObject fo = this.projRoot;
-            FileChangeListener weakFcl = 
-                    FileUtil.weakFileChangeListener(this, fo);
+            FileChangeListener weakFcl = FileUtil.weakFileChangeListener(
+                    this, fo);
             fo.addFileChangeListener(weakFcl);  
             FileObject parent = null;
             FileObject child = null;
