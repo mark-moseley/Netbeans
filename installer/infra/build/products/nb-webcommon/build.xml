@@ -36,7 +36,7 @@
 -->
 
 <!--
-  This is the build script for the NetBeans UML Pack nbi product 
+  This is the build script for the NetBeans Web Common nbi product 
   package.
     
   It inherits most of the functionality from the base script for building nbi 
@@ -44,7 +44,7 @@
   core properties. For more details on the values of these properties see
   the build.properties file.
 -->
-<project name="nb-uml" default="usage" basedir=".">
+<project name="nb-webcommon" default="usage" basedir=".">
     <!-- import the properties that are specific to this environment -->
     <property file="${environment.properties}"/>
     
