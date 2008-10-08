@@ -51,7 +51,7 @@ import javax.swing.JList;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.event.ListSelectionEvent;
 import org.netbeans.api.project.FileOwnerQuery;
-import org.netbeans.modules.web.project.ui.customizer.WebSourceRootsUi;
+import org.netbeans.modules.j2ee.common.project.ui.SourceRootsUi;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
@@ -228,7 +228,7 @@ public final class FolderList extends javax.swing.JPanel {
             File[] files = chooser.getSelectedFiles();
             int[] indecesToSelect = new int[files.length];
             DefaultListModel model = (DefaultListModel)this.roots.getModel();
-            Set invalidRoots = new HashSet ();
+            Set<File> invalidRoots = new HashSet<File>();
             File[] relatedFolders = this.relatedFolderList == null ? 
                 new File[0] : this.relatedFolderList.getFiles();
             for (int i=0, index=model.size(); i<files.length; i++, index++) {
@@ -254,7 +254,7 @@ public final class FolderList extends javax.swing.JPanel {
                 this.setLastUsedDir(FileUtil.normalizeFile(cd));
             }
             if (invalidRoots.size()>0) {
-                WebSourceRootsUi.showIllegalRootsDialog(invalidRoots);
+                SourceRootsUi.showIllegalRootsDialog(invalidRoots);
             }
         }
     }//GEN-LAST:event_addButtonActionPerformed
