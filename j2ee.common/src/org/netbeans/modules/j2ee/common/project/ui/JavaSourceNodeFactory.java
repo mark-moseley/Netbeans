@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.web.project.ui;
+package org.netbeans.modules.j2ee.common.project.ui;
 
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
@@ -55,9 +55,8 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
-import org.netbeans.modules.web.project.WebProject;
-import org.netbeans.modules.web.project.ui.customizer.CustomizerProviderImpl;
 import org.netbeans.spi.java.project.support.ui.PackageView;
+import org.netbeans.spi.project.ui.CustomizerProvider;
 import org.netbeans.spi.project.ui.support.NodeFactory;
 import org.netbeans.spi.project.ui.support.NodeList;
 import org.openide.filesystems.FileObject;
@@ -70,34 +69,34 @@ import org.openide.util.NbBundle;
  *
  * @author mkleint
  */
-public final class SourceNodeFactory implements NodeFactory {
-    public SourceNodeFactory() {
+public final class JavaSourceNodeFactory implements NodeFactory {
+    public JavaSourceNodeFactory() {
     }
     
     public NodeList createNodes(Project p) {
-        WebProject project = (WebProject)p.getLookup().lookup(WebProject.class);
+        Project project = (Project)p.getLookup().lookup(Project.class);
         assert project != null;
         return new SourcesNodeList(project);
     }
     
     private static class SourcesNodeList implements NodeList<SourceGroupKey>, ChangeListener {
         
-        private final WebProject project;
+        private final Project project;
         
         private final ChangeSupport changeSupport = new ChangeSupport(this);
         
-        public SourcesNodeList(WebProject proj) {
+        public SourcesNodeList(Project proj) {
             project = proj;
         }
         
         public List<SourceGroupKey> keys() {
             if (this.project.getProjectDirectory() == null || !this.project.getProjectDirectory().isValid()) {
-                return Collections.EMPTY_LIST;
+                return Collections.<SourceGroupKey>emptyList();
             }
             Sources sources = getSources();
             SourceGroup[] groups = sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
             
-            List result =  new ArrayList(groups.length);
+            List<SourceGroupKey> result =  new ArrayList<SourceGroupKey>(groups.length);
             for( int i = 0; i < groups.length; i++ ) {
                 result.add(new SourceGroupKey(groups[i]));
             }
@@ -218,7 +217,7 @@ public final class SourceNodeFactory implements NodeFactory {
     
     /** The special properties action
      */
-    static class PreselectPropertiesAction extends AbstractAction {
+    public static class PreselectPropertiesAction extends AbstractAction {
         
         private final Project project;
         private final String nodeName;
@@ -229,19 +228,22 @@ public final class SourceNodeFactory implements NodeFactory {
         }
         
         public PreselectPropertiesAction(Project project, String nodeName, String panelName) {
-            super(NbBundle.getMessage(SourceNodeFactory.class, "LBL_Properties_Action")); //NOI18N
+            super(NbBundle.getMessage(JavaSourceNodeFactory.class, "LBL_Properties_Action")); //NOI18N
             this.project = project;
             this.nodeName = nodeName;
             this.panelName = panelName;
         }
         
         public void actionPerformed(ActionEvent e) {
-            // J2SECustomizerProvider cp = (J2SECustomizerProvider) project.getLookup().lookup(J2SECustomizerProvider.class);
-            CustomizerProviderImpl cp = (CustomizerProviderImpl) project.getLookup().lookup(CustomizerProviderImpl.class);
-            if (cp != null) {
-                cp.showCustomizer(nodeName, panelName);
-            }
-            
+            CustomizerProvider2 cp2 = (CustomizerProvider2) project.getLookup().lookup(CustomizerProvider2.class);
+            if (cp2 != null) {
+                cp2.showCustomizer(nodeName, panelName);
+            } else {
+                CustomizerProvider cp = (CustomizerProvider) project.getLookup().lookup(CustomizerProvider.class);
+                if (cp != null) {
+                    cp.showCustomizer();
+                }
+            }            
         }
     }
     
