@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -71,7 +71,6 @@ public class RailsProjectUtil {
         try {
             Pattern VERSION_ELEMENT = Pattern.compile("\\s*[A-Z]+\\s*=\\s*(\\d+)\\s*");
             BufferedReader br = new BufferedReader(new FileReader(versionFile));
-            StringBuilder sb = new StringBuilder();
             int major = 0;
             int minor = 0;
             int tiny = 0;
@@ -113,7 +112,7 @@ public class RailsProjectUtil {
         GemManager gemManager = RubyPlatform.gemManagerFor(project);
         // Add in the builtins first (since they provide some more specific
         // UI configuration for known generators (labelling the arguments etc.)
-        String railsVersion = gemManager.getVersion("rails"); // NOI18N
+        String railsVersion = gemManager.getLatestVersion("rails"); // NOI18N
 
         FileObject railsPlugin = project.getProjectDirectory().getFileObject("vendor/rails/railties"); // NOI18N
         if (railsPlugin != null) {
@@ -126,10 +125,46 @@ public class RailsProjectUtil {
                 }
             }
         }
-        
+
+        FileObject environment = project.getProjectDirectory().getFileObject("config/environment.rb"); // NOI18N
+        if (environment != null && environment.isValid()) {
+            String specifiedVersion = getSpecifiedRailsVersion(FileUtil.toFile(environment));
+            if (specifiedVersion != null) {
+                railsVersion = specifiedVersion;
+            }
+        }
+
         return railsVersion;
     }
-    
+
+    /** Return the version of Rails requested in environment.rb */
+    public static String getSpecifiedRailsVersion(File environment) {
+        try {
+            // Look for version specifications like
+            //    RAILS_GEM_VERSION = '2.1.0' unless defined? RAILS_GEM_VERSION
+            // in environment.rb
+            BufferedReader br = new BufferedReader(new FileReader(environment));
+
+            Pattern VERSION_PATTERN = Pattern.compile("\\s*RAILS_GEM_VERSION\\s*=\\s*['\"]((\\d+)\\.(\\d+)\\.(\\d+))['\"].*"); // NOI18N
+            for (int line = 0; line < 20; line++) {
+                String s = br.readLine();
+                if (s == null) {
+                    break;
+                }
+                if (s.indexOf("RAILS_GEM_VERSION") != -1) { // NOI18N
+                    Matcher m = VERSION_PATTERN.matcher(s);
+                    if (m.matches()) {
+                        return m.group(1);
+                    }
+                }
+            }
+        } catch (IOException ioe) {
+            Exceptions.printStackTrace(ioe);
+        }
+        
+        return null;
+    }
+
     /**
      * Returns the property value evaluated by RailsProject's PropertyEvaluator.
      *
@@ -150,7 +185,7 @@ public class RailsProjectUtil {
         }
     }
     
-    public static void getAllScripts(String prefix, FileObject sourcesRoot, List/*<String>*/ result) {
+    public static void getAllScripts(String prefix, FileObject sourcesRoot, List<String> result) {
         FileObject children[] = sourcesRoot.getChildren();
         if (!"".equals(prefix)) {
             prefix += "/";

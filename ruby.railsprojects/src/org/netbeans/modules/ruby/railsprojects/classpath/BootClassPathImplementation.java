@@ -42,9 +42,9 @@ package org.netbeans.modules.ruby.railsprojects.classpath;
 
 import java.beans.PropertyChangeEvent;
 import org.netbeans.api.ruby.platform.RubyInstallation;
-import org.netbeans.spi.gsfpath.classpath.ClassPathImplementation;
-import org.netbeans.spi.gsfpath.classpath.PathResourceImplementation;
-import org.netbeans.spi.gsfpath.classpath.support.ClassPathSupport;
+import org.netbeans.modules.gsfpath.spi.classpath.ClassPathImplementation;
+import org.netbeans.modules.gsfpath.spi.classpath.PathResourceImplementation;
+import org.netbeans.modules.gsfpath.spi.classpath.support.ClassPathSupport;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
@@ -62,9 +62,12 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.api.ruby.platform.RubyPlatformProvider;
+import org.netbeans.modules.ruby.platform.Util;
 import org.netbeans.modules.ruby.platform.gems.GemManager;
 import org.netbeans.modules.ruby.railsprojects.RailsProjectUtil;
 import org.netbeans.modules.ruby.spi.project.support.rake.PropertyEvaluator;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
 import org.openide.util.WeakListeners;
 
@@ -108,13 +111,8 @@ final class BootClassPathImplementation implements ClassPathImplementation, Prop
         }
     }
 
-//    private static final String PLATFORM_ACTIVE = "platform.active";        //NOI18N
-//    private static final String ANT_NAME = "platform.ant.name";             //NOI18N
-//    private static final String J2SE = "j2se";                              //NOI18N
-
     private File projectDirectory;
     private final PropertyEvaluator evaluator;
-//    private JavaPlatformManager platformManager;
     //name of project active platform
     private String activePlatformName;
     //active platform is valid (not broken reference)
@@ -131,13 +129,12 @@ final class BootClassPathImplementation implements ClassPathImplementation, Prop
 
     public synchronized List<PathResourceImplementation> getResources() {
         if (this.resourcesCache == null) {
-//            JavaPlatform jp = findActivePlatform ();
-//            if (jp != null) {
                 //TODO: May also listen on CP, but from Platform it should be fixed.
             List<PathResourceImplementation> result = new ArrayList<PathResourceImplementation>();
             RubyPlatform platform = new RubyPlatformProvider(evaluator).getPlatform();
             if (platform == null) {
                 LOGGER.severe("Cannot resolve platform for project: " + projectDirectory);
+                return Collections.emptyList();
             }
             
             if (!platform.hasRubyGemsInstalled()) {
@@ -173,7 +170,9 @@ final class BootClassPathImplementation implements ClassPathImplementation, Prop
             } catch (PatternSyntaxException pse) {
                 Exceptions.printStackTrace(pse);
             }
-            
+
+            gemUrls = adjustGemsForExplicitVersion(gemUrls);
+
             // Add in all the vendor/ paths, if any
             File vendor = new File(projectDirectory, "vendor");
             if (vendor.exists()) {
@@ -245,6 +244,81 @@ final class BootClassPathImplementation implements ClassPathImplementation, Prop
         return urlString;
     }
 
+    /** Adjust the gem urls according to the RAILS_GEM_VERSION specified in config/environment.rb */
+    private Map<String,URL> adjustGemsForExplicitVersion(Map<String, URL> gemUrls) {
+        // Look for version specifications like
+        //    RAILS_GEM_VERSION = '2.1.0' unless defined? RAILS_GEM_VERSION
+        // in environment.rb
+        File environment = new File(projectDirectory, "config" + File.separator + "environment.rb"); // NOI18N
+        if (!environment.exists()) {
+            return gemUrls;
+        }
+
+        String railsVersion = RailsProjectUtil.getSpecifiedRailsVersion(environment);
+        if (railsVersion == null) {
+            // No version specified - no need to adjust anything
+            return gemUrls;
+        }
+
+        // See if we've picked the right version
+        String ACTIVERECORD = "activerecord"; // NOI18N
+        URL activerecord = gemUrls.get(ACTIVERECORD);
+        if (activerecord == null) {
+            // Activerecord not found at all - not good for a Rails projects, but at least no point adjusting versions
+            return gemUrls;
+        }
+        String activerecordUrl = activerecord.toExternalForm();
+        if (activerecordUrl.indexOf(ACTIVERECORD+"-" + railsVersion) != -1) { // NOI18N
+            // Already have the right version - we're done
+            return gemUrls;
+        }
+
+        Pattern VERSION_PATTERN = Pattern.compile(".*activerecord-(\\d+\\.\\d+\\.\\d+).*"); // NOI18N
+        Matcher m = VERSION_PATTERN.matcher(activerecordUrl);
+        if (!m.matches()) {
+            // Couldn't determine current version - don't attempt adjustments
+            return gemUrls;
+        }
+
+        String defaultVersion = m.group(1);
+
+        // Now attempt to fix the urls
+        gemUrls.get("actionwebservice");
+        String[] railsGems =  new String[] { "actionmailer", "actionpack", "activerecord",  // NOI18N
+                                         "activeresource", "activesupport", "rails", // NOI18N
+                                         "actionwebservice" }; // NOI18N    actionwebservice is Rails 1.x only
+        boolean first = true;
+        for (String gemName : railsGems) { // NOI18N
+            URL url = gemUrls.get(gemName);
+            if (url != null) {
+                String urlString = url.toExternalForm();
+                String replace = gemName + "-" + defaultVersion;
+                int index = urlString.indexOf(replace);
+                if (index != -1) {
+                    try {
+                        URL newUrl = new URL(urlString.replace(replace, gemName + "-" + railsVersion)); // NOI18N
+                        if (first) {
+                            first = false;
+                            FileObject fo = URLMapper.findFileObject(newUrl);
+                            if (fo == null) {
+                                // Can't find this URL - the project is probably specifying a Rails
+                                // project we don't have installed
+                                return gemUrls;
+                            }
+                            // Replace map the first time - the one we were passed was read-only
+                            gemUrls = new HashMap<String,URL>(gemUrls);
+                        }
+                        gemUrls.put(gemName, newUrl);
+                    } catch (MalformedURLException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                }
+            }
+        }
+
+        return gemUrls;
+    }
+
     public void addPropertyChangeListener(PropertyChangeListener listener) {
         this.support.addPropertyChangeListener (listener);
     }
@@ -253,17 +327,6 @@ final class BootClassPathImplementation implements ClassPathImplementation, Prop
         this.support.removePropertyChangeListener (listener);
     }
 
-//    private JavaPlatform findActivePlatform () {
-//        if (this.platformManager == null) {
-//            this.platformManager = JavaPlatformManager.getDefault();
-//            this.platformManager.addPropertyChangeListener(WeakListeners.propertyChange(this, this.platformManager));
-//        }                
-//        this.activePlatformName = evaluator.getProperty(PLATFORM_ACTIVE);
-//        final JavaPlatform activePlatform = RubyProjectUtil.getActivePlatform (this.activePlatformName);
-//        this.isActivePlatformValid = activePlatform != null;
-//        return activePlatform;
-//    }
-//    
     public void propertyChange(PropertyChangeEvent evt) {
         if (evt.getSource() == RubyInstallation.getInstance() && evt.getPropertyName().equals("roots")) {
             resetCache();
@@ -358,7 +421,7 @@ final class BootClassPathImplementation implements ClassPathImplementation, Prop
     private static void addGem(Map<String, String> gemVersions, Map<String, URL> gemUrls,
             String name, String version, URL url) {
         if (!gemVersions.containsKey(name) ||
-                GemManager.compareGemVersions(version, gemVersions.get(name)) > 0) {
+                Util.compareVersions(version, gemVersions.get(name)) > 0) {
             gemVersions.put(name, version);
             gemUrls.put(name, url);
         }
@@ -396,7 +459,7 @@ final class BootClassPathImplementation implements ClassPathImplementation, Prop
             }
         }
     }
-    
+
     private List<URL> getVendorPlugins(File vendor) {
         assert vendor != null;
         
