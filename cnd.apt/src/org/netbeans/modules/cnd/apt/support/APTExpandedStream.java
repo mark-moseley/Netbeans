@@ -320,7 +320,7 @@ public class APTExpandedStream implements TokenStream {
     // we are trying to prevent such experiments, especially in IDE
     private static final long MACRO_EXPANDING_THREASHOLD = 16*1024;
     private static List<Token> subsituteParams(APTMacro macro, List<List<Token>> params, APTMacroCallback callback, boolean expandPPExpression) throws TokenStreamException {
-        final Map<String/*getTokenTextKey(token)*/, List<Token>> paramsMap = createParamsMap(macro, params);;
+        final Map<String/*getTokenTextKey(token)*/, List<Token>> paramsMap = createParamsMap(macro, params);
         final List<Token> expanded = new LinkedList<Token>();
         final TokenStream body = new APTCommentsFilter(macro.getBody());
         int state = BODY_STREAM;
@@ -355,7 +355,7 @@ public class APTExpandedStream implements TokenStream {
                             case APTTokenTypes.ID:
                             {
                                 // may be it is parameter of macro to substitute with input parameter value  
-                                List<Token> paramValue = paramsMap.get(APTUtils.getTokenTextKey(token));
+                                List<Token> paramValue = paramsMap.get(token.getText());
                                 if (paramValue != null) {
                                     // found param, so expand it and skip current token
                                     List<Token> expandedValue = expandParamValue(paramValue, callback, expandPPExpression);
@@ -363,11 +363,11 @@ public class APTExpandedStream implements TokenStream {
                                         if (DebugUtils.STANDALONE) {
                                             System.err.printf(
                                                     "parameter '%s' was empty substituted due to very long output value when expanding macros:\n %s\n", // NOI18N
-                                                    APTUtils.getTokenTextKey(token), macro.getName());
+                                                    token.getText(), macro.getName());
                                         } else {
                                             APTUtils.LOG.log(Level.WARNING,
                                                     "parameter '{0}' was empty substituted due to very long output value when expanding macros:\n {1}\n", // NOI18N
-                                                    new Object[] {APTUtils.getTokenTextKey(token), macro.getName()});
+                                                    new Object[] {token.getText(), macro.getName()});
                                         }
                                         return Collections.<Token>emptyList();
                                     }
@@ -385,9 +385,15 @@ public class APTExpandedStream implements TokenStream {
                     token = null;
                     assert (laToken.getType() == APTTokenTypes.DBL_SHARP);
                     assert (leftConcatToken != null);
-                    Token rightConcatToken = body.nextToken();
-                    List<Token> concatList = createConcatenation(leftConcatToken, rightConcatToken, paramsMap);
-                    laToken = body.nextToken();  
+                    List<Token> rightConcatTokens = new ArrayList<Token>();
+                    rightConcatTokens.add(body.nextToken());
+                    laToken = body.nextToken();
+                    if (isImplicitConcat(rightConcatTokens.get(0), laToken)) {
+                        // Fix for IZ#149225: incorrect concatenation with token that starts with digit
+                        rightConcatTokens.add(laToken);
+                        laToken = body.nextToken();
+                    }
+                    List<Token> concatList = createConcatenation(leftConcatToken, rightConcatTokens, paramsMap);
                     switch (laToken.getType()) {
                         case APTTokenTypes.DBL_SHARP:
                         {
@@ -402,8 +408,8 @@ public class APTExpandedStream implements TokenStream {
                             }
                             state = CONCATENATE;
                             break;
-                        }                        
-                        default:    
+                        }
+                        default:
                         {
                             leftConcatToken = null;
                             expanded.addAll(concatList);
@@ -417,7 +423,7 @@ public class APTExpandedStream implements TokenStream {
                     token = null;                    
                     // stringize next token, it must be param!
                     assert (laToken.getType() == APTTokenTypes.ID);
-                    Token stringized = stringizeParam(paramsMap.get(APTUtils.getTokenTextKey(laToken)));
+                    Token stringized = stringizeParam(paramsMap.get(laToken.getText()));
                     laToken = body.nextToken(); 
                     switch (laToken.getType()) {
                         case APTTokenTypes.DBL_SHARP:
@@ -447,6 +453,23 @@ public class APTExpandedStream implements TokenStream {
         return expanded;
     }
 
+    private static boolean isImplicitConcat(Token left, Token right) {
+        return APTUtils.isInt(left) && APTUtils.isID(right) && areAdjacent(left, right);
+    }
+
+    private static boolean areAdjacent(Token left, Token right) {
+        while (left instanceof MacroExpandedToken && right instanceof MacroExpandedToken) {
+            left = ((MacroExpandedToken)left).getTo();
+            right = ((MacroExpandedToken)right).getTo();
+        }
+        if (left instanceof APTToken && right instanceof APTToken) {
+            return ((APTToken)left).getEndOffset() == ((APTToken)right).getOffset();
+        } else {
+            return left.getLine() == right.getLine()
+                    && left.getColumn() + left.getText().length() == right.getColumn();
+        }
+    }
+
     private static Map<String, List<Token>> createParamsMap(APTMacro macro, List<List<Token>> params) {
         Map<String, List<Token>> map = new HashMap<String, List<Token>>();
         Collection<Token> macroParams = macro.getParams();
@@ -454,7 +477,7 @@ public class APTExpandedStream implements TokenStream {
         int i=0;
         Token lastMacroParam = null;
         for (Token macroParam : macroParams) {
-            map.put(APTUtils.getTokenTextKey(macroParam), i < numInList ? params.get(i) : Collections.<Token>emptyList());
+            map.put(macroParam.getText(), i < numInList ? params.get(i) : Collections.<Token>emptyList());
             i++;
             lastMacroParam = macroParam;
         }
@@ -462,7 +485,7 @@ public class APTExpandedStream implements TokenStream {
         // if remains values and last param of macro is VA_ARG => 
         // add all remains to the last value separating by comma as it was in macro call
         if (i < numInList && APTUtils.isVaArgsToken(lastMacroParam)) {
-            List<Token> vaArgsVal = map.get(APTUtils.getTokenTextKey(lastMacroParam));
+            List<Token> vaArgsVal = map.get(lastMacroParam.getText());
             for (; i < numInList; i++) {
                 vaArgsVal.add(APTUtils.COMMA_TOKEN);
                 vaArgsVal.addAll(params.get(i));
@@ -471,21 +494,32 @@ public class APTExpandedStream implements TokenStream {
         return map;
     }    
 
-    private static List<Token> createConcatenation(Token tokenLeft, Token tokenRight, final Map<String/*getTokenTextKey(token)*/, List<Token>> paramsMap) {
+    private static List<Token> createConcatenation(Token tokenLeft, List<Token> tokensRight, final Map<String/*getTokenTextKey(token)*/, List<Token>> paramsMap) {
         //TODO: finish it, use lexer
-        List<Token> valLeft = paramsMap.get(APTUtils.getTokenTextKey(tokenLeft));
+        List<Token> valLeft = paramsMap.get(tokenLeft.getText());
         String leftText;
         if (valLeft != null) {
             leftText = toText(valLeft, false);
         } else {
             leftText = tokenLeft.getText();
         }
-        List<Token> valRight = paramsMap.get(APTUtils.getTokenTextKey(tokenRight));
+        StringBuilder tokensRightMerged = new StringBuilder();
+        for (Token token : tokensRight) {
+            tokensRightMerged.append(token.getText());
+        }
+        List<Token> valRight = paramsMap.get(tokensRightMerged.toString());
         String rightText;
         if (valRight != null) {
             rightText = toText(valRight, false);
         } else {
-            rightText = tokenRight.getText();
+            rightText = tokensRightMerged.toString();
+        }
+        // IZ#149505: special handling of __VA_ARGS__ with preceding comma
+        if (tokenLeft.getType() == APTTokenTypes.COMMA && rightText.length() == 0 && 
+            APTUtils.isVaArgsToken(tokensRight.get(0))) {
+            // when __VA_ARGS__ is empty expanded => 
+            // need to eat comma as well and should return no tokens
+            return new ArrayList<Token>();
         }
         String text = leftText + rightText;
         TokenStream ts = APTTokenStreamBuilder.buildTokenStream(text);
@@ -503,28 +537,37 @@ public class APTExpandedStream implements TokenStream {
     }
     
     private static String toText(List<Token> tokens, boolean stringize) {
-        // TODO: we need to check there, that end offset and start offset
-        // for subsequent tokens to identify whether whitespaces and comments
-        // where eaten before
-        // 
-        // now just concat all texts
         StringBuilder out = new StringBuilder();
         if (stringize) {
             out.append('"'); // NOI18N
         }
-        for (Iterator<Token> it = tokens.iterator(); it.hasNext();) {
-            Token token = it.next();
-            out.append(token.getText());
-            // FIXUP: this is the hack to be OK in stringize (used in #include macro)
-            // and concatenation
-            if (!stringize && it.hasNext()) {
-                out.append(" "); // NOI18N
+        for (int i = 0; i < tokens.size(); ++i) {
+            Token token = tokens.get(i);
+            if (stringize) {
+                out.append(escape(token.getText()));
+            } else {
+                out.append(token.getText());
+                if (i + 1 < tokens.size() && !areAdjacent(token, tokens.get(i + 1))) {
+                    out.append(' '); // NOI18N
+                }
             }
         }
         if (stringize) {
             out.append('"'); // NOI18N
         }
         return out.toString();
+    }
+    
+    private static CharSequence escape(CharSequence cs) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < cs.length(); ++i) {
+            char c = cs.charAt(i);
+            if (c == '"' || c == '\\') {
+                out.append('\\');
+            }
+            out.append(c);
+        }
+        return out;
     }
 
     private static List<Token> expandParamValue(List<Token> paramValue, APTMacroCallback callback, boolean expandPPExpression) {
