@@ -44,6 +44,7 @@ import org.netbeans.installer.product.Registry;
 import org.netbeans.installer.product.components.Product;
 import org.netbeans.installer.product.components.ProductConfigurationLogic;
 import org.netbeans.installer.utils.FileProxy;
+import org.netbeans.installer.utils.FileUtils;
 import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.applications.JavaUtils;
 import org.netbeans.installer.utils.exceptions.InitializationException;
@@ -66,8 +67,6 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
 	    FileProxy.RESOURCE_SCHEME_PREFIX + 
             "org/netbeans/installer/products/wsrp/wizard.xml"; // NOI18N
     
-    private static final String GLASSFISH_UID =
-            "glassfish"; // NOI18N
     private static final String APPSERVER_UID =
             "sjsas"; // NOI18N
     
@@ -89,7 +88,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         
         // get the list of suitable glassfish installations
         final List<Dependency> dependencies = 
-                getProduct().getDependencyByUid(GLASSFISH_UID);
+                getProduct().getDependencyByUid(APPSERVER_UID);
         final List<Product> sources = 
                 Registry.getInstance().getProducts(dependencies.get(0));
         
@@ -99,7 +98,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         
         // resolve the dependency
         dependencies.get(0).setVersionResolved(sources.get(0).getVersion());
-        
+        /*
         final File javaExecutable;
         try {
             javaExecutable = JavaUtils.getExecutable(
@@ -125,7 +124,6 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         try {
             progress.setDetail(getString("CL.install.wsrp.installer")); // NOI18N
             
-            final File asadmin = GlassFishUtils.getAsadmin(glassfishLocation);
             final File domain1 = new File(new File(glassfishLocation, "domains"),
                     GlassFishUtils.DEFAULT_DOMAIN);
             SystemUtils.executeCommand(
@@ -140,18 +138,31 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                     getString("CL.install.error.wsrp.installer"), // NOI18N
                     e);
         }
-        
+        */
+        try {
+            progress.setDetail(getString("CL.install.wsrp.installer")); // NOI18N
+	    final File targetFile = new File(glassfishLocation,
+                            "lib" + File.separator + "addons" + File.separator + WSRP_INSTALLER);
+            FileUtils.copyFile(wsrpInstaller, targetFile);
+            getProduct().getInstalledFiles().add(targetFile);            
+	} catch (IOException e) {
+            throw new InstallationException(
+                    getString("CL.install.error.wsrp.installer"), // NOI18N
+                    e);
+        }
         /////////////////////////////////////////////////////////////////////////////
         progress.setPercentage(Progress.COMPLETE);
     }
     
     public void uninstall(Progress progress) throws UninstallationException {        
+        progress.setPercentage(Progress.COMPLETE);
     }
     
     public List<WizardComponent> getWizardComponents() {
         return wizardComponents;
     }
     
+    @Override
     public boolean registerInSystem() {
         return false;
     }

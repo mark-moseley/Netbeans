@@ -43,7 +43,9 @@ import org.netbeans.installer.utils.applications.GlassFishUtils;
 import org.netbeans.installer.product.Registry;
 import org.netbeans.installer.product.components.Product;
 import org.netbeans.installer.product.components.ProductConfigurationLogic;
+import org.netbeans.installer.product.dependencies.Requirement;
 import org.netbeans.installer.utils.FileProxy;
+import org.netbeans.installer.utils.FileUtils;
 import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.applications.JavaUtils;
 import org.netbeans.installer.utils.exceptions.InitializationException;
@@ -51,6 +53,7 @@ import org.netbeans.installer.utils.exceptions.InstallationException;
 import org.netbeans.installer.utils.exceptions.UninstallationException;
 import org.netbeans.installer.utils.helper.Dependency;
 import org.netbeans.installer.utils.helper.RemovalMode;
+import org.netbeans.installer.utils.helper.Text;
 import org.netbeans.installer.utils.progress.Progress;
 import org.netbeans.installer.wizard.Wizard;
 import org.netbeans.installer.wizard.components.WizardComponent;
@@ -65,11 +68,6 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
     public static final String WIZARD_COMPONENTS_URI =
             FileProxy.RESOURCE_SCHEME_PREFIX +
             "org/netbeans/installer/products/portletcontainer/wizard.xml"; // NOI18N
-    
-    private static final String GLASSFISH_UID =
-            "glassfish"; // NOI18N
-    private static final String APPSERVER_UID =
-            "sjsas"; // NOI18N
     
     private static final String PC_INSTALLER =
             "portlet-container-configurator.jar"; // NOI18N
@@ -89,7 +87,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         
         // get the list of suitable glassfish installations
         final List<Dependency> dependencies =
-                getProduct().getDependencyByUid(GLASSFISH_UID);
+                getProduct().getDependencies(Requirement.class);
         final List<Product> sources =
                 Registry.getInstance().getProducts(dependencies.get(0));
         
@@ -99,7 +97,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         
         // resolve the dependency
         dependencies.get(0).setVersionResolved(sources.get(0).getVersion());
-        
+        /*
         // stop the default domain //////////////////////////////////////////////////
         try {
             progress.setDetail(getString("CL.install.stop.as")); // NOI18N
@@ -131,18 +129,31 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                     getString("CL.install.error.portletcontainer.installer"), // NOI18N
                     e);
         }
-        
+        */
+        try {
+            progress.setDetail(getString("CL.install.portletcontainer.installer")); // NOI18N
+	    final File targetFile = new File(asLocation,
+                            "lib" + File.separator + "addons" + File.separator + PC_INSTALLER);
+            FileUtils.copyFile(pcInstaller, targetFile);
+            getProduct().getInstalledFiles().add(targetFile);
+	} catch (IOException e) {
+            throw new InstallationException(
+                    getString("CL.install.error.portletcontainer.installer"), // NOI18N
+                    e);
+        }
         /////////////////////////////////////////////////////////////////////////////
         progress.setPercentage(Progress.COMPLETE);
     }
     
     public void uninstall(final Progress progress) throws UninstallationException {
+        progress.setPercentage(Progress.COMPLETE);
     }
     
     public List<WizardComponent> getWizardComponents() {
         return wizardComponents;
     }
     
+    @Override
     public boolean registerInSystem() {
         return false;
     }
@@ -150,4 +161,9 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
     public RemovalMode getRemovalMode() {
         return RemovalMode.LIST;
     }
+    
+    @Override
+    public Text getLicense() {
+       return null;
+    }    
 }
