@@ -827,9 +827,7 @@ public class TreeModelNode extends AbstractNode {
             WeakHashMap<Object, WeakReference<TreeModelNode>> newObjectToNode = new WeakHashMap<Object, WeakReference<TreeModelNode>>();
             for (i = 0; i < k; i++) {
                 if (ch [i] == null) {
-                    throw (NullPointerException) ErrorManager.getDefault().annotate(
-                            new NullPointerException(),
-                            "model: " + model + "\nparent: " + object);
+                    throw new NullPointerException("Null child at index "+i+", parent: "+object+", model: "+model);
                 }
                 WeakReference<TreeModelNode> wr = objectToNode.get(ch [i]);
                 if (wr == null) continue;
@@ -1084,12 +1082,17 @@ public class TreeModelNode extends AbstractNode {
             }
             try {
                 javax.swing.JToolTip tooltip = new javax.swing.JToolTip();
-                tooltip.putClientProperty("getShortDescription", object); // NOI18N
-                Object tooltipObj = model.getValueAt(tooltip, id);
-                if (tooltipObj == null) {
-                    return null;
-                } else {
-                    return adjustHTML(tooltipObj.toString());
+                try {
+                    tooltip.putClientProperty("getShortDescription", object); // NOI18N
+                    Object tooltipObj = model.getValueAt(tooltip, id);
+                    if (tooltipObj == null) {
+                        return null;
+                    } else {
+                        return adjustHTML(tooltipObj.toString());
+                    }
+                } finally {
+                    // We MUST clear the client property, Swing holds this in a static reference!
+                    tooltip.putClientProperty("getShortDescription", null); // NOI18N
                 }
             } catch (UnknownTypeException e) {
                 // Ignore models that do not define tooltips for values.
