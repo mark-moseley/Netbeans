@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools.modules.form.properties.editors;
 
+import java.io.IOException;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.modules.form.FormDesignerOperator;
@@ -54,6 +55,15 @@ import org.netbeans.junit.NbTestSuite;
  */
 public class MethodPickerOperatorTest extends FormPropertiesEditorsTestCase {
     
+    public static final String[] tests = new String[] {
+        "testLblComponent",
+        "testCboComponent",
+        "testLblMethods",
+        "testLstMethods",
+        "testSetComponent",
+        "testSetMethods",
+        "testClose"
+    };
     /** Use for internal test execution inside IDE
      * @param args command line arguments
      */
@@ -65,6 +75,7 @@ public class MethodPickerOperatorTest extends FormPropertiesEditorsTestCase {
      * @return  created suite
      */
     public static NbTestSuite suite() {
+        /*
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(new MethodPickerOperatorTest("testLblComponent"));
         suite.addTest(new MethodPickerOperatorTest("testCboComponent"));
@@ -74,10 +85,14 @@ public class MethodPickerOperatorTest extends FormPropertiesEditorsTestCase {
         suite.addTest(new MethodPickerOperatorTest("testSetMethods"));
         suite.addTest(new MethodPickerOperatorTest("testClose"));
         return suite;
+         */
+        return (NbTestSuite) createModuleTest(MethodPickerOperatorTest.class, 
+        tests);
     }
     
     /** Opens method picker. */
-    protected void setUp() {
+    @Override
+    protected void setUp() throws IOException {
         super.setUp();
         if(mpo == null) {
             // need to wait because combo box is not refreshed in time

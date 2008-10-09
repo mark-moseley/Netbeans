@@ -41,6 +41,7 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
@@ -55,6 +56,16 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class HTMLNodeTest extends JellyTestCase {
+    public static final String[] tests = {
+        "testVerifyPopup",
+        "testOpen",
+        "testCut",
+        "testCopy",
+        "testDelete",
+        "testRename",
+        "testSaveAsTemplate",
+        "testProperties"
+    };
     
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
@@ -66,6 +77,7 @@ public class HTMLNodeTest extends JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new HTMLNodeTest("testVerifyPopup"));
         suite.addTest(new HTMLNodeTest("testOpen"));
@@ -76,6 +88,9 @@ public class HTMLNodeTest extends JellyTestCase {
         suite.addTest(new HTMLNodeTest("testSaveAsTemplate"));
         suite.addTest(new HTMLNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(HTMLNodeTest.class, 
+        tests);
     }
     
     /** Use for internal test execution inside IDE
@@ -88,8 +103,9 @@ public class HTMLNodeTest extends JellyTestCase {
     protected static HTMLNode htmlNode = null;
     
     /** Find node. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         if(htmlNode == null) {
             htmlNode = new HTMLNode(new SourcePackagesNode("SampleProject"),
                                     "sample1|html.html"); // NOI18N

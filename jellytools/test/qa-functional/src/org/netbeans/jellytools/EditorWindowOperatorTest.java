@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools;
 
+import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
@@ -49,6 +50,8 @@ import org.netbeans.jellytools.nodes.JavaNode;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jemmy.EventTool;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.junit.NbTest;
 import org.netbeans.junit.NbTestSuite;
 
 /**
@@ -57,7 +60,17 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class EditorWindowOperatorTest extends JellyTestCase {
-    
+
+    public static final String[] tests = new String[] {
+                "testSelectPage",
+                "testGetEditor",
+                "testSelectDocument",
+                "testJumpLeft",
+                "testMoveTabsRight",
+                "testMoveTabsLeft",
+                "testVerify",
+                "testCloseDiscard"
+    };
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
@@ -76,6 +89,7 @@ public class EditorWindowOperatorTest extends JellyTestCase {
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         // order of tests is important
         suite.addTest(new EditorWindowOperatorTest("testSelectPage"));
@@ -87,11 +101,17 @@ public class EditorWindowOperatorTest extends JellyTestCase {
         suite.addTest(new EditorWindowOperatorTest("testVerify"));
         suite.addTest(new EditorWindowOperatorTest("testCloseDiscard"));
         return suite;
+         */
+        return (NbTest) NbModuleSuite.create(
+        NbModuleSuite.createConfiguration(EditorWindowOperatorTest.class).
+                addTest(tests).
+                enableModules(".*").clusters(".*"));
     }
     
     /** Redirect output to log files, wait before each test case. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
     }
     
     private static final String SAMPLE_CLASS_1 = "SampleClass1.java";

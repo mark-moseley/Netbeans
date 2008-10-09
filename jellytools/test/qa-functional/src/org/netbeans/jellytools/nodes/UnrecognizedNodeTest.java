@@ -41,6 +41,7 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
@@ -56,6 +57,17 @@ import org.netbeans.junit.NbTestSuite;
  */
 public class UnrecognizedNodeTest extends JellyTestCase {
     
+    public static final String[] tests = new String[] {
+        "testVerifyPopup",
+        "testOpen",
+        "testCut",
+        "testCopy",
+        "testDelete",
+        "testRename",
+        "testSaveAsTemplate",
+        "testProperties"
+    };
+    
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
      */
@@ -65,6 +77,7 @@ public class UnrecognizedNodeTest extends JellyTestCase {
     
     /** method used for explicit testsuite definition */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new UnrecognizedNodeTest("testVerifyPopup"));
         suite.addTest(new UnrecognizedNodeTest("testOpen"));
@@ -75,6 +88,9 @@ public class UnrecognizedNodeTest extends JellyTestCase {
         suite.addTest(new UnrecognizedNodeTest("testSaveAsTemplate"));
         suite.addTest(new UnrecognizedNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(UnrecognizedNodeTest.class, 
+        tests);                
     }
     
     /** Use for internal test execution inside IDE
@@ -87,8 +103,9 @@ public class UnrecognizedNodeTest extends JellyTestCase {
     protected static UnrecognizedNode unrecognizedNode = null;
     
     /** Finds node before each test case. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         // find node
         if(unrecognizedNode == null) {
             unrecognizedNode = new UnrecognizedNode(new SourcePackagesNode("SampleProject"), "sample1|unrecognized");  // NOI18N

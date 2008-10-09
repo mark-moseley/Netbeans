@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import javax.swing.text.JTextComponent;
 import junit.framework.Test;
@@ -52,6 +53,8 @@ import org.netbeans.jemmy.JemmyException;
 import org.netbeans.jemmy.Waitable;
 import org.netbeans.jemmy.Waiter;
 import org.netbeans.jemmy.operators.AbstractButtonOperator;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.junit.NbTest;
 import org.netbeans.junit.NbTestSuite;
 
 /**
@@ -60,7 +63,35 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class EditorOperatorTest extends JellyTestCase {
-    
+
+    public static final String[] tests = new String[] {
+                "testTxtEditorPane",
+                "testLblRowColumn",
+                "testLblStatusBar",
+                "testLblInputMode",
+                "testGetText",
+                "testContains",
+                "testSelect",
+                "testGetLineNumber",
+                "testPushHomeKey",
+                "testPushEndKey",
+                "testPushDownArrowKey",
+                "testPushUpArrowKey",
+                "testFolding",
+                "testSetCaretPositionRelative",
+                "testSetCaretPositionToLine",
+                "testSetCaretPosition",
+                "testGetToolbarButton",
+                "testReplace",
+                "testInsert",
+        // annotations have to be tested after testInsert because of parser annotations
+                "testGetAnnotations",
+                "testGetAnnotationType",
+                "testGetAnnotationShortDescription",
+                "testDelete",
+                "testPushTabKey",
+                "testCloseDiscard",
+    };
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
@@ -79,6 +110,7 @@ public class EditorOperatorTest extends JellyTestCase {
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new EditorOperatorTest("testTxtEditorPane"));
         suite.addTest(new EditorOperatorTest("testLblRowColumn"));
@@ -107,12 +139,15 @@ public class EditorOperatorTest extends JellyTestCase {
         suite.addTest(new EditorOperatorTest("testPushTabKey"));
         suite.addTest(new EditorOperatorTest("testCloseDiscard"));
         return suite;
+         */
+        return createModuleTest(EditorOperatorTest.class, tests);
     }
 
     private static EditorOperator eo;
     
     /** Opens sample class and finds EditorOperator instance */
-    protected void setUp() {
+    protected void setUp() throws IOException {
+        openDataProjects("SampleProject");
         System.out.println("### "+getName()+" ###");
         if(eo == null) {
             Node sample1 = new Node(new SourcePackagesNode("SampleProject"), "sample1");  // NOI18N
@@ -125,7 +160,7 @@ public class EditorOperatorTest extends JellyTestCase {
     private static final String SAMPLE_CLASS_1 = "SampleClass1";
     
     /** Test of txtEditorPane method. */
-    public void testTxtEditorPane() {
+    public void testTxtEditorPane() throws IOException {
         String text = eo.txtEditorPane().getText();
         assertTrue("Wrong editor pane found.", text.indexOf(SAMPLE_CLASS_1) != -1);
     }

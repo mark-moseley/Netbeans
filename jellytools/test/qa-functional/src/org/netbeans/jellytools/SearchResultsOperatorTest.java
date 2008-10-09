@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools;
 
+import java.io.IOException;
 import junit.framework.Test;
 import junit.textui.TestRunner;
 import org.netbeans.junit.NbTestSuite;
@@ -50,6 +51,19 @@ import org.netbeans.junit.NbTestSuite;
  */
 public class SearchResultsOperatorTest extends JellyTestCase {
 
+    public static final String[] tests = new String[] {
+        "testBtStopSearch",
+        "testBtShowDetails",
+        "testBtModifySearch",
+        "testTreeResult",
+        "testSelectResult",
+        "testOpenResult",
+        "testModifySearch",
+        "testShowDetails",
+        "testWaitEndOfSearch",
+        "testVerify"
+    };
+    
     /** Use for internal test execution inside IDE
      * @param args command line arguments
      */
@@ -61,6 +75,7 @@ public class SearchResultsOperatorTest extends JellyTestCase {
      * @return  created suite
      */
     public static Test suite() {
+        /*
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(new SearchResultsOperatorTest("testBtStopSearch"));
         suite.addTest(new SearchResultsOperatorTest("testBtShowDetails"));
@@ -74,6 +89,9 @@ public class SearchResultsOperatorTest extends JellyTestCase {
         suite.addTest(new SearchResultsOperatorTest("testWaitEndOfSearch"));
         suite.addTest(new SearchResultsOperatorTest("testVerify"));
         return suite;
+         */
+        return createModuleTest(SearchResultsOperatorTest.class, 
+        tests);
     }
     
     /** Creates new SearchResultsOperatorTest */
@@ -84,8 +102,9 @@ public class SearchResultsOperatorTest extends JellyTestCase {
     private static SearchResultsOperator searchResultsOper = null;
     
     /** Open find dialog on sample project and find sample substring. */
-    public void setUp() {
+    public void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         if(searchResultsOper == null) {
             FindInFilesOperator fifo = FindInFilesOperator.invoke(new ProjectsTabOperator().getProjectRootNode("SampleProject"));
             fifo.txtText().setText("sample");

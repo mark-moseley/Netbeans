@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools.modules.form.properties.editors;
 
+import java.io.IOException;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.modules.form.FormDesignerOperator;
@@ -54,6 +55,16 @@ import org.netbeans.junit.NbTestSuite;
  */
 public class PropertyPickerOperatorTest extends FormPropertiesEditorsTestCase {
     
+    public static final String[] tests = new String[] {
+        "testLblComponent",
+        "testCboComponent",
+        "testLblProperties",
+        "testLstProperties",
+        "testSetComponent",
+        "testSetProperty",
+        "testClose"
+    };
+    
     /** Use for internal test execution inside IDE
      * @param args command line arguments
      */
@@ -65,6 +76,7 @@ public class PropertyPickerOperatorTest extends FormPropertiesEditorsTestCase {
      * @return  created suite
      */
     public static NbTestSuite suite() {
+        /*
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(new PropertyPickerOperatorTest("testLblComponent"));
         suite.addTest(new PropertyPickerOperatorTest("testCboComponent"));
@@ -74,10 +86,13 @@ public class PropertyPickerOperatorTest extends FormPropertiesEditorsTestCase {
         suite.addTest(new PropertyPickerOperatorTest("testSetProperty"));
         suite.addTest(new PropertyPickerOperatorTest("testClose"));
         return suite;
+         */
+        return (NbTestSuite) createModuleTest(PropertyPickerOperatorTest.class, 
+        tests);
     }
     
     /** Redirect output to log files, wait before each test case. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         super.setUp();
         if(ppo == null) {
             // need to wait because combo box is not refreshed in time

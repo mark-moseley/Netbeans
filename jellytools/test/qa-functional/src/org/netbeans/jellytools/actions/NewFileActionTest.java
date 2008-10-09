@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools.actions;
 
+import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
@@ -57,6 +58,8 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class NewFileActionTest extends JellyTestCase {
+    public static final String[] tests = new String[] { "testPerformPopup", 
+                "testPerformMenu", "testPerformAPI", "testPerformShortcut"};
     
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
@@ -68,12 +71,20 @@ public class NewFileActionTest extends JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new NewFileActionTest("testPerformPopup"));
         suite.addTest(new NewFileActionTest("testPerformMenu"));
         suite.addTest(new NewFileActionTest("testPerformAPI"));
         suite.addTest(new NewFileActionTest("testPerformShortcut"));
         return suite;
+         */
+        return createModuleTest(NewFileActionTest.class, tests);
+    }
+
+    @Override
+    protected void setUp() throws IOException {
+        openDataProjects("SampleProject");
     }
     
     /** Use for internal test execution inside IDE

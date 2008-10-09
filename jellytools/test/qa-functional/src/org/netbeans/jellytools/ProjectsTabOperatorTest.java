@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools;
 
+import java.io.IOException;
 import org.netbeans.junit.NbTest;
 import org.netbeans.junit.NbTestSuite;
 
@@ -49,6 +50,9 @@ import org.netbeans.junit.NbTestSuite;
  */
 public class ProjectsTabOperatorTest extends JellyTestCase {
 
+    public static final String[] tests = new String[]
+    {"testInvoke", "testTree", "testGetProjectRootNode", "testVerify"};
+    
     public ProjectsTabOperatorTest(java.lang.String testName) {
         super(testName);
     }
@@ -58,6 +62,7 @@ public class ProjectsTabOperatorTest extends JellyTestCase {
     }
 
     public static NbTest suite() {
+        /*
         NbTestSuite suite = new NbTestSuite();
         // suites have to be in particular order
         suite.addTest(new ProjectsTabOperatorTest("testInvoke"));
@@ -65,11 +70,15 @@ public class ProjectsTabOperatorTest extends JellyTestCase {
         suite.addTest(new ProjectsTabOperatorTest("testGetProjectRootNode"));
         suite.addTest(new ProjectsTabOperatorTest("testVerify"));
         return suite;
+         */
+        return (NbTest) createModuleTest(ProjectsTabOperatorTest.class, 
+                tests);
     }
     
     /** Print out test name. */
-    public void setUp() {
+    public void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
     }
     
     private static ProjectsTabOperator projectsOper;

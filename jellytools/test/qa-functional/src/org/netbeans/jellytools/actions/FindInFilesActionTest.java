@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools.actions;
 
+import java.io.IOException;
 import junit.textui.TestRunner;
 
 import org.netbeans.jellytools.JellyTestCase;
@@ -56,6 +57,11 @@ import org.netbeans.junit.NbTestSuite;
  */
 public class FindInFilesActionTest extends JellyTestCase {
     
+    public static final String[] tests = new String[] {
+        "testPerformPopup", 
+                "testPerformMenu", "testPerformAPI"
+    };
+    
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
      */
@@ -65,11 +71,14 @@ public class FindInFilesActionTest extends JellyTestCase {
     
     /** method used for explicit testsuite definition */
     public static NbTestSuite suite() {
+        /*
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(new FindInFilesActionTest("testPerformPopup"));
         suite.addTest(new FindInFilesActionTest("testPerformMenu"));
         suite.addTest(new FindInFilesActionTest("testPerformAPI"));
         return suite;
+         */
+        return (NbTestSuite) createModuleTest(FindInFilesActionTest.class, tests);
     }
     
     /** Use for internal test execution inside IDE
@@ -80,8 +89,9 @@ public class FindInFilesActionTest extends JellyTestCase {
     }
     
     /** Redirect output to log files, wait before each test case. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
     }
     
     /** Clean up after each test case. */
