@@ -72,6 +72,7 @@ public final class JaxWsDataLoader extends MultiFileLoader {
         super("org.netbeans.modules.websvc.design.loader.JaxWsDataObject"); // NOI18N
     }
 
+    @Override
     protected String actionsContext () {
         return "Loaders/text/x-java/Actions/"; // NOI18N
     }
@@ -109,7 +110,7 @@ public final class JaxWsDataLoader extends MultiFileLoader {
         if (fo.getAttribute("template") != null && fo.getAttribute("javax.script.ScriptEngine") != null) // NOI18N
             return null;
         
-        if (fo.getExt().equals(JAVA_EXTENSION) && fo.getAttribute("jax-ws-service")!=null) {
+        if (fo.getExt().equals(JAVA_EXTENSION) && fo.getAttribute("jax-ws-service")!=null && fo.getAttribute("jax-ws-service-provider")==null) {
             return fo;
         }
         return null;
