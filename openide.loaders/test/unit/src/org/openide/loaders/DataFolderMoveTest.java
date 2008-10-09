@@ -45,10 +45,10 @@ import org.openide.filesystems.*;
 import org.openide.filesystems.FileSystem; // override java.io.FileSystem
 import org.openide.nodes.Node;
 
-import java.beans.*;
 import java.io.*;
-import java.util.*;
+import java.util.logging.Level;
 
+import java.util.logging.Logger;
 import org.netbeans.junit.*;
 
 /** Test of folders move. Originally written for testing #8705.
@@ -56,7 +56,7 @@ import org.netbeans.junit.*;
  * @author  Petr Hamernik
  */
 public class DataFolderMoveTest extends LoggingTestCaseHid {
-    private org.openide.ErrorManager err;
+    private Logger err;
 
 
     /** Creates new DataFolderTest */
@@ -64,11 +64,21 @@ public class DataFolderMoveTest extends LoggingTestCaseHid {
         super (name);
     }
 
+    @Override
+    protected int timeOut() {
+        return 60000;
+    }
+
+    @Override
+    protected Level logLevel() {
+        return Level.FINE;
+    }
+
     
     @Override
     protected void setUp() throws Exception {
         clearWorkDir();
-        err = org.openide.ErrorManager.getDefault().getInstance("TEST-" + getName());
+        err = Logger.getLogger("test." + getName());
     }
     
     
@@ -76,7 +86,8 @@ public class DataFolderMoveTest extends LoggingTestCaseHid {
     private static final int FS_DEPTH = 4;
     private static final int TXT_SIZE = 20000;
     private static final int CYCLE = 4;
-    
+
+    @RandomlyFails
     public void testMoveFolders() throws Exception {
         
         // create directory structur description
@@ -134,7 +145,7 @@ public class DataFolderMoveTest extends LoggingTestCaseHid {
                 final int src = (k % 2 == 0) ? 0 : 1;
                 final int dest = (src == 0) ? 1 : 0;
 
-                err.log("Copy cycle "+k+" (from "+src+" to "+dest+")");
+                err.info("Copy cycle "+k+" (from "+src+" to "+dest+")");
                 
                 final boolean[] working = new boolean[] { true };
 
@@ -145,14 +156,17 @@ public class DataFolderMoveTest extends LoggingTestCaseHid {
                         try {
                             DataObject[] objects = roots[src].getChildren();
                             for (int i = 0; i < objects.length; i++) {
+                                err.info("moving for " + i + " object: " + objects[i]);
                                 objects[i].move(roots[dest]);
+                                err.info("done for " + i + " object: " + objects[i]);
                             }
                         }
                         catch (Exception e) {
-                            e.printStackTrace();
+                            err.log(Level.WARNING, "exception while moving", e);
                         }
                         finally {
                             working[0] = false;
+                            err.info("settings working to false");
                         }
                     }
                 };
@@ -167,21 +181,26 @@ public class DataFolderMoveTest extends LoggingTestCaseHid {
 
                 boolean failed = false;
                 while (working[0]) {
+                    err.info("test nodes while working: " + working[0]);
                     failed = testNodes(fsNodes[dest], false);
+                    err.info("did it failed or not?");
                 }
                 if (failed) {
+                    err.info("Failed, sleeping...");
                     try {
                         Thread.sleep(3000);
                     } 
                     catch (InterruptedException ie) {
                         ie.printStackTrace();
                     }
+                    err.info("end of waiting");
                 }
                 
                 testNodes(fsNodes[dest], true);
             }
         }
         finally {
+            err.info("cleanup in finally");
             // clean
             TestUtilHid.destroyLocalFileSystem(getName() + "A");
             TestUtilHid.destroyLocalFileSystem(getName() + "B");
