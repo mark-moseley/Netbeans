@@ -55,11 +55,8 @@ import org.openide.util.NbBundle;
 import org.openide.util.Lookup;
 import org.openide.windows.*;
 
-import org.netbeans.api.diff.Diff;
 //import org.netbeans.api.diff.DiffWrapperPanel;
-import org.netbeans.api.diff.Difference;
-import org.netbeans.api.diff.DiffView;
-import org.netbeans.api.diff.StreamSource;
+import org.netbeans.api.diff.*;
 import org.netbeans.spi.diff.*;
 import org.netbeans.modules.diff.builtin.visualizer.DiffViewImpl;
 import org.netbeans.modules.diff.builtin.visualizer.editable.EditableDiffView;
@@ -114,8 +111,10 @@ public class DefaultDiff extends Diff implements Serializable {
         this.buffer2 = out2.toString();
                                      */
         //diffPanel = new DiffWrapperPanel(showDiffSelector, showDiffSelector);
+        // #147003 Always hide Visualizers combo => there is no Services/DiffVisualizers system folder
+        // We should rewrite this code to use DiffController instead of DiffPresenter in the future
         DiffInfo diffInfo = new DiffInfo(name1, name2, title1, title2,
-            MIMEType, showDiffSelector, showDiffSelector, r1, r2);
+            MIMEType, showDiffSelector, false, r1, r2);
         // I need to know the initial differences to know whether the files actually
         // differ or not.
         DiffProvider provider = (DiffProvider) Lookup.getDefault().lookup(DiffProvider.class);
@@ -371,6 +370,7 @@ public class DefaultDiff extends Diff implements Serializable {
             add(c, BorderLayout.CENTER);            
             getAccessibleContext().setAccessibleName(NbBundle.getMessage(DiffTopComponent.class, "ACSN_Diff_Top_Component")); // NOI18N
             getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(DiffTopComponent.class, "ACSD_Diff_Top_Component")); // NOI18N
+            setName(c.getName());
         }
         
         public int getPersistenceType(){
