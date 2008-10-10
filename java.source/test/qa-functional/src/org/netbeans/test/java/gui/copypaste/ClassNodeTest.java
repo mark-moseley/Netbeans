@@ -45,22 +45,21 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import junit.framework.Test;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.actions.CopyAction;
 import org.netbeans.jellytools.actions.CutAction;
 import org.netbeans.jellytools.actions.OpenAction;
-import org.netbeans.jellytools.actions.PasteAction;
 import org.netbeans.jellytools.modules.java.SimpleCopyAction;
 import org.netbeans.jellytools.modules.java.SimpleMoveAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.TestOut;
 import org.netbeans.jemmy.operators.JEditorPaneOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.test.java.JavaTestCase;
 import org.netbeans.test.java.Utilities;
 import org.netbeans.test.java.gui.GuiUtilities;
 
@@ -70,7 +69,7 @@ import org.netbeans.test.java.gui.GuiUtilities;
  * Tests copy, cut and paste operations on class node.
  * @author Roman Strobl
  */
-public class ClassNodeTest extends JellyTestCase {
+public class ClassNodeTest extends JavaTestCase {
     
     // name of sample project
     private static final String TEST_PROJECT_NAME = "default"; 
@@ -122,20 +121,6 @@ public class ClassNodeTest extends JellyTestCase {
     } 
 
     /**
-     * Adds tests into the test suite.
-     * @return suite
-     */        
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        // prepare testing project and package - not a core test but needed
-        suite.addTest(new ClassNodeTest("testCopyPaste"));
-        suite.addTest(new ClassNodeTest("testCutPaste"));
-        suite.addTest(new ClassNodeTest("testCopyPasteInterface"));
-        suite.addTest(new ClassNodeTest("testCutPasteInterface"));
-        return suite;
-    }
-    
-    /**
      * Main method for standalone execution.
      * @param args the command line arguments
      */
@@ -146,7 +131,9 @@ public class ClassNodeTest extends JellyTestCase {
     /**
      * Sets up logging facilities.
      */
-    public void setUp() {
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
         System.out.println("########  "+getName()+"  #######");
         err = getLog();
         log = getRef();        
@@ -155,7 +142,8 @@ public class ClassNodeTest extends JellyTestCase {
         try {
             File wd = getWorkDir();
             workDir = wd.toString();
-        } catch (IOException e) { }        
+        } catch (IOException e) { }
+        openDefaultProject();
     }
     
     /**
@@ -417,4 +405,8 @@ public class ClassNodeTest extends JellyTestCase {
         assertEquals(children.length, 0);                
     }    
         
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(ClassNodeTest.class).enableModules(".*").clusters(".*"));
+    }
 }

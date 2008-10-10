@@ -50,7 +50,7 @@ import org.netbeans.junit.diff.LineDiff;
 /** LogTestCase
  * @author Jan Becicka
  */
-public class LogTestCase extends NbTestCase {
+public class LogTestCase extends JavaTestCase {
 
     /**
      * state - true - testing
@@ -83,6 +83,7 @@ public class LogTestCase extends NbTestCase {
      */
     protected void setUp() {
         prepareProject();
+        openDefaultProject();
         try {
             //logs and refs
             refFile = new File(getWorkDir(), getName() + ".ref");
