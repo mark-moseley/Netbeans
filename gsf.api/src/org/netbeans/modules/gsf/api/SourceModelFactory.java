@@ -39,38 +39,33 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.gsf;
+package org.netbeans.modules.gsf.api;
 
-import org.netbeans.modules.gsf.api.Index;
-import org.netbeans.modules.gsf.api.SourceModel;
-import org.netbeans.modules.gsf.api.SourceModelFactory;
-import org.netbeans.napi.gsfret.source.ClasspathInfo;
-import org.netbeans.napi.gsfret.source.Source;
+import org.netbeans.modules.gsf.api.annotations.NonNull;
 import org.openide.filesystems.FileObject;
+import org.openide.util.Lookup;
 
 /**
- *
+ * Access to a SourceModel for a FileObject
+ * @todo Discourage use in documentation for class and methods.
+ * @todo Expose source factory to clients (but also discourage use of this.
+ *   GSF should be enhanced to handle most feature use-cases.
  * @author Tor Norbye
  */
-public class SourceAdapterFactory extends SourceModelFactory {
+public abstract class SourceModelFactory {
     
-    /** Creates a new instance of SourceAdapterFactory */
-    public SourceAdapterFactory() {
+    /** Creates a new instance of SourceModelFactory */
+    public SourceModelFactory() {
     }
 
-    @Override
-    public SourceModel getModel(FileObject fo) {
-        Source source = Source.forFileObject(fo);
-        if (source != null) {
-            return new SourceAdapter(source);
-        }
-        
-        return null;
+    @NonNull
+    public static SourceModelFactory getInstance() {
+        // TODO - cache instance?
+        SourceModelFactory factory = Lookup.getDefault().lookup(SourceModelFactory.class);
+        assert factory != null : "SourceModelFactory Lookup registration failure!";  // NOI18N
+        return factory;
     }
 
-    @Override
-    public Index getIndex(FileObject fileInProject, String mimeType) {
-        ClasspathInfo cp = ClasspathInfo.create(fileInProject);
-        return (cp != null) ? cp.getClassIndex(mimeType) : null;
-    }
+    public abstract SourceModel getModel(FileObject fo);
+    public abstract Index getIndex(FileObject fileInProject, String mimeType);
 }
