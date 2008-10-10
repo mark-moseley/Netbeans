@@ -78,10 +78,13 @@ import org.netbeans.modules.j2ee.dd.api.web.ServletMapping;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
 import org.netbeans.modules.web.project.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.web.project.ui.customizer.WebProjectProperties;
 import static org.netbeans.modules.websvc.spi.webservices.WebServicesConstants.*;
 import org.netbeans.modules.websvc.api.webservices.WsCompileEditorSupport;
 import org.netbeans.modules.websvc.api.webservices.StubDescriptor;
+import org.netbeans.spi.java.classpath.ClassPathFactory;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
+import org.netbeans.spi.java.project.classpath.support.ProjectClassPathSupport;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 
 /**
@@ -492,8 +495,8 @@ public class WebProjectWebServicesSupport implements WebServicesSupportImpl {
     
     private static final List importantWsdlServiceFeatures = Arrays.asList(WSCOMPILE_KEY_WSDL_SERVICE_FEATURES);
     
-    public List/*WsCompileEditorSupport.ServiceSettings*/ getServices() {
-        List serviceList = new ArrayList();
+    public List<WsCompileEditorSupport.ServiceSettings> getServices() {
+        List<WsCompileEditorSupport.ServiceSettings> serviceList = new ArrayList<WsCompileEditorSupport.ServiceSettings>();
         
         Element data = helper.getPrimaryConfigurationData(true);
         NodeList nodes = data.getElementsByTagName(WEB_SERVICES);
@@ -650,7 +653,7 @@ public class WebProjectWebServicesSupport implements WebServicesSupportImpl {
         EditableProperties projectProperties = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
         
         { // Block that adjusts wscompile.client.classpath as necessary.
-            HashSet wscJars = new HashSet();
+            HashSet<String> wscJars = new HashSet<String>();
             boolean newWscJars = false;
             String wscClientClasspath = projectProperties.getProperty(WSCOMPILE_CLASSPATH);
             if(wscClientClasspath != null) {
@@ -670,7 +673,7 @@ public class WebProjectWebServicesSupport implements WebServicesSupportImpl {
             if(newWscJars) {
                 StringBuffer newClasspathBuf = new StringBuffer(256);
                 for(Iterator iter = wscJars.iterator(); iter.hasNext(); ) {
-                    newClasspathBuf.append(iter.next().toString());
+                    newClasspathBuf.append(iter.next());
                     if(iter.hasNext()) {
                         newClasspathBuf.append(':');
                     }
@@ -731,12 +734,22 @@ public class WebProjectWebServicesSupport implements WebServicesSupportImpl {
                 ClassPathProviderImpl cpProvider = project.getClassPathProvider();
                 projectSourcesClassPath = ClassPathSupport.createProxyClassPath(new ClassPath[] {
                     cpProvider.getProjectSourcesClassPath(ClassPath.SOURCE),
-                    cpProvider.getJ2eePlatformClassPath(),
+                    getJ2eePlatformClassPath(),
                 });
             }
             return projectSourcesClassPath;
         }
     }
+    
+    public synchronized ClassPath getJ2eePlatformClassPath() {
+        if (platformClassPath == null) {
+            platformClassPath = ClassPathFactory.createClassPath(ProjectClassPathSupport.createPropertyBasedClassPathImplementation(
+                    FileUtil.toFile(project.getProjectDirectory()), project.evaluator(), new String[] {WebProjectProperties.J2EE_PLATFORM_CLASSPATH }));
+        }
+        return platformClassPath;
+    }
+    
+    private ClassPath platformClassPath = null;
         
     // Service stub descriptors
     private static final JAXRPCStubDescriptor seiServiceStub = new JAXRPCStubDescriptor(
