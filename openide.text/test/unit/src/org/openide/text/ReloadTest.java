@@ -41,7 +41,6 @@
 
 package org.openide.text;
 
-
 import java.beans.*;
 import java.io.*;
 import java.util.Date;
@@ -75,7 +74,6 @@ implements CloneableEditorSupport.Env {
     private transient VetoableChangeListener vetoL;
 
     private Logger err;
-    private CharSequence log;
     
     public ReloadTest (String s) {
         super(s);
@@ -86,26 +84,17 @@ implements CloneableEditorSupport.Env {
         return null;
     }
     
-    
-    protected boolean runInEQ() {
-        return false;
-    }
-
-    protected Level logLevel() {
-        return Level.ALL;
+    protected @Override Level logLevel() {
+        return Level.FINER;
     }
     
-    
-    protected void setUp () {
+    protected @Override void setUp() {
         support = new CES (this, Lookup.EMPTY);
-
-        log = Log.enable("", Level.ALL);
-
-        
+        Log.enable("", Level.ALL);
         err = Logger.getLogger(getName());
     }
     
-
+    @RandomlyFails // NB-Core-Build #670
     public void testRefreshProblem46885 () throws Exception {
         StyledDocument doc = support.openDocument ();
         
@@ -120,18 +109,24 @@ implements CloneableEditorSupport.Env {
         String s = doc.getText (0, doc.getLength ());
         assertEquals ("Text has been updated", content, s);
         
-        
+
         long oldtime = System.currentTimeMillis ();
+        Thread.sleep(300);
+        err.info("Document modified");
         doc.insertString (0, "A text", null);
+        err.info("Document about to save");
         support.saveDocument ();
+        err.info("Document saved");
         s = doc.getText (0, doc.getLength ());
-        
+
+        err.info("Current content: " + s);
         content = "NOT TO be loaded";
         propL.firePropertyChange (CloneableEditorSupport.Env.PROP_TIME, null, new Date (oldtime));
         
         waitAWT ();
         
         String s1 = doc.getText (0, doc.getLength ());
+        err.info("New content: " + s1);
         assertEquals ("Text has not been updated", s, s1);
     }
 
@@ -179,9 +174,10 @@ implements CloneableEditorSupport.Env {
     }
     public OutputStream outputStream() throws IOException {
         class ContentStream extends ByteArrayOutputStream {
-            public void close () throws IOException {
+            public @Override void close() throws IOException {
                 super.close ();
                 content = new String (toByteArray ());
+                date = new Date();
             }
         }
         
@@ -200,7 +196,7 @@ implements CloneableEditorSupport.Env {
         if (cannotBeModified != null) {
             final String notify = cannotBeModified;
             IOException e = new IOException () {
-                public String getLocalizedMessage () {
+                public @Override String getLocalizedMessage() {
                     return notify;
                 }
             };
@@ -245,7 +241,7 @@ implements CloneableEditorSupport.Env {
             return "ToolTip";
         }
 
-        protected EditorKit createEditorKit () {
+        protected @Override EditorKit createEditorKit() {
             EditorKit retValue = ReloadTest.this.createEditorKit ();
             if (retValue == null) {
                 retValue = super.createEditorKit();
