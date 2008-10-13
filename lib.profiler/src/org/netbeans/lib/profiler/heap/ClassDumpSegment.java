@@ -210,10 +210,10 @@ class ClassDumpSegment extends TagBounds {
             if (tag == HprofHeap.CLASS_DUMP) {
                 ClassDump classDump = new ClassDump(this, start);
                 long classId = classDump.getJavaClassId();
+                LongMap.Entry classEntry = hprofHeap.idToOffsetMap.put(classId, start);
 
                 classes.add(classDump);
-                hprofHeap.idToOffsetMap.put(classId, start);
-                hprofHeap.idToOffsetMap.get(classId).setIndex(classes.size());
+                classEntry.setIndex(classes.size());
             }
         }
 
@@ -222,19 +222,6 @@ class ClassDumpSegment extends TagBounds {
         extractSpecialClasses();
 
         return classes;
-    }
-
-    List findStaticReferencesFor(long instanceId) {
-        List refs = new ArrayList();
-        Iterator classIt = classes.iterator();
-
-        while (classIt.hasNext()) {
-            ClassDump cls = (ClassDump) classIt.next();
-
-            cls.findStaticReferencesFor(instanceId, refs);
-        }
-
-        return refs;
     }
 
     private void extractSpecialClasses() {
