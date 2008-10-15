@@ -391,6 +391,7 @@ public class JspLexer implements Lexer<JspTokenId> {
                             lexerState = ISA_LT_PC;
                             break;
                         default:
+                            input.backup(1);
                             lexerState = INIT; //just content
                             //                            state = ISI_TAG_ERROR;
                             //                            break;
@@ -559,6 +560,7 @@ public class JspLexer implements Lexer<JspTokenId> {
                     if (!(Character.isLetter(actChar) ||
                             Character.isDigit(actChar) ||
                             (actChar == '_') ||
+                            (actChar == '.') ||
                             (actChar == '-') ||
                             (actChar == ':'))
                             ) { // not alpha

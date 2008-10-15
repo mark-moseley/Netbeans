@@ -49,6 +49,7 @@ import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.lib.lexer.test.LexerTestUtilities;
 
 
 /**Jsp Lexer Test
@@ -86,5 +87,27 @@ public class JspLexerTest extends NbTestCase {
         compareReferenceFiles();
     }
     
+     public void test146930() {
+        TokenHierarchy th = TokenHierarchy.create("<${}", JspTokenId.language());
+        TokenSequence ts = th.tokenSequence();
+        ts.moveStart();
+        
+        assertTrue(ts.moveNext());
+        
+        assertEquals("<", ts.token().text().toString());
+        assertEquals(JspTokenId.TEXT, ts.token().id());
+        
+        assertTrue(ts.moveNext());
+        
+        assertEquals("${}", ts.token().text().toString());
+        assertEquals(JspTokenId.EL, ts.token().id());
+        
+        assertFalse(ts.moveNext());
+    }
+
+      public void testRegressions() throws Exception {
+        LexerTestUtilities.checkTokenDump(this, "testfiles/testRegressions.jsp.txt",
+                JspTokenId.language());
+    }
     
 }
