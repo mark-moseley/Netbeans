@@ -45,10 +45,12 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import junit.framework.Test;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.EditorWindowOperator;
 import org.netbeans.jellytools.JellyTestCase;
+import org.netbeans.jellytools.MainWindowOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.actions.ActionNoBlock;
 import org.netbeans.jellytools.actions.OpenAction;
@@ -57,7 +59,10 @@ import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.TestOut;
+import org.netbeans.jemmy.operators.JMenuBarOperator;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestSuite;
+import org.netbeans.test.java.JavaTestCase;
 import org.netbeans.test.java.Utilities;
 
 
@@ -66,10 +71,10 @@ import org.netbeans.test.java.Utilities;
  * Tests Error annotations.
  * @author Roman Strobl
  */
-public class ErrorAnnotations extends JellyTestCase {
+public class ErrorAnnotations extends JavaTestCase {
 
     // default timeout for actions in miliseconds
-    private static final int ACTION_TIMEOUT = 3000;
+    private static final int ACTION_TIMEOUT = 1500;
 
     // name of sample project
     private static final String TEST_PROJECT_NAME = "default";
@@ -108,22 +113,6 @@ public class ErrorAnnotations extends JellyTestCase {
     }
 
     /**
-     * Adds tests into the test suite.
-     * @return suite
-     */
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        // prepare testing project and package - not a core test but needed
-        suite.addTest(new ErrorAnnotations("testAnnotationsSimple"));
-        suite.addTest(new ErrorAnnotations("testUndo"));
-        suite.addTest(new ErrorAnnotations("testAnnotationsSimple2"));
-        suite.addTest(new ErrorAnnotations("testAnnotationsSimple3"));
-        suite.addTest(new ErrorAnnotations("testChangeCloseDiscart"));
-
-        return suite;
-    }
-
-    /**
      * Main method for standalone execution.
      * @param args the command line arguments
      */
@@ -144,6 +133,7 @@ public class ErrorAnnotations extends JellyTestCase {
             workDir = wd.toString();
         } catch (IOException e) {
         }
+        openDefaultProject();
     }
 
     /**
@@ -177,13 +167,15 @@ public class ErrorAnnotations extends JellyTestCase {
      * Tests undo after simple annotations test.
      */
     public void testUndo() {
+        EditorWindowOperator ewo = new EditorWindowOperator();
+        EditorOperator editor = ewo.getEditor(TEST_CLASS_NAME);
+        editor.requestFocus();
+        Utilities.takeANap(ACTION_TIMEOUT);
         // undo
         new ActionNoBlock("Edit|Undo", null).perform();
 
         Utilities.takeANap(ACTION_TIMEOUT);
 
-        EditorWindowOperator ewo = new EditorWindowOperator();
-        EditorOperator editor = ewo.getEditor(TEST_CLASS_NAME);
         log(editor.getText());
         Object[] annots = editor.getAnnotations();
 
@@ -229,7 +221,7 @@ public class ErrorAnnotations extends JellyTestCase {
     /**
      * Simple annotations tests - tries a simple error.
      */
-    public void testAnnotationsSimple3() {
+    public void testAnnotationsSimple3() {        
         Node pn = new ProjectsTabOperator().getProjectRootNode(TEST_PROJECT_NAME);
         pn.select();
 
@@ -289,5 +281,10 @@ public class ErrorAnnotations extends JellyTestCase {
         annots = editor.getAnnotations();
         assertEquals(0, annots.length); //there should be no annotations
         ewo.closeDiscard();
+    }
+    
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(ErrorAnnotations.class).enableModules(".*").clusters(".*"));
     }
 }
