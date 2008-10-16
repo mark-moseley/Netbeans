@@ -40,81 +40,61 @@
 package org.netbeans.modules.db.metadata.model.api;
 
 import java.util.Collection;
-import org.netbeans.modules.db.metadata.model.spi.CatalogImplementation;
+import org.netbeans.modules.db.metadata.model.spi.TableImplementation;
 
 /**
  *
  * @author Andrei Badea
  */
-public class Catalog extends MetadataElement {
+public class Table extends MetadataElement {
 
-    final CatalogImplementation impl;
+    final TableImplementation impl;
 
-    Catalog(CatalogImplementation impl) {
+    Table(TableImplementation impl) {
         this.impl = impl;
     }
 
     /**
-     * Returns the name of this catalog or {@code null} if the name is not known.
+     * Returns the schema containing this table.
      *
-     * @return the name or {@code null}.
+     * @return the parent schema.
+     */
+    public Schema getParent() {
+        return impl.getParent();
+    }
+
+    /**
+     * Returns the name of this table; never {@code null}.
+     *
+     * @return the name.
      */
     public String getName() {
         return impl.getName();
     }
 
     /**
-     * Returns {@code true} if this catalog is the default one in this metadata model.
+     * Returns the columns in this table.
      *
-     * @return {@code true} if this is the default catalog, {@false} otherwise.
+     * @return the columns.
+     * @throws MetadataException if an error occurs while retrieving the metadata.
      */
-    public boolean isDefault() {
-        return impl.isDefault();
+    public Collection<Column> getColumns() {
+        return impl.getColumns();
     }
 
     /**
-     * Returns the synthetic schema in this catalog. The catalog has
-     * a synthetic schema if the database doesn't support schemas. Synthetic
-     * schemas have {@code null} names.
+     * Returns the column with the given name.
      *
-     * <p>If this method returns {@code null}, then the database supports schemas,
-     * and they can be retrieved by the {@link #getSchemas} method.</p>
-     *
-     * @return the synthetic schema or {@code null}.
+     * @param name a column name.
+     * @return a column named {@code name} or {@code null} if there is no such column.
      * @throws MetadataException if an error occurs while retrieving the metadata.
      */
-    public Schema getSyntheticSchema() {
-        return impl.getSyntheticSchema();
-    }
-
-    /**
-     * Returns the schemas in this catalog.
-     *
-     * <p>If the database does not supports schemas, this method always returns
-     * an empty collection. In that case, a synthetic schema available
-     * through {@link #getSyntheticSchema} provides access to the tables and
-     * other metadata elements in the catalog.</p>
-     *
-     * @return the schemas.
-     * @throws MetadataException if an error occurs while retrieving the metadata.
-     */
-    public Collection<Schema> getSchemas() {
-        return impl.getSchemas();
-    }
-
-    /**
-     * Returns the schema with the given name.
-     *
-     * @param name a schema name.
-     * @return a schema named {@code name} or {@code null} if there is no such schema.
-     * @throws MetadataException if an error occurs while retrieving the metadata.
-     */
-    public Schema getSchema(String name) {
-        return impl.getSchema(name);
+    public Column getColumn(String name) {
+        return impl.getColumn(name);
     }
 
     @Override
     public String toString() {
-        return "Catalog[name='" + impl.getName() + "',default=" + isDefault() + "]"; // NOI18N
+        return "Table[name='" + getName() + "']"; // NOI18N
     }
 }
