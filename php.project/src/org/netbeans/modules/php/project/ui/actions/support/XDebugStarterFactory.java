@@ -38,64 +38,37 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.php.project.ui.actions;
+package org.netbeans.modules.php.project.ui.actions.support;
 
-
-import java.net.MalformedURLException;
-import org.netbeans.modules.php.project.PhpProject;
-import org.netbeans.modules.php.project.ProjectPropertiesSupport;
-import org.netbeans.spi.project.ActionProvider;
-import org.openide.util.Exceptions;
+import org.netbeans.modules.php.project.spi.XDebugStarter;
 import org.openide.util.Lookup;
-import org.openide.util.NbBundle;
+import org.openide.util.Union2;
+
 
 /**
  * @author Radek Matous
+ *
  */
-public class RunCommand extends Command implements Displayable {
-    public static final String ID = ActionProvider.COMMAND_RUN;
-    public static final String DISPLAY_NAME = NbBundle.getMessage(RunCommand.class, "LBL_RunProject");
-    private final RunLocalCommand localCommand;
+public final class XDebugStarterFactory {
+    private static Union2<XDebugStarter, Boolean> INSTANCE;
 
-    /**
-     * @param project
-     */
-    public RunCommand(PhpProject project) {
-        super(project);
-        localCommand = new RunLocalCommand(project);
+    private XDebugStarterFactory() {
     }
 
-    @Override
-    public void invokeAction(Lookup context) throws IllegalArgumentException {
-        boolean scriptSelected = isScriptSelected();
-        if (!isRunConfigurationValid(scriptSelected)) {
-            // property not set yet
-            return;
+    public static XDebugStarter getInstance() {
+        boolean init;
+        synchronized (XDebugStarterFactory.class) {
+            init = (INSTANCE == null);
         }
-        if (scriptSelected) {
-            localCommand.invokeAction(null);
-        } else {
-            eventuallyUploadFiles();
-            try {
-                showURLForProjectFile();
-            } catch (MalformedURLException ex) {
-                //TODO: improve error handling
-                Exceptions.printStackTrace(ex);
+        if (init) {
+            //TODO add lookup listener
+            XDebugStarter debugStarter = Lookup.getDefault().lookup(XDebugStarter.class);
+            if (debugStarter != null) {
+                INSTANCE = Union2.createFirst(debugStarter);
+            } else {
+                INSTANCE = Union2.createSecond(Boolean.FALSE);
             }
         }
-    }
-
-    @Override
-    public boolean isActionEnabled(Lookup context) throws IllegalArgumentException {
-        return true;
-    }
-
-    @Override
-    public String getCommandId() {
-        return ID;
-    }
-
-    public String getDisplayName() {
-        return DISPLAY_NAME;
+        return INSTANCE.hasFirst() ? INSTANCE.first() : null;
     }
 }
