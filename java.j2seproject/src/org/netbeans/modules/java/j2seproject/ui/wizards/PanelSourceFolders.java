@@ -49,6 +49,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JButton;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.java.api.common.project.ui.wizards.FolderList;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -146,11 +147,11 @@ public class PanelSourceFolders extends SettingsPanel implements PropertyChangeL
         File[] testRoots = ((FolderList)this.testsPanel).getFiles();
         String result = checkValidity (projectLocation, sourceRoots, testRoots);
         if (result == null) {
-            wizardDescriptor.putProperty( "WizardPanel_errorMessage","");   //NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, "");   //NOI18N
             return true;
         }
         else {
-            wizardDescriptor.putProperty( "WizardPanel_errorMessage",result);       //NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, result);
             return false;
         }
     }

@@ -50,7 +50,6 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.io.File;
 import java.nio.charset.Charset;
-import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.IllegalCharsetNameException;
@@ -63,11 +62,13 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
+import javax.swing.UIManager;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import javax.swing.plaf.UIResource;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableModel;
+import org.netbeans.modules.java.api.common.project.ui.customizer.SourceRootsUi;
 import org.netbeans.spi.java.project.support.ui.IncludeExcludeVisualizer;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -85,6 +86,7 @@ public class CustomizerSources extends javax.swing.JPanel implements HelpCtx.Pro
     
     
     private String originalEncoding;
+    private boolean notified;
 
     private final J2SEProjectProperties uiProperties;
 
@@ -104,7 +106,7 @@ public class CustomizerSources extends javax.swing.JPanel implements HelpCtx.Pro
         this.projectLocation.setText( pf == null ? "" : pf.getPath() ); // NOI18N
         
         
-        J2SESourceRootsUi.EditMediator emSR = J2SESourceRootsUi.registerEditMediator(
+        SourceRootsUi.EditMediator emSR = SourceRootsUi.registerEditMediator(
             uiProperties.getProject(),
             uiProperties.getProject().getSourceRoots(),
             sourceRoots,
@@ -112,9 +114,10 @@ public class CustomizerSources extends javax.swing.JPanel implements HelpCtx.Pro
             removeSourceRoot, 
             upSourceRoot, 
             downSourceRoot,
-            new LabelCellEditor(sourceRoots, testRoots));
+            new LabelCellEditor(sourceRoots, testRoots),
+            true);
         
-        J2SESourceRootsUi.EditMediator emTSR = J2SESourceRootsUi.registerEditMediator(
+        SourceRootsUi.EditMediator emTSR = SourceRootsUi.registerEditMediator(
             uiProperties.getProject(),
             uiProperties.getProject().getTestSourceRoots(),
             testRoots,
@@ -122,7 +125,8 @@ public class CustomizerSources extends javax.swing.JPanel implements HelpCtx.Pro
             removeTestRoot, 
             upTestRoot, 
             downTestRoot,
-            new LabelCellEditor(sourceRoots, testRoots));
+            new LabelCellEditor(sourceRoots, testRoots),
+            true);
         
         emSR.setRelatedEditMediator( emTSR );
         emTSR.setRelatedEditMediator( emSR );
@@ -150,8 +154,16 @@ public class CustomizerSources extends javax.swing.JPanel implements HelpCtx.Pro
         
         this.encoding.setModel(new EncodingModel(this.originalEncoding));
         this.encoding.setRenderer(new EncodingRenderer());
-        
-
+        final String lafid = UIManager.getLookAndFeel().getID();
+        if (!"Aqua".equals(lafid)) { //NOI18N
+            this.encoding.putClientProperty ("JComboBox.isTableCellEditor", Boolean.TRUE);    //NOI18N
+            this.encoding.addItemListener(new java.awt.event.ItemListener(){ 
+                public void itemStateChanged(java.awt.event.ItemEvent e){ 
+                    javax.swing.JComboBox combo = (javax.swing.JComboBox)e.getSource(); 
+                    combo.setPopupVisible(false); 
+                } 
+            });
+        }
         this.encoding.addActionListener(new ActionListener () {
             public void actionPerformed(ActionEvent arg0) {
                 handleEncodingChange();
@@ -214,6 +226,11 @@ public class CustomizerSources extends javax.swing.JPanel implements HelpCtx.Pro
             }
             else {
                 encName = originalEncoding;
+            }
+            if (!notified && encName!=null && !encName.equals(originalEncoding)) {
+                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                        NbBundle.getMessage(CustomizerSources.class,"MSG_EncodingWarning"), NotifyDescriptor.WARNING_MESSAGE));
+                notified=true;
             }
             this.uiProperties.putAdditionalProperty(J2SEProjectProperties.SOURCE_ENCODING, encName);
     }
@@ -398,7 +415,6 @@ public class CustomizerSources extends javax.swing.JPanel implements HelpCtx.Pro
         encoding = new javax.swing.JComboBox();
         jPanel2 = new javax.swing.JPanel();
 
-        setPreferredSize(new java.awt.Dimension(560, 450));
         setLayout(new java.awt.GridBagLayout());
 
         jLabel1.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/java/j2seproject/ui/customizer/Bundle").getString("MNE_ProjectFolder").charAt(0));
