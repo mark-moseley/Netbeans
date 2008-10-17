@@ -58,8 +58,8 @@ import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.ListDataListener;
+import org.netbeans.api.server.ServerInstance;
 import org.netbeans.modules.server.ServerRegistry;
-import org.netbeans.spi.server.ServerInstance;
 import org.netbeans.spi.server.ServerInstanceProvider;
 import org.netbeans.spi.server.ServerWizardProvider;
 import org.openide.util.NbBundle;
@@ -300,9 +300,14 @@ public class ServerWizardVisual extends javax.swing.JPanel {
 
 private void serverListBoxValueChanged(javax.swing.event.ListSelectionEvent evt) {//GEN-FIRST:event_serverListBoxValueChanged
        if (!evt.getValueIsAdjusting()) {
-           ServerWizardProvider server = ((WizardAdapter) serverListBox.getSelectedValue()).getServerInstanceWizard();
-           if (server != null) {
-               fillDisplayName(server);
+           WizardAdapter adapter = (WizardAdapter) serverListBox.getSelectedValue();
+           if (adapter != null) {
+               ServerWizardProvider server = adapter.getServerInstanceWizard();
+               if (server != null) {
+                   fillDisplayName(server);
+               }
+           } else {
+               fireChange();
            }
        }
 }//GEN-LAST:event_serverListBoxValueChanged
