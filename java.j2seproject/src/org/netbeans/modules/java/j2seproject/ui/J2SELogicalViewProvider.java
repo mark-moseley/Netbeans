@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -47,18 +47,12 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.CharConversionException;
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.ResourceBundle;
-import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.JSeparator;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.platform.JavaPlatform;
@@ -67,20 +61,19 @@ import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
+import org.netbeans.modules.java.api.common.project.ui.LogicalViewProvider2;
 import org.netbeans.modules.java.j2seproject.J2SEProjectUtil;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
 import org.netbeans.modules.java.j2seproject.J2SEProject;
-import org.netbeans.modules.java.j2seproject.SourceRoots;
-import org.netbeans.modules.java.j2seproject.UpdateHelper;
 import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
 import org.netbeans.spi.java.project.support.ui.PackageView;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
-import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.netbeans.spi.project.ui.support.CommonProjectActions;
 import org.netbeans.spi.project.ui.support.NodeFactorySupport;
 import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
@@ -88,18 +81,13 @@ import org.netbeans.spi.project.ui.support.ProjectSensitiveActions;
 import org.openide.ErrorManager;
 import org.openide.actions.FindAction;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileStatusEvent;
-import org.openide.filesystems.FileStatusListener;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataFolder;
 import org.openide.modules.SpecificationVersion;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
 import org.openide.util.HelpCtx;
-import org.openide.util.Lookup;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -112,7 +100,7 @@ import org.openide.xml.XMLUtil;
  * Support for creating logical views.
  * @author Petr Hrebejk
  */
-public class J2SELogicalViewProvider implements LogicalViewProvider {
+public class J2SELogicalViewProvider implements LogicalViewProvider2 {
     
     private static final RequestProcessor RP = new RequestProcessor("J2SEPhysicalViewProvider.RP"); // NOI18N
     
@@ -153,15 +141,15 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
     }
     
     public Node findPath(Node root, Object target) {
-        Project project = root.getLookup().lookup(Project.class);
-        if (project == null) {
+        Project prj = root.getLookup().lookup(Project.class);
+        if (prj == null) {
             return null;
         }
         
         if (target instanceof FileObject) {
             FileObject fo = (FileObject) target;
             Project owner = FileOwnerQuery.getOwner(fo);
-            if (!project.equals(owner)) {
+            if (!prj.equals(owner)) {
                 return null; // Don't waste time if project does not own the fo
             }
             
@@ -195,22 +183,16 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
         changeSupport.fireChange();
     }
     
-    private static Lookup createLookup( Project project ) {
-        DataFolder rootFolder = DataFolder.findFolder(project.getProjectDirectory());
-        // XXX Remove root folder after FindAction rewrite
-        return Lookups.fixed(project, rootFolder);
-    }
-    
     
     // Private innerclasses ----------------------------------------------------
     
     private static final String[] BREAKABLE_PROPERTIES = {
-        J2SEProjectProperties.JAVAC_CLASSPATH,
-        J2SEProjectProperties.RUN_CLASSPATH,
+        ProjectProperties.JAVAC_CLASSPATH,
+        ProjectProperties.RUN_CLASSPATH,
         J2SEProjectProperties.DEBUG_CLASSPATH,
-        J2SEProjectProperties.RUN_TEST_CLASSPATH,
+        ProjectProperties.RUN_TEST_CLASSPATH,
         J2SEProjectProperties.DEBUG_TEST_CLASSPATH,
-        J2SEProjectProperties.JAVAC_TEST_CLASSPATH,
+        ProjectProperties.JAVAC_TEST_CLASSPATH,
     };
     
     public boolean hasBrokenLinks () {
@@ -241,6 +223,10 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             return true;
         }
     }
+
+    private boolean isCompileOnSaveDisabled() {
+         return !J2SEProjectUtil.isCompileOnSaveEnabled(project) && J2SEProjectUtil.isCompileOnSaveSupported(project);
+    }
     
     private String[] getBreakableProperties() {
         SourceRoots roots = this.project.getSourceRoots();
@@ -254,29 +240,24 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
         return result;
     }
     
-    private static Image brokenProjectBadge = Utilities.loadImage("org/netbeans/modules/java/j2seproject/ui/resources/brokenProjectBadge.gif", true);
+    private static Image brokenProjectBadge = ImageUtilities.loadImage("org/netbeans/modules/java/j2seproject/ui/resources/brokenProjectBadge.gif", true);
+    private static final String COMPILE_ON_SAVE_DISABLED_BADGE_PATH = "org/netbeans/modules/java/j2seproject/ui/resources/compileOnSaveDisabledBadge.gif";
+    private static final Image compileOnSaveDisabledBadge;
+
+    static {
+        URL errorBadgeIconURL = J2SELogicalViewProvider.class.getClassLoader().getResource(COMPILE_ON_SAVE_DISABLED_BADGE_PATH);
+        String compileOnSaveDisabledTP = "<img src=\"" + errorBadgeIconURL + "\">&nbsp;" + NbBundle.getMessage(J2SELogicalViewProvider.class, "TP_CompileOnSaveDisabled");
+        compileOnSaveDisabledBadge = ImageUtilities.assignToolTipToImage(ImageUtilities.loadImage(COMPILE_ON_SAVE_DISABLED_BADGE_PATH), compileOnSaveDisabledTP); // NOI18N
+    }
     
     /** Filter node containin additional features for the J2SE physical
      */
-    private final class J2SELogicalViewRootNode extends AbstractNode implements Runnable, FileStatusListener, ChangeListener, PropertyChangeListener {
+    private final class J2SELogicalViewRootNode extends AbstractNode {
         
-        private Image icon;
-        private Lookup lookup;
         private Action brokenLinksAction;
         private boolean broken;         //Represents a state where project has a broken reference repairable by broken reference support
         private boolean illegalState;   //Represents a state where project is not in legal state, eg invalid source/target level
-        
-        // icon badging >>>
-        private Set<FileObject> files;
-        private Map<FileSystem,FileStatusListener> fileSystemListeners;
-        private RequestProcessor.Task task;
-        private final Object privateLock = new Object();
-        private boolean iconChange;
-        private boolean nameChange;
-        private ChangeListener sourcesListener;
-        private Map<SourceGroup,PropertyChangeListener> groupsListeners;
-        //private Project project;
-        // icon badging <<<
+        private boolean compileOnSaveDisabled;  //true iff Compile-on-Save is disabled
         
         public J2SELogicalViewRootNode() {
             super(NodeFactorySupport.createCompositeChildren(project, "Projects/org-netbeans-modules-java-j2seproject/Nodes"), 
@@ -289,8 +270,8 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             else if (hasInvalidJdkVersion ()) {
                 illegalState = true;
             }
+            compileOnSaveDisabled = isCompileOnSaveDisabled();
             brokenLinksAction = new BrokenLinksAction();
-            setProjectFiles(project);
         }
 
         @Override
@@ -299,66 +280,7 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             return NbBundle.getMessage(J2SELogicalViewProvider.class, "HINT_project_root_node", prjDirDispName);
         }
         
-        protected final void setProjectFiles(Project project) {
-            Sources sources = ProjectUtils.getSources(project);  // returns singleton
-            if (sourcesListener == null) {
-                sourcesListener = WeakListeners.change(this, sources);
-                sources.addChangeListener(sourcesListener);
-            }
-            setGroups(Arrays.asList(sources.getSourceGroups(Sources.TYPE_GENERIC)));
-        }
-        
-        
-        private final void setGroups(Collection<SourceGroup> groups) {
-            if (groupsListeners != null) {
-                for (Map.Entry<SourceGroup,PropertyChangeListener> e : groupsListeners.entrySet()) {
-                    e.getKey().removePropertyChangeListener(e.getValue());
-                }
-            }
-            groupsListeners = new HashMap<SourceGroup,PropertyChangeListener>();
-            Set<FileObject> roots = new HashSet<FileObject>();
-            for (SourceGroup group : groups) {
-                PropertyChangeListener pcl = WeakListeners.propertyChange(this, group);
-                groupsListeners.put(group, pcl);
-                group.addPropertyChangeListener(pcl);
-                FileObject fo = group.getRootFolder();
-                roots.add(fo);
-            }
-            setFiles(roots);
-        }
-        
-        protected final void setFiles(Set<FileObject> files) {
-            if (fileSystemListeners != null) {
-                for (Map.Entry<FileSystem,FileStatusListener> e : fileSystemListeners.entrySet()) {
-                    e.getKey().removeFileStatusListener(e.getValue());
-                }
-            }
-            
-            fileSystemListeners = new HashMap<FileSystem,FileStatusListener>();
-            this.files = files;
-            if (files == null) {
-                return;
-            }
-            
-            Set<FileSystem> hookedFileSystems = new HashSet<FileSystem>();
-            for (FileObject fo : files) {
-                try {
-                    FileSystem fs = fo.getFileSystem();
-                    if (hookedFileSystems.contains(fs)) {
-                        continue;
-                    }
-                    hookedFileSystems.add(fs);
-                    FileStatusListener fsl = FileUtil.weakFileStatusListener(this, fs);
-                    fs.addFileStatusListener(fsl);
-                    fileSystemListeners.put(fs, fsl);
-                } catch (FileStateInvalidException e) {
-                    ErrorManager err = ErrorManager.getDefault();
-                    err.annotate(e, ErrorManager.UNKNOWN, "Cannot get " + fo + " filesystem, ignoring...", null, null, null); // NO18N
-                    err.notify(ErrorManager.INFORMATIONAL, e);
-                }
-            }
-        }
-        
+        @Override
         public String getHtmlDisplayName() {
             String dispName = super.getDisplayName();
             try {
@@ -370,124 +292,47 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             return broken || illegalState ? "<font color=\"#A40000\">" + dispName + "</font>" : null; //NOI18N
         }
         
+        @Override
         public Image getIcon(int type) {
-            Image img = getMyIcon(type);
-            
-            if (files != null && !files.isEmpty()) {
-                try {
-                    FileObject fo = files.iterator().next();
-                    img = fo.getFileSystem().getStatus().annotateIcon(img, type, files);
-                } catch (FileStateInvalidException e) {
-                    ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
-                }
-            }
-            
-            return img;
-        }
-        
-        private Image getMyIcon(int type) {
             Image original = super.getIcon(type);
-            return broken || illegalState ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;
+
+            if (broken || illegalState) {
+                return ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0);
+            } else {
+                return compileOnSaveDisabled ? ImageUtilities.mergeImages(original, compileOnSaveDisabledBadge, 8, 0) : original;
+            }
         }
         
+        @Override
         public Image getOpenedIcon(int type) {
-            Image img = getMyOpenedIcon(type);
-            
-            if (files != null && !files.isEmpty()) {
-                try {
-                    FileObject fo = files.iterator().next();
-                    img = fo.getFileSystem().getStatus().annotateIcon(img, type, files);
-                } catch (FileStateInvalidException e) {
-                    ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
-                }
-            }
-            
-            return img;
-        }
-        
-        private Image getMyOpenedIcon(int type) {
             Image original = super.getOpenedIcon(type);
-            return broken || illegalState ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0) : original;
-        }
-        
-        public void run() {
-            boolean fireIcon;
-            boolean fireName;
-            synchronized (privateLock) {
-                fireIcon = iconChange;
-                fireName = nameChange;
-                iconChange = false;
-                nameChange = false;
-            }
-            if (fireIcon) {
-                fireIconChange();
-                fireOpenedIconChange();
-            }
-            if (fireName) {
-                fireDisplayNameChange(null, null);
-            }
-        }
-        
-        public void annotationChanged(FileStatusEvent event) {
-            if (task == null) {
-                task = RequestProcessor.getDefault().create(this);
-            }
             
-            synchronized (privateLock) {
-                if ((iconChange == false && event.isIconChange()) || (nameChange == false && event.isNameChange())) {
-                    for (FileObject fo : files) {
-                        if (event.hasChanged(fo)) {
-                            iconChange |= event.isIconChange();
-                            nameChange |= event.isNameChange();
-                        }
-                    }
-                }
+            if (broken || illegalState) {
+                return ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0);
+            } else {
+                return compileOnSaveDisabled ? ImageUtilities.mergeImages(original, compileOnSaveDisabledBadge, 8, 0) : original;
             }
-            
-            task.schedule(50); // batch by 50 ms
         }
         
-        // sources change
-        public void stateChanged(ChangeEvent e) {
-            RP.post(new Runnable () {
-                public void run() {
-                    setProjectFiles(project);
-                }
-            });            
-        }
-        
-        // group change
-        public void propertyChange(PropertyChangeEvent evt) {
-            setProjectFiles(project);
-        }
-        
+        @Override
         public Action[] getActions( boolean context ) {
             return getAdditionalActions();
         }
         
+        @Override
         public boolean canRename() {
             return true;
         }
         
+        @Override
         public void setName(String s) {
             DefaultProjectOperations.performDefaultRenameOperation(project, s);
         }
         
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(J2SELogicalViewRootNode.class);
         }
-        
-        /*
-        public boolean canDestroy() {
-            return true;
-        }
-         
-        public void destroy() throws IOException {
-            System.out.println("Destroy " + project.getProjectDirectory());
-            LogicalViews.closeProjectAction().actionPerformed(new ActionEvent(this, 0, ""));
-            project.getProjectDirectory().delete();
-        }
-         */
         
         // Private methods -------------------------------------------------
         
@@ -505,8 +350,8 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             actions.add(ProjectSensitiveActions.projectCommandAction(JavaProjectConstants.COMMAND_JAVADOC, bundle.getString("LBL_JavadocAction_Name"), null)); // NOI18N
             actions.add(null);
             actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_RUN, bundle.getString("LBL_RunAction_Name"), null)); // NOI18N
-            addFromLayers(actions, "Projects/Debugger_Actions_temporary"); //NOI18N
-            addFromLayers(actions, "Projects/Profiler_Actions_temporary"); //NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Debugger_Actions_temporary")); //NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Profiler_Actions_temporary")); //NOI18N
             actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_TEST, bundle.getString("LBL_TestAction_Name"), null)); // NOI18N
             actions.add(CommonProjectActions.setProjectConfigurationAction());
             actions.add(null);
@@ -522,7 +367,7 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             actions.add(SystemAction.get(FindAction.class));
             
             // honor 57874 contact
-            addFromLayers(actions, "Projects/Actions"); //NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Actions")); //NOI18N
             
             actions.add(null);
             if (broken) {
@@ -532,21 +377,6 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             
             return actions.toArray(new Action[actions.size()]);
             
-        }
-        
-        private void addFromLayers(List<Action> actions, String path) {
-            Lookup look = Lookups.forPath(path);
-            for (Object next : look.lookupAll(Object.class)) {
-                if (next instanceof Action) {
-                    actions.add((Action) next);
-                } else if (next instanceof JSeparator) {
-                    actions.add(null);
-                }
-            }
-        }
-        
-        private boolean isBroken() {
-            return this.broken;
         }
         
         private void setBroken(boolean broken) {
@@ -564,6 +394,13 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             fireDisplayNameChange(null, null);
         }
         
+        private void setCompileOnSaveDisabled (boolean value) {
+            this.compileOnSaveDisabled = value;
+            fireIconChange();
+            fireOpenedIconChange();
+            fireDisplayNameChange(null, null);
+        }
+
         /** This action is created only when project has broken references.
          * Once these are resolved the action is disabled.
          */
@@ -587,7 +424,7 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
             
             public void actionPerformed(ActionEvent e) {
                 try {
-                    helper.requestSave();
+                    helper.requestUpdate();
                     BrokenReferencesSupport.showCustomizer(helper.getAntProjectHelper(), resolver, getBreakableProperties(), new String[] {J2SEProjectProperties.JAVA_PLATFORM});
                     run();
                 } catch (IOException ioe) {
@@ -615,6 +452,11 @@ public class J2SELogicalViewProvider implements LogicalViewProvider {
                 broken = hasInvalidJdkVersion ();
                 if (old != broken) {
                     setIllegalState(broken);
+                }
+                old = J2SELogicalViewRootNode.this.compileOnSaveDisabled;
+                boolean cosDisabled = isCompileOnSaveDisabled();
+                if (old != cosDisabled) {
+                    setCompileOnSaveDisabled(cosDisabled);
                 }
             }
             
