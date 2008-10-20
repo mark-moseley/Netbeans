@@ -57,6 +57,7 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
 import org.netbeans.spi.project.ant.AntArtifactProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
@@ -292,8 +293,8 @@ public final class BuildImplTest extends NbTestCase {
     public void testIncludesExcludes() throws Exception {
         AntProjectHelper aph = setupProject(12, true);
         EditableProperties ep = aph.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-        ep.setProperty(J2SEProjectProperties.INCLUDES, "**/*1*");
-        ep.setProperty(J2SEProjectProperties.EXCLUDES, "**/*0*");
+        ep.setProperty(ProjectProperties.INCLUDES, "**/*1*");
+        ep.setProperty(ProjectProperties.EXCLUDES, "**/*0*");
         aph.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         ProjectManager.getDefault().saveAllProjects();
         FileObject dir = aph.getProjectDirectory();
@@ -627,6 +628,7 @@ public final class BuildImplTest extends NbTestCase {
         output.remove("jar:");
         assertFalse("subproject's jar should not be executed", output.contains("jar:"));
         fo = aph1.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
         fo = aph2.getProjectDirectory();
@@ -639,9 +641,11 @@ public final class BuildImplTest extends NbTestCase {
         output.remove("jar:");
         assertTrue("subproject's jar target was not executed", output.contains("jar:"));
         fo = aph1.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
         fo = aph2.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
 

@@ -43,6 +43,7 @@ package org.netbeans.modules.java.j2seproject.ui.wizards;
 
 import java.io.File;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.modules.java.api.common.project.ui.wizards.FolderList;
 
 
 /**
@@ -70,8 +71,8 @@ public class PanelSourceFoldersTest extends NbTestCase {
         badProjectDir.mkdir();
         badProjectDir.setReadOnly();
         
-        assertNotNull("Empty name", PanelProjectLocationExtSrc.checkValidity ("",projectDir.getAbsolutePath()));
-        assertNotNull("Read Only WorkDir", PanelProjectLocationExtSrc.checkValidity ("",badProjectDir.getAbsolutePath()));
+        assertNotNull("Empty name", PanelProjectLocationExtSrc.checkValidity ("",projectDir.getAbsolutePath(),"build.xml"));
+        assertNotNull("Read Only WorkDir", PanelProjectLocationExtSrc.checkValidity ("",badProjectDir.getAbsolutePath(),"build.xml"));
         assertNotNull("Non Existent Sources", PanelSourceFolders.checkValidity (projectDir, new File[] {badSrcDir} , new File[] {test}));
         assertFalse("Sources == Tests",  FolderList.isValidRoot (src, new File[] {src},projectDir));
         assertFalse("Tests under Sources", FolderList.isValidRoot (new File (src, "Tests"),new File[] {src},projectDir));
