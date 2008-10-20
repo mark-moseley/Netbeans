@@ -139,8 +139,10 @@ import com.sun.source.util.TreePathScanner;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.lang.model.element.Element;
@@ -177,9 +179,22 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
     
     private Type newArrayType;
     private Expression2 expression;
+    private Map<Tree, Type> subExpressionTypes = new IdentityHashMap<Tree, Type>();
 
     public EvaluatorVisitor(Expression2 expression) {
         this.expression = expression;
+    }
+
+    private Type getSubExpressionType(Tree t) {
+        Type type = subExpressionTypes.get(t);
+        if (type != null) {
+            return type;
+        } else {
+            if (t.getKind() == Tree.Kind.PARENTHESIZED) {
+                return getSubExpressionType(((ParenthesizedTree) t).getExpression());
+            }
+            return null;
+        }
     }
 
     @Override
@@ -200,6 +215,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
         Boolean isStatic = null;
         ExpressionTree expression = arg0.getMethodSelect();
         Element elm;
+        Type preferredType = null;
         TreePath currentPath = getCurrentPath();
         if (expression.getKind() == Tree.Kind.MEMBER_SELECT) {
             MemberSelectTree mst = (MemberSelectTree) expression;
@@ -207,6 +223,9 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
             methodName = mst.getIdentifier().toString();
             if (object == null) {
                 Assert2.error(arg0, "methodCallOnNull", methodName);
+            }
+            if (mst.getExpression().toString().equals("super")) {
+                preferredType = getSubExpressionType(mst.getExpression());
             }
             if (currentPath != null) {
                 TreePath memberSelectPath = TreePath.getPath(currentPath, mst);
@@ -278,7 +297,10 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                 isStatic = Boolean.TRUE;
             } else if (object instanceof ObjectReference) {
                 objectReference = (ObjectReference) object;
-                type = (ReferenceType) objectReference.type();
+                type = (ReferenceType) preferredType;
+                if (type == null) {
+                    type = (ReferenceType) objectReference.type();
+                }
             } else {
                 objectReference = evaluationContext.getFrame().thisObject();
                 type = (ReferenceType) evaluationContext.getFrame().location().declaringType();
@@ -304,7 +326,10 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                     type = null;
                 } else {
                     objectReference = (ObjectReference) object;
-                    type = objectReference.referenceType();
+                    type = (ReferenceType) preferredType;
+                    if (type == null) {
+                        type = objectReference.referenceType();
+                    }
                 }
             } else {
                 objectReference = evaluationContext.getFrame().thisObject();
@@ -315,6 +340,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                         if (enclType != null) {
                             ObjectReference enclObject = findEnclosingObject(arg0, objectReference, enclType, null, methodName);
                             if (enclObject != null) type = enclObject.referenceType();
+                            else Assert2.error(arg0, "noSuchMethod", methodName, type.name());
                         }
                     }
                 } else {
@@ -333,7 +359,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
             cType = (ClassType) type;
         }
         Method method = getConcreteMethodAndReportProblems(arg0, type, methodName, null, paramTypes, argTypes);
-        return invokeMethod(arg0, method, isStatic, cType, objectReference, argVals, evaluationContext);
+        return invokeMethod(arg0, method, isStatic, cType, objectReference, argVals, evaluationContext, preferredType != null);
     }
     
     /*private Method getConcreteMethod(ReferenceType type, String methodName, List<? extends ExpressionTree> typeArguments) {
@@ -1170,6 +1196,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                 if (thisObject == null) {
                     return superClass;
                 } else {
+                    subExpressionTypes.put(arg0, superClass);
                     return thisObject;
                 }
             }
@@ -1271,6 +1298,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                         if (thisObject == null) {
                             return superClass;
                         } else {
+                            subExpressionTypes.put(arg0, superClass);
                             return thisObject;
                         }
                     }
@@ -1298,13 +1326,15 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                 if (thisObject != null) {
                     if (field.isPrivate()) {
                         ObjectReference to = findEnclosingObject(arg0, thisObject, declaringType, field.name(), null);
-                        if (to != null) thisObject = to;
+                        thisObject = to;
                     } else {
                         if (!instanceOf(thisObject.referenceType(), declaringType)) {
                             ObjectReference to = findEnclosingObject(arg0, thisObject, declaringType, field.name(), null);
-                            if (to != null) thisObject = to;
+                            thisObject = to;
                         }
                     }
+                }
+                if (thisObject != null) {
                     evaluationContext.getVariables().put(arg0, new VariableInfo(field, thisObject));
                     try {
                         return thisObject.getValue(field);
@@ -1510,7 +1540,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
             try {
                 List<Value> args = Collections.emptyList();
                 return invokeMethod(arg0, strClass.methodsByName("intern").get(0),
-                                    false, strClass, str, args, evaluationContext);
+                                    false, strClass, str, args, evaluationContext, false);
             } catch (Exception ex) {
                 return str;
             }
@@ -1807,7 +1837,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
         if (vm == null) return null;
         StringReference constantNameRef = vm.mirrorOf(constantName);
         Value enumValue = invokeMethod(arg0, valueOfMethod, true, (ClassType) enumType, null,
-                     Collections.singletonList((Value) constantNameRef), evaluationContext);
+                     Collections.singletonList((Value) constantNameRef), evaluationContext, false);
         return enumValue;
     }
     
@@ -1862,7 +1892,10 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                 if (expression instanceof ArrayReference && "length".equals(name)) {
                     return expression.virtualMachine().mirrorOf(((ArrayReference) expression).length());
                 }
-                ReferenceType type = ((ObjectReference) expression).referenceType();
+                ReferenceType type = (ReferenceType) getSubExpressionType(arg0.getExpression());
+                if (type == null) {
+                    type = ((ObjectReference) expression).referenceType();
+                }
                 Field f = type.fieldByName(name);
                 if (f != null) {
                     return ((ObjectReference) expression).getValue(f);
@@ -1939,7 +1972,10 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                     if (expression instanceof ArrayReference && "length".equals(fieldName)) {
                         return expression.virtualMachine().mirrorOf(((ArrayReference) expression).length());
                     }
-                    ReferenceType type = ((ObjectReference) expression).referenceType();
+                    ReferenceType type = (ReferenceType) getSubExpressionType(arg0.getExpression());
+                    if (type == null) {
+                        type = ((ObjectReference) expression).referenceType();
+                    }
                     Field f = type.fieldByName(fieldName);
                     if (f != null) {
                         return ((ObjectReference) expression).getValue(f);
@@ -2060,6 +2096,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
         if (!instanceOf(((ObjectReference) expression).type(), (Type) type)) {
             Assert2.error(arg0, "castError", ((ObjectReference) expression).type(), type);
         }
+        subExpressionTypes.put(arg0, (Type) type);
         return expression;
     }
 
@@ -2377,12 +2414,13 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
     
     private Value invokeMethod(Tree arg0, Method method, Boolean isStatic, ClassType type,
                                ObjectReference objectReference, List<Value> argVals,
-                               EvaluationContext evaluationContext) {
+                               EvaluationContext evaluationContext, boolean nonVirtual) {
         if (!evaluationContext.canInvokeMethods()) {
             Assert2.error(arg0, "calleeException", new UnsupportedOperationException(), evaluationContext);
         }
-        ThreadReference evaluationThread = evaluationContext.getFrame().thread();
+        ThreadReference evaluationThread = null;
         try {
+            evaluationThread = evaluationContext.getFrame().thread();
             if (loggerMethod.isLoggable(Level.FINE)) {
                 loggerMethod.fine("STARTED : "+objectReference+"."+method+" ("+argVals+") in thread "+evaluationThread);
             }
@@ -2393,20 +2431,23 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
                 value = type.invokeMethod(evaluationThread, method, argVals,
                                           ObjectReference.INVOKE_SINGLE_THREADED);
             } else {
+                ObjectReference object = objectReference;
                 if (type != null) {
                     if (method.isPrivate()) {
-                        ObjectReference to = findEnclosingObject(arg0, objectReference, type, null, method.name());
-                        if (to != null) objectReference = to;
+                        object = findEnclosingObject(arg0, objectReference, type, null, method.name());
                     } else {
                         if (!instanceOf(objectReference.referenceType(), type)) {
-                            ObjectReference to = findEnclosingObject(arg0, objectReference, type, null, method.name());
-                            if (to != null) objectReference = to;
+                            object = findEnclosingObject(arg0, objectReference, type, null, method.name());
                         }
                     }
                 }
-                value = objectReference.invokeMethod(evaluationThread, method,
-                                                     argVals,
-                                                     ObjectReference.INVOKE_SINGLE_THREADED);
+                if (object == null) {
+                    Assert2.error(arg0, "noSuchMethod", method.name(), objectReference.referenceType().name());
+                }
+                value = object.invokeMethod(evaluationThread, method,
+                                            argVals,
+                                            ObjectReference.INVOKE_SINGLE_THREADED |
+                                            ((nonVirtual) ? ObjectReference.INVOKE_NONVIRTUAL : 0));
             }
             if (loggerMethod.isLoggable(Level.FINE)) {
                 loggerMethod.fine("   return = "+value);
@@ -2419,6 +2460,10 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
         } catch (IncompatibleThreadStateException itsex) {
             InvalidExpressionException ieex = new InvalidExpressionException (itsex);
             ieex.initCause(itsex);
+            throw new IllegalStateException(ieex);
+        } catch (InvalidStackFrameException isfex) {
+            InvalidExpressionException ieex = new InvalidExpressionException (isfex);
+            ieex.initCause(isfex);
             throw new IllegalStateException(ieex);
         } catch (InvocationException iex) {
             Throwable ex = new InvocationExceptionTranslated(iex, evaluationContext.getDebugger());
@@ -2785,7 +2830,7 @@ public class EvaluatorVisitor extends TreePathScanner<Mirror, EvaluationContext>
         }
         ((ClassType) ov.type()).methodsByName("toString");
         List<Value> argVals = Collections.emptyList();
-        Value sv = invokeMethod(arg0, method, false, null, ov, argVals, evaluationContext);
+        Value sv = invokeMethod(arg0, method, false, null, ov, argVals, evaluationContext, false);
         if (sv instanceof StringReference) {
             return ((StringReference) sv).value();
         } else {
