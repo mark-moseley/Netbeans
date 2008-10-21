@@ -57,7 +57,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
 import java.util.regex.Matcher;
 import javax.swing.AbstractAction;
@@ -75,6 +74,8 @@ import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.text.BadLocationException;
 import org.netbeans.core.output2.ui.AbstractOutputTab;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.actions.FindAction;
 import org.openide.util.Exceptions;
 import org.openide.util.Mutex;
@@ -638,7 +639,15 @@ public class Controller { //XXX public only for debug access to logging code
                     out.getLines().saveAs(f.getPath());
                 }
             } catch (IOException ioe) {
-                Exceptions.printStackTrace(ioe);
+                NotifyDescriptor notifyDesc = new NotifyDescriptor(
+                        NbBundle.getMessage(Controller.class, "MSG_SaveAsFailed", f.getPath()),
+                        NbBundle.getMessage(Controller.class, "LBL_SaveAsFailedTitle"),
+                        NotifyDescriptor.DEFAULT_OPTION,
+                        NotifyDescriptor.ERROR_MESSAGE,
+                        new Object[] {NotifyDescriptor.OK_OPTION},
+                        NotifyDescriptor.OK_OPTION);
+
+                DialogDisplayer.getDefault().notify(notifyDesc);
             }
         }
     }
@@ -1211,7 +1220,7 @@ public class Controller { //XXX public only for debug access to logging code
     }
 
     void hasOutputListenersChanged(OutputWindow win, OutputTab tab, boolean hasOutputListeners) {
-        if (hasOutputListeners && win.getSelectedTab() == tab && tab.isShowing()) {
+        if (hasOutputListeners && tab.getOutputPane().isScrollLocked()) {
             navigateToFirstErrorLine(tab);
         }
     }
