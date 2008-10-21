@@ -2,9 +2,7 @@
 <#-- You can change the contents of the license inserted into
  #   each template by opening Tools | Templates and editing
  #   Licenses | Default License  -->
-<#assign licenseFirst = "# ">
 <#assign licensePrefix = "# ">
-<#assign licenseLast = " ">
 <#include "../Licenses/license-${project.license}.txt">
 
 $:.unshift File.join(File.dirname(__FILE__),'..','lib')
@@ -24,7 +22,7 @@ ${indent}module ${modulename}
 <#-- If the "extend" parameter is set, add < Superclass to the class definition -->
 ${indent}class ${class}<#if extend?? && extend != ""> < ${extend}</#if>
 ${indent}  def test_foo
-${indent}    assert(false, 'Assertion was false.')
+${indent}    #TODO: Write test
 ${indent}    flunk "TODO: Write test"
 ${indent}    # assert_equal("foo", bar)
 ${indent}  end
