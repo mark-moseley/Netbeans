@@ -46,10 +46,12 @@ import java.net.URL;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import javax.swing.Action;
 import javax.swing.Icon;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
+import org.netbeans.spi.project.ui.support.CommonProjectActions;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
@@ -57,9 +59,10 @@ import org.openide.loaders.DataObject;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
+import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.Lookups;
 import org.openidex.search.SearchInfo;
 
@@ -132,6 +135,7 @@ final class LazyProject implements Project, ProjectInformation, SearchInfo, Logi
         return null;
     }
     
+    
     private final class ProjNode extends AbstractNode {
         public ProjNode(Lookup lookup) {
             super(new ProjCh(), lookup);
@@ -142,15 +146,34 @@ final class LazyProject implements Project, ProjectInformation, SearchInfo, Logi
 
         @Override
         public Image getIcon(int type) {
-            return Utilities.icon2Image(icon.getIcon());
+            return ImageUtilities.icon2Image(icon.getIcon());
         }
 
         @Override
         public Image getOpenedIcon(int type) {
             return getIcon(type);
         }
+
+        @Override
+        public Action getPreferredAction() {
+            OpenProjectList.preferredProject(LazyProject.this);
+            return super.getPreferredAction();
+        }
+
+        @Override
+        public boolean hasCustomizer() {
+            return false;
+        }
+
+        @Override
+        public Action[] getActions(boolean context) {
+            OpenProjectList.preferredProject(LazyProject.this);
+            return new Action[] { 
+                SystemAction.get(LazyProjectInitializing.class),
+                CommonProjectActions.closeProjectAction()
+            };
+        }
     } // end of ProjNode
-    
     private final class ProjCh extends Children.Array {
         @Override
         protected Collection<Node> initCollection() {
@@ -166,6 +189,5 @@ final class LazyProject implements Project, ProjectInformation, SearchInfo, Logi
             super.addNotify();
             OpenProjectList.preferredProject(LazyProject.this);
         }
-        
     }
 }
