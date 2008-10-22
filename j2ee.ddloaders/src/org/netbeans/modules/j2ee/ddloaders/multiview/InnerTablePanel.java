@@ -163,6 +163,7 @@ public class InnerTablePanel extends SectionNodeInnerPanel {
             /**
              * Invoked when the mouse has been clicked on a component.
              */
+            @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
                     editCell(table.getSelectedRow(), table.getSelectedColumn());
@@ -172,14 +173,13 @@ public class InnerTablePanel extends SectionNodeInnerPanel {
         InputMap inputMap = table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         inputMap.put(KeyStroke.getKeyStroke("ENTER"), "selectNextColumnCell"); //NOI18N
         inputMap.put(KeyStroke.getKeyStroke("shift ENTER"), "selectPreviousColumnCell");    //NOI18N
+        table.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(InnerTablePanel.class, "ACSN_Table")); // NOI18N
+        table.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(InnerTablePanel.class, "ACSD_Table")); // NOI18N
         setLayout(new BorderLayout());
         add(tablePanel, BorderLayout.WEST);
         setColumnWidths();
-        if (model instanceof InnerTableModel) {
-            InnerTableModel innerTableModel = (InnerTableModel) model;
-            setButtonListeners(innerTableModel);
-            setColumnEditors(innerTableModel);
-        }
+        setButtonListeners(model);
+        setColumnEditors(model);
         scheduleRefreshView();
         final TableColumnModel columnModel = table.getColumnModel();
         for (int i = 0, n = columnModel.getColumnCount(); i < n; i++) {
@@ -260,6 +260,7 @@ public class InnerTablePanel extends SectionNodeInnerPanel {
     public void setValue(JComponent source, Object value) {
     }
 
+    @Override
     public void dataModelPropertyChange(Object source, String propertyName, Object oldValue, Object newValue) {
         ((InnerTableModel) getTable().getModel()).tableChanged();
         scheduleRefreshView();
