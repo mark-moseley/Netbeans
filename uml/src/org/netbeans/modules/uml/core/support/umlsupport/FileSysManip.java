@@ -43,6 +43,11 @@
 package org.netbeans.modules.uml.core.support.umlsupport;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.logging.Level;
+import org.netbeans.modules.uml.core.support.UMLLogger;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
@@ -233,14 +238,38 @@ public class FileSysManip
       
 		return retStr;
 	}
-   
-   public static boolean copyFile(String fromFile, String toFile)
+        
+   public static boolean copyFile1(String fromFile, String toFile)
    {
    		boolean copySuccess = false;
    		File from = new File(fromFile);
    		File to = new File(toFile);
    		copySuccess = from.renameTo(to);
    		return copySuccess;
+   }
+   
+   public static boolean copyFile(String fromFile, String toFile)
+   {
+       boolean copySuccess = false;
+       if ( fromFile != null && toFile != null)
+       {
+            try {
+                FileObject fromFO = FileUtil.toFileObject(new File(fromFile));
+                FileObject toFO = FileUtil.createData(new File(toFile));
+                if ( fromFO != null) {
+                    FileObject copiedFO = FileUtil.copyFile(fromFO, 
+                            toFO.getParent(), toFO.getName(), toFO.getExt());
+                    if (copiedFO != null)
+                    {
+                        fromFO.delete();
+                        copySuccess = true;
+                    }
+                }
+            } catch (IOException ex) {
+                UMLLogger.logException(ex, Level.WARNING);
+            }
+       }
+       return copySuccess;
    }
    /**
 	* Adds a backslash to the path
@@ -273,4 +302,41 @@ public class FileSysManip
       File file = new File( fullFilename );
       return file.getName();
    }
+
+   public static void backupCopy(String fileName)
+   {
+       try {
+           if ((fileName != null) && (fileName.length() > 0))
+           {
+               File srcFile = new File(fileName);
+               FileObject srcFO = FileUtil.toFileObject(srcFile);
+               backupCopy(srcFO);
+           }
+       } catch (Exception ex) {
+           UMLLogger.logException(ex, Level.WARNING);
+       }
+   }
+
+   public static void backupCopy(FileObject srcFO)
+   {
+       try {
+           if (srcFO != null) 
+           {
+               FileObject parentFolderFO = srcFO.getParent(); 
+               String fileNameWithoutExt = srcFO.getName(); 
+               
+               FileObject destFolderFO = FileUtil.createFolder(parentFolderFO, "DiagramBackup"); //NOI18N
+               FileObject destFO = destFolderFO.getFileObject(fileNameWithoutExt, srcFO.getExt());
+               if (destFO != null) 
+               {
+                   destFO.delete();
+               }                                
+               FileUtil.copyFile(srcFO, destFolderFO, fileNameWithoutExt);
+           }
+       } catch (Exception ex) {
+           UMLLogger.logException(ex, Level.WARNING);
+       }
+   }
+
+
 }
