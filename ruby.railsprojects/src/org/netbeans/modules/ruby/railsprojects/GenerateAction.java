@@ -46,22 +46,23 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 import javax.swing.JButton;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import javax.swing.event.ChangeListener;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
-import org.netbeans.api.gsf.EditorAction;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId;
 import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.editor.BaseAction;
 import org.netbeans.modules.ruby.platform.RubyExecution;
 import org.netbeans.modules.ruby.railsprojects.ui.customizer.RailsProjectProperties;
 import org.netbeans.modules.ruby.platform.execution.DirectoryFileLocator;
-import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
+import org.netbeans.modules.ruby.platform.execution.RubyExecutionDescriptor;
 import org.netbeans.modules.ruby.platform.execution.FileLocator;
 import org.netbeans.modules.ruby.platform.execution.OutputProcessor;
 import org.netbeans.modules.ruby.platform.execution.OutputRecognizer;
@@ -81,11 +82,33 @@ import org.openide.util.NbBundle;
 import org.openide.util.Task;
 import org.openide.util.Utilities;
 import org.openide.util.actions.NodeAction;
+import org.openide.util.actions.SystemAction;
 
 
-public final class GenerateAction extends NodeAction implements EditorAction {
+public final class GenerateAction extends NodeAction {
+    public static final String EDITOR_ACTION_NAME = "rails-generator";
+
+    private static final Logger LOGGER = Logger.getLogger(GenerateAction.class.getName());
+
     private boolean forcing;
     private boolean preview;
+    
+    /** Editor action which lets you open the dialog as an editor action */
+    public static class EditorAction extends BaseAction {
+        public EditorAction() {
+            super(EDITOR_ACTION_NAME, 0);
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent evt, final JTextComponent target) {
+            SystemAction.get(GenerateAction.class).actionPerformed(evt, target);
+        }
+        
+        @Override
+        public Class getShortDescriptionBundleClass() {
+            return GenerateAction.class;
+        }
+    }
     
     @Override
     protected void performAction(Node[] activatedNodes) {
@@ -113,7 +136,11 @@ public final class GenerateAction extends NodeAction implements EditorAction {
 //            return;
 //        }
 
-        if (!RubyPlatform.gemManagerFor(project).isValidRails(true)) {
+        // #141908 -- check whether rails is installed in vendor/
+        FileObject railsInstall = project.getProjectDirectory().getFileObject("vendor/rails/railties"); // NOI18N
+        RubyPlatform platform = RubyPlatform.platformFor(project);
+        if (railsInstall == null && !platform.hasValidRails(true)) {
+            LOGGER.warning("No valid Rails installation found, platform is:" + RubyPlatform.platformFor(project));
             return;
         }
 
@@ -166,9 +193,10 @@ public final class GenerateAction extends NodeAction implements EditorAction {
 
         okButton.setEnabled(initialEnabled);
 
+        String projectName = ProjectUtils.getInformation(project).getDisplayName();
         DialogDescriptor desc =
             new DialogDescriptor(panel,
-                NbBundle.getMessage(GenerateAction.class, "GeneratorTitle"), true, options,
+                NbBundle.getMessage(GenerateAction.class, "GeneratorTitle", projectName), true, options,
                 options[0], DialogDescriptor.DEFAULT_ALIGN, null, null);
         desc.setMessageType(DialogDescriptor.PLAIN_MESSAGE);
 
@@ -195,7 +223,7 @@ public final class GenerateAction extends NodeAction implements EditorAction {
 
                 final FileObject dir = project.getProjectDirectory();
                 final File pwd = FileUtil.toFile(project.getProjectDirectory());
-                final String script = "script" + File.separator + "generate"; // NOI18N
+                final String script = "script" + File.separator + panel.getScript(); // NOI18N
                 List<String> argvList = new ArrayList<String>();
                 argvList.add(type);
 
@@ -244,7 +272,7 @@ public final class GenerateAction extends NodeAction implements EditorAction {
                                 FileLocator locator = new DirectoryFileLocator(dir);
                                 String displayName = NbBundle.getMessage(GenerateAction.class, "RailsGenerator");
                                 Task task =
-                                    new RubyExecution(new ExecutionDescriptor(RubyPlatform.platformFor(project), displayName, pwd, script).
+                                    new RubyExecution(new RubyExecutionDescriptor(RubyPlatform.platformFor(project), displayName, pwd, script).
                                             additionalArgs(argv).fileLocator(locator).
                                             addOutputRecognizer(recognizer), charsetName).run();
 
@@ -299,11 +327,7 @@ public final class GenerateAction extends NodeAction implements EditorAction {
 
     @Override
     public String getName() {
-        return NbBundle.getMessage(GenerateAction.class,  getActionName());
-    }
-
-    public String getActionName() {
-        return "rails-generator";
+        return NbBundle.getMessage(GenerateAction.class,  EDITOR_ACTION_NAME);
     }
 
     @Override
@@ -378,7 +402,8 @@ public final class GenerateAction extends NodeAction implements EditorAction {
         }
     }
 
-    public Class getShortDescriptionBundleClass() {
-        return GenerateAction.class;
+    public boolean appliesTo(String mimeType) {
+        return RubyInstallation.RHTML_MIME_TYPE.equals(mimeType) ||
+                RubyInstallation.RUBY_MIME_TYPE.equals(mimeType);
     }
 }
