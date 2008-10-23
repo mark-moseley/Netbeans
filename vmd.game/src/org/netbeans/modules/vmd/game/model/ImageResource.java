@@ -359,8 +359,15 @@ public class ImageResource implements Identifiable{
 	private int[] translateIndex(int index, int tileWidth, int tileHeight, boolean zeroBasedIndex) {
 		StaticTile[][] grid = this.getStaticTileGrid(tileWidth, tileHeight, zeroBasedIndex);
 		int[] coordinates = new int[2];
-		coordinates[0] = (index - (zeroBasedIndex ? 0 : 1)) / grid[0].length;
-		coordinates[1] = (index - (zeroBasedIndex ? 0 : 1)) % grid[0].length;
+        // Fix for 129253 - AIOOB when image changed
+        if ( grid.length == 0 ){
+            coordinates[0] = 0;
+            coordinates[1] = 0;
+        }
+        else {
+            coordinates[0] = (index - (zeroBasedIndex ? 0 : 1)) / grid[0].length;
+            coordinates[1] = (index - (zeroBasedIndex ? 0 : 1)) % grid[0].length;
+        }
 		return coordinates;
 	}
 	
@@ -370,8 +377,8 @@ public class ImageResource implements Identifiable{
 	}
 	
 	private int getColumnCount(int tileWidth, int tileHeight) {
-		StaticTile[][] grid = this.getStaticTileGrid(tileWidth, tileHeight, true);
-		return grid[0].length;
+                StaticTile[][] grid = this.getStaticTileGrid(tileWidth, tileHeight, true);
+                return grid.length > 0 ? grid[0].length : 0;
 	}
 	
 	private StaticTile[][] initStaticTileGrid(int tileWidth, int tileHeight, boolean zeroBasedIndex) {
