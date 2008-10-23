@@ -39,101 +39,103 @@
 
 package org.netbeans.modules.cnd.debugger.gdb.utils;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.modules.cnd.debugger.gdb.proxy.GdbProxy;
 
 /**
  * This class is intended for gathering multiline responses to a single gdb command.
- * 
+ *
  * @author gordonp
  */
 public class CommandBuffer {
     
     // Static parts
-    public static final int STATE_NONE = 0;
-    public static final int STATE_WAITING = 1;
-    public static final int STATE_COMMAND_TIMEDOUT = 2;
-    public static final int STATE_OK = 3;
-    public static final int STATE_DONE = 4;
-    public static final int STATE_ERROR = 5;
-    private final int WAIT_TIME = 500;
-    
-    private static Map<Integer, CommandBuffer> map = new HashMap<Integer, CommandBuffer>();
-    
-    public static CommandBuffer getCommandBuffer(Integer id) {
-        return map.get(id);
+    private static enum STATE {
+        NONE("None"), // NOI18N
+        WAITING("Waiting"), // NOI18N
+        TIMEOUT("Timeout"), // NOI18N
+        OK("OK"), // NOI18N
+        ERROR("Error"); // NOI18N
+
+        private final String name;
+        STATE(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
     }
+    
+    private final int WAIT_TIME = 30000;
+    private boolean timerOn = Boolean.getBoolean("gdb.proxy.timer"); // NOI18N
     
     // Instance parts
-    private StringBuilder buf;
-    private CommandBufferCallbackProc cbproc;
-    private Integer token;
-    private String err;
-    private int state;
-    private Object lock;
-    protected static Logger log = Logger.getLogger("gdb.logger"); // NOI18N
+    private final StringBuilder buf = new StringBuilder();
+    private final int token;
+    private String err = null;
+    private STATE state = STATE.NONE;
+    private final Object lock = new Object();
+    protected static Logger log = Logger.getLogger("gdb.logger.cb"); // NOI18N
+    private final GdbProxy gdb;
     
-    public CommandBuffer(int token, CommandBufferCallbackProc cbproc) {
-        buf = new StringBuilder();
-        this.token = new Integer(token);
-        this.cbproc = cbproc;
-        state = STATE_NONE;
-        err = null;
-        lock = new Object();
-        map.put(this.token, this);
+    public CommandBuffer(GdbProxy gdb, int token) {
+        assert gdb != null;
+        this.gdb = gdb;
+        this.token = token;
     }
     
-    public CommandBuffer(int token) {
-        this(token, null);
-    }
-    
-    public void callback() {
-        if (cbproc != null) {
-            cbproc.callback(toString());
-        }
-    }
-    
-    public String postAndWait() {
-        long tstart, tend;
-        
+    /**
+     * Block waiting for the command to complete. Can't be called on the GdbReaderRP
+     * thread because thats where the command input gets read.
+     * 
+     * @return The response from a gdb command
+     */
+    public String waitForCompletion() {
+        assert !Thread.currentThread().getName().equals("GdbReaderRP");
         synchronized (lock) {
+            if (state == STATE.NONE) {
+                state = STATE.WAITING; // this will change unless we timeout
+            }
             try {
-                state = STATE_WAITING; // this will change unless we timeout
-                if (log.isLoggable(Level.FINE)) {
-                    tstart = System.currentTimeMillis();
+                long tstart = System.currentTimeMillis();
+                long tend = tstart;
+                while (state == STATE.WAITING) {
                     lock.wait(WAIT_TIME);
                     tend = System.currentTimeMillis();
-                } else {
-                    lock.wait(WAIT_TIME);
-                    tstart = tend = 0;
-                }
-                if (state == STATE_WAITING) {
-                    state = STATE_COMMAND_TIMEDOUT;
-                    log.fine("CB.postAndWait[" + token + "]: Timeout");
-                } else {
-                    if (err != null) {
-                        state = STATE_ERROR;
-                    } else {
-                        state = STATE_OK;
+                    if ((tend - tstart) > WAIT_TIME) {
+                        if (state == STATE.OK) {
+                            log.finest("CB.postAndWait[" + token + "]: Timed out after Done [" + getResponse() + "]");
+                        } else {
+                            state = STATE.TIMEOUT;
+                        }
                     }
-                    log.fine("CB.postAndWait[" + token + "]: Waited " + (tend - tstart) + " milliseconds"); // NOI18N
                 }
-                return toString();
+                if (state == STATE.TIMEOUT) {
+                    log.warning("CB.postAndWait[" + token + "]: Timeout at " + tend + " on " + GdbUtils.threadId());
+                } else if (log.isLoggable(Level.FINE)) {
+                    if (state == STATE.ERROR &&
+                            !Thread.currentThread().getName().equals("ToolTip-Evaluator")) { // NOI18N
+                        log.fine("CB.postAndWait[" + token + "]: Error wait of " + (tend - tstart) + " ms on " +
+                                GdbUtils.threadId());
+                    } else if (state == STATE.OK) {
+                        log.fine("CB.postAndWait[" + token + "]: OK wait of " + (tend - tstart) + " ms on " +
+                                GdbUtils.threadId());
+                    }
+                }
+                return getResponse();
             } catch (InterruptedException ex) {
+                return "";
+            } finally {
+                gdb.removeCB(token);
             }
         }
-        
-        return null;
     }
-    
-    public Integer getID() {
+
+    public int getID() {
         return token;
-    }
-    
-    public int getState() {
-        return state;
     }
     
     public void append(String line) {
@@ -141,37 +143,63 @@ public class CommandBuffer {
     }
     
     public void done() {
+        String time = getTimePrefix(timerOn && log.isLoggable(Level.FINEST));
         synchronized (lock) {
-            state = STATE_DONE;
-            lock.notify();
+            state = STATE.OK;
+            log.finest("CB.done[" + time + token + "]: Released lock on " + GdbUtils.threadId());
+            gdb.removeCB(token);
+            lock.notifyAll();
         }
     }
     
     public void error(String msg) {
+        String time = getTimePrefix(timerOn && log.isLoggable(Level.FINEST));
         synchronized (lock) {
             err = msg;
-            state = STATE_ERROR;
-            lock.notify();
+            state = STATE.ERROR;
+            log.finest("CB.error[" + time + token + "]: Releasing lock on " + GdbUtils.threadId());
+            gdb.removeCB(token);
+            lock.notifyAll();
         }
     }
     
     public String getError() {
-        if (state == STATE_ERROR && err != null) {
+        if (state == STATE.ERROR && err != null) {
             return err;
         }
         return null;
     }
     
-    public boolean attachTimedOut() {
-        return state == STATE_WAITING;
+    public boolean isTimedOut() {
+        return state == STATE.TIMEOUT;
     }
-    
-    public void dispose() {
-        map.remove(token);
+
+    public boolean isError() {
+        return state == STATE.ERROR;
+    }
+
+    public boolean isOK() {
+        return state == STATE.OK;
+    }
+
+    public String getResponse() {
+        return buf.toString();
     }
 
     @Override
     public String toString() {
-        return buf.toString();
+        return "CommandBuffer(id=" + token + ", text=" + getResponse() + ", state=" + state + ", error=" + err + ")"; // NOI18N
+    }
+
+    /**
+     * @param show - if true - return empty string
+     * @return
+     */
+    public static String getTimePrefix(boolean show) {
+        if (show) {
+            return Long.toString(System.currentTimeMillis()) + ':';
+        } else {
+            return "";
+        }
     }
 }
