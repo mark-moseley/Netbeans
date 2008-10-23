@@ -52,7 +52,6 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -86,6 +85,7 @@ import org.openide.nodes.Node;
 import org.openide.nodes.NodeNotFoundException;
 import org.openide.nodes.NodeOp;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -104,8 +104,8 @@ public class ProjectTab extends TopComponent
     public static final String ID_LOGICAL = "projectTabLogical_tc"; // NOI18N                            
     public static final String ID_PHYSICAL = "projectTab_tc"; // NOI18N                        
     
-    private static final Image ICON_LOGICAL = org.openide.util.Utilities.loadImage( "org/netbeans/modules/project/ui/resources/projectTab.png" );
-    private static final Image ICON_PHYSICAL = org.openide.util.Utilities.loadImage( "org/netbeans/modules/project/ui/resources/filesTab.png" );
+    private static final Image ICON_LOGICAL = ImageUtilities.loadImage( "org/netbeans/modules/project/ui/resources/projectTab.png" );
+    private static final Image ICON_PHYSICAL = ImageUtilities.loadImage( "org/netbeans/modules/project/ui/resources/filesTab.png" );
     
     private static Map<String, ProjectTab> tabs = new HashMap<String, ProjectTab>();                            
                             
@@ -137,7 +137,7 @@ public class ProjectTab extends TopComponent
         btv = new ProjectTreeView();    // Add the BeanTreeView
         
         btv.setDragSource (true);
-        
+        btv.setUseSubstringInQuickSearch(true);
         btv.setRootVisible(false);
         
         add( btv, BorderLayout.CENTER ); 
@@ -251,10 +251,12 @@ public class ProjectTab extends TopComponent
         return getDefault( ID_PHYSICAL );
     }
     
+    @Override
     protected String preferredID () {
         return id;
     }
     
+    @Override
     public HelpCtx getHelpCtx() {
         return ExplorerUtils.getHelpCtx( 
             manager.getSelectedNodes(),
@@ -262,6 +264,7 @@ public class ProjectTab extends TopComponent
     }
 
      
+    @Override
     public int getPersistenceType() {
         return TopComponent.PERSISTENCE_ALWAYS;
     }
@@ -284,6 +287,7 @@ public class ProjectTab extends TopComponent
     // End of variables declaration//GEN-END:variables
         
     @SuppressWarnings("deprecation") 
+    @Override
     public boolean requestFocusInWindow() {
         super.requestFocusInWindow();
         return btv.requestFocusInWindow();
@@ -291,6 +295,7 @@ public class ProjectTab extends TopComponent
 
     //#41258: In the SDI, requestFocus is called rather than requestFocusInWindow:
     @SuppressWarnings("deprecation") 
+    @Override
     public void requestFocus() {
         super.requestFocus();
         btv.requestFocus();
@@ -300,6 +305,7 @@ public class ProjectTab extends TopComponent
     
     private static final long serialVersionUID = 9374872358L;
     
+    @Override
     public void writeExternal (ObjectOutput out) throws IOException {
         super.writeExternal( out );
         
@@ -310,6 +316,7 @@ public class ProjectTab extends TopComponent
     }
 
     @SuppressWarnings("unchecked") 
+    @Override
     public void readExternal (ObjectInput in) throws IOException, ClassNotFoundException {        
         super.readExternal( in );
         id = (String)in.readObject();
@@ -337,28 +344,15 @@ public class ProjectTab extends TopComponent
     
     // MANAGING ACTIONS
     
+    @Override
     protected void componentActivated() {
         ExplorerUtils.activateActions(manager, true);
     }
     
+    @Override
     protected void componentDeactivated() {
         ExplorerUtils.activateActions(manager, false);
     }
-
-    @Override
-    public Action[] getActions() {
-        Action[] actions = super.getActions();
-        if (ID_LOGICAL.equals(id)) {
-            List<Action> allActions = new ArrayList<Action>(Arrays.asList(manager.getRootContext().getActions(false)));
-            allActions.add(null);
-            allActions.addAll(Arrays.asList(actions));
-            return allActions.toArray(new Action[allActions.size()]);
-        } else {
-            return actions;
-        }
-    }
-
-
 
     // SEARCHING NODES
     
@@ -503,16 +497,27 @@ public class ProjectTab extends TopComponent
     /** Extending bean treeview. To be able to persist the selected paths
      */
     private class ProjectTreeView extends BeanTreeView {
-        public void scrollToNode(Node n) {
-            TreeNode tn = Visualizer.findVisualizer( n );
-            if (tn == null) return;
+        public void scrollToNode(final Node n) {
+            // has to be delayed to be sure that events for Visualizers
+            // were processed and TreeNodes are already in hierarchy
+            SwingUtilities.invokeLater(new Runnable() {
 
-            TreeModel model = tree.getModel();
-            if (!(model instanceof DefaultTreeModel)) return;
-
-            TreePath path = new TreePath(((DefaultTreeModel)model).getPathToRoot(tn));
-            Rectangle r = tree.getPathBounds(path);
-            if (r != null) tree.scrollRectToVisible(r);
+                public void run() {
+                    TreeNode tn = Visualizer.findVisualizer(n);
+                    if (tn == null) {
+                        return;
+                    }
+                    TreeModel model = tree.getModel();
+                    if (!(model instanceof DefaultTreeModel)) {
+                        return;
+                    }
+                    TreePath path = new TreePath(((DefaultTreeModel) model).getPathToRoot(tn));
+                    Rectangle r = tree.getPathBounds(path);
+                    if (r != null) {
+                        tree.scrollRectToVisible(r);
+                    }
+                }
+            });
 	}
                         
         public List<String[]> getExpandedPaths() { 
