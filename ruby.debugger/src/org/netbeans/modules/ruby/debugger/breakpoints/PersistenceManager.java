@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,17 +44,16 @@ package org.netbeans.modules.ruby.debugger.breakpoints;
 import java.beans.PropertyChangeEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 import org.netbeans.api.debugger.Breakpoint;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.DebuggerManagerAdapter;
 import org.netbeans.api.debugger.Properties;
-import org.netbeans.modules.ruby.debugger.Util;
 
-/**
- * @author Martin Krauskopf
- */
 public final class PersistenceManager extends DebuggerManagerAdapter {
-    
+
+    private static final Logger LOGGER = Logger.getLogger(PersistenceManager.class.getName());
+
     private static final String RUBY_PROPERTY = "ruby"; // NOI18N
     private static final String DEBUGGER_PROPERTY = "debugger"; // NOI18N
     
@@ -68,7 +67,7 @@ public final class PersistenceManager extends DebuggerManagerAdapter {
                 breakpoint.addPropertyChangeListener(this);
                 validBreakpoints.add(breakpoint);
             } else {
-                Util.warning("null stored in the array obtained from \"" + RUBY_PROPERTY + "\" property"); // TODO: why?
+                LOGGER.warning("null stored in the array obtained from \"" + RUBY_PROPERTY + "\" property"); // TODO: why?
             }
         }
         return validBreakpoints.toArray(new Breakpoint[validBreakpoints.size()]);
@@ -93,6 +92,7 @@ public final class PersistenceManager extends DebuggerManagerAdapter {
     @Override
     public void breakpointRemoved(final Breakpoint breakpoint) {
         if (breakpoint instanceof RubyBreakpoint) {
+            RubyBreakpointManager.removeBreakpoint((RubyBreakpoint) breakpoint);
             storeBreakpoints();
             breakpoint.removePropertyChangeListener(this);
         }

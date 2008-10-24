@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -46,22 +46,25 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.api.debugger.ActionsManager;
 import org.netbeans.modules.ruby.debugger.breakpoints.RubyBreakpointManager;
 import org.netbeans.spi.debugger.ActionsProviderSupport;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.debugger.DebuggerEngineProvider;
+import org.openide.awt.StatusDisplayer;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.NbBundle;
 import org.rubyforge.debugcommons.RubyDebugEventListener;
 import org.rubyforge.debugcommons.RubyDebugEvent;
 import org.rubyforge.debugcommons.RubyDebuggerException;
 
-/**
- * @author Martin Krauskopf
- */
 public final class RubyDebuggerActionProvider extends ActionsProviderSupport implements RubyDebugEventListener {
-    
+
+    public static final Logger LOGGER = Logger.getLogger(RubyDebuggerActionProvider.class.getName());
+
     private static final Set<Object> ACTIONS;
     
     static {
@@ -75,11 +78,11 @@ public final class RubyDebuggerActionProvider extends ActionsProviderSupport imp
         ACTIONS = Collections.unmodifiableSet(s);
     }
     
-    private Semaphore frontEndSemaphore = new Semaphore(1, true);
-    private Semaphore backEndSemaphore = new Semaphore(1, true);
+    private final Semaphore frontEndSemaphore;
+    private final Semaphore backEndSemaphore;
     
-    private ContextProviderWrapper contextProvider;
-    private RubyDebuggerEngineProvider engineProvider;
+    private final ContextProviderWrapper contextProvider;
+    private final RubyDebuggerEngineProvider engineProvider;
     private final RubySession rubySession;
     private Boolean terminated;
     
@@ -109,24 +112,24 @@ public final class RubyDebuggerActionProvider extends ActionsProviderSupport imp
     
     @Override
     public void doAction(final Object action) {
-        Util.finest("Performing \"" + action + '"');
+        LOGGER.finer("Performing \"" + action + '"');
         if (action == ActionsManager.ACTION_KILL) {
             finish(true);
             return;
         }
         if (frontEndSemaphore.getQueueLength() > 10) {
-            Util.info("Too much pending events (> 10). Action \"" + action + "\" is rejected."); // NOI18N
+            LOGGER.info("Too much pending events (> 10). Action \"" + action + "\" is rejected."); // NOI18N
             return;
         }
         try {
             frontEndSemaphore.acquire();
         } catch (InterruptedException e) {
-            Util.severe(e);
+            LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
             return;
         }
         synchronized (terminated) {
             if (terminated) {
-                Util.info("Flushing cached actions: " + action + ", process is terminated.");
+                LOGGER.info("Flushing cached actions: " + action + ", process is terminated.");
                 frontEndSemaphore.release();
                 return; // ignore cached actions
             }
@@ -139,6 +142,13 @@ public final class RubyDebuggerActionProvider extends ActionsProviderSupport imp
         } else if (action == ActionsManager.ACTION_RUN_TO_CURSOR) {
             rubySession.runToCursor();
         } else if (action == ActionsManager.ACTION_STEP_OUT) {
+            if (rubySession.getFrames().length == 1) {
+                StatusDisplayer.getDefault().setStatusText(
+                        NbBundle.getMessage(RubyDebuggerActionProvider.class,
+                        "RubyDebuggerActionProvider.stepout.outermost.frame")); // NOI18N
+                frontEndSemaphore.release();
+                return;
+            }
             rubySession.stepReturn();
         } else if (action == ActionsManager.ACTION_STEP_OVER) {
             rubySession.stepOver();
@@ -160,25 +170,22 @@ public final class RubyDebuggerActionProvider extends ActionsProviderSupport imp
         try {
             backEndSemaphore.acquire();
         } catch (InterruptedException e) {
-            Util.severe(e);
+            LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
             return;
         }
         synchronized (terminated) {
             if (terminated) {
-                Util.info("Flushing pending event: " + event + ", process is terminated."); // NOI18N
+                LOGGER.info("Flushing pending event: " + event + ", process is terminated."); // NOI18N
                 backEndSemaphore.release();
                 return;
             }
         }
-        if (event.isSuspensionType()) {
+        if (event.isSuspensionType() || event.isExceptionType()) {
             String path = event.getFilePath();
-            // HACK, do not try to step into the 'eval-code'. Cf. #106115.
+            // HACK, do not try to trace the 'eval-code'. Cf. #106115, #146894
             if ("(eval)".equals(path)) { // NOI18N
-                try {
-                    event.getRubyThread().stepReturn();
-                } catch (RubyDebuggerException e) {
-                    Util.severe(e);
-                }
+                rubySession.stepOver(true);
+                ContextProviderWrapper.getSessionsModel().fireChanges();
                 backEndSemaphore.release();
                 return;
             }
@@ -186,8 +193,10 @@ public final class RubyDebuggerActionProvider extends ActionsProviderSupport imp
             if (absPath != null) {
                 File file = new File(absPath);
                 FileObject fo = FileUtil.toFileObject(FileUtil.normalizeFile(file));
-                if (event.isStepping() || rubySession.isRunningTo(file, event.getLine()) ||
-                        (fo != null && RubyBreakpointManager.isBreakpointOnLine(fo, event.getLine()))) {
+                boolean shouldStop = event.isExceptionType() ||
+                        event.isStepping() || rubySession.isRunningTo(file, event.getLine()) ||
+                         (fo != null && RubyBreakpointManager.isBreakpointOnLine(fo, event.getLine()));
+                if (shouldStop) {
                     stopHere(event);
                 } else {
                     event.getRubyThread().resume();
@@ -201,7 +210,7 @@ public final class RubyDebuggerActionProvider extends ActionsProviderSupport imp
                     backEndSemaphore.release();
                     return;
                 } catch (RubyDebuggerException e) {
-                    Util.severe(e);
+                    LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
                 }
             }
         } else {
@@ -216,9 +225,9 @@ public final class RubyDebuggerActionProvider extends ActionsProviderSupport imp
      */
     private void finish(boolean terminate) {
         synchronized (terminated) {
-            Util.finest("Finishing session: " + rubySession.getName());
+            LOGGER.finer("Finishing session: " + rubySession.getName());
             if (terminated) {
-                Util.warning("Finish is not supposed to be called when a process is already terminated");
+                LOGGER.warning("Finish is not supposed to be called when a process is already terminated");
                 return;
             }
             terminated = true;
@@ -233,6 +242,7 @@ public final class RubyDebuggerActionProvider extends ActionsProviderSupport imp
     
     private void stopHere(final RubyDebugEvent suspensionEvent) {
         rubySession.suspend(suspensionEvent.getRubyThread(), contextProvider);
+        setEnabled(ActionsManager.ACTION_STEP_OUT, rubySession.getFrames().length != 1);
     }
 
 }
