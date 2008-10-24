@@ -39,18 +39,60 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.websvc.jaxrpc.actions;
+package org.netbeans.modules.websvc.design.schema2java;
 
-import org.netbeans.modules.websvc.api.webservices.WebServicesSupport;
+import java.util.List;
+import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.api.project.SourceGroup;
+import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
 import org.netbeans.modules.websvc.spi.support.AddOperationActionProvider;
 import org.netbeans.modules.websvc.api.support.AddOperationCookie;
+import org.netbeans.modules.websvc.design.view.actions.AddOperationAction;
+import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
-public class JaxRpcAddOperationProvider implements AddOperationActionProvider {
-	public AddOperationCookie getAddOperationCookie(FileObject fileObject) {
-        WebServicesSupport support = WebServicesSupport.getWebServicesSupport(fileObject);
-        if (support!=null && support.getServices().size()>0) 
-            return new JaxRpcAddOperation();
+public class WsdlAddOperationProvider implements AddOperationActionProvider {
+    
+    public AddOperationCookie getAddOperationCookie(FileObject fileObject) {
+        JAXWSSupport support = JAXWSSupport.getJAXWSSupport(fileObject);
+        if (support != null) {
+            String packageName = getPackageName(fileObject);
+            if (packageName != null) {
+                Service service = getService(support, packageName);
+                if (service != null && service.getWsdlUrl() != null && !service.isUseProvider()) return new AddOperationAction(service, fileObject);
+            }
+        }
+        return null;
+    }
+        
+    private Service getService(JAXWSSupport support, String packageName) {
+        List services = support.getServices();
+        for (Object service:services) {
+            if (packageName.equals(((Service)service).getImplementationClass())) {
+                return (Service)service;
+            } 
+        }
+        return null;
+    }
+    
+    private String getPackageName(FileObject fo) {
+        Project project = FileOwnerQuery.getOwner(fo);
+        SourceGroup[] groups = ProjectUtils.getSources(project).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
+        if (groups!=null) {
+            for (SourceGroup group: groups) {
+                FileObject rootFolder = group.getRootFolder();
+                if (FileUtil.isParentOf(rootFolder, fo)) {
+                    String relativePath = FileUtil.getRelativePath(rootFolder, fo).replace('/', '.');
+                    return (relativePath.endsWith(".java")? //NOI18N
+                        relativePath.substring(0,relativePath.length()-5):
+                        relativePath);
+                }
+            }
+        }
         return null;
     }
 

@@ -46,8 +46,7 @@ import com.sun.source.tree.MethodTree;
 import org.netbeans.modules.websvc.api.support.java.SourceUtils;
 import org.netbeans.modules.websvc.core._RetoucheUtil;
 import org.netbeans.modules.websvc.core.AddWsOperationHelper;
-import org.netbeans.modules.websvc.core.AddOperationCookie;
-import org.openide.filesystems.FileObject;
+import org.netbeans.modules.websvc.api.support.AddOperationCookie;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -118,7 +117,7 @@ public class JaxRpcAddOperation implements AddOperationCookie {
         }
     }
 
-    public boolean isEnabledInEditor(FileObject implClass) {
+    public boolean isEnabled(FileObject implClass) {
         return isWsImplBeanOrInterface(implClass);
     }
 
@@ -236,7 +235,10 @@ public class JaxRpcAddOperation implements AddOperationCookie {
     static WebserviceDescription findWSDescriptionFromClass(FileObject implClassFO) {
         WebServicesSupport wsSupport = WebServicesSupport.getWebServicesSupport(implClassFO);
         ClassPath classPath = ClassPath.getClassPath(implClassFO, ClassPath.SOURCE);
-        String implClassPath = classPath.getResourceName(implClassFO, '.', false);
+        String implClassPath = null;
+        if(classPath==null || (implClassPath = classPath.getResourceName(implClassFO, '.', false))==null) {
+            return null;
+        }
         if (wsSupport != null) {
             DDProvider wsDDProvider = DDProvider.getDefault();
             Webservices webServices = null;
