@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -97,7 +97,13 @@ public class UnitDetails extends DetailsPanel{
                     text += "<br>";
 
                 }
-                text += "<b>" + getBundle ("UnitDetails_Plugin_Version") + "</b>" + u.annotate(u.getDisplayVersion()) + "<br>"; // NOI18N
+                if (u instanceof Unit.Update) {
+                    Unit.Update uu = ((Unit.Update) u);
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_InstalledVersion") + "</b>" + u.annotate(uu.getInstalledVersion ()) + "<br>"; // NOI18N
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_AvailableVersion") + "</b>" + u.annotate(uu.getAvailableVersion ()) + "<br>"; // NOI18N
+                } else {
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_Version") + "</b>" + u.annotate(u.getDisplayVersion()) + "<br>"; // NOI18N
+                }
                 if (u.getAuthor () != null && u.getAuthor ().length () > 0) {
                     text += "<b>" + getBundle ("UnitDetails_Plugin_Author") + "</b>" + u.annotate(u.getAuthor ()) + "<br>"; // NOI18N
                 }
@@ -111,14 +117,14 @@ public class UnitDetails extends DetailsPanel{
                 }
                                 
                 if (u.getNotification() != null && u.getNotification().length () > 0) {
-                    text += "<br><h4>" + getBundle ("UnitDetails_Plugin_Notification") + "</h4>"; // NOI18N
+                    text += "<br><h3>" + getBundle ("UnitDetails_Plugin_Notification") + "</h3>"; // NOI18N
                     text += "<font color=\"red\">"; // NOI18N
                     text += u.annotate(u.getNotification ());
                     text += "</font><br>";  // NOI18N
                 }
                 
                 if (u.getDescription() != null && u.getDescription().length () > 0) {
-                    text += "<br><h4>" + getBundle ("UnitDetails_Plugin_Description") + "</h4>"; // NOI18N
+                    text += "<br><h3>" + getBundle ("UnitDetails_Plugin_Description") + "</h3>"; // NOI18N
                     text += u.annotate(u.getDescription ());
                 }
             } catch (CharConversionException e) {
