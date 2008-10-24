@@ -84,6 +84,8 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
      @deprecated Use getBasicHeight instead. */
     @Deprecated
     public static final int BASIC_HEIGHT = 34;
+
+    static final Logger LOG = Logger.getLogger(Toolbar.class.getName());
     
     /** 5 pixels is tolerance of toolbar height so toolbar can be high (BASIC_HEIGHT + HEIGHT_TOLERANCE)
         but it will be set to BASIC_HEIGHT high. */
@@ -190,7 +192,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
             try {
                 synthIconClass = Class.forName("sun.swing.plaf.synth.SynthIcon");
             } catch (ClassNotFoundException exc) {
-                Logger.getLogger(Toolbar.class.getName()).log(Level.INFO, null, exc);
+                LOG.log(Level.INFO, null, exc);
             }
         }
         return (synthIconClass != null);
@@ -286,7 +288,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
                                                                        backingFolder.delete();
                                                                    }
                                                                    catch (java.io.IOException e) {
-                                                                       Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING,
+                                                                       LOG.log(Level.WARNING,
                                                                                          null,
                                                                                          e);
                                                                    }
@@ -358,7 +360,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
         
         private Cursor dragMoveCursor = DragSource.DefaultMoveDrop;
         private Cursor dragNoDropCursor = DragSource.DefaultMoveNoDrop;
-        private Cursor dragRemoveCursor = Utilities.createCustomCursor( Toolbar.this, Utilities.loadImage( "org/openide/loaders/delete.gif"), "NO_ACTION_MOVE" );
+        private Cursor dragRemoveCursor = Utilities.createCustomCursor( Toolbar.this, ImageUtilities.loadImage( "org/openide/loaders/delete.gif"), "NO_ACTION_MOVE" );
         private Map<Component, DragGestureRecognizer> recognizers = new HashMap<Component, DragGestureRecognizer>();
         
         public DnDSupport() {
@@ -408,7 +410,8 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
         }
         
         public void dragGestureRecognized(DragGestureEvent e) {
-            if( !ToolbarPool.getDefault().isInEditMode() )  
+            if( !ToolbarPool.getDefault().isInEditMode()
+                    || "QuickSearch".equals(getName()) )  //HACK (137286)- there's not better way...
                 return;
             try {
                  Component c = e.getComponent();
@@ -447,8 +450,13 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
         }
         
         public void drop(DropTargetDropEvent dtde) {
-            if( validateDropPosition() ) {
-                dtde.dropComplete( handleDrop( dtde.getTransferable() ) );
+            boolean res = false;
+            try {
+                if( validateDropPosition() ) {
+                    res = handleDrop( dtde.getTransferable() );
+                }
+            } finally {
+                dtde.dropComplete(res);
             }
             resetDropGesture();
         }
@@ -581,11 +589,10 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
     private DataObject getDataObjectUnderDropCursor( int dropIndex, boolean dropBefore ) {
         DataObject[] buttons = backingFolder.getChildren();
         DataObject objUnderCursor = null;
-        boolean appendToEnd = false;
         if( buttons.length > 0 ) {
             if( !dropBefore )
                 dropIndex++;
-            if( dropIndex < buttons.length ) {
+            if( dropIndex < buttons.length && dropIndex >= 0 ) {
                 objUnderCursor = buttons[dropIndex];
             }
         }
@@ -787,7 +794,8 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
      * When Toolbar is floatable, ToolbarBump is added as Grip as first toolbar component
      * modified by Michael Wever, to use l&f's grip/bump. */
     void addGrip () {
-        if (floatable) {
+        //HACK (137286)- there's not better way...
+        if (floatable && !"QuickSearch".equals(getName()) ) { //NOI18N
             /** Uses L&F's grip **/
             String lfID = UIManager.getLookAndFeel().getID();
             JPanel dragarea = null;
@@ -840,11 +848,15 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
      * on the contrary to the programmatic name */
     public String getDisplayName () {
         if (displayName == null) {
-            if (!backingFolder.isValid()) {
-                // #17020
-                return backingFolder.getName();
+            if (backingFolder.isValid()) {
+                try {
+                    return backingFolder.getNodeDelegate ().getDisplayName ();
+                } catch (IllegalStateException ex) {
+                    // OK: #141387
+                }
             }
-            return backingFolder.getNodeDelegate ().getDisplayName ();
+            // #17020
+            return backingFolder.getName();
         }
         return displayName;
     }
@@ -853,6 +865,10 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
      * on the contrary to the programmatic name */
     public void setDisplayName (String displayName) {
         this.displayName = displayName;
+    }
+    
+    private static final void setToolTipText (JComponent comp, String text) {
+        comp.setToolTipText(Actions.cutAmpersand(text));
     }
 
     /** Fire drag of Toolbar
@@ -1094,7 +1110,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
                              a.getValue(javax.swing.Action.NAME).toString().length() ==
                              0)) {
                             a.putValue(javax.swing.Action.SMALL_ICON,
-                                       new ImageIcon( Utilities.loadImage( "org/openide/loaders/unknown.gif") ));
+                                       new ImageIcon( ImageUtilities.loadImage( "org/openide/loaders/unknown.gif") ));
                         }
                         org.openide.awt.Actions.connect(b, a);
                         b.putClientProperty("file", file);
@@ -1103,10 +1119,10 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
                     }
                 }
                 catch (java.io.IOException ex) {
-                    Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING, null, ex);
+                    LOG.log(Level.WARNING, null, ex);
                 }
                 catch (java.lang.ClassNotFoundException ex) {
-                    Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING, null, ex);
+                    LOG.log(Level.WARNING, null, ex);
                 }
                 finally {
                     cookiesToObjects.clear();
@@ -1149,7 +1165,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
             int width = WIDTH;
             dim = new Dimension (width, width);
             max = new Dimension (width, Integer.MAX_VALUE);
-            this.setToolTipText (Toolbar.this.getDisplayName());
+            Toolbar.setToolTipText (this, Toolbar.this.getDisplayName());
         }
 
         /** Paint bumps to specific Graphics. */
@@ -1222,7 +1238,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
             }
             dim = new Dimension (width, width);
             max = new Dimension (width, Integer.MAX_VALUE);
-            this.setToolTipText (Toolbar.this.getDisplayName());
+            Toolbar.setToolTipText (this, Toolbar.this.getDisplayName());
         }
         
         /** Paint bumps to specific Graphics. */
@@ -1241,31 +1257,31 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
                 try {
                     m = synthIconClass.getMethod("getIconWidth",Icon.class, SynthContext.class);
                 } catch (NoSuchMethodException exc) {
-                    Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING, null, exc);
+                    LOG.log(Level.WARNING, null, exc);
                 }
                 int width = 0;
                 //width = SynthIcon.getIconWidth(icon, context);
                 try {
                     width = (Integer) m.invoke(null, new Object [] {icon, context});
                 } catch (IllegalAccessException exc) {
-                    Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING, null, exc);
+                    LOG.log(Level.WARNING, null, exc);
                 } catch (InvocationTargetException exc) {
-                    Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING, null, exc);
+                    LOG.log(Level.WARNING, null, exc);
                 }
                 try {
                     m = synthIconClass.getMethod("paintIcon",Icon.class,SynthContext.class,                            
                     Graphics.class,Integer.TYPE,Integer.TYPE,Integer.TYPE,Integer.TYPE);
                 } catch (NoSuchMethodException exc) {
-                    Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING, null, exc);
+                    LOG.log(Level.WARNING, null, exc);
                 }
                 //SynthIcon.paintIcon(icon, context, g, 0, 0, width, height);
                 try {
                     m.invoke(null, new Object [] {icon,context,g,new Integer(0),new Integer(-1),
                     new Integer(width),new Integer(height)});
                 } catch (IllegalAccessException exc) {
-                    Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING, null, exc);
+                    LOG.log(Level.WARNING, null, exc);
                 } catch (InvocationTargetException exc) {
-                    Logger.getLogger(Toolbar.class.getName()).log(Level.WARNING, null, exc);
+                    LOG.log(Level.WARNING, null, exc);
                 }                    
             } else {
                 Dimension size = this.getSize();
@@ -1332,7 +1348,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
         public ToolbarAqua() {
             dim = new Dimension (WIDTH, WIDTH);
             max = new Dimension (WIDTH, Integer.MAX_VALUE);
-            this.setToolTipText (Toolbar.this.getDisplayName());
+            Toolbar.setToolTipText (this, Toolbar.this.getDisplayName());
         }
         
         @Override
@@ -1414,7 +1430,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
         public ToolbarXP() {
             dim = new Dimension (WIDTH, WIDTH);
             max = new Dimension (WIDTH, Integer.MAX_VALUE);
-            this.setToolTipText (Toolbar.this.getDisplayName());
+            Toolbar.setToolTipText (this, Toolbar.this.getDisplayName());
         }
         
         @Override
@@ -1541,7 +1557,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
             dim = new Dimension (width, width);
             max = new Dimension (width, Integer.MAX_VALUE);
             this.setBorder (new EmptyBorder (VGAP, HGAP, VGAP, HGAP));
-            this.setToolTipText (Toolbar.this.getDisplayName());
+            Toolbar.setToolTipText (this, Toolbar.this.getDisplayName());
         }
 
         /** Paint grip to specific Graphics. */
@@ -1648,7 +1664,7 @@ public class Toolbar extends JToolBar /*implemented by patchsuperclass MouseInpu
             Icon retValue = super.getIcon();
             if( null == retValue && (null == getText() || getText().length() == 0 ) ) {
                 if (unknownIcon == null) {
-                    unknownIcon = new ImageIcon( Utilities.loadImage( "org/openide/loaders/unknown.gif") );
+                    unknownIcon = new ImageIcon( ImageUtilities.loadImage( "org/openide/loaders/unknown.gif") );
                 }
                 retValue = unknownIcon;
             }
