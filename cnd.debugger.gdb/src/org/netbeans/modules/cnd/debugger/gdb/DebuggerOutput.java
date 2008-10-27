@@ -51,7 +51,6 @@ import org.netbeans.api.debugger.ActionsManager;
 import org.netbeans.api.debugger.ActionsManagerListener;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.LazyActionsManagerListener;
-//import org.netbeans.modules.cnd.debugger.gdb.GdbThread;
 import org.netbeans.spi.debugger.ContextProvider;
 
 import org.openide.util.NbBundle;
@@ -106,26 +105,37 @@ public class DebuggerOutput extends LazyActionsManagerListener implements Proper
     }
 
     public void propertyChange(PropertyChangeEvent evt) {
-        String debuggerState;
+        GdbDebugger.State debuggerState;
         synchronized (this) {
             if (debugger == null) {
                 return;
             }
             debuggerState = debugger.getState();
         }
-        if (debuggerState.equals(GdbDebugger.STATE_STARTING)) {
-            print("CTL_Launching", new String[] { }, null); // NOI18N
-        } else if (debuggerState.equals(GdbDebugger.STATE_RUNNING)) {
-            print("CTL_Debugger_running", new String[] { }, null); // NOI18N
-        } else if (debuggerState.equals(GdbDebugger.STATE_EXITED)) {
-            print("CTL_Debugger_finished", new String[] { }, null); // NOI18N
-        } else if (debuggerState.equals(GdbDebugger.STATE_NONE)) {
-            print("CTL_Debugger_finished", null, null); // NOI18N
-            if (ioManager != null) {
-                ioManager.closeStream();
-            }
-        } else if (debuggerState.equals(GdbDebugger.STATE_STOPPED)) {
-            print("CTL_Debugger_stopped", new String[] { }, null); // NOI18N
+        switch (debuggerState) {
+            case STARTING:
+                print("CTL_Launching", null, null); // NOI18N
+                break;
+            case RUNNING:
+                print("CTL_Debugger_running", null, null); // NOI18N
+                break;
+            case EXITED:
+                print("CTL_Debugger_finished", null, null); // NOI18N
+                break;
+            case NONE:
+                print("CTL_Debugger_finished", null, null); // NOI18N
+                if (ioManager != null) {
+                    ioManager.closeStream();
+                }
+                break;
+            case STOPPED:
+                String sig = debugger.getSignal();
+                if (sig != null) {
+                    print("CTL_Debugger_stopped_by_signal", new String[] { sig }, null); // NOI18N
+                } else {
+                    print("CTL_Debugger_stopped", null, null); // NOI18N
+                }
+                break;
         }
     }
 
