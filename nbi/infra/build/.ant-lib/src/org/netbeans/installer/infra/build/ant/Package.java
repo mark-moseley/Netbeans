@@ -131,7 +131,7 @@ public class Package extends Task {
             output = new JarOutputStream(new FileOutputStream(file));
             output.setLevel(9);
             
-            log("browsing, packing, archiving directory"); // NOI18N
+            log("browsing, packing, archiving directory " + directory.getCanonicalPath()); // NOI18N
             browse(directory.getCanonicalFile(),
                     output,
                     directory.getCanonicalPath().length());
@@ -179,6 +179,8 @@ public class Package extends Task {
                 writer.write(">" + entry. // NOI18N
                         getName().
                         replace("&", "&amp;"). // NOI18N
+                        replace("\'","&apos;"). //NOI18N
+                        replace("\"","&quot;"). //NOI18N
                         replace("<", "&lt;"). // NOI18N
                         replace(">", "&gt;") + "</entry>\n"); // NOI18N
             }
@@ -196,7 +198,9 @@ public class Package extends Task {
             throw new BuildException(e);
         }
     }
-    
+    private String getShortPath(File file) {
+        return file.getAbsolutePath().substring(directory.getAbsolutePath().length() - 1);
+    }
     // private //////////////////////////////////////////////////////////////////////
     private void browse(
             final File parent,
@@ -207,11 +211,11 @@ public class Package extends Task {
         
         for (File child: parent.listFiles()) {
             if (toSkip.contains(child)) {
-                log("    skipping " + child); // NOI18N
+                log("    skipping " + getShortPath(child)); // NOI18N
                 continue;
             }
             
-            log("    visiting " + child); // NOI18N
+            log("    visiting " + getShortPath(child)); // NOI18N
             
             final String path = child.getAbsolutePath();
             String name = path.substring(offset + 1).replace('\\', '/');    // NOMAGI
@@ -264,7 +268,7 @@ public class Package extends Task {
                             child = unpacked.getAbsoluteFile();
                             
                             log("        successfully unpacked - processing " + // NOI18N
-                                    "file: " + child); // NOI18N
+                                    "file: " + getShortPath(child)); // NOI18N
                         } else {
                             unpacked.delete();
                             if (temp != null) {
