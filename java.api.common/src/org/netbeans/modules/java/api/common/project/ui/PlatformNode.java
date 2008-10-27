@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.java.j2seproject.ui;
+package org.netbeans.modules.java.api.common.project.ui;
 
 
 import java.beans.PropertyChangeEvent;
@@ -50,7 +50,6 @@ import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
@@ -61,23 +60,23 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery;
-import org.netbeans.modules.java.j2seproject.J2SEProjectUtil;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.nodes.Children;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
-import org.openide.ErrorManager;
 import org.netbeans.api.java.platform.JavaPlatform;
-import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.modules.java.api.common.classpath.ClassPathSupport;
+import org.netbeans.modules.java.api.common.util.CommonProjectUtils;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.java.project.support.ui.PackageView;
 import org.openide.util.ChangeSupport;
+import org.openide.util.Exceptions;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.Lookups;
 import org.openide.xml.XMLUtil;
@@ -94,22 +93,24 @@ import org.openide.xml.XMLUtil;
  */
 class PlatformNode extends AbstractNode implements ChangeListener {
 
-    private static final String PLATFORM_ICON = "org/netbeans/modules/java/j2seproject/ui/resources/platform";    //NOI18N
-    private static final String ARCHIVE_ICON = "org/netbeans/modules/java/j2seproject/ui/resources/jar.gif"; //NOI18N
+    private static final String PLATFORM_ICON = "org/netbeans/modules/j2ee/common/project/ui/resources/platform.gif";    //NOI18N
+    private static final String ARCHIVE_ICON = "org/netbeans/modules/j2ee/common/project/ui/resources/jar.gif"; //NOI18N
 
     private final PlatformProvider pp;
 
-    private PlatformNode (PlatformProvider pp) {
-        super (new PlatformContentChildren (), Lookups.singleton (new JavadocProvider(pp)));        
+    private PlatformNode(PlatformProvider pp, ClassPathSupport cs) {
+        super (new PlatformContentChildren (cs), Lookups.singleton (new JavadocProvider(pp)));        
         this.pp = pp;
         this.pp.addChangeListener(this);
-        setIconBase(PLATFORM_ICON);
+        setIconBaseWithExtension(PLATFORM_ICON);
     }
 
+    @Override
     public String getName () {
         return this.getDisplayName();
     }
 
+    @Override
     public String getDisplayName () {
         JavaPlatform plat = pp.getPlatform();
         String name;
@@ -128,6 +129,7 @@ class PlatformNode extends AbstractNode implements ChangeListener {
         return name;
     }
     
+    @Override
     public String getHtmlDisplayName () {
         if (pp.getPlatform() == null) {
             String displayName = this.getDisplayName();
@@ -144,10 +146,12 @@ class PlatformNode extends AbstractNode implements ChangeListener {
         }                                
     }
 
+    @Override
     public boolean canCopy() {
         return false;
     }
     
+    @Override
     public Action[] getActions(boolean context) {
         return new Action[] {
             SystemAction.get (ShowJavadocAction.class)
@@ -172,45 +176,46 @@ class PlatformNode extends AbstractNode implements ChangeListener {
      * @param platformPropName the name of ant property holding the platform name
      *
      */
-    static PlatformNode create (PropertyEvaluator eval, String platformPropName) {
+    public static PlatformNode create (PropertyEvaluator eval, String platformPropName, ClassPathSupport cs) {
         PlatformProvider pp = new PlatformProvider (eval, platformPropName);
-        return new PlatformNode (pp);
+        return new PlatformNode (pp, cs);
     }
 
-    private static class PlatformContentChildren extends Children.Keys {
+    private static class PlatformContentChildren extends Children.Keys<SourceGroup> {
 
-        PlatformContentChildren () {
+        PlatformContentChildren (ClassPathSupport cs) {
         }
 
+        @Override
         protected void addNotify() {
             this.setKeys (this.getKeys());
         }
 
+        @Override
         protected void removeNotify() {
-            this.setKeys(Collections.EMPTY_SET);
+            this.setKeys(Collections.<SourceGroup>emptySet());
         }
 
-        protected Node[] createNodes(Object key) {
-            SourceGroup sg = (SourceGroup) key;
-            return new Node[] {ActionFilterNode.create(PackageView.createPackageView(sg), null, null, null, null)};
+        protected Node[] createNodes(SourceGroup sg) {
+            return new Node[] {ActionFilterNode.create(PackageView.createPackageView(sg), null,null,null,null,null,null)};
         }
 
-        private List getKeys () {            
+        private List<SourceGroup> getKeys () {            
             JavaPlatform platform = ((PlatformNode)this.getNode()).pp.getPlatform();
             if (platform == null) {
-                return Collections.EMPTY_LIST;
+                return Collections.<SourceGroup>emptyList();
             }
             //Todo: Should listen on returned classpath, but now the bootstrap libraries are read only
             FileObject[] roots = platform.getBootstrapLibraries().getRoots();
-            List result = new ArrayList (roots.length);
-            for (int i=0; i<roots.length; i++) {
+            List<SourceGroup> result = new ArrayList<SourceGroup>(roots.length);
+            for (int i = 0; i < roots.length; i++) {
                 try {
                     FileObject file;
                     Icon icon;
                     Icon openedIcon;
                     if ("jar".equals(roots[i].getURL().getProtocol())) { //NOI18N
                         file = FileUtil.getArchiveFile (roots[i]);
-                        icon = openedIcon = new ImageIcon (Utilities.loadImage(ARCHIVE_ICON));
+                        icon = openedIcon = new ImageIcon (ImageUtilities.loadImage(ARCHIVE_ICON));
                     }
                     else {
                         file = roots[i];
@@ -222,7 +227,7 @@ class PlatformNode extends AbstractNode implements ChangeListener {
                         result.add (new LibrariesSourceGroup(roots[i],file.getNameExt(),icon, openedIcon));
                     }
                 } catch (FileStateInvalidException e) {
-                    ErrorManager.getDefault().notify(e);
+                    Exceptions.printStackTrace(e);
                 }
             }
             return result;
@@ -248,31 +253,17 @@ class PlatformNode extends AbstractNode implements ChangeListener {
         
         public JavaPlatform getPlatform () {
             if (platformCache == null) {
-                final String platformSystemName = getPlatformId();
-                platformCache = J2SEProjectUtil.getActivePlatform (platformSystemName);
-                if (platformCache != null && platformCache.getInstallFolders().size() == 0) {
-                    //Deleted platform
-                    platformCache = null;
-                }                                
-                //Issue: #57840: Broken platform 'default_platform'
-                if (ErrorManager.getDefault().isLoggable(ErrorManager.INFORMATIONAL) && platformCache == null) {
-                    StringBuffer message = new StringBuffer ("RequestedPlatform: "+platformSystemName+" not found.\nInstalled Platforms:\n");    //NOI18N
-                    JavaPlatform[] platforms = JavaPlatformManager.getDefault().getInstalledPlatforms();
-                    for (int i=0; i<platforms.length; i++) {
-                        message.append ("Name: "+platforms[i].getProperties().get("platform.ant.name")+" Broken: "+ (platforms[i].getInstallFolders().size() == 0) + "\n");  //NOI18N
-                    }
-                    ErrorManager.getDefault().log (ErrorManager.INFORMATIONAL, message.toString());
-                }
-            }            
+                platformCache = CommonProjectUtils.getActivePlatform (getPlatformId());
+            }
             return platformCache;
         }
         
         public void addChangeListener (ChangeListener l) {
-            changeSupport.addChangeListener (l);
+            changeSupport.addChangeListener(l);
         }
         
         public void removeChangeListener (ChangeListener l) {
-            changeSupport.removeChangeListener (l);
+            changeSupport.removeChangeListener(l);
         }
         
         public void propertyChange(PropertyChangeEvent evt) {
@@ -315,13 +306,12 @@ class PlatformNode extends AbstractNode implements ChangeListener {
         
         
         private static URL[]  getJavadocRoots (JavaPlatform platform) {
-            Set result = new HashSet ();
-            List/*<ClassPath.Entry>*/ l = platform.getBootstrapLibraries().entries();            
-            for (Iterator it = l.iterator(); it.hasNext();) {
-                ClassPath.Entry e = (ClassPath.Entry) it.next ();                
+            Set<URL> result = new HashSet<URL>();
+            List<ClassPath.Entry> l = platform.getBootstrapLibraries().entries();            
+            for (ClassPath.Entry e : l) {
                 result.addAll(Arrays.asList(JavadocForBinaryQuery.findJavadoc (e.getURL()).getRoots()));
             }
-            return (URL[]) result.toArray (new URL[result.size()]);
+            return result.toArray (new URL[result.size()]);
         }
         
         
