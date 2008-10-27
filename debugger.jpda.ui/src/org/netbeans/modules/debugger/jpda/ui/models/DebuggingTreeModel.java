@@ -65,7 +65,6 @@ import org.netbeans.api.debugger.jpda.CallStackFrame;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.JPDAThreadGroup;
-import org.netbeans.api.debugger.jpda.ThreadsCollector;
 import org.netbeans.modules.debugger.jpda.ui.models.SourcesModel.AbstractColumn;
 import org.netbeans.spi.debugger.ContextProvider;
 
@@ -499,7 +498,7 @@ public class DebuggingTreeModel extends CachedChildrenTreeModel {
         }
     }
 
-    static boolean isMethodInvoking(JPDAThread t) {
+    public static boolean isMethodInvoking(JPDAThread t) {
         try {
             return (Boolean) t.getClass().getMethod("isMethodInvoking").invoke(t);
         } catch (IllegalAccessException ex) {
@@ -542,16 +541,12 @@ public class DebuggingTreeModel extends CachedChildrenTreeModel {
                 getString ("CTL_Debugging_Column_Name_Name");
         }
 
-        public Character getDisplayedMnemonic() {
-            return new Character(NbBundle.getBundle(DebuggingTreeModel.class).getString 
-                ("CTL_Debugging_Column_Name_Name_Mnc").charAt(0));
-        }
-
         /**
          * Returns tooltip for given column.
          *
          * @return  tooltip for given node
          */
+        @Override
         public String getShortDescription () {
             return NbBundle.getBundle (DebuggingTreeModel.class).getString
                 ("CTL_Debugging_Column_Name_Desc");
@@ -590,11 +585,6 @@ public class DebuggingTreeModel extends CachedChildrenTreeModel {
         public String getDisplayName () {
             return NbBundle.getBundle (DebuggingTreeModel.class).getString 
                 ("CTL_Debugging_Column_Suspend_Name");
-        }
-
-        public Character getDisplayedMnemonic() {
-            return new Character(NbBundle.getBundle(DebuggingTreeModel.class).getString 
-                ("CTL_Debugging_Column_Suspend_Name_Mnc").charAt(0));
         }
 
         /**
