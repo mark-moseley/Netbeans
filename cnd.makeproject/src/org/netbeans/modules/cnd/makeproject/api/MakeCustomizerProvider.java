@@ -48,6 +48,9 @@ import java.text.MessageFormat;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.Vector;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.WeakHashMap;
 import javax.swing.JButton;
 import org.netbeans.api.project.Project;
@@ -87,6 +90,7 @@ public class MakeCustomizerProvider implements CustomizerProvider {
     private DialogDescriptor dialogDescriptor;
     private Map customizerPerProject = new WeakHashMap (); // Is is weak needed here?
     private ConfigurationDescriptorProvider projectDescriptorProvider;
+    private final Set<ActionListener> actionListenerList = new HashSet<ActionListener>();
     
     public MakeCustomizerProvider(Project project, ConfigurationDescriptorProvider projectDescriptorProvider) {
         this.project = project;
@@ -110,13 +114,17 @@ public class MakeCustomizerProvider implements CustomizerProvider {
     }
     
     public void showCustomizer(final String preselectedNodeName, final Item item, final Folder folder) {
+        if (!projectDescriptorProvider.gotDescriptor()) {
+            //TODO: show warning dialog
+            return;
+        }
         RequestProcessor.Task task = RequestProcessor.getDefault().post(new Runnable() {
             public void run() {
                 showCustomizerWorker(preselectedNodeName, item, folder);
             }
         });     
     }
-    
+
     private void showCustomizerWorker(String preselectedNodeName, Item item, Folder folder) {
         
         if (customizerPerProject.containsKey (project)) {
@@ -137,6 +145,9 @@ public class MakeCustomizerProvider implements CustomizerProvider {
                 folder.getFolderConfiguration(configurations[i]);
             }
         }
+        
+        // Make sure all languages are update
+        ((MakeConfigurationDescriptor)projectDescriptorProvider.getConfigurationDescriptor()).refreshRequiredLanguages();
 
         // Create options
         JButton options[] = new JButton[] { 
@@ -170,12 +181,27 @@ public class MakeCustomizerProvider implements CustomizerProvider {
         options[ OPTION_OK ].addActionListener( optionsListener );
         options[ OPTION_CANCEL ].addActionListener( optionsListener );
         options[ OPTION_APPLY ].addActionListener( optionsListener );
+        
+        String dialogTitle = null;
+        if (item != null) {
+            dialogTitle = MessageFormat.format(
+                    NbBundle.getMessage(MakeCustomizerProvider.class, "LBL_File_Customizer_Title"),
+                    new Object[] {item.getFile().getName()}); // NOI18N 
+        }
+        else if (folder != null) {
+            dialogTitle = MessageFormat.format(
+                    NbBundle.getMessage(MakeCustomizerProvider.class, "LBL_Folder_Customizer_Title"),
+                    new Object[] {folder.getName()}); // NOI18N 
+        }
+        else {
+            dialogTitle = MessageFormat.format(
+                    NbBundle.getMessage(MakeCustomizerProvider.class, "LBL_Project_Customizer_Title"),
+                    new Object[] {ProjectUtils.getInformation(project).getDisplayName()}); // NOI18N 
+        }
 
         dialogDescriptor = new DialogDescriptor( 
             innerPane, // innerPane
-            MessageFormat.format(                 // displayName
-                NbBundle.getMessage( MakeCustomizerProvider.class, "LBL_Customizer_Title" ), // NOI18N 
-                new Object[] { ProjectUtils.getInformation(project).getDisplayName() } ),    
+            dialogTitle,
             true,                                  // modal
             options,                                // options
             options[OPTION_OK],                     // initial value
@@ -189,13 +215,13 @@ public class MakeCustomizerProvider implements CustomizerProvider {
 
         customizerPerProject.put (project, dialog);
         dialog.setVisible(true);
-        
+        clonedProjectdescriptor.closed();
     }    
     
 
     
     /** Listens to the actions on the Customizer's option buttons */
-    private static class OptionListener implements ActionListener {
+    private class OptionListener implements ActionListener {
     
         private Project project;
 	private ConfigurationDescriptor projectDescriptor;
@@ -225,27 +251,50 @@ public class MakeCustomizerProvider implements CustomizerProvider {
                     if (DialogDisplayer.getDefault().notify(d) != NotifyDescriptor.YES_OPTION) {
                         return;
                     }
+                    projectDescriptor.setVersion(currentVersion);
                 }
                 
 		//projectDescriptor.copyFromProjectDescriptor(clonedProjectdescriptor);
+                makeCustomizer.save();
 		projectDescriptor.assign(clonedProjectdescriptor);
 		projectDescriptor.setModified();
+                projectDescriptor.save(); // IZ 133606
                 ((MakeConfigurationDescriptor)projectDescriptor).checkForChangedItems(project, folder, item);
 
 		((MakeSources)ProjectUtils.getSources(project)).descriptorChanged();// FIXUP: should be moved into ProjectDescriptorHelper...
                 
-//                // And save the project
-//                try {
-//                    ProjectManager.getDefault().saveProject(project);
-//                }
-//                catch ( IOException ex ) {
-//                    ErrorManager.getDefault().notify( ex );
-//                }
+                fireActionEvent(e);
+                
             }
             if (command.equals(COMMAND_APPLY)) {
 		makeCustomizer.refresh();
 	    }
+            if (command.equals(COMMAND_OK) || command.equals(COMMAND_CANCEL))
+                actionListenerList.clear();
         }        
+    }
+    
+    public void addActionListener(ActionListener cl) {
+        synchronized (actionListenerList) {
+            actionListenerList.add(cl);
+        }
+    }
+    
+    public void removeActionListener(ActionListener cl) {
+        synchronized (actionListenerList) {
+            actionListenerList.remove(cl);
+        }
+    }
+    
+    public void fireActionEvent(ActionEvent e) {
+        Iterator it;
+        
+        synchronized (actionListenerList) {
+            it = new HashSet(actionListenerList).iterator();
+        }
+        while (it.hasNext()) {
+            ((ActionListener)it.next()).actionPerformed(e);
+        }
     }
     
     
