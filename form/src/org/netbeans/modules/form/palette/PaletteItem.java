@@ -111,7 +111,7 @@ public final class PaletteItem implements Node.Cookie {
      * normally used only for project output).
      */
     public void setClassFromCurrentProject(String className, FileObject fileInProject) {
-        setComponentClassSource(new ClassSource(className, null, null));
+        setComponentClassSource(new ClassSource((className == null) ? null : className.trim()));
         cpRepresentative = fileInProject;
     }
 
@@ -119,7 +119,7 @@ public final class PaletteItem implements Node.Cookie {
 
     /** @return a node visually representing this palette item */
     public Node getNode() {
-        return (itemDataObject == null) ? null : itemDataObject.getNodeDelegate();
+        return ((itemDataObject == null) || !itemDataObject.isValid()) ? null : itemDataObject.getNodeDelegate();
     }
 
     /** @return a String identifying this palette item */
