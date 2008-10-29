@@ -42,6 +42,7 @@
 package org.netbeans.modules.favorites;
 
 import java.awt.Image;
+import java.awt.datatransfer.Transferable;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -60,15 +61,19 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.Repository;
+import org.openide.loaders.ChangeableDataFilter;
+import org.openide.loaders.DataFilter;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataShadow;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Index;
 import org.openide.nodes.Node;
+import org.openide.util.ChangeSupport;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
+import org.openide.util.datatransfer.PasteType;
 
 /**
  *
@@ -83,6 +88,12 @@ final class Favorites extends FilterNode implements Index {
     /** Creates new ProjectRootFilterNode. */
     private Favorites(Node node) {
         super(node, new Chldrn (node, false));
+    }
+
+    @Override
+    public PasteType getDropType(Transferable t, int action, int index) {
+        //Disable drop till it is not specified what we should do.
+        return null;
     }
     
     @Override
@@ -186,12 +197,12 @@ final class Favorites extends FilterNode implements Index {
     
     @Override
     public Image getIcon (int type) {
-        return Utilities.loadImage("org/netbeans/modules/favorites/resources/actionSelect.png"); // NOI18N
+        return ImageUtilities.loadImage("org/netbeans/modules/favorites/resources/actionSelect.png"); // NOI18N
     }
     
     @Override
     public Image getOpenedIcon (int type) {
-        return Utilities.loadImage("org/netbeans/modules/favorites/resources/actionSelect.png"); // NOI18N
+        return ImageUtilities.loadImage("org/netbeans/modules/favorites/resources/actionSelect.png"); // NOI18N
     }
     
     @Override
@@ -278,43 +289,71 @@ final class Favorites extends FilterNode implements Index {
         }
     }
 
-    private static class Chldrn extends FilterNode.Children 
-    implements ChangeListener, Runnable {
+
+
+    static class VisQ 
+    implements DataFilter.FileBased, ChangeableDataFilter, ChangeListener {
+        public static final VisQ DEFAULT = new VisQ();
+
         private ChangeListener weak;
-        private boolean hideHidden;
-        /** Creates new Chldrn. */
-        public Chldrn (Node node, boolean hideHidden) {
-            super (node);
-            this.hideHidden = hideHidden;
-            
+        private ChangeSupport support = new ChangeSupport(this);
+
+        VisQ() {
             weak = org.openide.util.WeakListeners.change(this, VisibilityQuery.getDefault());
             VisibilityQuery.getDefault().addChangeListener(weak);
         }
         
+        public boolean acceptFileObject(FileObject fo) {
+            return VisibilityQuery.getDefault().isVisible(fo);
+        }
+
+        public boolean acceptDataObject(DataObject obj) {
+            return VisibilityQuery.getDefault().isVisible(obj.getPrimaryFile());
+        }
+
+        public void addChangeListener(ChangeListener listener) {
+            support.addChangeListener(listener);
+        }
+
+        public void removeChangeListener(ChangeListener listener) {
+            support.removeChangeListener(listener);
+        }
+
+        public void stateChanged(ChangeEvent e) {
+            support.fireChange();
+        }
+    } // end of VisQ
+    
+    private static class Chldrn extends FilterNode.Children {
+        private boolean hideHidden;
+        /** Creates new Chldrn. */
+        public Chldrn(Node node, boolean hideHidden) {
+            super (node);
+            this.hideHidden = hideHidden;
+        }
+        
         @Override
         protected Node[] createNodes(Node node) {
+            org.openide.nodes.Children ch = Children.LEAF;
+            DataObject obj = node.getLookup().lookup(DataObject.class);
             if (hideHidden) {
-                DataObject obj = node.getCookie(DataObject.class);
                 if (obj != null && !VisibilityQuery.getDefault().isVisible(obj.getPrimaryFile())) {
                     return null;
                 }
             }
-            
-            return new Node[] { new ProjectFilterNode (
-                node,
-                (node.isLeaf ()) ? org.openide.nodes.Children.LEAF : new Chldrn (node, true)
-            )};
-        }
 
-        public void stateChanged(ChangeEvent e) {
-            MUTEX.postWriteRequest(this);
-        }
-        
-        public void run() {
-            Node[] arr = original.getChildren().getNodes();
-            for (int i = 0; i < arr.length; i++) {
-                refreshKey(arr[i]);
+            DataFolder folder = node.getLookup().lookup(DataFolder.class);
+            if (folder != null) {
+                ch = new Chldrn(new FilterNode(node, folder.createNodeChildren(new VisQ())), true);
+            } else {
+                if (node.isLeaf()) {
+                    ch = org.openide.nodes.Children.LEAF;
+                } else {
+                    ch = new Chldrn(node, true);
+                }
             }
+            
+            return new Node[] { new ProjectFilterNode (node, ch) };
         }
     } // end of Chldrn
 
@@ -329,6 +368,19 @@ final class Favorites extends FilterNode implements Index {
             super (node, children);
         }
         
+        @Override
+        public void setName(String name) {
+            // #113859 - keep order of children in favorites folder after rename
+            final DataFolder favoritesFolder = Favorites.getFolder();
+            final DataObject[] children = favoritesFolder.getChildren();
+            super.setName(name);
+            try {
+                favoritesFolder.setOrder(children);
+            } catch (IOException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+
         @Override
         public String getDisplayName () {
             //Change display name only for favorite nodes (links) under Favorites node.
