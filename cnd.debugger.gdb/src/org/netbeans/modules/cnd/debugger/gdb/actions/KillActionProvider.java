@@ -48,10 +48,7 @@
 package org.netbeans.modules.cnd.debugger.gdb.actions;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
 
 import org.openide.util.RequestProcessor;
@@ -62,7 +59,6 @@ import org.netbeans.spi.debugger.ActionsProviderListener;
 import org.netbeans.spi.debugger.ContextProvider;
 
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
 
 /**
  * Termination of a debugging session.
@@ -70,14 +66,11 @@ import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
  */
 public class KillActionProvider extends ActionsProvider {
     
-    private ContextProvider lookupProvider;
     private GdbDebugger debuggerImpl;
     
     public KillActionProvider(ContextProvider lookupProvider) {
-        debuggerImpl = (GdbDebugger) lookupProvider.lookupFirst
-                (null, GdbDebugger.class);
+        debuggerImpl = (GdbDebugger) lookupProvider.lookupFirst(null, GdbDebugger.class);
         //super (debuggerImpl);
-        this.lookupProvider = lookupProvider;
     }
     
     /**
@@ -126,6 +119,7 @@ public class KillActionProvider extends ActionsProvider {
      *        done.
      * @since 1.5
      */
+    @Override
     public void postAction(final Object action,
             final Runnable actionPerformedNotifier) {
         RequestProcessor.getDefault().post(new Runnable() {

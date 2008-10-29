@@ -134,7 +134,7 @@ public class GdbDebugger implements PropertyChangeListener {
         CONTINUE, FINISH, STEP, NEXT;
     }
 
-    public static String DONE_PREFIX = "^done"; // NOI18N
+    public static final String DONE_PREFIX = "^done"; // NOI18N
 
     private LastGoState                 lastGo;
     private String                      lastStop;
@@ -801,51 +801,31 @@ public class GdbDebugger implements PropertyChangeListener {
         return null;
     }
 
-    private String getPathFromSymlink(String apath) {
-        SymlinkCommand slink = new SymlinkCommand(apath);
-        return slink.getPath();
-    }
+    private static String getPathFromSymlink(String path) {
+        File ls = new File("/bin/ls"); // NOI18N
+        if (ls.isFile()) {
+            List<String> list = new ArrayList<String>();
+            list.add(ls.getAbsolutePath());
+            list.add("-l"); // NOI18N
+            list.add(path);
+            ProcessBuilder pb = new ProcessBuilder(list);
+            pb.redirectErrorStream(true);
 
-    private static class SymlinkCommand {
-
-        private String path;
-        private ProcessBuilder pb;
-        private String linkline;
-
-        SymlinkCommand(String path) {
-            this.path = path;
-            linkline = null;
-            File file = new File("/bin/ls"); // NOI18N
-
-            if (file.exists()) {
-                List<String> list = new ArrayList<String>();
-                list.add("/bin/ls"); // NOI18N
-                list.add("-l"); // NOI18N
-                list.add(path);
-                pb = new ProcessBuilder(list);
-                pb.redirectErrorStream(true);
-            } else {
-                pb = null;
-            }
-        }
-
-        public String getPath() {
-            if (pb != null) {
-                try {
-                    Process process = pb.start();
-                    BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                    String line = br.readLine(); // just read 1st line...
-                    br.close();
+            try {
+                Process process = pb.start();
+                BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                String line = br.readLine(); // just read 1st line...
+                br.close();
+                if (line != null) {
                     int pos = line.indexOf("->"); // NOI18N
                     if (pos > 0) {
                         return line.substring(pos + 2).trim();
                     }
-                } catch (IOException ioe) {
                 }
-
+            } catch (IOException ioe) {
             }
-            return linkline;
         }
+        return null;
     }
 
     public GdbProxy getGdbProxy() {
@@ -909,9 +889,9 @@ public class GdbDebugger implements PropertyChangeListener {
        gdb.exec_continue();
     }
 
-    public long getProcessID() {
+    /*public long getProcessID() {
         return programPID;
-    }
+    }*/
 
     public void unexpectedGdbExit(int rc) {
         String msg;
@@ -986,12 +966,6 @@ public class GdbDebugger implements PropertyChangeListener {
             } else if (msg.startsWith("^done,stack=")) { // NOI18N (-stack-list-frames)
                 if (state == State.STOPPED) { // Ignore data if we've resumed running
                     stackUpdate(GdbUtils.createListFromString((msg.substring(13, msg.length() - 1))));
-                } else if (state == State.SILENT_STOP) {
-//                    CommandBuffer cb = gdb.getCommandBuffer(token);
-//                    if (cb != null) {
-//                        cb.append(msg.substring(13, msg.length() - 1));
-//                        cb.done();
-//                    }
                 }
             } else if (msg.startsWith("^done,locals=")) { // NOI18N (-stack-list-locals)
                 if (state == State.STOPPED) { // Ignore data if we've resumed running
@@ -1067,7 +1041,8 @@ public class GdbDebugger implements PropertyChangeListener {
                 log.warning("Failed type lookup for " + type);
             } else if (msg.equals("\"\\\"finish\\\" not meaningful in the outermost frame.\"")) { // NOI18N
                 finish_from_main();
-            } else if (msg.contains("(corrupt stack?)")) { // NOI18N
+            } else if (msg.contains("(corrupt stack?)") && gdbVersion > 6.3) { // NOI18N
+                // corrupted stack should not stop the debugging on old gdbs, see issue 151472
                 DialogDisplayer.getDefault().notify(
                        new NotifyDescriptor.Message(NbBundle.getMessage(GdbDebugger.class,
                        "ERR_CorruptedStack"))); // NOI18N
@@ -1460,6 +1435,7 @@ public class GdbDebugger implements PropertyChangeListener {
      * Set the temporary breakpoint at the current line and continue execution
      */
     public void runToCursor() {
+        // TODO: better use until debugger command
         removeRTCBreakpoint();
         rtcBreakpoint = LineBreakpoint.create(
             EditorContextBridge.getContext().getCurrentURL(),
@@ -2546,7 +2522,7 @@ public class GdbDebugger implements PropertyChangeListener {
         return ver;
     }
     
-    public class ShareInfo {
+    private static class ShareInfo {
         
         private String path;
         private String addr;
