@@ -66,12 +66,8 @@ public class Notificator {
     
     private int transactionLevel = 0;
     private ChangeEventImpl currEvent;
-    private ModelImpl model;
     
     private Notificator() {
-        if (CsmModelAccessor.getModel() instanceof ModelImpl) {
-            model = (ModelImpl) CsmModelAccessor.getModel();
-        }
     }
     
     public static Notificator instance() {
@@ -222,9 +218,10 @@ public class Notificator {
         
         gatherProjects(ev);
         
-        if( model != null ) {
-            model.fireModelChanged(ev);
-        }
+	//TODO: thik over, probably it's worth keeping this "!=" 
+        //if( model != null ) {
+        ListenersImpl.getImpl().fireModelChanged(ev);
+        //}
     }
     
     private static void gatherProjects(ChangeEventImpl ev) {

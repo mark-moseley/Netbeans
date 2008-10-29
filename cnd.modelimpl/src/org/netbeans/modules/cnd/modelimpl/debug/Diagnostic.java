@@ -54,6 +54,7 @@ import java.util.Map;
 import java.util.Set;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPParser;
+import org.openide.util.Exceptions;
 
 /**
  * Debugging output, collect file statistics
@@ -211,6 +212,16 @@ public class Diagnostic {
         System.out.println(buf.toString());
     }
     
+    public static synchronized void printToFile(String fileName, String format, Object... args) {
+        try {
+            FileOutputStream fos = new FileOutputStream(fileName, true);
+            PrintStream ps = new PrintStream(fos);
+            ps.printf(format, args);
+        } catch (FileNotFoundException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+    }
+    
     public static void traceThreads(String message) {
         if( TraceFlags.DEBUG ) {
             trace(message);
@@ -351,18 +362,18 @@ public class Diagnostic {
             this.includes.clear();
         }
         
-        private boolean hasStatistics() {
-            if (Diagnostic.getStatisticsLevel() == 1) {
-                // for the first level need to inform only about real problems
-                return hasLexerProblems() ||
-                        hasParserProblems() ||
-                        hasOtherProblems() ||
-                        hasIncludeProblems();
-                
-            }
-            // for other levels need detailed statistics
-            return true;
-        }
+//        private boolean hasStatistics() {
+//            if (Diagnostic.getStatisticsLevel() == 1) {
+//                // for the first level need to inform only about real problems
+//                return hasLexerProblems() ||
+//                        hasParserProblems() ||
+//                        hasOtherProblems() ||
+//                        hasIncludeProblems();
+//
+//            }
+//            // for other levels need detailed statistics
+//            return true;
+//        }
         
         private boolean hasLexerProblems() {
             return lexerProblems.size() > 0;

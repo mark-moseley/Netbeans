@@ -62,8 +62,7 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  * @author Vladimir Kvashin
  */
 
-//package-local
-abstract class ProjectComponent implements Persistent, SelfPersistent {
+public abstract class ProjectComponent implements Persistent, SelfPersistent {
     
     private Key key;
     
@@ -85,10 +84,10 @@ abstract class ProjectComponent implements Persistent, SelfPersistent {
 	RepositoryUtils.hang(key, this);
     }
 
-    private void putImpl() {
-	if( TraceFlags.TRACE_PROJECT_COMPONENT_RW ) System.err.printf("> ProjectComponent: Putting %s by key %s\n", this, key);
-	RepositoryUtils.put(key, this);
-    }
+//    private void putImpl() {
+//	if( TraceFlags.TRACE_PROJECT_COMPONENT_RW ) System.err.printf("> ProjectComponent: Putting %s by key %s\n", this, key);
+//	RepositoryUtils.put(key, this);
+//    }
     
     public void write(DataOutput out) throws IOException {
 	if( TraceFlags.TRACE_PROJECT_COMPONENT_RW ) System.err.printf("> ProjectComponent: Writing %s by key %s\n", this, key);
@@ -108,7 +107,8 @@ abstract class ProjectComponent implements Persistent, SelfPersistent {
 	if( p != null ) {
 	    assert p instanceof  ProjectComponent;
 	    ProjectComponent pc = (ProjectComponent) p;
-	    pc.putImpl();
+            // A workaround for #131701
+	    //pc.putImpl();
 	}
     }
 }
