@@ -44,6 +44,7 @@ package org.netbeans.api.db.explorer.support;
 import javax.swing.JComboBox;
 import org.netbeans.api.db.explorer.*;
 import org.netbeans.modules.db.test.TestBase;
+import org.netbeans.modules.db.test.Util;
 
 /**
  *
@@ -59,7 +60,7 @@ public class DatabaseExplorerUIsTest extends TestBase {
     }
 
     private void initConnections() throws Exception {
-        JDBCDriver driver = JDBCDriverManager.getDefault().getDrivers("sun.jdbc.odbc.JdbcOdbcDriver")[0];
+        JDBCDriver driver = Util.createDummyDriver();
         assertEquals(0, ConnectionManager.getDefault().getConnections().length);
         dbconn1 = DatabaseConnection.create(driver, "db", "dbuser", "dbschema", "dbpassword", true);
         dbconn2 = DatabaseConnection.create(driver, "database", "user", "schema", "password", true);
@@ -84,7 +85,7 @@ public class DatabaseExplorerUIsTest extends TestBase {
         initConnections();
         JComboBox combo = connect();
 
-        assertTrue("Wrong number of items in the combobox", combo.getItemCount() == 4);
+        assertTrue("Wrong number of items in the combobox", combo.getItemCount() == 3);
 
         assertSame(dbconn2, combo.getItemAt(0));
         assertSame(dbconn1, combo.getItemAt(1));
