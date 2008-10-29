@@ -86,13 +86,13 @@ public class AsmEditorKit extends NbEditorKit {
             String text = AsmObjectUtilities.getText(NbEditorUtilities.getFileObject(doc));
                       
             for (AsmTypesProvider ident : idents) {
-                res = ident.resolve(new StringReader(text.toString()));
+                res = ident.resolve(new StringReader(text));
                 if (res != null) {
                     modelProv = res.getModelProvider();
                     syntProv = res.getSyntaxProvider();
 
                     Logger.getLogger(AsmEditorKit.class.getName()).
-                        log(Level.INFO, "Asm Regognized " + modelProv + " " + syntProv);
+                        log(Level.FINE, "Asm Regognized " + modelProv + " " + syntProv); // NOI18N
                 }                                
             }
 
