@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,70 +31,75 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.uihandler;
 
-import java.awt.event.ActionEvent;
+import java.awt.Dimension;
+import java.awt.Toolkit;
+import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Handler;
 import java.util.logging.Level;
-import java.util.logging.Logger;
-import javax.swing.AbstractAction;
-import javax.swing.JButton;
 import java.util.logging.LogRecord;
-import javax.swing.Action;
+import java.util.logging.Logger;
+import org.junit.Test;
 import org.netbeans.junit.NbTestCase;
 
 /**
  *
- * @author Jaroslav Tulach
+ * @author Jindrich Sedek
  */
-public class UIHandlerTest extends NbTestCase {
-    private static Logger UILOG = Logger.getLogger("org.netbeans.ui.actions");
+public class ScreenSizeTest extends NbTestCase {
 
-    
-    public UIHandlerTest(String testName) {
-        super(testName);
+    private Object[] params = null;
+
+    public ScreenSizeTest(String name) {
+        super(name);
     }
 
-    protected void setUp() throws Exception {
-        Installer o = Installer.findObject(Installer.class, true);
-        System.setProperty("netbeans.user", getWorkDirPath());
-        clearWorkDir();
-        assertNotNull("Installer created", o);
-        o.restored();
-    }
+    @Test
+    public void testScreenResolutionLogging() {
+        Logger logger = Logger.getLogger("org.netbeans.ui");
+        logger.setLevel(Level.ALL);
+        logger.addHandler(new Handler() {
 
-    protected void tearDown() throws Exception {
-    }
+            @Override
+            public void publish(LogRecord record) {
+                if (ScreenSize.MESSAGE.equals(record.getMessage())) {
+                    params = record.getParameters();
+                }
+            }
 
-    public void testPublish() {
-        
-        MyAction a = new MyAction();
-        a.putValue(Action.NAME, "Tmp &Action");
-        JButton b = new JButton(a);
-        
-        LogRecord rec = new LogRecord(Level.FINER, "UI_ACTION_BUTTON_PRESS"); // NOI18N
-        rec.setParameters(new Object[] { 
-            b, 
-            b.getClass().getName(), 
-            a, 
-            a.getClass().getName(), 
-            a.getValue(Action.NAME) }
-        );
-        UILOG.log(rec);        
-        
-        List<LogRecord> logs = Installer.getLogs();
-        assertEquals("One log: " + logs, 2, logs.size());
-        LogRecord first = logs.get(1);
-        
-        assertEquals("This is the logged record", rec.getMessage(), first.getMessage());
-        
-        
-    }
-    
-    private static final class MyAction extends AbstractAction {
-        public void actionPerformed(ActionEvent e) {
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() throws SecurityException {
+            }
+        });
+        ScreenSize.logScreenSize();
+        assertNotNull(params);
+        assertEquals(3, params.length);
+        for (Object object : params) {
+            assertTrue(object instanceof Number);
         }
     }
+
+    public static List<LogRecord> removeScreenSizeLogs(List<LogRecord> logs){
+        Iterator<LogRecord> it = logs.iterator();
+        while (it.hasNext()){
+            LogRecord logRecord = it.next();
+            if (logRecord.getMessage().equals(ScreenSize.MESSAGE)) {
+                it.remove();
+            }
+        }
+        return logs;
+    }
 }
+
+
