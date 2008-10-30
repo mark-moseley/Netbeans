@@ -45,9 +45,10 @@ import org.mozilla.nb.javascript.Node;
 import org.mozilla.nb.javascript.Token;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.OffsetRange;
-import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.csl.api.CompilationInfo;
+import org.netbeans.modules.csl.api.EditHistory;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.api.ParserResult;
 import org.netbeans.modules.javascript.editing.lexer.LexUtilities;
 
 /**
@@ -189,6 +190,30 @@ public class AstOffsetTest extends JsTestBase {
 
     public void testFunctionExpressions() throws Exception {
         checkOffsets("testfiles/functions.js");
+    }
+
+    public void testEmbeddedCode1() throws Exception {
+        checkOffsets("testfiles/generated_identifiers.js");
+    }
+
+    public void testEmbeddedCode2() throws Exception {
+        checkOffsets("testfiles/lbracketlist.js");
+    }
+
+    public void testEmbeddedCode3() throws Exception {
+        checkOffsets("testfiles/embedding/issue136495.erb.js");
+    }
+
+    public void testEmbeddedCode4() throws Exception {
+        checkOffsets("testfiles/issue120499.js");
+    }
+
+    public void testEmbeddedCode6() throws Exception {
+        checkOffsets("testfiles/issue148423.js");
+    }
+
+    public void testEmbeddedCode5() throws Exception {
+        checkOffsets("testfiles/issue149019.js");
     }
 
 //    public void testDestructuringAssignment() throws Exception {

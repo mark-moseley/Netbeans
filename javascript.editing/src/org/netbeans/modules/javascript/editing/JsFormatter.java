@@ -54,9 +54,9 @@ import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.modules.editor.indent.api.IndentUtils;
 import org.netbeans.modules.editor.indent.spi.Context;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.OffsetRange;
-import org.netbeans.modules.gsf.spi.GsfUtilities;
+import org.netbeans.modules.csl.api.CompilationInfo;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.spi.GsfUtilities;
 import org.netbeans.modules.javascript.editing.JsPretty.Diff;
 import org.netbeans.modules.javascript.editing.lexer.LexUtilities;
 import org.netbeans.modules.javascript.editing.lexer.JsTokenId;
@@ -76,7 +76,7 @@ import org.openide.util.Exceptions;
  * @author Tor Norbye
  * @author Martin Adamek
  */
-public class JsFormatter implements org.netbeans.modules.gsf.api.Formatter {
+public class JsFormatter implements org.netbeans.modules.csl.api.Formatter {
     private boolean embeddedJavaScript;
     private int embeddededIndent = 0;
     private int indentSize;
@@ -367,7 +367,7 @@ public class JsFormatter implements org.netbeans.modules.gsf.api.Formatter {
     }
     
     @SuppressWarnings("unchecked")
-    private int getTokenBalance(TokenSequence<? extends JsTokenId> ts, BaseDocument doc, int begin, int end, boolean includeKeywords, boolean indentOnly) {
+    private int getTokenBalance(TokenSequence<? extends JsTokenId> ts, BaseDocument doc, final int begin, int end, boolean includeKeywords, boolean indentOnly) {
         int balance = 0;
 
         if (ts == null) {
@@ -386,6 +386,7 @@ public class JsFormatter implements org.netbeans.modules.gsf.api.Formatter {
             return 0;
         }
 
+        int last = begin;
         do {
             Token<?extends JsTokenId> token = ts.token();
             if (token == null) {
@@ -399,8 +400,17 @@ public class JsFormatter implements org.netbeans.modules.gsf.api.Formatter {
             } else {
                 balance += getBracketBalanceDelta(id);
             }
+            last = ts.offset() + token.length();
         } while (ts.moveNext() && (ts.offset() < end));
 
+        if (embeddedJavaScript && last < end) {
+            // We're not done yet... find the next section...
+            TokenSequence<? extends JsTokenId> ets = LexUtilities.getNextJsTokenSequence(doc, last+1, end);
+            if (ets != null && ets.offset() > begin) {
+                return balance + getTokenBalance(ets, doc, ets.offset(), end, includeKeywords, indentOnly);
+            }
+        }
+        
         return balance;
     }
     
@@ -741,10 +751,16 @@ public class JsFormatter implements org.netbeans.modules.gsf.api.Formatter {
 //                indentHtml = codeStyle.indentHtml();
 //            }
             
-            int originallockCommentIndention = 0;
+            //int originallockCommentIndention = 0;
             int adjustedBlockCommentIndention = 0;
 
             int endIndents;
+
+            final int IN_CODE = 0;
+            final int IN_LITERAL = 1;
+            final int IN_BLOCK_COMMENT_START = 2;
+            final int IN_BLOCK_COMMENT_MIDDLE = 3;
+
             while ((!includeEnd && offset < end) || (includeEnd && offset <= end)) {
                 int indent; // The indentation to be used for the current line
 
@@ -754,10 +770,6 @@ public class JsFormatter implements org.netbeans.modules.gsf.api.Formatter {
                 }
 
                 
-                final int IN_CODE = 0;
-                final int IN_LITERAL = 1;
-                final int IN_BLOCK_COMMENT_START = 2;
-                final int IN_BLOCK_COMMENT_MIDDLE = 3;
                 int lineType = IN_CODE;
                 int pos = Utilities.getRowFirstNonWhite(doc, offset);
                 TokenSequence<?extends JsTokenId> ts = null;
@@ -774,7 +786,7 @@ public class JsFormatter implements org.netbeans.modules.gsf.api.Formatter {
                         if (id == JsTokenId.BLOCK_COMMENT) {
                             if (ts.offset() == pos) {
                                 lineType = IN_BLOCK_COMMENT_START;
-                                originallockCommentIndention = GsfUtilities.getLineIndent(doc, offset);
+                                //originallockCommentIndention = GsfUtilities.getLineIndent(doc, offset);
                             } else {
                                 lineType =  IN_BLOCK_COMMENT_MIDDLE;
                             }
