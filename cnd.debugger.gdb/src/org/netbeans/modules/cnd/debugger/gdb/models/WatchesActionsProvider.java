@@ -46,7 +46,6 @@ import java.awt.event.ActionEvent;
 import java.text.MessageFormat;
 import java.util.*;
 import javax.swing.*;
-import javax.swing.KeyStroke;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.spi.viewmodel.Models;
 import org.netbeans.spi.viewmodel.TreeModel;
@@ -133,6 +132,7 @@ public class WatchesActionsProvider implements NodeActionsProvider {
         if (node == TreeModel.ROOT) {
             return;
         } else if (node instanceof GdbWatchVariable) {
+            customize((GdbWatchVariable) node);
             return;
         }
         throw new UnknownTypeException(node);
