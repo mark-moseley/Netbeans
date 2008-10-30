@@ -81,7 +81,11 @@ public class APTUtils {
                 LOG.setLevel(Level.SEVERE);
             }
         } else {
-            LOG.setLevel(Level.parse(level));
+            try {
+                LOG.setLevel(Level.parse(level));
+            } catch (IllegalArgumentException e) {
+                // skip
+            }
         }
     }
     
@@ -176,7 +180,7 @@ public class APTUtils {
         List<String> macrosSorted = new ArrayList<String>(macros.keySet());
         Collections.sort(macrosSorted);
         for (String key : macrosSorted) {
-            APTMacro macro = macros.get(APTUtils.getTokenTextKey(new APTBaseToken(key)));
+            APTMacro macro = macros.get(key);
             assert(macro != null);
             retValue.append(macro);
             retValue.append("'\n"); // NOI18N
@@ -225,6 +229,18 @@ public class APTUtils {
     
     public static boolean isID(Token token) {
         return token != null && token.getType() == APTTokenTypes.ID;
+    }
+
+    public static boolean isInt(Token token) {
+        if (token != null) {
+            switch (token.getType()) {
+                case APTTokenTypes.DECIMALINT:
+                case APTTokenTypes.HEXADECIMALINT:
+                case APTTokenTypes.OCTALINT:
+                    return true;
+            }
+        }
+        return false;
     }
     
     public static boolean isEOF(Token token) {
@@ -410,14 +426,8 @@ public class APTUtils {
         return text;
     }
     
-    public static String getTokenTextKey(Token token) {
-        assert (token != null);
-        // now use text, but it will be faster to use textID
-        return token.getText();
-    }
-    
     public static APTToken createAPTToken(Token token, int ttype) {
-        APTToken newToken = null;
+        APTToken newToken;
         if (APTTraceFlags.USE_APT_TEST_TOKEN) {
             newToken = new APTTestToken(token, ttype);
         } else {
@@ -431,7 +441,7 @@ public class APTUtils {
     }
     
     public static APTToken createAPTToken() {
-        APTToken newToken = null;
+        APTToken newToken;
         if (APTTraceFlags.USE_APT_TEST_TOKEN) {
             newToken = new APTTestToken();
         } else {
