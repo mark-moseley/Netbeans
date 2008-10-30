@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,61 +31,67 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb.models;
-
-import org.netbeans.spi.debugger.ui.Constants;
-import org.netbeans.spi.viewmodel.TableModel;
-import org.netbeans.spi.viewmodel.ModelListener;
-import org.netbeans.spi.viewmodel.UnknownTypeException;
-import org.netbeans.modules.cnd.debugger.gdb.CallStackFrame;
+package org.netbeans.modules.cnd.debugger.gdb.breakpoints;
 
 /**
  *
- * @author   Gordon Prieur (copied from Jan Jancura's JPDA implementation)
+ * @author eu155513
  */
-public class CallStackTableModel implements TableModel, Constants {
+public class AddressBreakpoint extends GdbBreakpoint implements Comparable {
+    public static final String          PROP_ADDRESS_VALUE = "address"; // NOI18N
+    public static final String          PROP_REFRESH = "refresh"; // NOI18N
     
-    public Object getValueAt(Object row, String columnID) throws UnknownTypeException {
-        if (row instanceof CallStackFrame) {
-            if (columnID.equals(CALL_STACK_FRAME_LOCATION_COLUMN_ID)) {
-                String loc = ((CallStackFrame) row).getFullname();
-                loc += ":"; // NOI18N
-                loc += ((CallStackFrame) row).getLineNumber();
-		return loc;
-            }
-        }
-        throw new UnknownTypeException(row);
+    private String address;
+
+    private AddressBreakpoint(String address) {
+        this.address = address;
     }
     
-    public boolean isReadOnly(Object row, String columnID) throws 
-    UnknownTypeException {
-        if (row instanceof CallStackFrame) {
-            if (columnID.equals(CALL_STACK_FRAME_LOCATION_COLUMN_ID)) {
-		return true;
-	    }
-        }
-        throw new UnknownTypeException(row);
-    }
-    
-    public void setValueAt(Object row, String columnID, Object value) throws UnknownTypeException {
-        throw new UnknownTypeException(row);
-    }
-    
-    /** 
-     * Registers given listener.
-     * 
-     * @param l the listener to add
-     */
-    public void addModelListener(ModelListener l) {
+    public static AddressBreakpoint create(String address) {
+        return new AddressBreakpoint(address);
     }
 
-    /** 
-     * Unregisters given listener.
-     *
-     * @param l the listener to remove
-     */
-    public void removeModelListener(ModelListener l) {
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String newAddress) {
+        String old;
+        synchronized (this) {
+            if (newAddress.equals(address)) {
+                return;
+            }
+            old = address;
+            address = newAddress;
+        }
+        firePropertyChange(PROP_ADDRESS_VALUE, old, newAddress);
+    }
+
+    @Override
+    public int getLineNumber() {
+        return 1; // to look like line breakpoint
+    }
+    
+    @Override
+    public String toString() {
+        return "AddressBreakpoint " + address; // NOI18N
+    }
+    
+    public void refresh() {
+        firePropertyChange(PROP_REFRESH, null, null);
+    }
+
+    public int compareTo(Object o) {
+        if (o instanceof AddressBreakpoint) {
+            return this.address.compareTo(((AddressBreakpoint)o).address);
+        } else {
+            return -1;
+        }
     }
 }

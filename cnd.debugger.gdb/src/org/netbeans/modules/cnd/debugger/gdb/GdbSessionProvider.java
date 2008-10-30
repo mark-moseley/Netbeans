@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.debugger.gdb;
 
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.openide.util.NbBundle;
 import org.netbeans.spi.debugger.SessionProvider;
 import org.netbeans.spi.debugger.ContextProvider;
@@ -48,14 +49,12 @@ import org.netbeans.modules.cnd.makeproject.api.ProjectActionEvent;
 
 public class GdbSessionProvider extends SessionProvider {
 
-    private ContextProvider contextProvider;
     private String sessionName = NbBundle.getMessage(GdbSessionProvider.class, "CTL_GDB_SESSION"); // NOI18N
-    private String locationName = NbBundle.getMessage(GdbSessionProvider.class, "CTL_GDB_SESSION"); // NOI18N
-    private String [] supportedLanguages = new String [] { "C++", "C", "Fortran" }; // NOI18N
-    private ProjectActionEvent projectActionEvent;
+    //private String locationName = NbBundle.getMessage(GdbSessionProvider.class, "CTL_GDB_SESSION"); // NOI18N
+    private final String [] supportedLanguages = new String [] { "C++", "C", "Fortran" }; // NOI18N
+    private final ProjectActionEvent projectActionEvent;
 
     public GdbSessionProvider(ContextProvider contextProvider) {
-        this.contextProvider = contextProvider;
         projectActionEvent = (ProjectActionEvent) contextProvider.lookupFirst(null, ProjectActionEvent.class);
     };
 
@@ -78,8 +77,7 @@ public class GdbSessionProvider extends SessionProvider {
     }
     
     public String getLocationName() {
-        locationName = "localhost"; // NOI18N
-        return locationName;
+        return CompilerSetManager.LOCALHOST;
     }
     
     public String getTypeID() {
