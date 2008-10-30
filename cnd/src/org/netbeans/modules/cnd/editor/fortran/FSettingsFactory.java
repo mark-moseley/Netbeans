@@ -39,37 +39,37 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.makeproject.api.actions;
+package org.netbeans.modules.cnd.editor.fortran;
 
-import javax.swing.Action;
-import javax.swing.JButton;
-import org.netbeans.api.project.Project;
-import org.netbeans.modules.cnd.makeproject.MakeActionProvider;
-import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
-import org.netbeans.spi.project.ui.support.MainProjectSensitiveActions;
-import org.netbeans.spi.project.ui.support.ProjectActionPerformer;
-import org.openide.util.NbBundle;
+import java.util.Collections;
+import java.util.List;
+import org.netbeans.editor.Acceptor;
+import org.netbeans.editor.AcceptorFactory;
+import org.netbeans.editor.TokenContext;
+import org.openide.text.IndentEngine;
 
-public class BatchBuildAction {
-    protected static final String actionName = NbBundle.getBundle(BatchBuildAction.class).getString("BatchBuildActionName");
-    
-    public static Action MainBatchBuildAction() {
-        return MainProjectSensitiveActions.mainProjectSensitiveAction(new BatchBuildActionPerformer(), actionName, null);
+/**
+ * Extended settings for Fortran.
+ */
+public class FSettingsFactory {
+
+    public static final int MAXIMUM_TEXT_WIDTH = 132;
+
+    public static Acceptor getAbbrevResetAcceptor() {
+        return AcceptorFactory.NON_JAVA_IDENTIFIER;
     }
+
+    public static Acceptor getIndentHotCharsAcceptor() {
+        return AcceptorFactory.NL;
+    }
+
+    public static List<? extends TokenContext> getTokenContext() {
+        return Collections.singletonList(FTokenContext.context);
+    }
+
+    public static IndentEngine getIndentEngine() {
+        return new FIndentEngine();
+    }
+
 }
-
-class BatchBuildActionPerformer implements ProjectActionPerformer {
-
-    public boolean enable(Project project) {
-        boolean ret = false;
-        if (project != null)
-            ret = project.getLookup().lookup(ConfigurationDescriptorProvider.class) != null;
-        return ret;
-    }
-
-    public void perform(Project project) {
-        Action action = MainProjectSensitiveActions.mainProjectCommandAction(MakeActionProvider.COMMAND_BATCH_BUILD, BatchBuildAction.actionName, null);
-        JButton jButton = new JButton(action);
-        jButton.doClick();
-    }
-}
+ 

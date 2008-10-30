@@ -51,17 +51,17 @@ import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
 import org.openide.nodes.Sheet;
 import org.openide.util.NbBundle;
 
-public class BasicCompilerConfiguration {
+public abstract class BasicCompilerConfiguration {
     private String baseDir;
     private BasicCompilerConfiguration master;
 
-    public static int DEVELOPMENT_MODE_FAST = 0;
-    public static int DEVELOPMENT_MODE_DEBUG = 1;
-    public static int DEVELOPMENT_MODE_DEBUG_PERF = 2;
-    public static int DEVELOPMENT_MODE_TEST = 3;
-    public static int DEVELOPMENT_MODE_RELEASE_DIAG = 4;
-    public static int DEVELOPMENT_MODE_RELEASE = 5;
-    public static int DEVELOPMENT_MODE_RELEASE_PERF = 6;
+    public static final int DEVELOPMENT_MODE_FAST = 0;
+    public static final int DEVELOPMENT_MODE_DEBUG = 1;
+    public static final int DEVELOPMENT_MODE_DEBUG_PERF = 2;
+    public static final int DEVELOPMENT_MODE_TEST = 3;
+    public static final int DEVELOPMENT_MODE_RELEASE_DIAG = 4;
+    public static final int DEVELOPMENT_MODE_RELEASE = 5;
+    public static final int DEVELOPMENT_MODE_RELEASE_PERF = 6;
     private static final String[] DEVELOPMENT_MODE_NAMES = {
 	getString("FastBuildTxt"),
 	getString("DebugTxt"),
@@ -73,12 +73,12 @@ public class BasicCompilerConfiguration {
     };
     private IntConfiguration developmentMode;
 
-    public static int WARNING_LEVEL_NO = 0;
-    public static int WARNING_LEVEL_DEFAULT = 1;
-    public static int WARNING_LEVEL_MORE = 2;
-    public static int WARNING_LEVEL_TAGS = 3;
-    public static int WARNING_LEVEL_CONVERT = 4;
-    public static int WARNING_LEVEL_32_64 = 5;
+    public static final int WARNING_LEVEL_NO = 0;
+    public static final int WARNING_LEVEL_DEFAULT = 1;
+    public static final int WARNING_LEVEL_MORE = 2;
+    public static final int WARNING_LEVEL_TAGS = 3;
+    public static final int WARNING_LEVEL_CONVERT = 4;
+    public static final int WARNING_LEVEL_32_64 = 5;
     private static final String[] WARNING_LEVEL_NAMES = {
 	getString("NoWarningsTxt"),
 	getString("SomeWarningsTxt"),
@@ -87,9 +87,9 @@ public class BasicCompilerConfiguration {
     };
     private IntConfiguration warningLevel;
 
-    public static int BITS_DEFAULT = 0;
-    public static int BITS_32 = 1;
-    public static int BITS_64 = 2;
+    public static final int BITS_DEFAULT = 0;
+    public static final int BITS_32 = 1;
+    public static final int BITS_64 = 2;
     private static final String[] BITS_NAMES = {
 	getString("BITS_DEFAULT"),
 	getString("BITS_32"),
@@ -102,7 +102,7 @@ public class BasicCompilerConfiguration {
     private OptionsConfiguration commandLineConfiguration;
 
     // Constructors
-    public BasicCompilerConfiguration(String baseDir, BasicCompilerConfiguration master) {
+    protected BasicCompilerConfiguration(String baseDir, BasicCompilerConfiguration master) {
 	this.baseDir = baseDir;
 	this.master = master;
 	developmentMode = new IntConfiguration(master != null ? master.getDevelopmentMode() : null, DEVELOPMENT_MODE_DEBUG, DEVELOPMENT_MODE_NAMES, null);
@@ -205,13 +205,27 @@ public class BasicCompilerConfiguration {
 	this.commandLineConfiguration = commandLineConfiguration;
     }
 
-    public String getOutputFile(String filePath, MakeConfiguration conf, boolean expanded) {
+    public String getOutputFile(Item item, MakeConfiguration conf, boolean expanded) {
+        String filePath = item.getPath(true);
 	String fileName = filePath;
-	int i = fileName.lastIndexOf("."); // NOI18N
-	if (i >= 0)
-	    fileName = fileName.substring(0, i) + ".o"; // NOI18N
-	else
-	    fileName = fileName + ".o"; // NOI18N
+        String suffix = ".o"; // NOI18N
+        boolean append = false;
+        if (item.hasHeaderOrSourceExtension(false, false)) {
+            suffix = ".pch"; // NOI18N
+            ItemConfiguration itemConf = item.getItemConfiguration(conf);
+            if (conf.getCompilerSet().getCompilerSet() != null) {
+                BasicCompiler compiler = (BasicCompiler)conf.getCompilerSet().getCompilerSet().getTool(itemConf.getTool());
+                if (compiler != null) {
+                    suffix = compiler.getDescriptor().getPrecompiledHeaderSuffix();
+                    append = compiler.getDescriptor().getPrecompiledHeaderSuffixAppend();
+                }
+            }
+        }
+        int i = fileName.lastIndexOf('.'); // NOI18N
+        if (i >= 0 && !append)
+            fileName = fileName.substring(0, i) + suffix;
+        else
+            fileName = fileName + suffix;
 
 	String dirName;
         if (expanded)
@@ -251,17 +265,17 @@ public class BasicCompilerConfiguration {
 	getCommandLineConfiguration().assign(conf.getCommandLineConfiguration());
     }
 
-    public Object clone() {
-	BasicCompilerConfiguration clone = new BasicCompilerConfiguration(getBaseDir(), getMaster());
-	clone.setDevelopmentMode((IntConfiguration)getDevelopmentMode().clone());
-	clone.setWarningLevel((IntConfiguration)getWarningLevel().clone());
-	clone.setSixtyfourBits((IntConfiguration)getSixtyfourBits().clone());
-	clone.setStrip((BooleanConfiguration)getStrip().clone());
-	clone.setAdditionalDependencies((StringConfiguration)getAdditionalDependencies().clone());
-	clone.setTool((StringConfiguration)getTool().clone());
-	clone.setCommandLineConfiguration((OptionsConfiguration)getCommandLineConfiguration().clone());
-	return clone;
-    }
+//    public Object clone() {
+//	BasicCompilerConfiguration clone = new BasicCompilerConfiguration(getBaseDir(), getMaster());
+//	clone.setDevelopmentMode((IntConfiguration)getDevelopmentMode().clone());
+//	clone.setWarningLevel((IntConfiguration)getWarningLevel().clone());
+//	clone.setSixtyfourBits((IntConfiguration)getSixtyfourBits().clone());
+//	clone.setStrip((BooleanConfiguration)getStrip().clone());
+//	clone.setAdditionalDependencies((StringConfiguration)getAdditionalDependencies().clone());
+//	clone.setTool((StringConfiguration)getTool().clone());
+//	clone.setCommandLineConfiguration((OptionsConfiguration)getCommandLineConfiguration().clone());
+//	return clone;
+//    }
 
 
     // Sheets

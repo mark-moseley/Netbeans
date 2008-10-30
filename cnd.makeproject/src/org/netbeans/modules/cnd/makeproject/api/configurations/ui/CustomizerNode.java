@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.makeproject.api.configurations.ui;
 
+import javax.swing.JPanel;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
@@ -48,13 +49,15 @@ import org.openide.nodes.Sheet;
 import org.openide.util.HelpCtx;
 
 public class CustomizerNode {
-    public static String iconbase = "org/netbeans/modules/cnd/makeproject/ui/resources/general"; // NOI18N
-    public static String icon = "org/netbeans/modules/cnd/makeproject/ui/resources/general.gif"; // NOI18N
+    public static final String iconbase = "org/netbeans/modules/cnd/makeproject/ui/resources/general"; // NOI18N
+    public static final String icon = "org/netbeans/modules/cnd/makeproject/ui/resources/general.gif"; // NOI18N
 
     public String name;
     public String displayName;
     public boolean advanced;
     public CustomizerNode[] children;
+
+    public enum CustomizerStyle {SHEET, PANEL};
         
     public CustomizerNode(String name, String displayName, boolean advanced, CustomizerNode[] children) {
         this.name = name;
@@ -66,12 +69,20 @@ public class CustomizerNode {
     public CustomizerNode(String name, String displayName, CustomizerNode[] children) {
         this(name, displayName, false, children);
     }
+    
+    public CustomizerStyle customizerStyle() {
+        return CustomizerStyle.SHEET; // Backward compatible
+    }
 
     public Sheet getSheet(Project project, ConfigurationDescriptor configurationDescriptor, Configuration configuration) {
 	return null;
     }
     
-    public HelpCtx getHelpCtx() {
+    public JPanel getPanel(Project project, ConfigurationDescriptor configurationDescriptor) {
         return null;
+    }
+    
+    public HelpCtx getHelpCtx() {
+        return new HelpCtx(""); // NOI18N // See CR 6718766
     }
 }
