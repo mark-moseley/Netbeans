@@ -42,8 +42,14 @@ package org.netbeans.modules.uihandler;
 
 import java.awt.Dialog;
 import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Graphics;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -56,8 +62,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.io.PushbackInputStream;
 import java.io.Reader;
+import java.lang.reflect.InvocationTargetException;
 import java.net.ConnectException;
 import java.net.MalformedURLException;
 import java.net.NoRouteToHostException;
@@ -93,12 +99,11 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 import javax.swing.text.html.HTMLEditorKit;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import org.netbeans.api.options.OptionsDisplayer;
 import org.netbeans.api.progress.ProgressHandle;
@@ -127,8 +132,6 @@ import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
 import org.openide.util.io.NullOutputStream;
 import org.openide.windows.WindowManager;
-import org.w3c.dom.Document;
-import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 /**
@@ -137,9 +140,6 @@ import org.xml.sax.SAXException;
 public class Installer extends ModuleInstall implements Runnable {
     static final long serialVersionUID = 1L;
 
-    /**
-     *
-     */
     static final String USER_CONFIGURATION = "UI_USER_CONFIGURATION";   // NOI18N
     private static UIHandler ui = new UIHandler(false);
     private static UIHandler handler = new UIHandler(true);
@@ -157,9 +157,32 @@ public class Installer extends ModuleInstall implements Runnable {
     private static Object[] selectedExcParams;
 
     private static boolean logMetricsEnabled = false;
+    /** Flag to store status of last metrics upload */
+    private static boolean logMetricsUploadFailed = false;
+    
     private static String USAGE_STATISTICS_ENABLED = "usageStatisticsEnabled"; // NOI18N
     private static String CORE_PREF_NODE = "org/netbeans/core"; // NOI18N
     private static Preferences corePref = NbPreferences.root().node (CORE_PREF_NODE);
+
+    private JButton metricsEnable = new JButton();
+    private JButton metricsCancel = new JButton();
+
+    private static final String CMD_METRICS_ENABLE = "MetricsEnable";   // NOI18N
+    private static final String CMD_METRICS_CANCEL = "MetricsCancel";   // NOI18N
+
+    /** Action listener for Usage Statistics Reminder dialog */
+    private ActionListener l = new ActionListener () {
+        public void actionPerformed (ActionEvent ev) {
+            cmd = ev.getActionCommand();
+            if (CMD_METRICS_ENABLE.equals(cmd)) {
+                corePref.putBoolean(USAGE_STATISTICS_ENABLED, true);
+            } else if (CMD_METRICS_CANCEL.equals(cmd)) {
+                corePref.putBoolean(USAGE_STATISTICS_ENABLED, false);
+            }
+        }
+    };
+
+    private String cmd;
 
     static final String METRICS_LOGGER_NAME = "org.netbeans.ui.metrics"; // NOI18N
     private static Pattern ENCODING = Pattern.compile(
@@ -203,8 +226,14 @@ public class Installer extends ModuleInstall implements Runnable {
         all.addHandler(handler);
         logsSize = prefs.getInt("count", 0);
         logsSizeMetrics = prefs.getInt("countMetrics", 0);
+        logMetricsUploadFailed = prefs.getBoolean("metrics.upload.failed", Boolean.FALSE); // NOI18N
         corePref.addPreferenceChangeListener(new PrefChangeListener());
 
+        if ((System.getProperty ("netbeans.full.hack") == null) && (System.getProperty ("netbeans.close") == null)) {
+            usageStatisticsReminder();
+        }
+        
+        System.setProperty("nb.show.statistics.ui",USAGE_STATISTICS_ENABLED);
         logMetricsEnabled = corePref.getBoolean(USAGE_STATISTICS_ENABLED,Boolean.FALSE);
         if (logMetricsEnabled) {
             //Handler for metrics
@@ -224,6 +253,11 @@ public class Installer extends ModuleInstall implements Runnable {
                 for (LogRecord rec : disabledRec) {
                     LogRecords.write(logStreamMetrics(), rec);
                 }
+                List<LogRecord> clusterRec = new ArrayList<LogRecord>();
+                getClusterList(log, clusterRec);
+                for (LogRecord rec : clusterRec) {
+                    LogRecords.write(logStreamMetrics(), rec);
+                }
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
@@ -239,6 +273,94 @@ public class Installer extends ModuleInstall implements Runnable {
         if (logsSize >= UIHandler.MAX_LOGS) {
             WindowManager.getDefault().invokeWhenUIReady(this);
         }
+    }
+    
+    private void usageStatisticsReminder () {
+        boolean keyExists = false;
+        String [] keys = null;
+        try {
+            keys = corePref.keys();
+            for (int i = 0; i < keys.length; i++) {
+                if (USAGE_STATISTICS_ENABLED.equals(keys[i])) {
+                    keyExists = true;
+                    break;
+                }
+            }
+        } catch (BackingStoreException exc) {
+            Exceptions.printStackTrace(exc);
+            //Not able to confirm if key exists or not
+            keyExists = true;
+        }
+
+        if (keyExists) {
+            //If key exists do not ask user
+            return;
+        }
+
+        metricsEnable.addActionListener(l);
+        metricsEnable.setActionCommand(CMD_METRICS_ENABLE);
+        //registerNow.setText(NbBundle.getMessage(RegisterAction.class,"LBL_RegisterNow"));
+        Mnemonics.setLocalizedText(metricsEnable, NbBundle.getMessage(
+                Installer.class, "LBL_MetricsEnable"));
+        metricsEnable.getAccessibleContext().setAccessibleName(
+                NbBundle.getMessage(Installer.class,"ACSN_MetricsEnable"));
+        metricsEnable.getAccessibleContext().setAccessibleDescription(
+                NbBundle.getMessage(Installer.class,"ACSD_MetricsEnable"));
+
+        metricsCancel.addActionListener(l);
+        metricsCancel.setActionCommand(CMD_METRICS_CANCEL);
+        //registerLater.setText(NbBundle.getMessage(RegisterAction.class,"LBL_RegisterLater"));
+        Mnemonics.setLocalizedText(metricsCancel, NbBundle.getMessage(
+                Installer.class, "LBL_MetricsCancel"));
+        metricsCancel.getAccessibleContext().setAccessibleName(
+                NbBundle.getMessage(Installer.class,"ACSN_MetricsCancel"));
+        metricsCancel.getAccessibleContext().setAccessibleDescription(
+                NbBundle.getMessage(Installer.class,"ACSD_MetricsCancel"));
+
+        WindowManager.getDefault().invokeWhenUIReady(new Runnable() {
+            public void run() {
+                showDialog();
+            }
+        });
+    }
+
+    private void showDialog () {
+        final JPanel panel = new ReminderPanel();
+        DialogDescriptor descriptor = new DialogDescriptor(
+            panel,
+            NbBundle.getMessage(Installer.class, "Metrics_title"),
+            true,
+                new Object[] {metricsEnable, metricsCancel},
+                null,
+                DialogDescriptor.DEFAULT_ALIGN,
+                null,
+                null);
+        Dialog dlg = null;
+        try {
+            dlg = DialogDisplayer.getDefault().createDialog(descriptor);
+            final Dialog d = dlg;
+            dlg.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowOpened(WindowEvent e) {
+                    BufferedImage offImg;
+                    offImg = (BufferedImage) panel.createImage(1000,1000);
+                    Graphics g = offImg.createGraphics();
+                    panel.paint(g);
+                    int height = d.getPreferredSize().height;
+                    Dimension size = d.getSize();
+                    size.height = height;
+                    d.setSize(size);
+                }
+
+            });
+            dlg.setResizable(false);
+            dlg.setVisible(true);
+        } finally {
+            if (dlg != null) {
+                dlg.dispose();
+            }
+        }
+        //NbConnection.updateStatus(cmd,NbInstaller.PRODUCT_ID);
     }
 
     public void run() {
@@ -291,12 +413,36 @@ public class Installer extends ModuleInstall implements Runnable {
                     RP.post(new Auto()).waitFinished();
                 }
                 File f = logFile(0);
-                f.renameTo(new File(f.getParentFile(), f.getName() + ".1"));
+                File f1 = logFile(1);
+                if (f1.exists()) {
+                    f1.delete();
+                }
+                f.renameTo(f1);
                 logsSize = 0;
             } else {
                 logsSize++;
                 if (prefs.getInt("count", 0) < logsSize && preferencesWritable) {
                     prefs.putInt("count", logsSize);
+                }
+            }
+            if ((logsSize % 100) == 0) {
+                //This is fallback to avoid growing log file over any limit.
+                File f = logFile(0);
+                File f1 = logFile(1);
+                if (f.exists() && (f.length() > UIHandler.MAX_LOGS_SIZE)) {
+                    LOG.log(Level.INFO, "UIGesture Collector log file size is over limit. It will be deleted."); // NOI18N
+                    LOG.log(Level.INFO, "Log file:" + f + " Size:" + f.length() + " Bytes"); // NOI18N
+                    closeLogStream();
+                    logsSize = 0;
+                    if (prefs.getInt("count", 0) < logsSize && preferencesWritable) {
+                        prefs.putInt("count", logsSize);
+                    }
+                    f.delete();
+                }
+                if (f1.exists() && (f1.length() > UIHandler.MAX_LOGS_SIZE)) {
+                    LOG.log(Level.INFO, "UIGesture Collector backup log file size is over limit. It will be deleted."); // NOI18N
+                    LOG.log(Level.INFO, "Log file:" + f1 + " Size:" + f1.length() + " Bytes"); // NOI18N
+                    f1.delete();
                 }
             }
         } catch (IOException ex) {
@@ -331,7 +477,31 @@ public class Installer extends ModuleInstall implements Runnable {
                 MetricsHandler.waitFlushed();
                 closeLogStreamMetrics();
                 File f = logFileMetrics(0);
-                f.renameTo(new File(f.getParentFile(), f.getName() + ".1"));
+                File f1 = logFileMetrics(1);
+                if (f1.exists()) {
+                    if (logMetricsUploadFailed) {
+                        //If last metrics upload failed first check size of backup file
+                        if (f1.length() > MetricsHandler.MAX_LOGS_SIZE) {
+                            //Size is over limit delete file
+                            f1.delete();
+                            if (!f.renameTo(f1)) {
+                                LOG.log(Level.INFO, "Failed to rename file:" + f + " to:" + f1); // NOI18N
+                            }
+                        } else {
+                            //Size is below limit, append data
+                            appendFile(f, f1);
+                        }
+                    } else {
+                        f1.delete();
+                        if (!f.renameTo(f1)) {
+                            LOG.log(Level.INFO, "Failed to rename file:" + f + " to:" + f1); // NOI18N
+                        }
+                    }
+                } else {
+                    if (!f.renameTo(f1)) {
+                        LOG.log(Level.INFO, "Failed to rename file:" + f + " to:" + f1); // NOI18N
+                    }
+                }
                 logsSizeMetrics = 0;
                 if (preferencesWritable) {
                     prefs.putInt("countMetrics", logsSizeMetrics);
@@ -347,6 +517,36 @@ public class Installer extends ModuleInstall implements Runnable {
             }
         } catch (IOException ex) {
             ex.printStackTrace();
+        }
+    }
+
+    /** Apend content of source to target */
+    private static void appendFile (File source, File target) {
+        try {
+            FileInputStream is = null;
+            FileOutputStream os = null;
+            try {
+                is = new FileInputStream(source);
+                BufferedInputStream bis = new BufferedInputStream(is);
+
+                os = new FileOutputStream(target, true);
+                BufferedOutputStream bos = new BufferedOutputStream(os);
+
+                int c;
+                while ((c = bis.read()) != -1) {
+                    bos.write(c);
+                }
+                bos.flush();
+            } finally {
+                if (is != null) {
+                    is.close();
+                }
+                if (os != null) {
+                    os.close();
+                }
+            }
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
         }
     }
 
@@ -394,6 +594,20 @@ public class Installer extends ModuleInstall implements Runnable {
         }
     }
 
+    static void getClusterList (Logger logger, List<LogRecord> clusterRec) {
+        LogRecord rec = new LogRecord(Level.INFO, "USG_INSTALLED_CLUSTERS");
+        String dirs = System.getProperty("netbeans.dirs");
+        String [] k = dirs.split(File.pathSeparator);
+        String [] l = new String[k.length];
+        for (int i = 0; i < k.length; i++) {
+            File f = new File(k[i]);
+            l[i] = f.getName();
+        }
+        rec.setParameters(l);
+        rec.setLoggerName(logger.getName());
+        clusterRec.add(rec);
+    }
+    
     public static URL hintsURL() {
         return hintURL;
     }
@@ -662,6 +876,13 @@ public class Installer extends ModuleInstall implements Runnable {
         return displaySummary("EXIT_URL", false, false,true); // NOI18N
     }
 
+    static void logDeactivated(){
+        Logger log = Logger.getLogger("org.netbeans.ui"); // NOI18N
+        for (Deactivated a : Lookup.getDefault().lookupAll(Deactivated.class)) {
+            a.deactivated(log);
+        }
+    }
+    
     private static AtomicReference<String> DISPLAYING = new AtomicReference<String>();
 
     private static boolean displaySummary(String msg, boolean explicit, boolean auto, boolean connectDialog, DataType dataType) {
@@ -753,114 +974,33 @@ public class Installer extends ModuleInstall implements Runnable {
     }
 
 
-    private static boolean isChild(org.w3c.dom.Node child, org.w3c.dom.Node parent) {
-        while (child != null) {
-            if (child == parent) {
-                return true;
-            }
-            child = child.getParentNode();
-        }
-        return false;
-    }
-
-    private static String attrValue(org.w3c.dom.Node in, String attrName) {
-        org.w3c.dom.Node n = in.getAttributes().getNamedItem(attrName);
-        return n == null ? null : n.getNodeValue();
-    }
-
     /** Tries to parse a list of buttons provided by given page.
      * @param u the url to read the page from
      * @param defaultButton the button to add always to the list
      */
-    static void parseButtons(InputStream is, Object defaultButton, DialogDescriptor dd)
-            throws IOException, ParserConfigurationException, SAXException {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setValidating(false);
-        factory.setIgnoringComments(true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
-
-        PushbackInputStream isWithProlog = new PushbackInputStream(is, 255);
-        byte[] xmlHeader = new byte[5];
-        int len = isWithProlog.read(xmlHeader);
-        isWithProlog.unread(xmlHeader, 0, len);
-
-        if (len < 5 || xmlHeader[0] != '<' ||
-            xmlHeader[1] != '?' ||
-            xmlHeader[2] != 'x' ||
-            xmlHeader[3] != 'm' ||
-            xmlHeader[4] != 'l'
-        ) {
-            String header = "<?xml version='1.0' encoding='utf-8'?>";
-            isWithProlog.unread(header.getBytes("utf-8"));
-        }
-
-        Document doc = builder.parse(isWithProlog);
-
-        List<Object> buttons = new ArrayList<Object>();
-        List<Object> left = new ArrayList<Object>();
-
-        NodeList forms = doc.getElementsByTagName("form");
-        for (int i = 0; i < forms.getLength(); i++) {
-            Form f = new Form(forms.item(i).getAttributes().getNamedItem("action").getNodeValue());
-            NodeList inputs = doc.getElementsByTagName("input");
-            for (int j = 0; j < inputs.getLength(); j++) {
-                if (isChild(inputs.item(j), forms.item(i))) {
-                    org.w3c.dom.Node in = inputs.item(j);
-                    String type = attrValue(in, "type");
-                    String name = attrValue(in, "name");
-                    String value = attrValue(in, "value");
-                    String align = attrValue(in, "align");
-                    String alt = attrValue(in, "alt");
-                    boolean enabled = !"true".equals(attrValue(in, "disabled")); // NOI18N
-
-                    List<Object> addTo = "left".equals(align) ? left : buttons;
-
-                    if ("hidden".equals(type) && Button.isSubmitTrigger(name)) { // NOI18N
-                        f.submitValue = value;
-                        JButton b = new JButton();
-                        Mnemonics.setLocalizedText(b, f.submitValue);
-                        b.setActionCommand(name); // NOI18N
-                        b.putClientProperty("url", f.url); // NOI18N
-                        b.setDefaultCapable(addTo.isEmpty() && addTo == buttons);
-                        b.putClientProperty("alt", alt); // NOI18N
-                        b.putClientProperty("now", f.submitValue); // NOI18N
-                        b.setEnabled(enabled);
-                        addTo.add(b);
-                        continue;
-                    }
-
-
-                    if ("hidden".equals(type)) { // NOI18N
-                        JButton b = new JButton();
-                        Mnemonics.setLocalizedText(b, value);
-                        b.setActionCommand(name);
-                        b.setDefaultCapable(addTo.isEmpty() && addTo == buttons);
-                        b.putClientProperty("alt", alt); // NOI18N
-                        b.putClientProperty("now", value); // NOI18N
-                        b.setEnabled(enabled && Button.isKnown(name));
-                        addTo.add(b);
-                        if (Button.EXIT.isCommand(name)) { // NOI18N
-                            defaultButton = null;
-                        }else if (Button.REDIRECT.isCommand(name)){
-                            b.putClientProperty("url", f.url); // NOI18N
-                        }
-                    }
+    static void parseButtons(InputStream is, final Object defaultButton, final DialogDescriptor dd)
+            throws IOException, ParserConfigurationException, SAXException, InterruptedException, InvocationTargetException {
+        final ButtonsParser bp = new ButtonsParser(is);
+        bp.parse();
+        Runnable buttonsCreation = new Runnable() {
+            public void run() {
+                bp.createButtons();
+                List<Object> options = bp.getOptions();
+                if (!bp.containsExitButton() && (defaultButton != null)){
+                    options.add(defaultButton);
+                }
+                dd.setOptions(options.toArray());
+                dd.setAdditionalOptions(bp.getAditionalOptions().toArray());
+                if (bp.getTitle() != null){
+                    dd.setTitle(bp.getTitle());
                 }
             }
-        }
-        if (defaultButton != null) {
-            buttons.add(defaultButton);
-        }
-        dd.setOptions(buttons.toArray());
-        dd.setAdditionalOptions(left.toArray());
-
-        NodeList title = doc.getElementsByTagName("title");
-        for (int i = 0; i < title.getLength(); i++) {
-            String t = title.item(i).getTextContent();
-            if (t != null) {
-                dd.setTitle(t);
-                break;
-            }
+        };
+        
+        if (EventQueue.isDispatchThread()){
+            buttonsCreation.run();
+        }else{
+            EventQueue.invokeAndWait(buttonsCreation);
         }
     }
     
@@ -989,6 +1129,7 @@ public class Installer extends ModuleInstall implements Runnable {
         LOG.log(Level.FINE, "uploadLogs, flushing"); // NOI18N
         data.flush();
         gzip.finish();
+        os.println();
         os.println("----------konec<>bloku--");
         os.close();
         
@@ -1034,7 +1175,14 @@ public class Installer extends ModuleInstall implements Runnable {
 
     private static String findIdentity() {
         Preferences p = NbPreferences.root().node("org/netbeans/modules/autoupdate"); // NOI18N
-        String id = p.get("ideIdentity", null);
+        String id = p.get("qualifiedId", null);
+        //Strip id prefix
+        if (id != null){
+            int ind = id.indexOf("0");
+            if (ind != -1) {
+                id = id.substring(ind + 1);
+            }
+        }
         LOG.log(Level.INFO, "findIdentity: {0}", id);
         return id;
     }
@@ -1125,10 +1273,7 @@ public class Installer extends ModuleInstall implements Runnable {
 
         public void doShow(DataType dataType) {
             if (dataType == DataType.DATA_UIGESTURE) {
-                Logger log = Logger.getLogger("org.netbeans.ui"); // NOI18N
-                for (Deactivated a : Lookup.getDefault().lookupAll(Deactivated.class)) {
-                    a.deactivated(log);
-                }
+                logDeactivated();
             }
             if (report) {
                 dd = new DialogDescriptor(null, NbBundle.getMessage(Installer.class, "ErrorDialogTitle"));
@@ -1186,6 +1331,10 @@ public class Installer extends ModuleInstall implements Runnable {
                     alterMessage(dd);
                     is.close();
                     url = tmp.toURI().toURL();
+                } catch (InterruptedException ex) {
+                    LOG.log(Level.WARNING, null, ex);
+                } catch (InvocationTargetException ex) {
+                    LOG.log(Level.WARNING, null, ex);
                 } catch (ParserConfigurationException ex) {
                     LOG.log(Level.WARNING, null, ex);
                 } catch (SAXException ex) {
@@ -1312,6 +1461,7 @@ public class Installer extends ModuleInstall implements Runnable {
                             recs.add(thrownLog);//exception selected by user
                         }
                         recs.add(TimeToFailure.logFailure());
+                        recs.add(BuildInfo.logBuildInfoRec());
                         recs.add(userData);
                         if ((report) && !(reportPanel.asAGuest())) {
                             if (!checkUserName()) {
@@ -1319,16 +1469,9 @@ public class Installer extends ModuleInstall implements Runnable {
                                 return;
                             }
                         }
-                        LOG.fine("posting upload UIGESTRUE");// NOI18N
+                        LOG.fine("posting upload UIGESTURES");// NOI18N
                     } else if (dataType == DataType.DATA_METRICS) {
                         recs = getLogsMetrics();
-                        saveUserName();
-                        if ((report) && !(reportPanel.asAGuest())) {
-                            if (!checkUserName()) {
-                                reportPanel.showWrongPassword();
-                                return;
-                            }
-                        }
                         LOG.fine("posting upload METRICS");// NOI18N
                     }
                     final List<LogRecord> recsFinal = recs;
@@ -1411,23 +1554,23 @@ public class Installer extends ModuleInstall implements Runnable {
             checkingResult=true;
             RequestProcessor.Task checking;
             checking = RequestProcessor.getDefault().post(new Runnable() {
-            public void run() {
-                ExceptionsSettings settings = new ExceptionsSettings();
-                String login = settings.getUserName();
-                String passwd = settings.getPasswd();
-                try {
-                    char[] array = new char[100];
-                    URL url = new URL(NbBundle.getMessage(Installer.class, "CHECKING_SERVER_URL", login, passwd));
-                    URLConnection connection = url.openConnection();
-                    connection.setRequestProperty("User-Agent", "NetBeans");
-                    Reader reader = new InputStreamReader(connection.getInputStream());
-                    int length = reader.read(array);
-                    checkingResult = new Boolean(new String(array, 0, length));
-                } catch (Exception exception) {
-                    Logger.getLogger(Installer.class.getName()).log(Level.INFO, "CHECKING PASSWORD FAILED", exception); // NOI18N
+                public void run() {
+                    ExceptionsSettings settings = new ExceptionsSettings();
+                    String login = settings.getUserName();
+                    String passwd = settings.getPasswd();
+                    try {
+                        char[] array = new char[100];
+                        URL url = new URL(NbBundle.getMessage(Installer.class, "CHECKING_SERVER_URL", login, passwd));
+                        URLConnection connection = url.openConnection();
+                        connection.setRequestProperty("User-Agent", "NetBeans");
+                        Reader reader = new InputStreamReader(connection.getInputStream());
+                        int length = reader.read(array);
+                        checkingResult = new Boolean(new String(array, 0, length));
+                    } catch (Exception exception) {
+                        Logger.getLogger(Installer.class.getName()).log(Level.INFO, "CHECKING PASSWORD FAILED", exception); // NOI18N
+                    }
                 }
-            }
-            });
+                });
             checking.waitFinished(10000);
             return checkingResult;
         }
@@ -1440,17 +1583,30 @@ public class Installer extends ModuleInstall implements Runnable {
             }
 
             try {
+                if (dataType == DataType.DATA_METRICS) {
+                    logMetricsUploadFailed = false;
+                }
                 nextURL = uploadLogs(u, findIdentity(), Collections.<String,String>emptyMap(), recs, dataType);
             } catch (IOException ex) {
                 LOG.log(Level.INFO, null, ex);
-                String txt;
-                if (!report){
-                    txt = NbBundle.getMessage(Installer.class, "MSG_ConnetionFailed", u.getHost(), u.toExternalForm());
-                }else{
-                    txt = NbBundle.getMessage(Installer.class, "MSG_ConnetionFailedReport", u.getHost(), u.toExternalForm());
+                if (dataType == DataType.DATA_METRICS) {
+                    logMetricsUploadFailed = true;
                 }
-                NotifyDescriptor nd = new NotifyDescriptor.Message(txt, NotifyDescriptor.ERROR_MESSAGE);
-                DialogDisplayer.getDefault().notifyLater(nd);
+                if (dataType != DataType.DATA_METRICS) {
+                    String txt;
+                    if (!report) {
+                        txt = NbBundle.getMessage(Installer.class, "MSG_ConnetionFailed", u.getHost(), u.toExternalForm());
+                    } else {
+                        txt = NbBundle.getMessage(Installer.class, "MSG_ConnetionFailedReport", u.getHost(), u.toExternalForm());
+                    }
+                    NotifyDescriptor nd = new NotifyDescriptor.Message(txt, NotifyDescriptor.ERROR_MESSAGE);
+                    DialogDisplayer.getDefault().notifyLater(nd);
+                }
+            }
+            if (dataType == DataType.DATA_METRICS) {
+                if (preferencesWritable) {
+                    prefs.putBoolean("metrics.upload.failed", logMetricsUploadFailed); // NOI18N
+                }
             }
             if (nextURL != null) {
                 clearLogs();
@@ -1645,6 +1801,7 @@ public class Installer extends ModuleInstall implements Runnable {
             notifyAll();
         }
         protected void showURL(URL u) {
+            LOG.log(Level.FINE, "opening URL: " + u); // NOI18N
             HtmlBrowser.URLDisplayer.getDefault().showURL(u);
         }
         protected void saveUserName() {
@@ -1671,10 +1828,6 @@ public class Installer extends ModuleInstall implements Runnable {
                     LOG.log(Level.WARNING, "PASSWORD ENCRYPTION ERROR", exc);// NOI18N
                 } catch (IOException exc) {
                     LOG.log(Level.WARNING, "PASSWORD ENCRYPTION ERROR", exc);// NOI18N
-                }
-                List<String> buildInfo = BuildInfo.logBuildInfo();
-                if (buildInfo != null) {
-                    params.addAll(buildInfo);
                 }
             }
         }
@@ -1783,6 +1936,7 @@ public class Installer extends ModuleInstall implements Runnable {
                         log.setUseParentHandlers(true);
                         log.setLevel(Level.FINEST);
                         log.addHandler(metrics);
+                        MetricsHandler.setFlushOnRecord(false);
                     } else {
                         MetricsHandler.flushImmediatelly();
                         closeLogStreamMetrics();
@@ -1793,7 +1947,7 @@ public class Installer extends ModuleInstall implements Runnable {
         }
     }
 
-    private static enum Button {
+    static enum Button {
         EXIT("exit"),
         NEVER_AGAIN("never-again"),
         VIEW_DATA("view-data"),
