@@ -45,6 +45,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.net.URL;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -69,6 +70,7 @@ import org.netbeans.modules.java.source.usages.ClassIndexManagerListener;
 import org.netbeans.modules.java.source.usages.ResultConvertor;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
+import org.openide.util.Mutex;
 import org.openide.util.WeakListeners;
 
 /**
@@ -95,7 +97,10 @@ public final class ClassIndex {
     private final Set<URL> oldSources;
     //INV: Never null
     //@GuardedBy (this)
-    private final Set<URL> oldDeps;    
+    private final Set<URL> oldBoot;    
+    //INV: Never null
+    //@GuardedBy (this)
+    private final Set<URL> oldCompile;
     //INV: Never null
     //@GuardedBy (this)
     private final Set<ClassIndexImpl> sourceIndeces;
@@ -204,7 +209,7 @@ public final class ClassIndex {
     
     static {
 	ClassIndexImpl.FACTORY = new ClassIndexFactoryImpl();
-    }
+    }    
     
     ClassIndex(final ClassPath bootPath, final ClassPath classPath, final ClassPath sourcePath) {
         assert bootPath != null;
@@ -213,7 +218,8 @@ public final class ClassIndex {
         this.bootPath = bootPath;
         this.classPath = classPath;
         this.sourcePath = sourcePath;
-        this.oldDeps = new HashSet<URL>();
+        this.oldBoot = new HashSet<URL>();
+        this.oldCompile = new  HashSet<URL>();
         this.oldSources = new HashSet<URL>();
         this.depsIndeces = new HashSet<ClassIndexImpl>();
         this.sourceIndeces = new HashSet<ClassIndexImpl>();
@@ -269,7 +275,13 @@ public final class ClassIndex {
         try {
             if (!ut.isEmpty()) {
                 for (ClassIndexImpl query : queries) {
-                    query.search(binaryName, ut, thConvertor, result);
+                    try {
+                        query.search(binaryName, ut, thConvertor, result);
+                    } catch (ClassIndexImpl.IndexAlreadyClosedException e) {
+                        logClosedIndex (query);
+                    } catch (IOException e) {
+                        Exceptions.printStackTrace(e);
+                    }
                 }
             }
             return Collections.unmodifiableSet(result);
@@ -299,7 +311,13 @@ public final class ClassIndex {
             if (!ut.isEmpty()) {
                 for (ClassIndexImpl query : queries) {
                     final ResultConvertor<FileObject> foConvertor = ResultConvertor.fileObjectConvertor (query.getSourceRoots());
-                    query.search (binaryName, ut, foConvertor, result);
+                    try {
+                        query.search (binaryName, ut, foConvertor, result);
+                    } catch (ClassIndexImpl.IndexAlreadyClosedException e) {
+                        logClosedIndex (query);
+                    } catch (IOException e) {
+                        Exceptions.printStackTrace(e);
+                    }
                 }
             }
             return Collections.unmodifiableSet(result);
@@ -327,7 +345,13 @@ public final class ClassIndex {
         final ResultConvertor<ElementHandle<TypeElement>> thConvertor = ResultConvertor.elementHandleConvertor();
         try {
             for (ClassIndexImpl query : queries) {
-                query.getDeclaredTypes (name, kind, thConvertor, result);
+                try {
+                    query.getDeclaredTypes (name, kind, thConvertor, result);
+                } catch (ClassIndexImpl.IndexAlreadyClosedException e) {
+                    logClosedIndex (query);
+                } catch (IOException e) {
+                    Exceptions.printStackTrace(e);
+                }
             }
             LOGGER.fine(String.format("ClassIndex.getDeclaredTypes returned %d elements\n", result.size()));
             return Collections.unmodifiableSet(result);
@@ -352,7 +376,13 @@ public final class ClassIndex {
         final Iterable<? extends ClassIndexImpl> queries = this.getQueries (scope);
         try {
             for (ClassIndexImpl query : queries) {
-                query.getPackageNames (prefix, directOnly, result);
+                try {
+                    query.getPackageNames (prefix, directOnly, result);
+                } catch (ClassIndexImpl.IndexAlreadyClosedException e) {
+                    logClosedIndex (query);
+                } catch (IOException e) {
+                    Exceptions.printStackTrace(e);
+                }
             }
             return Collections.unmodifiableSet(result);
         } catch (InterruptedException e) {
@@ -371,6 +401,11 @@ public final class ClassIndex {
     }
     
     //Private methods
+    
+    private static void logClosedIndex (final ClassIndexImpl query) {
+        assert query != null;
+        LOGGER.info("Ignoring closed index: " + query.toString());  //NOI18N
+    }
     
     
     private  void reset (final boolean source, final boolean deps) {
@@ -391,13 +426,14 @@ public final class ClassIndex {
                             impl.removeClassIndexImplListener(spiListener);
                         }
                         depsIndeces.clear();
-                        oldDeps.clear();
-                        createQueriesForRoots (bootPath, false, depsIndeces,  oldDeps);                
-                        createQueriesForRoots (classPath, false, depsIndeces, oldDeps);	    
+                        oldBoot.clear();
+                        oldCompile.clear();
+                        createQueriesForRoots (bootPath, false, depsIndeces,  oldBoot);                
+                        createQueriesForRoots (classPath, false, depsIndeces, oldCompile);	    
                     }
                 }
             }
-        } );        
+        });        
     }
     
     private synchronized Iterable<? extends ClassIndexImpl> getQueries (final Set<SearchScope> scope) {        
@@ -418,7 +454,8 @@ public final class ClassIndex {
             result.addAll(this.oldSources);
         }
         if (scope.contains(SearchScope.DEPENDENCIES)) {
-            result.addAll(this.oldDeps);
+            result.addAll(this.oldBoot);
+            result.addAll(this.oldCompile);
         }
         return result;
     }
@@ -427,28 +464,24 @@ public final class ClassIndex {
         final GlobalSourcePath gsp = GlobalSourcePath.getDefault();
         List<ClassPath.Entry> entries = cp.entries();
 	for (ClassPath.Entry entry : entries) {
-	    try {
-                URL[] srcRoots;
-                if (!sources) {
-                    srcRoots = gsp.getSourceRootForBinaryRoot (entry.getURL(), cp, true);                        
-                    if (srcRoots == null) {
-                        srcRoots = new URL[] {entry.getURL()};
-                    }
-                }
-                else {
+            URL[] srcRoots;
+            if (!sources) {
+                srcRoots = gsp.getSourceRootForBinaryRoot (entry.getURL(), cp, true);                        
+                if (srcRoots == null) {
                     srcRoots = new URL[] {entry.getURL()};
-                }                
-                for (URL srcRoot : srcRoots) {
-                    oldState.add (srcRoot);
-                    ClassIndexImpl ci = ClassIndexManager.getDefault().getUsagesQuery(srcRoot);
-                    if (ci != null) {
-                        ci.addClassIndexImplListener(spiListener);
-                        queries.add (ci);
-                    }
                 }
-	    } catch (IOException ioe) {
-		Exceptions.printStackTrace(ioe);
-	    }
+            }
+            else {
+                srcRoots = new URL[] {entry.getURL()};
+            }                
+            for (URL srcRoot : srcRoots) {
+                oldState.add (srcRoot);
+                ClassIndexImpl ci = ClassIndexManager.getDefault().getUsagesQuery(srcRoot);
+                if (ci != null) {
+                    ci.addClassIndexImplListener(spiListener);
+                    queries.add (ci);
+                }
+            }	    
 	}
     }
     
@@ -536,18 +569,7 @@ public final class ClassIndex {
         }
         
         public void classIndexRemoved (final ClassIndexManagerEvent event) {
-            final Set<? extends URL> roots = event.getRoots();
-            assert roots != null;
-            List<URL> ar = new LinkedList<URL> ();
-            boolean srcF = containsRoot(getOldState(EnumSet.of(SearchScope.SOURCE)), roots, ar);
-            boolean depF = containsRoot(getOldState(EnumSet.of(SearchScope.DEPENDENCIES)), roots, ar);
-            if (srcF || depF) {
-                reset (srcF, depF);
-                final RootsEvent e = new RootsEvent(ClassIndex.this, ar);
-                for (ClassIndexListener l : listeners) {
-                    l.rootsRemoved(e);
-                }
-            }
+            //Not important handled by propertyChange from ClassPath
         }
         
         private boolean containsRoot (final ClassPath cp, final Set<? extends URL> roots, final List<? super URL> affectedRoots, final boolean translate) {
@@ -578,7 +600,9 @@ public final class ClassIndex {
             return result;
         }
         
-        private boolean containsNewRoot (final ClassPath cp, final Set<? extends URL> roots, final List<? super URL> newRoots, final boolean translate) throws IOException {
+        private boolean containsNewRoot (final ClassPath cp, final Set<? extends URL> roots,
+                final List<? super URL> newRoots, final List<? super URL> removedRoots,
+                final boolean translate) throws IOException {
             final List<ClassPath.Entry> entries = cp.entries();
             final GlobalSourcePath gsp = GlobalSourcePath.getDefault();
             final ClassIndexManager mgr = ClassIndexManager.getDefault();
@@ -590,20 +614,23 @@ public final class ClassIndex {
                     srcRoots = gsp.getSourceRootForBinaryRoot (entry.getURL(), cp, false);
                 }                
                 if (srcRoots == null) {
-                    if (!roots.contains(url) && mgr.getUsagesQuery(url)!=null) {
+                    if (!roots.remove(url) && mgr.getUsagesQuery(url)!=null) {
                         newRoots.add (url);
                         result = true;
                     }
                 }
                 else {
                     for (URL _url : srcRoots) {
-                        if (!roots.contains(_url) && mgr.getUsagesQuery(_url)!=null) {
+                        if (!roots.remove(_url) && mgr.getUsagesQuery(_url)!=null) {
                             newRoots.add (_url);
                             result = true;
                         }
                     }
                 }
             }
+            result |= !roots.isEmpty();
+            Collection<? super URL> c = removedRoots;
+            c.addAll(roots);
             return result;
         }
         
@@ -621,6 +648,7 @@ public final class ClassIndex {
         public void propertyChange(PropertyChangeEvent evt) {
             if (ClassPath.PROP_ENTRIES.equals (evt.getPropertyName())) {
                 final List<URL> newRoots = new LinkedList<URL>();
+                final List<URL> removedRoots = new  LinkedList<URL> ();
                 boolean dirtySource = false;
                 boolean dirtyDeps = false;
                 try {
@@ -630,42 +658,48 @@ public final class ClassIndex {
                         synchronized (ClassIndex.this) {
                             copy = new HashSet<URL>(oldSources);
                         }
-                        dirtySource = containsNewRoot(sourcePath, copy, newRoots, false);                        
+                        dirtySource = containsNewRoot(sourcePath, copy, newRoots, removedRoots, false);                        
                     }                
                     else if (source == ClassIndex.this.classPath) {
                         Set<URL> copy;
                         synchronized (ClassIndex.this) {
-                            copy = new HashSet<URL>(oldDeps);
+                            copy = new HashSet<URL>(oldCompile);
                         }
-                        dirtyDeps = containsNewRoot(classPath, copy, newRoots, true);                        
+                        dirtyDeps = containsNewRoot(classPath, copy, newRoots, removedRoots, true);                        
                     }
                     else if (source == ClassIndex.this.bootPath) {
                         Set<URL> copy;
                         synchronized (ClassIndex.this) {
-                            copy = new HashSet<URL>(oldDeps);
+                            copy = new HashSet<URL>(oldBoot);
                         }
-                        dirtyDeps = containsNewRoot(bootPath, copy, newRoots, true);
+                        dirtyDeps = containsNewRoot(bootPath, copy, newRoots, removedRoots, true);
                     }
                     
                     if (dirtySource || dirtyDeps) {                        
                         ClassIndex.this.reset(dirtySource, dirtyDeps);
-                        final RootsEvent e = new RootsEvent(ClassIndex.this, newRoots);
+                        final RootsEvent ae = newRoots.isEmpty() ? null : new RootsEvent(ClassIndex.this, newRoots);
+                        final RootsEvent re = removedRoots.isEmpty() ? null : new RootsEvent(ClassIndex.this, removedRoots);
                         //Threading warning:
                         //The Javadoc promises that events are fired under javac lock,
                         //reschedule firing to the Java Worker Thread which runs under javac lock,
                         //trying to access javac lock in this thread may cause deadlock with Java Worker Thread
                         //because the classpath events are fired under the project mutex and it's legal to
                         //aquire project mutex in the CancellableTask.run()
-                        JavaSourceAccessor.INSTANCE.runSpecialTask(new CancellableTask<CompilationInfo>() {
-                            public void cancel() {
-                                //Cannot cancel event firing
-                            }
-
-                            public void run(CompilationInfo _null) throws Exception {
-                                for (ClassIndexListener l : listeners) {
-                                    l.rootsRemoved(e);
-                                }                        
-                            }
+                        JavaSourceAccessor.getINSTANCE().runSpecialTask(new Mutex.ExceptionAction<Void>() {
+                            
+                            public Void run() {
+                                if (ae != null) {
+                                    for (ClassIndexListener l : listeners) {
+                                        l.rootsAdded(ae);
+                                    }                        
+                                }
+                                if (re != null) {
+                                    for (ClassIndexListener l : listeners) {
+                                        l.rootsRemoved(re);
+                                    }
+                                }
+                                return null;
+                            }                            
                         }, JavaSource.Priority.MAX);                        
                     }                    
                 } catch (IOException ioe) {
