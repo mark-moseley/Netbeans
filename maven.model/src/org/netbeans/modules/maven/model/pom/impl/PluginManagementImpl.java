@@ -47,61 +47,46 @@ import org.netbeans.modules.maven.model.pom.POMComponentVisitor;
  *
  * @author mkleint
  */
-public class DependencyManagementImpl extends POMComponentImpl implements DependencyManagement {
+public class PluginManagementImpl extends POMComponentImpl implements PluginManagement {
 
-    public DependencyManagementImpl(POMModel model, Element element) {
+    public PluginManagementImpl(POMModel model, Element element) {
         super(model, element);
     }
     
-    public DependencyManagementImpl(POMModel model) {
-        this(model, createElementNS(model, model.getPOMQNames().DEPENDENCYMANAGEMENT));
+    public PluginManagementImpl(POMModel model) {
+        this(model, createElementNS(model, model.getPOMQNames().PLUGINMANAGEMENT));
     }
 
     // attributes
 
-    public List<Dependency> getDependencies() {
-        ModelList<Dependency> childs = getChild(DependencyImpl.List.class);
+    // child elements
+    public List<Plugin> getPlugins() {
+        ModelList<Plugin> childs = getChild(PluginImpl.List.class);
         if (childs != null) {
             return childs.getListChildren();
         }
         return null;
     }
 
-    public void addDependency(Dependency dep) {
-        ModelList<Dependency> childs = getChild(DependencyImpl.List.class);
+    public void addPlugin(Plugin plugin) {
+        ModelList<Plugin> childs = getChild(PluginImpl.List.class);
         if (childs == null) {
-            setChild(DependencyImpl.List.class,
-                    getModel().getPOMQNames().DEPENDENCIES.getQName().getLocalPart(),
-                    getModel().getFactory().create(this, getModel().getPOMQNames().DEPENDENCIES.getQName()),
+            setChild(PluginImpl.List.class,
+                    getModel().getPOMQNames().PLUGINS.getName(),
+                    getModel().getFactory().create(this, getModel().getPOMQNames().PLUGINS.getQName()),
                     Collections.<Class<? extends POMComponent>>emptyList());
-            childs = getChild(DependencyImpl.List.class);
+            childs = getChild(PluginImpl.List.class);
             assert childs != null;
         }
-        childs.addListChild(dep);
+        childs.addListChild(plugin);
     }
 
-    public void removeDependency(Dependency dep) {
-        ModelList<Dependency> childs = getChild(DependencyImpl.List.class);
+    public void removePlugin(Plugin plugin) {
+        ModelList<Plugin> childs = getChild(PluginImpl.List.class);
         if (childs != null) {
-            childs.removeListChild(dep);
+            childs.removeListChild(plugin);
         }
     }
-
-    public Dependency findDependencyById(String groupId, String artifactId, String classifier) {
-        assert groupId != null;
-        assert artifactId != null;
-        java.util.List<Dependency> deps = getDependencies();
-        if (deps != null) {
-            for (Dependency d : deps) {
-                if (groupId.equals(d.getGroupId()) && artifactId.equals(d.getArtifactId()) &&
-                        (classifier == null || classifier.equals(d.getClassifier()))) {
-                    return d;
-                }
-            }
-        }
-        return null;
-    }
-
 
     public void accept(POMComponentVisitor visitor) {
         visitor.visit(this);
