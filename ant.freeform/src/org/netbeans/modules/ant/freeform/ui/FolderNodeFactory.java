@@ -61,7 +61,6 @@ import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.api.queries.VisibilityQuery;
 import org.netbeans.modules.ant.freeform.FreeformProject;
 import org.netbeans.modules.ant.freeform.FreeformProjectType;
@@ -76,6 +75,7 @@ import org.openide.actions.OpenAction;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.ChangeableDataFilter;
+import org.openide.loaders.DataFilter;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -86,6 +86,7 @@ import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
 import org.openide.util.ContextAwareAction;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -236,7 +237,7 @@ public class FolderNodeFactory implements NodeFactory {
                     return null;
                 }
                 if (!style.equals("tree")) { // NOI18N
-                    Logger.getLogger(FolderNodeFactory.class.getName()).log(Level.WARNING, "Unrecognized <source-folder> style {0} on {1}", new Object[] {style, file});
+                    Logger.getLogger(FolderNodeFactory.class.getName()).log(Level.WARNING, "Unrecognized <source-folder> style {0} on {1}", new Object[] {style, file});  //NOI18N
                     // ... but show it as a tree anyway (at least ViewTest cares)
                 }
                 DataObject fileDO;
@@ -260,7 +261,7 @@ public class FolderNodeFactory implements NodeFactory {
     }
     
     
-    static final class VisibilityQueryDataFilter implements ChangeListener, ChangeableDataFilter {
+    static final class VisibilityQueryDataFilter implements ChangeListener, ChangeableDataFilter, DataFilter.FileBased {
         
         private final ChangeSupport cs = new ChangeSupport(this);
         private final FileObject root;
@@ -275,7 +276,7 @@ public class FolderNodeFactory implements NodeFactory {
         public boolean acceptDataObject(DataObject obj) {                
             FileObject fo = obj.getPrimaryFile();                
             String path = FileUtil.getRelativePath(root, fo);
-            assert path != null : fo + " not in " + root;
+            assert path != null : fo + " not in " + root;  //NOI18N
             if (fo.isFolder()) {
                 path += "/"; // NOI18N
             }
@@ -295,6 +296,10 @@ public class FolderNodeFactory implements NodeFactory {
                         
         public void removeChangeListener( ChangeListener listener ) {
             cs.removeChangeListener(listener);
+        }
+
+        public boolean acceptFileObject(FileObject fo) {
+            return VisibilityQuery.getDefault().isVisible(fo);
         }
         
     }
@@ -317,10 +322,12 @@ public class FolderNodeFactory implements NodeFactory {
             this.displayName = displayName;
         }
         
+        @Override
         public String getName() {
             return name;
         }
         
+        @Override
         public String getDisplayName() {
             if (displayName != null) {
                 return displayName;
@@ -330,14 +337,17 @@ public class FolderNodeFactory implements NodeFactory {
             }
         }
         
+        @Override
         public boolean canRename() {
             return false;
         }
         
+        @Override
         public boolean canDestroy() {
             return false;
         }
         
+        @Override
         public boolean canCut() {
             return false;
         }
@@ -369,7 +379,7 @@ public class FolderNodeFactory implements NodeFactory {
 
          @Override
          public Image getIcon(int type) {
-             return Utilities.icon2Image(info.getIcon());
+             return ImageUtilities.icon2Image(info.getIcon());
          }
 
          @Override

@@ -41,6 +41,7 @@
 
 package org.netbeans.spi.java.project.support.ui;
 
+import java.awt.EventQueue;
 import java.awt.Image;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -59,6 +60,7 @@ import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.ChangeableDataFilter;
+import org.openide.loaders.DataFilter;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.FilterNode;
@@ -142,10 +144,14 @@ final class TreeRootNode extends FilterNode implements PropertyChangeListener {
 
     public void propertyChange(PropertyChangeEvent ev) {
         // XXX handle SourceGroup.rootFolder change too
-        fireNameChange(null, null);
-        fireDisplayNameChange(null, null);
-        fireIconChange();
-        fireOpenedIconChange();
+        EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                fireNameChange(null, null);
+                fireDisplayNameChange(null, null);
+                fireIconChange();
+                fireOpenedIconChange();
+            }
+        });
     }
 
     /** Copied from PhysicalView and PackageRootNode. */
@@ -199,7 +205,8 @@ final class TreeRootNode extends FilterNode implements PropertyChangeListener {
         }
     }
     
-    private static final class VisibilityQueryDataFilter implements ChangeListener, PropertyChangeListener, ChangeableDataFilter {
+    private static final class VisibilityQueryDataFilter implements ChangeListener, PropertyChangeListener, 
+            ChangeableDataFilter, DataFilter.FileBased {
         
         private static final long serialVersionUID = 1L; // in case a DataFolder.ClonedFilterHandle saves me
         
@@ -246,6 +253,10 @@ final class TreeRootNode extends FilterNode implements PropertyChangeListener {
         
         public void removeChangeListener(ChangeListener listener) {
             ell.remove(ChangeListener.class, listener);
+        }
+
+        public boolean acceptFileObject(FileObject fo) {
+            return VisibilityQuery.getDefault().isVisible(fo);
         }
         
     }
