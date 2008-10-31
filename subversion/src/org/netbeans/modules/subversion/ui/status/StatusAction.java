@@ -42,6 +42,7 @@
 package org.netbeans.modules.subversion.ui.status;
 
 import java.io.File;
+import java.util.logging.Level;
 import org.netbeans.modules.subversion.util.*;
 import org.netbeans.modules.subversion.util.Context;
 import org.netbeans.modules.subversion.FileInformation;
@@ -127,19 +128,22 @@ public class StatusAction  extends ContextAction {
                     ISVNStatus status = statuses[s];                    
                     File file = status.getFile();                    
                     if(file.isDirectory() && status.getTextStatus().equals(SVNStatusKind.UNVERSIONED)) {
-                        // XXX could have been created externally and the cache ignores by designe 
+                        // could have been created externally and the cache ignores by designe 
                         // a newly created folders children. 
                         // As this is the place were such files should be recognized,
                         // we will force the refresh recursivelly. 
-                        SvnUtils.refreshRecursively(file);
+                        cache.refreshRecursively(file);
                     } else {
-                        cache.refresh(file, status);    
-                    }
-                    
+                        cache.refresh(file, status);
+                    }                    
                 }
             }
         } catch (SVNClientException ex) {
-            support.annotate(ex);
+            if(!support.isCanceled()) {
+                support.annotate(ex);
+            } else {
+                Subversion.LOG.log(Level.INFO, "Action canceled", ex);
+            }
         }
     }
 }
