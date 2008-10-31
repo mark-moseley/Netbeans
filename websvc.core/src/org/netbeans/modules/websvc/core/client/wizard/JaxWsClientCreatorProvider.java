@@ -41,11 +41,11 @@
 
 package org.netbeans.modules.websvc.core.client.wizard;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.websvc.core.ClientCreator;
-import org.netbeans.modules.websvc.core.ClientCreatorProvider;
+import org.netbeans.modules.websvc.api.support.ClientCreator;
+import org.netbeans.modules.websvc.spi.support.ClientCreatorProvider;
 import org.netbeans.modules.websvc.core.ClientWizardProperties;
-import org.netbeans.modules.websvc.core.JaxWsUtils;
-import org.netbeans.modules.websvc.core.dev.wizard.PlatformUtil;
+import org.netbeans.modules.websvc.core.ServerType;
+import org.netbeans.modules.websvc.core.WSStackUtils;
 import org.openide.WizardDescriptor;
 
 /**
@@ -65,7 +65,8 @@ public class JaxWsClientCreatorProvider implements ClientCreatorProvider {
 //        if (JaxWsUtils.isEjbJavaEE5orHigher(project)) {
 //            return new JaxWsClientCreator(project, wiz);
 //        }
-        if (PlatformUtil.isJaxWsInJ2ee14Supported(project)) {
+        
+        if (ServerType.JBOSS == WSStackUtils.getServerType(project)) {
             return new JaxWsClientCreator(project, wiz);
         }
         return null;
