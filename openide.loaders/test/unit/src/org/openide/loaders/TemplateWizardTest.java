@@ -51,6 +51,7 @@ import java.util.Set;
 import javax.swing.JPanel;
 import javax.swing.event.ChangeListener;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
@@ -187,10 +188,13 @@ public class TemplateWizardTest extends NbTestCase {
         }
     } // end of Loader
 
+    @RandomlyFails // NB-Core-Build #1639 (NPE in SunGraphics2D.addRenderingHints from HtmlLabelUI.calcPreferredSize);
+                   // NB-Core-Build #1644 (CCE: javax.swing.KeyStroke from TreeMap.compare in JTextField.<init>)
     public void testNextOnIterImpl () {
         doNextOnIterImpl (false);
     }
-    
+
+    @RandomlyFails // NB-Core-Build #1429
     public void testNextOnIterImplWithNotification () {
         doNextOnIterImpl (true);
     }
