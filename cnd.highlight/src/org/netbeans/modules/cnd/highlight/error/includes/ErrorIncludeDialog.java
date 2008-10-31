@@ -79,14 +79,15 @@ import javax.swing.event.ListSelectionListener;
 import org.netbeans.modules.cnd.api.model.CsmChangeEvent;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmInclude;
-import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
+import org.netbeans.modules.cnd.api.model.CsmListeners;
 import org.netbeans.modules.cnd.api.model.CsmModelListener;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.api.model.CsmProject;
+import org.netbeans.modules.cnd.api.model.services.CsmFileInfoQuery;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.api.project.NativeProject;
-import org.netbeans.modules.cnd.discovery.api.ProjectUtil;
+import org.netbeans.modules.cnd.discovery.api.DiscoveryUtils;
 import org.netbeans.modules.cnd.dwarfdump.Dwarf;
 import org.netbeans.modules.cnd.dwarfdump.CompilationUnit;
 import org.netbeans.modules.cnd.dwarfdump.exception.WrongFileFormatException;
@@ -96,6 +97,7 @@ import org.openide.DialogDisplayer;
 import org.openide.awt.Mnemonics;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 import org.openide.util.Utilities;
 
 /**
@@ -130,7 +132,8 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
         }
 
         createComponents(includes);
-        setPreferredSize(new Dimension(500, 240));
+        setPreferredSize(new Dimension(NbPreferences.forModule(ErrorIncludeDialog.class).getInt("dialogSizeW", 500),
+                                       NbPreferences.forModule(ErrorIncludeDialog.class).getInt("dialogSizeH", 240)));
         setMinimumSize(new Dimension(320, 240));
         addHierarchyListener(new HierarchyListener() {
             public void hierarchyChanged(HierarchyEvent e) {
@@ -144,7 +147,9 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
                         if (searchBase != null) {
                             searchBase.clear();
                         }
-                        CsmModelAccessor.getModel().removeModelListener(ErrorIncludeDialog.this);
+                        CsmListeners.getDefault().removeModelListener(ErrorIncludeDialog.this);
+                        NbPreferences.forModule(ErrorIncludeDialog.class).putInt("dialogSizeW", getSize().width);
+                        NbPreferences.forModule(ErrorIncludeDialog.class).putInt("dialogSizeH", getSize().height);
                     }
                 }
             }
@@ -173,7 +178,7 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
         Dialog dlg = DialogDisplayer.getDefault().createDialog(descriptor);
         dlg.setVisible(true);
         errors.parent = dlg;
-        CsmModelAccessor.getModel().addModelListener(errors);
+        CsmListeners.getDefault().addModelListener(errors);
     }
     
     private void createComponents(List<CsmInclude> includes) {
@@ -326,8 +331,7 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
         guessList.setEditable(false);
         
         JSplitPane pane = new JSplitPane();
-        pane.setDividerLocation(0.35);
-        pane.setResizeWeight(0.35);
+        pane.setResizeWeight(0.5);
         pane.setOneTouchExpandable(true);
         
         JPanel p;
@@ -360,8 +364,7 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
         pane.setLeftComponent(p);
         
         JSplitPane vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        vertical.setDividerLocation(0.65);
-        vertical.setResizeWeight(0.65);
+        vertical.setResizeWeight(0.5);
         vertical.setOneTouchExpandable(true);
         
         JScrollPane rightTopScroller = new JScrollPane(rightList);
@@ -415,6 +418,44 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
         vertical.setBottomComponent(p);
         
         pane.setRightComponent(vertical);
+
+        vertical.addHierarchyListener(new HierarchyListener() {
+            private boolean show;
+            public void hierarchyChanged(HierarchyEvent e) {
+                if ((HierarchyEvent.SHOWING_CHANGED & e.getChangeFlags()) == HierarchyEvent.SHOWING_CHANGED){
+                    JSplitPane p = (JSplitPane)e.getSource();
+                    if (show) {
+                        int l1 = p.getTopComponent().getHeight();
+                        int l2 = p.getBottomComponent().getHeight();
+                        if (l1 > 0 && l2 > 0) {
+                            NbPreferences.forModule(ErrorIncludeDialog.class).putDouble("verticalDivider", ((double)l1)/(l1+l2));
+                        }
+                    } else {
+                        p.setDividerLocation(NbPreferences.forModule(ErrorIncludeDialog.class).getDouble("verticalDivider", 0.65));
+                        show = true;
+                    }
+                }
+            }
+        });
+
+        pane.addHierarchyListener(new HierarchyListener() {
+            private boolean show;
+            public void hierarchyChanged(HierarchyEvent e) {
+                if ((HierarchyEvent.SHOWING_CHANGED & e.getChangeFlags()) == HierarchyEvent.SHOWING_CHANGED){
+                    JSplitPane p = (JSplitPane)e.getSource();
+                    if (show) {
+                        int l1 = p.getLeftComponent().getWidth();
+                        int l2 = p.getRightComponent().getWidth();
+                        if (l1 > 0 && l2 > 0) {
+                            NbPreferences.forModule(ErrorIncludeDialog.class).putDouble("horisontalDivider", ((double)l1)/(l1+l2));
+                        }
+                    } else {
+                        p.setDividerLocation(NbPreferences.forModule(ErrorIncludeDialog.class).getDouble("horisontalDivider", 0.35));
+                        show = true;
+                    }
+                }
+            }
+        });
         
         return pane;
     }
@@ -540,7 +581,51 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
             }
         }
         guessList.setText(buf.toString());
-        getObjectFile(found, incl.getContainingFile().getAbsolutePath().toString());
+        CsmFile file = incl.getContainingFile();
+        getObjectFile(found, file.getAbsolutePath().toString());
+        if (file.isHeaderFile()){
+            List<CsmInclude> list = CsmFileInfoQuery.getDefault().getIncludeStack(file);
+            if (list.size()>0) {
+                buf = new StringBuilder();
+                buf.append(i18n("PathToHeader"));  // NOI18N
+                file = list.get(0).getContainingFile();
+                for (CsmInclude inc : list){
+                    buf.append('\n').append('\t');
+                    buf.append(inc.getContainingFile().getAbsolutePath());
+                    buf.append(i18n("PathToHeaderLine", inc.getStartPosition().getLine()));  // NOI18N
+                }
+                buf.append('\n');
+                guessList.setText(guessList.getText()+buf.toString());
+            } else {
+                return;
+            }
+        }
+        if (file != null){
+            List<String> list = CsmFileInfoQuery.getDefault().getUserIncludePaths(file);
+            if (list.size()>0) {
+                buf = new StringBuilder();
+                buf.append(i18n("SourceUserPaths"));  // NOI18N
+                for (String path : list){
+                    buf.append('\n');
+                    buf.append('\t');
+                    buf.append(path);
+                }
+                buf.append('\n');
+                guessList.setText(guessList.getText()+buf.toString());
+            }
+            list = CsmFileInfoQuery.getDefault().getSystemIncludePaths(file);
+            if (list.size()>0) {
+                buf = new StringBuilder();
+                buf.append(i18n("SourceSystemPaths"));  // NOI18N
+                for (String path : list){
+                    buf.append('\n');
+                    buf.append('\t');
+                    buf.append(path);
+                }
+                buf.append('\n');
+                guessList.setText(guessList.getText()+buf.toString());
+            }
+        }
     }
     
     private void getObjectFile(String searchFor, String in){
@@ -653,7 +738,7 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
         HashMap<String,List<String>> map = new HashMap<String,List<String>>();
         for (Iterator it = set.iterator(); it.hasNext();){
             File d = new File((String)it.next());
-            if (d.isDirectory()){
+            if (d.exists() && d.isDirectory() && d.canRead()){
                 File[] ff = d.listFiles();
                 for (int i = 0; i < ff.length; i++) {
                     if (ff[i].isFile()) {
@@ -671,8 +756,8 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
     }
     
     private void gatherSubFolders(File d, HashSet<String> set){
-        if (d.isDirectory()){
-            if (ProjectUtil.ignoreFolder(d)){
+        if (d.exists() && d.isDirectory() && d.canRead()){
+            if (DiscoveryUtils.ignoreFolder(d)){
                 return;
             }
             String path = d.getAbsolutePath();
@@ -688,6 +773,10 @@ public class ErrorIncludeDialog extends JPanel implements CsmModelListener {
     
     private static String i18n(String id) {
         return NbBundle.getMessage(ErrorIncludeDialog.class,id);
+    }
+
+    private static String i18n(String id, int line) {
+        return NbBundle.getMessage(ErrorIncludeDialog.class,id,""+line);
     }
 
 }
