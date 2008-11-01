@@ -58,9 +58,14 @@ import org.netbeans.lib.ddl.impl.TableColumn;
 
 import org.netbeans.api.db.explorer.DatabaseException;
 import org.netbeans.modules.db.explorer.nodes.DatabaseNode;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
+import org.openide.util.NbBundle;
 
 public class ColumnNodeInfo extends DatabaseNodeInfo {
     static final long serialVersionUID =-1470704512178901918L;
+    private static final int VERSION_LENGTH = 4;  // represents Java DB version like 10.2
+    private static final double COL_DELETION_SUPPORTED = 10.3;  // Java DB version that supports column deletion
     
     public boolean canAdd(Map propmap, String propname) {
         if (propname.equals("decdigits")) { //NOI18N
@@ -90,14 +95,25 @@ public class ColumnNodeInfo extends DatabaseNodeInfo {
             String code = getCode();
             String table = (String) get(DatabaseNode.TABLE);
             Specification spec = (Specification) getSpecification();
+            // #149904 [65cat] Cannot remove database table column from action
+            if (spec.getProperties().get("DatabaseProductName").equals("Apache Derby")) {  // NOI18N
+                String productVersion = spec.getMetaData().getDatabaseProductVersion();
+                int versionLength = productVersion.length() < VERSION_LENGTH ? productVersion.length() : VERSION_LENGTH;
+                String productVersionOnly = productVersion.substring(0, versionLength);
+                double dProductVersion = Double.parseDouble(productVersionOnly);
+                if (dProductVersion < COL_DELETION_SUPPORTED) {
+                    String message = NbBundle.getMessage(ColumnNodeInfo.class, "LBL_JavaDB_DeleteNotSupported", productVersionOnly);
+                    NotifyDescriptor desc = new NotifyDescriptor.Message(message, NotifyDescriptor.INFORMATION_MESSAGE);
+                    DialogDisplayer.getDefault().notify(desc);
+                    return;
+                }
+            }
             RemoveColumn cmd = (RemoveColumn) spec.createCommandRemoveColumn(table);
             cmd.removeColumn((String) get(code));
             cmd.setObjectOwner((String) get(DatabaseNodeInfo.SCHEMA));
             cmd.execute();
 
-            // refresh list of columns after column drop
-            //getParent().refreshChildren();
-            fireRefresh();
+            notifyChange();
         } catch (Exception exc) {
             DbUtilities.reportError(bundle().getString("ERR_UnableToDeleteColumn"), exc.getMessage()); // NOI18N
         }
@@ -151,6 +167,15 @@ public class ColumnNodeInfo extends DatabaseNodeInfo {
         }
 
         return col;
+    }
+    
+    public int getColumnPosition() {
+        Object ordpos = getProperty("ordpos");
+        if (ordpos == null) {
+            return 0;
+        } else {
+            return (Integer)ordpos;
+        }
     }
 
     // catalog,schema,tablename,name,datatype,typename,
@@ -261,13 +286,24 @@ public class ColumnNodeInfo extends DatabaseNodeInfo {
         }
     }
 
-    /**
-     * Using name of column for hashCode computation.
-     *
-     * @return  computed hashCode based on name of column
-     */
-    public int hashCode() {
-        return getName().hashCode();
+    @Override
+    public int compareTo(Object o2) {
+        // Sort based on column position, not name
+        if ( equals(o2) ) {
+            return 0;
+        }
+        
+        if ( ! (o2 instanceof ColumnNodeInfo) ) {
+            return super.compareTo(o2);
+        }
+
+        if (getColumnPosition() == 0) {
+            // The database is not telling us ordinal positions, so sort by name
+            return super.compareTo(o2);
+        }
+        
+        return this.getColumnPosition() - 
+                ((ColumnNodeInfo)o2).getColumnPosition();
     }
     
 }
