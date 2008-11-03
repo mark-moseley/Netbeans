@@ -43,6 +43,7 @@ package org.netbeans.modules.ruby.platform.gems;
 import java.awt.Dialog;
 
 import javax.swing.JButton;
+import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.util.HelpCtx;
@@ -50,12 +51,38 @@ import org.openide.util.NbBundle;
 import org.openide.util.actions.CallableSystemAction;
 
 public final class GemAction extends CallableSystemAction {
-    
+
     public void performAction() {
-        showGemManager(null);
+        showGemManager(null, null, true);
     }
     
-    public static boolean showGemManager(String availableFilter) {
+    public static boolean GemManager(final String availableFilter) {
+        return showGemManager(null, availableFilter);
+    }
+
+    public static boolean showGemManager(final RubyPlatform platform) {
+        return showGemManager(platform, null);
+    }
+
+    public static boolean showGemManager(final RubyPlatform platform, final boolean canManagePlatforms) {
+        return showGemManager(null, platform, canManagePlatforms);
+    }
+
+    public static boolean showGemManager(final RubyPlatform platform, final String availableFilter) {
+        return showGemManager(availableFilter, platform, true);
+    }
+
+    /**
+     * Displays the gem manager panel.
+     * 
+     * @param availableFilter the filter to use for displaying gems, e.g.
+     * <code>"generators$"</code> for displaying only generator gems.
+     * @param preselected the platform that should be preselected in the panel;
+     * may be <code>null</code> in which case the last selected platform is preselected.
+     */
+    public static boolean showGemManager(final String availableFilter,
+            final RubyPlatform preselected,
+            final boolean canManagePlatforms) {
         // XXX: should be moved directly to GemManager panel(?)
 //        String gemProblem = GemManager.getGemProblem();
 //
@@ -67,7 +94,7 @@ public final class GemAction extends CallableSystemAction {
 //            return false;
 //        }
 
-        GemPanel customizer = new GemPanel(availableFilter);
+        GemPanel customizer = new GemPanel(availableFilter, preselected, canManagePlatforms);
         JButton close =
                 new JButton(NbBundle.getMessage(GemAction.class, "CTL_Close"));
         close.getAccessibleContext()
