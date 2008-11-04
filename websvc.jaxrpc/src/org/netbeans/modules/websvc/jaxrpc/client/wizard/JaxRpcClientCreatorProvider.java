@@ -42,8 +42,9 @@
 package org.netbeans.modules.websvc.jaxrpc.client.wizard;
 
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.websvc.core.ClientCreator;
-import org.netbeans.modules.websvc.core.ClientCreatorProvider;
+import org.netbeans.modules.websvc.api.client.WebServicesClientSupport;
+import org.netbeans.modules.websvc.api.support.ClientCreator;
+import org.netbeans.modules.websvc.spi.support.ClientCreatorProvider;
 import org.netbeans.modules.websvc.core.ClientWizardProperties;
 import org.openide.WizardDescriptor;
 
@@ -59,7 +60,9 @@ public class JaxRpcClientCreatorProvider implements ClientCreatorProvider {
     public ClientCreator getClientCreator(Project project, WizardDescriptor wiz) {
         String jaxVersion = (String) wiz.getProperty(ClientWizardProperties.JAX_VERSION);
         if (jaxVersion.equals(ClientWizardProperties.JAX_RPC)) {
-            return new JaxRpcClientCreator(project, wiz);
+            if (WebServicesClientSupport.getWebServicesClientSupport(project.getProjectDirectory()) != null) {
+                return new JaxRpcClientCreator(project, wiz);
+            }
         }
         return null;
     }
