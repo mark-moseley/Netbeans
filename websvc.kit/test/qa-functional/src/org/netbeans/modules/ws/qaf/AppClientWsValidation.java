@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,17 +34,15 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.ws.qaf;
 
 import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
-import junit.textui.TestRunner;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.OutputTabOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.modules.ws.qaf.WebServicesTestBase.ProjectType;
 
 /**
@@ -67,35 +65,19 @@ public class AppClientWsValidation extends EjbWsValidation {
         return "WsClientInAppClient"; //NOI18N
     }
 
-    @Override
-    protected String getWsClientPackage() {
-        return "o.n.m.ws.qaf.client.appclient"; //NOI18N
-    }
-
-    /** Creates suite from particular test cases. You can define order of testcases here.
-     * Since it's currently impossible to create web service in Java Application,
-     * this suite uses web service created previously by EjbWSValidation suite.
-     */
     public static Test suite() {
-        TestSuite suite = new NbTestSuite();
-        suite.addTest(new AppClientWsValidation("testCreateWsClient")); //NOI18N   
-        suite.addTest(new AppClientWsValidation("testCallWsOperationInJavaMainClass")); //NOI18N
-        suite.addTest(new AppClientWsValidation("testCallWsOperationInJavaClass")); //NOI18N
-        suite.addTest(new AppClientWsValidation("testWsClientHandlers")); //NOI18N
-        suite.addTest(new AppClientWsValidation("testRunWsClientProject")); //NOI18N
-        suite.addTest(new AppClientWsValidation("testUndeployClientProject")); //NOI18N
-        return suite;
-    }
-
-    /* Method allowing test execution directly from the IDE. */
-    public static void main(java.lang.String[] args) {
-        TestRunner.run(suite());
+        return NbModuleSuite.create(addServerTests(NbModuleSuite.createConfiguration(AppClientWsValidation.class),
+                "testCreateWsClient",
+                "testCallWsOperationInJavaMainClass",
+                "testCallWsOperationInJavaClass",
+                "testWsClientHandlers",
+                "testRunWsClientProject",
+                "testUndeployClientProject").enableModules(".*").clusters(".*"));
     }
 
     /**
      * Tests Call Web Service Operation action in a servlet
      */
-
     public void testCallWsOperationInJavaMainClass() {
         final EditorOperator eo = new EditorOperator("Main.java"); //NOI18N
         eo.select("// TODO code application logic here"); //NOI18N

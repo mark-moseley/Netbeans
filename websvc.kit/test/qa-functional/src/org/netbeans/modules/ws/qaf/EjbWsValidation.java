@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,25 +34,23 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.ws.qaf;
 
 import junit.framework.Test;
-import junit.framework.TestSuite;
-import junit.textui.TestRunner;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.NewFileNameLocationStepOperator;
-import org.netbeans.jellytools.actions.ActionNoBlock;
+import org.netbeans.jellytools.modules.java.editor.GenerateCodeOperator;
 import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.JemmyProperties;
-import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JRadioButtonOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.modules.ws.qaf.WebServicesTestBase.ProjectType;
 
 /**
@@ -95,31 +93,26 @@ public class EjbWsValidation extends WsValidation {
 
     @Override
     protected String getWsClientPackage() {
-        return "o.n.m.ws.qaf.client.ejb"; //NOI18N
+        return getWsPackage(); //NOI18N
     }
-
-    /** Creates suite from particular test cases. You can define order of testcases here. */
+    
     public static Test suite() {
-        TestSuite suite = new NbTestSuite();
-        suite.addTest(new EjbWsValidation("testCreateNewWs")); //NOI18N
-        suite.addTest(new EjbWsValidation("testAddOperation")); //NOI18N
-        suite.addTest(new EjbWsValidation("testStartServer")); //NOI18N
-        suite.addTest(new EjbWsValidation("testWsHandlers")); //NOI18N
-        suite.addTest(new EjbWsValidation("testDeployWsProject")); //NOI18N
-        suite.addTest(new EjbWsValidation("testCreateWsClient")); //NOI18N
-        suite.addTest(new EjbWsValidation("testCallWsOperationInSessionEJB")); //NOI18N
-        suite.addTest(new EjbWsValidation("testCallWsOperationInJavaClass")); //NOI18N
-        suite.addTest(new EjbWsValidation("testWsFromEJBinClientProject")); //NOI18N
-        suite.addTest(new EjbWsValidation("testWsClientHandlers")); //NOI18N
-        suite.addTest(new EjbWsValidation("testDeployWsClientProject")); //NOI18N
-        suite.addTest(new EjbWsValidation("testUndeployProjects")); //NOI18N
-        suite.addTest(new EjbWsValidation("testStopServer")); //NOI18N
-        return suite;
-    }
-
-    /* Method allowing test execution directly from the IDE. */
-    public static void main(java.lang.String[] args) {
-        TestRunner.run(suite());
+        return NbModuleSuite.create(addServerTests(NbModuleSuite.createConfiguration(EjbWsValidation.class),
+                "testCreateNewWs",
+                "testAddOperation",
+                "testStartServer",
+                "testWsHandlers",
+                "testDeployWsProject",
+                "testCreateWsClient",
+                "testRefreshClientAndReplaceWSDL",
+                "testCallWsOperationInSessionEJB",
+                "testCallWsOperationInJavaClass",
+                "testWsFromEJBinClientProject",
+                "testWsClientHandlers",
+                "testDeployWsClientProject",
+                "testUndeployProjects",
+                "testStopServer"
+                ).enableModules(".*").clusters(".*"));
     }
 
     public void testWsFromEJBinClientProject() {
@@ -177,6 +170,7 @@ public class EjbWsValidation extends WsValidation {
         op.cboPackage().clearText();
         op.cboPackage().typeText("org.mycompany.ejbs"); //NOI18N
         op.finish();
+        new EventTool().waitNoEvent(2000);
         //Add business method
         final EditorOperator eo = new EditorOperator(ejbName); //NOI18N
         addBusinessMethod(eo, "myBm", "String"); //NOI18N
@@ -185,27 +179,17 @@ public class EjbWsValidation extends WsValidation {
         eo.setCaretPosition("myBm() {", false); //NOI18N
         eo.insert("\n//xxx"); //NOI18N
         eo.select("//xxx"); //NOI18N
-        callWsOperation(eo, "myIntMethod", 16); //NOI18N
+        callWsOperation(eo, "myIntMethod", eo.getLineNumber()); //NOI18N
         assertTrue("@WebServiceRef has not been found", eo.contains("@WebServiceRef")); //NOI18N
         assertFalse("Lookup present", eo.contains(getWsClientLookupCall()));
         eo.close(true);
     }
 
     protected void addBusinessMethod(EditorOperator eo, String mName, String mRetVal) {
-        //EJB Methods
-        String actionGroupName = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_EJBActionGroup");
         //Add Business Method...
         String actionName = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddBusinessMethodAction");
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException ie) {
-        }
-        try {
-            new ActionNoBlock(null, actionGroupName + "|" + actionName).performPopup(eo);
-        } catch (TimeoutExpiredException tee) {
-            eo.select(16);
-            new ActionNoBlock(null, actionGroupName + "|" + actionName).performPopup(eo);
-        }
+        eo.setCaretPosition(16, 1);
+        GenerateCodeOperator.openDialog(actionName, eo);
         addMethod(eo, actionName, mName, mRetVal);
     }
 }
