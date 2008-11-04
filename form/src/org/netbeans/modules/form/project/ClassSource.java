@@ -56,10 +56,8 @@ import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.ant.AntArtifactQuery;
-import org.netbeans.api.project.ant.FileChooser;
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.libraries.LibraryManager;
-import org.netbeans.spi.project.libraries.support.LibrariesSupport;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
@@ -74,6 +72,7 @@ import org.openide.util.NbBundle;
 public final class ClassSource {
 
     private final String className;
+    private final String typeParameters;
     private final Collection<? extends Entry> entries;
 
     /**
@@ -83,12 +82,20 @@ public final class ClassSource {
         this(className, Arrays.asList(entries));
     }
     public ClassSource(String className, Collection<? extends Entry> entries) {
+        this(className, entries, null);
+    }
+    public ClassSource(String className, Collection<? extends Entry> entries, String typeParameters) {
         this.className = className;
         this.entries = entries;
+        this.typeParameters = typeParameters;
     }
 
     public String getClassName() {
         return className;
+    }
+
+    public String getTypeParameters() {
+        return typeParameters;
     }
 
     public Collection<? extends Entry> getEntries() {
@@ -214,12 +221,12 @@ public final class ClassSource {
             }
         }
         public Boolean addToProjectClassPath(FileObject projectArtifact, String classPathType) throws IOException, UnsupportedOperationException {
-            File f = FileChooser.showRelativizeFilePathCustomizer(jar, projectArtifact, true);
-            if (f == null) {
-                return null;
+            URL u = jar.toURI().toURL();
+            FileObject jarFile = FileUtil.toFileObject(jar);
+            if (jarFile == null) {
+                return Boolean.FALSE; // Issue 147451
             }
-            URL u = LibrariesSupport.convertFileToURL(f);
-            if (FileUtil.isArchiveFile(FileUtil.toFileObject(jar))) {
+            if (FileUtil.isArchiveFile(jarFile)) {
                 u = FileUtil.getArchiveRoot(u);
             }
             return Boolean.valueOf(ProjectClassPathModifier.addRoots(new URL[] {u}, projectArtifact, classPathType));

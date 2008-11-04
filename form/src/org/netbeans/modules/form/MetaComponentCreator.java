@@ -128,7 +128,13 @@ public class MetaComponentCreator {
         if (compClass == null)
             return null; // class loading failed
 
-        return createAndAddComponent(compClass, targetComp, constraints, exactTargetMatch);
+        RADComponent metacomp = createAndAddComponent(compClass, targetComp, constraints, exactTargetMatch);
+        String typeParams = classSource.getTypeParameters();
+        if (typeParams != null) {
+            metacomp.setAuxValue(JavaCodeGenerator.AUX_TYPE_PARAMETERS, typeParams);
+            JavaCodeGenerator.setupComponentFromAuxValues(metacomp);
+        }
+        return metacomp;
     }
 
     /** Creates a copy of a metacomponent and adds it to FormModel. The new
@@ -209,7 +215,7 @@ public class MetaComponentCreator {
     // addPrecreatedComponent methods gets called. If adding is canceled for
     // whatever reason, releasePrecreatedComponent is called.
 
-    public RADVisualComponent precreateVisualComponent(ClassSource classSource) {
+    public RADVisualComponent precreateVisualComponent(final ClassSource classSource) {
         final Class compClass = prepareClass(classSource);
 
         // no preview component if this is a window, applet, or not visual
@@ -230,6 +236,11 @@ public class MetaComponentCreator {
                 new Mutex.ExceptionAction() {
                     public Object run() throws Exception {
                         preMetaComp = createVisualComponent(compClass);
+                        String typeParams = classSource.getTypeParameters();
+                        if (typeParams != null) {
+                            preMetaComp.setAuxValue(JavaCodeGenerator.AUX_TYPE_PARAMETERS, typeParams);
+                            JavaCodeGenerator.setupComponentFromAuxValues(preMetaComp);
+                        }
                         return preMetaComp;
                     }
                 }
@@ -1181,20 +1192,11 @@ public class MetaComponentCreator {
         if (newMenuItemComp.getBeanInstance() instanceof MenuItem) {
             MenuItem menu = (MenuItem) newMenuItemComp.getBeanInstance();
             if ("".equals(menu.getLabel())) { // NOI18N
-                String label;
-                if (menu instanceof PopupMenu) {
-                    label = FormUtils.getBundleString("FMT_LAB_PopupMenu"); // NOI18N
-                } else if (menu instanceof Menu) {
-                    label = FormUtils.getBundleString("FMT_LAB_Menu"); // NOI18N
-                } else if (menu instanceof CheckboxMenuItem) {
-                    label = FormUtils.getBundleString("FMT_LAB_CheckboxMenuItem"); // NOI18N
-                } else {
-                    label = FormUtils.getBundleString("FMT_LAB_MenuItem"); // NOI18N
-                }
+                newMenuItemComp.createCodeExpression();
                 RADProperty prop = newMenuItemComp.getBeanProperty("label"); // NOI18N
                 try {
                     prop.setChangeFiring(false);
-                    prop.setValue(label);
+                    prop.setValue(newMenuItemComp.getName());
                     prop.setChangeFiring(true);
                 } catch (Exception e) { // never mind, ignore
                 }
@@ -1203,7 +1205,7 @@ public class MetaComponentCreator {
 
         addMenuComponent(newMenuItemComp, targetComp, true);
 
-        // for added new menu bar we add one menu so it is not empty
+        // for added new AWT MenuBar we add sample menus so it is not empty
         if (newMenuComp != null) {
             int type = newMenuComp.getMenuItemType();
             if (type == RADMenuItemComponent.T_MENUBAR) {
@@ -1211,9 +1213,27 @@ public class MetaComponentCreator {
                     newTypes = newMenuComp.getNewTypes();
                 if (newTypes.length > 0) {
                     try {
-                        newTypes[0].create();
+                        newTypes[0].create();  // sample "File" menu added
+                        newTypes[0].create();  // sample "Edit" menu added
                     }
                     catch (java.io.IOException e) {} // ignore
+                }
+                
+                // set default sample menu names File and Edit
+                RADComponent[] subComponents = newMenuComp.getSubBeans();
+                String[] labelBundleKeys = new String[]{
+                                            "CTL_DefaultFileMenu", // NOI18N 
+                                            "CTL_DefaultEditMenu"  // NOI18N
+                                            };
+                if (subComponents.length > 1) {
+                    for (int i = 0; i < labelBundleKeys.length; i++) {
+                        RADProperty prop = subComponents[i].getBeanProperty("label"); // NOI18N
+                        try {
+                            prop.setChangeFiring(false);
+                            prop.setValue(FormUtils.getBundleString(labelBundleKeys[i]));
+                            prop.setChangeFiring(true);
+                        } catch (Exception e) {} //ignore
+                    }
                 }
             }
         }
@@ -1409,17 +1429,7 @@ public class MetaComponentCreator {
             }
         } else if (comp instanceof JMenuItem) {
             if ("".equals(((JMenuItem)comp).getText())) { // NOI18N
-                String value;
-                if (comp instanceof JCheckBoxMenuItem) {
-                    value = FormUtils.getBundleString("FMT_LAB_JCheckBoxMenuItem"); // NOI18N
-                } else if (comp instanceof JMenu) {
-                    value = FormUtils.getBundleString("FMT_LAB_JMenu"); // NOI18N
-                } else if (comp instanceof JRadioButtonMenuItem) {
-                    value = FormUtils.getBundleString("FMT_LAB_JRadioButtonMenuItem"); // NOI18N
-                } else {
-                    value = FormUtils.getBundleString("FMT_LAB_JMenuItem"); // NOI18N
-                }
-                changes.put("text", value); // NOI18N
+                changes.put("text", varName); // NOI18N
             }
             if(comp instanceof JCheckBoxMenuItem) {
                 changes.put("selected", new Boolean(true)); // NOI18N
