@@ -164,12 +164,14 @@ public abstract class AbstractRefactoringPlugin implements RefactoringPlugin {
    protected final InfoHolder examineLookup(Lookup lkp) throws IOException {
        final TreePathHandle handle = lkp.lookup(TreePathHandle.class);
        final InfoHolder infoholder = new InfoHolder();
-       JavaSource source = JavaSource.forFileObject(handle.getFileObject());
        
        CancellableTask<CompilationController> info = new CancellableTask<CompilationController>() {
            public void run(CompilationController info) throws Exception {
                info.toPhase(JavaSource.Phase.RESOLVED);
                Element neco = handle.resolveElement(info);
+               if (neco == null) {
+                   return;
+               }
                infoholder.name = neco.getSimpleName().toString();
                if (neco.getKind() == ElementKind.CLASS) {
                    infoholder.isClass = true;
@@ -215,7 +217,11 @@ public abstract class AbstractRefactoringPlugin implements RefactoringPlugin {
            }
            public void cancel() { }
        };
-       source.runUserActionTask(info, true);
+       JavaSource source = JavaSource.forFileObject(handle.getFileObject());
+       if (source != null) {
+           //#141945
+           source.runUserActionTask(info, true);
+       }
        return infoholder;
    }
 
@@ -263,26 +269,6 @@ public abstract class AbstractRefactoringPlugin implements RefactoringPlugin {
                     if (elem != null) {
                         refactoringElements.add(refactoring, elem);
                     }
-                }
-            }
-        }
-    }
-    
-    protected final void checkMetaInfServices(Project project, String fqname, RefactoringElementsBag refactoringElements) {
-        FileObject services = Utility.findMetaInfServices(project);
-        if (services == null) {
-            return;
-        }
-        String name = fqname;
-        // Easiest to check them all; otherwise would need to find all interfaces and superclasses:
-        FileObject[] files = services.getChildren();
-        for (int i = 0; i < files.length; i++) {
-            int line = checkContentOfFile(files[i], name);
-            if (line != -1) {
-                RefactoringElementImplementation elem =
-                        createMetaInfServicesRefactoring(fqname, files[i], line);
-                if (elem != null) {
-                    refactoringElements.add(refactoring, elem);
                 }
             }
         }
@@ -466,10 +452,6 @@ public abstract class AbstractRefactoringPlugin implements RefactoringPlugin {
         }
         
     }
-    
-    protected abstract RefactoringElementImplementation createMetaInfServicesRefactoring(
-            String fqclazz,
-            FileObject serviceFile, int line);
     
     /**
      * 
