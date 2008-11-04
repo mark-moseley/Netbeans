@@ -44,14 +44,23 @@ package org.netbeans.modules.websvc.api.jaxws.wsdlmodel;
 import com.sun.tools.ws.processor.model.Port;
 import com.sun.tools.ws.processor.model.Service;
 import java.util.*;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSService;
 
 /**
  *
  * @author mkuchtiak
  */
-public class WsdlService {
+public class WsdlService implements WSService {
     
     private Service service;
+    
+    /** 
+     * Added this default constructor to fix an issue related to the XMLEncoder.
+     * See IZ 128161.
+     */
+    public WsdlService() {
+    }
+    
     /** Creates a new instance of WsdlService */
     WsdlService(Service service) {
         this.service=service;
@@ -62,7 +71,7 @@ public class WsdlService {
     }
     
     public List<WsdlPort> getPorts() {
-        List<WsdlPort> wsdlPorts = new ArrayList<WsdlPort>();
+        List wsdlPorts = new ArrayList();
         if (service==null) return wsdlPorts;
         List<Port> ports = service.getPorts();
         for (Port p:ports)

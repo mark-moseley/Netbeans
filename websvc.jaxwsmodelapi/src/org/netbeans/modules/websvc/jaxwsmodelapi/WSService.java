@@ -38,46 +38,26 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.jaxws.nodes;
 
-/** Port children (Operation elements)
- *
- * @author mkuchtiak
- */
-import java.util.ArrayList;
-import java.util.Collections;
+package org.netbeans.modules.websvc.jaxwsmodelapi;
+
 import java.util.List;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
-import org.openide.nodes.Children;
-import org.openide.nodes.Node;
 
-public class PortChildren extends Children.Keys<WsdlOperation> {
-    WsdlPort wsdlPort;
+/**
+ *
+ * @author ayubskhan
+ */
+public interface WSService {
     
-    public PortChildren(WsdlPort wsdlPort) {
-        this.wsdlPort=wsdlPort;
-    }
+    public Object getInternalJAXWSService();
     
-    @Override
-    protected void addNotify() {
-        super.addNotify();
-        updateKeys();
-    }
+    public List<? extends WSPort> getPorts();
     
-    @Override
-    protected void removeNotify() {
-        setKeys(Collections.<WsdlOperation>emptyList());
-        super.removeNotify();
-    }
-       
-    private void updateKeys() {
-        List<WsdlOperation> keys =  wsdlPort.getOperations();
-        setKeys(keys == null ? new ArrayList<WsdlOperation>() : keys);
-    }
-
-    protected Node[] createNodes(WsdlOperation key) {
-        return new Node[] {new OperationNode((WsdlOperation) key)};
-    }
-
+    public String getName();
+    
+    public String getNamespaceURI();
+    
+    public String getJavaName();
+    
+    public WSPort getPortByName(String portName);
 }

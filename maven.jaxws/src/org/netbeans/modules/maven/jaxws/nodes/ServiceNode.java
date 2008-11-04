@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Serviceions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,46 +38,56 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.jaxws.nodes;
+package org.netbeans.modules.maven.jaxws.nodes;
 
-/** Port children (Operation elements)
+import java.awt.Image;
+import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlService;
+import org.openide.filesystems.FileObject;
+import org.openide.nodes.AbstractNode;
+import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
+import org.openide.util.lookup.AbstractLookup;
+import org.openide.util.lookup.InstanceContent;
+
+/** Node representing WS Service
  *
  * @author mkuchtiak
  */
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
-import org.openide.nodes.Children;
-import org.openide.nodes.Node;
-
-public class PortChildren extends Children.Keys<WsdlOperation> {
-    WsdlPort wsdlPort;
+public class ServiceNode extends AbstractNode {
+    WsdlService service;
+    FileObject srcRoot;
     
-    public PortChildren(WsdlPort wsdlPort) {
-        this.wsdlPort=wsdlPort;
+    public ServiceNode(WsdlService service) {
+        this(service, new InstanceContent());
     }
     
-    @Override
-    protected void addNotify() {
-        super.addNotify();
-        updateKeys();
+    private ServiceNode(WsdlService service, InstanceContent content) {
+        super(new ServiceChildren(service),new AbstractLookup(content));
+        this.service=service;
+        setName(service.getName());
+        setDisplayName(service.getName());
+        content.add(service);
     }
     
     @Override
-    protected void removeNotify() {
-        setKeys(Collections.<WsdlOperation>emptyList());
-        super.removeNotify();
+    public Image getIcon(int type){
+        return ImageUtilities.loadImage("org/netbeans/modules/websvc/core/webservices/ui/resources/webservice.png"); //NOI18N
     }
-       
-    private void updateKeys() {
-        List<WsdlOperation> keys =  wsdlPort.getOperations();
-        setKeys(keys == null ? new ArrayList<WsdlOperation>() : keys);
+    
+    @Override
+    public Image getOpenedIcon(int type){
+        return getIcon( type);
     }
-
-    protected Node[] createNodes(WsdlOperation key) {
-        return new Node[] {new OperationNode((WsdlOperation) key)};
+    
+    @Override
+    public HelpCtx getHelpCtx() {
+        return HelpCtx.DEFAULT_HELP;
     }
-
+    
+    // Handle deleting:
+    @Override
+    public boolean canDestroy() {
+        return false;
+    }
+    
 }

@@ -38,46 +38,37 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.jaxws.nodes;
 
-/** Port children (Operation elements)
- *
- * @author mkuchtiak
- */
-import java.util.ArrayList;
-import java.util.Collections;
+package org.netbeans.modules.websvc.jaxwsmodelapi;
+
+import java.util.Iterator;
 import java.util.List;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
-import org.openide.nodes.Children;
-import org.openide.nodes.Node;
+import org.netbeans.modules.websvc.jaxwsmodelapi.java.JavaMethod;
 
-public class PortChildren extends Children.Keys<WsdlOperation> {
-    WsdlPort wsdlPort;
+/**
+ *
+ * @author ayubskhan
+ */
+public interface WSOperation {
+    public static final int TYPE_NORMAL=0;
+    public static final int TYPE_ASYNC_POLLING=1;
+    public static final int TYPE_ASYNC_CALLBACK=2;
     
-    public PortChildren(WsdlPort wsdlPort) {
-        this.wsdlPort=wsdlPort;
-    }
-    
-    @Override
-    protected void addNotify() {
-        super.addNotify();
-        updateKeys();
-    }
-    
-    @Override
-    protected void removeNotify() {
-        setKeys(Collections.<WsdlOperation>emptyList());
-        super.removeNotify();
-    }
-       
-    private void updateKeys() {
-        List<WsdlOperation> keys =  wsdlPort.getOperations();
-        setKeys(keys == null ? new ArrayList<WsdlOperation>() : keys);
-    }
+    public Object getInternalJAXWSOperation();
 
-    protected Node[] createNodes(WsdlOperation key) {
-        return new Node[] {new OperationNode((WsdlOperation) key)};
-    }
+    public JavaMethod getJavaMethod();
+    
+    public String getName();
+    
+    public String getJavaName();
+    
+    public String getReturnTypeName();
+    
+    public List<? extends WSParameter> getParameters();
+    
+    public Iterator<String> getExceptions();
+    
+    public int getOperationType();
 
+    public String getOperationName(); 
 }

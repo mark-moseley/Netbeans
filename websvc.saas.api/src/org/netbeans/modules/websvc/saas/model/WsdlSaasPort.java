@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,47 +31,56 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.websvc.core.jaxws.nodes;
 
-/** Port children (Operation elements)
- *
- * @author mkuchtiak
- */
+package org.netbeans.modules.websvc.saas.model;
+
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
-import org.openide.nodes.Children;
-import org.openide.nodes.Node;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSOperation;
+import org.netbeans.modules.websvc.jaxwsmodelapi.WSPort;
 
-public class PortChildren extends Children.Keys<WsdlOperation> {
-    WsdlPort wsdlPort;
-    
-    public PortChildren(WsdlPort wsdlPort) {
-        this.wsdlPort=wsdlPort;
-    }
-    
-    @Override
-    protected void addNotify() {
-        super.addNotify();
-        updateKeys();
-    }
-    
-    @Override
-    protected void removeNotify() {
-        setKeys(Collections.<WsdlOperation>emptyList());
-        super.removeNotify();
-    }
-       
-    private void updateKeys() {
-        List<WsdlOperation> keys =  wsdlPort.getOperations();
-        setKeys(keys == null ? new ArrayList<WsdlOperation>() : keys);
-    }
+/**
+ *
+ * @author nam
+ */
+public class WsdlSaasPort implements Comparable<WsdlSaasPort> {
+    private WsdlSaas parentSaas;
+    private WSPort port;
+    private List<WsdlSaasMethod> methods;
 
-    protected Node[] createNodes(WsdlOperation key) {
-        return new Node[] {new OperationNode((WsdlOperation) key)};
+    public WsdlSaasPort(WsdlSaas parentSaas, WSPort port) {
+        this.parentSaas = parentSaas;
+        this.port = port;
     }
-
+ 
+    public String getName() {
+        return getWsdlPort().getName();
+    }
+    
+    public WSPort getWsdlPort() {
+        return port;
+    }
+    
+    public WsdlSaas getParentSaas() {
+        return parentSaas;
+    }
+    
+    public List<WsdlSaasMethod> getWsdlMethods() {
+        if (methods == null) {
+            methods = new ArrayList<WsdlSaasMethod>();
+            for (WSOperation op : port.getOperations()) {
+                methods.add(new WsdlSaasMethod(this, op));
+            }
+        }
+        return methods;
+    }
+    
+    public int compareTo(WsdlSaasPort saasPort) {
+        return getWsdlPort().getName().compareTo(saasPort.getWsdlPort().getName());
+    }
 }

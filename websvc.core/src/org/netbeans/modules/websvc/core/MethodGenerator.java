@@ -54,6 +54,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
@@ -99,58 +101,63 @@ public class MethodGenerator {
                 workingCopy.toPhase(Phase.RESOLVED);
                 ClassTree javaClass = SourceUtils.getPublicTopLevelTree(workingCopy);
                 if (javaClass!=null) {
-                    
+              
                     // get proper wsdlOperation;
                     WsdlOperation wsdlOperation = getWsdlOperation(operationName);
                     
-                    TreeMaker make = workingCopy.getTreeMaker();
-                    
-                    // return type
-                    String returnType = wsdlOperation.getReturnTypeName();
-                    
-                    // create parameters
-                    List<WsdlParameter> parameters = wsdlOperation.getParameters();
-                    List<VariableTree> params = new ArrayList<VariableTree>();
-                    for (WsdlParameter parameter:parameters) {
-                        // create parameter:
-                        params.add(make.Variable(
-                                make.Modifiers(
-                                Collections.<Modifier>emptySet(),
+                    if (wsdlOperation != null) {
+                        TreeMaker make = workingCopy.getTreeMaker();
+
+                        // return type
+                        String returnType = wsdlOperation.getReturnTypeName();
+
+                        // create parameters
+                        List<WsdlParameter> parameters = wsdlOperation.getParameters();
+                        List<VariableTree> params = new ArrayList<VariableTree>();
+                        for (WsdlParameter parameter:parameters) {
+                            // create parameter:
+                            params.add(make.Variable(
+                                    make.Modifiers(
+                                    Collections.<Modifier>emptySet(),
+                                    Collections.<AnnotationTree>emptyList()
+                                    ),
+                                    parameter.getName(), // name
+                                    make.Identifier(parameter.getTypeName()), // parameter type
+                                    null // initializer - does not make sense in parameters.
+                                    ));
+                        }
+
+                        // create exceptions
+                        Iterator<String> exceptions = wsdlOperation.getExceptions();
+                        List<ExpressionTree> exc = new ArrayList<ExpressionTree>();
+                        while (exceptions.hasNext()) {
+                            String exception = exceptions.next();
+                            exc.add(make.Identifier(exception));
+                        }
+
+                        // create method
+                        ModifiersTree methodModifiers = make.Modifiers(
+                                Collections.<Modifier>singleton(Modifier.PUBLIC),
                                 Collections.<AnnotationTree>emptyList()
-                                ),
-                                parameter.getName(), // name
-                                make.Identifier(parameter.getTypeName()), // parameter type
-                                null // initializer - does not make sense in parameters.
-                                ));
+                                );
+                        MethodTree method = make.Method(
+                                methodModifiers, // public
+                                wsdlOperation.getJavaName(), // operation name
+                                make.Identifier(returnType), // return type
+                                Collections.<TypeParameterTree>emptyList(), // type parameters - none
+                                params,
+                                exc, // throws
+                                "{ //TODO implement this method\nthrow new UnsupportedOperationException(\"Not implemented yet.\") }", // body text
+                                null // default value - not applicable here, used by annotations
+                                );
+
+                        ClassTree modifiedClass =  make.addClassMember(javaClass, method);
+
+                        workingCopy.rewrite(javaClass, modifiedClass);
+                    } else {
+                        Logger.getLogger(MethodGenerator.class.getName()).log(Level.INFO, 
+                                "Failed to bind WSDL operation to java method: "+operationName); //NOI18N             
                     }
-                    
-                    // create exceptions
-                    Iterator<String> exceptions = wsdlOperation.getExceptions();
-                    List<ExpressionTree> exc = new ArrayList<ExpressionTree>();
-                    while (exceptions.hasNext()) {
-                        String exception = exceptions.next();
-                        exc.add(make.Identifier(exception));
-                    }
-                    
-                    // create method
-                    ModifiersTree methodModifiers = make.Modifiers(
-                            Collections.<Modifier>singleton(Modifier.PUBLIC),
-                            Collections.<AnnotationTree>emptyList()
-                            );
-                    MethodTree method = make.Method(
-                            methodModifiers, // public
-                            wsdlOperation.getJavaName(), // operation name
-                            make.Identifier(returnType), // return type
-                            Collections.<TypeParameterTree>emptyList(), // type parameters - none
-                            params,
-                            exc, // throws
-                            "{ //TODO implement this method\nthrow new UnsupportedOperationException(\"Not implemented yet.\") }", // body text
-                            null // default value - not applicable here, used by annotations
-                            );
-                    
-                    ClassTree modifiedClass =  make.addClassMember(javaClass, method);
-                    
-                    workingCopy.rewrite(javaClass, modifiedClass);
                 }
             }
             
@@ -325,7 +332,7 @@ public class MethodGenerator {
             for (WsdlPort port:ports) {
                 List<WsdlOperation> operations = port.getOperations();
                 for (WsdlOperation operation:operations) {
-                    if (operationName.equals(operation.getName())) return operation;
+                    if (operationName.equals(operation.getName())) return (WsdlOperation) operation;
                 }
             }
         }
