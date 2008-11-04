@@ -46,7 +46,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.netbeans.api.gsf.CompletionProposal;
+import org.netbeans.modules.gsf.api.CompletionProposal;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.modules.php.editor.TokenUtils;
@@ -57,6 +57,7 @@ import org.netbeans.modules.php.editor.TokenUtils;
  * @see http://www.php.net/manual/en/language.types.string.php#language.types.string.parsing
  * @author Victor G. Vasilyev
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.php.editor.completion.CompletionResultProvider.class)
 public class StringScope extends ASTBasedProvider 
         implements CompletionResultProvider {
     

@@ -73,6 +73,7 @@ import org.openide.filesystems.FileObject;
  *
  * @author Martin Grebac
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.wsitconf.spi.SecurityProfile.class)
 public class SAMLAuthorizationOverSSLProfile extends ProfileBase 
         implements ClientDefaultsFeature,ServiceDefaultsFeature {
     
@@ -89,14 +90,6 @@ public class SAMLAuthorizationOverSSLProfile extends ProfileBase
     public String getDescription() {
         return ComboConstants.PROF_SAMLSSL_INFO;
     }
-    
-    /**
-     * Called when the profile is selected in the combo box.
-     */
-    @Override
-    public void profileSelected(WSDLComponent component, boolean updateServiceUrl) {
-        ProfilesModelHelper.setSecurityProfile(component, getDisplayName(), updateServiceUrl);
-    }
 
     /**
      * Should return true if the profile is set on component, false otherwise
@@ -112,7 +105,7 @@ public class SAMLAuthorizationOverSSLProfile extends ProfileBase
         
         model.addUndoableEditListener(undoCounter);
 
-        JPanel profConfigPanel = new SAMLAuthorizationOverSSL(component);
+        JPanel profConfigPanel = new SAMLAuthorizationOverSSL(component, this);
         DialogDescriptor dlgDesc = new DialogDescriptor(profConfigPanel, getDisplayName());
         Dialog dlg = DialogDisplayer.getDefault().createDialog(dlgDesc);
 
@@ -180,15 +173,18 @@ public class SAMLAuthorizationOverSSLProfile extends ProfileBase
     }    
 
     public void setServiceDefaults(WSDLComponent component, Project p) {
+        ProprietarySecurityPolicyModelHelper.clearValidators(component);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
     }
     
     public boolean isServiceDefaultSetupUsed(WSDLComponent component, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         return true;
     }
 
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String samlVersion = getSamlVersion(serviceBinding);
         String cbName = null;
         

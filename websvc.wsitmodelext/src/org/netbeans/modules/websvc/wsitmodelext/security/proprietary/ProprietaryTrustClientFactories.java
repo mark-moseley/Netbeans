@@ -52,13 +52,11 @@ import org.netbeans.modules.websvc.wsitmodelext.security.proprietary.impl.Precon
 
 public class ProprietaryTrustClientFactories {
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class PreconfiguredSTSFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustClientQName.PRECONFIGUREDSTS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new PreconfiguredSTSImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {

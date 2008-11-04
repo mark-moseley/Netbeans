@@ -70,6 +70,7 @@ import org.xml.sax.SAXException;
  *
  * @author girix
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.xam.locator.CatalogModel.class)
 public class RuntimeCatalogModel implements CatalogModel{
     
     /** Creates a new instance of RuntimeCatalogModel */
@@ -85,7 +86,7 @@ public class RuntimeCatalogModel implements CatalogModel{
         InputStream inputStream = null;
         try {
             EntityResolver resolver = UserCatalog.getDefault().getEntityResolver();
-            InputSource src = resolver.resolveEntity(locationURI.toString(), locationURI.toString());
+            InputSource src = resolver.resolveEntity(null, locationURI.toString());
             if(src != null) {
                 inputStream = new URL(src.getSystemId()).openStream();
             } else {

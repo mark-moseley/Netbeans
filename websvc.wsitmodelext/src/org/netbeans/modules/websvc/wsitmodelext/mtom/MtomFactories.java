@@ -52,13 +52,11 @@ import java.util.Set;
 
 public class MtomFactories {
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class OptimizedMimeSerializationFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(MtomQName.OPTIMIZEDMIMESERIALIZATION.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new OptimizedMimeSerializationImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {

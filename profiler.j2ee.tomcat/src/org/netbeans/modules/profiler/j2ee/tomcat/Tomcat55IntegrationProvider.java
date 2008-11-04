@@ -40,18 +40,13 @@
 
 package org.netbeans.modules.profiler.j2ee.tomcat;
 
-import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.IntegrationProvider;
-import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
-import org.netbeans.modules.profiler.ui.wizards.providers.TargetPlatformEnum;
 import org.openide.util.NbBundle;
-import java.text.MessageFormat;
-
 
 /**
  *
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.attach.spi.IntegrationProvider.class)
 public class Tomcat55IntegrationProvider extends Tomcat5IntegrationProvider {
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -63,12 +58,8 @@ public class Tomcat55IntegrationProvider extends Tomcat5IntegrationProvider {
         return TOMCAT_55_TITLE;
     }
 
-    public boolean supportsJVM(TargetPlatformEnum jvm) {
-        return true;
-    }
-
     protected int getAttachWizardPriority() {
-        return 10;
+        return 11;
     }
 
     protected String getCatalinaScriptName() {

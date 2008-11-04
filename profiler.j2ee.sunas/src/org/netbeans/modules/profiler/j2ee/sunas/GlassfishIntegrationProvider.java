@@ -40,21 +40,15 @@
 
 package org.netbeans.modules.profiler.j2ee.sunas;
 
-import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.*;
-import org.netbeans.modules.profiler.ui.wizards.providers.AbstractIntegrationProvider;
-import org.netbeans.modules.profiler.ui.wizards.providers.IntegrationCategorizer;
-import org.netbeans.modules.profiler.ui.wizards.providers.TargetPlatformEnum;
-import org.netbeans.modules.profiler.ui.wizards.providers.ValidationResult;
-import org.netbeans.modules.profiler.ui.wizards.providers.scripted.AbstractScriptIntegrationProvider;
+import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
+import org.netbeans.modules.profiler.attach.providers.TargetPlatformEnum;
 import org.openide.util.NbBundle;
-import java.util.Collection;
-
 
 /**
  *
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.attach.spi.IntegrationProvider.class)
 public class GlassfishIntegrationProvider extends SunASAutoIntegrationProvider {
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -66,10 +60,6 @@ public class GlassfishIntegrationProvider extends SunASAutoIntegrationProvider {
 
     public String getTitle() {
         return APP_SERVER_TITLE; // NOI18N
-    }
-
-    public boolean supportsJVM(TargetPlatformEnum jvm) {
-        return true;
     }
 
     protected int getAttachWizardPriority() {

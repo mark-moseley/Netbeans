@@ -60,13 +60,11 @@ import org.netbeans.modules.websvc.wsitmodelext.security.proprietary.service.imp
 
 public class ProprietaryTrustServiceFactories {
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class CertAliasFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.CERTALIAS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new CertAliasImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -74,13 +72,11 @@ public class ProprietaryTrustServiceFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class ContractFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.CONTRACT.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new ContractImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -88,13 +84,11 @@ public class ProprietaryTrustServiceFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class STSIssuerFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.ISSUER.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new IssuerImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -102,13 +96,11 @@ public class ProprietaryTrustServiceFactories {
         }
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class STSConfigurationFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.STSCONFIGURATION.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new STSConfigurationServiceImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -116,13 +108,11 @@ public class ProprietaryTrustServiceFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class ServiceProviderFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.SERVICEPROVIDER.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new ServiceProviderImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -130,13 +120,11 @@ public class ProprietaryTrustServiceFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class ServiceProvidersFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.SERVICEPROVIDERS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new ServiceProvidersImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -144,13 +132,11 @@ public class ProprietaryTrustServiceFactories {
         }
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class TokenTypeFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.TOKENTYPE.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new TokenTypeImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -158,13 +144,11 @@ public class ProprietaryTrustServiceFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class KeyTypeFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.KEYTYPE.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new KeyTypeImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -172,13 +156,11 @@ public class ProprietaryTrustServiceFactories {
         }
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class LifeTimeFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietaryTrustServiceQName.LIFETIME.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new LifeTimeSTSImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {

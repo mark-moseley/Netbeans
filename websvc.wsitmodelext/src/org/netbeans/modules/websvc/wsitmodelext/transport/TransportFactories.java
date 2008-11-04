@@ -55,13 +55,11 @@ import org.netbeans.modules.websvc.wsitmodelext.transport.impl.OptimizedFastInfo
 
 public class TransportFactories {
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class OptimizedFastInfosetSerialization extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(FIQName.OPTIMIZEDFASTINFOSETSERIALIZATION.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new OptimizedFastInfosetSerializationImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -69,13 +67,11 @@ public class TransportFactories {
         }
     }   
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class AutomaticallySelectFastInfoset extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(FIQName.AUTOMATICALLYSELECTFASTINFOSET.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new AutomaticallySelectFastInfosetImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -83,13 +79,11 @@ public class TransportFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class OptimizedTCPTransport extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(TCPQName.OPTIMIZEDTCPTRANSPORT.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new OptimizedTCPTransportImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -97,13 +91,11 @@ public class TransportFactories {
         }
     }   
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class AutomaticallySelectOptimalTransport extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(TCPQName.AUTOMATICALLYSELECTOPTIMALTRANSPORT.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new AutomaticallySelectOptimalTransportImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {

@@ -45,6 +45,7 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.profiler.ppoints.ui.TakeSnapshotCustomizer;
 import org.netbeans.modules.profiler.ppoints.ui.TimedTakeSnapshotCustomizer;
 import org.openide.ErrorManager;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import java.text.MessageFormat;
@@ -57,6 +58,7 @@ import javax.swing.ImageIcon;
  *
  * @author Jiri Sedlacek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.ppoints.ProfilingPointFactory.class)
 public class TimedTakeSnapshotProfilingPointFactory extends CodeProfilingPointFactory {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -69,7 +71,7 @@ public class TimedTakeSnapshotProfilingPointFactory extends CodeProfilingPointFa
     private static final String PP_DEFAULT_NAME = NbBundle.getMessage(TimedTakeSnapshotProfilingPointFactory.class,
                                                                       "TimedTakeSnapshotProfilingPointFactory_PpDefaultName"); // NOI18N
                                                                                                                                // -----
-    public static final Icon TAKE_SNAPSHOT_PP_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/timedTakeSnapshotProfilingPoint.png")); // NOI18N
+    public static final Icon TAKE_SNAPSHOT_PP_ICON = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/timedTakeSnapshotProfilingPoint.png")); // NOI18N
     public static final String TAKE_SNAPSHOT_PP_TYPE = PP_TYPE;
     public static final String TAKE_SNAPSHOT_PP_DESCR = PP_DESCR;
     private static TimedTakeSnapshotProfilingPointFactory defaultInstance;

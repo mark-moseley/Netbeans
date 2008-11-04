@@ -55,6 +55,7 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  *
  * @author Nickolay Dalmatov
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.repository.support.KeyFactory.class)
 public class KeyObjectFactory extends KeyFactory {
     
     /** Creates a new instance of KeyObjectFactory */
@@ -108,6 +109,8 @@ public class KeyObjectFactory extends KeyFactory {
         
         if (object instanceof ProjectKey ) {
             aHandle = KEY_PROJECT_KEY;
+        } else if (object instanceof NamespaceDeclararationContainerKey) {
+            aHandle = KEY_NS_DECLARATION_CONTAINER_KEY;
         }  else if (object instanceof NamespaceKey) {
             aHandle = KEY_NAMESPACE_KEY;
         } else if (object instanceof FileKey ) {
@@ -167,6 +170,9 @@ public class KeyObjectFactory extends KeyFactory {
 	    case KEY_GRAPH_CONTAINER_KEY:
 		aKey = new GraphContainerKey(aStream);
 		break;
+	    case KEY_NS_DECLARATION_CONTAINER_KEY:
+		aKey = new NamespaceDeclararationContainerKey(aStream);
+		break;
             default:
                 throw new IllegalArgumentException("Unknown hander was provided: " + handler);  // NOI18N
         }
@@ -190,8 +196,9 @@ public class KeyObjectFactory extends KeyFactory {
     public static final int KEY_DECLARATION_CONTAINER_KEY = KEY_PRJ_VALIDATOR_KEY + 1;
     public static final int KEY_FILE_CONTAINER_KEY = KEY_DECLARATION_CONTAINER_KEY + 1;
     public static final int KEY_GRAPH_CONTAINER_KEY = KEY_FILE_CONTAINER_KEY    + 1;
+    public static final int KEY_NS_DECLARATION_CONTAINER_KEY = KEY_GRAPH_CONTAINER_KEY + 1;
     
     // index to be used in another factory (but only in one) 
     // to start own indeces from the next after LAST_INDEX    
-    public static final int LAST_INDEX          = KEY_GRAPH_CONTAINER_KEY;
+    public static final int LAST_INDEX          = KEY_NS_DECLARATION_CONTAINER_KEY;
 }

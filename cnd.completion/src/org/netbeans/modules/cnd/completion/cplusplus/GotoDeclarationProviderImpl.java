@@ -43,13 +43,14 @@ package org.netbeans.modules.cnd.completion.cplusplus;
 
 import javax.swing.Action;
 import org.netbeans.editor.ext.ExtKit;
-import org.netbeans.modules.cnd.MIMENames;
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.netbeans.modules.cnd.editor.spi.cplusplus.CndEditorActionsProvider;
 
 /**
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.editor.spi.cplusplus.CndEditorActionsProvider.class)
 public class GotoDeclarationProviderImpl extends CndEditorActionsProvider {
     
     public ExtKit.GotoDeclarationAction getGotoDeclarationAction() {

@@ -61,6 +61,7 @@ import org.openide.util.Lookup;
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.makeproject.api.wizards.IteratorExtension.class)
 public class DiscoveryExtension implements IteratorExtension {
     
     /** Creates a new instance of DiscoveryExtension */
@@ -149,9 +150,11 @@ public class DiscoveryExtension implements IteratorExtension {
         if (rootFolder == null) {
             return false;
         }
+        String logFile = descriptor.getBuildLog();
         ProjectProxy proxy = new ProjectProxyImpl(descriptor);
         DiscoveryProvider provider = findProvider("make-log"); // NOI18N
         if (provider != null && provider.isApplicable(proxy)){
+            provider.getProperty("make-log-file").setValue(logFile); // NOI18N
             if (provider.canAnalyze(proxy)>0){
                 descriptor.setProvider(provider);
                 return true;
@@ -233,7 +236,7 @@ public class DiscoveryExtension implements IteratorExtension {
         return canApply(descriptor);
     }
     
-    private DiscoveryProvider findProvider(String providerID){
+    /*package-local*/ static DiscoveryProvider findProvider(String providerID){
         Lookup.Result<DiscoveryProvider> providers = Lookup.getDefault().lookup(new Lookup.Template<DiscoveryProvider>(DiscoveryProvider.class));
         for(DiscoveryProvider provider : providers.allInstances()){
             if (providerID.equals(provider.getID())) {

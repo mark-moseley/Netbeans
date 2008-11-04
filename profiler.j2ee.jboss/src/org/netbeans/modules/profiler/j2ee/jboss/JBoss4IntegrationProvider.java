@@ -41,17 +41,15 @@
 package org.netbeans.modules.profiler.j2ee.jboss;
 
 import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.IntegrationProvider;
-import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
+import org.netbeans.modules.profiler.attach.spi.IntegrationProvider;
 import org.openide.util.NbBundle;
-import java.text.MessageFormat;
-import java.util.Properties;
 
 
 /**
  *
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.attach.spi.IntegrationProvider.class)
 public class JBoss4IntegrationProvider extends AbstractJBossIntegrationProvider {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 

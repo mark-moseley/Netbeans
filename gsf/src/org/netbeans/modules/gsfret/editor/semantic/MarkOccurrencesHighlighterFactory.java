@@ -40,7 +40,7 @@
  */
 package org.netbeans.modules.gsfret.editor.semantic;
 
-import org.netbeans.api.gsf.CancellableTask;
+import org.netbeans.modules.gsf.api.CancellableTask;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.napi.gsfret.source.Phase;
 import org.netbeans.napi.gsfret.source.Source;
@@ -57,6 +57,7 @@ import org.openide.filesystems.FileObject;
  *
  * @author Jan Lahoda
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.napi.gsfret.source.SourceTaskFactory.class)
 public class MarkOccurrencesHighlighterFactory extends CaretAwareSourceTaskFactory {
 
     /** Creates a new instance of SemanticHighlighterFactory */
@@ -65,7 +66,7 @@ public class MarkOccurrencesHighlighterFactory extends CaretAwareSourceTaskFacto
     }
 
     public CancellableTask<CompilationInfo> createTask(FileObject file) {
-        return new MarkOccurencesHighlighter(file);
+        return new MarkOccurrencesHighlighter(file);
     }
 
 }

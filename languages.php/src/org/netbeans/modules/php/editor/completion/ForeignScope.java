@@ -43,7 +43,7 @@ package org.netbeans.modules.php.editor.completion;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.api.gsf.CompletionProposal;
+import org.netbeans.modules.gsf.api.CompletionProposal;
 
 /**
  * Implementation of the <code>CompletionResultProvider</code> for the foreign 
@@ -52,6 +52,7 @@ import org.netbeans.api.gsf.CompletionProposal;
  * 
  * @author Victor G. Vasilyev 
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.php.editor.completion.CompletionResultProvider.class)
 public class ForeignScope extends ASTBasedProvider 
         implements CompletionResultProvider {
 

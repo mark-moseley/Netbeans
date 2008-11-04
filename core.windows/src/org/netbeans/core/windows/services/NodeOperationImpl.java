@@ -77,6 +77,7 @@ import javax.swing.border.EmptyBorder;
  *
  * @author  Ian Formanek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.openide.nodes.NodeOperation.class, supersedes="org.netbeans.modules.openide.explorer.NodeOperationImpl")
 public final class NodeOperationImpl extends NodeOperation {
 
     /** Shows an explorer on the given root Node.
@@ -212,6 +213,13 @@ public final class NodeOperationImpl extends NodeOperation {
             openProperties(new NbSheet(), nds);
         } else {
             d.setVisible( true );
+            //#131724 - PropertySheet clears its Nodes in removeNotify and keeps
+            //only a weakref which is being reused in subsequent addNotify
+            //so we should set the Nodes again in case the weakref got garbage collected
+            //pls note that PropertySheet code checks for redundant calls of setNodes
+            NbSheet sheet = findCachedSheet( d );
+            if( null != sheet )
+                sheet.setNodes(new Node[] { n });
             d.toFront();
             FocusTraversalPolicy ftp = d.getFocusTraversalPolicy();
             if( null != ftp && null != ftp.getDefaultComponent(d) ) {
@@ -231,6 +239,13 @@ public final class NodeOperationImpl extends NodeOperation {
             openProperties(new NbSheet(), nodes);
         } else {
             d.setVisible( true );
+            //#131724 - PropertySheet clears its Nodes in removeNotify and keeps
+            //only a weakref which is being reused in subsequent addNotify
+            //so we should set the Nodes again in case the weakref got garbage collected
+            //pls note that PropertySheet code checks for redundant calls of setNodes
+            NbSheet sheet = findCachedSheet( d );
+            if( null != sheet )
+                sheet.setNodes(nodes);
             d.toFront();
             FocusTraversalPolicy ftp = d.getFocusTraversalPolicy();
             if( null != ftp && null != ftp.getDefaultComponent(d) ) {
@@ -239,6 +254,20 @@ public final class NodeOperationImpl extends NodeOperation {
                 d.requestFocusInWindow();
             }
         }
+    }
+    
+    private NbSheet findCachedSheet( Container c ) {
+        NbSheet res = null;
+        int childrenCount = c.getComponentCount();
+        for( int i=0; i<childrenCount && res == null; i++ ) {
+            Component child = c.getComponent(i);
+            if( child instanceof NbSheet ) {
+                res = (NbSheet)child;
+            } else if( child instanceof Container ) {
+                res = findCachedSheet((Container)child);
+            } 
+        }
+        return res;
     }
     
     //#79126 - cache the open properties windows and reuse them if the Nodes 

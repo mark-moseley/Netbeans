@@ -45,7 +45,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
-import org.netbeans.api.gsf.CompletionProposal;
+import org.netbeans.modules.gsf.api.CompletionProposal;
 import org.netbeans.modules.php.doc.DocumentationRegistry;
 import org.netbeans.modules.php.doc.FunctionDoc;
 import org.netbeans.modules.php.model.Constant;
@@ -75,6 +75,7 @@ import org.openide.filesystems.FileObject;
  * @author ads
  *
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.php.editor.completion.CompletionResultProvider.class)
 public class ExpressionContext implements CompletionResultProvider
 {
 

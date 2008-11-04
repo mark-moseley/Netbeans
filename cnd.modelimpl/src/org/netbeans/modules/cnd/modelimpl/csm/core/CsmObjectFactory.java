@@ -47,6 +47,7 @@ import java.io.IOException;
 import org.netbeans.modules.cnd.api.model.CsmFriendFunction;
 import org.netbeans.modules.cnd.modelimpl.csm.ClassForwardDeclarationImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.ClassImpl;
+import org.netbeans.modules.cnd.modelimpl.csm.ClassImplSpecialization;
 import org.netbeans.modules.cnd.modelimpl.csm.ConstructorDDImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.ConstructorDefinitionImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.ConstructorImpl;
@@ -56,6 +57,7 @@ import org.netbeans.modules.cnd.modelimpl.csm.DestructorImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.EnumImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.EnumeratorImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.FieldImpl;
+import org.netbeans.modules.cnd.modelimpl.csm.ForwardClass;
 import org.netbeans.modules.cnd.modelimpl.csm.FriendClassImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.FriendFunctionDDImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.FriendFunctionDefinitionImpl;
@@ -88,6 +90,9 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  * objects factory
  * @author Vladimir Voskresensky
  */
+/* XXX typo in interface name?
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.repository.spi.PersistentObjectFactory.class)
+*/
 public final class CsmObjectFactory extends AbstractObjectFactory implements PersistentFactory {
     
     private static final CsmObjectFactory instance = new CsmObjectFactory();
@@ -127,7 +132,13 @@ public final class CsmObjectFactory extends AbstractObjectFactory implements Per
         } else if (object instanceof EnumImpl) {
             aHandler = ENUM_IMPL;
         } else if (object instanceof ClassImpl) {
-            aHandler = CLASS_IMPL;
+            if (object instanceof ClassImplSpecialization) {
+                aHandler = CLASS_IMPL_SPECIALIZATION;
+            } else if (object instanceof ForwardClass) {
+                aHandler = FORWARD_CLASS;
+            } else {
+                aHandler = CLASS_IMPL;
+            }
         } else if (object instanceof TypedefImpl) {
             if (object instanceof ClassImpl.MemberTypedef) {
                 aHandler = MEMBER_TYPEDEF;
@@ -145,7 +156,11 @@ public final class CsmObjectFactory extends AbstractObjectFactory implements Per
         } else if (object instanceof UsingDirectiveImpl) {
             aHandler = USING_DIRECTIVE_IMPL;
         } else if (object instanceof ClassForwardDeclarationImpl) {
-            aHandler = CLASS_FORWARD_DECLARATION_IMPL;
+            if (object instanceof ClassImpl.ClassMemberForwardDeclaration) {
+                aHandler = CLASS_MEMBER_FORWARD_DECLARATION;
+            } else {
+                aHandler = CLASS_FORWARD_DECLARATION_IMPL;
+            }
         } else if (object instanceof FunctionImpl) {
             // we have several FunctionImpl subclasses
             if (object instanceof FunctionImplEx) {
@@ -266,6 +281,14 @@ public final class CsmObjectFactory extends AbstractObjectFactory implements Per
             case CLASS_IMPL:
                 obj = new ClassImpl(stream);
                 break;
+
+            case CLASS_IMPL_SPECIALIZATION:
+                obj = new ClassImplSpecialization(stream);
+                break;
+
+            case FORWARD_CLASS:
+                obj = new ForwardClass(stream);
+                break;
                 
             case TYPEDEF_IMPL:
                 obj = new TypedefImpl(stream);
@@ -297,6 +320,10 @@ public final class CsmObjectFactory extends AbstractObjectFactory implements Per
                 
             case CLASS_FORWARD_DECLARATION_IMPL:
                 obj = new ClassForwardDeclarationImpl(stream);
+                break;
+
+            case CLASS_MEMBER_FORWARD_DECLARATION:
+                obj = new ClassImpl.ClassMemberForwardDeclaration(stream);
                 break;
                 
             case FUNCTION_IMPL:
@@ -429,7 +456,9 @@ public final class CsmObjectFactory extends AbstractObjectFactory implements Per
     private static final int DECLARATION_CONTAINER	    = GRAPH_CONTAINER + 1;
     private static final int FILE_IMPL                      = DECLARATION_CONTAINER + 1;
     private static final int ENUM_IMPL                      = FILE_IMPL + 1;
-    private static final int CLASS_IMPL                     = ENUM_IMPL + 1;
+    private static final int CLASS_IMPL_SPECIALIZATION      = ENUM_IMPL + 1;
+    private static final int FORWARD_CLASS                  = CLASS_IMPL_SPECIALIZATION + 1;
+    private static final int CLASS_IMPL                     = FORWARD_CLASS + 1;
 //    private static final int UNRESOLVED_FILE                = CLASS_IMPL + 1;
 //    private static final int UNRESOLVED_CLASS               = UNRESOLVED_FILE + 1;
 //    private static final int TYPEDEF_IMPL                   = UNRESOLVED_CLASS + 1;
@@ -441,7 +470,8 @@ public final class CsmObjectFactory extends AbstractObjectFactory implements Per
     private static final int USING_DECLARATION_IMPL         = NAMESPACE_ALIAS_IMPL + 1;
     private static final int USING_DIRECTIVE_IMPL           = USING_DECLARATION_IMPL + 1;
     private static final int CLASS_FORWARD_DECLARATION_IMPL = USING_DIRECTIVE_IMPL + 1;   
-    private static final int FRIEND_CLASS_IMPL              = CLASS_FORWARD_DECLARATION_IMPL + 1;   
+    private static final int CLASS_MEMBER_FORWARD_DECLARATION = CLASS_FORWARD_DECLARATION_IMPL + 1;   
+    private static final int FRIEND_CLASS_IMPL              = CLASS_MEMBER_FORWARD_DECLARATION + 1;   
                 
     // functions
     private static final int FUNCTION_IMPL                  = FRIEND_CLASS_IMPL + 1;

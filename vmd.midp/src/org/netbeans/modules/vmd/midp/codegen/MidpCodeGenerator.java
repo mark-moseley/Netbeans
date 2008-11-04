@@ -54,12 +54,13 @@ import javax.swing.text.StyledDocument;
 /**
  * @author David Kaspar
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.vmd.api.io.CodeGenerator.class)
 public class MidpCodeGenerator implements CodeGenerator {
 
     public void validateModelForCodeGeneration (DataObjectContext context, DesignDocument document) {
-        if (MidpDocumentSupport.PROJECT_TYPE_MIDP.equals (context.getProjectType ())) {
+//        if (MidpDocumentSupport.PROJECT_TYPE_MIDP.equals (context.getProjectType ())) {
 //            System.out.println ("MidpCodeGenerator.validateModelForCodeGeneration");
-        }
+//        }
     }
 
     public void updateModelFromCode (DataObjectContext context, DesignDocument document) {

@@ -87,6 +87,7 @@ import org.openide.util.Exceptions;
  *
  * @author  Jaroslav Tulach
  */
+@org.openide.util.lookup.ServiceProviders({@org.openide.util.lookup.ServiceProvider(service=org.openide.loaders.Environment.Provider.class), @org.openide.util.lookup.ServiceProvider(service=org.openide.xml.EntityCatalog.class)})
 public final class FileEntityResolver extends EntityCatalog implements Environment.Provider {
     private static final String ENTITY_PREFIX = "/xml/entities"; // NOI18N
     private static final String LOOKUP_PREFIX = "/xml/lookups"; // NOI18N
@@ -211,9 +212,9 @@ public final class FileEntityResolver extends EntityCatalog implements Environme
 
             }
         } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
+            ERR.log(Level.INFO, "no environment for " + obj, ex); // NOI18N
         } catch (ClassNotFoundException ex) {
-            Exceptions.printStackTrace(ex);
+            ERR.log(Level.INFO, "no environment for " + obj, ex); // NOI18N
         }
         
         return null;
@@ -440,7 +441,7 @@ public final class FileEntityResolver extends EntityCatalog implements Environme
                     // #25082: do not notify an exception if the file comes
                     // from other filesystem than the system filesystem
                     if (src.getFileSystem() == Repository.getDefault().getDefaultFileSystem()) {
-                        ERR.log(Level.WARNING, "Parsing " + src, ex); // NOI18N
+                        ERR.log(Level.WARNING, null, new IOException("Parsing " + src + ": " + ex.getMessage()).initCause(ex)); // NOI18N
                     }
                 } catch (org.openide.filesystems.FileStateInvalidException fie) {
                     // ignore

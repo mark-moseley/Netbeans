@@ -48,10 +48,11 @@ import org.netbeans.modules.vmd.structure.document.DocumentEditorViewFactory;
 /**
  * @author David Kaspar
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.vmd.api.io.DataEditorViewFactory.class)
 public class RegistryEditorViewFactory implements DataEditorViewFactory {
 
     public DataEditorView createEditorView (DataObjectContext context) {
-        if (DocumentEditorViewFactory.AVAILABLE)
+        if (Boolean.getBoolean (DocumentEditorViewFactory.VMD_STRUCTURE_SHOW))
             return new RegistryEditorView (context);
         return null;
     }

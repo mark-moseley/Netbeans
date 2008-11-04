@@ -39,7 +39,7 @@
 
 package org.netbeans.modules.gsfret.hints.infrastructure;
 
-import org.netbeans.api.gsf.CancellableTask;
+import org.netbeans.modules.gsf.api.CancellableTask;
 import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.napi.gsfret.source.Phase;
 import org.netbeans.napi.gsfret.source.Source.Priority;
@@ -50,6 +50,7 @@ import org.openide.filesystems.FileObject;
  *
  * @author Tor Norbye
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.napi.gsfret.source.SourceTaskFactory.class)
 public class SelectionHintsTaskFactory extends SelectionAwareSourceTaskFactory {
     
     public SelectionHintsTaskFactory() {

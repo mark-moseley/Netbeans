@@ -45,9 +45,11 @@ import org.netbeans.modules.versioning.spi.VCSAnnotator;
 import org.netbeans.modules.versioning.spi.VCSInterceptor;
 import org.netbeans.modules.versioning.util.VersioningListener;
 import org.netbeans.modules.versioning.util.VersioningEvent;
+import org.netbeans.spi.queries.CollocationQueryImplementation;
 import org.openide.util.NbBundle;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
@@ -57,6 +59,7 @@ import java.util.prefs.PreferenceChangeListener;
  * 
  * @author Maros Sandor
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.versioning.spi.VersioningSystem.class)
 public class CVS extends VersioningSystem implements VersioningListener, PreferenceChangeListener {
 
     public CVS() {
@@ -89,6 +92,33 @@ public class CVS extends VersioningSystem implements VersioningListener, Prefere
         CvsVersioningSystem.getInstance().getOriginalFile(workingCopy, originalFile);
     }
 
+    @Override
+    public CollocationQueryImplementation getCollocationQueryImplementation() {
+        return collocationQueryImplementation;
+    }
+
+    private final CollocationQueryImplementation collocationQueryImplementation = new CollocationQueryImplementation() {
+        public boolean areCollocated(File a, File b) {
+            File fra = getTopmostManagedAncestor(a);
+            File frb = getTopmostManagedAncestor(b);
+            if (fra == null || !fra.equals(frb)) return false;
+            try {
+                String ra = org.netbeans.modules.versioning.system.cvss.util.Utils.getCVSRootFor(a);
+                String rb = org.netbeans.modules.versioning.system.cvss.util.Utils.getCVSRootFor(b);
+                String rr = org.netbeans.modules.versioning.system.cvss.util.Utils.getCVSRootFor(fra);
+                return ra.equals(rb) && ra.equals(rr);
+            } catch (IOException e) {
+                // root not found
+                return false;
+            }
+        }
+
+        public File findRoot(File file) {
+            // TODO: we should probably return the closest common ancestor
+            return getTopmostManagedAncestor(file);
+        }
+    };
+            
     public void versioningEvent(VersioningEvent event) {
         if (event.getId() == FileStatusCache.EVENT_FILE_STATUS_CHANGED) {
             File file = (File) event.getParams()[0];

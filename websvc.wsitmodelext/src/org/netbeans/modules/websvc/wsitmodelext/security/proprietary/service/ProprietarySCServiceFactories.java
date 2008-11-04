@@ -53,13 +53,11 @@ import org.netbeans.modules.websvc.wsitmodelext.security.proprietary.service.imp
 
 public class ProprietarySCServiceFactories {
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class SCConfigurationServiceFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietarySCServiceQName.SCCONFIGURATION.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new SCConfigurationServiceImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -67,13 +65,11 @@ public class ProprietarySCServiceFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class LifeTimeServiceFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(ProprietarySCServiceQName.LIFETIME.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new LifeTimeServiceImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {

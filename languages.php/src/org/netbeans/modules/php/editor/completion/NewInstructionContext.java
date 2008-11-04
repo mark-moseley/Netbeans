@@ -44,8 +44,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.netbeans.api.gsf.CompletionProposal;
-import org.netbeans.api.gsf.HtmlFormatter;
+import org.netbeans.modules.gsf.api.CompletionProposal;
+import org.netbeans.modules.gsf.api.HtmlFormatter;
 import org.netbeans.modules.languages.php.lang.Keywords;
 import org.netbeans.modules.languages.php.lang.Keywords;
 import org.netbeans.modules.languages.php.lang.MagicConstants;
@@ -59,6 +59,7 @@ import org.netbeans.modules.php.model.SourceElement;
  * 
  * @author Victor G. Vasilyev 
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.php.editor.completion.CompletionResultProvider.class)
 public class NewInstructionContext extends ASTBasedProvider 
         implements CompletionResultProvider {
     

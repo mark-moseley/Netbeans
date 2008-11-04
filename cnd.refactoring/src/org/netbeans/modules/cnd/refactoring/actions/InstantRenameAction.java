@@ -44,7 +44,7 @@ import java.awt.event.ActionEvent;
 import javax.swing.Action;
 import javax.swing.text.JTextComponent;
 import org.netbeans.editor.BaseAction;
-import org.netbeans.modules.cnd.MIMENames;
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.netbeans.modules.cnd.editor.spi.cplusplus.CndEditorActionsProvider;
 
 /**
@@ -70,6 +70,7 @@ public class InstantRenameAction extends BaseAction {
         return InstantRenameAction.class;
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.editor.spi.cplusplus.CndEditorActionsProvider.class)
     public static class EditorActionProvider extends CndEditorActionsProvider {
 
         public EditorActionProvider() {

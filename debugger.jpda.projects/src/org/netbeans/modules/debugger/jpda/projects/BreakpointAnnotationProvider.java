@@ -86,6 +86,7 @@ import org.openide.util.WeakSet;
  *
  * @author Jan Jancura, Martin Entlicher
  */
+@org.openide.util.lookup.ServiceProvider(service=org.openide.text.AnnotationProvider.class)
 public class BreakpointAnnotationProvider implements AnnotationProvider,
                                                      DebuggerManagerListener {
 
@@ -200,6 +201,19 @@ public class BreakpointAnnotationProvider implements AnnotationProvider,
              (!MethodBreakpoint.PROP_METHOD_SIGNATURE.equals (propertyName))
         ) return;
         JPDABreakpoint b = (JPDABreakpoint) evt.getSource ();
+        DebuggerManager manager = DebuggerManager.getDebuggerManager();
+        Breakpoint[] bkpts = manager.getBreakpoints();
+        boolean found = false;
+        for (int x = 0; x < bkpts.length; x++) {
+            if (b == bkpts[x]) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            // breakpoint has been removed
+            return;
+        }
         RequestProcessor.getDefault().post(new AnnotationRefresh(b, true, true));
     }
     

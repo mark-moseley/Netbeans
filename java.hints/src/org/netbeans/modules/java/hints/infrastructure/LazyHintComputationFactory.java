@@ -40,8 +40,6 @@
  */
 
 package org.netbeans.modules.java.hints.infrastructure;
-import org.netbeans.modules.java.hints.infrastructure.CreatorBasedLazyFixList;
-import org.netbeans.modules.java.hints.*;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -61,6 +59,7 @@ import org.openide.util.Lookup;
  *
  * @author Jan Lahoda
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.api.java.source.JavaSourceTaskFactory.class)
 public class LazyHintComputationFactory extends EditorAwareJavaSourceTaskFactory {
     
     private static Map<FileObject, List<Reference<CreatorBasedLazyFixList>>> file2Creators = new WeakHashMap<FileObject, List<Reference<CreatorBasedLazyFixList>>>();

@@ -66,6 +66,7 @@ import org.openide.util.Lookup;
  *
  * @author Jan Becicka
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.refactoring.spi.RefactoringPluginFactory.class, position=100)
 public class JavaRefactoringsFactory implements RefactoringPluginFactory {
    
     public RefactoringPlugin createInstance(AbstractRefactoring refactoring) {
@@ -140,6 +141,10 @@ public class JavaRefactoringsFactory implements RefactoringPluginFactory {
     //TODO: should be implemented better
     private boolean checkSafeDelete(Lookup object) {
         boolean a=false;
+        NonRecursiveFolder folder = object.lookup(NonRecursiveFolder.class);
+        if (folder != null){
+            return true;
+        }
         for (FileObject f:object.lookupAll(FileObject.class)) {
             a=true;
             if (!RetoucheUtils.isJavaFile(f) && !isPackage(f)) {

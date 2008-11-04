@@ -42,7 +42,7 @@ package org.netbeans.lib.profiler.results.cpu.cct;
 
 import org.netbeans.lib.profiler.results.cpu.TimingAdjusterOld;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.MethodCPUCCTNode;
-import org.netbeans.lib.profiler.results.cpu.marking.Mark;
+import org.netbeans.lib.profiler.marker.Mark;
 import org.netbeans.lib.profiler.results.cpu.marking.MarkBasedNodeVisitor;
 import java.util.HashMap;
 import java.util.Map;
@@ -52,6 +52,7 @@ import java.util.Map;
  *
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProviders({@org.openide.util.lookup.ServiceProvider(service=org.netbeans.lib.profiler.results.cpu.cct.TimeCollector.class), @org.openide.util.lookup.ServiceProvider(service=org.netbeans.lib.profiler.results.cpu.marking.MarkingEngine.StateObserver.class)})
 public class TimeCollector extends MarkBasedNodeVisitor {
     //~ Inner Classes ------------------------------------------------------------------------------------------------------------
 

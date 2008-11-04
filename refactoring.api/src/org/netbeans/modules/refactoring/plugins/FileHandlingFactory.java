@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Collection;
+import org.netbeans.api.fileinfo.NonRecursiveFolder;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.MoveRefactoring;
 import org.netbeans.modules.refactoring.api.RenameRefactoring;
@@ -55,15 +56,19 @@ import org.netbeans.modules.refactoring.spi.RefactoringPluginFactory;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
+import org.openide.util.Lookup;
 
 /**
  *
  * @author Jan Becicka
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.refactoring.spi.RefactoringPluginFactory.class, position=50)
 public class FileHandlingFactory implements RefactoringPluginFactory {
    
     public RefactoringPlugin createInstance(AbstractRefactoring refactoring) {
-        Collection<? extends FileObject> o = refactoring.getRefactoringSource().lookupAll(FileObject.class);
+        Lookup look = refactoring.getRefactoringSource();
+        Collection<? extends FileObject> o = look.lookupAll(FileObject.class);
+        NonRecursiveFolder folder = look.lookup(NonRecursiveFolder.class);
         if (refactoring instanceof RenameRefactoring) {
             if (!o.isEmpty()) {
                 return new FileRenamePlugin((RenameRefactoring) refactoring);
@@ -73,8 +78,17 @@ public class FileHandlingFactory implements RefactoringPluginFactory {
                 return new FileMovePlugin((MoveRefactoring) refactoring);
             }
         } else if (refactoring instanceof SafeDeleteRefactoring) {
-            if (!o.isEmpty()) {
-                return new FileDeletePlugin((SafeDeleteRefactoring) refactoring);
+            if (folder != null) {
+                //Safe delete package
+                return new PackageDeleteRefactoringPlugin((SafeDeleteRefactoring)refactoring);
+            }
+            if (! o.isEmpty()) {
+                FileObject fObj = o.iterator().next();
+                if (fObj.isFolder()) {
+                    return new PackageDeleteRefactoringPlugin((SafeDeleteRefactoring)refactoring);
+                } else {
+                    return new FileDeletePlugin((SafeDeleteRefactoring) refactoring);
+                }
             }
         } else if (refactoring instanceof SingleCopyRefactoring) {
             if (!o.isEmpty()) {

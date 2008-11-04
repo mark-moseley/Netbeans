@@ -51,6 +51,7 @@ import java.util.logging.Logger;
 import javax.swing.KeyStroke;
 import org.netbeans.api.editor.settings.MultiKeyBinding;
 import org.netbeans.lib.editor.util.CharacterConversions;
+import org.netbeans.modules.editor.macros.MacroDialogSupport;
 import org.netbeans.modules.editor.settings.storage.spi.StorageDescription;
 import org.netbeans.modules.editor.settings.storage.spi.StorageReader;
 import org.netbeans.modules.editor.settings.storage.spi.StorageWriter;
@@ -67,6 +68,7 @@ import org.xml.sax.SAXException;
  *
  * @author Vita Stejskal
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.editor.settings.storage.spi.StorageDescription.class)
 public final class MacrosStorage implements StorageDescription<String, MacroDescription> {
 
     private static final Logger LOG = Logger.getLogger(MacrosStorage.class.getName());
@@ -96,16 +98,16 @@ public final class MacrosStorage implements StorageDescription<String, MacroDesc
         return "macros.xml"; //NOI18N
     }
 
-    public StorageReader<String, MacroDescription> createReader(FileObject f) {
+    public StorageReader<String, MacroDescription> createReader(FileObject f, String mimePath) {
         if (MIME_TYPE.equals(f.getMIMEType())) {
-            return new Reader();
+            return new Reader(f, mimePath);
         } else {
             // assume legacy file
-            return new LegacyReader();
+            return new LegacyReader(f, mimePath);
         }
     }
 
-    public StorageWriter<String, MacroDescription> createWriter(FileObject f) {
+    public StorageWriter<String, MacroDescription> createWriter(FileObject f, String mimePath) {
         return new Writer();
     }
 
@@ -131,6 +133,9 @@ public final class MacrosStorage implements StorageDescription<String, MacroDesc
     private static final String MIME_TYPE = "text/x-nbeditor-macrosettings"; //NOI18N
     
     private static abstract class MacrosReader extends StorageReader<String, MacroDescription> {
+        protected MacrosReader(FileObject f, String mimePath) {
+            super(f, mimePath);
+        }
         public abstract Map<String, MacroDescription> getAdded();
         public abstract Set<String> getRemoved();
     }
@@ -149,6 +154,10 @@ public final class MacrosStorage implements StorageDescription<String, MacroDesc
         private StringBuilder text = null;
         private StringBuilder cdataText = null;
         private boolean insideCdata = false;
+        
+        public Reader(FileObject f, String mimePath) {
+            super(f, mimePath);
+        }
         
         public Map<String, MacroDescription> getAdded() {
             return macrosMap;
@@ -228,7 +237,7 @@ public final class MacrosStorage implements StorageDescription<String, MacroDesc
                 }
 
                 KeyStroke[] arr = StorageSupport.stringToKeyStrokes(keystrokes, true);
-                shortcuts.add(new MultiKeyBinding(arr, "macro-" + name)); //NOI18N
+                shortcuts.add(new MultiKeyBinding(arr, MacroDialogSupport.RunMacroAction.runMacroAction)); //NOI18N
             }
         }
 
@@ -286,6 +295,10 @@ public final class MacrosStorage implements StorageDescription<String, MacroDesc
         // The macro being processed
         private String name = null;
         private StringBuilder text = null;
+        
+        public LegacyReader(FileObject f, String mimePath) {
+            super(f, mimePath);
+        }
         
         public Map<String, MacroDescription> getAdded() {
             return macrosMap;

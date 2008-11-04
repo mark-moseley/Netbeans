@@ -40,17 +40,17 @@
 
 package org.netbeans.modules.profiler.j2ee.weblogic;
 
-import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.*;
-import org.netbeans.lib.profiler.common.integration.exceptions.*;
-import org.netbeans.modules.profiler.ui.wizards.providers.TargetPlatformEnum;
 import java.text.MessageFormat;
-
+import org.netbeans.lib.profiler.common.AttachSettings;
+import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
+import org.netbeans.modules.profiler.attach.providers.TargetPlatformEnum;
+import org.netbeans.modules.profiler.attach.spi.IntegrationProvider;
 
 /**
  *
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.attach.spi.IntegrationProvider.class)
 public class WebLogic9IntegrationProvider extends WebLogicIntegrationProvider {
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -73,10 +73,6 @@ public class WebLogic9IntegrationProvider extends WebLogicIntegrationProvider {
     }
 
     public boolean supportsDynamic() {
-        return true;
-    }
-
-    public boolean supportsJVM(TargetPlatformEnum jvm) {
         return true;
     }
 

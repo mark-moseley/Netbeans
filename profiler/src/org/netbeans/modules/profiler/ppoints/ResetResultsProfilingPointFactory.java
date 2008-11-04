@@ -44,6 +44,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.profiler.ppoints.ui.ResetResultsCustomizer;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import java.io.File;
@@ -57,6 +58,7 @@ import javax.swing.ImageIcon;
  *
  * @author Jiri Sedlacek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.ppoints.ProfilingPointFactory.class)
 public class ResetResultsProfilingPointFactory extends CodeProfilingPointFactory {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -69,7 +71,7 @@ public class ResetResultsProfilingPointFactory extends CodeProfilingPointFactory
     private static final String PP_DEFAULT_NAME = NbBundle.getMessage(ResetResultsProfilingPointFactory.class,
                                                                       "ResetResultsProfilingPointFactory_PpDefaultName"); // NOI18N
                                                                                                                           // -----
-    public static final Icon RESET_RESULTS_PP_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/resetResultsProfilingPoint.png")); // NOI18N
+    public static final Icon RESET_RESULTS_PP_ICON = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/resetResultsProfilingPoint.png")); // NOI18N
     public static final String RESET_RESULTS_PP_TYPE = PP_TYPE;
     public static final String RESET_RESULTS_PP_DESCR = PP_DESCR;
     private static ResetResultsProfilingPointFactory defaultInstance;

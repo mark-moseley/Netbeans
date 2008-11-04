@@ -57,75 +57,60 @@ import org.netbeans.modules.websvc.wsitmodelext.addressing.impl.Addressing10Anon
 
 public class Addressing10Factories {
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class EndpointReferenceFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(Addressing10QName.ENDPOINTREFERENCE.getQName());
         }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new Addressing10EndpointReferenceImpl(context.getModel()));
-        }
-
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
             return new Addressing10EndpointReferenceImpl(context.getModel(), element);
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class AnonymousFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(Addressing10QName.ANONYMOUS.getQName());
         }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new Addressing10AnonymousImpl(context.getModel()));
-        }
-
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
             return new Addressing10AnonymousImpl(context.getModel(), element);
         }
     }
     
+    @org.openide.util.lookup.ServiceProviders({@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class), @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)})
     public static class Address10Factory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(Addressing10QName.ADDRESS.getQName());
         }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new Address10Impl(context.getModel()));
-        }
-
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
             return new Address10Impl(context.getModel(), element);
         }
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Addressing10MetadataFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(Addressing10QName.ADDRESSINGMETADATA.getQName());
         }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new Addressing10MetadataImpl(context.getModel()));
-        }
-
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
             return new Addressing10MetadataImpl(context.getModel(), element);
         }
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Addressing10ReferencePropertiesFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(Addressing10QName.REFERENCEPROPERTIES.getQName());
         }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new Addressing10ReferencePropertiesImpl(context.getModel()));
-        }
-
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
             return new Addressing10ReferencePropertiesImpl(context.getModel(), element);

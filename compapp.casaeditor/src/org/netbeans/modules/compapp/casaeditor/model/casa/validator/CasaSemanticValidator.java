@@ -57,11 +57,8 @@ import org.netbeans.modules.xml.xam.spi.Validation.ValidationType;
  *
  * @author jqian
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.xam.spi.Validator.class)
 public class CasaSemanticValidator implements Validator {    
-    
-    @SuppressWarnings("unchecked")
-    public static final ValidationResult EMPTY_RESULT = 
-        new ValidationResult(Collections.EMPTY_SET, Collections.EMPTY_SET);
     
     public String getName() {
         return "CasaSemanticValidator"; // NOI18N
@@ -79,7 +76,7 @@ public class CasaSemanticValidator implements Validator {
             if (validationType.equals(ValidationType.COMPLETE) ||
                     validationType.equals(ValidationType.PARTIAL)) {
                 if (casaModel.getState() == Model.State.NOT_WELL_FORMED){
-                    return EMPTY_RESULT;
+                    return null;
                 }
                  
                 CasaSemanticValidationVisitor visitor =
@@ -93,7 +90,6 @@ public class CasaSemanticValidator implements Validator {
                 return new ValidationResult(resultItems, validatedModels);                
             }
         } 
-        
-        return EMPTY_RESULT;
+        return null;
     }    
 }

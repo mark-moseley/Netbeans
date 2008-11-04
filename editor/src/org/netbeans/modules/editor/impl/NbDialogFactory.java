@@ -57,6 +57,7 @@ import org.netbeans.spi.editor.DialogFactory;
  * 
  * @author Vita Stejskal
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.editor.DialogFactory.class)
 public class NbDialogFactory implements DialogFactory {
 
     /**
@@ -76,6 +77,7 @@ public class NbDialogFactory implements DialogFactory {
             helpIDs = new HashMap(7);
             helpIDs.put("org.netbeans.editor.MacroSavePanel", HELP_ID_MacroSavePanel); // NOI18N
             helpIDs.put("org.netbeans.editor.ext.FindDialogSupport$FindPanel", HELP_ID_FindPanel); // NOI18N
+            helpIDs.put("org.netbeans.modules.editor.lib2.search.EditorFindDialogSupport$FindPanel", HELP_ID_FindPanel); // NOI18N
             helpIDs.put("org.netbeans.editor.ext.ScrollCompletionPane", HELP_ID_ScrollCompletionPane); // NOI18N
             helpIDs.put("org.netbeans.editor.ext.java.JavaFastImportPanel", HELP_ID_JavaFastImportPanel); // NOI18N
         }
@@ -126,7 +128,7 @@ public class NbDialogFactory implements DialogFactory {
                 
             d.addWindowListener(
                 new WindowAdapter() {
-                    public void windowClosing( WindowEvent evt ) {
+                    public @Override void windowClosing( WindowEvent evt ) {
                         cancelButton.doClick( 10 );
                     }
                 }

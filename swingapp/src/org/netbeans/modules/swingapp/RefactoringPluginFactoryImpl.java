@@ -47,8 +47,6 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import org.netbeans.api.fileinfo.NonRecursiveFolder;
 import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.modules.form.FormRefactoringUpdate;
-import org.netbeans.modules.form.RefactoringInfo;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.MoveRefactoring;
 import org.netbeans.modules.refactoring.api.Problem;
@@ -59,6 +57,7 @@ import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.netbeans.modules.refactoring.spi.RefactoringPlugin;
 import org.netbeans.modules.refactoring.spi.RefactoringPluginFactory;
 import org.netbeans.modules.refactoring.spi.SimpleRefactoringElementImplementation;
+import org.netbeans.modules.refactoring.spi.Transaction;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
@@ -76,6 +75,7 @@ import org.openide.util.NbBundle;
  * 
  * @author Tomas Pavek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.refactoring.spi.RefactoringPluginFactory.class)
 public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
 
     public RefactoringPluginFactoryImpl() {
@@ -121,56 +121,62 @@ public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
 
         public Problem prepare(RefactoringElementsBag refactoringElements) {
             Lookup sourceLookup = refactoring.getRefactoringSource();
-            FileObject srcFile = sourceLookup.lookup(FileObject.class);
             NonRecursiveFolder pkg = sourceLookup.lookup(NonRecursiveFolder.class);
-            if (srcFile != null && pkg == null && !srcFile.isFolder()) {
-                // renaming or moving a source file - rename/move the resources accordingly
-                DataObject propertiesDO;
-                if (AppFrameworkSupport.isFrameworkEnabledProject(srcFile)
-                        && (propertiesDO = ResourceUtils.getPropertiesDataObject(srcFile)) != null) {
-                    // there is a valid properties file for a resource map
-                    RefactoringElementImplementation previewElement = null;
-                    if (refactoring instanceof RenameRefactoring) {
-                        String displayText = NbBundle.getMessage(RefactoringPluginFactoryImpl.class,
-                                "FMT_RenameFileRef", propertiesDO.getPrimaryFile().getNameExt()); // NOI18N
-                        previewElement = new PreviewElement(srcFile, displayText);
-                    } else if (refactoring instanceof MoveRefactoring) {
-                        URL targetURL = ((MoveRefactoring)refactoring).getTarget().lookup(URL.class);
-                        try {
-                            File f = FileUtil.normalizeFile(new File(targetURL.toURI()));
-                            if (f.isDirectory()) {
+            if (pkg == null) {
+                for (FileObject srcFile : sourceLookup.lookupAll(FileObject.class)) {
+                    if (!srcFile.isFolder()) {
+                        // renaming, moving or copying a source file - update the resources accordingly
+                        DataObject propertiesDO;
+                        if (AppFrameworkSupport.isFrameworkLibAvailable(srcFile)
+                                && (propertiesDO = ResourceUtils.getPropertiesDataObject(srcFile)) != null) {
+                            // there is a valid properties file for a resource map
+                            RefactoringElementImplementation previewElement = null;
+                            if (refactoring instanceof RenameRefactoring) {
                                 String displayText = NbBundle.getMessage(RefactoringPluginFactoryImpl.class,
-                                        "FMT_MoveFileRef", propertiesDO.getPrimaryFile().getNameExt()); // NOI18N
+                                        "FMT_RenameFileRef", propertiesDO.getPrimaryFile().getNameExt()); // NOI18N
                                 previewElement = new PreviewElement(srcFile, displayText);
+                            } else if (refactoring instanceof MoveRefactoring) {
+                                URL targetURL = ((MoveRefactoring)refactoring).getTarget().lookup(URL.class);
+                                try {
+                                    File f = FileUtil.normalizeFile(new File(targetURL.toURI()));
+                                    if (f.isDirectory()) {
+                                        String displayText = NbBundle.getMessage(RefactoringPluginFactoryImpl.class,
+                                                "FMT_MoveFileRef", propertiesDO.getPrimaryFile().getNameExt()); // NOI18N
+                                        previewElement = new PreviewElement(srcFile, displayText);
+                                    }
+                                } catch (URISyntaxException ex) {
+                                    Exceptions.printStackTrace(ex);
+                                }
+                            } else if (refactoring instanceof SingleCopyRefactoring) {
+                                URL targetURL = ((SingleCopyRefactoring)refactoring).getTarget().lookup(URL.class);
+                                try {
+                                    File f = FileUtil.normalizeFile(new File(targetURL.toURI()));
+                                    if (f.isDirectory()) {
+                                        String displayText = NbBundle.getMessage(RefactoringPluginFactoryImpl.class,
+                                                "FMT_CopyFileRef", propertiesDO.getPrimaryFile().getNameExt()); // NOI18N
+                                        previewElement = new PreviewElement(srcFile, displayText);
+                                    }
+                                } catch (URISyntaxException ex) {
+                                    Exceptions.printStackTrace(ex);
+                                }
                             }
-                        } catch (URISyntaxException ex) {
-                            Exceptions.printStackTrace(ex);
-                        }
-                    } else if (refactoring instanceof SingleCopyRefactoring) {
-                        // TBD
-                    }
 
-                    if (previewElement != null) {
-                        refactoringElements.add(refactoring, previewElement);
-
-                        ResourceMapUpdate update = new ResourceMapUpdate(refactoring, previewElement, propertiesDO);
-
-                        // we need to rename/move the resource map before form gets updated
-                        RefactoringInfo refInfo = refactoring.getContext().lookup(RefactoringInfo.class);
-                        if (refInfo != null && refInfo.isForm()) {
-                            assert isJavaFileOfForm(srcFile) && srcFile.equals(refInfo.getPrimaryFile());
-                            refInfo.getUpdateForFile(srcFile).addPrecedingFileChange(update);
-                        } else { // the source file is not a form - but we still do the update
-                            refactoringElements.addFileChange(refactoring, update);
+                            if (previewElement != null) {
+                                refactoringElements.add(refactoring, previewElement);
+                                // we need to rename/move the resources before the form is renamed/moved
+                                ResourceMapUpdate update = new ResourceMapUpdate(refactoring, previewElement, srcFile, propertiesDO);
+                                refactoringElements.registerTransaction(update);
+                                refactoringElements.addFileChange(refactoring, update);
+                            }
                         }
                     }
                 }
-            } else if (pkg != null && refactoring instanceof RenameRefactoring) { // [can't package be also moved via MoveRefactoring???]
+            } else if (refactoring instanceof RenameRefactoring) { // [can't package be also moved via MoveRefactoring???]
                 // renaming a package - not renaming a folder, but non-recursive move to another folder
                 // we need to move the resources folder as well
                 FileObject pkgFolder = pkg.getFolder();
                 FileObject resFolder;
-                if (AppFrameworkSupport.isFrameworkEnabledProject(pkgFolder)
+                if (AppFrameworkSupport.isFrameworkLibAvailable(pkgFolder)
                         && (resFolder = pkgFolder.getFileObject("resources")) != null) { // NOI18N
                     // there is an app framework's resources folder
                     RefactoringElementImplementation previewElement = new PreviewElement(
@@ -179,22 +185,7 @@ public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
 
                     ResourcePackageUpdate update = new ResourcePackageUpdate(
                             (RenameRefactoring) refactoring, previewElement, resFolder);
-
-                    FormRefactoringUpdate formUpdate = null;
-                    RefactoringInfo refInfo = refactoring.getContext().lookup(RefactoringInfo.class);
-                    if (refInfo != null) {
-                        for (FileObject fo : pkgFolder.getChildren()) {
-                            if (isJavaFileOfForm(fo)) {
-                                formUpdate = refInfo.getUpdateForFile(fo);
-                                break;
-                            }
-                        }
-                    }
-                    if (formUpdate != null) {
-                        formUpdate.addPrecedingFileChange(update);
-                    } else {
-                        refactoringElements.addFileChange(refactoring, update);
-                    }
+                    refactoringElements.registerTransaction(update);
                 }
             }
 
@@ -243,32 +234,36 @@ public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
      * Updates properties files for a resource map (rename/move/copy) according
      * to a change of the java source file.
      */
-    private static class ResourceMapUpdate extends SimpleRefactoringElementImplementation {
+    private static class ResourceMapUpdate extends SimpleRefactoringElementImplementation implements Transaction {
         private AbstractRefactoring refactoring;
         private RefactoringElementImplementation refElement;
 
         private DataObject propertiesDO;
-        private String oldName; // if renamed
-        private FileObject oldFolder; // if moved
+        private DataObject newPropertiesDO; // copied
+        private String oldName; // original name of the source file
+        private FileObject oldFolder; // original folder of the properties file
         private FileObject srcFileBefore;
         private FileObject srcFileAfter;
 
-        ResourceMapUpdate(AbstractRefactoring refactoring, RefactoringElementImplementation previewElement, DataObject propertiesDO) {
+        ResourceMapUpdate(AbstractRefactoring refactoring, RefactoringElementImplementation previewElement,
+                          FileObject srcFileBefore, DataObject propertiesDO) {
             this.refactoring = refactoring;
             this.refElement = previewElement;
             this.propertiesDO = propertiesDO;
             oldName = propertiesDO.getName();
             oldFolder = propertiesDO.getFolder().getPrimaryFile();
-            srcFileBefore = refactoring.getRefactoringSource().lookup(FileObject.class);
+            this.srcFileBefore = srcFileBefore;
         }
 
-        public void performChange() {
+        public void commit() {
             if (!refElement.isEnabled()) {
                 return;
             }
 
-            // This is supposed to run after the form is renamed/moved but before it
-            // does its own update - so when it does it has the resource map in place.
+            // Need to ensure the resources are renamed/moved/copied at the right
+            // moment so form updates always find them. As a "transaction", this
+            // runs after form's transactions and before form's "file changes".
+            // At this point, the source file is not renamed/moved yet.
 
             if (refactoring instanceof RenameRefactoring) {
                 // source file renaming within the same package
@@ -276,7 +271,6 @@ public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
                 String newName = ((RenameRefactoring)refactoring).getNewName();
                 try {
                     propertiesDO.rename(newName);
-                    ResourceUtils.unregisterDesignResourceMap(srcFileBefore);
                 } catch (IOException ex) {
                     Exceptions.printStackTrace(ex);
                 }
@@ -291,21 +285,97 @@ public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
                     Exceptions.printStackTrace(ex);
                 }
                 if (targetFolder != null && targetFolder.isFolder()) {
-                    srcFileAfter = targetFolder.getFileObject(oldName);
                     try {
                         targetFolder = FileUtil.createFolder(targetFolder, "resources"); // NOI18N
                         propertiesDO.move(DataFolder.findFolder(targetFolder));
+                        newPropertiesDO = propertiesDO; // DataObject survives move
                         // TODO: Also analyze the resource map and copy relatively referenced
                         // images (stored under the same resources folder). Probably we should
                         // not just move the image files - that would require to analyze if
                         // not used from elsewhere. Or if staying in the same project we could
                         // maybe just change the relative names to complete cp names.
-                        ResourceUtils.unregisterDesignResourceMap(srcFileBefore);
+                        if (srcFileBefore != null) {
+                            ResourceUtils.unregisterDesignResourceMap(srcFileBefore);
+                        }
+                    } catch (IOException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                }
+            } else if (refactoring instanceof SingleCopyRefactoring) {
+                // source file to be copied - create a copy of the resources
+                SingleCopyRefactoring copyRef = (SingleCopyRefactoring) refactoring;
+                URL targetURL = copyRef.getTarget().lookup(URL.class);
+                FileObject targetFolder = null;
+                try {
+                    File f = FileUtil.normalizeFile(new File(targetURL.toURI()));
+                    targetFolder = FileUtil.toFileObject(f);
+                } catch (URISyntaxException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+                if (targetFolder != null && targetFolder.isFolder()) {
+                    String newName = copyRef.getNewName();
+                    try {
+                        targetFolder = FileUtil.createFolder(targetFolder, "resources"); // NOI18N
+                        if (targetFolder.getFileObject(newName, "properties") == null) { // NOI18N
+                            newPropertiesDO = propertiesDO.copy(DataFolder.findFolder(targetFolder));
+                            newPropertiesDO.rename(newName);
+                        }
+                        // TODO: Also analyze the resource map and copy relatively referenced
+                        // images (stored under the same resources folder). Probably we should
                     } catch (IOException ex) {
                         Exceptions.printStackTrace(ex);
                     }
                 }
             }
+        }
+
+        public void rollback() {
+            if (!refElement.isEnabled()) {
+                return;
+            }
+
+            // This is supposed to run after the form rename/move/copy is undone
+            // (files returned back). Here we need to restore the resoures to
+            // the original state.
+
+            if (refactoring instanceof RenameRefactoring) {
+                // source file renamed within the same package - rename properties file back
+                try {
+                    propertiesDO.rename(oldName);
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            } else if (refactoring instanceof MoveRefactoring) {
+                // source file moved to another package - move properties file back
+                try {
+                    propertiesDO.move(DataFolder.findFolder(oldFolder));
+                    newPropertiesDO = null;
+                    if (srcFileAfter != null) {
+                        ResourceUtils.unregisterDesignResourceMap(srcFileAfter);
+                        srcFileAfter = null;
+                    }
+                    srcFileBefore = oldFolder.getParent().getFileObject(oldName, "java"); // NOI18N
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            } else if (refactoring instanceof SingleCopyRefactoring) {
+                // source file copied - delete the new properties file
+                if (newPropertiesDO != null) {
+                    try {
+                        newPropertiesDO.delete();
+                        newPropertiesDO = null;
+                        if (srcFileAfter != null) {
+                            ResourceUtils.unregisterDesignResourceMap(srcFileAfter);
+                            srcFileAfter = null;
+                        }
+                    } catch (IOException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                }
+            }
+        }
+
+        public void performChange() {
         }
 
         @Override
@@ -314,27 +384,12 @@ public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
                 return;
             }
 
-            // This is supposed to run after the form is renamed/moved back but
-            // before it does its own undo update - so when it does it has the
-            // resource map in place.
-
-            if (refactoring instanceof RenameRefactoring) {
-                // source file renaming within the same package
-                try {
-                    propertiesDO.rename(oldName);
-                    ResourceUtils.unregisterDesignResourceMap(srcFileAfter);
-                } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
+            // just remember the new file
+            if (refactoring instanceof MoveRefactoring || refactoring instanceof SingleCopyRefactoring) {
+                if (newPropertiesDO != null) {
+                    FileObject targetFolder = newPropertiesDO.getPrimaryFile().getParent().getParent();
+                    srcFileAfter = targetFolder.getFileObject(newPropertiesDO.getName(), "java"); // NOI18N
                 }
-            } else if (refactoring instanceof MoveRefactoring) {
-                // source file moving to another package, but with the same name
-                try {
-                    propertiesDO.move(DataFolder.findFolder(oldFolder));
-                    ResourceUtils.unregisterDesignResourceMap(srcFileAfter);
-                } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
-                }
-                srcFileBefore = oldFolder.getParent().getFileObject(oldName);
             }
         }
 
@@ -366,7 +421,7 @@ public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
      * Moves resources folder according to package rename (i.e. non-recursive
      * folder move).
      */
-    private static class ResourcePackageUpdate extends SimpleRefactoringElementImplementation {
+    private static class ResourcePackageUpdate implements Transaction {
         private RenameRefactoring refactoring;
         private RefactoringElementImplementation refElement;
 
@@ -381,70 +436,50 @@ public class RefactoringPluginFactoryImpl implements RefactoringPluginFactory {
                     .getResourceName(resFolder.getParent(), '.', false);
         }
 
-        public void performChange() {
+        public void commit() {
             if (!refElement.isEnabled()) {
                 return;
             }
 
-            // This is supposed to run after the original package is renamed but
-            // before the forms are updated - so when the forms are loaded they
-            // have the resources in place.
+            // This is supposed to run before the original package is renamed.
+            // The package is renamed after "transactions", then form updates
+            // are run.
 
             ClassPath cp = ClassPath.getClassPath(resFolder.getPrimaryFile(), ClassPath.SOURCE);
-            DataFolder targetFolder = DataFolder.findFolder(
-                    cp.findResource(refactoring.getNewName().replace('.', '/')));
-            FileObject originalFolder = resFolder.getPrimaryFile().getParent();
+            FileObject srcRoot = cp.findOwnerRoot(resFolder.getPrimaryFile());
+            String newName = refactoring.getNewName().replace('.', '/');
             try {
+                // the new package folder is not there yet
+                DataFolder targetFolder = DataFolder.findFolder(
+                        FileUtil.createFolder(srcRoot, newName));
                 resFolder.move(targetFolder);
-                // remove the original package folder if it empty after moving resources
-                if (originalFolder != null && originalFolder.isValid()
-                        && originalFolder.getChildren().length == 0) {
-                    originalFolder.delete();
-                }
             } catch (IOException ex) {
                 Exceptions.printStackTrace(ex);
             }
         }
 
-        @Override
-        public void undoChange() {
+        public void rollback() {
             if (!refElement.isEnabled()) {
                 return;
             }
 
-            // This is suposed to run after the package is renamed back but
-            // before the forms perform their undo update - so when the forms
-            // loaded they have the resources in place.
+            // This is suposed to run after the package is renamed back.
 
             ClassPath cp = ClassPath.getClassPath(resFolder.getPrimaryFile(), ClassPath.SOURCE);
             FileObject srcRoot = cp.findOwnerRoot(resFolder.getPrimaryFile());
+            FileObject pkgFolder = resFolder.getPrimaryFile().getParent();
             try {
                 DataFolder targetFolder = DataFolder.findFolder(
                     FileUtil.createFolder(srcRoot, oldPkgName.replace('.', '/')));
                 resFolder.move(targetFolder);
+                // remove the package folder if it is empty after moving resources
+                if (pkgFolder != null && pkgFolder.isValid()
+                        && pkgFolder.getChildren().length == 0) {
+                    pkgFolder.delete();
+                }
             } catch (Exception ex) {
                 Exceptions.printStackTrace(ex);
             }
-        }
-
-        public String getText() {
-            return "Resources update"; // NOI18N
-        }
-
-        public String getDisplayText() {
-            return NbBundle.getMessage(RefactoringPluginFactoryImpl.class, "CTL_ResourcesPackageRef2"); // NOI18N
-        }
-
-        public Lookup getLookup() {
-            return Lookup.EMPTY;
-        }
-
-        public FileObject getParentFile() {
-            return resFolder.getPrimaryFile();
-        }
-
-        public PositionBounds getPosition() {
-            return null;
         }
     }
 

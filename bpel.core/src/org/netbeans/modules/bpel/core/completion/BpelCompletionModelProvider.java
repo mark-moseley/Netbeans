@@ -39,8 +39,8 @@ import org.openide.util.lookup.Lookups;
  * 
  * @author ads
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.schema.completion.spi.CompletionModelProvider.class)
 public class BpelCompletionModelProvider extends CompletionModelProvider {
-
 
     private static final String PROCESS = "process";            // NOI18N
 
@@ -49,8 +49,8 @@ public class BpelCompletionModelProvider extends CompletionModelProvider {
         if ( !isBpelFile( context) ) {
             return null;
         }
-        
         SchemaModel model = createMetaSchemaModel();
+
         if(model == null) {
             return null;
         }
@@ -81,9 +81,7 @@ public class BpelCompletionModelProvider extends CompletionModelProvider {
             QName qName = list.get( 0 );
             String root = qName.getLocalPart();
             String ns = qName.getNamespaceURI();
-            if ( PROCESS.equals( root )  && 
-                    BpelEntity.BUSINESS_PROCESS_NS_URI.equals(ns) ) 
-            {
+            if ( PROCESS.equals( root )  && BpelEntity.BUSINESS_PROCESS_NS_URI.equals(ns) ) {
                 return true;
             }
         }

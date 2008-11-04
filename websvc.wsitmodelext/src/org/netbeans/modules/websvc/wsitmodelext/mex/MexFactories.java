@@ -57,13 +57,11 @@ import org.netbeans.modules.websvc.wsitmodelext.mex.impl.MetadataSectionImpl;
 
 public class MexFactories {
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Metadata extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(MexQName.METADATA.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MetadataImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -71,13 +69,11 @@ public class MexFactories {
         }
     }   
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MetadataReference extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(MexQName.METADATAREFERENCE.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MetadataReferenceImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -85,13 +81,11 @@ public class MexFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MetadataSection extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(MexQName.METADATASECTION.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MetadataSectionImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -99,13 +93,11 @@ public class MexFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Dialect extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(MexQName.DIALECT.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new DialectImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -113,13 +105,11 @@ public class MexFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Identifier extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(MexQName.IDENTIFIER.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new IdentifierImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -127,13 +117,11 @@ public class MexFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Location extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
             return Collections.singleton(MexQName.LOCATION.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new LocationImpl(context.getModel()));
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {

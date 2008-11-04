@@ -49,17 +49,21 @@ import org.w3c.dom.Element;
 
 import javax.xml.namespace.QName;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 
 public class SecurityPolicyFactories {
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Wss11Factory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.WSS11.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new Wss11Impl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.WSS11.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -67,13 +71,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Wss10Factory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.WSS10.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new Wss10Impl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.WSS10.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -81,13 +87,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportRefEmbeddedTokenFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTREFEMBEDDEDTOKEN.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportRefEmbeddedTokenImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTREFEMBEDDEDTOKEN.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -95,13 +103,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportRefEncryptedKeyFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTREFENCRYPTEDKEY.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportRefEncryptedKeyImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTREFENCRYPTEDKEY.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -109,13 +119,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportRefExternalURIFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTREFEXTERNALURI.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportRefExternalURIImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTREFEXTERNALURI.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -123,13 +135,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportRefIssuerSerialFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTREFISSUERSERIAL.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportRefIssuerSerialImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTREFISSUERSERIAL.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -137,13 +151,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportRefKeyIdentifierFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTREFKEYIDENTIFIER.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportRefKeyIdentifierImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTREFKEYIDENTIFIER.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -151,13 +167,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportRefThumbprintFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTREFTHUMBPRINT.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportRefThumbprintImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTREFTHUMBPRINT.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -165,13 +183,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class RequireSignatureConfirmationFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.REQUIRESIGNATURECONFIRMATION.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new RequireSignatureConfirmationImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.REQUIRESIGNATURECONFIRMATION.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -179,13 +199,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class RequestSecurityTokenTemplateFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.REQUESTSECURITYTOKENTEMPLATE.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new RequestSecurityTokenTemplateImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.REQUESTSECURITYTOKENTEMPLATE.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -193,13 +215,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class Trust10Factory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.TRUST10.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new Trust10Impl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.TRUST10.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -207,13 +231,31 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
+    public static class Trust13Factory extends ElementFactory {
+        @Override
+        public Set<QName> getElementQNames() {
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.TRUST13.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
+        }
+        @Override
+        public WSDLComponent create(WSDLComponent context, Element element) {
+            return new Trust13Impl(context.getModel(), element);
+        }
+    }
+    
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class RequireServerEntropyFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.REQUIRESERVERENTROPY.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new RequireServerEntropyImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.REQUIRESERVERENTROPY.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -221,13 +263,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class RequireClientEntropyFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.REQUIRECLIENTENTROPY.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new RequireClientEntropyImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.REQUIRECLIENTENTROPY.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -235,13 +279,15 @@ public class SecurityPolicyFactories {
         }
     }
  
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportIssuedTokensFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTISSUEDTOKENS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportIssuedTokensImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTISSUEDTOKENS.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -249,13 +295,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportClientChallengeFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTCLIENTCHALLENGE.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportClientChallengeImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTCLIENTCHALLENGE.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -263,13 +311,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class MustSupportServerChallengeFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.MUSTSUPPORTSERVERCHALLENGE.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new MustSupportServerChallengeImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.MUSTSUPPORTSERVERCHALLENGE.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -277,13 +327,15 @@ public class SecurityPolicyFactories {
         }
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class IncludeTimestampFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.INCLUDETIMESTAMP.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new IncludeTimestampImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.INCLUDETIMESTAMP.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -291,13 +343,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class OnlySignEntireHeadersAndBodyFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.ONLYSIGNENTIREHEADERSANDBODY.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new OnlySignEntireHeadersAndBodyImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.ONLYSIGNENTIREHEADERSANDBODY.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -305,13 +359,15 @@ public class SecurityPolicyFactories {
         }
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class EncryptSignatureFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.ENCRYPTSIGNATURE.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new EncryptSignatureImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.ENCRYPTSIGNATURE.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -319,13 +375,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class EncryptBeforeSigningFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.ENCRYPTBEFORESIGNING.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new EncryptBeforeSigningImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.ENCRYPTBEFORESIGNING.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -333,13 +391,15 @@ public class SecurityPolicyFactories {
         }
     }    
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class SignedElementsFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.SIGNEDELEMENTS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new SignedElementsImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.SIGNEDELEMENTS.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -347,13 +407,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class SignedPartsFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.SIGNEDPARTS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new SignedPartsImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.SIGNEDPARTS.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -361,13 +423,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class EncryptedElementsFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.ENCRYPTEDELEMENTS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new EncryptedElementsImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.ENCRYPTEDELEMENTS.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -375,13 +439,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class EncryptedPartsFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.ENCRYPTEDPARTS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new EncryptedPartsImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.ENCRYPTEDPARTS.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -389,13 +455,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class HeaderFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.HEADER.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new HeaderImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.HEADER.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -403,13 +471,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class BodyFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.BODY.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new BodyImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.BODY.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -417,13 +487,31 @@ public class SecurityPolicyFactories {
         }
     }
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
+    public static class AttachmentsFactory extends ElementFactory {
+        @Override
+        public Set<QName> getElementQNames() {
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.ATTACHMENTS.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
+        }
+        @Override
+        public WSDLComponent create(WSDLComponent context, Element element) {
+            return new AttachmentsImpl(context.getModel(), element);
+        }
+    }
+    
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
     public static class XPathFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.XPATH.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new XPathImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.XPATH.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -431,13 +519,15 @@ public class SecurityPolicyFactories {
         }
     }
     
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class TransportBindingFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.TRANSPORTBINDING.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new TransportBindingImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.TRANSPORTBINDING.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -445,13 +535,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class SymmetricBindingFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.SYMMETRICBINDING.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new SymmetricBindingImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.SYMMETRICBINDING.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -459,13 +551,15 @@ public class SecurityPolicyFactories {
         }
     }    
 
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class AsymmetricBindingFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.ASYMMETRICBINDING.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new AsymmetricBindingImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.ASYMMETRICBINDING.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -473,13 +567,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class LayoutFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.LAYOUT.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new LayoutImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.LAYOUT.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -487,13 +583,15 @@ public class SecurityPolicyFactories {
         }
     }
    
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class StrictFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.STRICT.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new StrictImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.STRICT.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -501,13 +599,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class LaxFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.LAX.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new LaxImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.LAX.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -515,13 +615,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class LaxTsFirstFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.LAXTSFIRST.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new LaxTsFirstImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.LAXTSFIRST.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -529,13 +631,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class LaxTsLastFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.LAXTSLAST.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new LaxTsLastImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.LAXTSLAST.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -543,13 +647,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class RequiredElementsFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.REQUIREDELEMENTS.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new RequiredElementsImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.REQUIREDELEMENTS.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {
@@ -557,13 +663,15 @@ public class SecurityPolicyFactories {
         }
     }
 
+   @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.wsdl.model.spi.ElementFactory.class)
    public static class BootstrapPolicyFactory extends ElementFactory {
         @Override
         public Set<QName> getElementQNames() {
-            return Collections.singleton(SecurityPolicyQName.BOOTSTRAPPOLICY.getQName());
-        }
-        public <C extends WSDLComponent> C create(WSDLComponent context, Class<C> type) {
-            return type.cast(new BootstrapPolicyImpl(context.getModel()));
+            HashSet<QName> set = new HashSet<QName>();
+            for (ConfigVersion cfgVersion : ConfigVersion.values()) {
+                set.add(SecurityPolicyQName.BOOTSTRAPPOLICY.getQName(cfgVersion));
+            }
+            return Collections.unmodifiableSet(set);
         }
         @Override
         public WSDLComponent create(WSDLComponent context, Element element) {

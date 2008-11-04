@@ -76,6 +76,7 @@ import org.openide.util.Lookup;
  *
  * @author  Honza
  */
+@org.openide.util.lookup.ServiceProvider(service=org.apache.tools.ant.module.spi.AntLogger.class)
 public class DebuggerAntLogger extends AntLogger {
     
     
@@ -370,7 +371,7 @@ public class DebuggerAntLogger extends AntLogger {
         );
         DebuggerEngine[] es = DebuggerManager.getDebuggerManager ().
             startDebugging (di);
-        AntDebugger debugger = (AntDebugger) es [0].lookupFirst (null, AntDebugger.class);
+        AntDebugger debugger = es[0].lookupFirst(null, AntDebugger.class);
         debugger.setExecutor(execTask);
         return debugger;
     }

@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.Future;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.project.uiapi.OpenProjectsTrampoline;
@@ -42,6 +43,7 @@ import org.netbeans.modules.project.uiapi.OpenProjectsTrampoline;
  *
  * @author joelle
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.project.uiapi.OpenProjectsTrampoline.class)
 public class MockOpenProjectsTrampoline implements OpenProjectsTrampoline {
 
     private Collection<Project> openProjects = new ArrayList<Project>();
@@ -100,5 +102,9 @@ public class MockOpenProjectsTrampoline implements OpenProjectsTrampoline {
             throw new IllegalArgumentException("Project " + ProjectUtils.getInformation(mainProject).getDisplayName() + " is not open and cannot be set as main.");
         }
         this.mainProject = project;
+    }
+
+    public Future<Project[]> openProjectsAPI() {
+        return null;
     }
 }

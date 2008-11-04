@@ -64,6 +64,7 @@ import org.netbeans.modules.xml.wsdl.ui.view.treeeditor.WSDLElementNode;
  *
  * @author Shivanand (shivanand.kini@sun.com)
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.schema.completion.spi.CompletionModelProvider.class)
 public class WSDLCompletionModelProvider extends CompletionModelProvider {
     
     String XMLNS_COLON_CONSTANT = XMLConstants.XMLNS_ATTRIBUTE + ":";
@@ -78,8 +79,10 @@ public class WSDLCompletionModelProvider extends CompletionModelProvider {
      */    
     @Override
     public List<CompletionModel> getModels(CompletionContext context) {
+        String ext = (context != null && context.getPrimaryFile() != null) ? context.getPrimaryFile().getExt() : null;
+        
         //check the ext is wsdl
-        if (!context.getPrimaryFile().getExt().equals("wsdl")) {
+        if (ext != null && !ext.equals("wsdl")) {
             return null;
         }
         List<CompletionModel> models = new ArrayList<CompletionModel>();
@@ -102,10 +105,12 @@ public class WSDLCompletionModelProvider extends CompletionModelProvider {
             //Get only those models that make sense at this point
             if (extensibilityElementType != null) {
                 WSDLExtensibilityElement element = elements.getWSDLExtensibilityElement(extensibilityElementType);
-                List<WSDLExtensibilityElementInfo> infos = element.getAllWSDLExtensibilityElementInfos();
-                for (WSDLExtensibilityElementInfo info : infos) {
-                    String ns = info.getSchema().getTargetNamespace();
-                    xmlSchemaFileInfos.add(elements.getXMLSchemaFileInfo(ns));
+                if (element != null) {
+                    List<WSDLExtensibilityElementInfo> infos = element.getAllWSDLExtensibilityElementInfos();
+                    for (WSDLExtensibilityElementInfo info : infos) {
+                        String ns = info.getSchema().getTargetNamespace();
+                        xmlSchemaFileInfos.add(elements.getXMLSchemaFileInfo(ns));
+                    }
                 }
             }
             

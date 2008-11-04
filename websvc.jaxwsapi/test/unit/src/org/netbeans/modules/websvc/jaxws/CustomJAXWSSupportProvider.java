@@ -59,6 +59,7 @@ import org.openide.filesystems.FileObject;
  *
  * @author Lukas Jungmann
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.jaxws.spi.JAXWSSupportProvider.class)
 public class CustomJAXWSSupportProvider implements JAXWSSupportProvider {
     
    private Map<FileObject, JAXWSSupport> cache = new HashMap<FileObject, JAXWSSupport>();
@@ -94,7 +95,7 @@ public class CustomJAXWSSupportProvider implements JAXWSSupportProvider {
         
         public String addService(String name, String serviceImpl, String wsdlUrl,
                 String serviceName, String portName,
-                String packageName, boolean isJsr109) {
+                String packageName, boolean isJsr109, boolean useProvider) {
             throw new UnsupportedOperationException("Not supported yet.");
         }
         

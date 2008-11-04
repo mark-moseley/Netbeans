@@ -40,22 +40,22 @@
 
 package org.netbeans.modules.profiler.j2ee.sunas;
 
-import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.IntegrationProvider;
-import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
-import org.netbeans.modules.profiler.ui.wizards.framework.steps.NullWizardStep;
-import org.netbeans.modules.profiler.ui.wizards.framework.steps.WizardStep;
-import org.netbeans.modules.profiler.ui.wizards.providers.AbstractIntegrationProvider;
-import org.netbeans.modules.profiler.ui.wizards.providers.IntegrationCategorizer;
 import java.text.MessageFormat;
 import java.util.ResourceBundle;
-
+import org.netbeans.lib.profiler.common.AttachSettings;
+import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
+import org.netbeans.modules.profiler.attach.providers.AbstractIntegrationProvider;
+import org.netbeans.modules.profiler.attach.providers.IntegrationCategorizer;
+import org.netbeans.modules.profiler.attach.spi.IntegrationProvider;
+import org.netbeans.modules.profiler.attach.wizard.steps.NullWizardStep;
+import org.netbeans.modules.profiler.attach.wizard.steps.WizardStep;
 
 /**
  *
  * @author Tomas Hurka
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.attach.spi.IntegrationProvider.class)
 public class SunAS7IntegrationProvider extends AbstractIntegrationProvider {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 

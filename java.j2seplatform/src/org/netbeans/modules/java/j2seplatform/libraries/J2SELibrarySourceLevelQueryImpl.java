@@ -60,6 +60,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.java.queries.SourceLevelQueryImplementation.class, position=160)
 public class J2SELibrarySourceLevelQueryImpl implements SourceLevelQueryImplementation {
     
     private static final String JDK_12 = "1.2";     //NOI18N
@@ -97,7 +98,7 @@ public class J2SELibrarySourceLevelQueryImpl implements SourceLevelQueryImplemen
                 if (!lib.getType().equals(J2SELibraryTypeProvider.LIBRARY_TYPE)) {
                     continue;
                 }
-                List<URL> sourceRoots = J2SELibraryClassPathProvider.getResolvedVolume(lib, J2SELibraryTypeProvider.VOLUME_TYPE_SRC);
+                List<URL> sourceRoots = lib.getContent(J2SELibraryTypeProvider.VOLUME_TYPE_SRC);
                 if (sourceRoots.isEmpty()) {
                     continue;
                 }
@@ -115,7 +116,7 @@ public class J2SELibrarySourceLevelQueryImpl implements SourceLevelQueryImplemen
     private String getSourceLevel (Library lib) {
         String slevel = sourceLevelCache.get(lib);
         if (slevel == null) {
-            slevel = getSourceLevel (J2SELibraryClassPathProvider.getResolvedVolume(lib, J2SELibraryTypeProvider.VOLUME_TYPE_CLASSPATH));
+            slevel = getSourceLevel(lib.getContent(J2SELibraryTypeProvider.VOLUME_TYPE_CLASSPATH));
             this.sourceLevelCache.put (lib,slevel);
         }
         return slevel == JDK_UNKNOWN ? null : slevel;                

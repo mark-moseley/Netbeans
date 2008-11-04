@@ -53,6 +53,7 @@ import org.openide.filesystems.FileObject;
  *
  * @author Jan Becicka
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.refactoring.spi.ui.TreeElementFactoryImplementation.class, position=100)
 public class TreeElementFactoryImpl implements TreeElementFactoryImplementation {
 
     public Map<Object, TreeElement> map = new WeakHashMap<Object,TreeElement>();
@@ -73,11 +74,12 @@ public class TreeElementFactoryImpl implements TreeElementFactoryImplementation 
         if (o instanceof FileObject) {
             FileObject fo = (FileObject) o;
             if (fo.isFolder()) {
-                SourceGroup sg = FolderTreeElement.getSourceGroup(fo);
-                if (sg!=null && fo.equals(sg.getRootFolder())) 
-                    result = new SourceGroupTreeElement(sg);
-                else 
-                    result = new FolderTreeElement(fo);
+// No package/directory related refactoring for Ruby
+//                SourceGroup sg = FolderTreeElement.getSourceGroup(fo);
+//                if (sg!=null && fo.equals(sg.getRootFolder()))
+//                    result = new SourceGroupTreeElement(sg);
+//                else
+//                    result = new FolderTreeElement(fo);
             } else {
                 result = new FileTreeElement(fo);
             }

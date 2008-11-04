@@ -41,13 +41,13 @@
 package org.netbeans.modules.profiler.j2ee.jboss;
 
 import org.openide.util.NbBundle;
-import java.util.Properties;
 
 
 /**
  *
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.attach.spi.IntegrationProvider.class)
 public class JBoss3IntegrationProvider extends AbstractJBossIntegrationProvider {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 

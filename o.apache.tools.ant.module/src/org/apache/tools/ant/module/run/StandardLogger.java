@@ -65,6 +65,7 @@ import org.openide.windows.OutputListener;
  * Standard logger for producing Ant output messages.
  * @author Jesse Glick
  */
+@org.openide.util.lookup.ServiceProvider(service=org.apache.tools.ant.module.spi.AntLogger.class, position=100)
 public final class StandardLogger extends AntLogger {
     
     private static final Logger ERR = Logger.getLogger(StandardLogger.class.getName());
@@ -372,6 +373,11 @@ public final class StandardLogger extends AntLogger {
         OutputListener hyperlink = findHyperlink(session, line);
         if (hyperlink instanceof Hyperlink) {
             getSessionData(session).lastHyperlink = (Hyperlink) hyperlink;
+        }
+        if (hyperlink == null && "java".equals(event.getTaskName()) && 
+                (event.getLogLevel() == AntEvent.LOG_WARN || event.getLogLevel() == AntEvent.LOG_INFO)) {
+            // stdout and stderr (except hyperlinks) is printed directly for java
+            return;
         }
         // XXX should translate tabs to spaces here as a safety measure (esp. since output window messes it up...)
         event.getSession().println(line, event.getLogLevel() <= AntEvent.LOG_WARN, hyperlink);

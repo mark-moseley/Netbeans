@@ -47,7 +47,7 @@ import java.io.InputStreamReader;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.xml.text.syntax.XMLKit;
+import org.netbeans.editor.BaseKit;
 import org.netbeans.modules.xml.xam.ModelSource;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentModel;
 import org.netbeans.modules.xml.xam.dom.DocumentModelAccess;
@@ -58,6 +58,7 @@ import org.openide.loaders.DataObject;
  *
  * @author Nam Nguyen
  */
+@org.openide.util.lookup.ServiceProviders({@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.xam.spi.DocumentModelAccessProvider.class), @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.xml.xam.spi.ModelAccessProvider.class)})
 public class XDMAccessProvider implements DocumentModelAccessProvider {
     
     /** Creates a new instance of XDMAccessProvider */
@@ -69,7 +70,7 @@ public class XDMAccessProvider implements DocumentModelAccessProvider {
     }
     
     public Document loadSwingDocument(InputStream in) throws IOException, BadLocationException {
-        Document sd = new BaseDocument(XMLKit.class, false);
+        Document sd = new BaseDocument(true, "text/xml"); //NOI18N
         BufferedReader br = new BufferedReader(new InputStreamReader(in));
         try {
             String line = null;

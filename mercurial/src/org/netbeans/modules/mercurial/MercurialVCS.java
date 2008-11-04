@@ -45,6 +45,7 @@ import java.util.Set;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
 
+import org.netbeans.spi.queries.CollocationQueryImplementation;
 import org.netbeans.modules.versioning.spi.VCSAnnotator;
 import org.netbeans.modules.versioning.spi.VCSInterceptor;
 import org.netbeans.modules.versioning.spi.VersioningSystem;
@@ -54,6 +55,7 @@ import org.netbeans.modules.versioning.spi.VersioningSystem;
  * 
  * @author Maros Sandor
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.versioning.spi.VersioningSystem.class)
 public class MercurialVCS extends VersioningSystem implements PropertyChangeListener {
 
     public MercurialVCS() {
@@ -64,6 +66,27 @@ public class MercurialVCS extends VersioningSystem implements PropertyChangeList
         Mercurial.getInstance().getFileStatusCache().addPropertyChangeListener(this);
     }
 
+    @Override
+    public CollocationQueryImplementation getCollocationQueryImplementation() {
+        return collocationQueryImplementation;
+    }
+
+    private final CollocationQueryImplementation collocationQueryImplementation = new CollocationQueryImplementation() {
+        public boolean areCollocated(File a, File b) {
+            File fra = getTopmostManagedAncestor(a);
+            File frb = getTopmostManagedAncestor(b);
+
+            if (fra == null || !fra.equals(frb)) return false;
+
+            return true;
+        }
+
+        public File findRoot(File file) {
+            // TODO: we should probably return the closest common ancestor
+            return getTopmostManagedAncestor(file);
+        }
+    };
+            
     /**
      * Tests whether the file is managed by this versioning system. If it is, 
      * the method should return the topmost 

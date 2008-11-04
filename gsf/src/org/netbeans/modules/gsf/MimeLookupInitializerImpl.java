@@ -59,6 +59,7 @@ import org.openide.util.lookup.Lookups;
  * @author Jan Jancura
  * @author Tor Norbye
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.editor.mimelookup.MimeLookupInitializer.class)
 public class MimeLookupInitializerImpl implements MimeLookupInitializer {
 
     private static final int EDITOR_KIT_ID = 1;
@@ -129,12 +130,8 @@ public class MimeLookupInitializerImpl implements MimeLookupInitializer {
                     return null;
                 }
 
-                // TODO - finer granularity. What is really initialized here is layer stuff
-                // related to the language.
-                LanguageRegistry.getInstance().initializeLanguageForEditor(language);
-
                 Integer[] supportedOps = null;
-                if (((DefaultLanguage)language).hasFormatter()) {
+                if (language.hasFormatter()) {
                     supportedOps = new Integer[]{Integer.valueOf(EDITOR_KIT_ID), Integer.valueOf(INDENT_ID), Integer.valueOf(FORMAT_ID) };
                 } else {
                     supportedOps = new Integer[]{Integer.valueOf(EDITOR_KIT_ID), Integer.valueOf(INDENT_ID) };

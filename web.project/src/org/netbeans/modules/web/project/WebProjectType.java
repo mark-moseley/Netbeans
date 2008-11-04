@@ -49,6 +49,7 @@ import org.netbeans.spi.project.support.ant.AntBasedProjectType;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.openide.util.Lookup;
 
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.project.support.ant.AntBasedProjectType.class)
 public final class WebProjectType implements AntBasedProjectType {
 
     public static final String TYPE = "org.netbeans.modules.web.project";
@@ -87,7 +88,7 @@ public final class WebProjectType implements AntBasedProjectType {
         return shared ? PROJECT_CONFIGURATION_NAMESPACE : PRIVATE_CONFIGURATION_NAMESPACE;
     }
 
-    private Collection<WebProjectImplementationFactory> getProjectFactories() {
-        return Lookup.getDefault().lookup(new Lookup.Template(WebProjectImplementationFactory.class)).allInstances();
+    private Collection<? extends WebProjectImplementationFactory> getProjectFactories() {
+        return Lookup.getDefault().lookupAll(WebProjectImplementationFactory.class);
     }
 }

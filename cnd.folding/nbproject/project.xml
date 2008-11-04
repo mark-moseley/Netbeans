@@ -30,6 +30,11 @@
                         <specification-version>1.0</specification-version>
                     </run-dependency>
                 </dependency>
+                <dependency>
+                    <code-name-base>org.openide.util</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                </dependency>
             </module-dependencies>
             <test-dependencies>
                 <test-type>
@@ -39,6 +44,10 @@
                         <recursive/>
                         <compile-dependency/>
                         <test/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.cnd.editor</code-name-base>
+                        <compile-dependency/>
                     </test-dependency>
                     <test-dependency>
                         <code-name-base>org.netbeans.modules.editor.mimelookup</code-name-base>

@@ -34,18 +34,18 @@ import org.netbeans.modules.bpel.model.api.events.ArrayUpdateEvent;
 import org.netbeans.modules.bpel.model.api.events.ChangeEvent;
 import org.netbeans.modules.bpel.model.api.events.EntityInsertEvent;
 import org.netbeans.modules.bpel.model.api.events.EntityUpdateEvent;
-import org.netbeans.modules.bpel.model.api.support.ExNamespaceContext;
-import org.netbeans.modules.bpel.model.api.support.InvalidNamespaceException;
+import org.netbeans.modules.xml.xpath.ext.schema.ExNamespaceContext;
+import org.netbeans.modules.xml.xpath.ext.schema.InvalidNamespaceException;
 import org.netbeans.modules.bpel.model.impl.services.InnerEventDispatcherAdapter;
 import org.netbeans.modules.bpel.model.impl.services.MarkBuilderElement;
 import org.netbeans.modules.xml.xam.Referenceable;
 import org.netbeans.modules.xml.xam.dom.Attribute;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentComponent.PrefixAttribute;
+import org.netbeans.modules.bpel.model.api.support.Utils;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
-
 
 /**
  * @author ads
@@ -71,6 +71,7 @@ import org.w3c.dom.Node;
  * into tree. Only elements with this flag needs to be handled by this
  * service. Because otherwise there will be double work for "copied" element. 
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.bpel.model.xam.spi.InnerEventDispatcher.class)
 public class NamespaceOptimizer extends InnerEventDispatcherAdapter {
     
     static final String XMLNS = "xmlns";        // NOI18N
@@ -493,7 +494,6 @@ public class NamespaceOptimizer extends InnerEventDispatcherAdapter {
         }
         
         private String myKey;
-        
         private String myValue;
     }
 }

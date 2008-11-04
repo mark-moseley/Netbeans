@@ -31,9 +31,8 @@ import org.netbeans.modules.bpel.model.api.events.ChangeEvent;
 import org.netbeans.modules.bpel.model.api.events.PropertyUpdateEvent;
 import org.netbeans.modules.bpel.model.api.events.VetoException;
 import org.netbeans.modules.bpel.model.api.references.BpelReferenceable;
-import org.netbeans.modules.bpel.model.impl.services.ExpressionUpdater;
+import org.netbeans.modules.bpel.model.api.support.ExpressionUpdater;
 import org.netbeans.modules.bpel.model.impl.services.InnerEventDispatcherAdapter;
-
 
 /**
  * This service is responsible for updating references
@@ -46,6 +45,7 @@ import org.netbeans.modules.bpel.model.impl.services.InnerEventDispatcherAdapter
  * @author ads
  *
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.bpel.model.xam.spi.InnerEventDispatcher.class)
 public class ExpressionConsistencyService extends InnerEventDispatcherAdapter {
 
     /* (non-Javadoc)
@@ -160,5 +160,4 @@ public class ExpressionConsistencyService extends InnerEventDispatcherAdapter {
             return new WeakHashMap<ChangeEvent,Map<ContentElement,String>>();
         }
     };
-    
 }
