@@ -1,0 +1,3 @@
+org.netbeans.modules.parsing.impl.CurrentDocumentScheduller
+org.netbeans.modules.parsing.impl.CursorSensitiveScheduller
+org.netbeans.modules.parsing.impl.SelectedNodesScheduller
