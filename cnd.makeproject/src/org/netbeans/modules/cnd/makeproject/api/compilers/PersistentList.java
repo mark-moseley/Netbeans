@@ -52,39 +52,45 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
 
-public class PersistentList extends Vector implements Serializable{
+public class PersistentList<E> extends Vector<E> implements Serializable{
     private static final long serialVersionUID = -8893123456464434693L;
+    
+    private final transient Object lock;
     
     /** Creates a new instance of PersistentList */
     public PersistentList() {
+        lock = new Object();
     }
     
-    public PersistentList(List values) {
+    public PersistentList(List<E> values) {
         super(values);
+        lock = new Object();
     }
     
     private static String getRoot() {
-        String dir = System.getProperty("netbeans.user") + "/config/cndcodemodel/"; // NOI18N
+        String dir = System.getProperty("netbeans.user") + "/config/cnd-compilers/"; // NOI18N
         return dir;
     }
     
     /*
      * Add a string only if not already in list
      */
-    public void addUnique(String string) {
-        if (!inList(string)) {
-            super.add(string);
+    public void addUnique(E string) {
+        synchronized(lock) {
+            if (!inList(string)) {
+                super.add(string);
+            }
         }
         
     }
     
-    protected boolean inList(String path) {
+    private boolean inList(E path) {
         if (path == null) {
             return false;
         }
-        Iterator iterator = iterator();
+        Iterator<E> iterator = iterator();
         while (iterator.hasNext()) {
-            if (path.equals((String)iterator.next())) {
+            if (path.equals(iterator.next())) {
                 return true;
             }
         }
@@ -94,7 +100,7 @@ public class PersistentList extends Vector implements Serializable{
     /**
      * For serialization
      */
-    public void saveList(ObjectOutputStream out) {
+    private void saveList(ObjectOutputStream out) {
 	try {
 	    out.writeObject(this);
 	}
@@ -104,55 +110,56 @@ public class PersistentList extends Vector implements Serializable{
     }
 
     public void saveList(String name) {
-	File dirfile = new File(getRoot());
-	if (!dirfile.exists()) {
-	    dirfile.mkdirs();
-	}
+        synchronized (lock) {
+            File dirfile = new File(getRoot());
+            if (!dirfile.exists()) {
+                dirfile.mkdirs();
+            }
 
-	try {
-	    ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(getRoot() + name));
-	    saveList(oos);
-	    oos.flush();
-	    oos.close();
-	}
-	catch (Exception e) {
-	    System.out.println("e " + e); // NOI18N
-	}
+            try {
+                ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(getRoot() + name));
+                saveList(oos);
+                oos.flush();
+                oos.close();
+            }
+            catch (Exception e) {
+                System.out.println("e " + e); // NOI18N
+            }
+        }
     }
 
     /**
      * For serialization
      */
-    public static PersistentList restoreList(ObjectInputStream in) throws Exception {
-        PersistentList list = null;
-	try {
-	    list = (PersistentList)in.readObject();
-	}
-	catch (Exception e) {
-	    System.err.println("PersistentList - restorePicklist - e " + e); // NOI18N
-	    throw e;
-	}
-        return list;
+    @SuppressWarnings("unchecked")
+    private static PersistentList<String> restoreList(ObjectInputStream in) throws Exception {
+        PersistentList<String> list = null;
+    	try {
+            list = (PersistentList<String>)in.readObject();
+        } catch (Exception e) {
+            System.err.println("PersistentList - restorePicklist - e " + e); // NOI18N
+            throw e;
+        }
+        return new PersistentList<String>(list);
     }
 
-    public static PersistentList restoreList(String name) {
-        PersistentList ret = null;
-	File file = new File(getRoot() + File.separator + name);
-	if (!file.exists()) {
-	    ; // nothing
-	}
-	else {
-	    try {
-		ObjectInputStream ois = new ObjectInputStream(new FileInputStream(getRoot() + name));
-		ret = restoreList(ois);
-		ois.close();
-	    }
-	    catch (Exception e) {
-		System.err.println("PersistentList - restoreList - e" + e); // NOI18N
-		System.err.println(getRoot() + name + " deleted"); // NOI18N
-		file.delete();
-	    }
-	}
+    public static PersistentList<String> restoreList(String name) {
+        PersistentList<String> ret = null;
+        File file = new File(getRoot() + File.separator + name);
+        if (!file.exists()) {
+            // nothing
+        } else {
+            try {
+                ObjectInputStream ois = new ObjectInputStream(new FileInputStream(getRoot() + name));
+                ret = restoreList(ois);
+                ois.close();
+            }
+            catch (Exception e) {
+                System.err.println("PersistentList - restoreList - e" + e); // NOI18N
+                System.err.println(getRoot() + name + " deleted"); // NOI18N
+                file.delete();
+            }
+        }
         return ret;
     }
     
