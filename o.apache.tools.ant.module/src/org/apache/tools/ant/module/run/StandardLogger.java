@@ -66,6 +66,7 @@ import org.openide.windows.OutputListener;
  * Standard logger for producing Ant output messages.
  * @author Jesse Glick
  */
+@org.openide.util.lookup.ServiceProvider(service=org.apache.tools.ant.module.spi.AntLogger.class, position=100)
 public final class StandardLogger extends AntLogger {
     
     private static final Logger ERR = Logger.getLogger(StandardLogger.class.getName());
@@ -107,8 +108,7 @@ public final class StandardLogger extends AntLogger {
      * <li>message
      * </ol>
      */
-    // should be consistent with o.apache.tools.ant.module.ForkedJavaOverride.HYPERLINK
-    private static final Pattern HYPERLINK = Pattern.compile("\"?(.+?)\"?(?::|, line )(?:(\\d+):(?:(\\d+):(?:(\\d+):(\\d+):)?)?)? +(.+)"); // NOI18N
+    public static final Pattern HYPERLINK = Pattern.compile("\"?(.+?)\"?(?::|, line )(?:(\\d+):(?:(\\d+):(?:(\\d+):(\\d+):)?)?)? +(.+)"); // NOI18N
     
     /**
      * Data stored in the session.
@@ -371,12 +371,12 @@ public final class StandardLogger extends AntLogger {
                 }
             }
         }
-        AtomicBoolean isHypelink = new AtomicBoolean();
-        OutputListener hyperlink = findHyperlink(session, line, isHypelink);
+        AtomicBoolean isHyperlink = new AtomicBoolean();
+        OutputListener hyperlink = findHyperlink(session, line, isHyperlink);
         if (hyperlink instanceof Hyperlink) {
             getSessionData(session).lastHyperlink = (Hyperlink) hyperlink;
         }
-        if (!isHypelink.get() && "java".equals(event.getTaskName()) &&
+        if (!isHyperlink.get() && "java".equals(event.getTaskName()) &&
                 (event.getLogLevel() == AntEvent.LOG_WARN || event.getLogLevel() == AntEvent.LOG_INFO)) {
             // stdout and stderr (except hyperlinks) is printed directly for java
             return;
