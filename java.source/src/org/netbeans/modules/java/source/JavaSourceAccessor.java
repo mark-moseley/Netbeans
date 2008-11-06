@@ -146,21 +146,7 @@ public abstract class JavaSourceAccessor {
             Utilities.revalidate(sources.iterator().next());
         }
     }
-    
-    /**
-     * Expert: Locks java compiler. Private API for indentation engine only!
-     */
-    public void lockJavaCompiler () {
-        Utilities.acquireParserLock();
-    }
-    
-    /**
-     * Expert: Unlocks java compiler. Private API for indentation engine only!
-     */
-    public void unlockJavaCompiler () {
-        Utilities.releaseParserLock();
-    }
-    
+        
     public boolean isJavaCompilerLocked () {
         return Utilities.holdsParserLock();
     }
@@ -214,7 +200,7 @@ public abstract class JavaSourceAccessor {
     /**
      * Expert: Private API for indentation engine only!
      */
-    public abstract CompilationController createCompilationController (JavaSource js) throws IOException, ParseException;
+    public abstract CompilationController createCompilationController (Source s) throws IOException, ParseException;
     
     
     public abstract long createTaggedCompilationController (JavaSource js, long currentTag, Object[] out) throws IOException;
