@@ -326,7 +326,7 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(insertSQLButton)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                        .add(jScrollPane1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 168, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 168, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                             .add(sqlLimitTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
@@ -359,20 +359,21 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
 
 
     private void insertSQL() {
-        int rowSelected = sqlHistoryTable.getSelectedRow();
         try {
             // Make sure to insert the entire SQL, not just what appears in the Table
             List<SQLHistory> sqlHistoryList = view.getCurrentSQLHistoryList();
             int i = 0;
             String sqlToInsert = ""; // NOI18N
+            InsertSQLUtility insertUtility = new InsertSQLUtility();
             for (SQLHistory sqlHistory : sqlHistoryList) {
-                if (rowSelected == i) {
+                if (sqlHistoryTable.isRowSelected(i)) {
                     sqlToInsert = sqlHistory.getSql().trim();
+                    insertUtility.insert(sqlToInsert, editorPane);
                 }
                 // increment for the next row
                 i++;
             }
-            new InsertSQLUtility().insert(sqlToInsert, editorPane);
+            
         } catch (BadLocationException ex) {
             Exceptions.printStackTrace(ex);
         }
@@ -422,12 +423,13 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
                 }
             } else {
                 inputWarningLabel.setText(""); // NOI18N
-                SQLHistoryPersistenceManager.getInstance().updateSQLSaved(iLimit, historyRoot);
-                List<SQLHistory> sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, historyRoot);
-                view.setCurrentSQLHistoryList(sqlHistoryList);
-                ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(null, sqlHistoryList);
-                view.updateConnectionUrl();
-                NbPreferences.forModule(SQLHistoryPanel.class).put("SQL_STATEMENTS_SAVED_FOR_HISTORY", Integer.toString(iLimit));  // NOI18N               
+                if (SQLHistoryPersistenceManager.getInstance().updateSQLSaved(iLimit, historyRoot).size() > 0) {
+                    List<SQLHistory> sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, historyRoot);
+                    view.setCurrentSQLHistoryList(sqlHistoryList);
+                    ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(null, sqlHistoryList);
+                    view.updateConnectionUrl();
+                    NbPreferences.forModule(SQLHistoryPanel.class).put("SQL_STATEMENTS_SAVED_FOR_HISTORY", Integer.toString(iLimit));  // NOI18N
+                }
             }
         } catch (ClassNotFoundException ex) {
             Exceptions.printStackTrace(ex);
@@ -815,7 +817,7 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
         }
 
         public void insertUpdate(DocumentEvent evt) {
-            List<String> currentSQLList = view.getSQLList(sortData());
+            List<String> currentSQLList = view.getSQLList(view.getCurrentSQLHistoryList());
 
             // Read the contents
             try {
@@ -856,7 +858,7 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
         }
 
         public void removeUpdate(DocumentEvent evt) {
-            List<String> currentSQLList = view.getSQLList(sortData());
+            List<String> currentSQLList = view.getSQLList(view.getCurrentSQLHistoryList());
 
              // Read the contents
             try {
@@ -912,9 +914,6 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
 
         public List<SQLHistory> sortData() {
             // Refresh the table
-//            sqlHistoryTable.revalidate();
-            List<SQLHistory> sqlHistoryList = view.getSQLHistoryList();
-//            searchTextField.setText(""); // NOI18N
             List<SQLHistory> filteredSQLHistoryList = view.filterSQLHistoryList();
             SQLComparator sqlComparator = new SQLComparator(sortCol, sortAsc);
             Collections.sort(filteredSQLHistoryList, sqlComparator);
