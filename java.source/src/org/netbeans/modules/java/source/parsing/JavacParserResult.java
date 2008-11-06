@@ -37,52 +37,44 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl;
+package org.netbeans.modules.java.source.parsing;
 
-import java.util.Collections;
-import javax.swing.event.CaretEvent;
-import javax.swing.event.CaretListener;
-import javax.swing.text.Document;
-import javax.swing.text.JTextComponent;
-
-import org.netbeans.modules.parsing.api.Source;
-import org.netbeans.modules.parsing.spi.CursorMovedSchedulerEvent;
-
+import org.netbeans.api.java.source.CompilationInfo;
+import org.netbeans.modules.java.source.JavaSourceAccessor;
+import org.netbeans.modules.parsing.spi.Parser;
 
 /**
  *
- * @author Jan Jancura
+ * @author Tomas Zezula
  */
-public class CursorSensitiveScheduller extends CurrentEditorTaskScheduller {
+public class JavacParserResult extends Parser.Result {
     
-    private JTextComponent  currentEditor;
-    private CaretListener   caretListener;
-    private Document        currentDocument;
-    
-    protected void setEditor (JTextComponent editor) {
-        if (currentEditor != null)
-            currentEditor.removeCaretListener (caretListener);
-        currentEditor = editor;
-        if (editor != null) {
-            if (caretListener == null)
-                caretListener = new ACaretListener ();
-            editor.addCaretListener (caretListener);
-        }
+    private final CompilationInfo info;
+
+    public JavacParserResult (final CompilationInfo info) {
+        super (
+            JavaSourceAccessor.getINSTANCE ().getCompilationInfoImpl (info).getSnapshot (),
+            JavaSourceAccessor.getINSTANCE ().getCompilationInfoImpl (info).getEvent ()
+        );
+        assert info != null;
+        this.info = info;
+    }
         
-        Document document = editor.getDocument ();
-        if (currentDocument == document) return;
-        currentDocument = document;
-        Source source = Source.create (currentDocument);
-        schedule (Collections.singleton (source), new CursorMovedSchedulerEvent (this, editor.getCaret ().getDot ()) {});
+    private boolean supports (Class<? extends CompilationInfo> clazz) {
+        assert clazz != null;
+        return clazz.isInstance(info);
     }
     
-    private class ACaretListener implements CaretListener {
-
-        public void caretUpdate (CaretEvent e) {
-            schedule (new CursorMovedSchedulerEvent (this, e.getDot ()) {});
+    public <T extends CompilationInfo> T get (final Class<T> clazz) {
+        if (supports(clazz)) {
+            return clazz.cast(info);
         }
+        return null;
     }
+
+    @Override
+    public void invalidate() {
+        JavaSourceAccessor.getINSTANCE().invalidate (info);
+    }
+
 }
-
-
-

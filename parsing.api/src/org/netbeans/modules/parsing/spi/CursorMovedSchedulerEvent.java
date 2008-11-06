@@ -37,50 +37,27 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl;
-
-import java.util.Collections;
-import javax.swing.event.CaretEvent;
-import javax.swing.event.CaretListener;
-import javax.swing.text.Document;
-import javax.swing.text.JTextComponent;
-
-import org.netbeans.modules.parsing.api.Source;
-import org.netbeans.modules.parsing.spi.CursorMovedSchedulerEvent;
+package org.netbeans.modules.parsing.spi;
 
 
 /**
  *
- * @author Jan Jancura
+ * @author hanz
  */
-public class CursorSensitiveScheduller extends CurrentEditorTaskScheduller {
-    
-    private JTextComponent  currentEditor;
-    private CaretListener   caretListener;
-    private Document        currentDocument;
-    
-    protected void setEditor (JTextComponent editor) {
-        if (currentEditor != null)
-            currentEditor.removeCaretListener (caretListener);
-        currentEditor = editor;
-        if (editor != null) {
-            if (caretListener == null)
-                caretListener = new ACaretListener ();
-            editor.addCaretListener (caretListener);
-        }
-        
-        Document document = editor.getDocument ();
-        if (currentDocument == document) return;
-        currentDocument = document;
-        Source source = Source.create (currentDocument);
-        schedule (Collections.singleton (source), new CursorMovedSchedulerEvent (this, editor.getCaret ().getDot ()) {});
-    }
-    
-    private class ACaretListener implements CaretListener {
+public class CursorMovedSchedulerEvent extends SchedulerEvent {
 
-        public void caretUpdate (CaretEvent e) {
-            schedule (new CursorMovedSchedulerEvent (this, e.getDot ()) {});
-        }
+    private int             caretOffset;
+
+    protected CursorMovedSchedulerEvent (
+        Object              source,
+        int                 _caretOffset
+    ) {
+        super (source);
+        caretOffset = _caretOffset;
+    }
+
+    public int getCaretOffset () {
+        return caretOffset;
     }
 }
 
