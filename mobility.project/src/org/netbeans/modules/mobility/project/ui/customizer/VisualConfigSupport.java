@@ -198,12 +198,16 @@ public final class VisualConfigSupport {
         final ConfigurationsSelectionPanelGUI ncp = new ConfigurationsSelectionPanelGUI(allNames);
         final ErrorPanel ep = new ErrorPanel();
         final JPanel p = new JPanel(new BorderLayout());
+        p.getAccessibleContext().setAccessibleName(
+                ncp.getAccessibleContext().getAccessibleName());
+        p.getAccessibleContext().setAccessibleDescription(
+                ncp.getAccessibleContext().getAccessibleDescription());
         p.add(ncp, BorderLayout.CENTER);
         p.add(ep, BorderLayout.SOUTH);
         final DialogDescriptor dd = new DialogDescriptor(p, NbBundle.getMessage(VisualConfigSupport.class, "LBL_VCS_AddConfiguration"), true, NotifyDescriptor.OK_CANCEL_OPTION, NotifyDescriptor.OK_OPTION, null); //NOI18N
         ncp.addChangeListener(new ChangeListener() {
             public void stateChanged(ChangeEvent arg0) {
-                boolean valid = ncp.isValid();
+                boolean valid = ncp.valid();
                 dd.setValid(valid);
                 ep.setErrorMessage(valid ? null : NbBundle.getMessage(ConfigurationsSelectionPanel.class, "ERR_CfgSelPanel_NameCollision"));//NOI18N
             }

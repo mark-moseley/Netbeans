@@ -104,8 +104,8 @@ public class ConfigurationsSelectionPanel implements WizardDescriptor.Finishable
     
     public boolean isValid() {
         getComponent();
-        boolean valid = gui.isValid();
-        if (wiz != null) wiz.putProperty("WizardPanel_errorMessage", valid ? null : NbBundle.getMessage(ConfigurationsSelectionPanel.class, "ERR_CfgSelPanel_NameCollision")); // NOI18N
+        boolean valid = gui.valid();
+        if (wiz != null) wiz.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, valid ? null : NbBundle.getMessage(ConfigurationsSelectionPanel.class, "ERR_CfgSelPanel_NameCollision")); // NOI18N
         return valid;
     }
 }

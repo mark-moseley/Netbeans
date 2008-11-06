@@ -48,6 +48,7 @@ import javax.swing.ImageIcon;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.libraries.Library;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 
 /** Represents classpath items of various types. Can be used in the model
@@ -81,30 +82,48 @@ public final class VisualClassPathItem {
     private static Icon ICON_BROKEN_ARTIFACT;
     private static Icon ICON_BROKEN_CLASSPATH;
     private static Icon ICON_BROKEN_FOLDER;
+
+    private static Image IMAGE_JAR;
+    private static Image IMAGE_LIBRARY;
+    private static Image IMAGE_ARTIFACT;
+    private static Image IMAGE_CLASSPATH;
+    private static Image IMAGE_FOLDER;
+    private static Image IMAGE_BROKEN_JAR;
+    private static Image IMAGE_BROKEN_LIBRARY;
+    private static Image IMAGE_BROKEN_ARTIFACT;
+    private static Image IMAGE_BROKEN_CLASSPATH;
+    private static Image IMAGE_BROKEN_FOLDER;
+
     
     static {
-        Image i;
-        Image broken = Utilities.loadImage(RESOURCE_ICON_BROKEN);
+        //XXX no need to hold these bitmaps forever, should be
+        //created dynamically - Tim
+        Image broken = ImageUtilities.loadImage(RESOURCE_ICON_BROKEN);
         
-        i = Utilities.loadImage(RESOURCE_ICON_JAR);
-        ICON_JAR = new ImageIcon(i);
-        ICON_BROKEN_JAR = new ImageIcon(Utilities.mergeImages(i, broken, 8, 0));
+        IMAGE_JAR = ImageUtilities.loadImage(RESOURCE_ICON_JAR);
+        ICON_JAR = new ImageIcon(IMAGE_JAR);
+        IMAGE_BROKEN_JAR = ImageUtilities.mergeImages(IMAGE_JAR, broken, 8, 0);
+        ICON_BROKEN_JAR = new ImageIcon(IMAGE_BROKEN_JAR);
+
+        IMAGE_LIBRARY = ImageUtilities.loadImage(RESOURCE_ICON_LIBRARY);
+        ICON_LIBRARY = new ImageIcon(IMAGE_LIBRARY);
+        IMAGE_BROKEN_LIBRARY = ImageUtilities.mergeImages(IMAGE_LIBRARY, broken, 8, 0);
+        ICON_BROKEN_LIBRARY = new ImageIcon(IMAGE_BROKEN_LIBRARY);
         
-        i = Utilities.loadImage(RESOURCE_ICON_LIBRARY);
-        ICON_LIBRARY = new ImageIcon(i);
-        ICON_BROKEN_LIBRARY = new ImageIcon(Utilities.mergeImages(i, broken, 8, 0));
+        IMAGE_ARTIFACT = ImageUtilities.loadImage(RESOURCE_ICON_ARTIFACT);
+        ICON_ARTIFACT = new ImageIcon(IMAGE_ARTIFACT);
+        IMAGE_BROKEN_ARTIFACT = ImageUtilities.mergeImages(IMAGE_ARTIFACT, broken, 8, 0);
+        ICON_BROKEN_ARTIFACT = new ImageIcon(IMAGE_BROKEN_ARTIFACT);
         
-        i = Utilities.loadImage(RESOURCE_ICON_ARTIFACT);
-        ICON_ARTIFACT = new ImageIcon(i);
-        ICON_BROKEN_ARTIFACT = new ImageIcon(Utilities.mergeImages(i, broken, 8, 0));
+        IMAGE_CLASSPATH = ImageUtilities.loadImage(RESOURCE_ICON_CLASSPATH);
+        ICON_CLASSPATH = new ImageIcon(IMAGE_CLASSPATH);
+        IMAGE_BROKEN_CLASSPATH = ImageUtilities.mergeImages(IMAGE_CLASSPATH, broken, 8, 0);
+        ICON_BROKEN_CLASSPATH = new ImageIcon(IMAGE_BROKEN_CLASSPATH);
         
-        i = Utilities.loadImage(RESOURCE_ICON_CLASSPATH);
-        ICON_CLASSPATH = new ImageIcon(i);
-        ICON_BROKEN_CLASSPATH = new ImageIcon(Utilities.mergeImages(i, broken, 8, 0));
-        
-        i = Utilities.loadImage(RESOURCE_ICON_FOLDER);
-        ICON_FOLDER = new ImageIcon(i);
-        ICON_BROKEN_FOLDER = new ImageIcon(Utilities.mergeImages(i, broken, 8, 0));
+        IMAGE_FOLDER = ImageUtilities.loadImage(RESOURCE_ICON_FOLDER);
+        ICON_FOLDER = new ImageIcon(IMAGE_FOLDER);
+        IMAGE_BROKEN_FOLDER = ImageUtilities.mergeImages(IMAGE_FOLDER, broken, 8, 0);
+        ICON_BROKEN_FOLDER = new ImageIcon(IMAGE_BROKEN_FOLDER);
     }
     
     private int type;
@@ -177,7 +196,7 @@ public final class VisualClassPathItem {
         return cpElement;
     }
     
-    public URI getURI() {
+     public URI getURI() {
         return uri;
     }
     
@@ -215,11 +234,32 @@ public final class VisualClassPathItem {
         }
         
     }
+
+    public Image getImage() {
+
+        switch( getType() ) {
+            case TYPE_JAR:
+                return getElement() != null ? IMAGE_JAR : IMAGE_BROKEN_JAR;
+            case TYPE_FOLDER:
+                return getElement() != null ? IMAGE_FOLDER : IMAGE_BROKEN_FOLDER;
+            case TYPE_LIBRARY:
+                return getElement() != null ? IMAGE_LIBRARY : IMAGE_BROKEN_LIBRARY;
+            case TYPE_ARTIFACT:
+                return getElement() != null ? IMAGE_ARTIFACT : IMAGE_BROKEN_ARTIFACT;
+            case TYPE_CLASSPATH:
+                return getElement() != null ? IMAGE_CLASSPATH : IMAGE_BROKEN_CLASSPATH;
+            default:
+                return null;
+        }
+
+    }
     
+    @Override
     public String toString() {
         return getDisplayName();
     }
     
+    @Override
     public int hashCode() {
         
         int hash = getType();
@@ -247,6 +287,7 @@ public final class VisualClassPathItem {
         return hash;
     }
     
+    @Override
     public boolean equals( final Object object ) {
         //fix for 98455 - obvious case is missing
         if (this == object)

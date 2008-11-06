@@ -41,6 +41,7 @@
 
 package org.openide.nodes;
 
+import java.awt.Panel;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -493,12 +494,7 @@ public abstract class Children extends Object {
      * @since 7.7
      */
     public final List<Node> snapshot() {
-        try {
-            PR.enterReadAccess();
-            return entrySupport().createSnapshot();
-        } finally {
-            PR.exitReadAccess();
-        }
+        return entrySupport().snapshot();
     }
 
     static final int[] getSnapshotIdxs(List<Node> snapshot) {
@@ -1322,7 +1318,7 @@ public abstract class Children extends Object {
 
                 boolean init = entrySupport().isInitialized();
                 if (init && parent != null) {
-                    List<Node> snapshot = entrySupport.createSnapshot();
+                    List<Node> snapshot = entrySupport.snapshot();
                     if (snapshot.size() > 0) {
                         int[] idxs = getSnapshotIdxs(snapshot);
                         parent.fireSubNodesChangeIdx(false, idxs, null, Collections.<Node>emptyList(), snapshot);
@@ -1797,7 +1793,7 @@ public abstract class Children extends Object {
                 if (mutex != null && (mutex.isReadAccess() || mutex.isWriteAccess())) {
                     throw new IllegalStateException("Should not acquire Children.MUTEX while holding ProjectManager.mutex()");
                 }
-            }
+                }
             command.run();
         }
 
