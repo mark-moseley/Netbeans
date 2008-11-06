@@ -11,11 +11,6 @@
  * Microsystems, Inc. All Rights Reserved.
  */ 
 
-/*
- * SVGTextField.java
- * 
- * Created on Oct 2, 2007, 4:27:06 PM
- */
 package org.netbeans.microedition.svg;
 
 import org.netbeans.microedition.svg.input.InputHandler;
@@ -30,23 +25,28 @@ import org.w3c.dom.svg.SVGRect;
  * &lt;g id="textfield_name" transform="translate(20,40)">
  *       &lt;!-- Metadata information. Please don't edit. -->
  *   &lt;text display="none">type=textfield&lt;/text>
- *       &lt;text display="none">readOnly="false" enabled="true"&lt;/text>
+ *       &lt;text display="none">editable=true&lt;/text>
+ *       &lt;text display="none">enabled=true&lt;/text>
  *
  *       &lt;rect x="0" y="0" rx="5" ry="5" width="200" height="30" fill="none" stroke="black" stroke-width="2">
  *           &lt;animate attributeName="stroke" attributeType="XML" begin="textfield_name.focusin" dur="0.25s" fill="freeze" to="rgb(255,165,0)"/>
  *           &lt;animate attributeName="stroke" attributeType="XML" begin="textfield_name.focusout" dur="0.25s" fill="freeze" to="black"/>
  *       &lt;/rect>
- *       &lt;text  x="10" y="23" stroke="black" font-size="20" font-family="SunSansSemiBold">John Hilsworths
- *       &lt;!-- Metadata information. Please don't edit. -->
- *       &lt;text display="none">type=text&lt;/text>
- *       &lt;/text>
+ *       &lt;g>
+ *             &lt;text  id="textfield_name_text" x="10" y="23" stroke="black" font-size="20" 
+ *                 font-family="SunSansSemiBold">textField&lt;/text>
+ *             &lt;!-- Metadata information. Please don't edit. -->
+ *             &lt;text display="none">type=text&lt;/text>
+ *       &lt;/g>
+ *                 
  *   &lt;g>
  *           &lt;!-- Metadata information. Please don't edit. -->
  *           &lt;text display="none">type=caret&lt;/text>
  *
- *           &lt;rect visibility="visible" x="20" y="4" width="3" height="22" fill="black" stroke="black"/>
+ *           &lt;rect id="textfield_name_caret" visibility="visible" x="20" y="4" 
+ *              width="3" height="22" fill="black" stroke="black"/>
  *       &lt;/g>
- *   &lt;/g
+ *   &lt;/g>
  * </pre>
  * @author Pavel Benes
  * @author ads
@@ -58,21 +58,23 @@ public class SVGTextField extends SVGComponent {
     private static final String CARETELEM           = "caret";            // NOI18N
     protected static final String TRAIT_FONT_SIZE   = "font-size";        // NOI18N
     
-    private static final String EDITABLE           = "editable";         // NOI18N  
+    private static final String CARET_SUFFIX        = DASH+CARETELEM;     // NOI18N
+    private static final String TEXT_SUFFIX         = DASH + TEXT;        // NOI18N  
+    
+    private static final String EDITABLE            = "editable";         // NOI18N  
     
     public SVGTextField( SVGForm form, SVGLocatableElement element ) {
         super(form, element );
-        myTextElement  = (SVGLocatableElement) getElementByMeta(getElement(), 
-                TYPE , TEXT );
-        myCaretElement = (SVGLocatableElement) getNestedElementByMeta(getElement(), 
-                TYPE , CARETELEM );
+        
+        initNestedElements();
+        verify();
 
-        SVGRect outlineBox = wrapperElement.getBBox();
+        SVGRect outlineBox = getElement().getBBox();
         SVGRect textBox    = myTextElement.getBBox();
         
         if (textBox != null) {
-            System.out.println("Text width: " + textBox.getWidth());
-            elemWidth = (int) (outlineBox.getWidth() + 0.5f - (textBox.getX() - outlineBox.getX()) * 2);
+            elemWidth = (int) (outlineBox.getWidth() + 0.5f - 
+                    (textBox.getX() - outlineBox.getX()) * 2);
         } else {
             elemWidth = 0;
         }
@@ -116,9 +118,13 @@ public class SVGTextField extends SVGComponent {
     }
     
     public void setText(String text) {
+        if (text == null) {
+            text = "";
+        }
         if ( !text.equals(myTextValue)) {
             myTextValue = text;
             setTextImpl();
+            fireActionPerformed();
         }    
     }
 
@@ -192,6 +198,44 @@ public class SVGTextField extends SVGComponent {
         }
     }
     
+
+    private void initNestedElements() {
+        
+        if ( getElement().getId() != null ) {
+            myTextElement = (SVGLocatableElement) getElementById( getElement(), 
+                getElement().getId()+ TEXT_SUFFIX );
+            myCaretElement = (SVGLocatableElement) getElementById(getElement(),
+                    getElement().getId()+ CARET_SUFFIX );
+        }
+        
+        if ( myTextElement == null ){ 
+            myTextElement  = (SVGLocatableElement) getNestedElementByMeta(
+                    getElement(), TYPE , TEXT );
+        }
+        
+        if ( myCaretElement == null ){
+            myCaretElement = (SVGLocatableElement) getNestedElementByMeta(
+                    getElement(), 
+                TYPE , CARETELEM );
+        }
+        initEmpiricalLetterWidth( myTextElement );
+    }
+    
+    private void verify() {
+        /*
+         *  Should we check meta information f.e. type of component here
+         *  for preventing creation based on incorrect element ? 
+         */
+        // TODO : check type of element.
+        
+        if ( myTextElement == null ){
+            throw new IllegalArgumentException("Element with id=" +
+                    getElement().getId()+" couldn't be used for Text Field." +
+                            " It doesn't have nested 'text' element. " +
+                            "See javadoc for SVG snippet format");
+        }        
+    }
+    
     private void showCaret(final boolean showCaret) {
         if ( myCaretElement != null) {
             setTraitSafely( myCaretElement , TRAIT_VISIBILITY, 
@@ -218,6 +262,11 @@ public class SVGTextField extends SVGComponent {
             }
         }
         );
+        
+        if ( myLetterWidth == 0 ){
+            setTraitSafely( myHiddenTextElement , TRAIT_TEXT, TEXT);
+            initEmpiricalLetterWidth( myHiddenTextElement);
+        }
     }
     
 
@@ -253,7 +302,7 @@ public class SVGTextField extends SVGComponent {
             if ( bBox != null) {
                 width = bBox.getWidth();
             } else {
-                System.out.println("Error: Null BBox #1");
+                //System.out.println("Error: Null BBox #1");
             }
         }
         return width;
@@ -265,12 +314,36 @@ public class SVGTextField extends SVGComponent {
             text = text.substring(myStartOffset);
         }
 
-        while ( getTextWidth(text) > elemWidth) {
-            text = text.substring(0, text.length() - 1);
-        }
+        text = truncateToShownText(text);
         
         setTextTrait(text);
         myEndOffset = myStartOffset + text.length();
+    }
+
+    private String truncateToShownText( String text ) {
+        int count = (int)(elemWidth/myLetterWidth);
+        String result = text;
+        result = text.substring( 0 , Math.min( text.length(), count + 1));
+
+        float width = getTextWidth(result);
+        boolean isShort = true;
+        while ( width > elemWidth) {
+            result = result.substring(0, result.length() - 1);
+            width = getTextWidth(result);
+            isShort = false;
+        }
+        
+        String tmpText = result;
+        while ( isShort && width <= elemWidth && count <= text.length() ){
+            result = tmpText;
+            tmpText = text.substring( 0, count );
+            count ++;
+            width = getTextWidth(tmpText);
+        }
+        if ( count == text.length() ){
+            result = tmpText;
+        }
+        return result;
     }
 
     private String getTextTrait() {
@@ -281,8 +354,18 @@ public class SVGTextField extends SVGComponent {
         setTraitSafely( myTextElement, TRAIT_TEXT , text);
     }
     
-    private final SVGLocatableElement myTextElement;
-    private final SVGLocatableElement myCaretElement;
+    private void initEmpiricalLetterWidth( SVGLocatableElement element ) {
+        if ( myLetterWidth != 0 ){
+            return;
+        }
+        String text = element.getTrait( TRAIT_TEXT );
+        if ( text != null && text.length() != 0 && element.getBBox() != null){
+            myLetterWidth = element.getBBox().getWidth()/text.length();
+        }
+    }
+    
+    private SVGLocatableElement myTextElement;
+    private SVGLocatableElement myCaretElement;
     private final int                 elemWidth;
     private SVGLocatableElement myHiddenTextElement;
     
@@ -292,6 +375,7 @@ public class SVGTextField extends SVGComponent {
     private       int                 myCaretPos = -1;
     private       float               caretWidth = 0;
     private       String              myTitle;
+    private       float               myLetterWidth;
     
     private boolean isReadOnly;
     
