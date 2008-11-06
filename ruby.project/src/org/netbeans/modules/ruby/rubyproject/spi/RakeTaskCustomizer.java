@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,74 +31,37 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+ *
  * Contributor(s):
- * 
+ *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.ruby.testrunner.ui;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+package org.netbeans.modules.ruby.rubyproject.spi;
+
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.extexecution.api.ExecutionDescriptor;
+import org.netbeans.modules.ruby.platform.execution.RubyExecutionDescriptor;
+import org.netbeans.modules.ruby.rubyproject.rake.RakeTask;
 
 /**
- * Base class for test recognizer handlers. 
- * 
+ * Provides a possiblity to customize rake tasks, such as adding/removing parameters or
+ * adding <code>OutputRecognizer</code>s before the tasks are run.
+ *
  * @author Erno Mononen
  */
-abstract class TestRecognizerHandler {
-
-    private static final Logger LOGGER = Logger.getLogger(TestRecognizerHandler.class.getName());
-    
-    protected final Pattern pattern;
-    protected Matcher matcher;
-
-    TestRecognizerHandler(String regex) {
-        // handle newline chars at the end -- see #143508
-        if (!regex.endsWith(".*")) { //NOI18N
-            regex += ".*";  //NOI18N
-        }
-        this.pattern = Pattern.compile(regex, Pattern.DOTALL);
-    }
-
-    final boolean matches(String line) {
-        return match(line).matches();
-    }
-    
-    /**
-     * <i>Package private for unit tests, otherwise don't use directly</i>.
-     */
-    final Matcher match(String line) {
-        this.matcher = pattern.matcher(line);
-        return matcher;
-    }
-
-    abstract void updateUI(Manager manager, TestSession session);
+public interface RakeTaskCustomizer {
 
     /**
-     * Gets the RecognizedOutput for output that should be passed on 
-     * for printing to Output. Override in subclasses as needed, the default
-     * implementation supresses all output (i.e. nothing is passed on 
-     * for printing).
-     * 
-     * @return the RecognizedOutput for output that should be passed on 
-     * for printing to Output. 
+     * Configures the given <code>task</code> and <code>taskDescriptor</code> as
+     * necessary.
+     *
+     * @param project the project in which the <code>task</code> is invoked.
+     * @param task the task being invoked.
+     * @param taskDescriptor the descriptor for the given <code>task</code>.
+     * @param debug
      */
-    List<String> getRecognizedOutput() {
-        return Collections.<String>emptyList();
-    }
+    ExecutionDescriptor customize(Project project, RakeTask task, RubyExecutionDescriptor taskDescriptor, boolean debug);
 
-    protected static int toMillis(String timeInSeconds) {
-        try {
-            Double elapsedTimeMillis = Double.parseDouble(timeInSeconds) * 1000;
-            return elapsedTimeMillis.intValue();
-        } catch (NumberFormatException nfe) {
-            LOGGER.log(Level.WARNING, "Could not parse time, returning 0", nfe);
-        }
-        return 0;
-    }
+
 }
