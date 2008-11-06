@@ -50,7 +50,7 @@ import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.api.ruby.platform.RubyPlatformManager;
 import org.netbeans.modules.ruby.debugger.breakpoints.RubyLineBreakpoint;
 import org.netbeans.modules.ruby.debugger.breakpoints.RubyBreakpointManager;
-import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
+import org.netbeans.modules.ruby.platform.execution.RubyExecutionDescriptor;
 import org.netbeans.modules.ruby.platform.spi.RubyDebuggerImplementation;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -89,6 +89,27 @@ public final class RubyDebuggerTest extends TestBase {
         doAction(ActionsManager.ACTION_STEP_OVER); // 4 -> 5
         doContinue(); // finish
         waitFor(p);
+    }
+
+    public void testAttach() throws Exception {
+        String[] testContent = {
+            "sleep 0.01",
+            "sleep 0.01",
+            "sleep 0.01",
+            "sleep 0.01"};
+        File testF = createScript(testContent);
+        FileObject testFO = FileUtil.toFileObject(testF);
+        addBreakpoint(testFO, 2);
+        addBreakpoint(testFO, 3);
+        RubyPlatform platform = getTestConfiguredPlatform();
+        int port = 12345;
+        Process process = startDebuggerProcess(testF, port, platform);
+        RubyDebugger debugger = new RubyDebugger();
+        debugger.attach("localhost", port, 6);
+        waitForSuspension();
+        doContinue(); // 2 -> 3
+        doContinue(); // 3 -> finish
+        waitFor(process);
     }
     
     public void testStepInto() throws Exception {
@@ -315,7 +336,7 @@ public final class RubyDebuggerTest extends TestBase {
     
     public void testCheckAndTuneSettings() throws IOException {
         RubyPlatform jruby = getSafeJRuby();
-        ExecutionDescriptor descriptor = new ExecutionDescriptor(jruby);
+        RubyExecutionDescriptor descriptor = new RubyExecutionDescriptor(jruby);
         // DialogDisplayerImpl.createDialog() assertion would fail if dialog is shown
         assertTrue("default setting OK with JRuby", RubyDebugger.checkAndTuneSettings(descriptor));
         assertFalse("does not have fast debugger", jruby.hasFastDebuggerInstalled());
@@ -325,14 +346,14 @@ public final class RubyDebuggerTest extends TestBase {
 
     public void testCheckAndTuneSettingsForJRubyAndRails() throws IOException {
         RubyPlatform jruby = RubyPlatformManager.getDefaultPlatform();
-        ExecutionDescriptor descriptor = new ExecutionDescriptor(jruby);
+        RubyExecutionDescriptor descriptor = new RubyExecutionDescriptor(jruby);
         descriptor.fastDebugRequired(true); // simulate Rails
         assertTrue("default setting OK with JRuby and Rails", RubyDebugger.checkAndTuneSettings(descriptor));
     }
 
     public void testRubiniusDebugging() throws IOException {
         RubyPlatform rubinius = setUpRubinius();
-        ExecutionDescriptor descriptor = new ExecutionDescriptor(rubinius);
+        RubyExecutionDescriptor descriptor = new RubyExecutionDescriptor(rubinius);
         // DialogDisplayerImpl.createDialog() assertion would fail if dialog is shown
         RubyDebuggerImplementation rdi = new RubyDebugger();
         rdi.describeProcess(descriptor);
