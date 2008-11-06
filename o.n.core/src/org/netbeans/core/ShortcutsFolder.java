@@ -51,6 +51,7 @@ import javax.swing.Action;
 import javax.swing.KeyStroke;
 import javax.swing.text.Keymap;
 import org.netbeans.core.NbKeymap.KeymapAction;
+import org.netbeans.core.startup.StartLog;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileChangeAdapter;
@@ -85,8 +86,13 @@ class ShortcutsFolder {
     
     
     static void initShortcuts () {
-        if (shortcutsFolder != null) return;
-        shortcutsFolder = new ShortcutsFolder ();
+        StartLog.logStart("initShortcuts");
+        try {
+            if (shortcutsFolder != null) return;
+            shortcutsFolder = new ShortcutsFolder ();
+        } finally {
+            StartLog.logEnd("initShortcuts");
+        }
     }
     
     private ShortcutsFolder () {
@@ -149,9 +155,9 @@ class ShortcutsFolder {
     private void readShortcuts (NbKeymap keymap, FileObject fileObject) {
         debug.fine("\nreadShortcuts " + fileObject);
         DataFolder folder = DataFolder.findFolder (fileObject);
-        Enumeration en = folder.children (false);
+        Enumeration<DataObject> en = folder.children(false);
         while (en.hasMoreElements ()) {
-            DataObject dataObject = (DataObject) en.nextElement ();
+            DataObject dataObject = en.nextElement();
             if (dataObject instanceof DataFolder) continue;
             InstanceCookie ic = dataObject.getCookie(InstanceCookie.class);
             if (ic == null) continue;
