@@ -45,6 +45,7 @@ const DWORD THREAD_FINISHED = 100;
 const DWORD INITIAL_DELAY = 2000; // 2 seconds is seems to be enough to finish java process
 const WCHAR * LINE_SEPARATOR = L"\r\n";
 const WCHAR * UNC_PREFIX     = L"\\\\?\\";
+const WCHAR * UNC_STD_PREFIX = L"\\\\";
 const DWORD UNC_PREFIX_LENGTH = 4;
 
 #ifdef _MSC_VER
@@ -288,14 +289,15 @@ void deleteFile(WCHAR * filePath) {
     DWORD count = 0 ;
     WIN32_FILE_ATTRIBUTE_DATA attrs;
     DWORD filePathLength = lstrlenW(filePath);
-    DWORD length = filePathLength + UNC_PREFIX_LENGTH + 1;
+    DWORD prefixLength = (filePath == search(filePath, UNC_STD_PREFIX)) ? 0 : UNC_PREFIX_LENGTH;
+    DWORD length = filePathLength + prefixLength + 1;
     WCHAR * file = (WCHAR*) LocalAlloc(LPTR, sizeof(WCHAR) * length);
     DWORD i=0;
-    for(i=0;i<UNC_PREFIX_LENGTH;i++) {
+    for(i=0;i<prefixLength;i++) {
         file[i]=UNC_PREFIX[i];
     }
     for(i=0;i<filePathLength;i++) {
-        file[i+UNC_PREFIX_LENGTH] = filePath[i];
+        file[i+prefixLength] = filePath[i];
     }
     
     if(GetFileAttributesExW(file, GetFileExInfoStandard, &attrs)) {
@@ -402,6 +404,27 @@ void removeItselfUsingCmd() {
     
 }
 
+void changeCurrentDirectory() {
+    WCHAR * currentFile = LocalAlloc(LPTR, sizeof(WCHAR) * MAX_PATH);    
+    if (GetModuleFileNameW(0, currentFile, MAX_PATH)) {
+        WCHAR * ptr = currentFile;
+        DWORD i=0;
+        DWORD len=0;
+        WCHAR * parent;
+        while(search(ptr, L"\\")!=NULL) {
+            ptr = search(ptr, L"\\") + 1;
+        }
+        len = lstrlenW(currentFile) - lstrlenW(ptr) - 1;
+        parent = LocalAlloc(LPTR, sizeof(WCHAR) * (len + 1));
+        for(i=0;i<len;i++) {
+            parent[i] = currentFile[i];
+        }
+        parent[len] = 0;
+        SetCurrentDirectoryW(parent);
+        LocalFree(parent);
+    }
+    LocalFree(currentFile);
+}
 
 // should be less or equals to MAXIMUM_WAIT_OBJECTS
 #define MAXIMUM_THREADS MAXIMUM_WAIT_OBJECTS
@@ -418,7 +441,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hi, PSTR pszCmdLine, int nCmd
     for(i=0;i<MAXIMUM_THREADS;i++) {
         runningThreads[i] = INVALID_HANDLE_VALUE;
     }
-    
+    changeCurrentDirectory();
     
     if(argumentsNumber==2) {
         WCHAR * filename = commandLine[1];
