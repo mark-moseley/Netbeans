@@ -48,17 +48,20 @@ import java.util.Set;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.SourceGroup;
 import org.netbeans.modules.websvc.rest.RestUtils;
 import org.netbeans.modules.websvc.rest.codegen.Constants.HttpMethodType;
 import org.netbeans.modules.websvc.rest.codegen.Constants.MimeType;
 import org.netbeans.modules.websvc.rest.codegen.GenericResourceGenerator;
 import org.netbeans.modules.websvc.rest.codegen.model.GenericResourceBean;
+import org.netbeans.modules.websvc.rest.support.SourceGroupSupport;
 import org.netbeans.modules.websvc.rest.wizard.PatternResourcesSetupPanel.Pattern;
 import org.netbeans.spi.project.ui.templates.support.Templates;
-import org.openide.ErrorManager;
 import org.openide.WizardDescriptor;
+import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.TemplateWizard;
+import org.openide.loaders.DataObject;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
@@ -78,7 +81,15 @@ public class PatternResourcesIterator implements WizardDescriptor.InstantiatingI
         try {
             Project project = Templates.getProject(wizard);
             RestUtils.ensureRestDevelopmentReady(project);
-            final FileObject targetFolder = Templates.getTargetFolder(wizard);
+            FileObject tmpTargetFolder = Templates.getTargetFolder(wizard);
+
+            if (tmpTargetFolder == null) {
+                String targetPackage = (String) wizard.getProperty(WizardProperties.TARGET_PACKAGE);
+                SourceGroup sourceGroup = (SourceGroup) wizard.getProperty(WizardProperties.SOURCE_GROUP);
+                tmpTargetFolder = SourceGroupSupport.getFolderForPackage(sourceGroup, targetPackage, true);
+            }
+
+            final FileObject targetFolder = tmpTargetFolder;
             final GenericResourceBean[] resourceBeans = getResourceBeans(wizard);
             final ProgressDialog dialog = new ProgressDialog(NbBundle.getMessage(
                     PatternResourcesIterator.class, "LBL_RestServicesFromPatternsProgress"));
@@ -91,8 +102,14 @@ public class PatternResourcesIterator implements WizardDescriptor.InstantiatingI
                         for (GenericResourceBean bean : resourceBeans) {
                             result.addAll(new GenericResourceGenerator(targetFolder, bean).generate(pHandle));
                         }
+                        
+                        for (FileObject fobj : result) {
+                            DataObject dobj = DataObject.find(fobj);
+                            EditorCookie cookie = dobj.getCookie(EditorCookie.class);
+                            cookie.open();
+                        }
                     } catch(Exception iox) {
-                        ErrorManager.getDefault().notify(iox);
+                        Exceptions.printStackTrace(iox);
                     } finally {
                         pHandle.finish();
                         dialog.close();
@@ -102,7 +119,7 @@ public class PatternResourcesIterator implements WizardDescriptor.InstantiatingI
             generatorTask.schedule(50);
             dialog.open();
         } catch (Exception ex) {
-            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+            Exceptions.printStackTrace(ex);
         }
         return result;
     }
