@@ -51,7 +51,6 @@ import org.netbeans.modules.cnd.api.model.CsmFunction;
 import org.netbeans.modules.cnd.api.model.CsmScope;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
-import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
 
@@ -62,7 +61,7 @@ import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
 public class FriendFunctionDDImpl  extends FunctionDDImpl<CsmFriendFunction> implements CsmFriendFunction {
     private final CsmUID<CsmClass> friendClassUID;
     
-    public FriendFunctionDDImpl(AST ast, CsmClass cls, CsmScope scope) {
+    public FriendFunctionDDImpl(AST ast, CsmClass cls, CsmScope scope) throws AstRendererException {
         super(ast, cls.getContainingFile(), scope);
         friendClassUID = cls.getUID();
     }
@@ -84,11 +83,13 @@ public class FriendFunctionDDImpl  extends FunctionDDImpl<CsmFriendFunction> imp
         return cls;
     }
     
+    @Override
     public void write(DataOutput output) throws IOException {
         super.write(output);
         UIDObjectFactory.getDefaultFactory().writeUID(friendClassUID, output);
     }
     
+    @SuppressWarnings("unchecked")
     public FriendFunctionDDImpl(DataInput input) throws IOException {
         super(input);
         friendClassUID = UIDObjectFactory.getDefaultFactory().readUID(input);

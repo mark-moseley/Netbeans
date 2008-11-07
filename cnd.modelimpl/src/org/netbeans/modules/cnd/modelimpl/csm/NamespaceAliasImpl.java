@@ -100,7 +100,7 @@ public class NamespaceAliasImpl extends OffsetableDeclarationBase<CsmNamespaceAl
     public CsmNamespace getReferencedNamespace() {
 //        if (!Boolean.getBoolean("cnd.modelimpl.resolver2"))
         //assert ResolverFactory.resolver != 2;
-        return getContainingFile().getProject().findNamespace(namespace);
+        return ((ProjectBase)(getContainingFile().getProject())).findNamespace(namespace, true);
     }
 
     public CsmDeclaration.Kind getKind() {
@@ -163,6 +163,7 @@ public class NamespaceAliasImpl extends OffsetableDeclarationBase<CsmNamespaceAl
         UIDObjectFactory.getDefaultFactory().writeUID(this.referencedNamespaceUID, output);
     }
     
+    @SuppressWarnings("unchecked")
     public NamespaceAliasImpl(DataInput input) throws IOException {
         super(input);
         this.alias = QualifiedNameCache.getManager().getString(input.readUTF());
