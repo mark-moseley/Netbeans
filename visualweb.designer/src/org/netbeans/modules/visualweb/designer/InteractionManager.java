@@ -83,6 +83,7 @@ import org.netbeans.spi.palette.PaletteController;
 import org.openide.awt.MouseUtils;
 import org.openide.nodes.Node;
 import org.openide.util.ContextAwareAction;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
@@ -712,12 +713,17 @@ public class InteractionManager {
     int updateDropState(Point p, boolean committed, Transferable transferable) {
         DesignerPane pane = webform.getPane();
 //        CssBox box = webform.getMapper().findBox(p.x, p.y);
-        CssBox box = ModelViewMapper.findBox(pane.getPageBox(), p.x, p.y);
+        PageBox pageBox = pane.getPageBox();
+        if (pageBox == null) {
+            // XXX #152692 Possible NPE.
+            return DndHandler.DROP_DENIED;
+        }
+        CssBox box = ModelViewMapper.findBox(pageBox, p.x, p.y);
         CssBox insertBox = findInsertBox(box);
 
 //        if ((insertBox == pane.getPageBox()) && webform.getDocument().isGridMode()) {
 //        if ((insertBox == pane.getPageBox()) && webform.isGridModeDocument()) {
-        if ((insertBox == pane.getPageBox()) && webform.isGridMode()) {
+        if ((insertBox == pageBox) && webform.isGridMode()) {
             insertBox = null;
         }
 
@@ -1040,7 +1046,7 @@ public class InteractionManager {
                 p = new Point(9,9);
             } else {
             */
-            image = org.openide.util.Utilities.loadImage("org/netbeans/modules/visualweb/designer/resources/insert-cursor.gif"); //NOI18N
+            image = ImageUtilities.loadImage("org/netbeans/modules/visualweb/designer/resources/insert-cursor.gif"); //NOI18N
             p = new Point(9, 9);
 
             /* This doesn't work well - want to set our own hotspot
@@ -1075,7 +1081,7 @@ public class InteractionManager {
                 p = new Point(9,9);
             } else {
             */
-            image = org.openide.util.Utilities.loadImage("org/netbeans/modules/visualweb/designer/resources/linked-cursor.gif"); //NOI18N
+            image = ImageUtilities.loadImage("org/netbeans/modules/visualweb/designer/resources/linked-cursor.gif"); //NOI18N
             p = new Point(9, 9);
 
             /* This doesn't work well - want to set our own hotspot
@@ -2036,7 +2042,7 @@ public class InteractionManager {
                 // (or if you release over the same position, a selection.)
                 // We want to allow marquee selection over grid areas if
                 // control is pressed
-                if ((sel == null) || (selBox == pane.getPageBox()) ||
+                if ((sel == null) || (selBox == null) || (selBox == pane.getPageBox()) ||
                         (selBox.isGrid() && (e.isShiftDown() || e.isControlDown()))) {
                     setInsertBox(null, null);
 
