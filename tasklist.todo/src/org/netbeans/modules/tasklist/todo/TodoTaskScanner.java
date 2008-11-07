@@ -83,7 +83,7 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
      * 
      */
     TodoTaskScanner( String displayName, String description ) {
-        super( displayName, description, "Advanced" ); //NOI18N
+        super( displayName, description, "Advanced/ToDo" ); //NOI18N
     }
     
     public static TodoTaskScanner create() {
@@ -103,6 +103,8 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
     
     private List<? extends Task> scanAll( FileObject resource ) {
         List<Task> tasks = null;
+
+        Collection<String> patterns = Settings.getDefault().getPatterns();
         
         try {
             String text = getContent( resource );
@@ -152,7 +154,8 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
                 
                 index = end;
                 
-                String description = text.subSequence(begin, nonwhite+1).toString();
+                String description = new String( text.subSequence(begin, nonwhite+1).toString().toCharArray() );
+                description = trim( description, patterns );
                 
                 Task task = Task.create( resource, GROUP_NAME, description, lineno );
                 if( null == tasks ) {
@@ -179,6 +182,8 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
         
         SourceCodeCommentParser sccp = new SourceCodeCommentParser( lineComment, blockCommentStart, blockCommentEnd );
 
+        Collection<String> patterns = Settings.getDefault().getPatterns();
+
         List<Task> tasks = null;
 
         try {
@@ -192,7 +197,7 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
             int len = text.length();
             int lineno = 1;
             int index = 0;
-	    int idx = 0;
+            int idx = 0;
 
             // find the first comment region
             if (!sccp.nextRegion(reg)) {
@@ -263,7 +268,8 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
                 
                 index = end;
                 
-                String description = text.subSequence(begin, nonwhite+1).toString();
+                String description = new String( text.subSequence(begin, nonwhite+1).toString().toCharArray() );
+                description = trim( description, patterns );
 
                 Task task = Task.create( resource, GROUP_NAME, description, lineno );
                 if( null == tasks ) {
@@ -273,6 +279,9 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
             }
         } catch( IOException e ) {
             Logger.getLogger( getClass().getName() ).log( Level.INFO, null, e );
+        } catch( OutOfMemoryError oomE ) {
+            System.gc();
+            Logger.getLogger( getClass().getName() ).log( Level.INFO, null, oomE );
         }
         return null == tasks ? getEmptyList() : tasks;
     }
@@ -334,7 +343,7 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
             } catch (PatternSyntaxException e) {
                 // Internal error: the regexp should have been validated when
                 // the user edited it
-                Logger.getLogger( getClass().getName() ).log( Level.INFO, null, e );;
+                Logger.getLogger( getClass().getName() ).log( Level.INFO, null, e );
                 return null;
             }
         }
@@ -391,5 +400,18 @@ public class TodoTaskScanner extends FileTaskScanner implements PropertyChangeLi
     @Override
     public void notifyFinish() {
         regexp = null;
+    }
+
+    private String trim(String comment, Collection<String> patterns) {
+        int index = Integer.MAX_VALUE;
+        for( String p : patterns ) {
+            int i = comment.indexOf( p );
+            if( i > 0 && i < index ) {
+                index = i;
+            }
+        }
+        if( index > 0 && index < Integer.MAX_VALUE )
+            comment = comment.substring(index);
+        return comment;
     }
 }
