@@ -242,6 +242,10 @@ public class PageFlowController {
                 EventQueue.invokeLater(new Runnable() {
 
                     public void run() {
+                        if (view == null) {
+                            // XXX #145074 It is destroyed already, revise that pattern.
+                            return;
+                        }
                         view.removeUserMalFormedFacesConfig(); // Does clear graph take care of this?
                         setupGraph();
                     }
@@ -250,6 +254,10 @@ public class PageFlowController {
                 EventQueue.invokeLater(new Runnable() {
 
                     public void run() {
+                        if (view == null) {
+                            // XXX #145074 It is destroyed already, revise that pattern.
+                            return;
+                        }
                         view.clearGraph();
                         view.warnUserMalFormedFacesConfig();
                     }
@@ -544,7 +552,10 @@ public class PageFlowController {
             EventQueue.invokeLater(new Runnable() {
 
                 public void run() {
-
+                    if (view == null) {
+                        // XXX #145074 It is destroyed already, revise that pattern.
+                        return;
+                    }
                     setupGraph();
                 }
             });
@@ -1094,6 +1105,12 @@ public class PageFlowController {
     public void openNavigationCase(NavigationCaseEdge navCaseEdge) {
 
         final NavigationCase navCase = getNavCase2NavCaseEdge(navCaseEdge);
+        if (navCase == null) {
+            // XXX #152419 Possible NPE.
+            log("There is null NavigationCase for NavigationCaseEdge, navCaseEdge=" + navCaseEdge); // NOI18N
+            return;
+        }
+
         //FileObject fobj = NbEditorUtilities.getFileObject(navCase.getModel().getDocument());
         //DataObject dobj = DataObject.find(fobj);
         DataObject dobj = getConfigDataObject();
@@ -1173,5 +1190,10 @@ public class PageFlowController {
         static Set<NavigationCase> getAllNavigationCases(PageFlowController controller) {
             return controller.navCase2NavCaseEdge.keySet();
         }
+    }
+
+
+    private static void log(String message) {
+        Logger.getLogger(PageFlowController.class.getName()).log(Level.INFO, message);
     }
 }
