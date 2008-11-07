@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,35 +31,50 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.navigation.includeview;
+package org.netbeans.modules.cnd.callgraph.impl;
 
-import java.awt.event.ActionEvent;
-import javax.swing.AbstractAction;
-import javax.swing.Action;
-import org.netbeans.modules.cnd.api.model.CsmObject;
-import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import java.awt.Image;
+import org.netbeans.modules.cnd.callgraph.api.Call;
+import org.netbeans.modules.cnd.callgraph.api.Function;
+import org.openide.nodes.AbstractNode;
+import org.openide.nodes.Children;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 
 /**
+ *
  * @author Alexander Simon
  */
-public class GoToFileAction extends AbstractAction {
-    
-    private CsmObject csmObject;
-    private Action delegate;
-    
-    public GoToFileAction(CsmObject csmObject, Action delegate) {
-        this.csmObject = csmObject;
-        this.delegate = delegate;
-        putValue(Action.NAME, NbBundle.getMessage(GoToFileAction.class, "LBL_GoToFile")); //NOI18N
+public class LoadingNode extends AbstractNode implements Call {
+    public LoadingNode() {
+        super(Children.LEAF);
+        setName("dummy"); // NOI18N
+        setDisplayName(NbBundle.getMessage(getClass(), "Loading")); // NOI18N
     }
     
-    public void actionPerformed(ActionEvent e) {
-        if (delegate != null){
-            delegate.actionPerformed(e);
-        }
-        CsmUtilities.openSource(csmObject);
+    @Override
+    public Image getIcon(int param) {
+        return ImageUtilities.loadImage("org/netbeans/modules/cnd/callgraph/resources/waitNode.gif"); // NOI18N
+    }
+
+    public void open() {
+    }
+
+    public Function getCallee() {
+        return null;
+    }
+
+    public Function getCaller() {
+        return null;
+    }
+
+    public int compareTo(Call o) {
+        return -1;
     }
 }
