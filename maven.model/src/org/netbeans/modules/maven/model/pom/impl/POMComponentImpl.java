@@ -36,18 +36,18 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.maven.model.settings.impl;
+package org.netbeans.modules.maven.model.pom.impl;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import javax.xml.namespace.QName;
-import org.netbeans.modules.maven.model.settings.SettingsComponent;
-import org.netbeans.modules.maven.model.settings.SettingsComponentFactory;
-import org.netbeans.modules.maven.model.settings.SettingsExtensibilityElement;
-import org.netbeans.modules.maven.model.settings.SettingsModel;
-import org.netbeans.modules.maven.model.settings.SettingsQName;
+import org.netbeans.modules.maven.model.pom.POMComponent;
+import org.netbeans.modules.maven.model.pom.POMComponentFactory;
+import org.netbeans.modules.maven.model.pom.POMModel;
+import org.netbeans.modules.maven.model.pom.POMQName;
+import org.netbeans.modules.maven.model.pom.POMExtensibilityElement;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentComponent;
 import org.netbeans.modules.xml.xam.dom.Attribute;
 import org.w3c.dom.Element;
@@ -58,33 +58,33 @@ import org.w3c.dom.NodeList;
  *
  * @author mkleint
  */
-public abstract class SettingsComponentImpl extends AbstractDocumentComponent<SettingsComponent>
-        implements SettingsComponent {
+public abstract class POMComponentImpl extends AbstractDocumentComponent<POMComponent>
+        implements POMComponent {
 
-   public SettingsComponentImpl(SettingsModel model, Element e) {
+   public POMComponentImpl(POMModel model, Element e) {
         super(model, e);
     }
     
     @Override
     protected String getNamespaceURI() {
-        return SettingsQName.NS_URI;
+        return POMQName.NS_URI;
     }
         
     @Override
-    public SettingsModel getModel() {
-        return (SettingsModel) super.getModel();
+    public POMModel getModel() {
+        return (POMModel) super.getModel();
     }
     
-    protected void populateChildren(List<SettingsComponent> children) {
+    protected void populateChildren(List<POMComponent> children) {
         //System.out.println("populateChildren: " + getPeer().getNodeName());
         NodeList nl = getPeer().getChildNodes();
         if (nl != null){
-            SettingsModel model = getModel();
-            SettingsComponentFactory componentFactory = model.getFactory();
+            POMModel model = getModel();
+            POMComponentFactory componentFactory = model.getFactory();
             for (int i = 0; i < nl.getLength(); i++) {
                 Node n = nl.item(i);
                 if (n instanceof Element) {
-                    SettingsComponent comp = componentFactory.create((Element)n, this);
+                    POMComponent comp = componentFactory.create((Element)n, this);
                     if (comp != null) {
                         children.add(comp);
                     }
@@ -97,29 +97,29 @@ public abstract class SettingsComponentImpl extends AbstractDocumentComponent<Se
         return stringValue;
     }  
     
-    public static Element createElementNS(SettingsModel model, SettingsQName rq) {
+    public static Element createElementNS(POMModel model, POMQName rq) {
         return createElementNS(model, rq.getQName());
     }
 
-    public static Element createElementNS(SettingsModel model, QName rq) {
+    public static Element createElementNS(POMModel model, QName rq) {
         String qualified = rq.getPrefix() + ":" + rq.getLocalPart();
         return model.getDocument().createElementNS(
                 rq.getNamespaceURI(), qualified);
     }
         
-    public void removeExtensibilityElement(SettingsExtensibilityElement ee) {
+    public void removeExtensibilityElement(POMExtensibilityElement ee) {
         removeChild(EXTENSIBILITY_ELEMENT_PROPERTY, ee);
     }
     
-    public void addExtensibilityElement(SettingsExtensibilityElement ee) {
+    public void addExtensibilityElement(POMExtensibilityElement ee) {
         appendChild(EXTENSIBILITY_ELEMENT_PROPERTY, ee);
     }
     
-    public List<SettingsExtensibilityElement> getExtensibilityElements() {
-        return getChildren(SettingsExtensibilityElement.class);
+    public List<POMExtensibilityElement> getExtensibilityElements() {
+        return getChildren(POMExtensibilityElement.class);
     }
     
-    public <T extends SettingsExtensibilityElement> List<T> getExtensibilityElements(Class<T> type) {
+    public <T extends POMExtensibilityElement> List<T> getExtensibilityElements(Class<T> type) {
         return getChildren(type);
     }
 
@@ -154,8 +154,8 @@ public abstract class SettingsComponentImpl extends AbstractDocumentComponent<Se
      */
     @Override
     public String getChildElementText(QName qname) {
-        List<SettingsExtensibilityElement> els = getChildren(SettingsExtensibilityElement.class);
-        for (SettingsExtensibilityElement el : els) {
+        List<POMExtensibilityElement> els = getChildren(POMExtensibilityElement.class);
+        for (POMExtensibilityElement el : els) {
             if (el.getQName().equals(qname)) {
                 return el.getElementText();
             }
@@ -172,8 +172,8 @@ public abstract class SettingsComponentImpl extends AbstractDocumentComponent<Se
      */
     @Override
     public void setChildElementText(String propertyName, String text, QName qname) {
-        List<SettingsExtensibilityElement> els = getChildren(SettingsExtensibilityElement.class);
-        for (SettingsExtensibilityElement el : els) {
+        List<POMExtensibilityElement> els = getChildren(POMExtensibilityElement.class);
+        for (POMExtensibilityElement el : els) {
             if (el.getQName().equals(qname)) {
                 if (text != null) {
                     el.setElementText(text);
@@ -184,14 +184,14 @@ public abstract class SettingsComponentImpl extends AbstractDocumentComponent<Se
             }
         }
         if (text != null) {
-            SettingsExtensibilityElement el = getModel().getFactory().createSettingsExtensibilityElement(qname);
+            POMExtensibilityElement el = getModel().getFactory().createPOMExtensibilityElement(qname);
             addAfter(qname.getLocalPart(), el, Collections.EMPTY_LIST);
         }
     }
 
-    protected final Collection<Class<? extends SettingsComponent>> getClassesBefore(Class<? extends SettingsComponent>[] ordering, Class current) {
-        ArrayList<Class<? extends SettingsComponent>> toRet = new ArrayList<Class<? extends SettingsComponent>>();
-        for (Class<? extends SettingsComponent> ord : ordering) {
+    protected final Collection<Class<? extends POMComponent>> getClassesBefore(Class<? extends POMComponent>[] ordering, Class current) {
+        ArrayList<Class<? extends POMComponent>> toRet = new ArrayList<Class<? extends POMComponent>>();
+        for (Class<? extends POMComponent> ord : ordering) {
             if (ord.equals(current)) break;
             toRet.add(ord);
         }
