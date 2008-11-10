@@ -38,78 +38,91 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.completion.cplusplus.hyperlink;
 
 import java.awt.Toolkit;
 import java.text.MessageFormat;
+import java.util.EnumSet;
+import java.util.Set;
+import javax.swing.text.AbstractDocument;
 import javax.swing.text.DefaultCaret;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
-import org.netbeans.editor.BaseDocument;
+import org.netbeans.api.lexer.Token;
+import org.netbeans.cnd.api.lexer.CndTokenUtilities;
+import org.netbeans.cnd.api.lexer.CppTokenId;
 import org.netbeans.editor.Utilities;
-import org.netbeans.lib.editor.hyperlink.spi.HyperlinkProvider;
+import org.netbeans.lib.editor.hyperlink.spi.HyperlinkProviderExt;
+import org.netbeans.lib.editor.hyperlink.spi.HyperlinkType;
 import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.completion.cplusplus.NbCsmSyntaxSupport;
-import org.netbeans.modules.cnd.completion.cplusplus.utils.Token;
-import org.netbeans.modules.cnd.completion.cplusplus.utils.TokenUtilities;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.openide.util.Cancellable;
 import org.openide.util.NbBundle;
 
 /**
  * base hyperlink provider for Csm elements
  * @author Vladimir Voskresensky
  */
-public abstract class CsmAbstractHyperlinkProvider implements HyperlinkProvider {
+public abstract class CsmAbstractHyperlinkProvider implements HyperlinkProviderExt {
+
+    private Token<CppTokenId> jumpToken = null;
+    private Cancellable hyperLinkTask;
 
     protected CsmAbstractHyperlinkProvider() {
         DefaultCaret caret = new DefaultCaret();
-        caret.setMagicCaretPosition(null);        
+        caret.setMagicCaretPosition(null);
     }
-    
-    protected abstract void performAction(final BaseDocument originalDoc, final JTextComponent target, final int offset);
 
-    public void performClickAction(Document originalDoc, final int offset) {
-        if (!(originalDoc instanceof BaseDocument))
-            return ;
-        
-        final BaseDocument doc = (BaseDocument) originalDoc;
+    public Set<HyperlinkType> getSupportedHyperlinkTypes() {
+        return EnumSet.of(HyperlinkType.GO_TO_DECLARATION);
+    }
+
+    protected abstract void performAction(final Document originalDoc, final JTextComponent target, final int offset);
+
+    public void performClickAction(Document originalDoc, final int offset, HyperlinkType type) {
+        if (!(originalDoc instanceof Document)) {
+            return;
+        }
+
+        final Document doc = originalDoc;
         final JTextComponent target = Utilities.getFocusedComponent();
-        
-        if (target == null || target.getDocument() != doc)
-            return ;
-        
+
+        if (target == null || target.getDocument() != doc) {
+            return;
+        }
+
         Runnable run = new Runnable() {
+
             public void run() {
                 performAction(doc, target, offset);
             }
         };
-        CsmModelAccessor.getModel().enqueue(run, "Following hyperlink"); //NOI18N
+        if (hyperLinkTask != null) {
+            hyperLinkTask.cancel();
+        }
+        hyperLinkTask = CsmModelAccessor.getModel().enqueue(run, "Following hyperlink");// NOI18N
     }
-    
-    public boolean isHyperlinkPoint(Document doc, int offset) {
-        Token token = getToken(doc, offset);
+
+    public boolean isHyperlinkPoint(Document doc, int offset, HyperlinkType type) {
+        Token<CppTokenId> token = getToken(doc, offset);
         return isValidToken(token);
     }
-    
-    protected abstract boolean isValidToken(Token token);
-    
-    public int[] getHyperlinkSpan(Document doc, int offset) {
-        Token token = getToken(doc, offset);
+
+    protected abstract boolean isValidToken(Token<CppTokenId> token);
+
+    public int[] getHyperlinkSpan(Document doc, int offset, HyperlinkType type) {
+        Token<CppTokenId> token = getToken(doc, offset);
         if (isValidToken(token)) {
-            return new int[] {token.getStartOffset(), token.getEndOffset()};
+            jumpToken = token;
+            return new int[]{token.offset(null), token.offset(null) + token.length()};
         } else {
             return null;
         }
-    }  
-    
-    protected static Token getToken(Document doc, int offset) {
-        return TokenUtilities.getToken(doc, offset);
     }
-    
-    private Token jumpToken = null;
-    protected boolean preJump(BaseDocument doc, JTextComponent target, int offset, String msgKey) {
+
+    protected boolean preJump(Document doc, JTextComponent target, int offset, String msgKey) {
         if (doc == null || target == null || offset < 0 || offset > doc.getLength()) {
             return false;
         }
@@ -117,13 +130,13 @@ public abstract class CsmAbstractHyperlinkProvider implements HyperlinkProvider 
         if (!isValidToken(jumpToken)) {
             return false;
         }
-        String name = jumpToken.getText();
+        String name = jumpToken.text().toString();
         String msg = NbBundle.getBundle(NbCsmSyntaxSupport.class).getString(msgKey); //NOI18N
-        msg = MessageFormat.format(msg, new Object [] { name });
+        msg = MessageFormat.format(msg, new Object[]{name});
         org.openide.awt.StatusDisplayer.getDefault().setStatusText(msg);//NOI18N
         return true;
-    }    
-    
+    }
+
     protected boolean postJump(CsmOffsetable item, String existItemKey, String noItemKey) {
         if (jumpToken == null) {
             return false;
@@ -140,19 +153,49 @@ public abstract class CsmAbstractHyperlinkProvider implements HyperlinkProvider 
                 name = itemDesc;
             } else {
                 key = "cannot-open-csm-element";// NOI18N
-                name = jumpToken.getText();
+                name = jumpToken.text().toString();
             }
-            
+
             String msg = NbBundle.getBundle(NbCsmSyntaxSupport.class).getString(key);
-            
-            org.openide.awt.StatusDisplayer.getDefault().setStatusText(MessageFormat.format(msg, new Object [] { name } ));
+
+            org.openide.awt.StatusDisplayer.getDefault().setStatusText(MessageFormat.format(msg, new Object[]{name}));
             return false;
         }
-        return true;        
+        return true;
     }
-    
-    protected Token getJumpToken() {
+
+    protected Token<CppTokenId> getJumpToken() {
         return this.jumpToken;
     }
-    
+
+    static Token<CppTokenId> getToken(final Document doc, final int offset) {
+        if (doc instanceof AbstractDocument) {
+            ((AbstractDocument) doc).readLock();
+        }
+        try {
+            return CndTokenUtilities.getOffsetTokenCheckPrev(doc, offset);
+        } finally {
+            if (doc instanceof AbstractDocument) {
+                ((AbstractDocument) doc).readUnlock();
+            }
+        }
+    }
+
+    public String getTooltipText(Document doc, int offset, HyperlinkType type) {
+        if (doc == null || offset < 0 || offset > doc.getLength()) {
+            return null;
+        }
+
+        Token<CppTokenId> token = jumpToken;
+        if (token == null || token.offset(null) > offset ||
+                (token.offset(null) + token.length()) < offset) {
+            token = getToken(doc, offset);
+        }
+        if (!isValidToken(token)) {
+            return null;
+        }
+        return getTooltipText(doc, token, offset);
+    }
+
+    protected abstract String getTooltipText(Document doc, Token<CppTokenId> token, int offset);
 }
