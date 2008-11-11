@@ -279,6 +279,9 @@ public final class GeneratedFilesHelper {
                     dir.getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
                         public void run() throws IOException {
                             FileObject projectXml = dir.getFileObject(AntProjectHelper.PROJECT_XML_PATH);
+                            if (projectXml == null) {
+                                throw new IOException("project.xml file doesn't exist"); // NOI18N
+                            }
                             final FileObject buildScriptXml = FileUtil.createData(dir, path);
                             byte[] projectXmlData;
                             InputStream is = projectXml.getInputStream();
@@ -673,12 +676,8 @@ public final class GeneratedFilesHelper {
 
     /** Find the time the file this URL represents was last modified xor its size, if possible. */
     private static long checkFootprint(URL u) {
-        URL nested = FileUtil.getArchiveFile(u);
-        if (nested != null) {
-            u = nested;
-        }
-        if (u.getProtocol().equals("file")) { // NOI18N
-            File f = new File(URI.create(u.toExternalForm()));
+        File f = FileUtil.archiveOrDirForURL(u);
+        if (f != null) {
             return f.lastModified() ^ f.length();
         } else {
             return 0L;
