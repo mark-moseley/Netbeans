@@ -41,70 +41,16 @@
 
 package org.netbeans.modules.cnd.editor.makefile;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.ObjectStreamField;
-import org.netbeans.editor.ext.ExtFormatter;
-import org.netbeans.modules.cnd.MIMENames;
-import org.netbeans.modules.editor.FormatterIndentEngine;
-
-import org.openide.util.HelpCtx;
+import org.netbeans.editor.Acceptor;
+import org.netbeans.editor.AcceptorFactory;
 
 /**
- * Makefile indentation engine
+ * Extended settings for Makefile.
  */
+public class MakefileSettingsFactory {
 
-public class MakefileIndentEngine extends FormatterIndentEngine {
-    
-    public static final String MAKEFILE_TYPE = "MakefileType"; // NOI18N
-    
-    // Makefile type isn't implemented yet
-//    public static final String SOLARIS_MAKEFILE_TYPE = "SolarisMakefileType";
-//    public static final String GNU_MAKEFILE_TYPE = "GNUMakefileType";
-//    
-//    private String type = GNU_MAKEFILE_TYPE;
-    
-    private final static long serialVersionUID = -5085934337015783530L;
+    public static Acceptor getAbbrevResetAcceptor() {
+        return AcceptorFactory.NON_JAVA_IDENTIFIER;
+    }
 
-    public MakefileIndentEngine() {
-        setAcceptedMimeTypes(new String[] { MIMENames.MAKEFILE_MIME_TYPE });
-	setExpandTabs(false); // This should be the default for Makefilesd
-	setSpacesPerTab(8);
-    }
-    
-    protected ExtFormatter createFormatter() {
-        return new MakefileFormatter(MakefileKit.class);
-    }
-    
-    // Makefile type isn't implemented yet
-//    public String getMakefileType() {
-//        return type;
-//    }
-//    
-//    public void setMakefileType(String type) {
-//        this.type = type;
-//    }
-
-    public HelpCtx getHelpCtx() {
-        return new HelpCtx("Welcome_opt_indent_makefile"); // NOI18N // FIXUP
-    }
-    
-    // Serialization
-    
-    private static final ObjectStreamField[] serialPersistenFields = {
-        new ObjectStreamField(MAKEFILE_TYPE, String.class)
-    };
-    
-    private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
-//        ObjectInputStream.GetField fields = ois.readFields();
-//        setMakefileType((String) fields.get(MAKEFILE_TYPE, (Object) getMakefileType()));
-    }
-    
-    private void writeObject(ObjectOutputStream oos) throws IOException, ClassNotFoundException {
-//        ObjectOutputStream.PutField fields = oos.putFields();
-//        fields.put(MAKEFILE_TYPE, getMakefileType());
-//        oos.writeFields();
-    }
 }
-

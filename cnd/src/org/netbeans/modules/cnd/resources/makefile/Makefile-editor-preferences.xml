@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
@@ -40,23 +40,12 @@ However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
-<!DOCTYPE fontscolors PUBLIC "-//NetBeans//DTD Editor Fonts and Colors settings 1.1//EN" "http://www.netbeans.org/dtds/EditorFontsColors-1_1.dtd">
+<!DOCTYPE editor-preferences PUBLIC "-//NetBeans//DTD Editor Preferences 1.0//EN" "http://www.netbeans.org/dtds/EditorPreferences-1_0.dtd">
 
-<fontscolors>
-
-    <fontcolor name="line_comment" default="comment"/>
-    <fontcolor name="tab" default="whitespace"/>
-    <fontcolor name="whitespace" default="whitespace"/>
-    <fontcolor name="identifier" default="identifier"/>
-    <fontcolor name="keyword" default="keyword"/>
-    <fontcolor name="rule_operator" default="operator"/>
-    <fontcolor name="macro_operator" default="operator"/>
-    <fontcolor name="macro" default="field">
-        <font style="bold"/>
-    </fontcolor>
-    <fontcolor name="special_target" default="operator">
-        <font style="bold"/>
-    </fontcolor>
-    <fontcolor name="string_literal" default="string"/>
-
-</fontscolors>
+<editor-preferences>
+    <entry name="tab-size" value="8" javaType="java.lang.Integer" />
+    <entry name="expand-tabs" value="false" javaType="java.lang.Boolean" />
+    <entry name="indent-shift-width" value="8" javaType="java.lang.Integer" />
+    <entry name="word-match-match-case" value="true" javaType="java.lang.Boolean" />
+    <entry name="abbrev-reset-acceptor" value="org.netbeans.modules.cnd.editor.makefile.MakefileSettingsFactory.getAbbrevResetAcceptor" javaType="methodvalue" />
+</editor-preferences>
