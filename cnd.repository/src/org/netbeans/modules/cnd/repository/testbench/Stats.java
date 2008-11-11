@@ -51,12 +51,12 @@ public class Stats {
     
     private Stats() {}
     
-    public static int debugPut = 0;
-    public static int debugGot = 0;
-    public static int debugReadFromFile = 0;
-    public static int debugNotFound = 0;
-    public static int debugGotFromHardCache = 0;
-    public static int nullDataTriggered = 0;
+    public static final int debugPut = 0;
+    public static final int debugGot = 0;
+    public static final int debugReadFromFile = 0;
+    public static final int debugNotFound = 0;
+    public static final int debugGotFromHardCache = 0;
+    public static final int nullDataTriggered = 0;
     
     public static final boolean monitorRemovedKeys = getBoolean("cnd.repository.monitor.removed.keys", false); //NOI18N
     
@@ -76,6 +76,10 @@ public class Stats {
     public static final int fileStatisticsRanges = getInteger("cnd.repository.file.stat.ranges", 10); //NOI18N
 
     public static final boolean writeStatistics = getBoolean("cnd.repository.write.stat", false); //NOI18N
+    
+    public static final boolean multyFileStatistics = getBoolean("cnd.repository.mf.stat", false); //NOI18N
+
+    public static final boolean memoryCacheHitStatistics = getBoolean("cnd.repository.mem.cache.stat", false); //NOI18N
     
     public static final boolean dumoFileOnExit = getBoolean("cnd.repository.dump.on.exit", false); //NOI18N
     public static final int maintenanceInterval = getInteger("cnd.repository.queue.maintenance", 500); //NOI18N
@@ -149,7 +153,7 @@ public class Stats {
         if (useNullWorkaround) {
             st += "; NULL: " + nullDataTriggered; //NOI18N
         }
-        if (isDebug) System.err.println("DEBUG [Repository] " + st); //NOI18N
+        if (isDebug) { System.err.println("DEBUG [Repository] " + st); } //NOI18N
     }
     
 }

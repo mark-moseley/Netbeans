@@ -61,12 +61,30 @@ public class SourceRootContainer {
     }
     
     public boolean isMySource(String includePath){
-        return projectRoots.containsKey(includePath);
+        if (projectRoots.containsKey(includePath)){
+            return true;
+        }
+        while (true){
+            int i = includePath.lastIndexOf('\\');
+            if (i <= 0) {
+                i = includePath.lastIndexOf('/');
+            }
+            if (i <= 0) {
+                return false;
+            }
+            includePath = includePath.substring(0,i);
+            Integer val = projectRoots.get(includePath);
+            if (val != null) {
+                if (val > Integer.MAX_VALUE/4) {
+                    return true;
+                }
+            }
+        }
     }
     
     public void fixFolder(String path){
         if (path != null) {
-            projectRoots.put(path,new Integer(Integer.MAX_VALUE/2));
+            projectRoots.put(path, Integer.MAX_VALUE / 2);
         }
     }
     
@@ -93,10 +111,10 @@ public class SourceRootContainer {
     
     private void addPath(final String path) {
         Integer integer = projectRoots.get(path);
-        if (integer == null){
-            projectRoots.put(path,new Integer(1));
+        if (integer == null) {
+            projectRoots.put(path, 1);
         } else {
-            projectRoots.put(path, new Integer(integer.intValue()+1));
+            projectRoots.put(path, integer + 1);
         }
     }
     
@@ -109,9 +127,9 @@ public class SourceRootContainer {
     public void removeFile(File file){
         String path = FileUtil.normalizeFile(file).getParent();
         Integer integer = projectRoots.get(path);
-        if (integer != null){
-            if (integer.intValue()>1) {
-                projectRoots.put(path, new Integer(integer.intValue()-1));
+        if (integer != null) {
+            if (integer.intValue() > 1) {
+                projectRoots.put(path, integer - 1);
             } else {
                 projectRoots.remove(path);
             }

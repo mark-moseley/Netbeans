@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,41 +31,71 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.makeproject.configurations.ui;
+package org.netbeans.modules.cnd.editor.options;
 
+import org.netbeans.modules.cnd.editor.api.CodeStyle;
 import org.openide.nodes.PropertySupport;
-import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
+import org.openide.util.NbBundle;
 
-public class BooleanNodeProp extends PropertySupport<Boolean> {
-    private BooleanConfiguration booleanConfiguration;
+public class BooleanNodeProp extends PropertySupport.ReadWrite<Boolean> {
 
-    public BooleanNodeProp(BooleanConfiguration booleanConfiguration, boolean canWrite, String name1, String name2, String name3) {
-        super(name1, Boolean.class, name2, name3, true, canWrite);
-        this.booleanConfiguration = booleanConfiguration;
+    private final CodeStyle.Language language;
+    private final String optionID;
+    private PreviewPreferences preferences;
+    private boolean state;
+
+    public BooleanNodeProp(CodeStyle.Language language, PreviewPreferences preferences, String optionID) {
+        super(optionID, Boolean.class, getString("LBL_" + optionID), getString("HINT_" + optionID)); // NOI18N
+        this.language = language;
+        this.optionID = optionID;
+        this.preferences = preferences;
+        init();
+    }
+
+    private static String getString(String key) {
+        return NbBundle.getMessage(BooleanNodeProp.class, key);
+    }
+
+    private void init() {
+        state = getPreferences().getBoolean(optionID, getDefault());
+    }
+
+    private boolean getDefault(){
+        return (Boolean) EditorOptions.getDefault(
+                getPreferences().getLanguage(), getPreferences().getStyleId(), optionID);
+    }
+    
+    private PreviewPreferences getPreferences() {
+        return preferences;
     }
 
     @Override
     public String getHtmlDisplayName() {
-        if (booleanConfiguration.getModified()) {
+        if (!isDefaultValue()) {
             return "<b>" + getDisplayName(); // NOI18N
-        } else {
-            return null;
         }
+        return null;
     }
 
+    @Override
     public Boolean getValue() {
-        return Boolean.valueOf(booleanConfiguration.getValue());
+        return Boolean.valueOf(state);
     }
 
     public void setValue(Boolean v) {
-        booleanConfiguration.setValue(v.booleanValue());
+        state = v;
+        getPreferences().putBoolean(optionID, state);
     }
 
     @Override
     public void restoreDefaultValue() {
-        booleanConfiguration.reset();
+        setValue(getDefault());
     }
 
     @Override
@@ -81,6 +105,6 @@ public class BooleanNodeProp extends PropertySupport<Boolean> {
 
     @Override
     public boolean isDefaultValue() {
-        return !booleanConfiguration.getModified();
+        return getDefault() == getValue().booleanValue();
     }
 }
