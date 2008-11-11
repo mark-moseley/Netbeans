@@ -86,6 +86,13 @@ public class UploadLogsTest extends NbTestCase {
     protected Level logLevel() {
         return Level.INFO;
     }
+
+    public void testSendNull() throws Exception {
+        List<LogRecord> recs = new ArrayList<LogRecord>();
+        recs.add(null);
+        MemoryURL.registerURL("memory://upload", "Ok");
+        URL redir = Installer.uploadLogs(new URL("memory://upload"), "myId", Collections.<String,String>emptyMap(), recs, false);
+    }
     
     public void testSendsCorrectlyEncoded() throws Exception {
         
@@ -94,7 +101,7 @@ public class UploadLogsTest extends NbTestCase {
             List<LogRecord> recs = new ArrayList<LogRecord>();
             recs.add(new LogRecord(Level.WARNING, "MSG_MISTAKE"));
             MemoryURL.registerURL("memory://upload", "Ok");
-            URL redir = Installer.uploadLogs(new URL("memory://upload"), "myId", Collections.<String,String>emptyMap(), recs);
+            URL redir = Installer.uploadLogs(new URL("memory://upload"), "myId", Collections.<String,String>emptyMap(), recs, false);
 
             final byte[] content = MemoryURL.getOutputForURL("memory://upload");
 
