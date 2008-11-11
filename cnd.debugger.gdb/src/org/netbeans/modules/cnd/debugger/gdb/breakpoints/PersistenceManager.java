@@ -42,8 +42,11 @@
 package org.netbeans.modules.cnd.debugger.gdb.breakpoints;
 
 import java.beans.PropertyChangeEvent;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import org.netbeans.api.debugger.Breakpoint;
 import org.netbeans.api.debugger.DebuggerEngine;
 
@@ -53,6 +56,9 @@ import org.netbeans.api.debugger.Properties;
 import org.netbeans.api.debugger.Properties.Reader;
 import org.netbeans.api.debugger.Session;
 import org.netbeans.api.debugger.Watch;
+import org.openide.ErrorManager;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.URLMapper;
 
 /**
  * Listens on DebuggerManager and:
@@ -63,10 +69,48 @@ import org.netbeans.api.debugger.Watch;
  */
 public class PersistenceManager implements LazyDebuggerManagerListener {
     
-    public Breakpoint[] initBreakpoints() {
+    public synchronized Breakpoint[] initBreakpoints() {
         Properties p = Properties.getDefault().
                     getProperties("debugger").getProperties(DebuggerManager.PROP_BREAKPOINTS); // NOI18N
-        return (Breakpoint[]) p.getArray("gdb", new Breakpoint[0]); // NOI18N
+        Breakpoint[] breakpoints = (Breakpoint[]) p.getArray("gdb", new Breakpoint[0]); // NOI18N
+        
+        for (int i = 0; i < breakpoints.length; i++) {
+            if (breakpoints[i] instanceof LineBreakpoint) {
+                LineBreakpoint lb = (LineBreakpoint) breakpoints[i];
+                try {
+                    FileObject fo = URLMapper.findFileObject(new URL(lb.getURL()));
+                    if (fo == null) {
+                        // The file is gone - we should remove the breakpoint as well.
+                        Breakpoint[] breakpoints2 = new Breakpoint[breakpoints.length - 1];
+                        if (i > 0) {
+                            System.arraycopy(breakpoints, 0, breakpoints2, 0, i);
+                        }
+                        if (i < breakpoints2.length) {
+                            System.arraycopy(breakpoints, i + 1, breakpoints2, i, breakpoints2.length - i);
+                        }
+                        breakpoints = breakpoints2;
+                        i--;
+                        continue;
+                    }
+                } catch (MalformedURLException ex) {
+                    ErrorManager.getDefault().notify(ex);
+                }
+            }
+            breakpoints[i].addPropertyChangeListener(this);
+        }
+        return breakpoints;
+    }
+    
+    public synchronized Breakpoint[] unloadBreakpoints() {
+        Breakpoint[] bpts = DebuggerManager.getDebuggerManager().getBreakpoints();
+        ArrayList<Breakpoint> unloaded = new ArrayList<Breakpoint>();
+        for (Breakpoint b : bpts) {
+            if (b instanceof GdbBreakpoint) {
+                unloaded.add(b);
+                b.removePropertyChangeListener(this);
+            }
+        }
+        return unloaded.toArray(new Breakpoint[unloaded.size()]);
     }
     
     public void initWatches() {
@@ -80,17 +124,17 @@ public class PersistenceManager implements LazyDebuggerManagerListener {
     }
     
     public void breakpointAdded(Breakpoint breakpoint) {
-        Properties p = Properties.getDefault().
-                    getProperties("debugger").getProperties(DebuggerManager.PROP_BREAKPOINTS); // NOI18N
-        p.setArray("gdb", getBreakpoints()); // NOI18N
-        breakpoint.addPropertyChangeListener(this);
+        if (breakpoint instanceof GdbBreakpoint) {
+            storeBreakpoints();
+            breakpoint.addPropertyChangeListener(this);
+        }
     }
 
     public void breakpointRemoved(Breakpoint breakpoint) {
-        Properties p = Properties.getDefault().
-                    getProperties("debugger").getProperties(DebuggerManager.PROP_BREAKPOINTS); // NOI18N
-        p.setArray("gdb", getBreakpoints()); // NOI18N
-        breakpoint.removePropertyChangeListener(this);
+        if (breakpoint instanceof GdbBreakpoint) {
+            storeBreakpoints();
+            breakpoint.removePropertyChangeListener(this);
+        }
     }
     public void watchAdded(Watch watch) {
     }
@@ -100,14 +144,9 @@ public class PersistenceManager implements LazyDebuggerManagerListener {
     
     public void propertyChange(PropertyChangeEvent evt) {
         if (evt.getSource() instanceof GdbBreakpoint) {
-//            if (LineBreakpoint.PROP_LINE_NUMBER.equals(evt.getPropertyName())) {
-//                BreakpointsReader r = findBreakpointsReader();
-//                if (r != null) {
-//                    // Reset the class name, which might change
-//                    //r.storeCachedClassName((GdbBreakpoint) evt.getSource(), null);
-//                }
-//            }
-            storeBreakpoints();
+            if (!Breakpoint.PROP_VALIDITY.equals(evt.getPropertyName())) {
+                storeBreakpoints();
+            }
         }
     }
     
@@ -127,7 +166,8 @@ public class PersistenceManager implements LazyDebuggerManagerListener {
 
     static void storeBreakpoints() {
         Properties.getDefault().getProperties("debugger"). // NOI18N
-                    getProperties(DebuggerManager.PROP_BREAKPOINTS).setArray("gdb", getBreakpoints()); //NOI18N
+                    getProperties(DebuggerManager.PROP_BREAKPOINTS).
+                    setArray("gdb", getBreakpoints()); //NOI18N
     }
     
     public void sessionAdded (Session session) {}
@@ -139,14 +179,13 @@ public class PersistenceManager implements LazyDebuggerManagerListener {
     private static Breakpoint[] getBreakpoints() {
         Breakpoint[] bs = DebuggerManager.getDebuggerManager().getBreakpoints();
         int i, k = bs.length;
-        ArrayList bb = new ArrayList();
+        List<Breakpoint> bb = new ArrayList<Breakpoint>();
         for (i = 0; i < k; i++) {
             // Don't store hidden breakpoints
             if (bs[i] instanceof GdbBreakpoint && !((GdbBreakpoint) bs [i]).isHidden()) {
-                bb.add (bs [i]);
+                bb.add(bs[i]);
             }
         }
-        bs = new Breakpoint[bb.size ()];
-        return (Breakpoint[]) bb.toArray(bs);
+        return bb.toArray(new Breakpoint[bb.size()]);
     }
 }

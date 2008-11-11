@@ -64,26 +64,26 @@ final class ProcessList implements Runnable {
     public final static int PTYPE_CYGWIN = 1;
     
     private int ptype = PTYPE_UNINITIALIZED;
-    private List<String> args;
-    private List<String> proclist;
-    private ProcessBuilder pb;
-    private BufferedReader reader;
+    private final List<String> proclist;
+    private final ProcessBuilder pb;
     private ProcessListReader plr;
 
     protected ProcessList(ProcessListReader plr) {
         this.plr = plr;
-        args = getProcessCommand();
+        List<String> args = getProcessCommand();
         pb = new ProcessBuilder(args);
         pb.redirectErrorStream(true);
         proclist = new ArrayList<String>();
-        RequestProcessor.getDefault().post(this);
+        if (args != null && !args.isEmpty()) {
+            RequestProcessor.getDefault().post(this);
+        }
     }
     
     public void run() {
         String line;
         try {
             Process process = pb.start();
-            reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             reader.readLine(); // read and ignore header line...
             while ((line = reader.readLine()) != null) {
                 proclist.add(line);
@@ -144,7 +144,7 @@ final class ProcessList implements Runnable {
     }
     
     private List<String> getProcessCommand() {
-        List alist = new ArrayList<String>();
+        List<String> alist = new ArrayList<String>();
         
         if (Utilities.isWindows()) {
             File file = new File(CppUtils.getCygwinBase() + "/bin", "ps.exe"); // NOI18N

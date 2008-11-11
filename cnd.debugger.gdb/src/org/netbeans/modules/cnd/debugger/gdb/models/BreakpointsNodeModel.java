@@ -41,7 +41,9 @@
 
 package org.netbeans.modules.cnd.debugger.gdb.models;
 
-import java.util.Vector;
+import java.util.Collection;
+import java.util.concurrent.CopyOnWriteArrayList;
+import org.netbeans.api.debugger.Breakpoint;
 import org.netbeans.modules.cnd.debugger.gdb.breakpoints.FunctionBreakpoint;
 
 import org.openide.util.NbBundle;
@@ -52,6 +54,7 @@ import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.netbeans.modules.cnd.debugger.gdb.breakpoints.GdbBreakpoint;
 import org.netbeans.modules.cnd.debugger.gdb.breakpoints.LineBreakpoint;
 import org.netbeans.modules.cnd.debugger.gdb.EditorContextBridge;
+import org.netbeans.modules.cnd.debugger.gdb.breakpoints.AddressBreakpoint;
 
 /**
  * @author   Jan Jancura and Gordon Prieur
@@ -60,10 +63,19 @@ public class BreakpointsNodeModel implements NodeModel {
 
     public static final String BREAKPOINT =
         "org/netbeans/modules/debugger/resources/breakpointsView/NonLineBreakpoint"; // NOI18N
+    public static final String DISABLED_BREAKPOINT =
+        "org/netbeans/modules/debugger/resources/breakpointsView/DisabledNonLineBreakpoint"; // NOI18N
     public static final String LINE_BREAKPOINT =
         "org/netbeans/modules/debugger/resources/breakpointsView/Breakpoint"; // NOI18N
+    public static final String DISABLED_LINE_BREAKPOINT =
+        "org/netbeans/modules/debugger/resources/breakpointsView/DisabledBreakpoint"; // NOI18N
+    public static final String LINE_CONDITIONAL_BREAKPOINT =
+        "org/netbeans/modules/debugger/resources/breakpointsView/ConditionalBreakpoint"; // NOI18N
+    public static final String DISABLED_LINE_CONDITIONAL_BREAKPOINT =
+        "org/netbeans/modules/debugger/resources/breakpointsView/DisabledConditionalBreakpoint"; // NOI18N
+    
 
-    private Vector listeners = new Vector();
+    private Collection<ModelListener> listeners = new CopyOnWriteArrayList<ModelListener>();
 
     static int log10(int n) {
         int l = 1;
@@ -72,7 +84,8 @@ public class BreakpointsNodeModel implements NodeModel {
         }
         return l;
     }
-    
+
+    // We have the same in AbstractVariable
     private static final String ZEROS = "            "; // NOI18N
     
     static String zeros(int n) {
@@ -93,7 +106,7 @@ public class BreakpointsNodeModel implements NodeModel {
             LineBreakpoint b = (LineBreakpoint) o;
             int lineNum = b.getLineNumber();
             String line = Integer.toString(lineNum);
-            Integer maxInt = (Integer) BreakpointsTreeModelFilter.MAX_LINES.get(b);
+            Integer maxInt = BreakpointsTreeModelFilter.MAX_LINES.get(b);
             if (maxInt != null) {
                 int max = maxInt.intValue();
                 int num0 = log10(max) - log10(lineNum);
@@ -124,6 +137,10 @@ public class BreakpointsNodeModel implements NodeModel {
 			"CTL_Function_Breakpoint", b.getFunctionName())); // NOI18N
 		}
             }
+        } else if (o instanceof AddressBreakpoint) {
+            AddressBreakpoint b = (AddressBreakpoint)o;
+            return bold(b, NbBundle.getMessage(BreakpointsNodeModel.class, "CTL_Address_Breakpoint", // NOI18N
+                    b.getAddress()));
         } else {
             throw new UnknownTypeException(o);
         }
@@ -133,7 +150,7 @@ public class BreakpointsNodeModel implements NodeModel {
         if (o instanceof LineBreakpoint) {
             return NbBundle.getMessage(BreakpointsNodeModel.class, "CTL_Line_Breakpoint", // NOI18N
                     EditorContextBridge.getFileName((LineBreakpoint) o),
-                    "" + ((LineBreakpoint) o).getLineNumber()); // NOI18N
+                    ((LineBreakpoint) o).getLineNumber()); // NOI18N
         } else if (o instanceof FunctionBreakpoint) {
             FunctionBreakpoint b = (FunctionBreakpoint) o;
             String className = "";
@@ -149,16 +166,38 @@ public class BreakpointsNodeModel implements NodeModel {
                 return NbBundle.getMessage(BreakpointsNodeModel.class, "CTL_Function_Breakpoint", // NOI18N
                         className, b.getFunctionName());
             }
+        } else if (o instanceof AddressBreakpoint) {
+            return NbBundle.getMessage(BreakpointsNodeModel.class, "CTL_Address_Breakpoint", // NOI18N
+                    ((AddressBreakpoint) o).getAddress()); // NOI18N
         } else {
             throw new UnknownTypeException(o);
         }
     }
     
     public String getIconBase(Object o) throws UnknownTypeException {
-        if (o instanceof LineBreakpoint) {
-            return LINE_BREAKPOINT;
+        boolean disabled = !((Breakpoint) o).isEnabled();
+        if (o instanceof LineBreakpoint || o instanceof AddressBreakpoint) {
+            String condition = ((GdbBreakpoint) o).getCondition();
+            boolean conditional = condition != null && condition.trim().length() > 0;
+            if (disabled) {
+                if (conditional) {
+                    return DISABLED_LINE_CONDITIONAL_BREAKPOINT;
+                } else {
+                    return DISABLED_LINE_BREAKPOINT;
+                }
+            } else {
+                if (conditional) {
+                    return LINE_CONDITIONAL_BREAKPOINT;
+                } else {
+                    return LINE_BREAKPOINT;
+                }
+            }
         } else if (o instanceof FunctionBreakpoint) {
-            return BREAKPOINT;
+            if (disabled) {
+                return DISABLED_BREAKPOINT;
+            } else {
+                return BREAKPOINT;
+            }
         } else {
             throw new UnknownTypeException (o);
         }
@@ -189,10 +228,8 @@ public class BreakpointsNodeModel implements NodeModel {
 //    
     
     void fireNodeChanged(GdbBreakpoint b) {
-        Vector v = (Vector) listeners.clone();
-        int i, k = v.size();
-        for (i = 0; i < k; i++) {
-            ((ModelListener) v.get(i)).modelChanged(new ModelEvent.NodeChanged(this, b));
+        for (ModelListener listener : listeners) {
+            listener.modelChanged(new ModelEvent.NodeChanged(this, b));
         }
     }
     

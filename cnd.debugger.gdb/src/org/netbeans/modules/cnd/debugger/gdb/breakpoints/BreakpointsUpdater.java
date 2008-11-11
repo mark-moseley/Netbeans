@@ -39,71 +39,38 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb.actions;
+package org.netbeans.modules.cnd.debugger.gdb.breakpoints;
 
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.util.Collections;
-import java.util.Set;
-import org.netbeans.api.debugger.ActionsManager;
+import org.netbeans.api.debugger.DebuggerManager;
+import org.netbeans.api.debugger.LazyActionsManagerListener;
 import org.netbeans.spi.debugger.ContextProvider;
-import org.netbeans.modules.cnd.debugger.gdb.CallStackFrame;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.spi.debugger.ActionsProviderSupport;
+import org.netbeans.modules.cnd.debugger.gdb.EditorContextBridge;
 
 
 /**
-* Representation of a debugging session.
-*
-* @author  Gordon Prieur (copied from Jan Jancura's JPDA implementation)
-*/
-public class MakeCallerCurrentActionProvider extends ActionsProviderSupport implements PropertyChangeListener {
+ * Listener on all breakpoints and prints text specified in the breakpoint when a it hits.
+ *
+ * @see GdbBreakpoint#setPrintText(java.lang.String)
+ * @author Gordon Prieur (based on Maros Sandor's JPDA implementation)
+ */
+public class BreakpointsUpdater extends LazyActionsManagerListener {
     
     private GdbDebugger debugger;
     
-    public MakeCallerCurrentActionProvider(ContextProvider lookupProvider) {
+    public BreakpointsUpdater(ContextProvider lookupProvider) {
         debugger = lookupProvider.lookupFirst(null, GdbDebugger.class);
-        debugger.addPropertyChangeListener(GdbDebugger.PROP_CURRENT_CALL_STACK_FRAME, this);
+        EditorContextBridge.createTimeStamp(debugger);
+        BreakpointAnnotationListener bal =
+                DebuggerManager.getDebuggerManager().lookupFirst(null, BreakpointAnnotationListener.class);
+        bal.updateBreakpoints();
     }
     
-    public Set getActions() {
-        return Collections.singleton(ActionsManager.ACTION_MAKE_CALLER_CURRENT);
-    }
-
-    public void doAction(Object action) {
-        int i = getCurrentCallStackFrameIndex(debugger);
-        if (i < (debugger.getStackDepth() - 1)) {
-	    setCurrentCallStackFrameIndex(debugger, i+1);
-	}
+    protected void destroy () {
+        EditorContextBridge.disposeTimeStamp(debugger);
     }
     
-    protected void checkEnabled(GdbDebugger.State debuggerState) {
-        if (debuggerState == GdbDebugger.State.STOPPED) {
-	    int i = getCurrentCallStackFrameIndex(debugger);
-	    setEnabled(ActionsManager.ACTION_MAKE_CALLER_CURRENT, i < (debugger.getStackDepth() - 1));
-        } else {
-	    setEnabled(ActionsManager.ACTION_MAKE_CALLER_CURRENT, false);
-	}
-    }
-    
-    static int getCurrentCallStackFrameIndex(GdbDebugger debugger) {
-	CallStackFrame csf = debugger.getCurrentCallStackFrame();
-        if (csf != null) {
-            return csf.getFrameNumber();
-        } else {
-            return -1;
-        }
-    }
-    
-    static void setCurrentCallStackFrameIndex(GdbDebugger debugger, int index) {
-	if (index < debugger.getStackDepth()) {
-	    CallStackFrame csf = debugger.getCallStack().get(index);
-	    csf.makeCurrent();
-	}
-    }
-    
-    public void propertyChange(PropertyChangeEvent evt) {
-	checkEnabled(debugger.getState());
+    public String[] getProperties() {
+        return new String[0];
     }
 }
-
