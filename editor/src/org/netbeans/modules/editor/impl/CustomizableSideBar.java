@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.editor.impl;
 
+import java.util.logging.Level;
 import org.netbeans.modules.editor.*;
 import java.awt.BorderLayout;
 import java.lang.ref.Reference;
@@ -63,7 +64,6 @@ import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.editor.SideBarFactory;
 import org.netbeans.editor.WeakEventListenerList;
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
@@ -233,7 +233,7 @@ public final class CustomizableSideBar {
         return sideBarsMap;
     }
 
-    private static Map<SideBarPosition, List<SideBarFactory>> getFactoriesMap(String mimeType) {
+    public static Map<SideBarPosition, List<SideBarFactory>> getFactoriesMap(String mimeType) {
         MimePath mimePath = MimePath.parse(mimeType);
         
         Lookup.Result<SideBarFactoriesProvider> lR = LR.get(mimePath);
@@ -251,7 +251,9 @@ public final class CustomizableSideBar {
         }
         
         Collection<? extends SideBarFactoriesProvider> providers = lR.allInstances();
-        assert providers.size() == 1 : "There should always be only one SideBarFactoriesProvider"; //NOI18N
+        assert providers.size() == 1 : "There should always be only one SideBarFactoriesProvider; provider-count="
+                + providers.size() + ", mimeType=" + mimeType + ", providers: " + providers; //NOI18N
+
         
         SideBarFactoriesProvider provider = providers.iterator().next();
         return provider.getFactories();
@@ -293,8 +295,8 @@ public final class CustomizableSideBar {
                             if (EAST_NAME.equals(positionName)) {
                                 this.position = EAST;
                             } else {
-                                if (ErrorManager.getDefault().isLoggable(ErrorManager.INFORMATIONAL))
-                                    ErrorManager.getDefault().log(ErrorManager.INFORMATIONAL, "Unsupported position: " + positionName);
+                                if (Logger.getLogger("global").isLoggable(Level.FINE))
+                                    Logger.getLogger("global").log(Level.FINE, "Unsupported position: " + positionName);
                                 
                                 this.position = WEST;
                             }
@@ -314,8 +316,8 @@ public final class CustomizableSideBar {
             }
             
             if (this.scrollable && (this.position == SOUTH || this.position == EAST)) {
-                if (ErrorManager.getDefault().isLoggable(ErrorManager.INFORMATIONAL))
-                    ErrorManager.getDefault().log(ErrorManager.INFORMATIONAL, "Unsupported combination: scrollable == true, position=" + getBorderLayoutPosition());
+                if (Logger.getLogger("global").isLoggable(Level.FINE))
+                    Logger.getLogger("global").log(Level.FINE, "Unsupported combination: scrollable == true, position=" + getBorderLayoutPosition());
             }
         }
         
