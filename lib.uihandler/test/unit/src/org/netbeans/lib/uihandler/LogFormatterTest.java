@@ -32,6 +32,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.sql.SQLException;
+import java.util.ResourceBundle;
 import java.util.logging.Formatter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -42,9 +43,7 @@ import javax.swing.JMenuItem;
 import org.netbeans.junit.NbTestCase;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
-import org.openide.util.actions.CallableSystemAction;
 import org.openide.util.actions.CallbackSystemAction;
-import org.openide.util.actions.SystemAction;
 
 /**
  *
@@ -70,14 +69,14 @@ public class LogFormatterTest extends NbTestCase {
         thrown.initCause(new AssertionError("CAUSE PROBLEM"));
         rec.setThrown(thrown);
         String result = new LogFormatter().format(rec);
-        assertTrue(result.contains("java.lang.NullPointerException: TESTING"));
-        assertTrue(result.contains("<level>SEVERE</level>"));
-        assertTrue(result.contains("<method>testFormat</method>"));
-        assertTrue(result.contains("<message>java.lang.AssertionError: CAUSE PROBLEM</message>"));
-        assertTrue(result.contains("<more>19</more>"));
-        assertTrue(result.contains(" <class>junit.framework.TestSuite</class>"));
-        assertTrue(result.contains("<class>sun.reflect.NativeMethodAccessorImpl</class>"));
-        assertFalse(result.contains("<more>20</more>"));
+        assertTrue(result, result.contains("java.lang.NullPointerException: TESTING"));
+        assertTrue(result, result.contains("<level>SEVERE</level>"));
+        assertTrue(result, result.contains("<method>testFormat</method>"));
+        assertTrue(result, result.contains("<message>java.lang.AssertionError: CAUSE PROBLEM</message>"));
+        assertTrue(result, result.contains("<more>19</more>"));
+        assertTrue(result, result.contains(" <class>junit.framework.TestSuite</class>"));
+        assertTrue(result, result.contains("<class>sun.reflect.NativeMethodAccessorImpl</class>"));
+        assertFalse(result, result.contains("<more>20</more>"));
     }
         
     
@@ -95,6 +94,18 @@ public class LogFormatterTest extends NbTestCase {
         }
     }
     
+    public void testDontPrintLocalizedMessage() throws IOException{
+        LogRecord log = new LogRecord(Level.INFO, "test_msg");
+        log.setResourceBundleName("org.netbeans.lib.uihandler.TestBundle");
+        log.setResourceBundle(ResourceBundle.getBundle("org.netbeans.lib.uihandler.TestBundle"));
+        log.setParameters(new Object[] { new Integer(1), "Ahoj" });
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        LogRecords.write(os, log);
+        assertFalse("no localized message is printed" + os.toString(), os.toString().contains(" and "));
+        assertTrue("key", os.toString().contains("<key>test_msg</key>"));
+        assertTrue("no localized message", os.toString().contains("<message>test_msg</message>"));
+    }
+
     /**
      * test whether the result of LogFormatter is the same as XMLFormatter 
      * if there is no nested exception
