@@ -54,10 +54,12 @@ made subject to such option by the copyright holder.
                     <attr name="position" intvalue="700"/>
                 </file>
                 </folder>    
-            <folder name="Nodes">
-                <file name="org-netbeans-modules-ant-freeform-ui-FolderNodeFactory.instance"/>
-            </folder>    
          </folder>
     </folder>
-    
+    <folder name="ProjectXMLCatalog">
+        <folder name="freeform-project">
+            <file name="1.xsd" url="freeform-project-general.xsd"/>
+            <file name="2.xsd" url="freeform-project-general-2.xsd"/>
+        </folder>
+    </folder>
 </filesystem>
