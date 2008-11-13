@@ -86,7 +86,6 @@ package org.netbeans.test.uml.designpatterns;
 
 
 
-//import com.embarcadero.uml.ui.controls.projecttree.IProjectTreeItem;
 
 import java.awt.event.InputEvent;
 
@@ -186,7 +185,7 @@ public class BuildingPatterns1 extends UMLTestCase {
 
     private static boolean codeSync=false;
 
-    private static String workdir=System.getProperty("xtest.workdir");
+    private static String workdir=System.getProperty("nbjunit.workdir");
 
     private static String defaultNewElementName=org.netbeans.test.uml.designpatterns.utils.Utils.defaultNewElementName;
 

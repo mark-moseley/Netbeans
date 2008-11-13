@@ -42,7 +42,6 @@
 
 package org.netbeans.test.uml.designpatterns;
 
-//import com.embarcadero.uml.ui.controls.projecttree.IProjectTreeItem;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import javax.swing.JComboBox;
@@ -101,7 +100,7 @@ public class ApplyingPatterns extends UMLTestCase {
     private static String prName= "ApplyingPatternsProject";
     private static String project = prName+"|Model";
     private static boolean codeSync=false;
-    private static String workdir=System.getProperty("xtest.workdir");
+    private static String workdir=System.getProperty("nbjunit.workdir");
     private static String defaultNewElementName=org.netbeans.test.uml.designpatterns.utils.Utils.defaultNewElementName;
     private static String defaultReturnType=org.netbeans.test.uml.designpatterns.utils.Utils.defaultReturnType;
     private static String defaultAttributeType=org.netbeans.test.uml.designpatterns.utils.Utils.defaultAttributeType;
