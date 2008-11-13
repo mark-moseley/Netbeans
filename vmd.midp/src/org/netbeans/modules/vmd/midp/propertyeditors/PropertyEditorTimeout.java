@@ -38,10 +38,10 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.vmd.midp.propertyeditors;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -55,6 +55,7 @@ import javax.swing.JRadioButton;
 import javax.swing.JTextField;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
 import org.netbeans.modules.vmd.midp.components.displayables.AlertCD;
@@ -72,24 +73,38 @@ public final class PropertyEditorTimeout extends PropertyEditorUserCode implemen
 
     private static final String FOREVER_TEXT = NbBundle.getMessage(PropertyEditorTimeout.class, "LBL_TIMEOUTPE_FOREVER_TXT"); // NOI18N
     private static final String FOREVER_NUM_TEXT = String.valueOf(AlertCD.FOREVER_VALUE.getPrimitiveValue());
-
     private CustomEditor customEditor;
     private JRadioButton radioButton;
 
     private PropertyEditorTimeout() {
         super(NbBundle.getMessage(PropertyEditorTimeout.class, "LBL_TIMEOUT_UCLABEL")); // NOI18N
-        initComponents();
-
-        initElements(Collections.<PropertyEditorElement>singleton(this));
     }
 
     public static final PropertyEditorTimeout createInstance() {
         return new PropertyEditorTimeout();
     }
 
+    @Override
+    public void cleanUp(DesignComponent component) {
+        super.cleanUp(component);
+        if (customEditor != null) {
+            customEditor.cleanUp();
+            customEditor = null;
+        }
+        radioButton = null;
+    }
+
     private void initComponents() {
         radioButton = new JRadioButton();
         Mnemonics.setLocalizedText(radioButton, NbBundle.getMessage(PropertyEditorTimeout.class, "LBL_TIMEOUT_STR")); // NOI18N
+
+        radioButton.getAccessibleContext().setAccessibleName(
+                NbBundle.getMessage(PropertyEditorTimeout.class, "ACSN_TIMEOUT_STR")); // NOI18N
+
+        radioButton.getAccessibleContext().setAccessibleDescription(
+                NbBundle.getMessage(PropertyEditorTimeout.class, "ACSD_TIMEOUT_STR")); // NOI18N
+
+
         customEditor = new CustomEditor();
     }
 
@@ -124,11 +139,11 @@ public final class PropertyEditorTimeout extends PropertyEditorUserCode implemen
         return String.valueOf(valueValue);
     }
 
-    public void setTextForPropertyValue (String text) {
+    public void setTextForPropertyValue(String text) {
         saveValue(text);
     }
 
-    public String getTextForPropertyValue () {
+    public String getTextForPropertyValue() {
         return null;
     }
 
@@ -182,6 +197,17 @@ public final class PropertyEditorTimeout extends PropertyEditorUserCode implemen
         return false;
     }
 
+    @Override
+    public Component getCustomEditor() {
+        if (customEditor == null) {
+            initComponents();
+            initElements(Collections.<PropertyEditorElement>singleton(this));
+        }
+        return super.getCustomEditor();
+    }
+
+
+
     private class CustomEditor extends JPanel implements ActionListener, DocumentListener, FocusListener {
 
         private JTextField textField;
@@ -190,6 +216,15 @@ public final class PropertyEditorTimeout extends PropertyEditorUserCode implemen
         public CustomEditor() {
             radioButton.addFocusListener(this);
             initComponents();
+        }
+
+        void cleanUp() {
+            if (textField != null && textField.getDocument() != null) {
+                textField.getDocument().removeDocumentListener(this);
+            }
+            textField = null;
+            foreverCheckBox = null;
+            this.removeAll();
         }
 
         private void initComponents() {
@@ -201,10 +236,26 @@ public final class PropertyEditorTimeout extends PropertyEditorUserCode implemen
             Mnemonics.setLocalizedText(foreverCheckBox, NbBundle.getMessage(PropertyEditorTimeout.class, "LBL_TIMEOUTPE_FOREVER")); // NOI18N
             add(foreverCheckBox, BorderLayout.NORTH);
 
+            foreverCheckBox.getAccessibleContext().setAccessibleName(
+                    NbBundle.getMessage(PropertyEditorTimeout.class,
+                    "ACSN_TIMEOUTPE_FOREVER")); // NOI18N
+
+            foreverCheckBox.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorTimeout.class,
+                    "ACSD_TIMEOUTPE_FOREVER")); // NOI18N
+
+
             textField = new JTextField();
             textField.getDocument().addDocumentListener(this);
             textField.addFocusListener(this);
             add(textField, BorderLayout.SOUTH);
+
+            textField.getAccessibleContext().setAccessibleName(
+                    NbBundle.getMessage(PropertyEditorTimeout.class,
+                    "ACSN_TIMEOUTPE_VALUE")); // NOI18N
+            textField.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorTimeout.class,
+                    "ACSD_TIMEOUTPE_VALUE")); // NOI18N
         }
 
         public void setText(String text) {

@@ -38,9 +38,9 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.vmd.midp.propertyeditors;
 
+import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
@@ -52,6 +52,7 @@ import javax.swing.JRadioButton;
 import javax.swing.JTextField;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorElement;
@@ -71,14 +72,25 @@ public class PropertyEditorInputMode extends PropertyEditorUserCode {
 
     private PropertyEditorInputMode() {
         super(NbBundle.getMessage(PropertyEditorInputMode.class, "LBL_INPUT_MODE_UCLABEL")); // NOI18N
-        elements = new ArrayList<PropertyEditorElement>(2);
-        elements.add(new PredefinedEditor());
-        elements.add(new CustomEditor());
-        initElements(elements);
     }
 
     public static final PropertyEditorInputMode createInstance() {
         return new PropertyEditorInputMode();
+    }
+
+    @Override
+    public void cleanUp(DesignComponent component) {
+        super.cleanUp(component);
+        if (elements != null) {
+            for (PropertyEditorElement e : elements) {
+                if (e instanceof CleanUp) {
+                    ((CleanUp) e).clean(component);
+                }
+            } if (elements != null) {
+                elements.clear();
+                elements = null;
+            }
+        }
     }
 
     @Override
@@ -118,7 +130,20 @@ public class PropertyEditorInputMode extends PropertyEditorUserCode {
         return false;
     }
 
-    private final class PredefinedEditor implements PropertyEditorElement, ActionListener {
+    @Override
+    public Component getCustomEditor() {
+        if (elements == null) {
+            elements = new ArrayList<PropertyEditorElement>(2);
+            elements.add(new PredefinedEditor());
+            elements.add(new CustomEditor());
+            initElements(elements);
+        }
+        return super.getCustomEditor();
+    }
+
+
+
+    private final class PredefinedEditor implements PropertyEditorElement, ActionListener, CleanUp {
 
         private JRadioButton radioButton;
         private DefaultComboBoxModel model;
@@ -127,9 +152,30 @@ public class PropertyEditorInputMode extends PropertyEditorUserCode {
         public PredefinedEditor() {
             radioButton = new JRadioButton();
             Mnemonics.setLocalizedText(radioButton, NbBundle.getMessage(PropertyEditorInputMode.class, "LBL_PREDEFINED")); // NOI18N
+
+            radioButton.getAccessibleContext().setAccessibleName(
+                    NbBundle.getMessage(PropertyEditorInputMode.class, "ACSN_PREDEFINED")); // NOI18N
+            radioButton.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorInputMode.class, "ACSD_PREDEFINED")); // NOI18N
+
             model = new DefaultComboBoxModel(PREDEFINED_INPUT_MODES);
             combobox = new JComboBox(model);
+
+            combobox.getAccessibleContext().setAccessibleName(
+                    NbBundle.getMessage(PropertyEditorInputMode.class,
+                    "ACSN_PREDEFINED_LIST")); // NOI18N
+            combobox.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorInputMode.class,
+                    "ACSD_PREDEFINED_LIST")); // NOI18N
+
             combobox.addActionListener(this);
+        }
+
+        public void clean(DesignComponent component) {
+            radioButton.removeActionListener(this);
+            radioButton = null;
+            combobox.removeActionListener(this);
+            combobox = null;
         }
 
         public void updateState(PropertyValue value) {
@@ -174,7 +220,7 @@ public class PropertyEditorInputMode extends PropertyEditorUserCode {
         }
     }
 
-    private final class CustomEditor implements PropertyEditorElement, DocumentListener {
+    private final class CustomEditor implements PropertyEditorElement, DocumentListener, CleanUp {
 
         private JRadioButton radioButton;
         private JTextField textField;
@@ -182,8 +228,27 @@ public class PropertyEditorInputMode extends PropertyEditorUserCode {
         public CustomEditor() {
             radioButton = new JRadioButton();
             Mnemonics.setLocalizedText(radioButton, NbBundle.getMessage(PropertyEditorInputMode.class, "LBL_CUSTOM")); // NOI18N
+
+            radioButton.getAccessibleContext().setAccessibleName(
+                    NbBundle.getMessage(PropertyEditorInputMode.class, "ACSN_CUSTOM")); // NOI18N`
+            radioButton.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorInputMode.class, "ACSD_CUSTOM")); // NOI18N
+
             textField = new JTextField();
             textField.getDocument().addDocumentListener(this);
+
+            textField.getAccessibleContext().setAccessibleName(
+                    NbBundle.getMessage(PropertyEditorInputMode.class, "ACSN_CUSTOM_VALUE")); // NOI18N`
+            textField.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorInputMode.class, "ACSD_CUSTOM_VALUE")); // NOI18N
+        }
+
+        public void clean(DesignComponent component) {
+            radioButton = null;
+            if (textField.getDocument() != null) {
+                textField.getDocument().removeDocumentListener(this);
+            }
+            textField = null;
         }
 
         public void updateState(PropertyValue value) {
