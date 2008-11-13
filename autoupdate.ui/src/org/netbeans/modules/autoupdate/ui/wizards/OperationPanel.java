@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -95,9 +95,18 @@ public class OperationPanel extends javax.swing.JPanel {
         }
     }
     
-    public void setRestartButtonsVisible (boolean visible) {
-        rbRestartLater.setVisible (visible);
-        rbRestartNow.setVisible (visible);
+    public void setRestartButtonsVisible (final boolean visible) {
+        if (SwingUtilities.isEventDispatchThread ()) {
+            rbRestartLater.setVisible (visible);
+            rbRestartNow.setVisible (visible);
+        } else {
+            SwingUtilities.invokeLater (new Runnable () {
+                public void run () {
+                    rbRestartLater.setVisible (visible);
+                    rbRestartNow.setVisible (visible);
+                }
+            });
+        }
     }
     
     public boolean restartNow () {
@@ -105,7 +114,15 @@ public class OperationPanel extends javax.swing.JPanel {
     }
 
     public void hideRunInBackground () {
-        cbRunInBackground.setVisible (false);
+        if (SwingUtilities.isEventDispatchThread ()) {
+            cbRunInBackground.setVisible (false);
+        } else {
+            SwingUtilities.invokeLater (new Runnable () {
+                public void run () {
+                    cbRunInBackground.setVisible (false);
+                }
+            });
+        }
     }
     
     private void setProgressComponents (JLabel mainLabel, JComponent progressComponent, JLabel detailLabel) {
@@ -118,6 +135,7 @@ public class OperationPanel extends javax.swing.JPanel {
         pProgress.add (mainLabel, BorderLayout.NORTH);
         pProgress.add (progressComponent, BorderLayout.CENTER);
         pProgress.add (detailLabel, BorderLayout.SOUTH);
+        pAboveSpace.setVisible(true);
         revalidate ();
     }
     
@@ -150,6 +168,7 @@ public class OperationPanel extends javax.swing.JPanel {
         pProgress.removeAll ();
         pProgress.add (getTitleComponent (msg), BorderLayout.NORTH);
         pProgress.add (getElementsComponent (elements), BorderLayout.CENTER);
+        pAboveSpace.setVisible(false);
         revalidate ();
     }
     
@@ -157,6 +176,7 @@ public class OperationPanel extends javax.swing.JPanel {
         pProgress.removeAll ();
         pProgress.add (getTitleComponent (msg), BorderLayout.NORTH);
         pProgress.add (getElementsComponent (elements), BorderLayout.CENTER);
+        pAboveSpace.setVisible(false);
         revalidate ();
     }
     
