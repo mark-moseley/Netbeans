@@ -91,8 +91,8 @@ import org.netbeans.modules.uml.ui.support.diagramsupport.ProxyDiagramManager;
  */
 public class ProjectTreeBuilderImpl implements IProjectTreeBuilder
 {
-   private static final Logger LOG = 
-                Logger.getLogger("org.netbeans.modules.uml.ui.support.projecttreesupport.ProjectTreeBuilderImpl");
+   private static final Logger logger = 
+                Logger.getLogger("uml.ui.support.projecttreesupport.ProjectTreeBuilderImpl");
    private HashMap < String, Integer > m_SortMap = new HashMap < String, Integer >();
    //private HashMap m_SortMap = new HashMap();
    private IPropertyDefinitionFactory m_DefFactory = null;
@@ -174,7 +174,6 @@ public class ProjectTreeBuilderImpl implements IProjectTreeBuilder
     * @param pElement[in]  The element in which to get its children
     * @return              A collection of tree items (including elements, diagrams,
     *                      relationships)
-    * @see org.netbeans.modules.uml.ui.support.projecttreesupport.IProjectTreeBuilder#retrieveChildItemsForElement(java.lang.Object, com.embarcadero.describe.foundation.IElement)
     */
    public ITreeItem[] retrieveChildItemsForElement(Object pDisp, IElement pEle)
    {
@@ -288,7 +287,6 @@ public class ProjectTreeBuilderImpl implements IProjectTreeBuilder
    }
 
    /* (non-Javadoc)
-    * @see org.netbeans.modules.uml.ui.support.projecttreesupport.IProjectTreeBuilder#retrieveChildItemsForWorkspace(com.embarcadero.describe.workspacemanagement.IWorkspace)
     */
    public ITreeItem[] retrieveChildItemsForWorkspace(IWorkspace pWork)
    {
@@ -1251,53 +1249,6 @@ public class ProjectTreeBuilderImpl implements IProjectTreeBuilder
       Object retVal = null;
       
       IElement curE = object;
-//      if((id != null) && (id.length() > 0))
-//      {
-//         // TODO: The reflection must be removed after the bindings are no longer used.
-//         {
-//            Class classType;
-//            try
-//            {
-//               classType = Class.forName(id);
-//      
-//      
-//               Class[] params = null;//{com.embarcadero.com.Dispatch.class};
-//               Constructor constructor = classType.getConstructor(params);      
-//         
-//               Object[] paramInstances = {curE};
-//               curE = (IElement)constructor.newInstance(paramInstances);
-//            }
-//            catch (ClassNotFoundException e1)
-//            {
-//               // TODO Auto-generated catch block
-//               e1.printStackTrace();
-//            } catch (SecurityException e)
-//            {
-//               // TODO Auto-generated catch block
-//               e.printStackTrace();
-//            } catch (NoSuchMethodException e)
-//            {
-//               // TODO Auto-generated catch block
-//               e.printStackTrace();
-//            } catch (IllegalArgumentException e)
-//            {
-//               // TODO Auto-generated catch block
-//               e.printStackTrace();
-//            } catch (InstantiationException e)
-//            {
-//               // TODO Auto-generated catch block
-//               e.printStackTrace();
-//            } catch (IllegalAccessException e)
-//            {
-//               // TODO Auto-generated catch block
-//               e.printStackTrace();
-//            } catch (InvocationTargetException e)
-//            {
-//               // TODO Auto-generated catch block
-//               e.printStackTrace();
-//            }      
-//         }
-//      }
 
       Class elementClass = curE.getClass();
       try
@@ -1590,9 +1541,8 @@ public class ProjectTreeBuilderImpl implements IProjectTreeBuilder
     * @param pEle    Element in which to retrieve its owned diagrams
     * @param retList A collection of tree items (diagrams)
     */
-   public void retrieveDiagramsForElement(Object    parent, 
-                                             IElement  pEle, 
-                                             ArrayList < ITreeItem > retList)
+   public void retrieveDiagramsForElement(
+       Object parent, IElement pEle, ArrayList<ITreeItem> retList)
    {
       // only namespace elements can own diagrams
       if (pEle instanceof INamespace)
@@ -1605,24 +1555,25 @@ public class ProjectTreeBuilderImpl implements IProjectTreeBuilder
             // get the diagrams owned by this namespace and add them to
             // the out array
             ETList<IProxyDiagram> diagrams = manager.getDiagramsInNamespace(space);
-            if((diagrams != null) && diagrams != null)
+            if (diagrams != null && diagrams.size() > 0)
             {
-               String diagName = null;
+               String diagramName = null;
                for (int index = 0; index < diagrams.size(); index++)
                {
                   //ITreeDiagram newItem = new ProjectTreeDiagramNode(diagrams.get(index));
-                  if(getNodeFactory() != null)
+                  if (getNodeFactory() != null)
                   {
-                     diagName = diagrams.get(index).getNameWithAlias();
-                     LOG.info("*** retrieveDiagramsForElement: diagramNameWithAlias = "+ diagName);
-                     ITreeDiagram newItem = getNodeFactory().createDiagramNode(diagrams.get(index));
-                     newItem.setDisplayedName(diagName);
-                     // cvc - CR#6265213   
-                     // the tree node's and the diagram's name was constantly 
-                     // being reset to the diagram type name ???
-                     // newItem.setName(diagrams.get(index).getDiagramKindName());
-                     newItem.setName(diagName);
-                     newItem.setSortPriority(getSortPriority(diagrams.get(index).getDiagramKindName()));
+                     ITreeDiagram newItem = getNodeFactory()
+                         .createDiagramNode(diagrams.get(index));
+                     
+                     diagramName = diagrams.get(index).getNameWithAlias();
+                     logger.fine("*** retrieveDiagramsForElement: diagramNameWithAlias = "+ diagramName);
+                     newItem.setDisplayedName(diagramName);
+                     newItem.setName(diagramName);
+                     
+                     newItem.setSortPriority(getSortPriority(
+                         diagrams.get(index).getDiagramKindName()));
+                     
                      setTreeItemParent(newItem, parent);
                      retList.add(newItem);
                   }

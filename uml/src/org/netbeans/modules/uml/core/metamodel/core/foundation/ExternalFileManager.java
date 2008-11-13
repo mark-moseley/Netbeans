@@ -63,8 +63,6 @@ import org.netbeans.modules.uml.core.preferenceframework.IPreferenceAccessor;
 import org.netbeans.modules.uml.core.preferenceframework.PreferenceAccessor;
 import org.netbeans.modules.uml.core.support.umlmessagingcore.UMLMessagingHelper;
 import org.netbeans.modules.uml.core.support.umlsupport.PathManip;
-//import org.netbeans.modules.uml.core.support.umlsupport.ProductRetriever;
-import org.netbeans.modules.uml.core.support.umlsupport.FileSysManip;
 import org.netbeans.modules.uml.core.support.umlsupport.ProductRetriever;
 import org.netbeans.modules.uml.core.support.umlsupport.StringUtilities;
 import org.netbeans.modules.uml.core.support.umlsupport.URILocator;
@@ -72,7 +70,6 @@ import org.netbeans.modules.uml.core.support.umlsupport.XMLManip;
 import org.netbeans.modules.uml.core.typemanagement.ITypeManager;
 import org.dom4j.Attribute;
 
-//import com.embarcadero.describe.foundation.IConfigManager;
 /**
  * @author sumitabhk
  *
@@ -1389,16 +1386,7 @@ public class ExternalFileManager
 								 org.dom4j.Element element)
 	{
 		UMLXMLManip.convertAbsoluteHrefs(element, m_rootFileName);
-		
-		try
-		{
-			XMLManip.save(doc, docLoc);
-		}
-		catch (IOException e)
-		{
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		XMLManip.save(doc, docLoc);
 	}
 
 	/**

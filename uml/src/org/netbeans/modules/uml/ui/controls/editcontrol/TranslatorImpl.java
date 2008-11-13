@@ -1421,7 +1421,7 @@ public class TranslatorImpl implements ITranslator
             try
             {
                Class clazz = Class.forName(pDef.getID());
-               Class[] params = null;//{com.embarcadero.com.Dispatch.class};
+               Class[] params = null;//
                Constructor constructor = clazz.getConstructor(params);
                
                Object[] paramInstances =
@@ -1601,6 +1601,7 @@ public class TranslatorImpl implements ITranslator
       {
          refreshEditControl();
       }
+      nStartPos += pField.getTextStartPos() - startPos;
       setPosition(nStartPos + sText.length(), nStartPos + sText.length());
       m_Modified = true;
       

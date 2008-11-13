@@ -174,7 +174,6 @@ public class MemberInfo extends ElementInfo
     }
 
     /* (non-Javadoc)
-     * @see com.embarcadero.integration.events.ElementInfo#getOwningProject()
      */
     public IProject getOwningProject() {
         return attribute != null?
@@ -873,6 +872,7 @@ public class MemberInfo extends ElementInfo
                nextTok = null;
         for (int i = 0; i < ranges.getCount(); i++){
             try {
+
                  nextTok = tok.nextToken();
             }
             catch (Exception ex) {
@@ -989,6 +989,5 @@ public class MemberInfo extends ElementInfo
 				     getContainingClass());
 
     }
-
 
 }

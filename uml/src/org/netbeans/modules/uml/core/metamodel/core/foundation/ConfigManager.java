@@ -50,6 +50,7 @@ import java.util.List;
 import org.dom4j.Document;
 import org.dom4j.Node;
 
+import org.netbeans.modules.uml.UMLCoreModule;
 import org.netbeans.modules.uml.core.support.Debug;
 import org.netbeans.modules.uml.core.support.umlsupport.StringUtilities;
 import org.netbeans.modules.uml.core.support.umlsupport.Validator;
@@ -92,9 +93,6 @@ public class ConfigManager implements IConfigManager
     
     public ConfigManager()
     {
-        // this((String)System.getProperty("embarcadero.home-dir",
-        //    System.getProperty("user.home") + File.separatorChar + ".uml"));
-        
         // The following line will get the netbeans.user property which should 
         //  be something like xyz/.jstudio/Ent81, where xyz is soe os specific
         //  user home (example Win - C:\Documents and Settings\Admin\), or
@@ -113,6 +111,8 @@ public class ConfigManager implements IConfigManager
     {
         Debug.log(this, "uml config dir="+homeLocation);
         
+        UMLCoreModule.checkInitUml1();
+
         m_HomeLocation = homeLocation;
         
         if (!m_HomeLocation.endsWith(File.separator))
