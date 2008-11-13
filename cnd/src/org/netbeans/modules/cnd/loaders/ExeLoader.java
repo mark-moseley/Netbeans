@@ -51,7 +51,7 @@ import org.openide.loaders.MultiDataObject;
 import org.openide.loaders.DataObjectExistsException;
 import org.openide.util.NbBundle;
 
-import org.netbeans.modules.cnd.MIMENames;
+import org.netbeans.modules.cnd.utils.MIMENames;
 
 /**
  *  Recognizes EXE files (Windows, Linux, and Solaris executables, shared objects and
@@ -123,7 +123,7 @@ public class ExeLoader extends UniFileLoader {
 		    MIMENames.ELF_SHOBJ_MIME_TYPE.equals(mime) ||
 		    MIMENames.ELF_OBJECT_MIME_TYPE.equals(mime)) {
 	    lastMime = mime;
-	    lastFo = new WeakReference(fo);
+	    lastFo = new WeakReference<FileObject>(fo);
 
 //	    try {
 //		fo.setAttribute(KNOWN_EXEFILE_TYPE, mime);
