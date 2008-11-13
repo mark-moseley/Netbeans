@@ -53,17 +53,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.Vector;
-import org.netbeans.modules.cnd.api.utils.FileChooser;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationAuxObject;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.runprofiles.RunProfileXMLCodec;
 import org.netbeans.modules.cnd.makeproject.runprofiles.ui.EnvPanel;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.api.utils.Path;
 import org.netbeans.modules.cnd.api.xml.XMLDecoder;
 import org.netbeans.modules.cnd.api.xml.XMLEncoder;
 import org.netbeans.modules.cnd.makeproject.api.configurations.IntConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
+import org.netbeans.modules.cnd.makeproject.configurations.ui.ListenableIntNodeProp;
 import org.netbeans.modules.cnd.makeproject.configurations.ui.IntNodeProp;
-import org.netbeans.modules.cnd.settings.CppSettings;
 import org.openide.explorer.propertysheet.ExPropertyEditor;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.modules.InstalledFileLocator;
@@ -73,6 +75,8 @@ import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
 public class RunProfile implements ConfigurationAuxObject {
+    private static final boolean NO_EXEPTION = Boolean.getBoolean("org.netbeans.modules.cnd.makeproject.api.runprofiles");
+
     public static final String PROFILE_ID = "runprofile"; // NOI18N
     
     /** Property name: runargs (args, cd, etc.) have changed */
@@ -120,16 +124,25 @@ public class RunProfile implements ConfigurationAuxObject {
     private IntConfiguration consoleType;
     
     private IntConfiguration terminalType;
-    private HashMap termPaths;
-    private HashMap termOptions;
+    private HashMap<String, String> termPaths;
+    private HashMap<String, String> termOptions;
+    private final int platform;
     
+    // constructor for SS compatibility, only for localhost usage
+    @Deprecated
     public RunProfile(String baseDir) {
+        this(baseDir, Platform.getDefaultPlatform());
+    }
+    
+    public RunProfile(String baseDir, int platform) {
+        this.platform = platform;
         this.baseDir = baseDir;
         this.pcs = null;
         initialize();
     }
     
     public RunProfile(String baseDir, PropertyChangeSupport pcs) {
+        platform = Platform.getDefaultPlatform(); //TODO: it's not always right
         this.baseDir = baseDir;
         this.pcs = pcs;
         initialize();
@@ -145,8 +158,8 @@ public class RunProfile implements ConfigurationAuxObject {
         runDir = ""; // NOI18N
         buildFirst = true;
         dorun = getDorunScript();
-        termPaths = new HashMap();
-        termOptions = new HashMap();
+        termPaths = new HashMap<String, String>();
+        termOptions = new HashMap<String, String>();
         consoleType = new IntConfiguration(null, CONSOLE_TYPE_DEFAULT, consoleTypeNames, null);
         terminalType = new IntConfiguration(null, 0, setTerminalTypeNames(), null);
         clearChanged();
@@ -157,30 +170,37 @@ public class RunProfile implements ConfigurationAuxObject {
         if (file != null && file.exists()) {
             return file.getAbsolutePath();
         } else {
-            throw new IllegalStateException(getString("Err_MissingDorunScript")); // NOI18N
+            if (!NO_EXEPTION) {
+                throw new IllegalStateException(getString("Err_MissingDorunScript")); // NOI18N
+            }
+            return null;
         }
     }
     
+    private boolean isWindows() {
+        return platform == PlatformTypes.PLATFORM_WINDOWS;
+    }
+    
     private String[] setTerminalTypeNames() {
-        List list = new ArrayList();
+        List<String> list = new ArrayList<String>();
         String def = getString("TerminalType_Default"); // NOI18N
         String name;
         String termPath;
         
         list.add(def);
-        if (Utilities.isWindows()) {
+        if (isWindows()) {
             String term = getString("TerminalType_CommandWindow"); // NOI18N
             list.add(term);
-            termPaths.put(term, "start"); // NOI18N
-            termPaths.put(def, "start"); // NOI18N
-            termOptions.put(term, "sh \"" + dorun + "\" -p \"" + getString("LBL_RunPrompt") + " \" -f \"{0}\" {1} {2}"); // NOI18N
-            termOptions.put(def,  "sh \"" + dorun + "\" -p \"" + getString("LBL_RunPrompt") + " \" -f \"{0}\" {1} {2}"); // NOI18N
+            termPaths.put(term, "cmd.exe"); // NOI18N
+            termPaths.put(def, "cmd.exe"); // NOI18N
+            termOptions.put(term, "/c start sh \"" + dorun + "\" -p \"" + getString("LBL_RunPrompt") + " \" -f \"{0}\" {1} {2}"); // NOI18N
+            termOptions.put(def,  "/c start sh \"" + dorun + "\" -p \"" + getString("LBL_RunPrompt") + " \" -f \"{0}\" {1} {2}"); // NOI18N
         } else {
             // Start with the user's $PATH. Append various other directories and look
             // for gnome-terminal, konsole, and xterm.
-            String path = CppSettings.getDefault().getPath() + 
+            String path = Path.getPathAsString() + 
                 ":/usr/X11/bin:/usr/X/bin:/usr/X11R6/bin:/opt/gnome/bin" + // NOI18N
-                ":/usr/gnome/bin:/opt/kde/bin:/opt/kde3/bin/usr/kde/bin:/usr/openwin/bin"; // NOI18N
+                ":/usr/gnome/bin:/opt/kde/bin:/opt/kde4/bin:/opt/kde3/bin:/usr/kde/bin:/usr/openwin/bin"; // NOI18N
             
             termPath = searchPath(path, "gnome-terminal", "/usr/bin"); // NOI18N
             if (termPath != null) {
@@ -188,22 +208,23 @@ public class RunProfile implements ConfigurationAuxObject {
                 list.add(name); 
                 termPaths.put(name, termPath);
                 termPaths.put(def, termPath);
-                termOptions.put(name, "--disable-factory --hide-menubar " + "--title=\"{1} {2}\" " + // NOI18N
-                        "-e \"\\\"" + dorun + "\\\" -p \\\"" + getString("LBL_RunPrompt") + "\\\" " + // NOI18N
-                        "-f \\\"{0}\\\" {1} {2}\""); // NOI18N
-                termOptions.put(def,  "--disable-factory --hide-menubar " + "--title=\"{1} {2}\" " + // NOI18N
-                        "-e \"\\\"" + dorun + "\\\" -p \\\"" + getString("LBL_RunPrompt") + "\\\" " + // NOI18N
-                        "-f \\\"{0}\\\" {1} {2}\""); // NOI18N
+                String opts = "--disable-factory --hide-menubar " + "--title=\"{1} {3}\" " + // NOI18N
+                        "-x \"" + dorun + "\" -p \"" + getString("LBL_RunPrompt") + "\" " + // NOI18N
+                        "-f \"{0}\" {1} {2}"; // NOI18N
+                termOptions.put(name, opts);
+                termOptions.put(def,  opts);
             }
             termPath = searchPath(path, "konsole"); // NOI18N
             if (termPath != null) {
                 name = getString("TerminalType_KDE"); // NOI18N
                 list.add(name); 
                 termPaths.put(name, termPath);
-                termOptions.put(name,    "-e \"" + dorun + "\" -p \"" + getString("LBL_RunPrompt") + "\" -f \"{0}\" {1} {2}"); // NOI18N
+                termOptions.put(name, "--nomenubar --notabbar --workdir " + baseDir + " -e \"" + dorun + // NOI18N
+                        "\" -p \"" + getString("LBL_RunPrompt") + "\" -f \"{0}\" {1} {2}"); // NOI18N
                 if (termPaths.get(def) == null) {
                     termPaths.put(def, termPath);
-                    termOptions.put(def, "-e \"" + dorun + "\" -p \"" + getString("LBL_RunPrompt") + "\" -f \"{0}\" {1} {2}"); // NOI18N
+                    termOptions.put(def, "--nomenubar --notabbar --workdir " + baseDir + " -e \"" + dorun + // NOI18N
+                        "\" -p \"" + getString("LBL_RunPrompt") + "\" -f \"{0}\" {1} {2}"); // NOI18N
                 }
             }
             termPath = searchPath(path, "xterm", Utilities.getOperatingSystem() == Utilities.OS_SOLARIS ? // NOI18N
@@ -222,7 +243,7 @@ public class RunProfile implements ConfigurationAuxObject {
                 list.add(getString("TerminalType_None")); // NOI18N
             }
         }
-        return (String[]) list.toArray(new String[list.size()]);
+        return list.toArray(new String[list.size()]);
     }
     
     /**
@@ -281,11 +302,11 @@ public class RunProfile implements ConfigurationAuxObject {
     }
     
     public String getTerminalPath() {
-        return (String) termPaths.get(getTerminalType().getName());
+        return termPaths.get(getTerminalType().getName());
     }
     
     public String getTerminalOptions() {
-        return (String) termOptions.get(getTerminalType().getName());
+        return termOptions.get(getTerminalType().getName());
     }
     
     public boolean shared() {
@@ -327,8 +348,9 @@ public class RunProfile implements ConfigurationAuxObject {
         this.argsFlat = argsFlat;
         argsFlatValid = true;
         argsArrayValid = false;
-        if (pcs != null && !IpeUtils.sameString(oldArgsFlat, argsFlat))
+        if (pcs != null && !IpeUtils.sameString(oldArgsFlat, argsFlat)) {
             pcs.firePropertyChange(PROP_RUNARGS_CHANGED, oldArgsFlat, argsFlat);
+        }
         needSave = true;
     }
     
@@ -337,8 +359,9 @@ public class RunProfile implements ConfigurationAuxObject {
         this.argsArray = argsArray;
         argsFlatValid = false;
         argsArrayValid = true;
-        if (pcs != null && !IpeUtils.sameStringArray(oldArgsArray, argsArray))
+        if (pcs != null && !IpeUtils.sameStringArray(oldArgsArray, argsArray)) {
             pcs.firePropertyChange(PROP_RUNARGS_CHANGED, oldArgsArray, argsArray);
+        }
         needSave = true;
     }
     
@@ -347,8 +370,9 @@ public class RunProfile implements ConfigurationAuxObject {
             argsFlat = ""; // NOI18N
             for (int i = 0; i < argsArray.length; i++) {
                 argsFlat += IpeUtils.quoteIfNecessary(argsArray[i]);
-                if (i < (argsArray.length-1))
+                if (i < (argsArray.length-1)) {
                     argsFlat += " "; // NOI18N
+                }
             }
             argsFlatValid = true;
         }
@@ -369,8 +393,9 @@ public class RunProfile implements ConfigurationAuxObject {
     public String[] getArgv(String ex) {
         String[] argsArrayShifted = new String[getArgsArray().length+1];
         argsArrayShifted[0] = ex;
-        for (int i = 0; i < getArgsArray().length; i++)
+        for (int i = 0; i < getArgsArray().length; i++) {
             argsArrayShifted[i+1] = getArgsArray()[i];
+        }
         return argsArrayShifted;
     }
     
@@ -396,8 +421,9 @@ public class RunProfile implements ConfigurationAuxObject {
          * Run Directory is either absolute or relative (to base directory).
          */
     public String getRunDir() {
-        if (runDir == null)
+        if (runDir == null) {
             runDir = ""; // NOI18N
+        }
         return runDir;
     }
     
@@ -406,17 +432,16 @@ public class RunProfile implements ConfigurationAuxObject {
          * Run Directory is either absolute or relative (to base directory).
          */
     public void setRunDir(String runDir) {
-        if (runDir == null)
+        if (runDir == null) {
             runDir = ""; // NOI18N
-        if (this.runDir == runDir)
-            return;
+        }
         if (this.runDir != null && this.runDir.equals(runDir)) {
             return;
         }
-        String oldRunDir = this.runDir;
         this.runDir = runDir;
-        if (pcs != null)
+        if (pcs != null) {
             pcs.firePropertyChange(PROP_RUNDIR_CHANGED, null, this);
+        }
         needSave = true;
     }
     
@@ -428,12 +453,14 @@ public class RunProfile implements ConfigurationAuxObject {
         String runDirectory;
         String runDirectoryCanonicalPath;
         String runDir2 = getRunDir();
-        if (runDir2.length() == 0)
+        if (runDir2.length() == 0) {
             runDir2 = "."; // NOI18N
-        if (IpeUtils.isPathAbsolute(runDir2))
+        }
+        if (IpeUtils.isPathAbsolute(runDir2)) {
             runDirectory = runDir2;
-        else
+        } else {
             runDirectory = getBaseDir() + "/" + runDir2; // NOI18N
+        }
         
         // convert to canonical path
         File runDirectoryFile = new File(runDirectory);
@@ -477,8 +504,9 @@ public class RunProfile implements ConfigurationAuxObject {
     
     public void setEnvironment(Env environment) {
         this.environment = environment;
-        if (pcs != null)
+        if (pcs != null) {
             pcs.firePropertyChange(PROP_ENVVARS_CHANGED, null, this);
+        }
     }
     
     public IntConfiguration getConsoleType() {
@@ -489,7 +517,7 @@ public class RunProfile implements ConfigurationAuxObject {
         this.consoleType = consoleType;
     }
     
-    public int getDefaultConsoleType() {
+    public static int getDefaultConsoleType() {
         return CONSOLE_TYPE_EXTERNAL;
     }
     
@@ -524,8 +552,9 @@ public class RunProfile implements ConfigurationAuxObject {
      *  @param l new listener.
      */
     public void addPropertyChangeListener(PropertyChangeListener l) {
-        if (pcs != null)
+        if (pcs != null) {
             pcs.addPropertyChangeListener(l);
+        }
     }
     
     /**
@@ -533,8 +562,9 @@ public class RunProfile implements ConfigurationAuxObject {
      *  @param l removed listener.
      */
     public void removePropertyChangeListener(PropertyChangeListener l) {
-        if (pcs != null)
+        if (pcs != null) {
             pcs.removePropertyChangeListener(l);
+        }
     }
     
     //
@@ -620,8 +650,9 @@ public class RunProfile implements ConfigurationAuxObject {
      * Clones the profile.
      * All fields are cloned except for 'parent'.
      */
+    @Override
     public Object clone() {
-        RunProfile p = new RunProfile(getBaseDir());
+        RunProfile p = new RunProfile(getBaseDir(), this.platform);
         //p.setParent(getParent());
         p.setCloneOf(this);
         p.setDefault(isDefault());
@@ -629,19 +660,23 @@ public class RunProfile implements ConfigurationAuxObject {
         p.setRunDir(getRunDir());
         //p.setRawRunDirectory(getRawRunDirectory());
         p.setBuildFirst(getBuildFirst());
-        p.setEnvironment(getEnvironment().cloneEnv());
+        p.setEnvironment(getEnvironment().clone());
         p.setConsoleType(getConsoleType());
         p.setTerminalType(getTerminalType());
         return p;
     }
     
-    public Sheet getSheet() {
-        return createSheet();
+    public Sheet getSheet(boolean isRemote) {
+        return createSheet(isRemote);
     }
     
-    private Sheet createSheet() {
+    public Sheet getSheet() {
+        return createSheet(false);
+    }
+    
+    private Sheet createSheet(boolean isRemote) {
         Sheet sheet = new Sheet();
-        
+
         Sheet.Set set = new Sheet.Set();
         set.setName("General"); // NOI18N
         set.setDisplayName(getString("GeneralName"));
@@ -650,58 +685,84 @@ public class RunProfile implements ConfigurationAuxObject {
         set.put(new RunDirectoryNodeProp());
         set.put(new EnvNodeProp());
         set.put(new BuildFirstNodeProp());
-        set.put(new IntNodeProp(getConsoleType(), true, null,
-                getString("ConsoleType_LBL"), getString("ConsoleType_HINT"))); // NOI18N
-        set.put(new IntNodeProp(getTerminalType(), true, null,
-                getString("TerminalType_LBL"), getString("TerminalType_HINT"))); // NOI18N
+        ListenableIntNodeProp consoleTypeNP = new ListenableIntNodeProp(getConsoleType(), true, null,
+                getString("ConsoleType_LBL"), getString("ConsoleType_HINT")); // NOI18N
+        set.put(consoleTypeNP);
+        final IntNodeProp terminalTypeNP = new IntNodeProp(getTerminalType(), true, null,
+                getString("TerminalType_LBL"), getString("TerminalType_HINT")); // NOI18N
+        set.put(terminalTypeNP);
+        if (isRemote) {
+            terminalTypeNP.setCanWrite(false);
+            consoleTypeNP.setCanWrite(false);
+        } else {
+
+            consoleTypeNP.addPropertyChangeListener(new PropertyChangeListener() {
+
+                public void propertyChange(PropertyChangeEvent evt) {
+                    String value = (String) evt.getNewValue();
+                    updateTerminalTypeState(terminalTypeNP, value);
+                }
+            });
+            // because IntNodeProb has "setValue(String)" and "Integer getValue()"...
+            updateTerminalTypeState(terminalTypeNP, consoleTypeNames[(Integer) consoleTypeNP.getValue()]);
+        }
         sheet.put(set);
-        
+
+
         return sheet;
+    }
+
+    private static void updateTerminalTypeState(IntNodeProp terminalTypeNP, String value) {
+        terminalTypeNP.setCanWrite( consoleTypeNames[CONSOLE_TYPE_EXTERNAL].equals(value) ||
+                consoleTypeNames[CONSOLE_TYPE_DEFAULT].equals(value) && getDefaultConsoleType() == CONSOLE_TYPE_EXTERNAL) ;
     }
     
     private static String getString(String s) {
         return NbBundle.getMessage(RunProfile.class, s);
     }
     
-    private class ArgumentsNodeProp extends PropertySupport {
+    private class ArgumentsNodeProp extends PropertySupport<String> {
         public ArgumentsNodeProp() {
             super("Arguments", String.class, getString("ArgumentsName"), getString("ArgumentsHint"), true, true); // NOI18N
         }
         
-        public Object getValue() {
+        public String getValue() {
             return getArgsFlat();
         }
         
-        public void setValue(Object v) {
-            setArgs((String)v);
+        public void setValue(String v) {
+            setArgs(v);
         }
     }
     
-    private class RunDirectoryNodeProp extends PropertySupport {
+    private class RunDirectoryNodeProp extends PropertySupport<String> {
         public RunDirectoryNodeProp() {
             super("Run Directory", String.class, getString("RunDirectoryName"), getString("RunDirectoryHint"), true, true); // NOI18N
         }
         
-        public Object getValue() {
+        public String getValue() {
             return getRunDir();
         }
         
-        public void setValue(Object v) {
-            String path = IpeUtils.toAbsoluteOrRelativePath(getBaseDir(), (String)v);
+        public void setValue(String v) {
+            String path = IpeUtils.toAbsoluteOrRelativePath(getBaseDir(), v);
             path = FilePathAdaptor.mapToRemote(path);
             path = FilePathAdaptor.normalize(path);
             setRunDir(path);
         }
         
+        @Override
         public PropertyEditor getPropertyEditor() {
             String seed;
             String runDir2 = getRunDir();
-            if (runDir2.length() == 0)
+            if (runDir2.length() == 0) {
                 runDir2 = "."; // NOI18N
-            if (IpeUtils.isPathAbsolute(runDir2))
+            }
+            if (IpeUtils.isPathAbsolute(runDir2)) {
                 seed = runDir2;
-            else
+            } else {
                 seed = getBaseDir() + File.separatorChar + runDir2;
+            }
             return new DirEditor(seed);
         }
     }
@@ -714,28 +775,34 @@ public class RunProfile implements ConfigurationAuxObject {
             this.seed = seed;
         }
         
+        @Override
         public void setAsText(String text) {
             setRunDir(text);
         }
         
+        @Override
         public String getAsText() {
             return getRunDir();
         }
         
+        @Override
         public Object getValue() {
             return getRunDir();
         }
         
+        @Override
         public void setValue(Object v) {
             setRunDir((String)v);
         }
         
+        @Override
         public boolean supportsCustomEditor() {
             return true;
         }
         
+        @Override
         public java.awt.Component getCustomEditor() {
-            return new DirPanel(seed, this, propenv);
+            return new DirectoryChooserPanel(seed, this, propenv);
         }
         
         public void attachEnv(PropertyEnv propenv) {
@@ -743,69 +810,43 @@ public class RunProfile implements ConfigurationAuxObject {
         }
     }
     
-    class DirPanel extends FileChooser implements PropertyChangeListener {
-        PropertyEditorSupport editor;
-        
-        public DirPanel(String seed, PropertyEditorSupport editor, PropertyEnv propenv) {
-            super(
-		java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/api/Bundle").getString("Run_Directory"),
-		java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/api/Bundle").getString("SelectLabel"),
-		FileChooser.DIRECTORIES_ONLY,
-		null,
-		seed,
-		true
-		);
-            setControlButtonsAreShown(false);
-            
-            this.editor = editor;
-            
-            propenv.setState(PropertyEnv.STATE_NEEDS_VALIDATION);
-            propenv.addPropertyChangeListener(this);
-        }
-        
-        public void propertyChange(PropertyChangeEvent evt) {
-            if (PropertyEnv.PROP_STATE.equals(evt.getPropertyName()) && evt.getNewValue() == PropertyEnv.STATE_VALID) {
-                File file = getSelectedFile();
-                if (file != null)
-                    editor.setValue(file.getPath());
-            }
-        }
-    }
-    
-    private class BuildFirstNodeProp extends PropertySupport {
+    private class BuildFirstNodeProp extends PropertySupport<Boolean> {
         public BuildFirstNodeProp() {
             super("Build First", Boolean.class, getString("BuildFirstName"), getString("BuildFirstHint"), true, true); // NOI18N
         }
         
-        public Object getValue() {
-            return new Boolean(getBuildFirst());
+        public Boolean getValue() {
+            return Boolean.valueOf(getBuildFirst());
         }
         
-        public void setValue(Object v) {
-            setBuildFirst(((Boolean)v).booleanValue());
+        public void setValue(Boolean v) {
+            setBuildFirst((v).booleanValue());
         }
     }
     
-    private class EnvNodeProp extends PropertySupport {
+    private class EnvNodeProp extends PropertySupport<Env> {
         public EnvNodeProp() {
             super("Environment", Env.class, getString("EnvironmentName"), getString("EnvironmentHint"), true, true); // NOI18N
         }
         
-        public Object getValue() {
+        public Env getValue() {
             return getEnvironment();
         }
         
-        public void setValue(Object v) {
-            getEnvironment().assign((Env)v);
+        public void setValue(Env v) {
+            getEnvironment().assign(v);
         }
         
+        @Override
         public PropertyEditor getPropertyEditor() {
-            return new EnvEditor(getEnvironment().cloneEnv());
+            return new EnvEditor(getEnvironment().clone());
         }
         
+        @Override
         public Object getValue(String attributeName) {
-            if (attributeName.equals("canEditAsText")) // NOI18N
+            if (attributeName.equals("canEditAsText")) { // NOI18N
                 return Boolean.FALSE;
+            }
             return super.getValue(attributeName);
         }
     }
@@ -818,17 +859,21 @@ public class RunProfile implements ConfigurationAuxObject {
             this.env = env;
         }
         
+        @Override
         public void setAsText(String text) {
         }
         
+        @Override
         public String getAsText() {
             return env.toString();
         }
         
+        @Override
         public java.awt.Component getCustomEditor() {
             return new EnvPanel(env, this, propenv);
         }
         
+        @Override
         public boolean supportsCustomEditor() {
             return true;
         }
