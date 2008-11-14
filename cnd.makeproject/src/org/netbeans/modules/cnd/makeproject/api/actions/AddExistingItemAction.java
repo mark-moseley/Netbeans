@@ -99,9 +99,12 @@ public class AddExistingItemAction extends NodeAction {
 	Folder folder = (Folder)n.getValue("Folder"); // NOI18N
 	assert folder != null;
 
-	ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider)project.getLookup().lookup(ConfigurationDescriptorProvider.class );
+	ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class );
 	ConfigurationDescriptor projectDescriptor = pdp.getConfigurationDescriptor();
 
+        if (!((MakeConfigurationDescriptor)projectDescriptor).okToChange()) {
+            return;
+        }
 	String seed = null;
 	if (FileChooser.getCurrectChooserFile() != null) {
 	    seed = FileChooser.getCurrectChooserFile().getPath();
