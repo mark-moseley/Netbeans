@@ -45,6 +45,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 import java.awt.event.FocusListener;
+import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.util.ArrayList;
 import javax.swing.SwingUtilities;
@@ -90,6 +91,10 @@ public class MethodCheckedTreeBeanView extends BeanTreeView implements Runnable 
         }
     }
     
+    public String getToolTipText(MouseEvent event){
+        return super.getToolTipText(event);
+    }
+    
     public Node getWaitNode() {
         return waitNode;
     }
@@ -118,8 +123,9 @@ public class MethodCheckedTreeBeanView extends BeanTreeView implements Runnable 
 
     public void run() {
         TreePath tp = tree.getSelectionPath();
-        ((DefaultTreeModel)tree.getModel()).reload();
-        if (tp != null) tree.scrollPathToVisible(tp);
+        if (tp != null) tree.setSelectionPath(null);
+        //((DefaultTreeModel)tree.getModel()).reload();
+        //if (tp != null) tree.scrollPathToVisible(tp);
     }
     
     private void forceState(Children ch, MultiStateCheckBox.State state) {
