@@ -57,6 +57,7 @@ import org.netbeans.modules.cnd.api.project.NativeFileItemSet;
 import org.netbeans.modules.cnd.loaders.CndDataObject;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
+import org.openide.loaders.DataObject;
 import org.openide.util.NbBundle;
 
 public class Folder {
@@ -185,7 +186,7 @@ public class Folder {
             }
             if (!((Folder)o).isProjectFiles()) {
                 indexAt--;
-                break;
+                continue;
             }
             String name2 = ((Folder)o).getSortName();
             int compareRes = name1.compareTo(name2);
@@ -199,7 +200,7 @@ public class Folder {
     }
     
     private void insertItemElement(Item element) {
-        String name1 = ((Item)element).getSortName();
+        String name1 = (element).getSortName();
         int indexAt = items.size() - 1;
         while (indexAt >= 0) {
             Object o = items.elementAt(indexAt);
@@ -240,8 +241,11 @@ public class Folder {
         ((MakeConfigurationDescriptor)configurationDescriptor).fireFilesAdded(list);
         return item;
     }
-    
     public Item addItem(Item item) {
+        return addItem(item, true);
+    }
+    
+    public Item addItem(Item item, boolean notify) {
         if (item == null)
             return null;
         // Check if already in project. Refresh if it's there.
@@ -256,11 +260,11 @@ public class Folder {
         addElement(item);
         
         // Add item to the dataObject's lookup
-        if (isProjectFiles()) {
-            // item.getLastDataObject() should be inited in method item.setFolder(this);
-            if (item.getLastDataObject() instanceof CndDataObject) {
-                CndDataObject dataObject = (CndDataObject)item.getLastDataObject();
-                MyNativeFileItemSet myNativeFileItemSet = (MyNativeFileItemSet)dataObject.getCookie(MyNativeFileItemSet.class);
+        if (isProjectFiles() && notify) {
+            DataObject dao = item.getDataObject();
+            if (dao instanceof CndDataObject) {
+                CndDataObject dataObject = (CndDataObject) dao;
+                MyNativeFileItemSet myNativeFileItemSet = dataObject.getCookie(MyNativeFileItemSet.class);
                 if (myNativeFileItemSet == null) {
                     myNativeFileItemSet = new MyNativeFileItemSet();
                     dataObject.addCookie(myNativeFileItemSet);
@@ -312,7 +316,6 @@ public class Folder {
     public FolderConfiguration getFolderConfiguration(Configuration configuration) {
         FolderConfiguration folderConfiguration = null;
         if (isProjectFiles()) {
-            String id = getId();
             folderConfiguration = (FolderConfiguration)configuration.getAuxObject(getId());
             if (folderConfiguration == null) {
                 CCompilerConfiguration parentCCompilerConfiguration;
@@ -382,7 +385,7 @@ public class Folder {
             }
             if (dataObject instanceof CndDataObject) {
                 CndDataObject cndDataObject = (CndDataObject)dataObject;
-                MyNativeFileItemSet myNativeFileItemSet = (MyNativeFileItemSet)cndDataObject.getCookie(MyNativeFileItemSet.class);
+                MyNativeFileItemSet myNativeFileItemSet = cndDataObject.getCookie(MyNativeFileItemSet.class);
                 if (myNativeFileItemSet != null) {
                     myNativeFileItemSet.remove(item);
                     if (myNativeFileItemSet.isEmpty())
@@ -400,7 +403,6 @@ public class Folder {
             for (int i = 0; i < configurations.length; i++)
                 configurations[i].removeAuxObject(item.getId()/*ItemConfiguration.getId(item.getPath())*/);
         }
-        item.removePropertyChangeListener();
         item.setFolder(null);
         fireChangeEvent();
         return ret;
@@ -536,10 +538,9 @@ public class Folder {
         Iterator iter = new ArrayList(getElements()).iterator();
         while (iter.hasNext()) {
             Item item = (Item)iter.next();
-            if (item instanceof Item) {
-                FileObject fo  = item.getFileObject();
-                if (fo != null)
-                    files.add(fo);
+            FileObject fo  = item.getFileObject();
+            if (fo != null) {
+                files.add(fo);
             }
         }
         return new LinkedHashSet(files);
@@ -557,8 +558,9 @@ public class Folder {
                 Object item = iter.next();
                 if (item instanceof Item) {
                     FileObject fo  = ((Item)item).getFileObject();
-                    if (fo != null)
+                    if (fo != null) {
                         files.add(fo);
+                    }
                 }
                 if (item instanceof Folder) {
                     files.addAll(((Folder)item).getAllItemsAsFileObjectSet(projectFilesOnly));
@@ -577,10 +579,9 @@ public class Folder {
         Iterator iter = new ArrayList(getElements()).iterator();
         while (iter.hasNext()) {
             Item item = (Item)iter.next();
-            if (item instanceof Item) {
-                DataObject da  = item.getDataObject();
-                if (da != null && (MIMETypeFilter == null || da.getPrimaryFile().getMIMEType().contains(MIMETypeFilter)))
-                    files.add(da);
+            DataObject da  = item.getDataObject();
+            if (da != null && (MIMETypeFilter == null || da.getPrimaryFile().getMIMEType().contains(MIMETypeFilter))) {
+                files.add(da);
             }
         }
         return new LinkedHashSet(files);
@@ -589,7 +590,7 @@ public class Folder {
     /*
      * Returns a set of all files in this logical folder and subfolders as FileObjetc's
      */
-    public Set/*<DataObject>*/ getAllItemsAsDataObjectSet(boolean projectFilesOnly, String MIMETypeFilter) {
+    public Set<DataObject> getAllItemsAsDataObjectSet(boolean projectFilesOnly, String MIMETypeFilter) {
         Vector files = new Vector();
         
         if (!projectFilesOnly || isProjectFiles()) {

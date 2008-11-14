@@ -86,7 +86,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
+import org.openide.util.RequestProcessor.Task;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -110,8 +110,9 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
     private List<String> sourceRoots = null;
     private Set<ChangeListener> projectItemsChangeListeners = new HashSet<ChangeListener>();
     private NativeProject nativeProject = null;
-    public static String DEFAULT_PROJECT_MAKFILE_NAME = "Makefile"; // NOI18N
+    public static final String DEFAULT_PROJECT_MAKFILE_NAME = "Makefile"; // NOI18N
     private String projectMakefileName = DEFAULT_PROJECT_MAKFILE_NAME;
+    private Task initTask = null;
 
     public MakeConfigurationDescriptor(String baseDir) {
         super();
@@ -179,6 +180,18 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
         setModified(true);
     }
 
+    public void setInitTask(Task task){
+        initTask = task;
+    }
+    
+    /*package-local*/ synchronized void waitInitTask(){
+        if (initTask == null){
+            return;
+        }
+        initTask.waitFinished();
+        initTask = null;
+    }
+    
     public void initLogicalFolders(Iterator sourceFileFolders, boolean createLogicalFolders, Iterator importantItems) {
         if (createLogicalFolders) {
             rootFolder.addNewFolder(SOURCE_FILES_FOLDER, getString("SourceFilesTxt"), true);
@@ -349,6 +362,9 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
 
     public Item findExternalItemByPath(String path) {
         // Try first as-is
+        if (externalFileItems == null){
+            return null;
+        }
         path = FilePathAdaptor.normalize(path);
         Item item = externalFileItems.findItemByPath(path);
         if (item == null) {
@@ -654,7 +670,7 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
      * Returns project locations (rel or abs) or all subprojects in all configurations.
      */
     public Set<String> getSubprojectLocations() {
-        Set subProjects = new HashSet();
+        Set<String> subProjects = new HashSet<String>();
 
         Configuration[] confs = getConfs().getConfs();
         for (int i = 0; i < confs.length; i++) {
@@ -764,7 +780,7 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
         return sourceRoots;
     }
     
-    public void setSourceRoots(List list) {
+    public void setSourceRoots(List<String> list) {
         synchronized (sourceRoots) {
             sourceRoots = list;
         }
@@ -870,7 +886,7 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
             new AddFilesThread(sourceFileFoldersIterator, folder, notify).start();
         } else {
             while (sourceFileFoldersIterator.hasNext()) {
-                ArrayList filesAdded = new ArrayList();
+                ArrayList<NativeFileItem> filesAdded = new ArrayList<NativeFileItem>();
                 FolderEntry folderEntry = (FolderEntry) sourceFileFoldersIterator.next();
                 Folder top = folder.findFolderByName(folderEntry.getFile().getName());
                 if (top == null) {
@@ -907,7 +923,7 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
         }
 
         public void run() {
-            ArrayList filesAdded = new ArrayList();
+            ArrayList<NativeFileItem> filesAdded = new ArrayList<NativeFileItem>();
             try {
                 handle.setInitialDelay(500);
                 handle.start();
