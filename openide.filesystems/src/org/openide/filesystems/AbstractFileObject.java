@@ -382,6 +382,9 @@ final class AbstractFileObject extends AbstractFolder {
     * @exception IOException if the folder cannot be created (e.g. already exists)
     */
     public FileObject createFolder(String name) throws IOException {
+        if (name.contains("/") || name.contains("\\")) {
+            FSException.io("EXC_SlashNotAllowed", name);
+        }
         AbstractFileObject fo;
 
         try {
@@ -523,7 +526,7 @@ final class AbstractFileObject extends AbstractFolder {
                 testLock(lock);
 
                 if (isData()) {
-                    if (ext != null) {
+                    if (ext != null && ext.trim().length() > 0) {
                         name = name + EXT_SEP + ext;
                     }
                 }
