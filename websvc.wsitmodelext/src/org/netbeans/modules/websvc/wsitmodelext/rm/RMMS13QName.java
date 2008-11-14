@@ -38,7 +38,9 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.wsitmodelext.trust;
+
+
+package org.netbeans.modules.websvc.wsitmodelext.rm;
 
 import java.util.HashMap;
 import javax.xml.namespace.QName;
@@ -51,41 +53,43 @@ import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
  *
  * @author Martin Grebac
  */
-public enum TrustQName {
-    TOKENTYPE(createTrustQName("TokenType")),                     //NOI18N
-    KEYTYPE(createTrustQName("KeyType")),                     //NOI18N
-    KEYSIZE(createTrustQName("KeySize"));                     //NOI18N
+public enum RMMS13QName {
+    INACTIVITYTIMEOUT(createRMQName("InactivityTimeout"));                      //NOI18N
 
-    public static final String TRUST_NS_PREFIX = "t";                                       //NOI18N
+    static final String RM_NS_PREFIX = "wsrm";                                            //NOI18N
 
-    public static final String TRUST_NS_URI = "http://schemas.xmlsoap.org/ws/2005/02/trust";    //NOI18N
-    public static final String TRUST_NS_URI_EXT = "http://schemas.xmlsoap.org/ws/2005/02/trust/WS-Trust.xsd";    //NOI18N
-    public static final String TRUST_NS_URI_LOCAL = "nbres:/org/netbeans/modules/websvc/wsitmodelext/catalog/resources/WS-Trust.xsd";    //NOI18N
+    static final String RM_NS_URI = "http://schemas.xmlsoap.org/ws/2005/02/rm/policy";    //NOI18N
+    static final String RM_NS_URI_EXT = "http://schemas.xmlsoap.org/ws/2005/02/rm/wsrm-policy.xsd";    //NOI18N
+    static final String RM_NS_URI_LOCAL = "nbres:/org/netbeans/modules/websvc/wsitmodelext/catalog/resources/wsrm-policy.xsd";    //NOI18N
 
-    public static final String TRUST_12_NS_URI = "http://docs.oasis-open.org/ws-sx/ws-trust/200512";    //NOI18N
-    public static final String TRUST_12_NS_URI_EXT = "http://docs.oasis-open.org/ws-sx/ws-trust/200512";    //NOI18N
-    public static final String TRUST_12_NS_URI_LOCAL = "nbres:/org/netbeans/modules/websvc/wsitmodelext/catalog/resources/ws-trust-1.3.xsd";    //NOI18N
+    static final String RM_12_NS_PREFIX = "netrmp";                                            //NOI18N
+
+    static final String RM_12_NS_URI = "http://schemas.microsoft.com/ws-rx/wsrmp/200702";    //NOI18N
+
+    // TODO - find the schemas
+    static final String RM_12_NS_URI_EXT = null;    //NOI18N
+    static final String RM_12_NS_URI_LOCAL = null;    //NOI18N
     
-    static QName createTrustQName(String localName){
-        return new QName(TRUST_NS_URI, localName, TRUST_NS_PREFIX);
+    static QName createRMQName(String localName){
+        return new QName(RM_NS_URI, localName, RM_NS_PREFIX);
     }
-
-    TrustQName(QName name) {
+    
+    RMMS13QName(QName name) {
         qName = name;
     }
-
+    
     public QName getQName(ConfigVersion cfgVersion) {
         return new QName(getNamespaceUri(cfgVersion), qName.getLocalPart(), qName.getPrefix());
     }
 
     public static String getNamespaceUri(ConfigVersion cfgVersion) {
         switch (cfgVersion) {
-            case CONFIG_1_0 : return TRUST_NS_URI;
-            case CONFIG_1_3 : return TRUST_12_NS_URI;
+            case CONFIG_1_0 : return RM_NS_URI;
+            case CONFIG_1_3 : return RM_12_NS_URI;
         }
         return null;
     }
-
+    
     public static ConfigVersion getConfigVersion(QName q) {
         for (ConfigVersion cfgVersion : ConfigVersion.values()) {
             if (getQNames(cfgVersion).contains(q)) {
@@ -94,14 +98,14 @@ public enum TrustQName {
         }
         return null;
     }
-
+    
     public static Set<QName> getQNames(ConfigVersion cfgVersion) {
         Set<QName> qnames = new HashSet<QName>();
-        for (TrustQName wq : values()) {
+        for (RMMS13QName wq : values()) {
             qnames.add(wq.getQName(cfgVersion));
         }
         return qnames;
-    }
+    }    
     private final QName qName;
 
     public Map<String, String> getSchemaLocations(boolean local) {
@@ -120,11 +124,11 @@ public enum TrustQName {
     }
 
     public String getSchemaLocation(String namespace, boolean local) {
-        if (TRUST_NS_URI.equals(namespace)) {
-            return local ? TRUST_NS_URI_LOCAL : TRUST_NS_URI_EXT;
+        if (RM_NS_URI.equals(namespace)) {
+            return local ? RM_NS_URI_LOCAL : RM_NS_URI_EXT;
         }
-        if (TRUST_12_NS_URI.equals(namespace)) {
-            return local ? TRUST_12_NS_URI_LOCAL : TRUST_12_NS_URI_EXT;
+        if (RM_12_NS_URI.equals(namespace)) {
+            return local ? RM_12_NS_URI_LOCAL : RM_12_NS_URI_EXT;
         }
         return null;
     }

@@ -38,7 +38,9 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.wsitmodelext.trust;
+
+
+package org.netbeans.modules.websvc.wsitmodelext.addressing;
 
 import java.util.HashMap;
 import javax.xml.namespace.QName;
@@ -51,26 +53,24 @@ import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
  *
  * @author Martin Grebac
  */
-public enum TrustQName {
-    TOKENTYPE(createTrustQName("TokenType")),                     //NOI18N
-    KEYTYPE(createTrustQName("KeyType")),                     //NOI18N
-    KEYSIZE(createTrustQName("KeySize"));                     //NOI18N
+public enum Addressing13WsdlQName {
+    ADDRESSING(createAddressingQName("Addressing")),                              //NOI18N
+    ANONYMOUSRESPONSES(createAddressingQName("AnonymousResponses"));                //NOI18N
 
-    public static final String TRUST_NS_PREFIX = "t";                                       //NOI18N
+    private static final String A_NS_PREFIX = "wsam";        //NOI18N
 
-    public static final String TRUST_NS_URI = "http://schemas.xmlsoap.org/ws/2005/02/trust";    //NOI18N
-    public static final String TRUST_NS_URI_EXT = "http://schemas.xmlsoap.org/ws/2005/02/trust/WS-Trust.xsd";    //NOI18N
-    public static final String TRUST_NS_URI_LOCAL = "nbres:/org/netbeans/modules/websvc/wsitmodelext/catalog/resources/WS-Trust.xsd";    //NOI18N
+    static final String A_NS_URI = 
+            "http://www.w3.org/2007/05/addressing/metadata";      //NOI18N
+    static final String A_NS_URI_EXT =
+            "http://www.w3.org/2007/05/addressing/metadata/ws-addr-metadata.xsd";      //NOI18N
+    static final String A_NS_URI_LOCAL =
+            "nbres:/org/netbeans/modules/websvc/wsitmodelext/catalog/resources/ws-addr-metadata.xsd";      //NOI18N
 
-    public static final String TRUST_12_NS_URI = "http://docs.oasis-open.org/ws-sx/ws-trust/200512";    //NOI18N
-    public static final String TRUST_12_NS_URI_EXT = "http://docs.oasis-open.org/ws-sx/ws-trust/200512";    //NOI18N
-    public static final String TRUST_12_NS_URI_LOCAL = "nbres:/org/netbeans/modules/websvc/wsitmodelext/catalog/resources/ws-trust-1.3.xsd";    //NOI18N
-    
-    static QName createTrustQName(String localName){
-        return new QName(TRUST_NS_URI, localName, TRUST_NS_PREFIX);
+    static QName createAddressingQName(String localName){
+        return new QName(A_NS_URI, localName, A_NS_PREFIX);
     }
-
-    TrustQName(QName name) {
+    
+    Addressing13WsdlQName(QName name) {
         qName = name;
     }
 
@@ -80,28 +80,29 @@ public enum TrustQName {
 
     public static String getNamespaceUri(ConfigVersion cfgVersion) {
         switch (cfgVersion) {
-            case CONFIG_1_0 : return TRUST_NS_URI;
-            case CONFIG_1_3 : return TRUST_12_NS_URI;
+            case CONFIG_1_3 : return A_NS_URI;
+            case CONFIG_1_0 : throw new IllegalArgumentException("These ADDR assertions are supported for 1.3 only!");
         }
         return null;
     }
-
+    
     public static ConfigVersion getConfigVersion(QName q) {
         for (ConfigVersion cfgVersion : ConfigVersion.values()) {
             if (getQNames(cfgVersion).contains(q)) {
                 return cfgVersion;
             }
         }
+        System.err.println("Not found config version for: " + q);
         return null;
     }
-
+    
     public static Set<QName> getQNames(ConfigVersion cfgVersion) {
         Set<QName> qnames = new HashSet<QName>();
-        for (TrustQName wq : values()) {
+        for (Addressing13WsdlQName wq : values()) {
             qnames.add(wq.getQName(cfgVersion));
         }
         return qnames;
-    }
+    }    
     private final QName qName;
 
     public Map<String, String> getSchemaLocations(boolean local) {
@@ -109,9 +110,7 @@ public enum TrustQName {
         for (ConfigVersion cfg : ConfigVersion.values()) {
             try {
                 String nsUri = getNamespaceUri(cfg);
-                if (nsUri != null) {
-                    hmap.put(nsUri, getSchemaLocation(nsUri, local));
-                }
+                hmap.put(nsUri, getSchemaLocation(nsUri, local));
             } catch (IllegalArgumentException iae) {
                 // ignore - just skip this
             }
@@ -120,11 +119,8 @@ public enum TrustQName {
     }
 
     public String getSchemaLocation(String namespace, boolean local) {
-        if (TRUST_NS_URI.equals(namespace)) {
-            return local ? TRUST_NS_URI_LOCAL : TRUST_NS_URI_EXT;
-        }
-        if (TRUST_12_NS_URI.equals(namespace)) {
-            return local ? TRUST_12_NS_URI_LOCAL : TRUST_12_NS_URI_EXT;
+        if (A_NS_URI.equals(namespace)) {
+            return local ? A_NS_URI_LOCAL : A_NS_URI_EXT;
         }
         return null;
     }
