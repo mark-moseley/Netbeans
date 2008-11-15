@@ -31,6 +31,8 @@ dirname=`dirname "$0"`
 
 "$dirname"/add_tc.sh "$NETBEANS_INSTALL_DIR" "$TOMCAT_INSTALL_DIR"
 
+"$dirname"/add_mysql.sh "$NETBEANS_INSTALL_DIR" "$MYSQL_INSTALL_DIR"
+
 jdk_home=`"$dirname"/get_current_jdk.sh`
 
 cd "$NETBEANS_INSTALL_DIR"
@@ -38,7 +40,7 @@ cd Contents/Resources/NetBeans*/etc
 if [ -f netbeans.conf ]
 then
   echo netbeans.conf found: `pwd`/netbeans.conf
-  if [ -d $jdk_home ]
+  if [ -d $jdk_home ] || [ -L $jdk_home ]
   then
     echo JDK home exists: $jdk_home
     cp netbeans.conf netbeans.conf_orig_jdk_home
@@ -56,6 +58,10 @@ cd "$NETBEANS_INSTALL_DIR"
 cd Contents/Resources/NetBeans*/${NB_CLUSTER_DIR}
 mkdir -p var
 touch var/license_accepted
+
+#fix for 151681
+cd "$NETBEANS_INSTALL_DIR"
+"$dirname"/perm.sh
 
 #add Product ID
 "$dirname"/addproduct_id.sh "NB"
