@@ -46,23 +46,37 @@ import org.openide.util.NbBundle;
 import org.openide.nodes.Sheet;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ui.CustomizerNode;
+import org.netbeans.modules.cnd.makeproject.api.configurations.CustomizerNodeProvider;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.debugger.gdb.profiles.GdbProfile;
 import org.openide.util.HelpCtx;
 
-public class ProfileNodeProvider {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.makeproject.api.configurations.CustomizerNodeProvider.class)
+public class GdbCustomizerNodeProvider implements CustomizerNodeProvider {
 
     private ResourceBundle bundle;
-
-    public CustomizerNode createDebugNode() {
-	return new CndProfileGeneralCustomizerNode("Debug", getString("Debug"),null); // NOI18N
+    private CustomizerNode customizerNode = null;
+    
+    public CustomizerNode factoryCreate() {
+        if (customizerNode == null) {
+            customizerNode = new GdbCustomizerNode("Debug", getString("Debug")); // NOI18N
+        }
+	return customizerNode;
     }
 
-    class CndProfileGeneralCustomizerNode extends CustomizerNode {
+    /** Look up i18n strings here */
+    private String getString(String s) {
+	if (bundle == null) {
+	    bundle = NbBundle.getBundle(GdbCustomizerNodeProvider.class);
+	}
+	return bundle.getString(s);
+    }
 
-	public CndProfileGeneralCustomizerNode(String name, String displayName, CustomizerNode[] children) {
-	    super(name, displayName, children);
+    static class GdbCustomizerNode extends CustomizerNode {
+
+	public GdbCustomizerNode(String name, String displayName) {
+	    super(name, displayName, null);
 	}
 
         @Override
@@ -76,13 +90,5 @@ public class ProfileNodeProvider {
         public HelpCtx getHelpCtx() {
             return new HelpCtx("ProjectPropsDebugging"); // NOI18N
         }
-    }
-
-    /** Look up i18n strings here */
-    private String getString(String s) {
-	if (bundle == null) {
-	    bundle = NbBundle.getBundle(ProfileNodeProvider.class);
-	}
-	return bundle.getString(s);
     }
 }
