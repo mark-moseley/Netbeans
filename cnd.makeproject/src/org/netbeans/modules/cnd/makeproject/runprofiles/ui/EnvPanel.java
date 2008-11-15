@@ -107,8 +107,8 @@ public class EnvPanel extends javax.swing.JPanel implements HelpCtx.Provider, Pr
 	String[][] envvars = env.getenvAsPairs();
 	if (envvars != null) {
 	    int n = envvars.length;
-	    ArrayList col0 = new ArrayList(n+3); // Leave slop for inserts
-	    ArrayList col1 = new ArrayList(n+3);
+	    ArrayList<String> col0 = new ArrayList<String>(n+3); // Leave slop for inserts
+	    ArrayList<String> col1 = new ArrayList<String>(n+3);
 	    for (int i = 0; i < n; i++) {
 		col0.add(envvars[i][0]);
 		col1.add(envvars[i][1]);
@@ -245,10 +245,10 @@ public class EnvPanel extends javax.swing.JPanel implements HelpCtx.Provider, Pr
 	int numRows = envvarModel.getRowCount();
 	if (numRows > 0) {
 	    for (int j = 0; j < numRows; j++) {
-		String name = (String)envvarModel.getValueAt(j, 0);
+		String name = ((String)envvarModel.getValueAt(j, 0)).trim();
 		if (name.length() == 0)
 		    continue;
-		String value = (String)envvarModel.getValueAt(j, 1);
+		String value = ((String)envvarModel.getValueAt(j, 1)).trim();
 		env.putenv(name, value);
 	    }
 	}

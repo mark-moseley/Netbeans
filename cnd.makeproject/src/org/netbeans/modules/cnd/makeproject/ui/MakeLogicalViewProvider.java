@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.ui;
 
 import java.awt.Toolkit;
@@ -51,8 +50,6 @@ import java.awt.dnd.DnDConstants;
 import java.awt.event.ActionEvent;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.text.MessageFormat;
@@ -63,10 +60,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ResourceBundle;
-import java.util.Vector;
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.JSeparator;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -76,13 +72,13 @@ import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.netbeans.modules.cnd.api.project.NativeProject;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.MakeActionProvider;
-import org.netbeans.modules.cnd.makeproject.api.MakeCustomizerProvider;
 import org.netbeans.modules.cnd.makeproject.api.actions.AddExistingFolderItemsAction;
 import org.netbeans.modules.cnd.makeproject.api.actions.AddExistingItemAction;
 import org.netbeans.modules.cnd.makeproject.api.actions.NewFolderAction;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
+import org.netbeans.modules.cnd.makeproject.api.configurations.Configurations;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Folder;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ItemConfiguration;
@@ -114,6 +110,8 @@ import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
+import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Lookup.Template;
 import org.openide.util.LookupEvent;
@@ -124,65 +122,78 @@ import org.openide.util.actions.SystemAction;
 import org.openide.util.datatransfer.PasteType;
 import org.openide.util.lookup.Lookups;
 import org.openide.util.Utilities;
+import org.openide.util.actions.CallbackSystemAction;
+import org.openide.util.actions.NodeAction;
 import org.openide.util.datatransfer.ExTransferable;
+import org.openide.util.lookup.AbstractLookup;
+import org.openide.util.lookup.InstanceContent;
 import org.openidex.search.SearchInfo;
 
 /**
  * Support for creating logical views.
  */
 public class MakeLogicalViewProvider implements LogicalViewProvider {
-    
+
     private final Project project;
-    private FilterNode projectNode = null;
     private final SubprojectProvider spp;
-    
+    private static final Boolean ASYNC_ROOT_NODE = Boolean.getBoolean("cnd.async.root");// NOI18N
+    private static final Logger log = Logger.getLogger("cnd.async.root");// NOI18N
     private static final MessageFormat ITEM_VIEW_FLAVOR = new MessageFormat("application/x-org-netbeans-modules-cnd-makeproject-uidnd; class=org.netbeans.modules.cnd.makeproject.ui.MakeLogicalViewProvider$ViewItemNode; mask={0}"); // NOI18N
     static final String PRIMARY_TYPE = "application"; // NOI18N
     static final String SUBTYPE = "x-org-netbeans-modules-cnd-makeproject-uidnd"; // NOI18N
     static final String MASK = "mask"; // NOI18N
-    
+    static StandardNodeAction renameAction = null;
+    static StandardNodeAction deleteAction = null;
+
     public MakeLogicalViewProvider(Project project, SubprojectProvider spp) {
         this.project = project;
         assert project != null;
         this.spp = spp;
         assert spp != null;
     }
-    
+
     public Node createLogicalView() {
-        if (getMakeConfigurationDescriptor() == null)
-            return new MakeLogicalViewRootNodeBroken();
-        else
+        if (ASYNC_ROOT_NODE) {
+            log.fine("creating async root node in EDT? " + SwingUtilities.isEventDispatchThread());// NOI18N
             return new MakeLogicalViewRootNode(getMakeConfigurationDescriptor().getLogicalFolders());
+        } else {
+            if (getMakeConfigurationDescriptor() == null) {
+                return new MakeLogicalViewRootNodeBroken();
+            } else {
+                return new MakeLogicalViewRootNode(getMakeConfigurationDescriptor().getLogicalFolders());
+            }
+        }
     }
-    
     private boolean findPathMode = false;
+
     private boolean isFindPathMode() {
         return findPathMode;
     }
-    
-    public org.openide.nodes.Node findPath( Node root, Object target ) {
+
+    public org.openide.nodes.Node findPath(Node root, Object target) {
         Node returnNode = null;
-        Project rootProject = (Project)root.getLookup().lookup( Project.class );
-        if (rootProject == null ) {
+        Project rootProject = root.getLookup().lookup(Project.class);
+        if (rootProject == null) {
             return null;
         }
-        
+
         if (target instanceof DataObject) {
             target = ((DataObject) target).getPrimaryFile();
         }
-        
-        if (!(target instanceof FileObject))
+
+        if (!(target instanceof FileObject)) {
             return null;
-        
+        }
+
         // FIXUP: this doesn't work with file groups (jl: is this still true?)
-        File file = FileUtil.toFile((FileObject)target);
-        MakeConfigurationDescriptor makeConfigurationDescriptor = getMakeConfigurationDescriptor();
-        if (makeConfigurationDescriptor == null || file == null) {
+        File file = FileUtil.toFile((FileObject) target);
+        if (!gotMakeConfigurationDescriptor() || file == null) {
             // IZ 111884 NPE while creating a web project
             return null;
         }
+        MakeConfigurationDescriptor makeConfigurationDescriptor = getMakeConfigurationDescriptor();
         Item item = makeConfigurationDescriptor.findProjectItemByPath(file.getAbsolutePath());
-        
+
         if (item == null) {
             item = makeConfigurationDescriptor.findExternalItemByPath(file.getAbsolutePath());
             if (item == null) {
@@ -194,58 +205,66 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                 }
             }
         }
-        
+
         try {
             findPathMode = true;
             // FIXUP: assume nde node is last node in current folder. Is this always true?
             // Find the node and return it
             Node folderNode = findFolderNode(root, item.getFolder());
             if (folderNode != null) {
-                Node[] nodes = folderNode.getChildren().getNodes( true );
+                Node[] nodes = folderNode.getChildren().getNodes(true);
                 int index = 0;
                 for (index = 0; index < nodes.length; index++) {
-                    Item nodeItem = (Item)nodes[index].getValue("Item"); // NOI18N
-                    if (nodeItem == item)
+                    Item nodeItem = (Item) nodes[index].getValue("Item"); // NOI18N
+                    if (nodeItem == item) {
                         break;
+                    }
                 }
-                if (nodes.length > 0 && index < nodes.length)
+                if (nodes.length > 0 && index < nodes.length) {
                     returnNode = nodes[index];
-                /*
-                if (nodes.length > 0)
-                    returnNode = nodes[nodes.length -1];
-                 */
+                }
+            /*
+            if (nodes.length > 0)
+            returnNode = nodes[nodes.length -1];
+             */
             }
         } finally {
             findPathMode = false;
-        }        
+        }
         return returnNode;
     }
-    
+
     /*
      * Recursive method to find the node in the tree with root 'root'
      * that is representing 'folder'
      */
     private static Node findFolderNode(Node root, Folder folder) {
         if (root.getValue("Folder") == folder) // NOI18N
+        {
             return root;
+        }
         Folder parent = folder.getParent();
-        
-        if (parent == null)
+
+        if (parent == null) {
             return root;
-        
+        }
+
         Node parentNode = findFolderNode(root, parent);
-        
-        if (parentNode == null)
+
+        if (parentNode == null) {
             return null;
-        
-        Node[] nodes = parentNode.getChildren().getNodes( true );
-        for ( int i = 0; i < nodes.length; i++)  {
+        }
+
+        Node[] nodes = parentNode.getChildren().getNodes(true);
+        for (int i = 0; i < nodes.length; i++) {
             if (nodes[i].getValue("Folder") == folder) // NOI18N
+            {
                 return nodes[i];
+            }
         }
         return null;
     }
-    
+
     /*
      * Recursive method to find the node in the tree with root 'root'
      * that is representing 'item'
@@ -254,14 +273,16 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
         Node parentNode = findFolderNode(root, item.getFolder());
         if (parentNode != null) {
             Node[] nodes = parentNode.getChildren().getNodes(true);
-            for ( int i = 0; i < nodes.length; i++)  {
+            for (int i = 0; i < nodes.length; i++) {
                 if (nodes[i].getValue("Item") == item) // NOI18N
+                {
                     return nodes[i];
+                }
             }
         }
         return null;
     }
-    
+
     /**
      * HACK: set the folder node visible in the project explorer
      * See IZ7551
@@ -269,44 +290,47 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
     public static void setVisible(Project project, Folder folder) {
         Node rootNode = ProjectTabBridge.getInstance().getExplorerManager().getRootContext();
         Node projectRoot = findProjectNode(rootNode, project);
-        
-        if (projectRoot == null)
-            return ;
-        
+
+        if (projectRoot == null) {
+            return;
+        }
+
         Node folderNode = findFolderNode(projectRoot, folder);
         try {
-            ProjectTabBridge.getInstance().getExplorerManager().setSelectedNodes(new Node[] {folderNode});
+            ProjectTabBridge.getInstance().getExplorerManager().setSelectedNodes(new Node[]{folderNode});
         } catch (Exception e) {
-            ; // FIXUP
+            // skip
         }
     }
-    
+
     /**
      * HACK: set the folder node visible in the project explorer
      * See IZ7551
      */
     public static void setVisible(Project project, Item item) {
-        setVisible(project, new Item[] {item});
+        setVisible(project, new Item[]{item});
     }
-    
+
     public static void setVisible(Project project, Item[] items) {
         Node rootNode = ProjectTabBridge.getInstance().getExplorerManager().getRootContext();
-        List nodes = new ArrayList();
+        List<Node> nodes = new ArrayList<Node>();
         for (int i = 0; i < items.length; i++) {
             Node root = findProjectNode(rootNode, project);
-            
-            if (root != null)
+
+            if (root != null) {
                 nodes.add(findItemNode(root, items[i]));
+            }
         }
         try {
-            ProjectTabBridge.getInstance().getExplorerManager().setSelectedNodes((Node[]) nodes.toArray(new Node[0]));
+            ProjectTabBridge.getInstance().getExplorerManager().setSelectedNodes(nodes.toArray(new Node[0]));
         } catch (Exception e) {
-            ; // FIXUP
+            // skip
         }
     }
 
     public static void checkForChangedItems(final Project project, final Folder folder, final Item item) {
         SwingUtilities.invokeLater(new Runnable() {
+
             public void run() {
                 if (item == null) {
                     checkForChangedItems(project);
@@ -314,12 +338,12 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                 }
                 Node rootNode = ProjectTabBridge.getInstance().getExplorerManager().getRootContext();
                 Node root = findProjectNode(rootNode, project);
-                if (root != null){
+                if (root != null) {
                     Node node = findItemNode(root, item);
-                    if (node instanceof FilterNode){
+                    if (node instanceof FilterNode) {
                         Object o = node.getLookup().lookup(ViewItemNode.class);
-                        if (o != null){
-                            ((ChangeListener)o).stateChanged(null);
+                        if (o != null) {
+                            ((ChangeListener) o).stateChanged(null);
                         }
                     }
                 }
@@ -333,14 +357,43 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
     }
 
     private static void checkForChangedItems(Node root) {
-        if (root != null){
-            for(Node node : root.getChildren().getNodes(true)){
+        if (root != null) {
+            for (Node node : root.getChildren().getNodes(true)) {
                 checkForChangedItems(node);
-                if (node instanceof FilterNode){
+                if (node instanceof FilterNode) {
                     Object o = node.getLookup().lookup(ViewItemNode.class);
-                    if (o != null){
-                        ((ChangeListener)o).stateChanged(null);
+                    if (o != null) {
+                        ((ChangeListener) o).stateChanged(null);
                     }
+                }
+            }
+        }
+    }
+
+    public static void refreshBrokenItems(final Project project) {
+        SwingUtilities.invokeLater(new Runnable() {
+
+            public void run() {
+                refreshBrokenItemsImpl(project);
+            }
+        });
+    }
+
+    private static void refreshBrokenItemsImpl(Project project) {
+        Node rootNode = ProjectTabBridge.getInstance().getExplorerManager().getRootContext();
+        refreshBrokenItemsImpl(findProjectNode(rootNode, project));
+    }
+
+    private static void refreshBrokenItemsImpl(Node root) {
+        if (root != null) {
+            if (root.isLeaf()) {
+                Object o = root.getLookup().lookup(BrokenViewItemNode.class);
+                if (o != null) {
+                    ((BrokenViewItemNode) o).refresh();
+                }
+            } else {
+                for (Node node : root.getChildren().getNodes(true)) {
+                    refreshBrokenItemsImpl(node);
                 }
             }
         }
@@ -349,40 +402,27 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
     private static Node findProjectNode(Node root, Project p) {
         Node[] n = root.getChildren().getNodes(true);
         Template t = new Template(null, null, p);
-        
+
         for (int cntr = 0; cntr < n.length; cntr++) {
             if (n[cntr].getLookup().lookupItem(t) != null) {
                 return n[cntr];
             }
         }
-        
+
         return null;
     }
-    
-    private static Lookup createLookup( Project project ) {
-        DataFolder rootFolder = DataFolder.findFolder( project.getProjectDirectory() );
-        // XXX Remove root folder after FindAction rewrite
-        return Lookups.fixed( new Object[] { project, rootFolder } );
-    }
-    
-    
+
     // Private innerclasses ----------------------------------------------------
-    
     public static boolean hasBrokenLinks() {
         return false;
-        /*
-        return BrokenReferencesSupport.isBroken(helper, resolver, BREAKABLE_PROPERTIES,
-            new String[] {MakeProjectProperties.JAVA_PLATFORM});
-         */
     }
-    
-    private static Image brokenProjectBadge = Utilities.loadImage( "org/netbeans/modules/cnd/makeproject/ui/resources/brokenProjectBadge.gif" ); // NOI18N
-    private static Image brokenIncludeBadge = Utilities.loadImage( "org/netbeans/modules/cnd/makeproject/ui/resources/brokenIncludeBadge.gif" ); // NOI18N
-    
+    private static Image brokenProjectBadge = ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/brokenProjectBadge.gif"); // NOI18N
+    private static Image brokenIncludeBadge = ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/brokenIncludeBadge.gif"); // NOI18N
+
     private static Node getWaitNode() {
         return new LoadingNode();
     }
-    
+
     private static class LoadingNode extends AbstractNode {
 
         public LoadingNode() {
@@ -391,63 +431,69 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             setDisplayName(NbBundle.getMessage(MakeLogicalViewProvider.class, "Tree_Loading")); // NOI18N
         }
 
+        @Override
         public Image getIcon(int param) {
             //System.err.println("get icon asked");
-            return Utilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/waitNode.gif"); // NOI18N
+            return ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/waitNode.gif"); // NOI18N
         }
     }
-    
+
     /** Filter node containin additional features for the Make physical
      */
     private final class MakeLogicalViewRootNode extends AnnotatedNode implements ChangeListener, LookupListener {
-        
-        private Image icon;
-        private Lookup lookup;
-        private Action brokenLinksAction;
+
         private boolean brokenLinks;
         private boolean brokenIncludes;
         private Folder folder;
         private final Lookup.Result<BrokenIncludes> brokenIncludesResult;
-        
+
         public MakeLogicalViewRootNode(Folder folder) {
-            super(new LogicalViewChildren(folder), Lookups.fixed(new Object[] {
-                folder,
-                project,
-                new FolderSearchInfo(folder),
-            }));
+            super(new LogicalViewChildren(folder), Lookups.fixed(new Object[]{
+                        folder,
+                        project,
+                        new FolderSearchInfo(folder),}));
             this.folder = folder;
             setIconBaseWithExtension(MakeConfigurationDescriptor.ICON);
-            setName( ProjectUtils.getInformation( project ).getDisplayName() );
-            
+            setName(ProjectUtils.getInformation(project).getDisplayName());
+
             brokenIncludesResult = Lookup.getDefault().lookup(new Lookup.Template<BrokenIncludes>(BrokenIncludes.class));
             brokenIncludesResult.addLookupListener(this);
             resultChanged(null);
-            
+
             brokenLinks = hasBrokenLinks();
             brokenIncludes = hasBrokenIncludes(project);
-            brokenLinksAction = new BrokenLinksAction();
             // Handle annotations
             setForceAnnotation(true);
             updateAnnotationFiles();
-            
-//            // Test Logical View Providers
-//            if (LogicalViewNodeProviders.getInstance().getProviders().size() < 1)
-//                LogicalViewNodeProviders.getInstance().addProvider(new ExperimentsLogicalViewNodeProvider());
-//            // Test Logical View Providers
         }
-        
+
         public Folder getFolder() {
             return folder;
         }
-        
+
         private void updateAnnotationFiles() {
-            HashSet set = new HashSet();
+            HashSet<FileObject> set = new HashSet<FileObject>();
             // Add project directory
+            FileObject fo = project.getProjectDirectory();
+            if (fo == null || !fo.isValid()) {
+                // See IZ 125880
+                Logger.getLogger("cnd.makeproject").warning("project.getProjectDirectory() == null - " + project);
+            }
             set.add(project.getProjectDirectory());
+            if (!gotMakeConfigurationDescriptor()) {
+                return;
+            }
             // Add buildfolder from makefile projects to sources. See IZ 90190.
-            Configuration[] confs = getMakeConfigurationDescriptor().getConfs().getConfs();
-            for (int i = 0; i < confs.length; i++) {
-                MakeConfiguration makeConfiguration = (MakeConfiguration) confs[i];
+            MakeConfigurationDescriptor makeConfigurationDescriptor = getMakeConfigurationDescriptor();
+            if (makeConfigurationDescriptor == null) {
+                return;
+            }
+            Configurations confs = makeConfigurationDescriptor.getConfs();
+            if (confs == null) {
+                return;
+            }
+            for (Configuration conf : confs.getConfs()) {
+                MakeConfiguration makeConfiguration = (MakeConfiguration) conf;
                 if (makeConfiguration.isMakefileConfiguration()) {
                     MakefileConfiguration makefileConfiguration = makeConfiguration.getMakefileConfiguration();
                     String path = makefileConfiguration.getAbsBuildCommandWorkingDir();
@@ -455,31 +501,30 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                     if (file.exists()) {
                         try {
                             set.add(FileUtil.toFileObject(file.getCanonicalFile()));
-                        }
-                        catch (IOException ioe) {
+                        } catch (IOException ioe) {
                         }
                     }
                 }
             }
             setFiles(set);
-            Vector allFolders = new Vector();
+            List<Folder> allFolders = new ArrayList<Folder>();
             allFolders.add(folder);
             allFolders.addAll(folder.getAllFolders(true));
             Iterator iter = allFolders.iterator();
             while (iter.hasNext()) {
-                ((Folder)iter.next()).addChangeListener(this);
+                ((Folder) iter.next()).addChangeListener(this);
             }
         }
 
         @Override
         public String getShortDescription() {
-            if (brokenIncludes){
+            if (brokenIncludes) {
                 return NbBundle.getMessage(getClass(), "BrokenIncludeTxt");
             } else {
                 return super.getShortDescription();
             }
         }
-        
+
         /*
          * Something in the folder has changed
          **/
@@ -490,91 +535,96 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             fireIconChange();
             fireOpenedIconChange();
         }
-        
+
+        @Override
         public Object getValue(String valstring) {
-            if (valstring == null)
-                return super.getValue(valstring);
+            if (valstring == null) {
+                return super.getValue(null);
+            }
             if (valstring.equals("Folder")) // NOI18N
+            {
                 return folder;
-            else if (valstring.equals("Project")) // NOI18N
+            } else if (valstring.equals("Project")) // NOI18N
+            {
                 return project;
-            else if (valstring.equals("This")) // NOI18N
+            } else if (valstring.equals("This")) // NOI18N
+            {
                 return this;
+            }
             return super.getValue(valstring);
         }
-        
-        public Image getIcon( int type ) {
+
+        @Override
+        public Image getIcon(int type) {
             return mergeBadge(annotateIcon(super.getIcon(type), type));
         }
 
-        private Image mergeBadge(Image original){
+        private Image mergeBadge(Image original) {
             if (brokenLinks) {
-                return Utilities.mergeImages(original, brokenProjectBadge, 8, 0);
+                return ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0);
             } else if (brokenIncludes) {
-                return Utilities.mergeImages(original, brokenIncludeBadge, 8, 0);
+                return ImageUtilities.mergeImages(original, brokenIncludeBadge, 8, 0);
             }
             return original;
         }
-        
-        public Image getOpenedIcon( int type ) {
+
+        @Override
+        public Image getOpenedIcon(int type) {
             return mergeBadge(annotateIcon(super.getOpenedIcon(type), type));
         }
-        
-        public Action[] getActions( boolean context ) {
+
+        @Override
+        public Action[] getActions(boolean context) {
             // TODO: not clear if we need to call the following method at all
             // but we need to remove remembering the output to prevent memory leak;
             // I think it could be removed
-            getMakeConfigurationDescriptor().getLogicalFolders();
-            
-            Vector actions = new Vector();
+            if (gotMakeConfigurationDescriptor()) {
+                getMakeConfigurationDescriptor().getLogicalFolders();
+            }
+
+            List<Action> actions = new ArrayList<Action>();
             // Add standard actions
             Action[] standardActions = getAdditionalActions();
-            for (int i = 0; i < standardActions.length; i++)
+            for (int i = 0; i < standardActions.length; i++) {
                 actions.add(standardActions[i]);
+            }
             actions.add(null);
             //actions.add(new CodeAssistanceAction());
-            addActionsFromLayers(actions, "NativeProjects/Menu"); // NOI18N
+            actions.addAll(Utilities.actionsForPath("NativeProjects/Menu")); // NOI18N
             actions.add(null);
-            actions.add(SystemAction.get(org.openide.actions.FindAction.class ));
-            addActionsFromLayers(actions, "Projects/Actions"); // NOI18N
+            actions.add(SystemAction.get(org.openide.actions.FindAction.class));
+            actions.addAll(Utilities.actionsForPath("Projects/Actions")); // NOI18N
             // Add remaining actions
             actions.add(null);
             //actions.add(SystemAction.get(ToolsAction.class));
             //actions.add(null);
             actions.add(CommonProjectActions.customizeProjectAction());
-            return (Action[])actions.toArray(new Action[actions.size()]);
+            return actions.toArray(new Action[actions.size()]);
         }
-        
-        private void addActionsFromLayers(final Vector actions, String path) {
-            Lookup look = Lookups.forPath(path);
-            for (Object next : look.lookupAll(Object.class)) {
-                if (next instanceof Action) {
-                    actions.add((Action) next);
-                } else if (next instanceof JSeparator) {
-                    actions.add(null);
-                }
-            }
-        }
-        
+
+        @Override
         public boolean canRename() {
             return false;
         }
-        
+
+        @Override
         public PasteType getDropType(Transferable transferable, int action, int index) {
             DataFlavor[] flavors = transferable.getTransferDataFlavors();
             for (int i = 0; i < flavors.length; i++) {
-                if (flavors[i].getSubType().equals(SUBTYPE))
+                if (flavors[i].getSubType().equals(SUBTYPE)) {
                     return super.getDropType(transferable, action, index);
+                }
             }
             return null;
         }
-        
-        protected void createPasteTypes(Transferable transferable, List list) {
+
+        @Override
+        protected void createPasteTypes(Transferable transferable, List<PasteType> list) {
             DataFlavor[] flavors = transferable.getTransferDataFlavors();
             for (int i = 0; i < flavors.length; i++) {
                 if (flavors[i].getSubType().equals(SUBTYPE)) {
                     try {
-                        ViewItemNode viewItemNode = (ViewItemNode)transferable.getTransferData(flavors[i]);
+                        ViewItemNode viewItemNode = (ViewItemNode) transferable.getTransferData(flavors[i]);
                         int type = new Integer(flavors[i].getParameter(MASK)).intValue();
                         list.add(new ViewItemPasteType(this.getFolder(), viewItemNode, type));
                     } catch (Exception e) {
@@ -583,43 +633,42 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             }
             super.createPasteTypes(transferable, list);
         }
-        
+
         // Private methods -------------------------------------------------
-        
         private Action[] getAdditionalActions() {
-            
-            ResourceBundle bundle = NbBundle.getBundle( MakeLogicalViewProvider.class );
-            
-            return new Action[] {
-                CommonProjectActions.newFileAction(),
-                null,
-                SystemAction.get(AddExistingItemAction.class),
-                SystemAction.get(AddExistingFolderItemsAction.class),
-                SystemAction.get(NewFolderAction.class),
-                new AddExternalItemAction(project),
-                null,
-                ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_BUILD, bundle.getString( "LBL_BuildAction_Name" ), null ), // NOI18N
-                ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_REBUILD, bundle.getString( "LBL_RebuildAction_Name" ), null ), // NOI18N
-                ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_CLEAN, bundle.getString( "LBL_CleanAction_Name" ), null ), // NOI18N
-                ProjectSensitiveActions.projectCommandAction(MakeActionProvider.COMMAND_BATCH_BUILD, bundle.getString("LBL_BatchBuildAction_Name"), null ), // NOI18N
-                new SetConfigurationAction(project),
-                null,
-                ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_RUN, bundle.getString( "LBL_RunAction_Name" ), null ), // NOI18N
-                //new DebugMenuAction(project, helper),
-                ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_DEBUG, bundle.getString( "LBL_DebugAction_Name" ), null ),
-                ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_DEBUG_STEP_INTO, bundle.getString( "LBL_DebugAction_Step_Name" ), null ),
-                null,
-                CommonProjectActions.setAsMainProjectAction(),
-                CommonProjectActions.openSubprojectsAction(),
-                CommonProjectActions.closeProjectAction(),
-                null,
-                CommonProjectActions.renameProjectAction(),
-                CommonProjectActions.moveProjectAction(),
-                CommonProjectActions.copyProjectAction(),
-                CommonProjectActions.deleteProjectAction(),
-                null,
-            };
-            
+
+            ResourceBundle bundle = NbBundle.getBundle(MakeLogicalViewProvider.class);
+
+            return new Action[]{
+                        CommonProjectActions.newFileAction(),
+                        null,
+                        SystemAction.get(AddExistingItemAction.class),
+                        SystemAction.get(AddExistingFolderItemsAction.class),
+                        SystemAction.get(NewFolderAction.class),
+                        new AddExternalItemAction(project),
+                        null,
+                        ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_BUILD, bundle.getString("LBL_BuildAction_Name"), null), // NOI18N
+                        ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_REBUILD, bundle.getString("LBL_RebuildAction_Name"), null), // NOI18N
+                        ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_CLEAN, bundle.getString("LBL_CleanAction_Name"), null), // NOI18N
+                        ProjectSensitiveActions.projectCommandAction(MakeActionProvider.COMMAND_BATCH_BUILD, bundle.getString("LBL_BatchBuildAction_Name"), null), // NOI18N
+                        ProjectSensitiveActions.projectCommandAction(MakeActionProvider.COMMAND_BUILD_PACKAGE, bundle.getString("LBL_BuildPackagesAction_Name"), null), // NOI18N
+                        new SetConfigurationAction(project),
+                        null,
+                        ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_RUN, bundle.getString("LBL_RunAction_Name"), null), // NOI18N
+                        //new DebugMenuAction(project, helper),
+                        ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_DEBUG, bundle.getString("LBL_DebugAction_Name"), null),
+                        ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_DEBUG_STEP_INTO, bundle.getString("LBL_DebugAction_Step_Name"), null),
+                        null,
+                        CommonProjectActions.setAsMainProjectAction(),
+                        CommonProjectActions.openSubprojectsAction(),
+                        CommonProjectActions.closeProjectAction(),
+                        null,
+                        CommonProjectActions.renameProjectAction(),
+                        CommonProjectActions.moveProjectAction(),
+                        CommonProjectActions.copyProjectAction(),
+                        CommonProjectActions.deleteProjectAction(),
+                        null,};
+
         }
 
         public void resultChanged(LookupEvent ev) {
@@ -627,7 +676,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                 elem.addChangeListener(this);
             }
         }
-        
+
         private boolean hasBrokenIncludes(Project project) {
             BrokenIncludes provider = Lookup.getDefault().lookup(BrokenIncludes.class);
             if (provider != null) {
@@ -638,101 +687,56 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             }
             return false;
         }
-
-        /** This action is created only when project has broken references.
-         * Once these are resolved the action is disabled.
-         */
-        private class BrokenLinksAction extends AbstractAction implements PropertyChangeListener, Runnable {
-            
-            private RequestProcessor.Task task = null;
-            
-            private PropertyChangeListener weakPCL;
-            
-            public BrokenLinksAction() {
-                /*
-                putValue(Action.NAME, NbBundle.getMessage(MakePhysicalViewProvider.class, "LBL_Fix_Broken_Links_Action"));
-                setEnabled(broken);
-                evaluator.addPropertyChangeListener( this );
-                // When evaluator fires changes that platform properties were
-                // removed the platform still exists in JavaPlatformManager.
-                // That's why I have to listen here also on JPM:
-                weakPCL = WeakListeners.propertyChange( this, JavaPlatformManager.getDefault() );
-                JavaPlatformManager.getDefault().addPropertyChangeListener( weakPCL );
-                 */
-            }
-            
-            public void actionPerformed(ActionEvent e) {
-                /* FIXUP
-                BrokenReferencesSupport.showCustomizer(helper, resolver, BREAKABLE_PROPERTIES, new String[]{MakeProjectProperties.JAVA_PLATFORM});
-                run();
-                 */
-            }
-            
-            public void propertyChange(PropertyChangeEvent evt) {
-                // check project state whenever there was a property change
-                // or change in list of platforms.
-                // Coalesce changes since they can come quickly:
-                if (task == null) {
-                    task = RequestProcessor.getDefault().create(this);
-                }
-                task.schedule(100);
-            }
-            
-            public synchronized void run() {
-                boolean old = brokenLinks;
-                brokenLinks = hasBrokenLinks();
-                if (old != brokenLinks) {
-                    setEnabled(brokenLinks);
-                    fireIconChange();
-                    fireOpenedIconChange();
-                }
-            }
-            
-        }
     }
-    
+
     private final class MakeLogicalViewRootNodeBroken extends AbstractNode {
+
         public MakeLogicalViewRootNodeBroken() {
-            super(Children.LEAF, Lookups.fixed(new Object[] {project}));
+            super(Children.LEAF, Lookups.fixed(new Object[]{project}));
             setIconBaseWithExtension(MakeConfigurationDescriptor.ICON);
-            setName( ProjectUtils.getInformation( project ).getDisplayName() );
+            setName(ProjectUtils.getInformation(project).getDisplayName());
         }
-        
-        public Image getIcon( int type ) {
+
+        @Override
+        public Image getIcon(int type) {
             Image original = super.getIcon(type);
-            return Utilities.mergeImages(original, brokenProjectBadge, 8, 0);
+            return ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0);
         }
-        
-        public Image getOpenedIcon( int type ) {
+
+        @Override
+        public Image getOpenedIcon(int type) {
             Image original = super.getOpenedIcon(type);
-            return Utilities.mergeImages(original, brokenProjectBadge, 8, 0);
+            return ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0);
         }
-        
-        public Action[] getActions( boolean context ) {
-            Vector actions = new Vector();
+
+        @Override
+        public Action[] getActions(boolean context) {
+            List<Action> actions = new ArrayList<Action>();
             actions.add(CommonProjectActions.closeProjectAction());
-            return (Action[])actions.toArray(new Action[actions.size()]);
+            return actions.toArray(new Action[actions.size()]);
         }
-        
+
+        @Override
         public boolean canRename() {
             return false;
         }
     }
-    
+
     private class LogicalViewChildren extends BaseMakeViewChildren {
+
         public LogicalViewChildren(Folder folder) {
             super(folder);
         }
-        
+
         protected Node[] createNodes(Object key) {
             Node node = null;
             if (key instanceof LoadingNode) {
                 //System.err.println("LogicalViewChildren: return wait node");
-                node = (Node)key;                
+                node = (Node) key;
             } else if (key instanceof Node) {
-                node = (Node)key;
+                node = (Node) key;
             } else if (key instanceof Folder) {
-                Folder folder = (Folder)key;
+                Folder folder = (Folder) key;
                 if (folder.isProjectFiles()) {
                     //FileObject srcFileObject = project.getProjectDirectory().getFileObject("src");
                     FileObject srcFileObject = project.getProjectDirectory();
@@ -742,12 +746,12 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                     } catch (DataObjectNotFoundException e) {
                         throw new AssertionError(e);
                     }
-                    node = new LogicalFolderNode(((DataFolder)srcDataObject).getNodeDelegate(), folder);
+                    node = new LogicalFolderNode(((DataFolder) srcDataObject).getNodeDelegate(), folder);
                 } else {
                     node = new ExternalFilesNode(folder);
                 }
             } else if (key instanceof Item) {
-                Item item = (Item)key;
+                Item item = (Item) key;
                 DataObject fileDO = item.getDataObject();
                 if (fileDO != null) {
                     node = new ViewItemNode(this, getFolder(), item, fileDO);
@@ -755,141 +759,89 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                     node = new BrokenViewItemNode(this, getFolder(), item);
                 }
             } else if (key instanceof AbstractNode) {
-                node = (AbstractNode)key;
+                node = (AbstractNode) key;
             }
-            return new Node[] {node};
+            return new Node[]{node};
         }
-        
+
         protected Collection getKeys() {
             Collection collection = getFolder().getElements();
-            
-            if (getFolder().getName() == "root") { // NOI18N
+            switch (getFolder().getConfigurationDescriptor().getState()) {
+                case READING:
+                    if (collection.size() == 0) {
+                        collection = Collections.singletonList(new LoadingNode());
+                    }
+                    break;
+                case BROKEN:
+                // TODO show broken node
+            }
+            if ("root".equals(getFolder().getName())) { // NOI18N
                 LogicalViewNodeProvider[] providers = LogicalViewNodeProviders.getInstance().getProvidersAsArray();
                 if (providers.length > 0) {
                     for (int i = 0; i < providers.length; i++) {
                         AbstractNode node = providers[i].getLogicalViewNode(project);
-                        if (node != null)
+                        if (node != null) {
                             collection.add(node);
+                        }
                     }
                 }
             }
-            
+
             return collection;
         }
     }
-    
+
     private MakeConfigurationDescriptor getMakeConfigurationDescriptor() {
-        ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider)project.getLookup().lookup(ConfigurationDescriptorProvider.class );
-        MakeConfigurationDescriptor makeConfigurationDescriptor = (MakeConfigurationDescriptor)pdp.getConfigurationDescriptor();
+        ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class);
+        MakeConfigurationDescriptor makeConfigurationDescriptor = (MakeConfigurationDescriptor) pdp.getConfigurationDescriptor();
         return makeConfigurationDescriptor;
     }
 
+    private boolean gotMakeConfigurationDescriptor() {
+        ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class);
+        return pdp.gotDescriptor();
+    }
 
-    /** Yet another cool filter node just to add properties action
-     */
-    /* FIXUP
-    private static class PackageViewFilterNode extends FilterNode {
-     
-        private String nodeName;
-        private Project project;
-     
-        Action[] actions;
-     
-        public PackageViewFilterNode( SourceGroup sourceGroup, Project project ) {
-            super( PackageView.createPackageView( sourceGroup ) );
-            this.project = project;
-     
-            if ( "${src.dir}".equals( sourceGroup.getName() ) ) {  // NOI18N
-                this.nodeName = "BuildCategory/Build"; // NOI18N
-            }
-            else if ( "${test.src.dir}".equals( sourceGroup.getName() ) ) { // NOI18N
-                this.nodeName = "BuildCategory/BuildTests"; // NOI18N
-            }
-     
-        }
-     
-     
-        public Action[] getActions( boolean context ) {
-            if ( !context ) {
-                if ( actions == null ) {
-                    Action superActions[] = super.getActions( context );
-                    actions = new Action[ superActions.length + 2 ];
-                    System.arraycopy( superActions, 0, actions, 0, superActions.length );
-                    actions[superActions.length] = null;
-                    actions[superActions.length + 1] = new PreselectPropertiesAction( project, nodeName );
-                }
-     
-                return actions;
-     
-            }
-            else {
-                return super.getActions( context );
-            }
-        }
-     
-     
-    }
-     */
-    
-    
-    /** The special properties action
-     */
-    private static class PreselectPropertiesAction extends AbstractAction {
-        
-        private Project project;
-        private String nodeName;
-        
-        public PreselectPropertiesAction( Project project, String nodeName ) {
-            super( NbBundle.getMessage( MakeLogicalViewProvider.class, "LBL_Properties_Action" ) ); // NOI18N
-            this.project = project;
-            this.nodeName = nodeName;
-        }
-        
-        public void actionPerformed( ActionEvent e ) {
-            MakeCustomizerProvider cp = (MakeCustomizerProvider)project.getLookup().lookup( MakeCustomizerProvider.class );
-            if ( cp != null ) {
-                cp.showCustomizer( nodeName );
-            }
-        }
-    }
-    
-    public class LogicalFolderNode extends AnnotatedNode implements ChangeListener {
+    private class LogicalFolderNode extends AnnotatedNode implements ChangeListener {
+
         private Folder folder;
-        
+
         public LogicalFolderNode(Node folderNode, Folder folder) {
-            super(new LogicalViewChildren(folder), Lookups.fixed(new Object[] {
-                folder,
-                project,
-                new FolderSearchInfo(folder),
-            }));
+            super(new LogicalViewChildren(folder), Lookups.fixed(new Object[]{
+                        folder,
+                        project,
+                        new FolderSearchInfo(folder),}));
             this.folder = folder;
             setForceAnnotation(true);
             updateAnnotationFiles();
         }
-        
+
         private void updateAnnotationFiles() {
             RequestProcessor.getDefault().post(new UpdateAnnotationFilesTHread(this));
         }
-        
+
         class UpdateAnnotationFilesTHread extends Thread {
+
             LogicalFolderNode logicalFolderNode;
-            
+
             UpdateAnnotationFilesTHread(LogicalFolderNode logicalFolderNode) {
                 this.logicalFolderNode = logicalFolderNode;
             }
+
+            @Override
             public void run() {
-                setFiles(Collections.EMPTY_SET /*folder.getAllItemsAsFileObjectSet(true)*/); // See IZ 100394 for details 
-                Vector allFolders = new Vector();
+                setFiles(Collections.EMPTY_SET /*folder.getAllItemsAsFileObjectSet(true)*/); // See IZ 100394 for details
+                List<Folder> allFolders = new ArrayList<Folder>();
                 allFolders.add(folder);
                 allFolders.addAll(folder.getAllFolders(true));
                 Iterator iter = allFolders.iterator();
                 while (iter.hasNext()) {
-                    ((Folder)iter.next()).addChangeListener(logicalFolderNode);
+                    ((Folder) iter.next()).addChangeListener(logicalFolderNode);
                 }
             }
         }
-        
-        
+
+
         /*
          * Something in the folder has changed
          **/
@@ -898,40 +850,52 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             fireIconChange();
             fireOpenedIconChange();
         }
-        
+
         public Folder getFolder() {
             return folder;
         }
+
+        @Override
         public Object getValue(String valstring) {
-            if (valstring == null)
-                return super.getValue(valstring);
+            if (valstring == null) {
+                return super.getValue(null);
+            }
             if (valstring.equals("Folder")) // NOI18N
+            {
                 return folder;
-            else if (valstring.equals("Project")) // NOI18N
+            } else if (valstring.equals("Project")) // NOI18N
+            {
                 return project;
-            else if (valstring.equals("This")) // NOI18N
+            } else if (valstring.equals("This")) // NOI18N
+            {
                 return this;
+            }
             return super.getValue(valstring);
         }
-        
-        public Image getIcon( int type ) {
-            return annotateIcon(Utilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/logicalFilesFolder.gif"), type); // NOI18N
+
+        @Override
+        public Image getIcon(int type) {
+            return annotateIcon(ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/logicalFilesFolder.gif"), type); // NOI18N
         }
-        
-        public Image getOpenedIcon( int type ) {
-            return annotateIcon(Utilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/logicalFilesFolderOpened.gif"), type); // NOI18N
+
+        @Override
+        public Image getOpenedIcon(int type) {
+            return annotateIcon(ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/logicalFilesFolderOpened.gif"), type); // NOI18N
         }
-        
+
+        @Override
         public String getName() {
             return folder.getDisplayName();
         }
-        
+
+        @Override
         public String getDisplayName() {
             return annotateName(folder.getDisplayName());
         }
-        
+
+        @Override
         public void setName(String newName) {
-            String oldName = folder.getName();
+            String oldName = folder.getDisplayName();
             if (folder.getParent() != null && folder.getParent().findFolderByDisplayName(newName) != null) {
                 String msg = NbBundle.getMessage(MakeLogicalViewProvider.class, "CANNOT_RENAME", oldName, newName); // NOI18N
                 DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(msg));
@@ -940,42 +904,49 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             folder.setDisplayName(newName);
             fireDisplayNameChange(oldName, newName);
         }
-        
-        public void setDisplayName(String newName) {
-            setDisplayName(newName);
-        }
-        
+
+//        @Override
+//        public void setDisplayName(String newName) {
+//            setDisplayName(newName);
+//        }
+        @Override
         public boolean canRename() {
             return true;
         }
-        
+
+        @Override
         public boolean canDestroy() {
             return true;
         }
-        
+
+        @Override
         public boolean canCut() {
             return false; // FIXUP
         }
-        
+
+        @Override
         public boolean canCopy() {
             return false; // FIXUP
         }
-        
+
+        @Override
         public PasteType getDropType(Transferable transferable, int action, int index) {
             DataFlavor[] flavors = transferable.getTransferDataFlavors();
             for (int i = 0; i < flavors.length; i++) {
-                if (flavors[i].getSubType().equals(SUBTYPE))
+                if (flavors[i].getSubType().equals(SUBTYPE)) {
                     return super.getDropType(transferable, action, index);
+                }
             }
             return null;
         }
-        
-        protected void createPasteTypes(Transferable transferable, List list) {
+
+        @Override
+        protected void createPasteTypes(Transferable transferable, List<PasteType> list) {
             DataFlavor[] flavors = transferable.getTransferDataFlavors();
             for (int i = 0; i < flavors.length; i++) {
                 if (flavors[i].getSubType().equals(SUBTYPE)) {
                     try {
-                        ViewItemNode viewItemNode = (ViewItemNode)transferable.getTransferData(flavors[i]);
+                        ViewItemNode viewItemNode = (ViewItemNode) transferable.getTransferData(flavors[i]);
                         int type = new Integer(flavors[i].getParameter(MASK)).intValue();
                         list.add(new ViewItemPasteType(this.getFolder(), viewItemNode, type));
                     } catch (Exception e) {
@@ -984,43 +955,45 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             }
             super.createPasteTypes(transferable, list);
         }
-        
+
         public void newLogicalFolder() {
         }
-        
-        public Action[] getActions( boolean context ) {
-            return new Action[] {
-                CommonProjectActions.newFileAction(),
-                SystemAction.get(AddExistingItemAction.class),
-                SystemAction.get(AddExistingFolderItemsAction.class),
-                SystemAction.get(NewFolderAction.class),
-                null,
-                new RefreshItemAction((LogicalViewChildren)getChildren(), folder, null),
-                null,
-                SystemAction.get(CutAction.class),
-                SystemAction.get(CopyAction.class),
-                SystemAction.get(PasteAction.class),
-                SystemAction.get(RemoveFolderAction.class),
-                SystemAction.get(RenameAction.class),
-                null,
-                SystemAction.get(org.openide.actions.FindAction.class ),
-                null,
-                SystemAction.get(PropertiesFolderAction.class),
-            };
+
+        @Override
+        public Action[] getActions(boolean context) {
+            return new Action[]{
+                        CommonProjectActions.newFileAction(),
+                        SystemAction.get(AddExistingItemAction.class),
+                        SystemAction.get(AddExistingFolderItemsAction.class),
+                        SystemAction.get(NewFolderAction.class),
+                        null,
+                        new RefreshItemAction((LogicalViewChildren) getChildren(), folder, null),
+                        null,
+                        SystemAction.get(CutAction.class),
+                        SystemAction.get(CopyAction.class),
+                        SystemAction.get(PasteAction.class),
+                        SystemAction.get(RemoveFolderAction.class),
+                        //                SystemAction.get(RenameAction.class),
+                        createRenameAction(),
+                        null,
+                        SystemAction.get(org.openide.actions.FindAction.class),
+                        null,
+                        SystemAction.get(PropertiesFolderAction.class),};
         }
     }
-    
-    class ViewItemPasteType extends PasteType {
-        Folder toFolder;
-        ViewItemNode viewItemNode;
-        int type;
-        
+
+    private class ViewItemPasteType extends PasteType {
+
+        private final Folder toFolder;
+        private final ViewItemNode viewItemNode;
+        private final int type;
+
         public ViewItemPasteType(Folder toFolder, ViewItemNode viewItemNode, int type) {
             this.toFolder = toFolder;
             this.viewItemNode = viewItemNode;
             this.type = type;
         }
-        
+
         private void copyItemConfigurations(ItemConfiguration[] newConfigurations, ItemConfiguration[] oldConfigurations) {
             // Only allowing copying configurations within same project
             assert newConfigurations.length == oldConfigurations.length;
@@ -1028,8 +1001,11 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                 newConfigurations[i].assignValues(oldConfigurations[i]);
             }
         }
-        
+
         public Transferable paste() throws IOException {
+            if (!gotMakeConfigurationDescriptor() || !(getMakeConfigurationDescriptor().okToChange())) {
+                return null;
+            }
             Item item = viewItemNode.getItem();
             ItemConfiguration[] oldConfigurations = item.getItemConfigurations();
             if (type == DnDConstants.ACTION_MOVE) {
@@ -1074,8 +1050,9 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                         String newName = IpeUtils.createUniqueFileName(parent, fo.getName(), ext);
                         fo.copy(fo.getParent(), newName, ext);
                         String newPath = parent + "/" + newName; // NOI18N
-                        if (ext.length() > 0)
+                        if (ext.length() > 0) {
                             newPath = newPath + "." + ext; // NOI18N
+                        }
                         newPath = IpeUtils.toRelativePath(FileUtil.toFile(viewItemNode.getFolder().getProject().getProjectDirectory()).getPath(), newPath);
                         Item newItem = new Item(FilePathAdaptor.normalize(newPath));
                         toFolder.addItemAction(newItem);
@@ -1098,10 +1075,11 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                         FileObject fo = item.getFileObject();
                         String ext = fo.getExt();
                         String newName = IpeUtils.createUniqueFileName(parent, fo.getName(), ext);
-                        FileObject copy = fo.copy(toProject.getProjectDirectory(), newName, ext);
+                        //FileObject copy = fo.copy(toProject.getProjectDirectory(), newName, ext);
                         String newPath = newName;
-                        if (ext.length() > 0)
+                        if (ext.length() > 0) {
                             newPath = newPath + "." + ext; // NOI18N
+                        }
                         toFolder.addItemAction(new Item(FilePathAdaptor.normalize(newPath))); // NOI18N
                     }
                 }
@@ -1109,100 +1087,99 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             return null;
         }
     }
-    
+
     private final class ExternalFilesNode extends AbstractNode {
-        private Image icon;
-        private Lookup lookup;
-        private Action brokenLinksAction;
-        private boolean broken;
+
         private Folder folder;
-        
+
         public ExternalFilesNode(Folder folder) {
-            super( new ExternalFilesChildren(project, folder), Lookups.fixed(new Object[] {project, new FolderSearchInfo(folder)}));
+            super(new ExternalFilesChildren(project, folder), Lookups.fixed(new Object[]{project, new FolderSearchInfo(folder)}));
             setName(folder.getName());
             setDisplayName(folder.getDisplayName());
             setShortDescription(NbBundle.getBundle(getClass()).getString("ONLY_REFERENCE_TXT"));
             this.folder = folder;
         }
-        
+
         @Override
         public Object getValue(String valstring) {
-            if (valstring == null)
-                return super.getValue(valstring);
+            if (valstring == null) {
+                return super.getValue(null);
+            }
             if (valstring.equals("Folder")) // NOI18N
+            {
                 return folder;
-            else if (valstring.equals("Project")) // NOI18N
+            } else if (valstring.equals("Project")) // NOI18N
+            {
                 return project;
-            else if (valstring.equals("This")) // NOI18N
+            } else if (valstring.equals("This")) // NOI18N
+            {
                 return this;
+            }
             return super.getValue(valstring);
         }
-        
-        private FilterNode getProjectNode() {
-            if (projectNode == null) {
-                FileObject srcFileObject = project.getProjectDirectory();
-                DataObject srcDataObject;
-                try {
-                    srcDataObject = DataObject.find(srcFileObject);
-                } catch (DataObjectNotFoundException e) {
-                    throw new AssertionError(e);
-                }
-                projectNode = new FilterNode(srcDataObject.getNodeDelegate());
-            }
-            return projectNode;
-        }
-        
+
         @Override
-        public Image getIcon( int type ) {
-            return getProjectNode().getIcon(type);
+        public Image getIcon(int type) {
+            return ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/importantFolder.gif"); // NOI18N
         }
-        
-        public Image getOpenedIcon( int type ) {
-            return getProjectNode().getOpenedIcon(type);
+
+        @Override
+        public Image getOpenedIcon(int type) {
+            return ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/importantFolderOpened.gif"); // NOI18N
         }
-        
-        public Action[] getActions( boolean context ) {
-            return new Action[] {
-                new AddExternalItemAction(project),
-                null,
-                SystemAction.get(org.openide.actions.FindAction.class ),
-            };
+
+        @Override
+        public Action[] getActions(boolean context) {
+            return new Action[]{
+                        new AddExternalItemAction(project),
+                        null,
+                        SystemAction.get(org.openide.actions.FindAction.class),};
         }
-        
+
+        @Override
         public boolean canRename() {
             return false;
         }
     }
-
     private static final int WAIT_DELAY = 50;
-    private abstract class BaseMakeViewChildren extends Children.Keys implements ChangeListener {
+
+    private abstract class BaseMakeViewChildren extends Children.Keys
+            implements ChangeListener, RefreshableItemsContainer {
+
         private final Folder folder;
 
         public BaseMakeViewChildren(Folder folder) {
             this.folder = folder;
         }
 
+        @Override
         protected void addNotify() {
             if (isFindPathMode()) {
                 //System.err.println("BaseMakeViewChildren: FindPathMode " + (SwingUtilities.isEventDispatchThread() ? "UI":"regular") + " thread");
                 // no wait node for direct search
                 super.addNotify();
-                folder.addChangeListener( this );
-                setKeys( getKeys() );
-            }  else {
+                folder.addChangeListener(this);
+                setKeys(getKeys());
+            } else {
                 //System.err.println("BaseMakeViewChildren: create wait node " + (SwingUtilities.isEventDispatchThread() ? "UI":"regular") + " thread");
                 if (SwingUtilities.isEventDispatchThread()) {
                     super.addNotify();
                     setKeys(new Object[]{getWaitNode()});
-                    folder.addChangeListener( this );
+                    folder.addChangeListener(this);
                     RequestProcessor.getDefault().post(new Runnable() {
+
                         public void run() {
-                            //System.err.println("ExternalFilesChildren: setting real nodes");
-                            setKeys( getKeys() );
+                            // between posting this task and running it can be become deleted (see iz #142240)
+                            // TODO: fix workflow instead?
+                            if (project.getProjectDirectory() != null && project.getProjectDirectory().isValid()) {
+                                //System.err.println("ExternalFilesChildren: setting real nodes");
+                                setKeys(getKeys());
+                            }
                         }
-                    }, WAIT_DELAY);            
-                }  else {
+                    }, WAIT_DELAY);
+                } else {
                     SwingUtilities.invokeLater(new Runnable() {
+
                         public void run() {
                             addNotify();
                         }
@@ -1215,16 +1192,15 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             refreshKey(item);
         }
 
-
+        @Override
         protected void removeNotify() {
             setKeys(Collections.EMPTY_SET);
-            folder.removeChangeListener( this );
+            folder.removeChangeListener(this);
             super.removeNotify();
         }
 
-
         public void stateChanged(ChangeEvent e) {
-            if (e.getSource() instanceof Item ) {
+            if (e.getSource() instanceof Item) {
                 // update single item (it may be broken)
                 Item[] items = getFolder().getItemsAsArray();
                 for (int i = 0; i < items.length; i++) {
@@ -1232,8 +1208,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                         refreshItem(items[i]);
                     }
                 }
-            }
-            else {
+            } else {
                 // update folder. Items may have been added or deleted
                 setKeys(getKeys());
             }
@@ -1247,22 +1222,20 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
     }
 
     private class ExternalFilesChildren extends BaseMakeViewChildren {
-        private final Project project;
-        
+
         public ExternalFilesChildren(Project project, Folder folder) {
             super(folder);
-            this.project = project;
         }
-        
-        protected Node[] createNodes( Object key ) {
+
+        protected Node[] createNodes(Object key) {
             if (key instanceof LoadingNode) {
-                return new Node[] { (Node)key };
+                return new Node[]{(Node) key};
             }
             if (!(key instanceof Item)) {
                 System.err.println("wrong item in external files folder " + key); // NOI18N
                 return null;
             }
-            Item item = (Item)key;
+            Item item = (Item) key;
             DataObject fileDO = item.getDataObject();
             Node node;
             if (fileDO != null) {
@@ -1270,88 +1243,85 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             } else {
                 node = new BrokenViewItemNode(this, getFolder(), item);
             }
-            return new Node[] {node};
+            return new Node[]{node};
         }
-        
+
         protected Collection getKeys() {
             return getFolder().getElements();
         }
     }
-    
+
     private class ViewItemNode extends FilterNode implements ChangeListener {
-        Children.Keys childrenKeys;
+
+        RefreshableItemsContainer childrenKeys;
         private Folder folder;
         private Item item;
-        
-        public ViewItemNode(Children.Keys childrenKeys, Folder folder, Item item, DataObject dataObject) {
-            super(dataObject.getNodeDelegate());
+
+        public ViewItemNode(RefreshableItemsContainer childrenKeys, Folder folder, Item item, DataObject dataObject) {
+            super(dataObject.getNodeDelegate());//, null, Lookups.fixed(item));
             this.childrenKeys = childrenKeys;
             this.folder = folder;
             this.item = item;
             File file = item.getCanonicalFile();
             setShortDescription(file.getPath());
         }
-        
+
         public Folder getFolder() {
             return folder;
         }
-        
+
         public Item getItem() {
             return item;
         }
+
         @Override
         public boolean canRename() {
             return true;
         }
-        
+
         @Override
         public boolean canDestroy() {
             return true;
         }
-        
+
         @Override
         public boolean canCut() {
             return true;
         }
-        
+
         @Override
         public boolean canCopy() {
             return true;
         }
-        
+
         @Override
         public Transferable clipboardCopy() throws IOException {
-            try {
-                Transferable t = new ViewItemTransferable(this, DnDConstants.ACTION_COPY);
-                return t;
-            } catch (ClassNotFoundException e) {
-                throw new AssertionError(e);
-            }
-            
+            return addViewItemTransferable(super.clipboardCopy(), DnDConstants.ACTION_COPY);
         }
-        
+
         @Override
         public Transferable clipboardCut() throws IOException {
-            try {
-                Transferable t = new ViewItemTransferable(this, DnDConstants.ACTION_MOVE);
-                return t;
-            } catch (ClassNotFoundException e) {
-                throw new AssertionError(e);
-            }
+            return addViewItemTransferable(super.clipboardCut(), DnDConstants.ACTION_MOVE);
         }
-        
+
         @Override
         public Transferable drag() throws IOException {
+            return addViewItemTransferable(super.drag(), DnDConstants.ACTION_NONE);
+        }
+
+        private ExTransferable addViewItemTransferable(Transferable t, int operation) {
             try {
-                Transferable t = new ViewItemTransferable(this, DnDConstants.ACTION_NONE);
-                return t;
+                ExTransferable extT = ExTransferable.create(t);
+                ViewItemTransferable viewItem = new ViewItemTransferable(this, operation);
+                extT.put(viewItem);
+                return extT;
             } catch (ClassNotFoundException e) {
                 throw new AssertionError(e);
             }
         }
-        
         // The node will be removed when the Item gets notification that the file has been destroyed.
         // No need to do it here.
+
         @Override
         public void destroy() throws IOException {
 //            File file = new File(item.getAbsPath());
@@ -1360,28 +1330,34 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             folder.removeItemAction(item);
             super.destroy();
         }
-        
+
         @Override
         public Object getValue(String valstring) {
-            if (valstring == null)
-                return super.getValue(valstring);
+            if (valstring == null) {
+                return super.getValue(null);
+            }
             if (valstring.equals("Folder")) // NOI18N
+            {
                 return getFolder();
-            else if (valstring.equals("Project")) // NOI18N
+            } else if (valstring.equals("Project")) // NOI18N
+            {
                 return project;
-            else if (valstring.equals("Item")) // NOI18N
+            } else if (valstring.equals("Item")) // NOI18N
+            {
                 return getItem();
-            else if (valstring.equals("This")) // NOI18N
+            } else if (valstring.equals("This")) // NOI18N
+            {
                 return this;
+            }
             return super.getValue(valstring);
         }
-        
+
         @Override
-        public Action[] getActions( boolean context ) {
+        public Action[] getActions(boolean context) {
             // Replace DeleteAction with Remove Action
             // Replace PropertyAction with customizeProjectAction
             Action[] oldActions = super.getActions(false);
-            Vector newActions = new Vector();
+            List<Action> newActions = new ArrayList<Action>();
             for (int i = 0; i < oldActions.length; i++) {
                 if (oldActions[i] != null && oldActions[i] instanceof org.openide.actions.OpenAction) {
                     newActions.add(oldActions[i]);
@@ -1390,25 +1366,27 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                     newActions.add(null);
                     newActions.add(SystemAction.get(CompileSingleAction.class));
                     newActions.add(null);
+                } else if (oldActions[i] != null && oldActions[i] instanceof RenameAction) {
+                    newActions.add(createRenameAction());
                 } else if (oldActions[i] != null && oldActions[i] instanceof DeleteAction) {
                     newActions.add(SystemAction.get(RemoveItemAction.class));
-                    newActions.add(SystemAction.get(DeleteAction.class));
+                    newActions.add(createDeleteAction());
                 } else if (oldActions[i] != null && oldActions[i] instanceof org.openide.actions.PropertiesAction && getFolder().isProjectFiles()) {
                     newActions.add(SystemAction.get(PropertiesItemAction.class));
                 } else {
                     newActions.add(oldActions[i]);
                 }
             }
-            return (Action[]) newActions.toArray(new Action[newActions.size()]);
+            return newActions.toArray(new Action[newActions.size()]);
         }
 
         @Override
         public Image getIcon(int type) {
             Image image = super.getIcon(type);
             if (isExcluded() && (image instanceof BufferedImage)) {
-                ColorSpace gray_space = ColorSpace.getInstance (ColorSpace.CS_GRAY);
-                ColorConvertOp convert_to_gray_op = new ColorConvertOp (gray_space, null);
-                image = convert_to_gray_op.filter ((BufferedImage)image, null);                
+                ColorSpace gray_space = ColorSpace.getInstance(ColorSpace.CS_GRAY);
+                ColorConvertOp convert_to_gray_op = new ColorConvertOp(gray_space, null);
+                image = convert_to_gray_op.filter((BufferedImage) image, null);
             }
             return image;
         }
@@ -1416,16 +1394,16 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
         @Override
         public String getHtmlDisplayName() {
             if (isExcluded()) {
-                return "<font color='!controlShadow'>"+getDisplayName(); // NOI18N
+                return "<font color='!controlShadow'>" + getDisplayName(); // NOI18N
             }
             return super.getHtmlDisplayName();
         }
-        
-        private boolean isExcluded(){
-            if (item == null || item.getFolder() == null || item.getFolder().getConfigurationDescriptor() == null || item.getFolder().getConfigurationDescriptor().getConfs() == null){
+
+        private boolean isExcluded() {
+            if (item == null || item.getFolder() == null || item.getFolder().getConfigurationDescriptor() == null || item.getFolder().getConfigurationDescriptor().getConfs() == null) {
                 return false;
             }
-            MakeConfiguration makeConfiguration = (MakeConfiguration)item.getFolder().getConfigurationDescriptor().getConfs().getActive();
+            MakeConfiguration makeConfiguration = (MakeConfiguration) item.getFolder().getConfigurationDescriptor().getConfs().getActive();
             ItemConfiguration itemConfiguration = item.getItemConfiguration(makeConfiguration); //ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(item.getPath()));
             if (itemConfiguration == null) {
                 return false;
@@ -1438,33 +1416,35 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             String displayName = getDisplayName();
             // do not work:
             //fireDisplayNameChange(displayName,displayName);
-            fireDisplayNameChange(displayName,"");
-            fireDisplayNameChange("",displayName);
+            fireDisplayNameChange(displayName, "");
+            fireDisplayNameChange("", displayName);
             fireIconChange();
             fireOpenedIconChange();
         }
     }
-    
-    static class ViewItemTransferable extends ExTransferable.Single {
+
+    private static class ViewItemTransferable extends ExTransferable.Single {
+
         private ViewItemNode node;
-        
+
         public ViewItemTransferable(ViewItemNode node, int operation) throws ClassNotFoundException {
-            super(new DataFlavor(ITEM_VIEW_FLAVOR.format(new Object[] {new Integer(operation)}), null, MakeLogicalViewProvider.class.getClassLoader()));
+            super(new DataFlavor(ITEM_VIEW_FLAVOR.format(new Object[]{Integer.valueOf(operation)}), null, MakeLogicalViewProvider.class.getClassLoader()));
             this.node = node;
         }
-        
+
         protected Object getData() throws IOException, UnsupportedFlavorException {
             return this.node;
         }
     }
-    
+
     private final class BrokenViewItemNode extends AbstractNode {
+
         private boolean broken;
-        private Children.Keys childrenKeys;
+        private RefreshableItemsContainer childrenKeys;
         private Folder folder;
         private Item item;
-        
-        public BrokenViewItemNode(Children.Keys childrenKeys, Folder folder, Item item) {
+
+        public BrokenViewItemNode(RefreshableItemsContainer childrenKeys, Folder folder, Item item) {
             super(Children.LEAF);
             this.childrenKeys = childrenKeys;
             this.folder = folder;
@@ -1475,94 +1455,205 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             setShortDescription(NbBundle.getMessage(getClass(), "BrokenTxt", file.getPath())); // NOI18N
             broken = true;
         }
-        
-        public Image getIcon( int type ) {
+
+        @Override
+        public Image getIcon(int type) {
             //Image original = Utilities.loadImage("org/openide/loaders/instanceObject.gif"); // NOI18N
             //Image original = Utilities.loadImage("org/netbeans/modules/cnd/loaders/CCSrcIcon.gif"); // NOI18N
             Image original;
             int tool = item.getDefaultTool();
-            if (tool == Tool.CCompiler)
-                original = Utilities.loadImage("org/netbeans/modules/cnd/loaders/CSrcIcon.gif"); // NOI18N
-            else if (tool == Tool.CCCompiler)
-                original = Utilities.loadImage("org/netbeans/modules/cnd/loaders/CCSrcIcon.gif"); // NOI18N
-            else if (tool == Tool.FortranCompiler)
-                original = Utilities.loadImage("org/netbeans/modules/cnd/loaders/FortranSrcIcon.gif"); // NOI18N
-            else
-                original = Utilities.loadImage("org/netbeans/modules/cnd/loaders/unknown.gif"); // NOI18N
-            return broken ? Utilities.mergeImages(original, brokenProjectBadge, 11, 0) : original;
+            if (tool == Tool.CCompiler) {
+                original = ImageUtilities.loadImage("org/netbeans/modules/cnd/loaders/CSrcIcon.gif"); // NOI18N
+            } else if (tool == Tool.CCCompiler) {
+                original = ImageUtilities.loadImage("org/netbeans/modules/cnd/loaders/CCSrcIcon.gif"); // NOI18N
+            } else if (tool == Tool.FortranCompiler) {
+                original = ImageUtilities.loadImage("org/netbeans/modules/cnd/loaders/FortranSrcIcon.gif"); // NOI18N
+            } else {
+                original = ImageUtilities.loadImage("org/netbeans/modules/cnd/loaders/unknown.gif"); // NOI18N
+            }
+            return broken ? ImageUtilities.mergeImages(original, brokenProjectBadge, 11, 0) : original;
         }
-        
-        public Action[] getActions( boolean context ) {
-            return new Action[] {
-                SystemAction.get(RemoveItemAction.class),
-                new RefreshItemAction(childrenKeys, null, item),
-                null,
-                SystemAction.get(PropertiesItemAction.class),
-            };
+
+        @Override
+        public Action[] getActions(boolean context) {
+            return new Action[]{
+                        SystemAction.get(RemoveItemAction.class),
+                        new RefreshItemAction(childrenKeys, null, item),
+                        null,
+                        SystemAction.get(PropertiesItemAction.class),};
         }
-        
+
+        public void refresh() {
+            childrenKeys.refreshItem(item);
+        }
+
+        @Override
         public boolean canRename() {
             return false;
         }
-        
+
+        @Override
         public Object getValue(String valstring) {
-            if (valstring == null)
-                return super.getValue(valstring);
+            if (valstring == null) {
+                return super.getValue(null);
+            }
             if (valstring.equals("Folder")) // NOI18N
+            {
                 return folder;
-            else if (valstring.equals("Project")) // NOI18N
+            } else if (valstring.equals("Project")) // NOI18N
+            {
                 return project;
-            else if (valstring.equals("Item")) // NOI18N
+            } else if (valstring.equals("Item")) // NOI18N
+            {
                 return item;
-            else if (valstring.equals("This")) // NOI18N
+            } else if (valstring.equals("This")) // NOI18N
+            {
                 return this;
+            }
             return super.getValue(valstring);
         }
     }
-    
-    class RefreshItemAction extends AbstractAction {
-        private Children.Keys childrenKeys;
+
+    private interface RefreshableItemsContainer {
+
+        void refreshItem(Item item);
+    }
+
+    private static class RefreshItemAction extends AbstractAction {
+
+        private RefreshableItemsContainer childrenKeys;
         private Folder folder;
         private Item item;
-        
-        public RefreshItemAction(Children.Keys childrenKeys, Folder folder, Item item) {
+
+        public RefreshItemAction(RefreshableItemsContainer childrenKeys, Folder folder, Item item) {
             this.childrenKeys = childrenKeys;
             this.folder = folder;
             this.item = item;
             putValue(NAME, NbBundle.getBundle(getClass()).getString("CTL_Refresh")); //NOI18N
         }
-        
+
         public void actionPerformed(ActionEvent e) {
             if (item != null) {
-                refresh(item);
+                childrenKeys.refreshItem(item);
             } else {
                 Item[] items = folder.getItemsAsArray();
-                for (int i = 0; i < items.length; i++)
-                    refresh(items[i]);
+                for (int i = 0; i < items.length; i++) {
+                    childrenKeys.refreshItem(items[i]);
+                }
             }
         }
-        
-        private void refresh(Item item) {
-            if (childrenKeys instanceof ExternalFilesChildren)
-                ((ExternalFilesChildren)childrenKeys).refreshItem(item);
-            else if (childrenKeys instanceof LogicalViewChildren)
-                ((LogicalViewChildren)childrenKeys).refreshItem(item);
-        }
     }
-    
-    class FolderSearchInfo implements SearchInfo {
+
+    private static class FolderSearchInfo implements SearchInfo {
+
         Folder folder;
-        
+
         FolderSearchInfo(Folder folder) {
             this.folder = folder;
         }
-        
+
         public boolean canSearch() {
             return true;
         }
-        
+
         public Iterator objectsToSearch() {
             return folder.getAllItemsAsDataObjectSet(false, "text/").iterator(); // NOI18N
         }
+    }
+
+    // this class should be static, because successors are shared classes
+    // and accessing MakeLogicalViewProvider.this would use wrong one!
+    private static class StandardNodeAction extends NodeAction {
+
+        SystemAction systemAction;
+
+        public StandardNodeAction(SystemAction systemAction) {
+            this.systemAction = systemAction;
+        }
+
+        @Override
+        protected void performAction(Node[] activatedNodes) {
+            if (activatedNodes.length > 0) {
+                Folder folder = activatedNodes[0].getLookup().lookup(Folder.class);
+                if (folder == null) {
+                    // TODO: looking up for views is not a good technique, this should
+                    // be changed one day all other this class
+                    ViewItemNode vin = activatedNodes[0].getLookup().lookup(ViewItemNode.class);
+                    if (vin != null) {
+                        folder = vin.getFolder();
+                    }
+                }
+
+                if (folder != null) {
+                    MakeConfigurationDescriptor mcd = (MakeConfigurationDescriptor) folder.getConfigurationDescriptor();
+                    if (mcd != null && !mcd.okToChange()) {
+                        return;
+                    }
+                }
+            }
+            InstanceContent ic = new InstanceContent();
+            for (int i = 0; i < activatedNodes.length; i++) {
+                ic.add(activatedNodes[i]);
+            }
+            Lookup actionContext = new AbstractLookup(ic);
+            final Action a;
+            if (systemAction instanceof NodeAction) {
+                a = ((NodeAction) systemAction).createContextAwareInstance(actionContext);
+            } else if (systemAction instanceof CallbackSystemAction) {
+                a = ((CallbackSystemAction) systemAction).createContextAwareInstance(actionContext);
+            } else {
+                a = null;
+                assert false;
+            }
+            SwingUtilities.invokeLater(new Runnable() {
+
+                public void run() {
+                    a.actionPerformed(new ActionEvent(this, 0, null));
+                }
+            });
+        }
+
+        @Override
+        protected boolean enable(Node[] activatedNodes) {
+            return true;
+        }
+
+        @Override
+        public HelpCtx getHelpCtx() {
+            return systemAction.getHelpCtx();
+        }
+
+        @Override
+        public String getName() {
+            return systemAction.getName();
+        }
+    }
+
+    private static class RenameNodeAction extends StandardNodeAction {
+
+        public RenameNodeAction() {
+            super(SystemAction.get(RenameAction.class));
+        }
+    }
+
+    private static class DeleteNodeAction extends StandardNodeAction {
+
+        public DeleteNodeAction() {
+            super(SystemAction.get(DeleteAction.class));
+        }
+    }
+
+    private StandardNodeAction createRenameAction() {
+        if (renameAction == null) {
+            renameAction = new RenameNodeAction();
+        }
+        return renameAction;
+    }
+
+    private StandardNodeAction createDeleteAction() {
+        if (deleteAction == null) {
+            deleteAction = new DeleteNodeAction();
+        }
+        return deleteAction;
     }
 }

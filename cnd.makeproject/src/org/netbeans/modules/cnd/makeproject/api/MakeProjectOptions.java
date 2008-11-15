@@ -48,114 +48,80 @@ import org.netbeans.modules.cnd.settings.CppSettings;
 
 public class MakeProjectOptions {
 
+    /**
+     * @Deprecated
+     */
     public static void setDefaultMakeCommand(String defaultMakeCommand) {
-        CppSettings.getDefault().setMakeName(defaultMakeCommand);
+        //CppSettings.getDefault().setMakeName(defaultMakeCommand);
     }
 
-    public static String getDefaultMakeCommand() {
-        return CppSettings.getDefault().getMakeName();
-    }
-    
     /**
-     * Choose either Sun or GNU compiler sets. Unfortunately, we no longer guarantee either
-     * exists. In CND 5.5, you had a Sun and GNU compiler set regardless of whether you had
-     * compilers to make either set usable. In CND 5.5.1, a compiler set is defined for every
-     * directory which has executables recognized as compilers.
-     * 
-     * @deprecated
+     * @Deprecated
      */
-    public static void setDefaultCompilerSet(int compilerSet) {
-        CompilerSet cs = null;
-        
-        if (compilerSet == 0) {
-            cs = CompilerSetManager.getDefault().getCompilerSet("Sun"); // NOI18N
-        } else if (compilerSet == 1) {
-            cs = CompilerSetManager.getDefault().getCompilerSet("GNU"); // NOI18N
-        }
-        if (cs != null) {
-            CppSettings.getDefault().setCompilerSetName(cs.getName());
-            CppSettings.getDefault().setCompilerSetDirectories(cs.getDirectory());
-        } else {
-            cs = CompilerSetManager.getDefault().getCompilerSet(0); // use 0th as default
-        }
+    public static String getDefaultMakeCommand() {
+        return null; //CppSettings.getDefault().getMakeName();
     }
     
     /**
-     * Choose either Sun or GNU compiler sets. Unfortunately, we no longer guarantee either
-     * exists. In CND 5.5, you had a Sun and GNU compiler set regardless of whether you had
-     * compilers to make either set usable. In CND 5.5.1, a compiler set is defined for every
-     * directory which has executables recognized as compilers.
+     * @Deprecated
      */
     public static void setDefaultCompilerSet(String name) {
-        CompilerSet cs = CompilerSetManager.getDefault().getCompilerSet(name);
-        if (cs != null) {
-            CppSettings.getDefault().setCompilerSetName(cs.getName());
-            CppSettings.getDefault().setCompilerSetDirectories(cs.getDirectory());
-        } else {
-            cs = CompilerSetManager.getDefault().getCompilerSet(0); // use 0th as default
+        // Set the default name in global setting
+        CppSettings.getDefault().setCompilerSetName(name);
+        // Also set the default compiler set in the localhost set. Remote sets will look at the setting in CppSettings.
+        CompilerSetManager compilerSetManager = CompilerSetManager.getDefault(CompilerSetManager.LOCALHOST);
+        CompilerSet compilerSet = compilerSetManager.getCompilerSet(name);
+        if (compilerSet != null) {
+            compilerSetManager.setDefault(compilerSet);
         }
+//        CompilerSet cs = CompilerSetManager.getDefault(CompilerSetManager.LOCALHOST).getCompilerSet(name);
+//        if (cs != null) {
+//            CppSettings.getDefault().setCompilerSetName(cs.getName());
+////            CppSettings.getDefault().setCompilerSetDirectories(cs.getDirectory());
+//        } else {
+//            cs = CompilerSetManager.getDefault(CompilerSetManager.LOCALHOST).getCompilerSet(0); // use 0th as default
+//        }
     }
 
     /**
-     * Return a default compiler set index. Note that this index is only valid if the user
-     * doesn't modify their path INSIDE THE IDE. Also, if there are no compiler sets in the
-     * user's path, the return is 0 and the results are somewhat undefined.
-     *
-     * @returns index of the current default compiler set
-     *
-     * @deprecated
+     * @Deprecated
      */
-    public static int getDefaultCompilerSet() {
-        CompilerSet cs = CompilerSetManager.getDefault().getCompilerSet(CppSettings.getDefault().getCompilerSetName());
-        if (cs != null) {
-            int i = 0;
-            for (CompilerSet cs2 : CompilerSetManager.getDefault().getCompilerSets()) {
-                if (cs2 == cs) {
-                    return i;
-                } else {
-                    i++;
-                }
-            }
-        }
-        return 0;
-    }
-
     public static void setDefaultMakeOptions(String defaultMakeOptions) {
         MakeOptions.setDefaultMakeOptions(defaultMakeOptions);
     }
 
+    /**
+     * @Deprecated
+     */
     public static String getDefaultMakeOptions() {
         return MakeOptions.getDefaultMakeOptions();
     }
 
-    public static void setDefaultCompilerSetName(String compilerSetName) {
-        CppSettings.getDefault().setCompilerSetName(compilerSetName);
-    }
 
-    public static String getDefaultCompilerSetName() {
-        return CppSettings.getDefault().getCompilerSetName();
-    }
-
-    public static void setDefaultCompilerSetDirectories(String compilerSetDirectories) {
-        CppSettings.getDefault().setCompilerSetDirectories(compilerSetDirectories);
-    }
-
-    public static String getDefaultCompilerSetDirectories() {
-        return CppSettings.getDefault().getCompilerSetDirectories();
-    }
-    
+    /**
+     * @Deprecated
+     */
     public static void setDefaultPlatform(int platform) {
         MakeOptions.getInstance().setPlatform(platform);
     }
-    
+
+    /**
+     * @Deprecated
+     */
     public static int getDefaultPlatform() {
         return MakeOptions.getInstance().getPlatform();
     }
-    
+
+    /**
+     * @Deprecated
+     */
     public static void setFortranSupport(boolean fortran) {
         CppSettings.getDefault().setFortranEnabled(fortran);
     }
-    
+
+    /**
+     * @Deprecated
+     */
     public static boolean getFortranSupport() {
         return CppSettings.getDefault().isFortranEnabled();
     }

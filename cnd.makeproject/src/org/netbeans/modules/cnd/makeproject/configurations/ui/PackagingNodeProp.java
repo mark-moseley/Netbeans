@@ -38,127 +38,108 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+
 package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
-import java.io.File;
-import java.util.StringTokenizer;
 import java.util.List;
-import java.util.ArrayList;
-import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.configurations.VectorConfiguration;
-import org.netbeans.modules.cnd.makeproject.ui.utils.DirectoryChooserPanel;
+import java.util.ResourceBundle;
+import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.PackagingConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.PackagerFileElement;
 import org.openide.explorer.propertysheet.ExPropertyEditor;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.nodes.PropertySupport;
-import org.openide.util.HelpCtx;
+import org.openide.util.NbBundle;
 
-public class VectorNodeProp extends PropertySupport {
-
-    private VectorConfiguration vectorConfiguration;
-    private BooleanConfiguration inheritValues;
-    private String baseDir;
-    private String[] texts;
-    boolean addPathPanel;
-    private HelpCtx helpCtx;
-
-    public VectorNodeProp(VectorConfiguration vectorConfiguration, BooleanConfiguration inheritValues, String baseDir, String[] texts, boolean addPathPanel, HelpCtx helpCtx) {
-        super(texts[0], List.class, texts[1], texts[2], true, true);
-        this.vectorConfiguration = vectorConfiguration;
-        this.inheritValues = inheritValues;
-        this.baseDir = baseDir;
-        this.texts = texts;
-        this.addPathPanel = addPathPanel;
-        this.helpCtx = helpCtx;
+public class PackagingNodeProp extends PropertySupport {
+    private PackagingConfiguration packagingConfiguration;
+    MakeConfiguration conf;
+    
+    public PackagingNodeProp(PackagingConfiguration packagingConfiguration, MakeConfiguration conf, String[] txts) {
+        super(txts[0], List.class, txts[1], txts[2], true, true);
+        this.packagingConfiguration = packagingConfiguration;
+	this.conf = conf;
     }
 
-    @Override
-    public String getHtmlDisplayName() {
-        if (vectorConfiguration.getModified()) {
-            return "<b>" + getDisplayName(); // NOI18N
-        } else {
-            return null;
+//    public String getHtmlDisplayName() {
+//        if (vectorConfiguration.getModified())
+//            return "<b>" + getDisplayName(); // NOI18N
+//        else
+//            return null;
+//    }
+    
+    public Object getValue() {
+        return packagingConfiguration;
+    }
+    
+    public void setValue(Object v) {
+        if (v != null) {
+            packagingConfiguration = (PackagingConfiguration) v; // FIXUP
         }
     }
-
-    public Object getValue() {
-        return vectorConfiguration.getValue();
-    }
-
-    public void setValue(Object v) {
-        vectorConfiguration.setValue((List) v);
-    }
-
-    @Override
-    public void restoreDefaultValue() {
-        vectorConfiguration.reset();
-    }
-
+    
+//    public void restoreDefaultValue() {
+//        vectorConfiguration.reset();
+//    }
+    
     @Override
     public boolean supportsDefaultValue() {
-        return true;
+        return false;
     }
-
-    @Override
-    public boolean isDefaultValue() {
-        return vectorConfiguration.getValue().size() == 0;
-    }
+    
+//    public boolean isDefaultValue() {
+//        return vectorConfiguration.getValue().size() == 0;
+//    }
 
     @Override
     public PropertyEditor getPropertyEditor() {
-        return new DirectoriesEditor((List) ((ArrayList) vectorConfiguration.getValue()).clone());
+	return new Editor(packagingConfiguration);
     }
 
-    /*
+    @Override
     public Object getValue(String attributeName) {
-    if (attributeName.equals("canEditAsText")) // NOI18N
-    return Boolean.FALSE;
-    return super.getValue(attributeName);
+        if (attributeName.equals("canEditAsText")) // NOI18N
+            return Boolean.FALSE;
+        return super.getValue(attributeName);
     }
-     */
-    private class DirectoriesEditor extends PropertyEditorSupport implements ExPropertyEditor {
 
-        private List value;
+    
+    
+    private class Editor extends PropertyEditorSupport implements ExPropertyEditor {
+        private PackagingConfiguration packagingConfiguration;
         private PropertyEnv env;
-
-        public DirectoriesEditor(List value) {
-            this.value = value;
+        
+        public Editor(PackagingConfiguration packagingConfiguration) {
+            this.packagingConfiguration = packagingConfiguration;
         }
-
+        
         @Override
         public void setAsText(String text) {
-            List<String> newList = new ArrayList<String>();
-            StringTokenizer st = new StringTokenizer(text, File.pathSeparator); // NOI18N
-            while (st.hasMoreTokens()) {
-                newList.add(st.nextToken());
-            }
-            super.setValue(newList);
         }
-
+        
         @Override
         public String getAsText() {
-            boolean addSep = false;
-            StringBuilder ret = new StringBuilder();
-            for (int i = 0; i < value.size(); i++) {
-                if (addSep) {
-                    ret.append(File.pathSeparator);
-                }
-                ret.append((String) value.get(i));
-                addSep = true;
+            int noFiles = packagingConfiguration.getFiles().getValue().size();
+            String val;
+            if (noFiles == 0) {
+                val = getString("FilesTextZero");
             }
-            return ret.toString();
+            else if (noFiles == 1) {
+                val = getString("FilesTextOne", "" + noFiles, ((PackagerFileElement)packagingConfiguration.getFiles().getValue().get(0)).getTo()); // NOI18N
+            }
+            else {
+                val = getString("FilesTextMany", "" + noFiles, ((PackagerFileElement)packagingConfiguration.getFiles().getValue().get(0)).getTo() + ", ..."); // NOI18N
+            }
+            return val;
         }
-
+        
         @Override
         public java.awt.Component getCustomEditor() {
-            String text = null;
-            if (inheritValues != null) {
-                text = texts[3];
-            }
-            return new DirectoryChooserPanel(baseDir, (String[]) value.toArray(new String[value.size()]), addPathPanel, inheritValues, text, this, env, helpCtx);
+            return new PackagingPanel(packagingConfiguration, this, env, conf);
         }
-
+        
         @Override
         public boolean supportsCustomEditor() {
             return true;
@@ -167,5 +148,17 @@ public class VectorNodeProp extends PropertySupport {
         public void attachEnv(PropertyEnv env) {
             this.env = env;
         }
+    }
+    /** Look up i18n strings here */
+    private static ResourceBundle bundle;
+    private static String getString(String s) {
+	if (bundle == null) {
+	    bundle = NbBundle.getBundle(PackagingNodeProp.class);
+	}
+	return bundle.getString(s);
+    }
+    
+    private static String getString(String s, String a1, String a2) {
+        return NbBundle.getMessage(PackagingNodeProp.class, s, a1, a2);
     }
 }
