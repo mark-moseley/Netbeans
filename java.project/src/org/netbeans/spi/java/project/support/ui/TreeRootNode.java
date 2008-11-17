@@ -41,6 +41,7 @@
 
 package org.netbeans.spi.java.project.support.ui;
 
+import java.awt.EventQueue;
 import java.awt.Image;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -59,12 +60,14 @@ import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.ChangeableDataFilter;
+import org.openide.loaders.DataFilter;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
 import org.openide.nodes.NodeNotFoundException;
 import org.openide.nodes.NodeOp;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
@@ -106,9 +109,9 @@ final class TreeRootNode extends FilterNode implements PropertyChangeListener {
         Icon icon = g.getIcon(opened);
         if (icon == null) {
             Image image = opened ? super.getOpenedIcon(type) : super.getIcon(type);
-            return Utilities.mergeImages(image, PackageRootNode.PACKAGE_BADGE, 7, 7);
+            return ImageUtilities.mergeImages(image, PackageRootNode.PACKAGE_BADGE, 7, 7);
         } else {
-            return Utilities.icon2Image(icon);
+            return ImageUtilities.icon2Image(icon);
         }
     }
     
@@ -142,10 +145,14 @@ final class TreeRootNode extends FilterNode implements PropertyChangeListener {
 
     public void propertyChange(PropertyChangeEvent ev) {
         // XXX handle SourceGroup.rootFolder change too
-        fireNameChange(null, null);
-        fireDisplayNameChange(null, null);
-        fireIconChange();
-        fireOpenedIconChange();
+        EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                fireNameChange(null, null);
+                fireDisplayNameChange(null, null);
+                fireIconChange();
+                fireOpenedIconChange();
+            }
+        });
     }
 
     /** Copied from PhysicalView and PackageRootNode. */
@@ -199,7 +206,8 @@ final class TreeRootNode extends FilterNode implements PropertyChangeListener {
         }
     }
     
-    private static final class VisibilityQueryDataFilter implements ChangeListener, PropertyChangeListener, ChangeableDataFilter {
+    private static final class VisibilityQueryDataFilter implements ChangeListener, PropertyChangeListener, 
+            ChangeableDataFilter, DataFilter.FileBased {
         
         private static final long serialVersionUID = 1L; // in case a DataFolder.ClonedFilterHandle saves me
         
@@ -246,6 +254,10 @@ final class TreeRootNode extends FilterNode implements PropertyChangeListener {
         
         public void removeChangeListener(ChangeListener listener) {
             ell.remove(ChangeListener.class, listener);
+        }
+
+        public boolean acceptFileObject(FileObject fo) {
+            return VisibilityQuery.getDefault().isVisible(fo);
         }
         
     }

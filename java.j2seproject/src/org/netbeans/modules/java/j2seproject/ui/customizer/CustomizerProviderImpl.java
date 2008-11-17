@@ -51,12 +51,12 @@ import java.util.HashMap;
 import java.util.Map;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.java.api.common.project.ui.customizer.CustomizerProvider2;
 import org.netbeans.modules.java.j2seproject.J2SEProject;
-import org.netbeans.modules.java.j2seproject.UpdateHelper;
 import org.netbeans.spi.project.support.ant.GeneratedFilesHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
-import org.netbeans.spi.project.ui.CustomizerProvider;
 import org.netbeans.spi.project.ui.support.ProjectCustomizer;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -67,7 +67,7 @@ import org.openide.util.lookup.Lookups;
  *
  * @author Petr Hrebejk
  */
-public class CustomizerProviderImpl implements CustomizerProvider {
+public class CustomizerProviderImpl implements CustomizerProvider2 {
     
     private final Project project;
     private final UpdateHelper updateHelper;
@@ -88,7 +88,7 @@ public class CustomizerProviderImpl implements CustomizerProvider {
 
     public static final String CUSTOMIZER_FOLDER_PATH = "Projects/org-netbeans-modules-java-j2seproject/Customizer"; //NO18N
     
-    private static Map /*<Project,Dialog>*/project2Dialog = new HashMap(); 
+    private static Map<Project,Dialog> project2Dialog = new HashMap<Project,Dialog>();
     
     public CustomizerProviderImpl(Project project, UpdateHelper updateHelper, PropertyEvaluator evaluator, ReferenceHelper refHelper, GeneratedFilesHelper genFileHelper) {
         this.project = project;
@@ -109,7 +109,7 @@ public class CustomizerProviderImpl implements CustomizerProvider {
     
     public void showCustomizer( String preselectedCategory, String preselectedSubCategory ) {
         
-        Dialog dialog = (Dialog)project2Dialog.get (project);
+        Dialog dialog = project2Dialog.get(project);
         if ( dialog != null ) {            
             dialog.setVisible(true);
             return;
@@ -123,7 +123,8 @@ public class CustomizerProviderImpl implements CustomizerProvider {
             });
 
             OptionListener listener = new OptionListener( project, uiProperties );
-            dialog = ProjectCustomizer.createCustomizerDialog( CUSTOMIZER_FOLDER_PATH, context, preselectedCategory, listener, null );
+            StoreListener storeListener = new StoreListener(uiProperties);
+            dialog = ProjectCustomizer.createCustomizerDialog(CUSTOMIZER_FOLDER_PATH, context, preselectedCategory, listener, storeListener, null);
             dialog.addWindowListener( listener );
             dialog.setTitle( MessageFormat.format(                 
                     NbBundle.getMessage( CustomizerProviderImpl.class, "LBL_Customizer_Title" ), // NOI18N 
@@ -133,6 +134,20 @@ public class CustomizerProviderImpl implements CustomizerProvider {
             dialog.setVisible(true);
         }
     }    
+    
+    private class StoreListener implements ActionListener {
+    
+        private J2SEProjectProperties uiProperties;
+        
+        StoreListener(J2SEProjectProperties uiProperties ) {
+            this.uiProperties = uiProperties;
+        }
+        
+        public void actionPerformed(ActionEvent e) {
+            uiProperties.save();
+        }
+        
+    }
     
     /** Listens to the actions on the Customizer's option buttons */
     private class OptionListener extends WindowAdapter implements ActionListener {
@@ -155,10 +170,11 @@ public class CustomizerProviderImpl implements CustomizerProvider {
 // as modified before the project customizer is shown. 
 //            assert !ProjectManager.getDefault().isModified(project) : 
 //                "Some of the customizer panels has written the changed data before OK Button was pressed. Please file it as bug."; //NOI18N
-            uiProperties.save();
-            
+
+            //Show warning when modified
+            uiProperties.checkModified ();
             // Close & dispose the the dialog
-            Dialog dialog = (Dialog)project2Dialog.get( project );
+            Dialog dialog = project2Dialog.get(project);
             if ( dialog != null ) {
                 dialog.setVisible(false);
                 dialog.dispose();
@@ -174,7 +190,7 @@ public class CustomizerProviderImpl implements CustomizerProvider {
         public void windowClosing (WindowEvent e) {
             //Dispose the dialog otherwsie the {@link WindowAdapter#windowClosed}
             //may not be called
-            Dialog dialog = (Dialog)project2Dialog.get( project );
+            Dialog dialog = project2Dialog.get(project);
             if ( dialog != null ) {
                 dialog.setVisible(false);
                 dialog.dispose();

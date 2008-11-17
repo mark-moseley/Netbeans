@@ -97,10 +97,10 @@ import org.openide.nodes.PropertySupport;
 import org.openide.nodes.Sheet;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
 import org.openide.util.datatransfer.ExTransferable;
 import org.openide.util.datatransfer.MultiTransferObject;
@@ -152,22 +152,18 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
         if ( fo != null && fo.isValid()) {
             Object o = names2nodes.get(path);
             PackageNode n;
-            if ( o == NODE_NOT_CREATED ) {
-                n = new PackageNode( root, DataFolder.findFolder( fo ), false );
+            DataFolder folder = DataFolder.findFolder(fo);
+            if (folder.isValid()) {
+                if ( o == NODE_NOT_CREATED ) {
+                    n = new PackageNode(root, folder, false);
+                } else { // NODE_NOT_CREATED_EMPTY, PackageNode
+                    n = new PackageNode(root, folder);
+                }
+                names2nodes.put(path, n);
+                return new Node[] {n};
             }
-            else if ( o ==  NODE_NOT_CREATED_EMPTY ) {
-                n = new PackageNode( root, DataFolder.findFolder( fo ), true );
-            }
-            else {
-                n = new PackageNode( root, DataFolder.findFolder( fo ) );
-            }            
-            names2nodes.put(path, n);
-            return new Node[] {n};
         }
-        else {
-            return new Node[0];
-        }
-        
+        return new Node[0];
     }
     
     RequestProcessor.Task task = RequestProcessor.getDefault().create( this );
@@ -993,13 +989,13 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
             if (path == null) {
                 // ??? - #103711: null cannot be returned because the icon 
                 // must be annotated; general package icon is returned instead
-                return Utilities.loadImage("org/netbeans/spi/java/project/support/ui/package.gif"); // NOI18N
+                return ImageUtilities.loadImage("org/netbeans/spi/java/project/support/ui/package.gif"); // NOI18N
             }
             return PackageDisplayUtils.getIcon(folder, path.replace('/', '.'), isLeaf() );
         }
         
         private Image getMyOpenedIcon(int type) {
-            return getIcon(type);
+            return getMyIcon(type);
         }
         
         public void update() {
@@ -1136,7 +1132,7 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
         }
     }
     
-    final class NoFoldersDataFilter implements ChangeListener, ChangeableDataFilter {
+    final class NoFoldersDataFilter implements ChangeListener, ChangeableDataFilter, DataFilter.FileBased {
         
         private final ChangeSupport cs = new ChangeSupport(this);
         
@@ -1146,7 +1142,7 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
                 
         public boolean acceptDataObject(DataObject obj) {                
             FileObject fo = obj.getPrimaryFile();                
-            return  VisibilityQuery.getDefault().isVisible(fo) && !(obj instanceof DataFolder) && group.contains(fo);
+            return  fo.isValid() && VisibilityQuery.getDefault().isVisible(fo) && !(obj instanceof DataFolder) && group.contains(fo);
         }
         
         public void stateChanged( ChangeEvent e) {            
@@ -1159,6 +1155,10 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
                         
         public void removeChangeListener( ChangeListener listener ) {
             cs.removeChangeListener(listener);
+        }
+
+        public boolean acceptFileObject(FileObject fo) {
+            return VisibilityQuery.getDefault().isVisible(fo);
         }
         
     }
@@ -1218,14 +1218,12 @@ final class PackageViewChildren extends Children.Keys<String> implements FileCha
                     if (children[i].getPrimaryFile().isData() 
                     && VisibilityQuery.getDefault().isVisible (children[i].getPrimaryFile())) {
                         //Copy only the package level
-                        children[i].copy (dest);
                         if (this.op == DnDConstants.ACTION_MOVE) {
-                            try {
-                                children[i].delete();
-                            } catch (IOException ioe) {
-                                cantDelete = true;
-                            }
+                            children[i].move(dest);
                         }
+                        else {
+                            children[i].copy (dest);
+                        }                                                
                     }
                     else {
                         cantDelete = true;
