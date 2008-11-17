@@ -39,9 +39,10 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.visualweb.windows;
+package org.netbeans.performance.visualweb.dialogs;
 
-import org.netbeans.performance.visualweb.VWPUtilities;
+import org.netbeans.performance.visualweb.PaletteComponentOperator;
+import org.netbeans.performance.visualweb.JSFComponentOptionsDialog;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.RuntimeTabOperator;
 import org.netbeans.jellytools.TopComponentOperator;
@@ -50,7 +51,6 @@ import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.actions.ActionNoBlock;
 import org.netbeans.jellytools.actions.DeleteAction;
 import org.netbeans.jemmy.JemmyProperties;
-
 import org.netbeans.jemmy.QueueTool;
 import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.ComponentOperator;
@@ -58,28 +58,34 @@ import org.netbeans.jemmy.operators.JTextComponentOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.StringComparator;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
+
+import org.netbeans.performance.visualweb.setup.VisualWebSetup;
+import org.netbeans.performance.visualweb.VWPUtilities;
 
 /**
  *
  * @author mkhramov@netbeans.org
  */
-public class DatabaseTableDrop extends org.netbeans.modules.performance.utilities.PerformanceTestCase {
+public class DatabaseTableDropTest extends JSFComponentOptionsDialog {
+
     private RuntimeTabOperator rto;
-    protected WebFormDesignerOperator surface;
-    protected PaletteComponentOperator palette;
+//    protected WebFormDesignerOperator surface;
+//    protected PaletteComponentOperator palette;
     
-    protected String categoryName;
-    protected String componentName;
-    protected java.awt.Point addPoint;
+//    protected String categoryName;
+//    protected String componentName;
+//    protected java.awt.Point addPoint;
     private StringComparator previousComparator;
     
     private static final String DBRootName = "jdbc:derby://localhost:1527/travel [travel on TRAVEL]";
     private static final String DBTableName = "Tables"+"|"+"TRIP";
-    public static final String suiteName="UI Responsiveness VisualWeb Actions suite";
-    /** Creates a new instance of DatabaseTableDrop
+
+    /** Creates a new instance of DatabaseTableDropTest
      * @param testName
      */
-    public DatabaseTableDrop(String testName) {
+    public DatabaseTableDropTest(String testName) {
         super(testName);
         expectedTime = 10000; // 20 seconds ?
         WAIT_AFTER_OPEN=5000;
@@ -88,11 +94,11 @@ public class DatabaseTableDrop extends org.netbeans.modules.performance.utilitie
         addPoint = new java.awt.Point(50,50);
     }
     
-    /** Creates a new instance of DatabaseTableDrop
+    /** Creates a new instance of DatabaseTableDropTest
      * @param testName
      * @param performanceDataName
      */
-    public DatabaseTableDrop(String testName, String performanceDataName) {
+    public DatabaseTableDropTest(String testName, String performanceDataName) {
         super(testName,performanceDataName);
         expectedTime = 10000; // 20 seconds ?
         WAIT_AFTER_OPEN=5000;
@@ -100,33 +106,45 @@ public class DatabaseTableDrop extends org.netbeans.modules.performance.utilitie
         componentName = "Table"; // NOI18N
         addPoint = new java.awt.Point(50,50);
     }
+
+    public static NbTestSuite suite() {
+        NbTestSuite suite = new NbTestSuite();
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(VisualWebSetup.class)
+             .addTest(DatabaseTableDropTest.class)
+             .enableModules(".*").clusters(".*")));
+        return suite;
+    }
     
     public void testDatabaseTableDrop() {
         doMeasurement();
     }
     
-    @Override
-    protected void initialize() {
-        log(":: initialize");
-        new ActionNoBlock("Window|Navigating|Navigator",null).perform(); //NOI18N
+
+    public void initialize() {
+ /*      new ActionNoBlock("Window|Navigating|Navigator",null).perform(); //NOI18N
         
         rto = RuntimeTabOperator.invoke();
         Operator.DefaultStringComparator comparator = new Operator.DefaultStringComparator(false, false);
         previousComparator = rto.tree().getComparator();
         //rto.setComparator(comparator);
         rto.tree().setComparator(comparator);
-        
+*/
+        super.initialize();
+
+        rto = RuntimeTabOperator.invoke();
         Node travelBaseNode = new Node(rto.getRootNode(),"Databases"+"|"+DBRootName); // NOI18N
         travelBaseNode.performPopupActionNoBlock("Connect"); // NOI18N
         processDBConnectDialogNoPass();
-        VWPUtilities.invokePTO();
-        
-        PaletteComponentOperator.invoke();
-        openPage();
+        //VWPUtilities.invokePTO();
+
+  //      PaletteComponentOperator.invoke();
+  //      openPage();
+ 
+    
     }
     
     private void openPage() {
-        surface = org.netbeans.performance.visualweb.VWPUtilities.openedWebDesignerForJspFile("VisualWebProject", "Page1");
+        surface = org.netbeans.performance.visualweb.VWPUtilities.openedWebDesignerForJspFile("UltraLargeWA", "TestPage");
         palette = new PaletteComponentOperator();
     }
     
@@ -137,56 +155,42 @@ public class DatabaseTableDrop extends org.netbeans.modules.performance.utilitie
         //Click on design surface to add selected component on page
         surface.clickOnSurface(new Double(addPoint.getX()).intValue(),new Double(addPoint.getY()).intValue());
         
-        long click1 = System.currentTimeMillis();
-        log(":: click on surface");
+   //     long click1 = System.currentTimeMillis();
+   //     log(":: click on surface");
         //Click some other surface point to make added component deselected
         
         new QueueTool().waitEmpty();
-        long click2 = System.currentTimeMillis();
-        surface.clickOnSurface(10,10);
-        log(":: click on surface");
-        log(":: Delta = " +(click2-click1));
-        waitNoEvent(5000);
+   //     long click2 = System.currentTimeMillis();
+        //surface.clickOnSurface(10,10);
+   //     log(":: click on surface");
+   //     log(":: Delta = " +(click2-click1));
+        
     }
     
+    @Override
     public void prepare() {
-        log(":: prepare");
+       // super.prepare();
         addComponent();
         selectDBTableNode();
+        surface.clickOnSurface(60,60);
     }
     
     public ComponentOperator open() {
-        log(":: open");
-        surface.clickOnSurface(70,70);
+        new NbDialogOperator("Add").ok();
         return null;
     }
     
     @Override
     public void close() {
-        log(":: close");
-        clearBindingArtefacts();
+        surface.clickOnSurface(70,70);
+        surface.deleteSelection();
+     //        clearBindingArtefacts();
     }
     private void processDBConnectDialogNoPass() {
         NbDialogOperator connectDlg = new NbDialogOperator("Connecting to Database"); // NOI18N
         connectDlg.waitClosed();
     }
-    private void processDBConnectDialog() {
-        NbDialogOperator connectDlg = new NbDialogOperator("Connecting to Database"); // NOI18N
-        JTextComponentOperator password = new JTextComponentOperator(connectDlg,0);
-        password.setText("travel");
-        
-        long oldTimeout = JemmyProperties.getCurrentTimeouts().getTimeout("ComponentOperator.WaitStateTimeout");
-        JemmyProperties.getCurrentTimeouts().setTimeout("ComponentOperator.WaitStateTimeout",60000);        
-        
-        connectDlg.ok();
-        try {
-            connectDlg.waitClosed();
-        } catch (TimeoutExpiredException tex) 
-        {
-            fail("Unable to start Java DB server");
-        }
-        JemmyProperties.getCurrentTimeouts().setTimeout("ComponentOperator.WaitStateTimeout",oldTimeout);
-    }
+
     
     private void selectDBTableNode() {
         rto = RuntimeTabOperator.invoke();
@@ -198,8 +202,6 @@ public class DatabaseTableDrop extends org.netbeans.modules.performance.utilitie
         
         Node TableNode = new Node(rto.getRootNode(),"Databases"+"|"+DBRootName+"|"+DBTableName); // NOI18N
         TableNode.select();
-        log("Selected Node path ="+TableNode.getPath()+" and node is "+TableNode.getText());
-        
     }
     
     private void clearBindingArtefacts() {
@@ -228,9 +230,6 @@ public class DatabaseTableDrop extends org.netbeans.modules.performance.utilitie
         table = new Node(tree,"Page1|trip");
         new DeleteAction().perform(table);
         new NbDialogOperator(title).yes();
-
-        
-
     }
     
     @Override
@@ -242,7 +241,5 @@ public class DatabaseTableDrop extends org.netbeans.modules.performance.utilitie
         rto.tree().setComparator(previousComparator);
     }
     
-    public static void main(String[] args) {
-        junit.textui.TestRunner.run(new DatabaseTableDrop("measureTime", "Time to Drop Database table on table"));
-    }
+
 }
