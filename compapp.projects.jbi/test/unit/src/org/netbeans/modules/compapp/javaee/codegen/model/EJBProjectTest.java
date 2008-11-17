@@ -28,18 +28,9 @@ package org.netbeans.modules.compapp.javaee.codegen.model;
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.api.project.TestUtil;
 import org.netbeans.junit.NbTestCase;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 
 /**
  *
@@ -66,14 +57,10 @@ public class EJBProjectTest extends NbTestCase {
     }
 
     public void setUp() throws Exception {
-        FileObject scratch = TestUtil.makeScratchDir(this);
-        this.scratchDir = FileUtil.toFile(scratch);
+        clearWorkDir();
+        scratchDir = getWorkDir();
     }
 
-    public void tearDown() throws Exception {
-        TestUtil.deleteRec(scratchDir);
-    }
-    
     public void testSUForEJBJarMissingPortName() throws Exception {
         File f = new File(getDataDir().getAbsolutePath(), PORT_NAME_MISSING_EJB_JAR1);
         File eF = new File(getDataDir().getAbsolutePath(), PORT_NAME_MISSING_SU_EJB_JAR1);
@@ -84,7 +71,7 @@ public class EJBProjectTest extends NbTestCase {
         JarFile actual = new JarFile(ret);
         assertTrue("Generated jar with jbi.xml did not macth:", CompAppTestUtil.compareJar(expected, actual));
     }
-    
+
     public void testSUForWebAppAllDefault() throws Exception {
         File f = new File(getDataDir().getAbsolutePath(), ALL_DEFAULT_WEB_APP);
         File eF = new File(getDataDir().getAbsolutePath(), ALL_DEFAULT_SU_WEB_APP);
@@ -106,5 +93,4 @@ public class EJBProjectTest extends NbTestCase {
         JarFile actual = new JarFile(ret);
         assertTrue("Generated jar with jbi.xml did not macth:", CompAppTestUtil.compareJar(expected, actual));
     }
-    
 }
