@@ -47,6 +47,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.WeakHashMap;
@@ -70,26 +71,6 @@ public final class TestUtil {
     
     private TestUtil() {}
     
-    /**
-     * Set the global default lookup.
-     * Caution: if you don't include Lookups.metaInfServices, you may have trouble,
-     * e.g. {@link #makeScratchDir} will not work.
-     * @deprecated Use {@link MockLookup} instead.
-     */
-    @Deprecated
-    public static void setLookup(Lookup l) {
-        MockLookup.setLookup(l);
-    }
-    
-    /**
-     * Set the global default lookup with some fixed instances including META-INF/services/*.
-     * @deprecated Use {@link MockLookup} instead.
-     */
-    @Deprecated
-    public static void setLookup(Object... instances) {
-        MockLookup.setInstances(instances);
-    }
-    
     private static boolean warned = false;
     /**
      * Create a scratch directory for tests.
@@ -99,7 +80,8 @@ public final class TestUtil {
     public static FileObject makeScratchDir(NbTestCase test) throws IOException {
         test.clearWorkDir();
         File root = test.getWorkDir();
-        assert root.isDirectory() && root.list().length == 0;
+        assert root.isDirectory() : root;
+        assert root.list().length == 0 : Arrays.toString(root.list());
         MockLookup.init(); // URLMapper asks for default lookup
         FileObject fo = FileUtil.toFileObject(root);
         if (fo != null) {
@@ -220,6 +202,11 @@ public final class TestUtil {
      */
     public static Object BROKEN_PROJECT_LOAD_LOCK = null;
     
+    /**If non-null, use the value as the Lookup for newly created projects.
+     * 
+     */
+    public static Lookup LOOKUP = null;
+    
     private static final class TestProjectFactory implements ProjectFactory {
         
         TestProjectFactory() {}
@@ -246,7 +233,7 @@ public final class TestUtil {
                     }
                     throw new IOException("Load failed of " + projectDirectory);
                 } else {
-                    return new TestProject(projectDirectory, state);
+                    return new TestProject(projectDirectory, LOOKUP != null ? LOOKUP : Lookup.EMPTY, state);
                 }
             } else {
                 return null;
@@ -279,17 +266,19 @@ public final class TestUtil {
     private static final class TestProject implements Project {
         
         private final FileObject dir;
+        private final Lookup lookup;
         final ProjectState state;
         Throwable error;
         int saveCount = 0;
         
-        public TestProject(FileObject dir, ProjectState state) {
+        public TestProject(FileObject dir, Lookup lookup, ProjectState state) {
             this.dir = dir;
+            this.lookup = lookup;
             this.state = state;
         }
         
         public Lookup getLookup() {
-            return Lookup.EMPTY;
+            return lookup;
         }
         
         public FileObject getProjectDirectory() {
