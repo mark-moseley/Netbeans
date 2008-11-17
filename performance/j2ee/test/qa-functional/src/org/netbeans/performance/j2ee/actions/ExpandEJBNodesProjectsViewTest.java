@@ -39,102 +39,119 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2ee.menus;
+package org.netbeans.performance.j2ee.actions;
 
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
 import org.netbeans.performance.j2ee.setup.J2EESetup;
 
-import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jellytools.RuntimeTabOperator;
+import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.actions.MaximizeWindowAction;
+import org.netbeans.jellytools.actions.RestoreWindowAction;
 import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jemmy.operators.JPopupMenuOperator;
+import org.netbeans.jemmy.operators.ComponentOperator;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.junit.NbModuleSuite;
 
 /**
- * Test of popup menu on nodes in Runtime View
- * @author  juhrik@netbeans.org, mmirilovic@netbeans.org
+ * Test of expanding nodes/folders in the Explorer.
+ *
+ * @author  mmirilovic@netbeans.org
  */
-
-
-public class AppServerPopupMenuTest extends PerformanceTestCase {
+public class ExpandEJBNodesProjectsViewTest extends PerformanceTestCase {
     
-    private static RuntimeTabOperator runtimeTab;
-    protected static Node dataObjectNode;
+    /** Name of the folder which test creates and expands */
+    private static String project;
     
-    private final String SERVER_REGISTRY = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.Bundle", "SERVER_REGISTRY_NODE");
+    /** Path to the folder which test creates and expands */
+    private static String pathToFolderNode;
     
-   
+    /** Node represantation of the folder which test creates and expands */
+    private static Node nodeToBeExpanded;
+    
+    /** Projects tab */
+    private static ProjectsTabOperator projectTab;
+    
+    /** Project with data for these tests */
+    private static String testDataProject = "TestApplication-EJBModule";
+    
+  
     /**
-     * Creates a new instance of AppServerPopupMenuTest
+     * Creates a new instance of ExpandNodesInExplorer
+     * @param testName the name of the test
      */
-    public AppServerPopupMenuTest(String testName) {
+    public ExpandEJBNodesProjectsViewTest(String testName) {
         super(testName);
+        expectedTime = WINDOW_OPEN;
     }
     
     /**
-     * Creates a new instance of AppServerPopupMenuTest
+     * Creates a new instance of ExpandNodesInExplorer
+     * @param testName the name of the test
+     * @param performanceDataName measured values will be saved under this name
      */
-    public AppServerPopupMenuTest(String testName, String performanceDataName) {
+    public ExpandEJBNodesProjectsViewTest(String testName, String performanceDataName) {
         super(testName, performanceDataName);
+        expectedTime = WINDOW_OPEN;
     }
-    
+
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(J2EESetup.class)
-             .addTest(AppServerPopupMenuTest.class)
+             .addTest(ExpandEJBNodesProjectsViewTest.class)
              .enableModules(".*").clusters(".*")));
         return suite;
     }
 
-    public void testAppServerPopupMenuRuntime(){
-        testMenu(SERVER_REGISTRY + "|" + "GlassFish V2");
-    }
-    
-    private void testMenu(String path){
-        try {
-            runtimeTab = new RuntimeTabOperator();
-            dataObjectNode = new Node(runtimeTab.getRootNode(), path);
-            doMeasurement();
-        } catch (Exception e) {
-            throw new Error("Exception thrown",e);
-        }
-    }
-    
-            /**
-     * Closes the popup by sending ESC key event.
-     */
-    @Override
-    public void close(){
-        //testedComponentOperator.pressKey(java.awt.event.KeyEvent.VK_ESCAPE);
-        // Above sometimes fails in QUEUE mode waiting to menu become visible.
-        // This pushes Escape on underlying JTree which should be always visible
-        dataObjectNode.tree().pushKey(java.awt.event.KeyEvent.VK_ESCAPE);
-    }
-    
-    
-    @Override
-    public void prepare() {
-        dataObjectNode.select();
+
+    public void testExpandEjbProjectNode(){
+        WAIT_AFTER_OPEN = 1000;
+        WAIT_AFTER_PREPARE = 2000;
+        project = testDataProject;
+        pathToFolderNode = "";
+        doMeasurement();
     }
 
+    public void testExpandEjbNode(){
+        WAIT_AFTER_OPEN = 1000;
+        WAIT_AFTER_PREPARE = 2000;
+        project = testDataProject;
+        pathToFolderNode = "Enterprise Beans";
+        doMeasurement();
+    }
+  
+    
     @Override
-    public ComponentOperator open() {
-        java.awt.Point point = dataObjectNode.tree().getPointToClick(dataObjectNode.getTreePath());
-        int button = dataObjectNode.tree().getPopupMouseButton();
-        dataObjectNode.tree().clickMouse(point.x, point.y, 1, button);
-        return new JPopupMenuOperator();
+    public void initialize(){
+        projectTab = new ProjectsTabOperator();
+        new MaximizeWindowAction().performAPI(projectTab);
+        projectTab.getProjectRootNode(testDataProject).collapse();
+        repaintManager().addRegionFilter(repaintManager().EXPLORER_FILTER);
+    }
+        
+        
+    public void prepare() {
+        if(pathToFolderNode.equals(""))
+            nodeToBeExpanded = projectTab.getProjectRootNode(project);
+        else
+            nodeToBeExpanded = new Node(projectTab.getProjectRootNode(project), pathToFolderNode);
+    }
+    
+    public ComponentOperator open(){
+        nodeToBeExpanded.tree().doExpandPath(nodeToBeExpanded.getTreePath());
+        nodeToBeExpanded.expand();
+        return null;
     }
     
     @Override
-    public void initialize() {
-        //Utils.startStopServer(true);
+    public void close(){
+        nodeToBeExpanded.collapse();
     }
     
     @Override
     public void shutdown() {
-        //Utils.startStopServer(false);
+        repaintManager().resetRegionFilters();
+        projectTab.getProjectRootNode(testDataProject).collapse();
+        new RestoreWindowAction().performAPI(projectTab);
     }
 
- 
 }

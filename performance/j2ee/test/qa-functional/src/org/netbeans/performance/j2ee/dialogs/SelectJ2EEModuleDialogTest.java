@@ -39,102 +39,79 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.j2ee.menus;
+package org.netbeans.performance.j2ee.dialogs;
+
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.nodes.ProjectRootNode;
+import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.jemmy.operators.JTreeOperator;
+import org.netbeans.jemmy.operators.Operator;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
 import org.netbeans.performance.j2ee.setup.J2EESetup;
 
-import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jellytools.RuntimeTabOperator;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jemmy.operators.JPopupMenuOperator;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.NbModuleSuite;
-
 /**
- * Test of popup menu on nodes in Runtime View
- * @author  juhrik@netbeans.org, mmirilovic@netbeans.org
+ * Test of Project Properties Window
+ *
+ * @author  mmirilovic@netbeans.org
  */
-
-
-public class AppServerPopupMenuTest extends PerformanceTestCase {
+public class SelectJ2EEModuleDialogTest extends PerformanceTestCase {
     
-    private static RuntimeTabOperator runtimeTab;
-    protected static Node dataObjectNode;
+    private static Node testNode;
+    private String TITLE;
     
-    private final String SERVER_REGISTRY = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.j2ee.deployment.impl.ui.Bundle", "SERVER_REGISTRY_NODE");
-    
-   
     /**
-     * Creates a new instance of AppServerPopupMenuTest
+     * Creates a new instance of SelectJ2EEModuleDialogTest
      */
-    public AppServerPopupMenuTest(String testName) {
+    public SelectJ2EEModuleDialogTest(String testName) {
         super(testName);
+        expectedTime = WINDOW_OPEN;
+        WAIT_AFTER_OPEN = 2000;
     }
     
     /**
-     * Creates a new instance of AppServerPopupMenuTest
+     * Creates a new instance of SelectJ2EEModuleDialogTest
      */
-    public AppServerPopupMenuTest(String testName, String performanceDataName) {
-        super(testName, performanceDataName);
+    public SelectJ2EEModuleDialogTest(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
+        WAIT_AFTER_OPEN = 2000;
     }
-    
+
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(J2EESetup.class)
-             .addTest(AppServerPopupMenuTest.class)
+             .addTest(SelectJ2EEModuleDialogTest.class)
              .enableModules(".*").clusters(".*")));
         return suite;
     }
 
-    public void testAppServerPopupMenuRuntime(){
-        testMenu(SERVER_REGISTRY + "|" + "GlassFish V2");
-    }
-    
-    private void testMenu(String path){
-        try {
-            runtimeTab = new RuntimeTabOperator();
-            dataObjectNode = new Node(runtimeTab.getRootNode(), path);
-            doMeasurement();
-        } catch (Exception e) {
-            throw new Error("Exception thrown",e);
-        }
-    }
-    
-            /**
-     * Closes the popup by sending ESC key event.
-     */
-    @Override
-    public void close(){
-        //testedComponentOperator.pressKey(java.awt.event.KeyEvent.VK_ESCAPE);
-        // Above sometimes fails in QUEUE mode waiting to menu become visible.
-        // This pushes Escape on underlying JTree which should be always visible
-        dataObjectNode.tree().pushKey(java.awt.event.KeyEvent.VK_ESCAPE);
-    }
-    
-    
-    @Override
-    public void prepare() {
-        dataObjectNode.select();
+    public void testSelectJ2EEModuleDialog() {
+        doMeasurement();
     }
 
-    @Override
-    public ComponentOperator open() {
-        java.awt.Point point = dataObjectNode.tree().getPointToClick(dataObjectNode.getTreePath());
-        int button = dataObjectNode.tree().getPopupMouseButton();
-        dataObjectNode.tree().clickMouse(point.x, point.y, 1, button);
-        return new JPopupMenuOperator();
-    }
-    
-    @Override
     public void initialize() {
-        //Utils.startStopServer(true);
+        JTreeOperator tree = new ProjectsTabOperator().tree();
+        tree.setComparator(new Operator.DefaultStringComparator(true, true));
+        String JAVA_EE_MODULES = Bundle.getStringTrimmed(
+                "org.netbeans.modules.j2ee.earproject.ui.Bundle",
+                "LBL_LogicalViewNode");
+        testNode = new Node(new ProjectRootNode(tree, "TestApplication"), JAVA_EE_MODULES);
     }
     
-    @Override
-    public void shutdown() {
-        //Utils.startStopServer(false);
+    public void prepare() {
+        // do nothing
     }
-
- 
+    
+    public ComponentOperator open() {
+        // invoke Window / Properties from the main menu
+        testNode.performPopupActionNoBlock("Add Java EE Module...");
+        return new NbDialogOperator("Add Java EE Module");
+    }
+    
 }
