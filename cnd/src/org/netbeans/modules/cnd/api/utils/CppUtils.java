@@ -41,18 +41,11 @@
 
 package org.netbeans.modules.cnd.api.utils;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.List;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 
 /** Miscellaneous utility classes useful for the C/C++/Fortran module */
 public class CppUtils {
-    
-    private static String cygwinBase;
-    private static String mingwBase;
-    private static String msysBase;
     
     public static String reformatWhitespaces(String string)  {
         return reformatWhitespaces(string, ""); // NOI18N
@@ -125,135 +118,17 @@ public class CppUtils {
         
         return list;
     }
-    
+
+    /** Use org.netbeans.modules.cnd.api.compilers.CompilerSetManager.getCygwinBase() instead */
+    @Deprecated
     public static String getCygwinBase() {
-        if (cygwinBase == null) {
-            File file = new File("C:/Windows/System32/reg.exe"); // NOI18N
-
-            if (file.exists()) {
-                List<String> list = new ArrayList<String>();
-                list.add(file.getAbsolutePath());
-                list.add("query"); // NOI18N
-                list.add("hklm\\software\\cygnus solutions\\cygwin\\mounts v2\\/"); // NOI18N
-                ProcessBuilder pb = new ProcessBuilder(list);
-                pb.redirectErrorStream(true);
-                try {
-                    Process process = pb.start();
-                    BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        line = line.trim();
-                        if (line.startsWith("native")) { // NOI18N
-                            int pos = line.lastIndexOf('\t');
-                            if (pos != -1 && pos < line.length()) {
-                                cygwinBase = line.substring(pos + 1);
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                }
-            }
-            if (cygwinBase == null) {
-                for (String dir : Path.getPath()) {
-                    if (dir.toLowerCase().contains("cygwin")) { // NOI18N
-                        if (dir.toLowerCase().endsWith("\\usr\\bin")) { // NOI18N
-                            cygwinBase = dir.substring(0, dir.length() - 8);
-                            break;
-                        } else if (dir.toLowerCase().endsWith("\\bin")) { // NOI18N
-                            cygwinBase = dir.substring(0, dir.length() - 4);
-                            break;
-                        }
-                    }
-                }
-            }
-            if (cygwinBase == null) {
-                for (String dir : Path.getPath()) {
-                    if (dir.toLowerCase().endsWith("\\cygwin\\bin")) { // NOI18N
-                        cygwinBase = dir.substring(0, dir.length() - 4);
-                        break;
-                    }
-                }
-            }
-        }
-        return cygwinBase;
+        return CompilerSetManager.getCygwinBase();
     }
     
-    public static String getMinGWBase() {
-        if (mingwBase == null) {
-            File file = new File("C:/Windows/System32/reg.exe"); // NOI18N
-
-            if (file.exists()) {
-                List<String> list = new ArrayList<String>();
-                list.add(file.getAbsolutePath());
-                list.add("query"); // NOI18N
-                list.add("hklm\\software\\microsoft\\windows\\currentversion\\uninstall\\MinGW"); // NOI18N
-                ProcessBuilder pb = new ProcessBuilder(list);
-                pb.redirectErrorStream(true);
-                try {
-                    Process process = pb.start();
-                    BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        line = line.trim();
-                        if (line.startsWith("InstallLocation")) { // NOI18N
-                            int pos = line.lastIndexOf('\t');
-                            if (pos != -1 && pos < line.length()) {
-                                mingwBase = line.substring(pos + 1);
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                }
-            }
-            if (mingwBase == null) {
-                for (String dir : Path.getPath()) {
-                    if (dir.toLowerCase().endsWith("\\mingw\\bin")) { // NOI18N
-                        mingwBase = dir.substring(0, dir.length() - 4);
-                        break;
-                    }
-                }
-            }
-        }
-        return mingwBase;
-    }
-    
+    /** Use org.netbeans.modules.cnd.api.compilers.CompilerSetManager.getMSysBase() instead */
+    @Deprecated
     public static String getMSysBase() {
-        if (msysBase == null) {
-            File file = new File("C:/Windows/System32/reg.exe"); // NOI18N
-
-            if (file.exists()) {
-                List<String> list = new ArrayList<String>();
-                list.add(file.getAbsolutePath());
-                list.add("query"); // NOI18N
-                list.add("hklm\\software\\microsoft\\windows\\currentversion\\uninstall\\msys-1.0_is1"); // NOI18N
-                ProcessBuilder pb = new ProcessBuilder(list);
-                pb.redirectErrorStream(true);
-                try {
-                    Process process = pb.start();
-                    BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        line = line.trim();
-                        if (line.startsWith("Inno Setup: App Path")) { // NOI18N
-                            int pos = line.lastIndexOf('\t');
-                            if (pos != -1 && pos < line.length()) {
-                                msysBase = line.substring(pos + 1);
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                }
-            }
-            if (msysBase == null) {
-                for (String dir : Path.getPath()) {
-                    if (dir.toLowerCase().endsWith("\\msys\\1.0\\bin")) { // NOI18N
-                        msysBase = dir.substring(0, dir.length() - 4);
-                        break;
-                    }
-                }
-            }
-        }
-        return msysBase;
+        return CompilerSetManager.getMSysBase();
     }
 }
 
