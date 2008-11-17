@@ -218,13 +218,19 @@ public class PageFlowView extends TopComponent implements Lookup.Provider {
      * node is always teh faces config file.
      */
     public void setDefaultActivatedNode() {
+        FileObject facesConfigFO = context.getFacesConfigFile();
+        if (!facesConfigFO.isValid()) {
+            // XXX #148551 File is invalid, probably deleted already.
+            setActivatedNodes(new Node[0]);
+            return;
+        }
         try {
-            Node node = new DefaultDataNode(DataObject.find(context.getFacesConfigFile()));
+            Node node = new DefaultDataNode(DataObject.find(facesConfigFO));
             setActivatedNodes(new Node[]{node});
         } catch (DataObjectNotFoundException donfe) {
             Exceptions.printStackTrace(donfe);
             /* Trying to track down #112243 */
-            LOG.fine("WARNING: Unable to find the following DataObject: " + context.getFacesConfigFile());
+            LOG.fine("WARNING: Unable to find the following DataObject: " + facesConfigFO);
             setActivatedNodes(new Node[]{});
         }
     }
@@ -693,9 +699,14 @@ public class PageFlowView extends TopComponent implements Lookup.Provider {
         FileObject projectDirectory = p.getProjectDirectory();
         FileObject nbprojectFolder = projectDirectory.getFileObject("nbproject", null);
         if (nbprojectFolder == null) {
-            LOG.warning("Unable to create access the follow folder: " + nbprojectFolder);
-            System.err.println("Unable to create access the follow folder:" + nbprojectFolder);
-            return null;
+            // Maven project
+            if (projectDirectory.getFileObject("pom", "xml") != null) {
+                nbprojectFolder = projectDirectory;
+            } else {
+                LOG.warning("Unable to create access the follow folder: " + nbprojectFolder);
+                System.err.println("Unable to create access the follow folder:" + nbprojectFolder);
+                return null;
+            }
         }
 
         String filename = configFile.getName() + ".NavData";
