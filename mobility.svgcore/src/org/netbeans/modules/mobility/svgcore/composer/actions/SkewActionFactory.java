@@ -52,6 +52,7 @@ import org.netbeans.modules.mobility.svgcore.composer.ComposerAction;
 import org.netbeans.modules.mobility.svgcore.composer.SVGObject;
 import org.netbeans.modules.mobility.svgcore.composer.SVGObjectOutline;
 import org.netbeans.modules.mobility.svgcore.composer.SceneManager;
+import org.openide.util.ImageUtilities;
 
 /**
  *
@@ -59,7 +60,7 @@ import org.netbeans.modules.mobility.svgcore.composer.SceneManager;
  */
 public final class SkewActionFactory extends AbstractComposerActionFactory {
     private static final ActionMouseCursor SKEW_MOUSE_CURSOR = new ActionMouseCursor( 
-                Toolkit.getDefaultToolkit().createCustomCursor(org.openide.util.Utilities.loadImage ("org/netbeans/modules/mobility/svgcore/resources/skew_cursor.png"), // NOI18N
+                Toolkit.getDefaultToolkit().createCustomCursor(ImageUtilities.loadImage ("org/netbeans/modules/mobility/svgcore/resources/skew_cursor.png"), // NOI18N
                 new Point(8,8), "skewCursor"), 3);  //NOI18N
     
     private final class SkewAction extends AbstractComposerAction {
@@ -97,7 +98,7 @@ public final class SkewActionFactory extends AbstractComposerActionFactory {
                 bBox.add(m_skewed.getScreenBBox());
                 
                 m_factory.getSceneManager().getScreenManager().repaint(bBox, SVGObjectOutline.SELECTOR_OVERLAP);
-            } else {
+            } else if (evt.getID() == MouseEvent.MOUSE_RELEASED) {
                 actionCompleted();
                 m_skewed.commitChanges();
             }
@@ -112,6 +113,9 @@ public final class SkewActionFactory extends AbstractComposerActionFactory {
             m_skewed.repaint(SVGObjectOutline.SELECTOR_OVERLAP);
             m_skewed.applyTextChanges();
             m_skewed.commitChanges();
+            if (getScreenManager().getShowAllArea()){
+                getScreenManager().refresh();
+            }
             super.actionCompleted();
         }
     }
