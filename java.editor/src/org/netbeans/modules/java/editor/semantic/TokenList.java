@@ -97,37 +97,48 @@ public class TokenList {
                 if (cancel.get())
                     return ;
                 
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
+                
                 if (topLevelIsJava) {
                     while (ts.offset() < offset) {
                         if (!ts.moveNext())
                             return ;
                     }
                 } else {
-                    while (true) {
-                        if (ts == null) {
+                    if (ts == null) {
+                        List<? extends TokenSequence> seqs = new ArrayList<TokenSequence>(embeddedTokenSequences(TokenHierarchy.get(doc), offset));
+
+                        Collections.reverse(seqs);
+
+                        for (TokenSequence tseq : seqs) {
+                            if (tseq.language() == JavaTokenId.language()) {
+                                ts = tseq;
+                            }
+                        }
+                    }
+
+                    if (ts == null) {
+                        return;
+                    }
+
+                    while (ts.offset() < offset) {
+                        if (!ts.moveNext()) {
+                            TokenSequence oldTs = ts;
+                            ts = null;
                             List<? extends TokenSequence> seqs = new ArrayList<TokenSequence>(embeddedTokenSequences(TokenHierarchy.get(doc), offset));
 
                             Collections.reverse(seqs);
 
                             for (TokenSequence tseq : seqs) {
                                 if (tseq.language() == JavaTokenId.language()) {
-                                    ts = tseq;
+                                    if (tseq != ts)
+                                        ts = tseq;
                                 }
                             }
                         }
-
-                        if (ts == null) {
-                            return;
-                        }
-
-                        while (ts.offset() < offset) {
-                            if (!ts.moveNext()) {
-                                ts = null;
-                                return;
-                            }
-                        }
-                        
-                        return;
                     }
                 }
             }
@@ -165,6 +176,11 @@ public class TokenList {
                 if (cancel.get())
                     return ;
                 
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
+                
                 if (ts == null)
                     return ;
                 
@@ -190,6 +206,11 @@ public class TokenList {
                 if (cancel.get())
                     return ;
                 
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
+                
                 if (ts == null)
                     return ;
                 
@@ -210,6 +231,11 @@ public class TokenList {
             public void run() {
                 if (cancel.get())
                     return ;
+                
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
                 
                 if (ts == null)
                     return ;
@@ -237,6 +263,11 @@ public class TokenList {
             public void run() {
                 if (cancel.get())
                     return ;
+                
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
                 
                 if (ts == null)
                     return ;
