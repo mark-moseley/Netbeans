@@ -48,7 +48,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.netbeans.api.project.Project;
-import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -154,7 +153,7 @@ public class Generator {
             if (railsInstall != null) {
                 gemLocation = FileUtil.toFile(railsInstall);
             } else {
-                String version = platform.getGemManager().getVersion("rails"); // NOI18N
+                String version = platform.getGemManager().getLatestVersion("rails"); // NOI18N
                 if (version != null) {
                     gemLocation =
                         new File(platform.getGemManager().getGemHome() + File.separator +
