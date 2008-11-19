@@ -38,108 +38,117 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
 import java.util.List;
-import java.util.ResourceBundle;
+import java.util.ArrayList;
+import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.configurations.PackagingConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.PackagerFileElement;
+import org.netbeans.modules.cnd.makeproject.api.configurations.VectorConfiguration;
 import org.openide.explorer.propertysheet.ExPropertyEditor;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.nodes.PropertySupport;
-import org.openide.util.NbBundle;
 
-public class PackagingNodeProp extends PropertySupport {
-    private PackagingConfiguration packagingConfiguration;
+public class RequiredProjectsNodeProp<E> extends PropertySupport {
+
+    private VectorConfiguration<E> vectorConfiguration;
+    Project project;
     MakeConfiguration conf;
-    
-    public PackagingNodeProp(PackagingConfiguration packagingConfiguration, MakeConfiguration conf, String[] txts) {
-        super(txts[0], List.class, txts[1], txts[2], true, true);
-        this.packagingConfiguration = packagingConfiguration;
-	this.conf = conf;
+    String baseDir;
+    String[] texts;
+
+    public RequiredProjectsNodeProp(VectorConfiguration<E> vectorConfiguration, Project project, MakeConfiguration conf, String baseDir, String[] texts) {
+        super(texts[0], List.class, texts[1], texts[2], true, true);
+        this.vectorConfiguration = vectorConfiguration;
+        this.project = project;
+        this.conf = conf;
+        this.baseDir = baseDir;
+        this.texts = texts;
     }
 
-//    public String getHtmlDisplayName() {
-//        if (vectorConfiguration.getModified())
-//            return "<b>" + getDisplayName(); // NOI18N
-//        else
-//            return null;
-//    }
-    
-    public Object getValue() {
-        return packagingConfiguration;
-    }
-    
-    public void setValue(Object v) {
-        if (v != null) {
-            packagingConfiguration = (PackagingConfiguration) v; // FIXUP
+    @Override
+    public String getHtmlDisplayName() {
+        if (vectorConfiguration.getModified()) {
+            return "<b>" + getDisplayName(); // NOI18N
+        } else {
+            return null;
         }
     }
-    
-//    public void restoreDefaultValue() {
-//        vectorConfiguration.reset();
-//    }
-    
+
+    public Object getValue() {
+        return vectorConfiguration.getValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    public void setValue(Object v) {
+        vectorConfiguration.setValue((List) v);
+    }
+
+    @Override
+    public void restoreDefaultValue() {
+        vectorConfiguration.reset();
+    }
+
     @Override
     public boolean supportsDefaultValue() {
-        return false;
+        return true;
     }
-    
-//    public boolean isDefaultValue() {
-//        return vectorConfiguration.getValue().size() == 0;
-//    }
+
+    @Override
+    public boolean isDefaultValue() {
+        return vectorConfiguration.getValue().size() == 0;
+    }
 
     @Override
     public PropertyEditor getPropertyEditor() {
-	return new Editor(packagingConfiguration);
+        ArrayList<E> clone = new ArrayList<E>();
+        clone.addAll(vectorConfiguration.getValue());
+        return new DirectoriesEditor(clone);
     }
 
     @Override
     public Object getValue(String attributeName) {
         if (attributeName.equals("canEditAsText")) // NOI18N
+        {
             return Boolean.FALSE;
+        }
         return super.getValue(attributeName);
     }
 
-    
-    
-    private class Editor extends PropertyEditorSupport implements ExPropertyEditor {
-        private PackagingConfiguration packagingConfiguration;
+    private class DirectoriesEditor extends PropertyEditorSupport implements ExPropertyEditor {
+
+        private List<E> value;
         private PropertyEnv env;
-        
-        public Editor(PackagingConfiguration packagingConfiguration) {
-            this.packagingConfiguration = packagingConfiguration;
+
+        public DirectoriesEditor(List<E> value) {
+            this.value = value;
         }
-        
+
         @Override
         public void setAsText(String text) {
         }
-        
+
         @Override
         public String getAsText() {
-            int noFiles = packagingConfiguration.getFiles().getValue().size();
-            String val;
-            if (noFiles == 0) {
-                val = getString("FilesTextZero");
+            boolean addSep = false;
+            String ret = ""; // NOI18N
+            for (int i = 0; i < value.size(); i++) {
+                if (addSep) {
+                    ret += ", "; // NOI18N
+                }
+                ret += value.get(i).toString();
+                addSep = true;
             }
-            else if (noFiles == 1) {
-                val = getString("FilesTextOne", "" + noFiles, (packagingConfiguration.getFiles().getValue().get(0)).getTo()); // NOI18N
-            }
-            else {
-                val = getString("FilesTextMany", "" + noFiles, (packagingConfiguration.getFiles().getValue().get(0)).getTo() + ", ..."); // NOI18N
-            }
-            return val;
+            return ret;
         }
-        
+
         @Override
         public java.awt.Component getCustomEditor() {
-            return new PackagingPanel(packagingConfiguration, this, env, conf);
+            return new RequiredProjectsPanel(project, conf, baseDir, value.toArray(), this, env);
         }
-        
+
         @Override
         public boolean supportsCustomEditor() {
             return true;
@@ -148,17 +157,5 @@ public class PackagingNodeProp extends PropertySupport {
         public void attachEnv(PropertyEnv env) {
             this.env = env;
         }
-    }
-    /** Look up i18n strings here */
-    private static ResourceBundle bundle;
-    private static String getString(String s) {
-	if (bundle == null) {
-	    bundle = NbBundle.getBundle(PackagingNodeProp.class);
-	}
-	return bundle.getString(s);
-    }
-    
-    private static String getString(String s, String a1, String a2) {
-        return NbBundle.getMessage(PackagingNodeProp.class, s, a1, a2);
     }
 }
