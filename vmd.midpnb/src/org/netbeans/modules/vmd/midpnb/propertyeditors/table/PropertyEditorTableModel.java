@@ -64,24 +64,37 @@ public class PropertyEditorTableModel extends DesignPropertyEditor implements Pr
 
     private WeakReference<DesignComponent> component;
     private JPanel customEditorPanel;
-    private TableModelEditorElement customEditor;
+    private TableModelEditorElement perElement;
     private PropertyValue values;
     private PropertyValue headers;
 
-    private PropertyEditorTableModel() {
-        initComponents();
-    }
+   
 
     public static PropertyEditorTableModel createInstance() {
         return new PropertyEditorTableModel();
     }
 
+    @Override
+    public void cleanUp(DesignComponent component) {
+        super.cleanUp(component);
+        if (perElement != null) {
+            perElement.clean(component);
+            perElement = null;
+        }
+        values = null;
+        headers = null;
+        if (customEditorPanel != null) {
+            customEditorPanel.removeAll();
+        }
+        this.component = null;
+    }
+
     private void initComponents() {
-        customEditor = new TableModelEditorElement();
-        customEditor.addPropertyEditorResourceElementListener(this);
+        perElement = new TableModelEditorElement();
+        perElement.addPropertyEditorResourceElementListener(this);
         customEditorPanel = new JPanel(new BorderLayout());
         customEditorPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        customEditorPanel.add(customEditor, BorderLayout.CENTER);
+        customEditorPanel.add(perElement, BorderLayout.CENTER);
     }
 
     @Override
@@ -93,12 +106,14 @@ public class PropertyEditorTableModel extends DesignPropertyEditor implements Pr
 
     @Override
     public Component getCustomEditor() {
-        //if (customEditorPanel.isShowing()) {
-        if (component != null && component.get() != null) {
-            customEditor.setDesignComponentWrapper(new DesignComponentWrapper(component.get()));
+        if (customEditorPanel == null) {
+            initComponents();
         }
-        customEditor.setAllEnabled(true);
-        //}
+        if (component != null && component.get() != null) {
+            perElement.setDesignComponentWrapper(new DesignComponentWrapper(component.get()));
+        }
+        perElement.setAllEnabled(true);
+        
         return customEditorPanel;
     }
 
