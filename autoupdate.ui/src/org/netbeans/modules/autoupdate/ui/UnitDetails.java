@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.autoupdate.ui;
 
+import java.awt.Color;
 import java.io.CharConversionException;
 import java.net.URL;
 import java.util.logging.Level;
@@ -76,8 +77,7 @@ public class UnitDetails extends DetailsPanel{
         } else {
             String text;
             try {
-                //text = "<h3>" + u.annotateDisplayName(u.annotate(XMLUtil.toElementContent(u.getDisplayName()))) + "</h3>"; // NOI18N
-                text = u.annotate(XMLUtil.toElementContent(u.getDisplayName())); // NOI18N
+                text = XMLUtil.toElementContent(u.getDisplayName()); // NOI18N
                 setTitle(text);text = "";//NOI18N
                 setActionListener(action);
                 if (u instanceof Unit.Available) {
@@ -93,47 +93,52 @@ public class UnitDetails extends DetailsPanel{
                 }
                                 
                 if (Utilities.modulesOnly () || Utilities.showExtendedDescription ()) {
-                    text += "<b>" + getBundle ("UnitDetails_Plugin_CodeName") + "</b>" + u.annotate (u.updateUnit.getCodeName ()); // NOI18N
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_CodeName") + "</b>" + u.updateUnit.getCodeName (); // NOI18N
                     text += "<br>";
 
                 }
-                text += "<b>" + getBundle ("UnitDetails_Plugin_Version") + "</b>" + u.annotate(u.getDisplayVersion()) + "<br>"; // NOI18N
+                if (u instanceof Unit.Update) {
+                    Unit.Update uu = ((Unit.Update) u);
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_InstalledVersion") + "</b>" + uu.getInstalledVersion () + "<br>"; // NOI18N
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_AvailableVersion") + "</b>" + uu.getAvailableVersion () + "<br>"; // NOI18N
+                } else {
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_Version") + "</b>" + u.getDisplayVersion() + "<br>"; // NOI18N
+                }
                 if (u.getAuthor () != null && u.getAuthor ().length () > 0) {
-                    text += "<b>" + getBundle ("UnitDetails_Plugin_Author") + "</b>" + u.annotate(u.getAuthor ()) + "<br>"; // NOI18N
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_Author") + "</b>" + u.getAuthor () + "<br>"; // NOI18N
                 }
                 if (u.getDisplayDate () != null && u.getDisplayDate ().length () > 0) {
-                    text += "<b>" + getBundle ("UnitDetails_Plugin_Date") + "</b>" + u.annotate(u.getDisplayDate ()) + "<br>"; // NOI18N
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_Date") + "</b>" + u.getDisplayDate () + "<br>"; // NOI18N
                 }
-                text += "<b>" + getBundle ("UnitDetails_Plugin_Source") + "</b>" + u.annotate(u.getSource()) + "<br>"; // NOI18N
+                text += "<b>" + getBundle ("UnitDetails_Plugin_Source") + "</b>" + u.getSource() + "<br>"; // NOI18N
 
                 if (u.getHomepage() != null && u.getHomepage().length() > 0) {
-                    text += "<b>" + getBundle ("UnitDetails_Plugin_Homepage") + "</b><a href=\"" + u.getHomepage() + "\">" + u.annotate(u.getHomepage()) + "</a><br>"; // NOI18N
+                    text += "<b>" + getBundle ("UnitDetails_Plugin_Homepage") + "</b><a href=\"" + u.getHomepage() + "\">" + u.getHomepage() + "</a><br>"; // NOI18N
                 }
                                 
                 if (u.getNotification() != null && u.getNotification().length () > 0) {
-                    text += "<br><h4>" + getBundle ("UnitDetails_Plugin_Notification") + "</h4>"; // NOI18N
+                    text += "<br><h3>" + getBundle ("UnitDetails_Plugin_Notification") + "</h3>"; // NOI18N
                     text += "<font color=\"red\">"; // NOI18N
-                    text += u.annotate(u.getNotification ());
+                    text += u.getNotification ();
                     text += "</font><br>";  // NOI18N
                 }
                 
                 if (u.getDescription() != null && u.getDescription().length () > 0) {
-                    text += "<br><h4>" + getBundle ("UnitDetails_Plugin_Description") + "</h4>"; // NOI18N
-                    text += u.annotate(u.getDescription ());
+                    text += "<br><h3>" + getBundle ("UnitDetails_Plugin_Description") + "</h3>"; // NOI18N
+                    text += u.getDescription ();
                 }
             } catch (CharConversionException e) {
                 err.log (Level.INFO, null, e);
                 return;
             }
-            getDetails().setText(text);
-            Document d = getDetails().getDocument();
-            int idx = -1;
-            try {
-                idx = u.findCaretPosition(d.getText(0, d.getLength()));
-            } catch (BadLocationException ex) {
-                Exceptions.printStackTrace(ex);
-            }
+            //TODO - use some color from UI palette instead of the hardcoded one,
+            // if possible, to make it custom (or native) L&F friendly.
+            final Color highlightColor  = Color.YELLOW;
             
+            final ColorHighlighter highlighter = new ColorHighlighter(getDetails(), highlightColor);
+            
+            getDetails().setText(text);
+            int idx = highlighter.highlight(u.getFilter());
             getDetails().setCaretPosition(idx > 0 ? idx : 0);
         }
     }

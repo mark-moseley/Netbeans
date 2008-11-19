@@ -156,45 +156,11 @@ public abstract class Unit {
             }
         };
         return retval;
-    }
-    public String annotateDisplayName (String toAnnotate) {
-        if (this instanceof Unit.Installed) {
-            Unit.Installed i = ((Unit.Installed)this);
-            if (i.getRelevantElement ().isEnabled ()) {
-                return "<font color=\"green\">"+toAnnotate+"</font>";
-            } else {
-                return "<font color=\"red\">"+toAnnotate+"</font>";
-            }
-        }
-        return toAnnotate;
-    }
-    public String annotate (String toAnnotate) {
-        if (isVisible && filter.length () != 0) {
-            String toAnnotate2 = toAnnotate.toLowerCase ();
-            int startIdx = 0;
-            int stopIdx = toAnnotate2.indexOf (filter);
-            StringBuffer sb = new StringBuffer ();
-            while (stopIdx > -1) {                
-                sb.append (toAnnotate.substring (startIdx, stopIdx));
-                sb.append ("<font bgcolor=\"yellow\">"+toAnnotate.substring (stopIdx,stopIdx+filter.length ())+"</font>");
-                startIdx = stopIdx + +filter.length ();
-                stopIdx = toAnnotate2.indexOf (filter, startIdx);
-            }
-            sb.append (toAnnotate.substring (startIdx));
-            if (startIdx > 0) {
-                return sb.toString ();
-            }
-        }
-        return toAnnotate;
-    }
-
-    public int findCaretPosition (String toAnnotate) {
-        if (isVisible && filter.length () != 0) {
-            return toAnnotate.toLowerCase ().indexOf (filter);
-        }
-        return -1;
-    }
+    }     
     
+    public String getFilter() {
+        return filter;
+    }
     
     public String getDescription () {
         return getRelevantElement ().getDescription ();
@@ -217,7 +183,7 @@ public abstract class Unit {
     }
     
     public String getDisplayVersion () {
-        return getRelevantElement ().getSpecificationVersion ().toString ();
+        return getRelevantElement ().getSpecificationVersion ();
     }
     
     public String getDisplayDate () {
@@ -276,6 +242,15 @@ public abstract class Unit {
     }
     
     public static int compareDisplayVersions (Unit unit1, Unit unit2) {
+        if (unit1.getDisplayVersion () == null) {
+            if (unit2.getDisplayVersion () == null) {
+                return 0;
+            } else {
+                return -1;
+            }
+        } else if (unit2.getDisplayVersion () == null) {
+            return 1;
+        }
         return new SpecificationVersion (unit1.getDisplayVersion ()).compareTo (new SpecificationVersion (unit2.getDisplayVersion ()));
     }
     
@@ -304,20 +279,38 @@ public abstract class Unit {
                 assert installEl != null : "Installed UpdateUnit " + unit + " has Installed UpdateElement.";
             }
             this.backupEl = unit.getBackup ();
-            this.isUninstallAllowed = isOperationAllowed (this.updateUnit, installEl, Containers.forUninstall ());
+            OperationContainer<OperationSupport> container = null;
+            if (UpdateManager.TYPE.CUSTOM_HANDLED_COMPONENT == updateUnit.getType ()) {
+                container = Containers.forCustomUninstall ();
+            } else {
+                container = Containers.forUninstall ();
+            }
+            this.isUninstallAllowed = isOperationAllowed (this.updateUnit, installEl, container);
             initState();
         }
         
         public boolean isMarked () {
-            return Containers.forUninstall ().contains (installEl);
+            OperationContainer container = null;
+            if (UpdateManager.TYPE.CUSTOM_HANDLED_COMPONENT == updateUnit.getType ()) {
+                container = Containers.forCustomUninstall ();
+            } else {
+                container = Containers.forUninstall ();
+            }
+            return container.contains (installEl);
         }
         
         public void setMarked (boolean marked) {
             assert marked != isMarked ();
-            if (marked) {
-                Containers.forUninstall ().add (updateUnit, installEl);
+            OperationContainer container = null;
+            if (UpdateManager.TYPE.CUSTOM_HANDLED_COMPONENT == updateUnit.getType ()) {
+                container = Containers.forCustomUninstall ();
             } else {
-                Containers.forUninstall ().remove (installEl);
+                container = Containers.forUninstall ();
+            }
+            if (marked) {
+                container.add (updateUnit, installEl);
+            } else {
+                container.remove (installEl);
             }
         }
         
@@ -335,6 +328,15 @@ public abstract class Unit {
             if (u1 instanceof Unit.Installed && u2 instanceof Unit.Installed) {
                 Unit.Installed unit1 = (Unit.Installed )u1;
                 Unit.Installed unit2 = (Unit.Installed )u2;
+                if (unit1.getInstalledVersion () == null) {
+                    if (unit2.getInstalledVersion () == null) {
+                        return 0;
+                    } else {
+                        return -1;
+                    }
+                } else if (unit2.getInstalledVersion () == null) {
+                    return 1;
+                }
                 return new SpecificationVersion (unit1.getInstalledVersion ()).compareTo (new SpecificationVersion (unit2.getInstalledVersion ()));
             }
             return Unit.compareDisplayVersions (u1, u2);
@@ -350,12 +352,11 @@ public abstract class Unit {
         }
         
         public String getInstalledVersion () {
-            assert installEl.getSpecificationVersion () != null : installEl + " has specification version.";
-            return installEl.getSpecificationVersion ().toString ();
+            return installEl.getSpecificationVersion ();
         }
         
         public String getBackupVersion () {
-            return backupEl == null ? "-" : backupEl.getSpecificationVersion ().toString ();
+            return backupEl == null ? "-" : backupEl.getSpecificationVersion ();
         }
         
         public Integer getMyRating () {
@@ -442,11 +443,11 @@ public abstract class Unit {
         
         
         public String getInstalledVersion () {
-            return installEl.getSpecificationVersion ().toString ();
+            return installEl.getSpecificationVersion ();
         }
         
         public String getAvailableVersion () {
-            return updateEl.getSpecificationVersion ().toString ();
+            return updateEl.getSpecificationVersion ();
         }
         
         public String getSize () {
@@ -541,7 +542,7 @@ public abstract class Unit {
         }
         
         public String getAvailableVersion () {
-            return updateEl.getSpecificationVersion ().toString ();
+            return updateEl.getSpecificationVersion ();
         }
         
         public Integer getMyRating () {
