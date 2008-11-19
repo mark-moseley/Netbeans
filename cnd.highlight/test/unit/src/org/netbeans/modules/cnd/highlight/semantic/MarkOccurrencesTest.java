@@ -38,47 +38,90 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.highlight.semantic;
 
 import java.util.Collection;
+import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
-import org.netbeans.modules.cnd.modelimpl.test.ProjectBasedTestCase;
 
 /**
  *
- * @author sg155630
+ * @author Sergey Grinev
  */
-public abstract class SemanticHighlightingTestBase  extends ProjectBasedTestCase {
-    
-    public SemanticHighlightingTestBase(String name) {
-        super(name);
-    }
-    
-    protected abstract Collection<? extends CsmOffsetable> getBlocks(FileImpl testFile, int offset);
+public class MarkOccurrencesTest extends SemanticHighlightingTestBase {
 
-    protected void performTest(String source) throws Exception {
-        performTest(source, -1);
+    public MarkOccurrencesTest(String testName) {
+        super(testName);
+    }
+    private static final String SOURCE = "markocc.cc"; // NOI18N
+
+    public void testMacro() throws Exception {
+        // FOO 
+        performTest(SOURCE, 214);
     }
 
-    protected final void performTest(String testFileName, int line, int column) throws Exception {
-        int offset = super.getOffset(getDataFile(testFileName), line, column);
-        performTest(testFileName, offset);
+    public void testLocalVariable() throws Exception {
+        performTest(SOURCE, 236);
+    }
+
+    public void testGlobalVariable() throws Exception {
+        // int bar
+        performTest(SOURCE, 264);
+    }
+
+    public void testField() throws Exception {
+        //boo 
+        performTest(SOURCE, 122);
+    }
+
+    public void testCtor() throws Exception {
+        // Foo() 
+        performTest(SOURCE, 115);
+    }
+
+    public void testCtor2() throws Exception {
+        // Foo(int) 
+        performTest(SOURCE, 138);
+    }
+
+    public void testClassName() throws Exception {
+        // class Foo 
+        performTest(SOURCE, 110);
+    }
+
+    public void testPreproc1() throws Exception {
+        performTest(SOURCE, 30, 1);
+    }
+
+    public void testPreproc2() throws Exception {
+        performTest(SOURCE, 32, 3);
+    }
+
+    public void testPreproc3() throws Exception {
+        performTest(SOURCE, 38, 3);
+    }
+
+    public void testPreproc4() throws Exception {
+        performTest(SOURCE, 44, 7);
+    }
+
+    public void testPreproc5() throws Exception {
+        performTest(SOURCE, 34, 3);
+    }
+
+    public void testPreproc6() throws Exception {
+        performTest(SOURCE, 42, 5);
     }
     
-    protected final void performTest(String testFileName, int offset) throws Exception {
-        FileImpl file = (FileImpl)getCsmFile(getDataFile(testFileName));
-        Collection<? extends CsmOffsetable> out = getBlocks(file, offset);
-        assertNotNull(out);
-        int i = 1;
-        for (CsmOffsetable b : out) {
-            ref( "Block " + (i++) + ": Lines " +  // NOI18N
-                    file.getLineColumn(b.getStartOffset())[0] + "-" + file.getLineColumn(b.getEndOffset())[0] + // NOI18N
-                    "\tOffsets " + // NOI18N
-                    b.getStartOffset() + "-" + b.getEndOffset()); // NOI18N
+    protected Collection<? extends CsmOffsetable> getBlocks(FileImpl testFile, int offset) {
+        BaseDocument doc;
+        try {
+            doc = getBaseDocument(testFile.getFile());
+        } catch (Exception e) {
+            e.printStackTrace(System.err);
+            doc = null;
         }
-        compareReferenceFiles();
+        return MarkOccurrencesHighlighter.getOccurrences(doc, testFile, offset, null);
     }
-
 }
