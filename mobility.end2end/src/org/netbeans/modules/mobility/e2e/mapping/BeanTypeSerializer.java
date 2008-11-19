@@ -169,7 +169,10 @@ public class BeanTypeSerializer implements JavonSerializer {
                 if( e.getModifiers().contains( Modifier.FINAL )) continue;
                 
                 ClassData fieldClass = traversable.traverseType( e.asType(), typeCache );
-                if( fieldClass == null ) continue;
+                if( fieldClass == null ) {
+                    cd.addInvalidField( e );
+                    continue;
+                }
                 String methodPartName = e.getSimpleName().toString().substring( 0, 1 ).toUpperCase() + 
                         e.getSimpleName().toString().substring( 1 );
                 String setterName = "set" + methodPartName;
@@ -313,8 +316,8 @@ public class BeanTypeSerializer implements JavonSerializer {
         return "set" + field.getName().substring( 0, 1 ).toUpperCase() + field.getName().substring( 1 );
     }
     
-    private String getGetter( FieldData field ) {
-        return "get" + field.getName().substring( 0, 1 ).toUpperCase() + field.getName().substring( 1 );
+    private String getGetter( FieldData field ) {        
+        return (!field.getType().getClassName().toLowerCase().equals("boolean") ? "get" : "is") + field.getName().substring( 0, 1 ).toUpperCase() + field.getName().substring( 1 ); //NOI18N
     }
     
     public Set<ClassData> getReferencedTypes( ClassData rootClassData, Set<ClassData> usedTypes ) {
