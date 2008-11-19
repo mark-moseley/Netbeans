@@ -38,45 +38,55 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-import java.util.Vector;
+import java.util.List;
+import java.util.ArrayList;
 
-public class LibrariesConfiguration extends VectorConfiguration {
+public class LibrariesConfiguration<E> extends VectorConfiguration<E> {
+
     public LibrariesConfiguration() {
-	super(null);
+        super(null);
     }
 
     public LibraryItem[] getLibraryItemsAsArray() {
-        return (LibraryItem[])getValue().toArray(new LibraryItem[getValue().size()]);
+        return getValue().toArray(new LibraryItem[getValue().size()]);
     }
 
     public String getOptions(MakeConfiguration conf) {
-	StringBuilder options = new StringBuilder();
-	
-	LibraryItem[] items = getLibraryItemsAsArray();
-	for (int i = 0; i < items.length; i++) {
-	    options.append(items[i].getOption(conf));
-            options.append(" "); // NOI18N
-	}
+        StringBuilder options = new StringBuilder();
 
-	return options.toString();
+        LibraryItem[] items = getLibraryItemsAsArray();
+        for (int i = 0; i < items.length; i++) {
+            options.append(items[i].getOption(conf));
+            options.append(" "); // NOI18N
+        }
+
+        return options.toString();
     }
     // Clone and Assign
+
     @Override
-    public void assign(VectorConfiguration conf) {
-	// From VectorConfiguration
-	super.assign(conf);
-	// From LibrariesConfiguration
+    public void assign(VectorConfiguration<E> conf) {
+        // From VectorConfiguration
+        super.assign(conf);
+    // From LibrariesConfiguration
     }
 
     @Override
-    public Object clone() {
-	LibrariesConfiguration clone = new LibrariesConfiguration();
-	// From VectorConfiguration
-	clone.setValue((Vector)getValue().clone());
-	// From LibrariesConfiguration
-	return clone;
+    public LibrariesConfiguration<E> cloneConf() {
+        LibrariesConfiguration<E> clone = new LibrariesConfiguration<E>();
+        clone.setValue(new ArrayList<E>(getValue()));
+        return clone;
     }
+
+//    @Override
+//    @Deprecated
+//    public Object clone() {
+//        LibrariesConfiguration clone = new LibrariesConfiguration();
+//        // From VectorConfiguration
+//        clone.setValue((List) ((ArrayList) getValue()).clone());
+//        // From LibrariesConfiguration
+//        return clone;
+//    }
 }
