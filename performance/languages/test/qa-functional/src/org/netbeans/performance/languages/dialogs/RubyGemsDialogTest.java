@@ -39,31 +39,81 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages;
+package org.netbeans.performance.languages.dialogs;
 
-import org.netbeans.junit.NbModuleSuite;
-import org.netbeans.junit.NbTestSuite;
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
-import org.netbeans.performance.languages.menus.*;
+import org.netbeans.performance.languages.setup.ScriptingSetup;
+import org.netbeans.modules.performance.guitracker.LoggingRepaintManager.RegionFilter;
+
+import javax.swing.JComponent;
+import org.netbeans.jellytools.MainWindowOperator;
+import org.netbeans.jellytools.WizardOperator;
+import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.jemmy.operators.JMenuBarOperator;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 
 /**
  *
  * @author mkhramov@netbeans.org
  */
-public class ScriptingMeasureMenusTest {
+public class RubyGemsDialogTest extends PerformanceTestCase {
+
+    protected String MENU, TITLE;
+    
+    public RubyGemsDialogTest(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;
+    }
+    
+    public RubyGemsDialogTest(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;
+    }
+
     public static NbTestSuite suite() {
-        PerformanceTestCase.prepareForMeasurements();
-
-        NbTestSuite suite = new NbTestSuite("Scripting UI Responsiveness Menus suite");
-        System.setProperty("suitename", ScriptingMeasureMenusTest.class.getCanonicalName());
-        System.setProperty("suite", "UI Responsiveness Scripting Menus suite");
-
-        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingProjectNodePopupTest.class)
-        .addTest(ScriptingNodePopupTest.class)
-        .addTest(EditorMenuPopupTest.class)
-        .enableModules(".*").clusters(".*").reuseUserDir(true)));
-        
+        NbTestSuite suite = new NbTestSuite();
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingSetup.class)
+             .addTest(RubyGemsDialogTest.class)
+             .enableModules(".*").clusters(".*")));
         return suite;
     }
+    
+    public void testRubyGemsDialog() {
+        doMeasurement();
+    }
+    
+    @Override
+    public void initialize() {
+        MENU = "Tools"+"|"+"Ruby Gems"; 
+        TITLE = "Ruby Gems"; 
+    }
+
+    @Override
+    public void prepare() {
+        repaintManager().addRegionFilter(GemsProgress);
+    }
+
+    private static final RegionFilter GemsProgress = new RegionFilter() {
+        public boolean accept(JComponent c) {
+           return  !(c instanceof javax.swing.JProgressBar);
+        }
+        public String getFilterName() {
+            return "Gems Dialog progressbar filter";
+        }
+    };
+
+    @Override
+    public ComponentOperator open() {
+        new JMenuBarOperator(MainWindowOperator.getDefault().getJMenuBar()).pushMenuNoBlock(MENU);
+        return new WizardOperator(TITLE);
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        repaintManager().resetRegionFilters();        
+        
+    }    
 
 }

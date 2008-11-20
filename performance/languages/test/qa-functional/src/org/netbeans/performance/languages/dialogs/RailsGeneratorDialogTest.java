@@ -39,31 +39,67 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages;
+package org.netbeans.performance.languages.dialogs;
 
-import org.netbeans.junit.NbModuleSuite;
-import org.netbeans.junit.NbTestSuite;
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
-import org.netbeans.performance.languages.menus.*;
+import org.netbeans.performance.languages.setup.ScriptingSetup;
+import org.netbeans.performance.languages.Projects;
+
+import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 
 /**
  *
  * @author mkhramov@netbeans.org
  */
-public class ScriptingMeasureMenusTest {
+public class RailsGeneratorDialogTest extends PerformanceTestCase {
+
+    private Node testNode;
+    private String CMD, TITLE, projectName;
+    
+    public RailsGeneratorDialogTest(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;          
+    }
+    
+    public RailsGeneratorDialogTest(String testName, String performanceDataName)
+    {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;          
+    }
+
     public static NbTestSuite suite() {
-        PerformanceTestCase.prepareForMeasurements();
-
-        NbTestSuite suite = new NbTestSuite("Scripting UI Responsiveness Menus suite");
-        System.setProperty("suitename", ScriptingMeasureMenusTest.class.getCanonicalName());
-        System.setProperty("suite", "UI Responsiveness Scripting Menus suite");
-
-        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingProjectNodePopupTest.class)
-        .addTest(ScriptingNodePopupTest.class)
-        .addTest(EditorMenuPopupTest.class)
-        .enableModules(".*").clusters(".*").reuseUserDir(true)));
-        
+        NbTestSuite suite = new NbTestSuite();
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingSetup.class)
+             .addTest(RailsGeneratorDialogTest.class)
+             .enableModules(".*").clusters(".*")));
         return suite;
+    }
+
+    public void testRailsGeneratorDialog() {
+        doMeasurement();
+    }
+    
+    @Override
+    public void initialize() {
+        CMD = org.netbeans.jellytools.Bundle.getString("org.netbeans.modules.ruby.railsprojects.Bundle", "rails-generator");
+        TITLE = org.netbeans.jellytools.Bundle.getString("org.netbeans.modules.ruby.railsprojects.Bundle", "RailsGenerator");
+        projectName = Projects.RAILS_PROJECT;
+        testNode = (Node) new ProjectsTabOperator().getProjectRootNode(projectName);            
+    }
+
+    @Override
+    public void prepare() {
+    }
+
+    @Override
+    public ComponentOperator open() {
+        testNode.performPopupActionNoBlock(CMD);
+        return new NbDialogOperator(TITLE);        
     }
 
 }

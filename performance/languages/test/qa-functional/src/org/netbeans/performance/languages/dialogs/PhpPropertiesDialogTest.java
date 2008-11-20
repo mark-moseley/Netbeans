@@ -39,31 +39,76 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages;
+package org.netbeans.performance.languages.dialogs;
 
-import org.netbeans.junit.NbModuleSuite;
-import org.netbeans.junit.NbTestSuite;
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
-import org.netbeans.performance.languages.menus.*;
+import org.netbeans.performance.languages.setup.ScriptingSetup;
+import org.netbeans.performance.languages.Projects;
+
+import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.actions.PropertiesAction;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 
 /**
  *
  * @author mkhramov@netbeans.org
  */
-public class ScriptingMeasureMenusTest {
+public class PhpPropertiesDialogTest extends PerformanceTestCase {
+
+    private Node testNode;
+    private String TITLE, projectName;
+    
+    public PhpPropertiesDialogTest(String testName) {
+        super(testName);
+        expectedTime = WINDOW_OPEN;          
+    }
+    
+    public PhpPropertiesDialogTest(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;      
+    }
+
     public static NbTestSuite suite() {
-        PerformanceTestCase.prepareForMeasurements();
-
-        NbTestSuite suite = new NbTestSuite("Scripting UI Responsiveness Menus suite");
-        System.setProperty("suitename", ScriptingMeasureMenusTest.class.getCanonicalName());
-        System.setProperty("suite", "UI Responsiveness Scripting Menus suite");
-
-        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingProjectNodePopupTest.class)
-        .addTest(ScriptingNodePopupTest.class)
-        .addTest(EditorMenuPopupTest.class)
-        .enableModules(".*").clusters(".*").reuseUserDir(true)));
-        
+        NbTestSuite suite = new NbTestSuite();
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingSetup.class)
+             .addTest(PhpPropertiesDialogTest.class)
+             .enableModules(".*").clusters(".*")));
         return suite;
+    }
+
+    @Override
+    public void initialize() {
+        TITLE = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.php.project.ui.customizer.Bundle", "LBL_Customizer_Title", new String[]{projectName});       
+        testNode = (Node) new ProjectsTabOperator().getProjectRootNode(projectName);        
+    }
+    
+    @Override
+    public void prepare() {
+    }
+
+    @Override
+    public ComponentOperator open() {
+        new PropertiesAction().performPopup(testNode);
+        return new NbDialogOperator(TITLE);
+    }
+    
+    public void testPhpProjectProperties() {
+        projectName = Projects.PHP_PROJECT;
+        doMeasurement();
+    }
+
+    public void testRubyProjectProperties() {
+        projectName = Projects.RUBY_PROJECT;
+        doMeasurement();
+    }
+
+    public void testRailsProjectProperties() {
+        projectName = Projects.RAILS_PROJECT;
+        doMeasurement();
     }
 
 }
