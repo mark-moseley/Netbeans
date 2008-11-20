@@ -47,6 +47,9 @@ import org.netbeans.modules.asm.base.syntax.*;
 
 }
 
+{
+@SuppressWarnings({"unchecked", "cast", "fallthrough"})
+}
 class DisScanner extends Lexer;
 options {
     k = 3;  
@@ -54,6 +57,7 @@ options {
     testLiterals = false;
     charVocabulary = '\0'..'\ufffe';
     classHeaderSuffix = "AntlrScanner";
+    filter = true;
 }
 
 
@@ -103,7 +107,7 @@ options {
    
     public void consume() {
         super.consume();
-        if (inputState.guessing == 0) {
+        if (guessing == 0) {
             offset++;
         }
     }
@@ -361,7 +365,8 @@ Ident                  { boolean wasLetters = false; }:
                        ( ( ( 'g'..'z' |
                               'G'..'Z' |
                               '.'      |
-                              '_'                                    
+                              '_'      |
+                              '~'
                              ) { wasLetters = true; }
                            )
                            |
