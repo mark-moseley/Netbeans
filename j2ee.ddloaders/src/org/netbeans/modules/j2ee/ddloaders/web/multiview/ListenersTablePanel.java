@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.j2ee.ddloaders.web.multiview;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.modules.j2ee.dd.api.web.Listener;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.j2ee.ddloaders.web.DDDataObject;
@@ -93,15 +95,12 @@ public class ListenersTablePanel extends DefaultTablePanel {
                 NbBundle.getMessage(ListenersTablePanel.class,"LBL_listenerClass"),
                 NbBundle.getMessage(ListenersTablePanel.class,"LBL_description")
             };
-            char[] mnem = new char[] {
-                NbBundle.getMessage(ListenersTablePanel.class,"LBL_listenerClass_mnem").charAt(0),
-                NbBundle.getMessage(ListenersTablePanel.class,"LBL_description_mnem").charAt(0)
-            };
             String[] a11y_desc = new String[]{
                 NbBundle.getMessage(ListenersTablePanel.class,"ACSD_listener_class"),
                 NbBundle.getMessage(ListenersTablePanel.class,"ACSD_listener_desc")
             };
-            SimpleDialogPanel.DialogDescriptor descriptor = new SimpleDialogPanel.DialogDescriptor(labels);
+            SimpleDialogPanel.DialogDescriptor descriptor =
+                    new SimpleDialogPanel.DialogDescriptor(labels, true);
             if (!add) {
                 String[] initValues = new String[] {
                     (String)model.getValueAt(row,0),
@@ -109,7 +108,6 @@ public class ListenersTablePanel extends DefaultTablePanel {
                 };
                 descriptor.setInitValues(initValues);
             }
-            descriptor.setMnemonics(mnem);
             descriptor.setButtons(new boolean[]{true,false});
             descriptor.setTextField(new boolean[]{true,false});
             descriptor.setA11yDesc(a11y_desc);
@@ -130,7 +128,9 @@ public class ListenersTablePanel extends DefaultTablePanel {
                             String className = DDUtils.getResourcePath(groups,fo);
                             dialogPanel.getTextComponents()[0].setText(className);
                         }
-                    } catch (java.io.IOException ex) {}
+                    } catch (java.io.IOException ex) {
+                        Logger.getLogger("ListenersTablePanel").log(Level.FINE, "ignored exception", ex); //NOI18N
+                    }
                 }
             });
             EditDialog dialog = new EditDialog(dialogPanel,NbBundle.getMessage(ListenersTablePanel.class,"TTL_Listener"),add) {

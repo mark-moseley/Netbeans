@@ -41,14 +41,12 @@
 
 package org.netbeans.modules.j2ee.ddloaders.web.multiview;
 
-import org.netbeans.core.spi.multiview.*;
 import org.openide.nodes.*;
 import org.netbeans.modules.j2ee.dd.api.web.*;
 import org.netbeans.modules.j2ee.ddloaders.web.*;
 import org.netbeans.modules.xml.multiview.ui.*;
 import org.netbeans.modules.xml.multiview.ToolBarMultiViewElement;
 import org.netbeans.modules.xml.multiview.Error;
-import org.openide.util.NbBundle;
 import org.netbeans.api.project.SourceGroup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -96,6 +94,7 @@ public class PagesMultiViewElement extends ToolBarMultiViewElement implements ja
         return view;
     }
     
+    @Override
     public void componentShowing() {
         super.componentShowing();
         dObj.setLastOpenView(index);
@@ -119,11 +118,13 @@ public class PagesMultiViewElement extends ToolBarMultiViewElement implements ja
         dObj.checkParseable();
     }
     
+    @Override
     public void componentOpened() {
         super.componentOpened();
         dObj.getWebApp().addPropertyChangeListener(this);
     }
     
+    @Override
     public void componentClosed() {
         super.componentClosed();
         dObj.getWebApp().removePropertyChangeListener(this);
@@ -236,6 +237,7 @@ public class PagesMultiViewElement extends ToolBarMultiViewElement implements ja
             else return NbBundle.getMessage(PagesMultiViewElement.class,"NODE_JSP_GROUP");
         }
         
+        @Override
         public Error validateView() {
             return SectionValidator.validatePages(webApp);
         }
@@ -243,13 +245,12 @@ public class PagesMultiViewElement extends ToolBarMultiViewElement implements ja
     }
     
     private class JspPGNode extends org.openide.nodes.AbstractNode {
-        private JspPropertyGroup group;
         JspPGNode(PagesView view, JspPropertyGroup group) {
             super(org.openide.nodes.Children.LEAF);
-            this.group=group;
             setDisplayName(view.getJspGroupNodeName(group));
             setIconBaseWithExtension("org/netbeans/modules/j2ee/ddloaders/web/multiview/resources/jspObject.gif"); //NOI18N
         }
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(HELP_ID_PREFIX+"jspPropertyGroupNode"); //NOI18N
         }
@@ -261,6 +262,7 @@ public class PagesMultiViewElement extends ToolBarMultiViewElement implements ja
             setDisplayName(NbBundle.getMessage(PagesMultiViewElement.class,"TTL_welcomeFiles"));
             setIconBaseWithExtension("org/netbeans/modules/j2ee/ddloaders/web/multiview/resources/htmlObject.gif"); //NOI18N
         }
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(HELP_ID_PREFIX+"welcomeFilesNode"); //NOI18N
         }
@@ -272,6 +274,7 @@ public class PagesMultiViewElement extends ToolBarMultiViewElement implements ja
             setDisplayName(NbBundle.getMessage(PagesMultiViewElement.class,"TTL_errorPages"));
             setIconBaseWithExtension("org/netbeans/modules/j2ee/ddloaders/web/multiview/resources/htmlObject.gif"); //NOI18N
         }
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(HELP_ID_PREFIX+"errorPagesNode"); //NOI18N
         }
@@ -291,19 +294,14 @@ public class PagesMultiViewElement extends ToolBarMultiViewElement implements ja
                 NbBundle.getMessage(PagesMultiViewElement.class,"LBL_description"),
                 NbBundle.getMessage(PagesMultiViewElement.class,"LBL_urlPatterns")
             };
-            char[] mnem = new char[] {
-                NbBundle.getMessage(PagesMultiViewElement.class,"LBL_displayName_mnem").charAt(0),
-                NbBundle.getMessage(PagesMultiViewElement.class,"LBL_description_mnem").charAt(0),
-                NbBundle.getMessage(PagesMultiViewElement.class,"LBL_urlPatterns_mnem").charAt(0)
-            };
             String[] a11y_desc = new String[]{
                 NbBundle.getMessage(PagesMultiViewElement.class,"ACSD_jsp_property_display_name"),
                 NbBundle.getMessage(PagesMultiViewElement.class,"ACSD_jsp_property_desc"),
                 NbBundle.getMessage(PagesMultiViewElement.class,"ACSD_jsp_property_url_pattern")
             };
             boolean[] buttons = new boolean[]{false,false,true};
-            SimpleDialogPanel.DialogDescriptor descriptor = new SimpleDialogPanel.DialogDescriptor(labels);
-            descriptor.setMnemonics(mnem);
+            SimpleDialogPanel.DialogDescriptor descriptor =
+                    new SimpleDialogPanel.DialogDescriptor(labels, true);
             descriptor.setButtons(buttons);
             descriptor.setA11yDesc(a11y_desc);
             descriptor.setTextField(new boolean[]{true,false,true});

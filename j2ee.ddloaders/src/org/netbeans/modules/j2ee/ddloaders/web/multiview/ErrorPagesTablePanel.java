@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.j2ee.ddloaders.web.multiview;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.modules.j2ee.dd.api.web.ErrorPage;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.j2ee.ddloaders.web.DDDataObject;
@@ -55,6 +57,9 @@ import org.openide.util.NbBundle;
  * Created on October 1, 2002, 3:52 PM
  */
 public class ErrorPagesTablePanel extends DefaultTablePanel {
+    
+    private static final Logger LOG = Logger.getLogger(ErrorPagesTablePanel.class.getName());
+    
     private ErrorPagesTableModel model;
     private WebApp webApp;
     private DDDataObject dObj;
@@ -97,17 +102,13 @@ public class ErrorPagesTablePanel extends DefaultTablePanel {
                 NbBundle.getMessage(ErrorPagesTablePanel.class,"LBL_exceptionType")
             };
 
-            char[] mnem = new char[] {
-                NbBundle.getMessage(ErrorPagesTablePanel.class,"LBL_errorPage_mnem").charAt(0),
-                NbBundle.getMessage(ErrorPagesTablePanel.class,"LBL_errorCode_mnem").charAt(0),
-                NbBundle.getMessage(ErrorPagesTablePanel.class,"LBL_exceptionType_mnem").charAt(0)
-            };
             String[] a11y_desc = new String[]{
                 NbBundle.getMessage(ErrorPagesTablePanel.class,"ACSD_errorPage"),
                 NbBundle.getMessage(ErrorPagesTablePanel.class,"ACSD_errorCode"),
                 NbBundle.getMessage(ErrorPagesTablePanel.class,"ACSD_exceptionType")
             };
-            SimpleDialogPanel.DialogDescriptor descriptor = new SimpleDialogPanel.DialogDescriptor(labels);
+            SimpleDialogPanel.DialogDescriptor descriptor =
+                    new SimpleDialogPanel.DialogDescriptor(labels, true);
             if (!add) {
                 Integer val = (Integer)model.getValueAt(row,1);
                 String[] initValues = new String[] {
@@ -118,7 +119,6 @@ public class ErrorPagesTablePanel extends DefaultTablePanel {
                 descriptor.setInitValues(initValues);
             }
             descriptor.setButtons(new boolean[]{true,false,false});
-            descriptor.setMnemonics(mnem);
             descriptor.setA11yDesc(a11y_desc);
             final SimpleDialogPanel dialogPanel = new SimpleDialogPanel(descriptor);
             if (add) {
@@ -138,7 +138,9 @@ public class ErrorPagesTablePanel extends DefaultTablePanel {
                             String res = DDUtils.getResourcePath(groups,fo,'/',true);
                             dialogPanel.getTextComponents()[0].setText("/"+res);
                         }
-                    } catch (java.io.IOException ex) {}
+                    } catch (java.io.IOException ex) {
+                        LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+                    }
                 }
             });
             EditDialog dialog = new EditDialog(dialogPanel,NbBundle.getMessage(ErrorPagesTablePanel.class,"TTL_ErrorPage"),add) {
@@ -158,7 +160,9 @@ public class ErrorPagesTablePanel extends DefaultTablePanel {
                         Integer c = null;
                         try {
                             c = new Integer(code); 
-                        } catch (NumberFormatException ex) {}
+                        } catch (NumberFormatException ex) {
+                            LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+                        }
                         if (c==null) {
                             return NbBundle.getMessage(ErrorPagesTablePanel.class,"TXT_EP_wrongNumber",code);
                         } else {
