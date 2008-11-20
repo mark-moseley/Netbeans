@@ -41,65 +41,35 @@
 
 package org.netbeans.modules.cnd.editor.fortran;
 
-import java.io.IOException;
-import java.io.Writer;
-import javax.swing.text.BadLocationException;
-import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.Syntax;
+import java.util.Collections;
+import java.util.List;
+import org.netbeans.editor.Acceptor;
+import org.netbeans.editor.AcceptorFactory;
+import org.netbeans.editor.TokenContext;
+import org.openide.text.IndentEngine;
 
-import org.netbeans.editor.ext.AbstractFormatLayer;
-import org.netbeans.editor.ext.FormatSupport;
-import org.netbeans.editor.ext.ExtFormatter;
-import org.netbeans.editor.ext.FormatWriter;
-import org.openide.awt.StatusDisplayer;
-import org.openide.util.NbBundle;
+/**
+ * Extended settings for Fortran.
+ */
+public class FSettingsFactory {
 
-/** Fortran indentation services */
-public class FFormatter extends ExtFormatter {
+    public static final int MAXIMUM_TEXT_WIDTH = 132;
 
-    public FFormatter(Class kitClass) {
-        super(kitClass);
+    public static Acceptor getAbbrevResetAcceptor() {
+        return AcceptorFactory.NON_JAVA_IDENTIFIER;
     }
 
-    protected boolean acceptSyntax(Syntax syntax) {
-        return (syntax instanceof FSyntax);
-    }
-    
-    protected void initFormatLayers() {
-        addFormatLayer(new FortranLayer());
-    }
-    
-    public Writer reformat(BaseDocument doc, int startOffset, int endOffset,
-            boolean indentOnly) throws BadLocationException, IOException {
-        return null;
+    public static Acceptor getIndentHotCharsAcceptor() {
+        return AcceptorFactory.NL;
     }
 
-    public int reformat(BaseDocument doc, int startOffset, int endOffset)
-    throws BadLocationException {
-        return 0;
+    public static List<? extends TokenContext> getTokenContext() {
+        return Collections.singletonList(FTokenContext.context);
     }
 
-    
-    public void shiftLine(BaseDocument doc, int dotPos, boolean right) throws BadLocationException {
-        StatusDisplayer.getDefault().setStatusText(
-                NbBundle.getBundle(FFormatter.class).getString("MSG_NoFortranShifting")); // NOI18N
+    public static IndentEngine getIndentEngine() {
+        return new FIndentEngine();
     }
-    
-    public class FortranLayer extends AbstractFormatLayer {
 
-        public FortranLayer() {
-            super("fortran-layer"); // NOI18N
-        }
-
-        protected FormatSupport createFormatSupport(FormatWriter fw) {
-            StatusDisplayer.getDefault().setStatusText(
-                    NbBundle.getBundle(FFormatter.class).getString("MSG_NoFortranReformatting")); // NOI18N
-            return null;
-        }
-
-        public void format(FormatWriter fw) {
-            StatusDisplayer.getDefault().setStatusText(
-                    NbBundle.getBundle(FFormatter.class).getString("MSG_NoFortranReformatting")); // NOI18N
-        }
-    } // end class FortranLayer
 }
+ 

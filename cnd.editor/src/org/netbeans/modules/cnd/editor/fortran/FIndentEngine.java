@@ -41,14 +41,9 @@
 
 package org.netbeans.modules.cnd.editor.fortran;
 
-import java.io.*;
-import java.awt.Toolkit; // for beeping
-
-import org.netbeans.editor.Formatter;
-import org.netbeans.editor.SettingsNames;
 import org.netbeans.editor.ext.ExtFormatter;
 import org.netbeans.modules.editor.FormatterIndentEngine;
-import org.netbeans.modules.cnd.MIMENames;
+import org.netbeans.modules.cnd.utils.MIMENames;
 
 import org.openide.util.HelpCtx;
 
@@ -71,9 +66,10 @@ public class FIndentEngine extends FormatterIndentEngine {
     }
 
     protected ExtFormatter createFormatter() {
-	return (FFormatter)Formatter.getFormatter(FKit.class);
+        return new FFormatter(FKit.class);
     }
 
+    @Override
     public HelpCtx getHelpCtx() {
         return new HelpCtx("Welcome_opt_indent_fortran"); // NOI18N
     }
