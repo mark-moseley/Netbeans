@@ -42,18 +42,15 @@
 package org.netbeans.modules.extexecution.input;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.nio.charset.Charset;
-import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.modules.extexecution.api.input.InputProcessor;
-import org.netbeans.modules.extexecution.api.input.InputReader;
-import org.netbeans.modules.extexecution.api.input.InputReaders;
+import org.netbeans.api.extexecution.input.InputProcessor;
+import org.netbeans.api.extexecution.input.InputReader;
+import org.netbeans.api.extexecution.input.InputReaders;
 
 /**
  *

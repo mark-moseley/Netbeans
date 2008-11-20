@@ -40,7 +40,7 @@
 package org.netbeans.modules.groovy.grailsproject.ui.wizards;
 
 import org.netbeans.api.progress.ProgressHandle;
-import org.netbeans.modules.extexecution.api.input.LineProcessor;
+import org.netbeans.api.extexecution.input.LineProcessor;
 
 /**
  *
@@ -65,7 +65,7 @@ public class ProgressSnooper implements LineProcessor {
     public void processLine(String line) {
         value += step;
         if (value > max) {
-                        value = max;
+            value = max;
         }
 
         progress.progress(value);
@@ -75,4 +75,8 @@ public class ProgressSnooper implements LineProcessor {
         // noop
     }
 
+    public void close() {
+        value = max;
+        progress.progress(max);
+    }
 }
