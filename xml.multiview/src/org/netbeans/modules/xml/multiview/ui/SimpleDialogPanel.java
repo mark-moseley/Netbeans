@@ -41,20 +41,14 @@
 
 package org.netbeans.modules.xml.multiview.ui;
 
-// AWT
 import java.awt.GridBagLayout;
 import java.awt.GridBagConstraints;
-import java.awt.BorderLayout;
-
-// Swing
 import javax.swing.JTextField;
 import javax.swing.JTextArea;
 import javax.swing.text.JTextComponent;
 import javax.swing.JPanel;
 import javax.swing.JLabel;
 import javax.swing.JButton;
-
-// Netbeans
 import org.openide.util.NbBundle;
 
 /** The simple dialog panel containing labels, text fields and browse buttons.
@@ -63,7 +57,6 @@ import org.openide.util.NbBundle;
  *
  * @author  mk115033
  * Created on January 03, 2005
- *
  */
 public class SimpleDialogPanel extends JPanel {
     private JTextComponent[] jTextComponents;
@@ -77,7 +70,7 @@ public class SimpleDialogPanel extends JPanel {
     */      
     public SimpleDialogPanel(DialogDescriptor desc) {
         super();
-        initComponents(desc.getLabels(), desc.isTextField(), desc.getSize(), desc.getButtons(), desc.getMnemonics(), desc.getA11yDesc());
+        initComponents(desc.getLabels(), desc.isTextField(), desc.getSize(), desc.getButtons(), desc.getMnemonics(), desc.getA11yDesc(), desc.includesMnemonics);
         String[] initValues = desc.getInitValues();
         if (initValues!=null)
             for (int i=0;i<initValues.length;i++) {
@@ -85,12 +78,18 @@ public class SimpleDialogPanel extends JPanel {
             }
     }
 
-    private void initComponents(String[] labels, boolean[] isTextField, int size, boolean[] customizers, char[] mnem, String[] a11yDesc) {
+    private void initComponents(String[] labels, boolean[] isTextField, int size, boolean[] customizers, char[] mnem, String[] a11yDesc, boolean includesMnemonics) {
         setLayout(new GridBagLayout());
         jLabels = new JLabel [labels.length];
         jTextComponents = new JTextComponent [labels.length];
         for (int i=0;i<labels.length;i++) {
-            jLabels[i] = new JLabel(labels[i]);
+            if (!includesMnemonics) {
+                jLabels[i] = new JLabel(labels[i]);
+            }
+            else {
+                jLabels[i] = new JLabel();
+                org.openide.awt.Mnemonics.setLocalizedText(jLabels[i], labels[i]);
+            }
             gridBagConstraints = new java.awt.GridBagConstraints();
             gridBagConstraints.gridx = 0;
             gridBagConstraints.gridy = i;
@@ -108,7 +107,7 @@ public class SimpleDialogPanel extends JPanel {
             } else { // text area
                 jTextComponents[i] = new JTextArea();
                 ((JTextArea)jTextComponents[i]).setRows(3);
-                if (i>0) jTextComponents[i].setBorder(jTextComponents[0].getBorder());
+                ((JTextArea)jTextComponents[i]).setColumns(size);
             }
             gridBagConstraints = new java.awt.GridBagConstraints();
             gridBagConstraints.gridx = 1;
@@ -161,6 +160,7 @@ public class SimpleDialogPanel extends JPanel {
             }
         }
     }
+    
     /** Returns the values from the text fields.
     * @return text fields values
     */
@@ -172,18 +172,28 @@ public class SimpleDialogPanel extends JPanel {
         }
         return values;
     }
+    
     /** Returns the JButton components from the dialog described in DialogDescriptor.
     * @return JButton components that are used for invoking the text field customizers 
     */    
     public JButton[] getCustomizerButtons() {
         return jButtons;
     }
+    
     /** Returns the dialog text fields.
     * @return array of text fields
     */    
     public JTextComponent[] getTextComponents() {
         return jTextComponents;
     }
+    
+    /** Returns the dialog labels. For testing purposes mainly.
+     * @return array of labels
+     */
+    JLabel[] getLabels() {
+        return jLabels;
+    }
+
     /** This is the descriptor for the dialog components.
     * Parameters are :<ul>
     * <li>labels = text array for text fields
@@ -193,8 +203,7 @@ public class SimpleDialogPanel extends JPanel {
     * For example setCustomizers(new boolean{false,true,false}) sets the customizer only for the second text field 
     * <li>size = default number of columns for text fields. Defaultly set to 25
     * </ul>
-    */
-    
+    */    
     public static class DialogDescriptor {
         String[] labels;
         String[] initValues;
@@ -204,12 +213,16 @@ public class SimpleDialogPanel extends JPanel {
         char[] mnem;
         String[] a11yDesc;
         int size;
-
+        boolean includesMnemonics;
         
         /** the constructor for DialogDescriptor object
         * @param labels labels names
         */
         public DialogDescriptor(String[] labels) {
+            this(labels, false);
+        }
+        
+        public DialogDescriptor(String[] labels, boolean includesMnemonics) {
             this.labels=labels;
             size=25;
             adding=true;
@@ -217,10 +230,13 @@ public class SimpleDialogPanel extends JPanel {
             for (int i=0;i<labels.length;i++) {
                 textField[i]=true; // setting textFields to text fields
             }
+            this.includesMnemonics = includesMnemonics;
         }
+        
         public String[] getLabels() {
             return labels;
         }
+        
         /** Specifies which text fields should contain the Browse buttons
          * Limited up to 3 Browse bottons (number of "true" items in buttons array)
          * Example : setButtons (new boolean[] {true, false, false, true, false, false});
@@ -228,55 +244,68 @@ public class SimpleDialogPanel extends JPanel {
         public void setButtons(boolean[] buttons) {
             this.buttons=buttons;
         }
+        
         public boolean[] getButtons() {
             return buttons;
         }
+        
         /** Sets the text fields
          */         
         public void setTextField(boolean[] textField) {
             this.textField=textField;
         }
+        
         public boolean[] isTextField() {
             return textField;
         }
+        
         /** Sets the init values for text fields
          */        
         public void setInitValues(String[] initValues) {
             this.initValues=initValues;
             adding=false;
         }
+        
         public String[] getInitValues() {
             return initValues;
         }
+        
         /** Specifies whether the dialog adds or adits values
          */
         public void setAdding(boolean adding) {
             this.adding=adding;
         }
+        
         public boolean isAdding() {
             return adding;
         }
+        
         /** Sets the longest text field size
          */
         public void setSize(int size) {
             this.size=size;
         }
+        
         public int getSize() {
             return size;
         }
+        
         /** Sets mnemonics for labels
          */
         public void setMnemonics(char[] mnem) {
             this.mnem=mnem;
         }
+        
         public char[] getMnemonics() {
             return mnem;
         }
+        
         /** Sets A11Y desc for text fields
          */
         public void setA11yDesc(String[] a11yDesc) {
             this.a11yDesc=a11yDesc;
         }
+        
         public String[] getA11yDesc() {
             return a11yDesc;
         }
