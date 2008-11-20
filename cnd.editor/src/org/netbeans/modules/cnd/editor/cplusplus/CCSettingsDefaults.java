@@ -39,34 +39,23 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.completion.cplusplus;
+package org.netbeans.modules.cnd.editor.cplusplus;
 
-import org.netbeans.modules.cnd.completion.cplusplus.ext.CsmFinder;
-import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.editor.NbEditorUtilities;
-import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
 
-/**
-* Support methods for syntax analyzes
-*
-* @author Miloslav Metelka, Vladimir Voskresensky
-* @version 1.00
-*/
-@Deprecated
-@SuppressWarnings("deprecation")
-public class NbCsmSyntaxSupport extends org.netbeans.modules.cnd.completion.cplusplus.ext.CsmSyntaxSupport {
+import org.netbeans.editor.Acceptor;
+import org.netbeans.editor.AcceptorFactory;
 
-    protected static final String PACKAGE_SUMMARY = "package-summary"; // NOI18N
-    
-    public NbCsmSyntaxSupport(BaseDocument doc) {
-        super(doc);        
+/** Default settings values for C and C++ 
+ *  registered in cpp-preferences.xml and cpp-preferences.xml
+ */
+public class CCSettingsDefaults {
+
+    public static Acceptor getDefaultAbbrevResetAcceptor() {
+        return AcceptorFactory.NON_JAVA_IDENTIFIER;
     }
-    
-    public CsmFinder getFinder() {
-        DataObject dobj = NbEditorUtilities.getDataObject(getDocument());
-        assert dobj != null;
-        FileObject fo = dobj.getPrimaryFile();
-        return CsmFinderFactory.getDefault().getFinder(fo);
+
+    public static Acceptor getDefaultIdentifierAcceptor() {
+        return AcceptorFactory.JAVA_IDENTIFIER;
     }
+
 }
