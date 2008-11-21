@@ -39,40 +39,76 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.repository.util;
+package org.netbeans.modules.cnd.repository.disk;
 
+import java.io.IOException;
 import org.netbeans.modules.cnd.repository.api.RepositoryException;
+import org.netbeans.modules.cnd.repository.spi.Key;
+import org.netbeans.modules.cnd.repository.spi.Persistent;
+import org.netbeans.modules.cnd.repository.util.RepositoryListenersManager;
 
 /**
- *
- * @author Nickolay Dalmatov
+ * The implementation of the repository, which uses HDD
+ * @author Nickolay Dalmatov 
  */
-public abstract class AbstractRepositoryException extends Throwable implements RepositoryException{
-    private Throwable cause;
-    boolean fatal;
+public class MultyFileStorage implements Storage {
     
-    protected AbstractRepositoryException(Throwable cause, boolean fatal) {
-        this.cause = cause;
-        this.fatal = fatal;
+    private FilesAccessStrategy theFilesHelper;
+    private String unitName;
+    
+    public MultyFileStorage(String unitName) {
+        super();
+        theFilesHelper = FilesAccessStrategyImpl.getInstance();
+        this.unitName = unitName;
     }
     
-    protected AbstractRepositoryException(Throwable cause) {
-        this(cause, true);
+    /** Creates a new instance of SimpleDiskRepository */
+    public MultyFileStorage(FilesAccessStrategy aFilesHelper) {
+        theFilesHelper = aFilesHelper;
     }
     
-    protected AbstractRepositoryException(boolean fatal) {
-        this(null, fatal);
+    public void write(Key id, final Persistent obj) {
+        assert id != null;
+        assert obj != null;
+        try {
+            theFilesHelper.write(id, obj);
+        } catch (Throwable ex) {
+            RepositoryListenersManager.getInstance().fireAnException(
+                    id.getUnit().toString(), new RepositoryException(ex));
+        }
     }
     
-    protected AbstractRepositoryException() {
-        this(null, true);
+    public boolean defragment(long timeout) {
+	return false;
     }
     
-    public Throwable getCause() {
-        return cause;
-    } 
+    public Persistent read(Key id) {
+        assert id != null;
+        Persistent obj = null;
+        try {
+            obj = theFilesHelper.read(id);
+        }  catch (Throwable ex) {
+            RepositoryListenersManager.getInstance().fireAnException(
+                    id.getUnit().toString(), new RepositoryException(ex));
+        }
+        return obj;
+    }
     
-    public boolean isFatal() {
-        return fatal;
+    public void remove(Key id) {
+        assert id != null;
+        try {
+        theFilesHelper.remove(id);
+        } catch (Throwable ex) {
+            RepositoryListenersManager.getInstance().fireAnException(
+                    id.getUnit().toString(), new RepositoryException(ex));
+        }
+    }
+
+    public void close() throws IOException {
+        theFilesHelper.closeUnit(unitName);
+    }
+
+    public int getFragmentationPercentage() {
+        return 0;
     }
 }
