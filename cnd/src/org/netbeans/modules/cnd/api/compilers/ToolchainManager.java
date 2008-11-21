@@ -136,18 +136,18 @@ public final class ToolchainManager {
     }
 
     ToolchainDescriptor getToolchain(String name, int platform) {
-        ToolchainDescriptor nonePlatform = null;
         for (ToolchainDescriptor d : descriptors) {
-            if (isPlatforSupported(platform, d)) {
-                if (name.equals(d.getName())) {
-                    return d;
-                }
-            }
-            if (nonePlatform == null && isPlatforSupported(PlatformTypes.PLATFORM_NONE, d)) {
-                nonePlatform = d;
+            if (name.equals(d.getName()) && (isPlatforSupported(platform, d)
+                        || isPlatforSupported(PlatformTypes.PLATFORM_NONE, d))) {
+                return d;
             }
         }
-        return nonePlatform;
+        for (ToolchainDescriptor d : descriptors) {
+            if (isPlatforSupported(PlatformTypes.PLATFORM_NONE, d)) {
+                return d;
+            }
+        }
+        return null;
     }
 
     List<ToolchainDescriptor> getAllToolchains() {
@@ -1310,17 +1310,17 @@ public final class ToolchainManager {
             buf.append("\tArchitecture " + c.architecture + "\n"); // NOI18N
             buf.append("\tStrip [" + c.strip + "]\n"); // NOI18N
             if (c.multithreading.isValid()) {
-                buf.append("\tMultithreading [" + c.multithreading + "]\n");
-            } // NOI18N
+                buf.append("\tMultithreading [" + c.multithreading + "]\n");// NOI18N
+            } 
             if (c.standard.isValid()) {
-                buf.append("\tStandard [" + c.standard + "]\n");
-            } // NOI18N
+                buf.append("\tStandard [" + c.standard + "]\n");// NOI18N
+            } 
             if (c.languageExtension.isValid()) {
-                buf.append("\tLanguage [" + c.languageExtension + "]\n");
-            } // NOI18N
+                buf.append("\tLanguage [" + c.languageExtension + "]\n");// NOI18N
+            } 
             if (c.library.isValid()) {
-                buf.append("\tLibrary [" + c.library + "]\n");
-            } // NOI18N
+                buf.append("\tLibrary [" + c.library + "]\n");// NOI18N
+            } 
             buf.append("C++ compiler [" + cpp.name + "] Recognize path [" + cpp.pathPattern + // NOI18N
                     "] Version [" + cpp.versionFlags + ";" + cpp.versionPattern + "]\n"); // NOI18N
             buf.append("\tInclude flags [" + cpp.includeFlags + "] parser [" + cpp.includeOutputParser + // NOI18N
@@ -1332,17 +1332,17 @@ public final class ToolchainManager {
             buf.append("\tStrip [" + cpp.strip + "]\n"); // NOI18N
             buf.append("\tDependency generation flags [" + cpp.dependencyGenerationFlags + "]\n"); // NOI18N
             if (cpp.multithreading.isValid()) {
-                buf.append("\tMultithreading " + cpp.multithreading + "\n");
-            } // NOI18N
+                buf.append("\tMultithreading " + cpp.multithreading + "\n");// NOI18N
+            } 
             if (cpp.standard.isValid()) {
-                buf.append("\tStandard " + cpp.standard + "\n");
-            } // NOI18N
+                buf.append("\tStandard " + cpp.standard + "\n"); // NOI18N
+            } 
             if (cpp.languageExtension.isValid()) {
-                buf.append("\tLanguage " + cpp.languageExtension + "\n");
-            } // NOI18N
+                buf.append("\tLanguage " + cpp.languageExtension + "\n"); // NOI18N
+            } 
             if (cpp.library.isValid()) {
-                buf.append("\tLibrary " + cpp.library + "\n");
-            } // NOI18N
+                buf.append("\tLibrary " + cpp.library + "\n"); // NOI18N
+            } 
             if (fortran.isValid()) {
                 buf.append("Fortran compiler [" + fortran.name + "] Recognize path [" + fortran.pathPattern + // NOI18N
                         "] Version [" + fortran.versionFlags + ";" + fortran.versionPattern + "]\n"); // NOI18N
