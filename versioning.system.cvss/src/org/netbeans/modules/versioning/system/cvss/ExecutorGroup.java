@@ -51,6 +51,8 @@ import org.netbeans.api.progress.ProgressHandleFactory;
 import javax.swing.*;
 import java.util.*;
 import java.awt.event.ActionEvent;
+import java.util.logging.Level;
+import org.netbeans.modules.versioning.system.cvss.util.Utils;
 
 /**
  * Support for actions that run multiple commands.
@@ -184,6 +186,7 @@ public final class ExecutorGroup extends AbstractAction implements Cancellable {
             String header = "\n" + sep + "\n" + msg + "\n"; // NOI18N
             queue.log(header);
         }
+        log("Start - " + name);
     }
 
     /**
@@ -214,6 +217,7 @@ public final class ExecutorGroup extends AbstractAction implements Cancellable {
                     progressHandle.finish();
                     progressHandle = null;
                 }
+                log("End - " + name);
             }
             finished &= commands.isEmpty();
         }
@@ -249,6 +253,10 @@ public final class ExecutorGroup extends AbstractAction implements Cancellable {
 
     public boolean isCancelled() {
         return cancelled;
+    }
+
+    public boolean isFailed() {
+        return failed;
     }
 
     /**
@@ -497,5 +505,10 @@ public final class ExecutorGroup extends AbstractAction implements Cancellable {
 
         /** Execute custom code. */
         void execute();
+    }
+
+    private static void log(String msg) {
+        Utils.logT9Y(msg);
+//        CVS.LOG.log(Level.FINE, msg);
     }
 }
