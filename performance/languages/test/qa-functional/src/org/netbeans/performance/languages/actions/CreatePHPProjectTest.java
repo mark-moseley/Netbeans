@@ -39,72 +39,92 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages.dialogs;
+package org.netbeans.performance.languages.actions;
+
+import org.netbeans.modules.performance.utilities.CommonUtilities;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.performance.languages.setup.ScriptingSetup;
+
+import java.io.File;
 
 import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.MainWindowOperator;
-import org.netbeans.jellytools.WizardOperator;
+import org.netbeans.jellytools.NewPHPProjectNameLocationStepOperator;
+import org.netbeans.jellytools.NewProjectWizardOperator;
+import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JMenuBarOperator;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.junit.NbModuleSuite;
-import org.netbeans.performance.languages.setup.ScriptingSetup;
 
 /**
  *
- * @author mkhramov@netbeans.org
+ * @author mkhramov@netbeans.org, mrkam@netbeans.org
  */
-public class AddJavaScriptLibraryDialogTest  extends org.netbeans.modules.performance.utilities.PerformanceTestCase {
+public class CreatePHPProjectTest extends PerformanceTestCase {
+
+    private NewPHPProjectNameLocationStepOperator wizard_location;
+    public String category, project, project_name, project_type,  editor_name;
     
-    public static final String suiteName="Scripting UI Responsiveness Actions suite";
-    protected String MENU, TITLE;
-    
-    public AddJavaScriptLibraryDialogTest(String testName) {
-        super(testName);
+    public CreatePHPProjectTest(String testName)
+    {
+        super(testName);        
         expectedTime = 10000;
-        WAIT_AFTER_OPEN=20000;         
+        WAIT_AFTER_OPEN=20000;        
     }
     
-    public AddJavaScriptLibraryDialogTest(String testName, String performanceDataName) {
-        super(testName, performanceDataName);        
+    public CreatePHPProjectTest(String testName, String performanceDataName)
+    {
+        super(testName,performanceDataName);
         expectedTime = 10000;
-        WAIT_AFTER_OPEN=20000;         
+        WAIT_AFTER_OPEN=20000;        
     }
 
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingSetup.class)
-             .addTest(AddJavaScriptLibraryDialogTest.class)
+             .addTest(CreatePHPProjectTest.class)
              .enableModules(".*").clusters(".*")));
         return suite;
     }
 
-    public void testAddJavaScriptLibraryDialog() {
-        doMeasurement();
-    }
-    
     @Override
-    public void initialize() {
-        MENU = "Tools"+"|"+ Bundle.getStringTrimmed("org.netbeans.core.ui.resources.Bundle","Menu/Tools") + "|" + org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.javascript.libraries.actions.Bundle", "CTL_TestAction");
-        TITLE = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.javascript.libraries.ui.Bundle", "SELECT_LIBRARY_DIALOG_TITLE");
-    }
-    
-    @Override
-    public void prepare() {
-        log("prepare");
+    public void initialize(){
+        closeAllModal();
     }
 
     @Override
-    public ComponentOperator open() {
-        log("::open");
-        new JMenuBarOperator(MainWindowOperator.getDefault().getJMenuBar()).pushMenuNoBlock(MENU);
-        return new WizardOperator(TITLE);
+    public void prepare(){
+        NewProjectWizardOperator wizard = NewProjectWizardOperator.invoke();
+        wizard.selectCategory(category);
+        wizard.selectProject(project);
+        wizard.next();
+        wizard_location = new NewPHPProjectNameLocationStepOperator();
+        project_name = project_type + "_" + System.currentTimeMillis();
+        wizard_location.typeProjectName(project_name);
+        String directory = CommonUtilities.getTempDir() + "createdProjects"
+                + File.separator + project_name;
+        wizard_location.typeSourcesFolder(directory);
+        wizard.next();
     }
+    
+    public ComponentOperator open(){
+        wizard_location.finish();
+                CommonUtilities.waitProjectTasksFinished();
+//        wizard_location.waitClosed();
+//        TopComponentOperator.findTopComponent(editor_name, 0);
+//        return null;
+        return null;//new TopComponentOperator(editor_name);
+    }
+    
     @Override
-    public void close() {
-        super.close();                
+    public void close(){
     }    
-    public static void main(String[] args) {
-        junit.textui.TestRunner.run(new AddJavaScriptLibraryDialogTest("testAddJavaScriptLibraryDialog"));
+    
+    public void testCreatePhpProject() {
+        category = "PHP";
+        project = Bundle.getString("org.netbeans.modules.php.project.ui.wizards.Bundle", "Templates/Project/PHP/PHPProject.php");
+        project_type = "PHPApplication";
+        editor_name = "index.php";
+        doMeasurement();        
     }
+
 }

@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,80 +42,108 @@
 package org.netbeans.performance.languages.actions;
 
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.modules.performance.guitracker.ActionTracker;
 import org.netbeans.performance.languages.Projects;
 import org.netbeans.performance.languages.ScriptingUtilities;
 import org.netbeans.performance.languages.setup.ScriptingSetup;
 
-import java.io.IOException;
-import org.openide.util.Exceptions;
-
+import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.actions.CloseAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jemmy.operators.ComponentOperator;
+import org.netbeans.jemmy.operators.JPopupMenuOperator;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.junit.NbModuleSuite;
 
 /**
  *
- * @author mrkam@netbeans.org
+ * @author mkhramov@netbeans.org
  */
-public class CloseProjectTest extends PerformanceTestCase {
-
-    private static String projectName; 
+public class CloseScriptingFilesTest extends PerformanceTestCase {
+    
+    /** Node to be opened/edited */
+    public static Node fileToBeOpened ;
     protected static ProjectsTabOperator projectsTab = null;
     
-    public CloseProjectTest(String testName) {
+    /** Folder with data */
+    public static String testProject;
+    protected String nodePath;
+    protected String fileName;     
+    
+    /** Menu item name that opens the editor */
+    public static String menuItem;
+    
+    protected static String OPEN = org.netbeans.jellytools.Bundle.getStringTrimmed("org.openide.actions.Bundle", "Open");    
+    protected static String EDIT = org.netbeans.jellytools.Bundle.getStringTrimmed("org.openide.actions.Bundle", "Edit");
+    protected EditorOperator editor;
+    
+    public CloseScriptingFilesTest(String testName) {
         super(testName);
+        expectedTime = WINDOW_OPEN;        
     }
 
-    public CloseProjectTest(String testName, String performanceDataName) {
-        super(testName, performanceDataName);
+    public CloseScriptingFilesTest(String testName, String performanceDataName) {
+        super(testName, performanceDataName);        
+        expectedTime = WINDOW_OPEN;        
     }
 
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingSetup.class)
-             .addTest(CloseProjectTest.class)
+             .addTest(CloseScriptingFilesTest.class)
              .enableModules(".*").clusters(".*")));
         return suite;
     }
 
     @Override
-    public void initialize() {
+    protected void initialize(){
+        EditorOperator.closeDiscardAll();        
         closeAllModal();
+    }
+
+    protected Node getProjectNode(String projectName) {
+        if(projectsTab==null)
+            projectsTab = ScriptingUtilities.invokePTO();
+        return projectsTab.getProjectRootNode(projectName);
     }
     
     @Override
     public void prepare() {
+        String path = nodePath+"|"+fileName;    
+        fileToBeOpened = new Node(getProjectNode(testProject),path);
+        JPopupMenuOperator popup =  fileToBeOpened.callPopup();
+        if (popup == null) {
+            throw new Error("Cannot get context menu for node ["+ fileToBeOpened.getPath() + "] in project [" + testProject + "]");
+        }
+        try {
+            popup.pushMenu(menuItem);
+        } catch (org.netbeans.jemmy.TimeoutExpiredException tee) {
+            tee.printStackTrace(getLog());
+            throw new Error("Cannot push menu item ["+menuItem+"] of node [" + fileToBeOpened.getPath() + "] in project [" + testProject + "]");
+        }
+        editor = new EditorOperator(this.fileName);
     }
 
     @Override
     public ComponentOperator open() {
-        new CloseAction().perform(getProjectNode(projectName));
+        editor.close();
         return null;
     }
     
-    protected Node getProjectNode(String projectName) {
-        if (projectsTab == null) {
-            projectsTab = ScriptingUtilities.invokePTO();
-        }
-        return projectsTab.getProjectRootNode(projectName);
-    }
-
     @Override
-    public void close() {
-        closeAllModal();
-        try {
-            this.openDataProjects(projectName);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
+    protected void shutdown(){
+        testedComponentOperator = null; // allow GC of editor and documents
+        EditorOperator.closeDiscardAll();
+        repaintManager().resetRegionFilters();
     }
-
-    public void testClosePHPProject() {
-        projectName = Projects.PHP_PROJECT;
-        expectedTime = 1000;
+    
+    public void testClose20kbPHPFile() {
+        testProject = Projects.PHP_PROJECT;
+        WAIT_AFTER_OPEN = 1500;
+        menuItem = OPEN;
+        fileName = "php20kb.php";
+        nodePath = "Source Files";
+        MY_START_EVENT = ActionTracker.TRACK_OPEN_BEFORE_TRACE_MESSAGE;
         doMeasurement();
     }
 

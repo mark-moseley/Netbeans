@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,80 +39,112 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages.dialogs;
+package org.netbeans.performance.languages.actions;
 
 
-import org.netbeans.jellytools.NbDialogOperator;
+import junit.framework.Test;
+import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.EditorOperator;
+import org.netbeans.jellytools.EditorWindowOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.actions.PropertiesAction;
+import org.netbeans.jellytools.actions.OpenAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jemmy.operators.JPopupMenuOperator;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.modules.performance.guitracker.LoggingRepaintManager;
 import org.netbeans.performance.languages.Projects;
+import org.netbeans.performance.languages.ScriptingUtilities;
+import org.netbeans.performance.languages.setup.ScriptingSetup;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.junit.NbModuleSuite;
-import org.netbeans.performance.languages.setup.ScriptingSetup;
 
 /**
  *
- * @author mkhramov@netbeans.org
+ * @author mrkam@netbeans.org
  */
-public class RubyPropertiesDialogTest  extends org.netbeans.modules.performance.utilities.PerformanceTestCase {
-    public static final String suiteName="Scripting UI Responsiveness Dialogs suite";
-    private Node testNode;
-    private String TITLE, projectName;
+public class FormatFileTest extends org.netbeans.modules.performance.utilities.PerformanceTestCase {
+    public static final String suiteName="Scripting UI Responsiveness Actions suite";
+    protected Node fileToBeOpened;
+    protected String testProject;
+    protected String fileName; 
+    protected String nodePath;
     
-    public RubyPropertiesDialogTest(String testName) {
+    private EditorOperator editorOperator;
+    protected static ProjectsTabOperator projectsTab = null;
+    
+    private int caretBlinkRate;
+    
+    public FormatFileTest(String testName) {
         super(testName);
-        expectedTime = WINDOW_OPEN;          
     }
-    
-    public RubyPropertiesDialogTest(String testName, String performanceDataName) {
+
+    public FormatFileTest(String testName, String performanceDataName) {
         super(testName,performanceDataName);
-        expectedTime = WINDOW_OPEN;      
     }
 
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingSetup.class)
-             .addTest(RubyPropertiesDialogTest.class)
+             .addTest(FormatFileTest.class)
              .enableModules(".*").clusters(".*")));
         return suite;
     }
 
     @Override
     public void initialize() {
-        TITLE = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.ruby.rubyproject.ui.customizer.Bundle", "LBL_Customizer_Title", new String[]{projectName});
-        testNode = (Node) new ProjectsTabOperator().getProjectRootNode(projectName);        
+        log("::initialize");
+        closeAllModal();
+        String path = nodePath + "|" + fileName;
+        log("attempting to open: " + path);
+        
+        fileToBeOpened = new Node(getProjectNode(testProject),path);
     }
     
     @Override
     public void prepare() {
         log("::prepare");
+        new OpenAction().performAPI(fileToBeOpened);
+        
+        waitNoEvent(800);
+
+        editorOperator = EditorWindowOperator.getEditor(fileName);
+        
+        caretBlinkRate =  editorOperator.txtEditorPane().getCaret().getBlinkRate();
+        
+        editorOperator.txtEditorPane().getCaret().setBlinkRate(0);
+        repaintManager().addRegionFilter(LoggingRepaintManager.EDITOR_FILTER);
+        waitNoEvent(2000);        
     }
 
     @Override
     public ComponentOperator open() {
-        // invoke Window / Properties from the main menu
-        new PropertiesAction().performPopup(testNode);
-        return new NbDialogOperator(TITLE);
+        editorOperator.txtEditorPane().clickForPopup();
+        // Format
+        new JPopupMenuOperator().pushMenu(Bundle.getStringTrimmed("org.netbeans.editor.Bundle", "format"));
+        return null;
+    }
+
+    @Override
+    public void close() {
+        editorOperator.txtEditorPane().getCaret().setBlinkRate(caretBlinkRate);
+        repaintManager().resetRegionFilters();        
+        EditorOperator.closeDiscardAll();
+    }
+
+    protected Node getProjectNode(String projectName) {
+        if(projectsTab==null)
+            projectsTab = ScriptingUtilities.invokePTO();
+        
+        return projectsTab.getProjectRootNode(projectName);
     }
     
-    public void testRubyProjectProperties() {
-        projectName = Projects.RUBY_PROJECT;
+    public void testFormatPHPFile() {
+        testProject = Projects.PHP_PROJECT;
+        fileName = "php20kb.php";
+        nodePath = "Source Files";
+        expectedTime = 1000;
         doMeasurement();
     }
-    public void testRailsProjectProperties() {
-        projectName = Projects.RAILS_PROJECT;
-        doMeasurement();                
-    }
-
-
-    /** Test could be executed internaly in IDE without XTest
-     * @param args arguments from command line
-     */
-    public static void main(String[] args) {
-        junit.textui.TestRunner.run(suite());
-    }    
-
+   
 }
