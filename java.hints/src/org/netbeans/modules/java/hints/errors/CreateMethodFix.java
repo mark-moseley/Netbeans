@@ -44,8 +44,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
@@ -56,7 +58,6 @@ import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.ModificationResult;
-import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.TreeMaker;
 import org.netbeans.api.java.source.TypeMirrorHandle;
 import org.netbeans.api.java.source.WorkingCopy;
@@ -87,7 +88,13 @@ public final class CreateMethodFix implements Fix {
     
     public CreateMethodFix(CompilationInfo info, String name, Set<Modifier> modifiers, TypeElement target, TypeMirror returnType, List<? extends TypeMirror> argumentTypes, List<String> argumentNames, FileObject targetFile) {
         this.name = name;
-        this.inFQN = target.getQualifiedName().toString();
+        final Name qualifiedName = target.getQualifiedName(); //#130759
+        if (qualifiedName == null) {
+            this.inFQN = ""; //NOI18N
+            Logger.getLogger(CreateMethodFix.class.getName()).warning("Target qualified name could not be resolved."); //NOI18N
+        } else {
+            this.inFQN = qualifiedName.toString();
+        }
         this.cpInfo = info.getClasspathInfo();
         this.modifiers = modifiers;
         this.targetFile = targetFile;
@@ -141,6 +148,8 @@ public final class CreateMethodFix implements Fix {
     public ChangeInfo implement() throws IOException {
         //use the original cp-info so it is "sure" that the proposedType can be resolved:
         JavaSource js = JavaSource.create(cpInfo, targetFile);
+        // tag used for selection
+        final String methodBodyTag = "mbody"; //NOI18N
         
         ModificationResult diff = js.runModificationTask(new Task<WorkingCopy>() {
             public void run(final WorkingCopy working) throws IOException {
@@ -181,6 +190,11 @@ public final class CreateMethodFix implements Fix {
                 }
                 
                 BlockTree body = targetType.getKind().isClass() ? createDefaultMethodBody(working, returnType) : null;
+                
+                if(body != null && !body.getStatements().isEmpty()) {
+                    working.tag(body.getStatements().get(0), methodBodyTag);
+                }
+                
                 MethodTree mt = make.Method(make.Modifiers(modifiers), name, returnType != null ? make.Type(returnType) : null, Collections.<TypeParameterTree>emptyList(), argTypes, Collections.<ExpressionTree>emptyList(), body, null);
                 ClassTree decl = GeneratorUtils.insertClassMember(working, targetTree, mt);
                 
@@ -188,7 +202,7 @@ public final class CreateMethodFix implements Fix {
             }
         });
         
-        return Utilities.commitAndComputeChangeInfo(targetFile, diff);
+        return Utilities.commitAndComputeChangeInfo(targetFile, diff, methodBodyTag);
     }
     
     private void addArguments(CompilationInfo info, StringBuilder value) {
@@ -245,6 +259,6 @@ public final class CreateMethodFix implements Fix {
         }
         return make.Block(blockStatements, false);
     }
-    
+
 }
 
