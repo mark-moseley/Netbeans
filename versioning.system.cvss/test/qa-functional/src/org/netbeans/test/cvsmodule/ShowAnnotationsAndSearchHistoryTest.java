@@ -51,30 +51,27 @@
 package org.netbeans.test.cvsmodule;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.ListModel;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputOperator;
-import org.netbeans.jellytools.OutputTabOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.modules.javacvs.CVSRootStepOperator;
 import org.netbeans.jellytools.modules.javacvs.CheckoutWizardOperator;
 import org.netbeans.jellytools.modules.javacvs.ModuleToCheckoutStepOperator;
 import org.netbeans.jellytools.modules.javacvs.SearchHistoryOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jemmy.JemmyProperties;
-import org.netbeans.jemmy.QueueTool;
-import org.netbeans.jemmy.TimeoutExpiredException;
+import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JListOperator;
-import org.netbeans.jemmy.operators.JProgressBarOperator;
-import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.ide.ProjectSupport;
 
 /**
@@ -82,7 +79,7 @@ import org.netbeans.junit.ide.ProjectSupport;
  * @author novakm
  */
 public class ShowAnnotationsAndSearchHistoryTest extends JellyTestCase {
-    String os_name;
+    static String os_name;
     static String sessionCVSroot;
     final String projectName = "ForImport";
     final String pathToMain = "forimport|Main.java";
@@ -90,47 +87,56 @@ public class ShowAnnotationsAndSearchHistoryTest extends JellyTestCase {
     static File cacheFolder;
     Operator.DefaultStringComparator comOperator;
     Operator.DefaultStringComparator oldOperator;
+    static Logger log;
     /** Creates a new instance of ShowAnnotationsAndSearchHistoryTest */
     public ShowAnnotationsAndSearchHistoryTest(String name) {
         super(name);
+        if (os_name == null) {
+            os_name = System.getProperty("os.name");
+        }
+        try {
+            TestKit.extractProtocol(getDataDir());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
+    @Override
     protected void setUp() throws Exception {
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### " + getName() + " ###");
+
+        if (log == null) {
+            log = Logger.getLogger("org.netbeans.modules.versioning.system.cvss.t9y");
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
+        }
     }
     
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new ShowAnnotationsAndSearchHistoryTest("testCheckOutProject"));
-        //suite.addTest(new ShowAnnotationsAndSearchHistoryTest("testSearchHistory"));
-        suite.addTest(new ShowAnnotationsAndSearchHistoryTest("testShowAnnotations"));
-        suite.addTest(new ShowAnnotationsAndSearchHistoryTest("removeAllData"));
-        return suite;
-    }
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(ShowAnnotationsAndSearchHistoryTest.class).addTest(
+                     "testCheckOutProject",
+                     //"testSearchHistory",
+                     "testShowAnnotations",
+                     "removeAllData"
+                )
+                .enableModules(".*")
+                .clusters(".*")
+        );
+     }
     
     public void testCheckOutProject() throws Exception {
-        long timeout = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
-        try {
-            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        } finally {
-            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", timeout);
-        }
-        
-        timeout = JemmyProperties.getCurrentTimeout("DialogWaiter.WaitDialogTimeout");
-        try {
-            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);
-        } finally {
-            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", timeout);
-        }
+        MessageHandler mh = new MessageHandler("Checking out");
+        log.addHandler(mh);
+
         TestKit.closeProject(projectName);
-        new ProjectsTabOperator().tree().clearSelection();
+        TestKit.showStatusLabels();
+//
+        if ((os_name !=null) && (os_name.indexOf("Mac") > -1))
+            NewProjectWizardOperator.invoke().close();
+
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -158,7 +164,12 @@ public class ShowAnnotationsAndSearchHistoryTest extends JellyTestCase {
         tmp.deleteOnExit();
         ModuleToCheckoutStepOperator moduleCheck = new ModuleToCheckoutStepOperator();
         cvss.stop();
-        in.close();
+        try {
+            new EventTool().waitNoEvent(1000);
+            in.close();
+        } catch (IOException e) {
+            //
+        }
         moduleCheck.setModule("ForImport");
         moduleCheck.setLocalFolder(work.getAbsolutePath()); // NOI18N
         //Pseudo CVS server for finishing check out wizard
@@ -168,36 +179,30 @@ public class ShowAnnotationsAndSearchHistoryTest extends JellyTestCase {
         CVSroot = cvss.getCvsRoot();
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         cwo.finish();
-        OutputOperator oo = OutputOperator.invoke();
-        OutputTabOperator oto = oo.getOutputTab(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-        oto.waitText("Checking out finished");
+        TestKit.waitText(mh);
         cvss.stop();
-        in.close();
+        
         NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
         JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
         open.push();
         
         ProjectSupport.waitScanFinished();
-        TestKit.waitForQueueEmpty();
-        ProjectSupport.waitScanFinished();
+//        TestKit.waitForQueueEmpty();
+//        ProjectSupport.waitScanFinished();
         
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", "");
     }
+            
     public void testShowAnnotations() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 18000);
         PseudoCvsServer cvss, cvss2;
         InputStream in, in2;
-        //OutputOperator oo;
-        OutputTabOperator oto;
         org.openide.nodes.Node nodeIDE;
         String color, cvsRoot;
-        
+               
         TestKit.deleteRecursively(cacheFolder);
         
-        //oo = OutputOperator.invoke();
-        oto = new OutputTabOperator(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
+        MessageHandler mh = new MessageHandler("Loading Annotation");
+        log.addHandler(mh);
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "show_annotation.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
@@ -208,11 +213,10 @@ public class ShowAnnotationsAndSearchHistoryTest extends JellyTestCase {
         
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", cvss.getCvsRoot() + "," + cvss2.getCvsRoot());
         Node nodeMain = new Node(new SourcePackagesNode("ForImport"), "forimport|Main.java");
-        oto = new OutputTabOperator(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
+        
         nodeMain.performPopupAction("CVS|Show Annotations");
-        Thread.sleep(1000);
-        oto.waitText("Loading Annotations finished");
+        new EventTool().waitNoEvent(1000);
+        TestKit.waitText(mh);
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", "");
         cvss.stop();
         cvss2.stop();
@@ -222,13 +226,14 @@ public class ShowAnnotationsAndSearchHistoryTest extends JellyTestCase {
         //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 18000);
         PseudoCvsServer cvss, cvss2;
         InputStream in, in2;
-        //OutputOperator oo;
-        OutputTabOperator oto;
+        
         org.openide.nodes.Node nodeIDE;
         String color, cvsRoot;
         TestKit.deleteRecursively(cacheFolder);
-        oto = new OutputTabOperator(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
+
+        MessageHandler mh = new MessageHandler("Searching History");
+        log.addHandler(mh);
+
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "search_history.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
@@ -236,10 +241,10 @@ public class ShowAnnotationsAndSearchHistoryTest extends JellyTestCase {
         Node nodeMain = new Node(new SourcePackagesNode("ForImport"), "forimport|Main.java");
         //nodeMain.performPopupAction("CVS|Search History...");
         SearchHistoryOperator sho = SearchHistoryOperator.invoke(nodeMain);
-        oto.waitText("Searching History finished");
-        Thread.sleep(1000);
+        TestKit.waitText(mh);
+        new EventTool().waitNoEvent(1000);
         cvss.stop();
-        oto.clear();
+        
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "search_history_1.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
@@ -248,8 +253,11 @@ public class ShowAnnotationsAndSearchHistoryTest extends JellyTestCase {
         sho.setFrom("1.1");
         sho.setTo("1.1");
         sho.btSearch().push();
-        oto.waitText("Searching History started");
-        Thread.sleep(1000);
+        mh = new MessageHandler("Searching History");
+        TestKit.removeHandlers(log);
+        log.addHandler(mh);
+
+        new EventTool().waitNoEvent(1000);
         cvss.stop();
         JListOperator list = sho.lstHistory();
         ListModel model = list.getModel();

@@ -51,28 +51,27 @@
 package org.netbeans.test.cvsmodule;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
-import junit.textui.TestRunner;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputOperator;
-import org.netbeans.jellytools.OutputTabOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.modules.javacvs.CVSRootStepOperator;
 import org.netbeans.jellytools.modules.javacvs.CheckoutWizardOperator;
 import org.netbeans.jellytools.modules.javacvs.ModuleToCheckoutStepOperator;
 import org.netbeans.jellytools.modules.javacvs.VersioningOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jemmy.JemmyProperties;
-import org.netbeans.jemmy.QueueTool;
-import org.netbeans.jemmy.TimeoutExpiredException;
+import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JProgressBarOperator;
 import org.netbeans.jemmy.operators.JTableOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.ide.ProjectSupport;
 
 /**
@@ -80,7 +79,7 @@ import org.netbeans.junit.ide.ProjectSupport;
  * @author novakm
  */
 public class VersioningButtonsTest extends JellyTestCase {
-    String os_name;
+    static String os_name;
     static String sessionCVSroot;
     final String projectName = "ForImport";
     final String pathToMain = "forimport|Main.java";
@@ -88,44 +87,56 @@ public class VersioningButtonsTest extends JellyTestCase {
     static File cacheFolder;
     Operator.DefaultStringComparator comOperator;
     Operator.DefaultStringComparator oldOperator;
+    static Logger log;
+
     /** Creates a new instance of VersioningButtonsTest */
     public VersioningButtonsTest(String name) {
         super(name);
-    }
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
+        if (os_name == null) {
+            os_name = System.getProperty("os.name");
+        }
+        try {
+            TestKit.extractProtocol(getDataDir());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
     
+    @Override
     protected void setUp() throws Exception {
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
-        System.out.println("### " + getName() + " ###");
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new VersioningButtonsTest("testCheckOutProject"));
-        suite.addTest(new VersioningButtonsTest("testVersioningButtons"));
-        //        suite.addTest(new VersioningButtonsTest("removeAllData"));
-        return suite;
-    }
-    public void testCheckOutProject() throws Exception {
-        long timeout = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
-        try {
-            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        } finally {
-            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", timeout);
-        }
         
-        timeout = JemmyProperties.getCurrentTimeout("DialogWaiter.WaitDialogTimeout");
-        try {
-            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);
-        } finally {
-            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", timeout);
+        System.out.println("### " + getName() + " ###");
+        if (log == null) {
+            log = Logger.getLogger("org.netbeans.modules.versioning.system.cvss.t9y");
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
         }
+    }    
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(VersioningButtonsTest.class).addTest(
+                     "testCheckOutProject",
+                     "testVersioningButtons",
+                     "removeAllData"
+                )
+                .enableModules(".*")
+                .clusters(".*")
+        );
+     }
+    
+    public void testCheckOutProject() throws Exception {
+        
+        MessageHandler mh = new MessageHandler("Checking out");
+        log.addHandler(mh);
+
         TestKit.closeProject(projectName);
-        new ProjectsTabOperator().tree().clearSelection();
+        TestKit.showStatusLabels();
+//
+        if ((os_name !=null) && (os_name.indexOf("Mac") > -1))
+            NewProjectWizardOperator.invoke().close();
+
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -143,7 +154,7 @@ public class VersioningButtonsTest extends JellyTestCase {
         crso.setCVSRoot(CVSroot);
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         crso.next();
-        
+
         //2nd step of CheckOutWizard
         File tmp = new File("/tmp"); // NOI18N
         File work = new File(tmp, "" + File.separator + System.currentTimeMillis());
@@ -153,7 +164,12 @@ public class VersioningButtonsTest extends JellyTestCase {
         tmp.deleteOnExit();
         ModuleToCheckoutStepOperator moduleCheck = new ModuleToCheckoutStepOperator();
         cvss.stop();
-        in.close();
+        try {
+            new EventTool().waitNoEvent(1000);
+            in.close();
+        } catch (IOException e) {
+            //
+        }
         moduleCheck.setModule("ForImport");
         moduleCheck.setLocalFolder(work.getAbsolutePath()); // NOI18N
         //Pseudo CVS server for finishing check out wizard
@@ -163,27 +179,20 @@ public class VersioningButtonsTest extends JellyTestCase {
         CVSroot = cvss.getCvsRoot();
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         cwo.finish();
-        OutputOperator oo = OutputOperator.invoke();
-        OutputTabOperator oto = oo.getOutputTab(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-        oto.waitText("Checking out finished");
+        TestKit.waitText(mh);
         cvss.stop();
-        in.close();
+
         NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
         JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
         open.push();
-        
+
         ProjectSupport.waitScanFinished();
-        TestKit.waitForQueueEmpty();
-        ProjectSupport.waitScanFinished();
-        
+
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", "");
     }
     
     public void testVersioningButtons() throws Exception {
         VersioningOperator vo;
-        //OutputOperator oo;
-        OutputTabOperator oto;
         InputStream in;
         PseudoCvsServer cvss;
         String CVSroot;
@@ -191,12 +200,11 @@ public class VersioningButtonsTest extends JellyTestCase {
         org.openide.nodes.Node nodeIDE;
         String color;
         
-        oto = new OutputTabOperator(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
+        MessageHandler mh = new MessageHandler("Refreshing");
+        log.addHandler(mh);
         
         //perform Show Changes action on Main.java file
         Node nodeMain = new Node(new SourcePackagesNode(projectName), pathToMain);
-        //oo = OutputOperator.invoke();
         //System.out.println(sessionCVSroot);
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "versioning/show_changes_main.in");
         cvss = new PseudoCvsServer(in);
@@ -204,22 +212,21 @@ public class VersioningButtonsTest extends JellyTestCase {
         CVSroot = cvss.getCvsRoot();
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         nodeMain.performPopupAction("CVS|Show Changes");
-        Thread.sleep(1000);
+        new EventTool().waitNoEvent(1000);
         vo = VersioningOperator.invoke();
         table = vo.tabFiles();
         //System.out.println(""+table);
-        oto.waitText("Refreshing CVS Status finished");
-        Thread.sleep(1000);
+        TestKit.waitText(mh);
+        new EventTool().waitNoEvent(3000);
         assertEquals("Table should be empty", 1, table.getRowCount());
         assertEquals("File should be [Remotely Modified]", "Remotely Modified", table.getValueAt(0, 1).toString());
         cvss.stop();
         //System.out.println("Show Changes is ok");
         
         //push refresh button
-        //oo = OutputOperator.invoke();
-        //oto = oo.getOutputTab(sessionCVSroot);
-        oto = new OutputTabOperator(sessionCVSroot);
-        oto.clear();
+        mh = new MessageHandler("Refreshing");
+        TestKit.removeHandlers(log);
+        log.addHandler(mh);
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "versioning/refresh_main.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
@@ -227,16 +234,17 @@ public class VersioningButtonsTest extends JellyTestCase {
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         //vo = VersioningOperator.invoke();
         vo.refresh();
-        oto.waitText("Refreshing CVS Status finished");
-        Thread.sleep(1000);
+        TestKit.waitText(mh);
+        new EventTool().waitNoEvent(3000);
         table = vo.tabFiles();
         assertEquals("Table should be empty", 0, table.getRowCount());
         cvss.stop();
         
         //push Update all
-        //oo = OutputOperator.invoke();
-        oto = new OutputTabOperator(sessionCVSroot);
-        oto.clear();
+        mh = new MessageHandler("Updating");
+        TestKit.removeHandlers(log);
+        log.addHandler(mh);
+
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "versioning/refresh_main.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
@@ -244,13 +252,13 @@ public class VersioningButtonsTest extends JellyTestCase {
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         //vo = VersioningOperator.invoke();
         vo.update();
-        oto.waitText("Updating Sources finished");
-        Thread.sleep(1000);
+        TestKit.waitText(mh);
+        new EventTool().waitNoEvent(2000);
         cvss.stop();
         
         //push commit button
         vo.commit();
-        Thread.sleep(1000);
+        new EventTool().waitNoEvent(2000);
         
         NbDialogOperator dialog = new NbDialogOperator("Comm");
         JButtonOperator btnOk = new JButtonOperator(dialog, "OK");
@@ -263,4 +271,5 @@ public class VersioningButtonsTest extends JellyTestCase {
         TestKit.closeProject(projectName);
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", "");
     }
+
 }
