@@ -77,7 +77,7 @@ public class ArchiverConfiguration implements AllOptionsProvider {
     }
     
     // MakeConfiguration
-    public void setMakeConfiguration(MakeConfiguration MakeConfiguration) {
+    public void setMakeConfiguration(MakeConfiguration makeConfiguration) {
         this.makeConfiguration = makeConfiguration;
     }
     public MakeConfiguration getMakeConfiguration() {
@@ -230,6 +230,15 @@ public class ArchiverConfiguration implements AllOptionsProvider {
         set4.setShortDescription(getString("ToolHint1"));
         set4.put(new StringNodeProp(getTool(), "Tool", getString("ToolTxt2"), getString("ToolHint2"))); // NOI18N
         sheet.put(set4);
+        
+        texts = new String[] {getString("AdditionalOptionsTxt1"), getString("AdditionalOptionsHint"), getString("AdditionalOptionsTxt2"), getString("AllOptionsTxt")};
+        set2 = new Sheet.Set();
+        set2.setName("CommandLine"); // NOI18N
+        set2.setDisplayName(getString("CommandLineTxt"));
+        set2.setShortDescription(getString("CommandLineHint"));
+        set2.put(new OptionsNodeProp(getCommandLineConfiguration(), null, this, null, null, texts));
+        sheet.put(set2);
+        
         return sheet;
     }
     
@@ -245,20 +254,6 @@ public class ArchiverConfiguration implements AllOptionsProvider {
         }
     }
     
-    public Sheet getCommandLineSheet() {
-        Sheet sheet = new Sheet();
-        String[] texts = new String[] {getString("AdditionalOptionsTxt1"), getString("AdditionalOptionsHint"), getString("AdditionalOptionsTxt2"), getString("AllOptionsTxt")};
-        
-        Sheet.Set set2 = new Sheet.Set();
-        set2.setName("CommandLine"); // NOI18N
-        set2.setDisplayName(getString("CommandLineTxt"));
-        set2.setShortDescription(getString("CommandLineHint"));
-        set2.put(new OptionsNodeProp(getCommandLineConfiguration(), null, this, null, null, texts));
-        sheet.put(set2);
-        
-        return sheet;
-    }
-    
     public String getOutputValue() {
         if (getOutput().getModified())
             return getOutput().getValue();
@@ -266,7 +261,7 @@ public class ArchiverConfiguration implements AllOptionsProvider {
             return getOutputDefault();
     }
     
-    private class OutputNodeProp extends StringNodeProp {
+    private static class OutputNodeProp extends StringNodeProp {
         public OutputNodeProp(StringConfiguration stringConfiguration, String def, String txt1, String txt2, String txt3) {
             super(stringConfiguration, def, txt1, txt2, txt3);
         }
@@ -285,7 +280,7 @@ public class ArchiverConfiguration implements AllOptionsProvider {
         String outputName = IpeUtils.getBaseName(getMakeConfiguration().getBaseDir()).toLowerCase();
         outputName = ConfigurationSupport.makeNameLegal(outputName);
         outputName = "lib" + outputName + ".a"; // NOI18N
-        return MakeConfiguration.DIST_FOLDER + "/" + getMakeConfiguration().getName() + "/" + getMakeConfiguration().getVariant() + "/" + outputName; // UNIX path // NOI18N
+        return MakeConfiguration.DIST_FOLDER + "/" + getMakeConfiguration().getName() + "/" + "${PLATFORM}" + "/" + outputName; // UNIX path // NOI18N
     }
     
     /*
