@@ -50,14 +50,14 @@ import org.netbeans.lib.profiler.results.BaseCallGraphBuilder;
 import org.netbeans.lib.profiler.results.RuntimeCCTNode;
 import org.netbeans.lib.profiler.results.cpu.cct.CPUCCTNodeFactory;
 import org.netbeans.lib.profiler.results.cpu.cct.RuntimeCPUCCTNodeVisitorAdaptor;
-import org.netbeans.lib.profiler.results.cpu.cct.nodes.CategoryCPUCCTNode;
+import org.netbeans.lib.profiler.results.cpu.cct.nodes.MarkedCPUCCTNode;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.MethodCPUCCTNode;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.RuntimeCPUCCTNode;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.ServletRequestCPUCCTNode;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.SimpleCPUCCTNode;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.ThreadCPUCCTNode;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.TimedCPUCCTNode;
-import org.netbeans.lib.profiler.results.cpu.marking.Mark;
+import org.netbeans.lib.profiler.marker.Mark;
 import org.netbeans.lib.profiler.results.cpu.marking.MarkingEngine;
 import java.util.ArrayList;
 import java.util.List;
@@ -69,6 +69,7 @@ import java.util.logging.Level;
  * @author Misha Dmitriev
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProviders({@org.openide.util.lookup.ServiceProvider(service=org.netbeans.lib.profiler.results.cpu.CPUCCTProvider.class), @org.openide.util.lookup.ServiceProvider(service=org.netbeans.lib.profiler.results.cpu.CPUProfilingResultListener.class)})
 public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProfilingResultListener, CPUCCTProvider {
     //~ Inner Classes ------------------------------------------------------------------------------------------------------------
 
@@ -104,7 +105,6 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
         TimedCPUCCTNode comboNodeDst;
         TimedCPUCCTNode comboNodeSrc;
         int totalNNodes; // total number of call tree nodes for this thread
-        long lastCallIndex = -1;
         long rootGrossTimeAbs;
         long rootGrossTimeThreadCPU; // Accumulated absolute and thread CPU gross time for the root method
                                      // - blackout data subtracted, calibration data not
@@ -336,7 +336,7 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
             buffer.append("threadId = ").append(node.getThreadId()); // NOI18N
         }
 
-        public void visit(CategoryCPUCCTNode node) {
+        public void visit(MarkedCPUCCTNode node) {
             buffer.append("Category ").append(node.getMark()); // NOI18N
         }
 
@@ -498,15 +498,24 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
             TimedCPUCCTNode oneMoreNode = ti.peek();
 
             // category must go with a method node; so close them together
-            if ((oneMoreNode != null)
-                    && (oneMoreNode instanceof CategoryCPUCCTNode || oneMoreNode instanceof ServletRequestCPUCCTNode)) {
+            if (oneMoreNode instanceof MarkedCPUCCTNode) {
                 //        oneMoreNode.addNCalls(oldNode.getNCalls());
                 //        oneMoreNode.addNetTime0(oldNode.getNetTime0());
                 //        oneMoreNode.addNetTime1(oldNode.getNetTime1());
                 //        oneMoreNode.addSleepTime0(oldNode.getSleepTime0());
                 //        oneMoreNode.addWaitTime0(oldNode.getWaitTime0());
                 ti.pop();
+                oneMoreNode = ti.peek();
             }
+            // Servelt node must go with a method node; so close them together
+            if (oneMoreNode instanceof ServletRequestCPUCCTNode) {
+                //        oneMoreNode.addNCalls(oldNode.getNCalls());
+                //        oneMoreNode.addNetTime0(oldNode.getNetTime0());
+                //        oneMoreNode.addNetTime1(oldNode.getNetTime1());
+                //        oneMoreNode.addSleepTime0(oldNode.getSleepTime0());
+                //        oneMoreNode.addWaitTime0(oldNode.getWaitTime0());
+                ti.pop();
+            }        
         }
 
         batchNotEmpty = true;
@@ -538,8 +547,17 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
             TimedCPUCCTNode oneMoreNode = ti.peek();
 
             // category must go with a method node; so close them together
-            if ((oneMoreNode != null)
-                    && (oneMoreNode instanceof CategoryCPUCCTNode || oneMoreNode instanceof ServletRequestCPUCCTNode)) {
+            if (oneMoreNode instanceof MarkedCPUCCTNode) {
+                //        oneMoreNode.addNCalls(oldNode.getNCalls());
+                //        oneMoreNode.addNetTime0(oldNode.getNetTime0());
+                //        oneMoreNode.addNetTime1(oldNode.getNetTime1());
+                //        oneMoreNode.addSleepTime0(oldNode.getSleepTime0());
+                //        oneMoreNode.addWaitTime0(oldNode.getWaitTime0());
+                ti.pop();
+                oneMoreNode = ti.peek();
+            }
+            // Servelt node must go with a method node; so close them together
+            if (oneMoreNode instanceof ServletRequestCPUCCTNode) {
                 //        oneMoreNode.addNCalls(oldNode.getNCalls());
                 //        oneMoreNode.addNetTime0(oldNode.getNetTime0());
                 //        oneMoreNode.addNetTime1(oldNode.getNetTime1());
@@ -1053,8 +1071,7 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
 
     private TimedCPUCCTNode markerMethodEntry(final int methodId, final ThreadInfo ti, long timeStamp0, long timeStamp1,
                                               boolean stamped) {
-        MarkingEngine engine = MarkingEngine.getDefault();
-        Mark mark = engine.getMarker().getMark(methodId, status);
+        Mark mark = MarkingEngine.getDefault().markMethod(methodId, status);
 
         if (LOGGER.isLoggable(Level.FINEST)) {
             LOGGER.finest("MarkerMEntry" + ((!stamped) ? "(unstamped)" : "") + " for tId = " + (int) ti.threadId // NOI18N
@@ -1072,7 +1089,7 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
             ti.push(rootNode);
             ti.totalNInv--;
 
-            if (!mark.isDefault) {
+            if (!mark.isDefault()) {
                 curNode = factory.createCategory(mark);
                 rootNode.attachNodeAsChild(curNode);
                 ti.totalNNodes++;
@@ -1117,9 +1134,9 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
 
             TimedCPUCCTNode calleeNode;
 
-            if (!mark.isDefault) {
+            if (!mark.isDefault()) {
                 // try to locate the category node; or create a new node for the category
-                calleeNode = CategoryCPUCCTNode.Locator.locate(mark, curNode.getChildren());
+                calleeNode = MarkedCPUCCTNode.Locator.locate(mark, curNode.getChildren());
 
                 if (calleeNode == null) {
                     calleeNode = factory.createCategory(mark);
@@ -1367,8 +1384,7 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
             );
         }
 
-        MarkingEngine engine = MarkingEngine.getDefault();
-        Mark mark = engine.getMarker().getMark(methodId, status);
+        Mark mark = MarkingEngine.getDefault().markMethod(methodId, status);
 
         TimedCPUCCTNode curNode = ti.peek();
 
@@ -1394,7 +1410,7 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
             ti.push(rootNode); // and place it on the stack
             ti.totalNInv--;
 
-            if (!mark.isDefault) {
+            if (!mark.isDefault()) {
                 curNode = factory.createCategory(mark);
                 rootNode.attachNodeAsChild(curNode);
                 ti.totalNNodes++;
@@ -1408,9 +1424,9 @@ public class CPUCallGraphBuilder extends BaseCallGraphBuilder implements CPUProf
         } else {
             TimedCPUCCTNode calleeNode;
 
-            if (!mark.isDefault) {
+            if (!mark.isDefault()) {
                 // try to locate the category node; or create a new node for the category
-                calleeNode = CategoryCPUCCTNode.Locator.locate(mark, curNode.getChildren());
+                calleeNode = MarkedCPUCCTNode.Locator.locate(mark, curNode.getChildren());
 
                 if (calleeNode == null) {
                     calleeNode = factory.createCategory(mark);
