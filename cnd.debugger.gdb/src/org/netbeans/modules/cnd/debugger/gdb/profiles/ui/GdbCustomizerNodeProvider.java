@@ -39,15 +39,53 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb.actions;
+package org.netbeans.modules.cnd.debugger.gdb.profiles.ui;
 
-import org.netbeans.modules.cnd.makeproject.api.CustomProjectActionHandler;
-import org.netbeans.modules.cnd.makeproject.api.CustomProjectActionHandlerProvider;
+import org.openide.util.NbBundle;
+import org.openide.nodes.Sheet;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ui.CustomizerNode;
+import org.netbeans.modules.cnd.makeproject.api.configurations.CustomizerNodeProvider;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
+import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
+import org.netbeans.modules.cnd.debugger.gdb.profiles.GdbProfile;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ui.PrioritizedCustomizerNode;
+import org.openide.util.HelpCtx;
 
-@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.makeproject.api.CustomProjectActionHandlerProvider.class)
-public class GdbActionHandlerProvider implements CustomProjectActionHandlerProvider {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.makeproject.api.configurations.CustomizerNodeProvider.class)
+public class GdbCustomizerNodeProvider implements CustomizerNodeProvider {
 
-    public CustomProjectActionHandler factoryCreate() {
-        return new GdbActionHandler();
+    public final static int GDB_PRIORITY = 200;
+
+    private CustomizerNode customizerNode = null;
+    
+    public CustomizerNode factoryCreate() {
+        if (customizerNode == null) {
+            customizerNode = new GdbCustomizerNode("Debug", NbBundle.getMessage(GdbCustomizerNodeProvider.class, "DebugDisplayName")); // NOI18N
+        }
+	return customizerNode;
+    }
+
+    static class GdbCustomizerNode extends CustomizerNode implements PrioritizedCustomizerNode {
+
+        public GdbCustomizerNode(String name, String displayName) {
+	    super(name, displayName, null);
+	}
+
+        @Override
+	public Sheet getSheet(Project project, ConfigurationDescriptor configurationDescriptor,
+		    Configuration configuration) {
+	    GdbProfile profile = (GdbProfile) configuration.getAuxObject(GdbProfile.GDB_PROFILE_ID);
+	    return profile == null ? null : profile.getSheet();
+	}
+        
+        @Override
+        public HelpCtx getHelpCtx() {
+            return new HelpCtx("ProjectPropsDebugging"); // NOI18N
+        }
+
+        public int getPriority() {
+            return GDB_PRIORITY;
+        }
     }
 }
