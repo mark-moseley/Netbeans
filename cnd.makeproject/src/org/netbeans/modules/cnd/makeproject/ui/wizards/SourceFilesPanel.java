@@ -88,8 +88,7 @@ public class SourceFilesPanel extends javax.swing.JPanel {
         filterComboBox.addItem(CSourceFileFilter.getInstance().getSuffixesAsString());
         filterComboBox.addItem(CCSourceFileFilter.getInstance().getSuffixesAsString());
         filterComboBox.addItem(HeaderSourceFileFilter.getInstance().getSuffixesAsString());
-        if (CppSettings.getDefault().isFortranEnabled())
-            filterComboBox.addItem(FortranSourceFileFilter.getInstance().getSuffixesAsString());
+        filterComboBox.addItem(FortranSourceFileFilter.getInstance().getSuffixesAsString());
         filterComboBox.addItem(ResourceFileFilter.getInstance().getSuffixesAsString());
         filterComboBox.addItem(AllSourceFileFilter.getInstance().getSuffixesAsString());
         filterComboBox.addItem(AllFileFilter.getInstance().getSuffixesAsString());
@@ -119,7 +118,7 @@ public class SourceFilesPanel extends javax.swing.JPanel {
         return data;
     }
     
-    private class CustomFileFilter extends SourceFileFilter {
+    private static class CustomFileFilter extends SourceFileFilter {
         String[] suffixes;
         CustomFileFilter(String suffixesString) {
             StringTokenizer st = new StringTokenizer(suffixesString);
@@ -172,8 +171,7 @@ public class SourceFilesPanel extends javax.swing.JPanel {
             // Left align table header
             ((DefaultTableCellRenderer)getTableHeader().getDefaultRenderer()).setHorizontalAlignment(SwingConstants.LEFT);
             getColumnModel().getColumn(0).setPreferredWidth(95);
-            getColumnModel().getColumn(0).setMaxWidth(95);
-            getColumnModel().getColumn(0).setResizable(false);
+            getColumnModel().getColumn(0).setMaxWidth(200);
             
             getSelectionModel().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             getSelectionModel().addListSelectionListener(new TargetSelectionListener());
