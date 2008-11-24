@@ -37,41 +37,56 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.parsing.impl;
+
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import javax.swing.text.Document;
+import javax.swing.text.JTextComponent;
+
+import org.netbeans.api.editor.EditorRegistry;
+import org.netbeans.modules.editor.NbEditorUtilities;
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.openide.filesystems.FileObject;
 
 
 /**
  *
- * @author hanz
+ * @author Jan Jancura
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
-
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+public abstract class CurrentEditorTaskScheduler extends Scheduler {
+    
+    private JTextComponent  currentEditor;
+    
+    public CurrentEditorTaskScheduler () {
+        currentEditor = EditorRegistry.focusedComponent ();
+        EditorRegistry.addPropertyChangeListener (new AListener ());
     }
-
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
-    @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+    
+    protected abstract void setEditor (JTextComponent editor);
+    
+    private class AListener implements PropertyChangeListener {
+    
+        public void propertyChange (PropertyChangeEvent evt) {
+            if (evt.getPropertyName () == null ||
+                evt.getPropertyName ().equals (EditorRegistry.FOCUSED_DOCUMENT_PROPERTY) ||
+                evt.getPropertyName ().equals (EditorRegistry.FOCUS_GAINED_PROPERTY)
+            ) {
+                JTextComponent editor = EditorRegistry.focusedComponent ();
+                if (editor == currentEditor) return;
+                currentEditor = editor;
+                Document document = editor.getDocument ();
+                FileObject fileObject = NbEditorUtilities.getFileObject (document);
+                if (fileObject == null) {
+                    System.out.println("no file object for " + document);
+                    return;
+                }
+                setEditor (currentEditor);
+            }
+            else if (evt.getPropertyName().equals(EditorRegistry.LAST_FOCUSED_REMOVED_PROPERTY)) {
+                currentEditor = null;
+                setEditor(null);
+            }
+        }
     }
 }
-
-
-

@@ -37,41 +37,27 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.parsing.impl;
+
+import java.util.Collection;
+import java.util.Collections;
+
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.openide.filesystems.FileObject;
 
 
 /**
- *
- * @author hanz
+ * This implementation of {@link Scheduler} schedules tasks when some
+ * file or document is chenged. This is helper class only, and it should
+ * be extended by some real implementation of {@link Scheduler}.
+ * 
+ * @author Jan Jancura
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
+public class FileObjectsTaskScheduler extends Scheduler {
 
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
-    }
-
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
-    @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+    
+    private Collection<FileObject> fileObjects = Collections.<FileObject>emptyList ();
+    
+    public void setFileObjects (Collection<FileObject> fileObject) {
     }
 }
-
-
-

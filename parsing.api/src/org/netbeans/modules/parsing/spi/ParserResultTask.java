@@ -31,7 +31,7 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+     * 
  * Contributor(s):
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
@@ -40,38 +40,31 @@
 package org.netbeans.modules.parsing.spi;
 
 
+
 /**
+ * SchedulerTask that process result of parsing. 
+ * {@link org.netbeans.modules.parsing.spi.Parser.Result} is created when 
+ * parser is finished.
  *
- * @author hanz
+ * @author Jan Jancura
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
+public abstract class ParserResultTask<T extends Parser.Result> extends SchedulerTask {
 
-    private final int             caretOffset;
-    private final int             markOffset;
+    /**
+     * Called when parser is finished.
+     * 
+     * @param result        A result of parsing.
+     */
+    public abstract void run (T result, SchedulerEvent event);
 
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
-    }
-
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
-    @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
-    }
+    /**
+     * A priority. Less number wins.
+     * 
+     * @return              Priority of this listener.
+     */
+    public abstract int getPriority ();
 }
+
 
 
 

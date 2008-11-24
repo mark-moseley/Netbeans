@@ -37,41 +37,79 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.api.languages;
 
+import java.util.List;
+import javax.swing.text.Document;
+import org.netbeans.api.languages.database.DatabaseContext;
+import org.netbeans.modules.languages.features.DatabaseManager;
+import org.netbeans.modules.languages.parser.SyntaxError;
+import org.netbeans.modules.parsing.api.Snapshot;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.parsing.spi.SchedulerEvent;
 
 /**
  *
  * @author hanz
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
+public class ParserResult extends Parser.Result {
 
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
+    
+    public static ParserResult create (
+        Snapshot            snapshot,
+        Document            document,
+        ASTNode             rootNode, 
+        List<SyntaxError>   syntaxErrors
     ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+        return new ParserResult (
+            snapshot,
+            document, 
+            rootNode, 
+            syntaxErrors
+        );
     }
 
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
+    private boolean         valid = true;
+    
     @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+    public void invalidate () {
+        valid = false;
+    }
+    
+    private Document        document;
+    private ASTNode         rootNode;
+    private List<SyntaxError> 
+                            syntaxErrors;
+
+    private ParserResult (
+        Snapshot            snapshot,
+        Document            document,
+        ASTNode             rootNode, 
+        List<SyntaxError>   syntaxErrors
+    ) {
+        super (snapshot);
+        this.document =     document;
+        this.rootNode =     rootNode;
+        this.syntaxErrors = syntaxErrors;
+    }
+
+    public ASTNode getRootNode () {
+        if (!valid) throw new IllegalStateException ();
+        return rootNode;
+    }
+
+    public List<SyntaxError> getSyntaxErrors () {
+        if (!valid) throw new IllegalStateException ();
+        return syntaxErrors;
+    }
+    
+    private DatabaseContext semanticRoot;
+    
+    public synchronized DatabaseContext getSemanticStructure () {
+        if (!valid) throw new IllegalStateException ();
+        if (semanticRoot == null) {
+            semanticRoot = DatabaseManager.parse (getRootNode (), document);
+        }
+        return semanticRoot;
     }
 }
-
-
-

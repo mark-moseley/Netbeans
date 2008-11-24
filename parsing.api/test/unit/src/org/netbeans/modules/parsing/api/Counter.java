@@ -36,40 +36,77 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.parsing.api;
 
-package org.netbeans.modules.parsing.spi;
+class Counter {
 
+    private int count = 1;
+    private int maxCount;
+    private String errorMessage = null;
 
-/**
- *
- * @author hanz
- */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
-
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+    public Counter (int maxCount) {
+        this.maxCount = maxCount;
+    }
+    
+    public void check (int c) {
+        check (c, false);
     }
 
-    public int getCaretOffset () {
-        return caretOffset;
+    public void wait (int c) {
+        check (c, true);
+    }
+    
+    public synchronized void check (final int c, final boolean wait) {
+        while (true) {
+            if (errorMessage != null) {
+                return;
+            }
+            if (c == maxCount) {
+                notifyAll ();
+                return;
+            }
+            if (wait && count < c)
+                try {
+                    wait ();
+                    continue;
+                } catch (InterruptedException ex) {
+                    ex.printStackTrace ();
+                }
+            if (c != count) {
+                errorMessage = "expected " + c + ", but was " + count;
+                notifyAll ();
+                return;
+            }
+            count ++;
+            notifyAll ();
+            return;
+        }
     }
 
-    public int getMarkOffset () {
-        return markOffset;
+    public synchronized void check (String expected, String current) {
+        if (errorMessage != null)
+            return;
+        if (!expected.equals (current)) {
+            errorMessage = "expected " + expected + ", but was " + current;
+            notify ();
+            return;
+        }
     }
 
-    @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+    public synchronized String errorMessage (boolean wait) throws InterruptedException {
+        while (true) {
+            if (errorMessage != null) 
+                return errorMessage;
+            if (count == maxCount) return null;
+            if (wait)
+                wait ();
+            else
+                return errorMessage;
+        }
+    }
+
+    public int count () {
+        return count;
     }
 }
 

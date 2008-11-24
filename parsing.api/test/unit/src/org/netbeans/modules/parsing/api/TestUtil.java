@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,47 +31,32 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+ *
  * Contributor(s):
- * 
+ *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.parsing.api;
 
+import org.netbeans.modules.parsing.impl.SourceAccessor;
+import org.netbeans.modules.parsing.impl.TaskProcessor;
 
 /**
  *
- * @author hanz
+ * @author Tomas Zezula
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
+public class TestUtil {
 
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+    public static int getReparseDelay () {
+        return TaskProcessor.reparseDelay;
     }
 
-    public int getCaretOffset () {
-        return caretOffset;
+    public static void setReparseDelay (final Source src, final int reparseDelay, final boolean reset) {
+        TaskProcessor.reparseDelay = reparseDelay;
+        if (reset) {
+            SourceAccessor.getINSTANCE().getEventSupport(src).resetState(true, -1, -1);
+        }
     }
 
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
-    @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
-    }
 }
-
-
-

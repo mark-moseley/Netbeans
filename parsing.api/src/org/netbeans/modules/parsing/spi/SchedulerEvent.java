@@ -39,37 +39,23 @@
 
 package org.netbeans.modules.parsing.spi;
 
+import java.util.EventObject;
 
 /**
  *
  * @author hanz
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
+public class SchedulerEvent extends EventObject {
 
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
+    protected SchedulerEvent (
+        Object              source
     ) {
         super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
-    }
-
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
     }
 
     @Override
     public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+        return "SchedulerEvent " + hashCode () + "(source: " + source + ")";
     }
 }
 

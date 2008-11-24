@@ -29,7 +29,7 @@
  * your version of this file under either the CDDL, the GPL Version 2 or
  * to extend the choice of license to its licensees as provided above.
  * However, if you add GPL Version 2 code and therefore, elected the GPL
- * Version 2 license, then the option applies only if the new code is
+ * Version 2 licenCurrentEditorTaskSchedulerse, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  * 
  * Contributor(s):
@@ -37,39 +37,61 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.parsing.impl;
+
+import java.util.Collections;
+import javax.swing.event.CaretEvent;
+import javax.swing.event.CaretListener;
+import javax.swing.text.Document;
+import javax.swing.text.JTextComponent;
+
+import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.spi.CursorMovedSchedulerEvent;
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.openide.util.lookup.ServiceProvider;
 
 
 /**
  *
- * @author hanz
+ * @author Jan Jancura
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
-
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+@ServiceProvider(service=Scheduler.class)
+public class CursorSensitiveScheduler extends CurrentEditorTaskScheduler {
+    
+    private JTextComponent  currentEditor;
+    private CaretListener   caretListener;
+    private Document        currentDocument;
+    
+    protected void setEditor (JTextComponent editor) {
+        if (currentEditor != null)
+            currentEditor.removeCaretListener (caretListener);
+        currentEditor = editor;
+        if (editor != null) {
+            if (caretListener == null)
+                caretListener = new ACaretListener ();
+            editor.addCaretListener (caretListener);
+            Document document = editor.getDocument ();
+            if (currentDocument == document) return;
+            currentDocument = document;
+            Source source = Source.create (currentDocument);
+            schedule (source, new CursorMovedSchedulerEvent (this, editor.getCaret ().getDot (), editor.getCaret ().getMark ()) {});
+        }
+        else {
+            currentDocument = null;
+            schedule(null, null);
+        }
     }
-
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
+    
     @Override
     public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+        return "CursorSensitiveScheduller";
+    }
+    
+    private class ACaretListener implements CaretListener {
+
+        public void caretUpdate (CaretEvent e) {
+            schedule (new CursorMovedSchedulerEvent (this, e.getDot (), e.getMark ()) {});
+        }
     }
 }
 

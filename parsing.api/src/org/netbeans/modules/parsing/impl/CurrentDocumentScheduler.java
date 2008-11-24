@@ -37,39 +37,49 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.parsing.impl;
+
+import javax.swing.text.Document;
+import javax.swing.text.JTextComponent;
+
+import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.netbeans.modules.parsing.spi.SchedulerEvent;
+import org.openide.util.lookup.ServiceProvider;
 
 
 /**
  *
- * @author hanz
+ * @author Jan Jancura
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
-
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+@ServiceProvider(service=Scheduler.class)
+public class CurrentDocumentScheduler extends CurrentEditorTaskScheduler {
+    
+    private Document        currentDocument;
+    private Source          source;
+    
+    protected void setEditor (JTextComponent editor) {
+        if (editor != null) {
+            Document document = editor.getDocument ();
+            if (currentDocument == document) return;
+            currentDocument = document;
+            source = Source.create (currentDocument);
+            schedule (source, new SchedulerEvent (this) {});
+        }
+        else {
+            currentDocument = null;
+            source = null;
+            //schedule (null, null);
+        }
     }
-
-    public int getCaretOffset () {
-        return caretOffset;
+    
+    void schedule (Source source) {
+        schedule (source, new SchedulerEvent (this) {});
     }
-
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
+    
     @Override
     public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+        return "CurrentDocumentScheduler";
     }
 }
 

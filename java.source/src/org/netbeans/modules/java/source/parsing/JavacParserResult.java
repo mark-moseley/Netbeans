@@ -37,41 +37,44 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.java.source.parsing;
 
+import org.netbeans.api.java.source.CompilationInfo;
+import org.netbeans.modules.java.source.JavaSourceAccessor;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.parsing.spi.SchedulerEvent;
 
 /**
  *
- * @author hanz
+ * @author Tomas Zezula
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
+public class JavacParserResult extends Parser.Result {
+    
+    private final CompilationInfo info;
 
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+    public JavacParserResult (final CompilationInfo info) {
+        super (
+            JavaSourceAccessor.getINSTANCE ().getCompilationInfoImpl (info).getSnapshot ()
+        );
+        assert info != null;
+        this.info = info;
     }
-
-    public int getCaretOffset () {
-        return caretOffset;
+        
+    private boolean supports (Class<? extends CompilationInfo> clazz) {
+        assert clazz != null;
+        return clazz.isInstance(info);
     }
-
-    public int getMarkOffset () {
-        return markOffset;
+    
+    public <T extends CompilationInfo> T get (final Class<T> clazz) {
+        if (supports(clazz)) {
+            return clazz.cast(info);
+        }
+        return null;
     }
 
     @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+    public void invalidate() {
+        JavaSourceAccessor.getINSTANCE().invalidate (info);
     }
+
 }
-
-
-

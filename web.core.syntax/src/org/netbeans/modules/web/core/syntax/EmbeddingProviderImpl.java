@@ -37,41 +37,71 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.web.core.syntax;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
+import org.netbeans.modules.parsing.api.Embedding;
+import org.netbeans.modules.parsing.api.Snapshot;
+import org.netbeans.modules.parsing.spi.EmbeddingProvider;
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.netbeans.modules.parsing.spi.SchedulerTask;
+import org.netbeans.modules.parsing.spi.TaskFactory;
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.openide.util.Exceptions;
 
 /**
  *
- * @author hanz
+ * @author Jan Lahoda
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
+public class EmbeddingProviderImpl extends EmbeddingProvider {
 
-    private final int             caretOffset;
-    private final int             markOffset;
+    @Override
+    public List<Embedding> getEmbeddings(Snapshot snapshot) {
+        //XXX: should not use the document, I guess:
+        Document doc = snapshot.getSource().getDocument();
 
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
-    }
+        if (doc == null) {
+            return Collections.emptyList();
+        }
 
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
+        SimplifiedJSPServlet gen = new SimplifiedJSPServlet(snapshot, doc);
+        
+        try {
+            gen.process();
+        } catch (BadLocationException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+        
+        Embedding e = gen.getVirtualClassBody();
+        
+        if (e != null) {
+            return Collections.singletonList(e);
+        } else {
+            return Collections.emptyList();
+        }
     }
 
     @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+    public int getPriority() {
+        return 100;
     }
+
+    @Override
+    public void cancel() {
+        //well...
+    }
+    
+    public static final class Factory extends TaskFactory {
+
+        @Override
+        public Collection<SchedulerTask> create(final Snapshot snapshot) {
+            return Collections.<SchedulerTask>singletonList(new EmbeddingProviderImpl());
+        }
+        
+    }
+
 }
-
-
-

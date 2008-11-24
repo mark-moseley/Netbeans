@@ -31,7 +31,7 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+     * 
  * Contributor(s):
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
@@ -39,39 +39,49 @@
 
 package org.netbeans.modules.parsing.spi;
 
+import java.util.List;
+import org.netbeans.modules.parsing.api.Embedding;
+import org.netbeans.modules.parsing.api.Snapshot;
+
 
 /**
+ * EmbeddingProvider returns sources for embedded languages ({@link Embedding}s)
+ * based on lexical analyse of current snapshot. Embedded
+ * source can consist from one or more blocks of original source and it can contain
+ * some generated parts that has no mirror in the original text. See 
+ * {@link Snapshot} class for more information how to create embedded source.
  *
- * @author hanz
+ * @author Jan Jancura
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
-
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+public abstract class EmbeddingProvider extends SchedulerTask {
+    
+    
+    /**
+     * Returns {@link Scheduler} class for this SchedulerTask. See
+     * {@link Scheduler} documentation for a list of default schedulers,
+     * or your your own implementation.
+     * 
+     * @return              {@link Scheduler} for this SchedulerTask.
+     */
+    public final Class<? extends Scheduler> getSchedulerClass () {
+        return null;
     }
 
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
-    @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
-    }
+    /**
+     * Returns list of {@link Embedding}s based on lexical analyse.
+     * 
+     * @param snapshot      A snapshot that should be scanned for embeddings.
+     * @return              List of {@link Embedding}s.
+     */
+    public abstract List<Embedding> getEmbeddings (Snapshot snapshot);
+    
+    /**
+     * Returns priority of this source provider.
+     * @return              priority of this source provider
+     */
+    public abstract int getPriority ();
 }
+
 
 
 

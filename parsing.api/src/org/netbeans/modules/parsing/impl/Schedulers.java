@@ -37,39 +37,32 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi;
+package org.netbeans.modules.parsing.impl;
+
+import java.util.Collection;
+
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.openide.util.Lookup;
 
 
 /**
  *
- * @author hanz
+ * @author Jan Jancura
  */
-public class CursorMovedSchedulerEvent extends SchedulerEvent {
+public class Schedulers {
 
-    private final int             caretOffset;
-    private final int             markOffset;
-
-    protected CursorMovedSchedulerEvent (
-        Object              source,
-        int                 _caretOffset,
-        int                 _markOffset
-    ) {
-        super (source);
-        caretOffset = _caretOffset;
-        markOffset = _markOffset;
+    private static Collection<? extends Scheduler> taskSchedulers;
+    
+    static void init () {
+        taskSchedulers = Lookup.getDefault ().lookupAll (Scheduler.class);
     }
 
-    public int getCaretOffset () {
-        return caretOffset;
-    }
-
-    public int getMarkOffset () {
-        return markOffset;
-    }
-
-    @Override
-    public String toString () {
-        return "CursorMovedSchedulerEvent " + hashCode () + "(source: " + source + ", cursor: " + caretOffset + ")";
+    /**
+     * For tests only.
+     */
+    static Collection<? extends Scheduler> getSchedulers () {
+        if (taskSchedulers == null) init();
+        return taskSchedulers;
     }
 }
 
