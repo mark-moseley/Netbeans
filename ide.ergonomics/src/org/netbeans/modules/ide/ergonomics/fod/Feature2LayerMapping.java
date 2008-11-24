@@ -37,7 +37,7 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.autoupdate.featureondemand;
+package org.netbeans.modules.ide.ergonomics.fod;
 
 import java.io.File;
 import java.io.IOException;
@@ -114,6 +114,16 @@ public class Feature2LayerMapping {
         return null;
     }
 
+    /** Used from tests */
+    public static synchronized void assignFeatureTypesLookup(Lookup lkp) {
+        boolean eaOn = false;
+        assert eaOn = true;
+        if (!eaOn) {
+            throw new IllegalStateException();
+        }
+        featureTypesLookup = lkp;
+    }
+
     private static Lookup featureTypesLookup;
     static synchronized Lookup featureTypesLookup() {
         if (featureTypesLookup != null) {
@@ -135,31 +145,9 @@ public class Feature2LayerMapping {
                 URL layer = Feature2LayerMapping.class.getResource(layerName);
                 URL bundle = Feature2LayerMapping.class.getResource(bundleName);
                 if (layer != null && bundle != null) {
+                    FeatureInfo info;
                     try {
-                        Properties p = new Properties();
-                        p.load(bundle.openStream());
-                        String cnbs = p.getProperty("cnbs");
-                        assert cnbs != null : "Error loading from " + bundle; // NOI18N
-                        TreeSet<String> s = new TreeSet<String>();
-                        s.addAll(Arrays.asList(cnbs.split(",")));
-                        FeatureInfo info = FeatureInfo.create(s, layer);
-
-                        final String prefix = "nbproject.";
-                        final String prefFile = "project.file.";
-                        for (String key : p.stringPropertyNames()) {
-                            if (key.startsWith(prefix)) {
-                                info.nbproject(
-                                    key.substring(prefix.length()),
-                                    p.getProperty(key)
-                                );
-                            }
-                            if (key.startsWith(prefFile)) {
-                                info.projectFile(
-                                    key.substring(prefFile.length()),
-                                    p.getProperty(key)
-                                );
-                            }
-                        }
+                        info = FeatureInfo.create(layer, bundle);
                         ic.add(info);
                     } catch (IOException ex) {
                         Exceptions.printStackTrace(ex);

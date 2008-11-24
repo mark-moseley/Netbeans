@@ -37,16 +37,19 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.autoupdate.featureondemand;
+package org.netbeans.modules.ide.ergonomics.fod;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
-import org.netbeans.modules.autoupdate.featureondemand.FeatureInfoAccessor.Internal;
+import java.util.TreeSet;
+import org.netbeans.modules.ide.ergonomics.fod.FeatureInfoAccessor.Internal;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 
@@ -56,9 +59,7 @@ import org.openide.util.Exceptions;
  * @author Jaroslav Tulach <jtulach@netbeans.org>, Jirka Rechtacek <jrechtacek@netbeans.org>
  */
 public final class FeatureInfo {
-    private final String codeName;
     private final URL delegateLayer;
-    private final String delegateFilePath;
     private final Internal internal = new Internal(this);
     private final Set<String> cnbs;
     final Map<String,String> nbproject = new HashMap<String,String>();
@@ -67,72 +68,46 @@ public final class FeatureInfo {
     private FeatureInfo(Set<String> cnbs, URL delegateLayer) {
         this.cnbs = cnbs;
         this.delegateLayer = delegateLayer;
-        this.codeName = null;
-        this.delegateFilePath = null;
     }
     
-    private FeatureInfo(String codeName, URL delegateLayer, String delegateFilePath) {
-        this.codeName = codeName;
-        this.delegateLayer = delegateLayer;
-        this.delegateFilePath = delegateFilePath;
-        this.cnbs = null;
-    }
-    
-    /** Creates new <em>Feature On Demand</em> descriptor. Whenever the module
-     * named <code>codeName</code> is not enabled, the system plugs in the
-     * {@link XMLFileSystem} specified by <code>delegateLayer</code> URL.
-     * Instances of the returned <code>FeatureInfo</code> need to be registered
-     * in {@link Lookups#forPath} at <code>FeaturesOnDemand</code> location:
-     * 
-     * <pre>
-&lt;folder name="FeaturesOnDemand"&gt;
-    &lt;file name="cnd.instance"&gt;
-        &lt;attr name="instanceCreate" methodvalue="org.netbeans.modules.autoupdate.featureondemand.api.FeatureInfo.create"/&gt;
-        &lt;attr name="codeName" stringvalue="org.openide.util.enum"/&gt;
-        &lt;attr name="delegateLayer" urlvalue="nbresloc:/org/netbeans/modules/autoupdate/featureondemand/api/FeatureInfoTest.xml"/&gt;
-    &lt;/file&gt;
-&lt;/folder&gt;
-     * </pre>
-     * 
-     * @param codeName name of module to check for
-     * @param delegateLayer layer file to enable when the module 
-     * @param delegateFilePath relative path to some important file in projectFile this module provides, file structure, or null
-     * @return feature info descriptor to be used by the infrastructure
-     */
-    public static FeatureInfo create(String codeName, URL delegateLayer, String delegateFilePath) {
-        return new FeatureInfo(codeName, delegateLayer, delegateFilePath);
-    }
 
-    public static FeatureInfo create(Set<String> cnbs, URL delegateLayer) {
-        return new FeatureInfo(cnbs, delegateLayer);
+    public static FeatureInfo create(URL delegateLayer, URL bundle) throws IOException {
+        Properties p = new Properties();
+        p.load(bundle.openStream());
+        String cnbs = p.getProperty("cnbs");
+        assert cnbs != null : "Error loading from " + bundle; // NOI18N
+        TreeSet<String> s = new TreeSet<String>();
+        s.addAll(Arrays.asList(cnbs.split(",")));
+
+        FeatureInfo info = new FeatureInfo(s, delegateLayer);
+        final String prefix = "nbproject.";
+        final String prefFile = "project.file.";
+        for (String key : p.stringPropertyNames()) {
+            if (key.startsWith(prefix)) {
+                info.nbproject(
+                    key.substring(prefix.length()),
+                    p.getProperty(key)
+                );
+            }
+            if (key.startsWith(prefFile)) {
+                info.projectFile(
+                    key.substring(prefFile.length()),
+                    p.getProperty(key)
+                );
+            }
+        }
+        return info;
     }
-    
-    static FeatureInfo create(FileObject fo) {
-        Object cnb = fo.getAttribute("codeName"); // NOI18N
-        Object layer = fo.getAttribute("delegateLayer"); // NOI18N
-        Object pfp = fo.getAttribute("delegateFilePath"); // NOI18N
-        return create((String)cnb, (URL)layer, (String)pfp);
-    }
-    
     static {
         FeatureInfoAccessor.DEFAULT = new FeatureInfoAccessor() {
             @Override
             public Set<String> getCodeName(FeatureInfo info) {
-                if (info.codeName != null) {
-                    return Collections.singleton(info.codeName);
-                } else {
-                    return info.cnbs;
-                }
+                return info.cnbs;
             }
 
             @Override
             public URL getDelegateLayer(FeatureInfo info) {
                 return info.delegateLayer;
-            }
-
-            @Override
-            public String getDelegateFilePath(FeatureInfo info) {
-                return info.delegateFilePath;
             }
 
             @Override

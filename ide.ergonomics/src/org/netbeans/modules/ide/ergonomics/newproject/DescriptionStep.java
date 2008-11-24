@@ -38,10 +38,10 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.autoupdate.featureondemand.ui;
+package org.netbeans.modules.ide.ergonomics.newproject;
 
-import org.netbeans.modules.autoupdate.featureondemand.FindComponentModules;
-import org.netbeans.modules.autoupdate.featureondemand.ModulesInstaller;
+import org.netbeans.modules.ide.ergonomics.fod.FindComponentModules;
+import org.netbeans.modules.ide.ergonomics.fod.ModulesInstaller;
 import java.awt.Component;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -60,8 +60,8 @@ import org.netbeans.api.autoupdate.UpdateElement;
 import org.netbeans.api.autoupdate.UpdateUnitProvider;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
-import org.netbeans.modules.autoupdate.featureondemand.FoDFileSystem;
-import org.netbeans.modules.autoupdate.featureondemand.Feature2LayerMapping;
+import org.netbeans.modules.ide.ergonomics.fod.FoDFileSystem;
+import org.netbeans.modules.ide.ergonomics.fod.Feature2LayerMapping;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.util.HelpCtx;

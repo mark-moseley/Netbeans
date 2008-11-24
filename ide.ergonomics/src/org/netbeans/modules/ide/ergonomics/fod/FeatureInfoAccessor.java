@@ -37,14 +37,13 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.autoupdate.featureondemand;
+package org.netbeans.modules.ide.ergonomics.fod;
 
 import java.beans.PropertyVetoException;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Set;
 import java.util.logging.Level;
-import org.netbeans.modules.autoupdate.featureondemand.FeatureInfo;
 import org.openide.filesystems.XMLFileSystem;
 import org.openide.modules.ModuleInfo;
 import org.openide.util.Exceptions;
@@ -64,7 +63,6 @@ public abstract class FeatureInfoAccessor {
     
     public abstract Set<String> getCodeName(FeatureInfo info);
     public abstract URL getDelegateLayer(FeatureInfo info);
-    public abstract String getDelegateFilePath(FeatureInfo info);
     
     public abstract Internal getInternal(FeatureInfo info);
 
