@@ -61,12 +61,19 @@ import org.netbeans.modules.gsf.api.annotations.NonNull;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.gsf.api.IncrementalEmbeddingModel;
+import org.netbeans.modules.gsf.api.IncrementalParser;
+import org.netbeans.modules.gsf.api.Parser;
 import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
 import org.netbeans.modules.gsfret.source.usages.ClassIndexManager;
 import org.netbeans.modules.gsfpath.spi.classpath.ClassPathFactory;
 import org.netbeans.modules.gsfpath.spi.classpath.ClassPathImplementation;
 import org.netbeans.modules.gsfpath.spi.classpath.PathResourceImplementation;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.Repository;
@@ -108,6 +115,9 @@ public class LanguageRegistry implements Iterable<Language> {
     private List<Language> languages;
     private Map<String,Language> mimeToLanguage;
     private Collection<? extends EmbeddingModel> embeddingModels;
+    /** Set of applicable langauges for each mimetype */
+    private Map<String,List<Language>> applicableLanguages = new HashMap<String,List<Language>>();
+    private Map<String,Boolean> possiblyIncremental = new HashMap<String,Boolean>();
 
     /**
      * Creates a new instance of LanguageRegistry
@@ -212,30 +222,66 @@ public class LanguageRegistry implements Iterable<Language> {
         
         return result.booleanValue();
     }
-    
+
     @NonNull
     public List<Language> getApplicableLanguages(String mimeType) {
-        // TODO - cache the answer since this is called a lot (for example during
-        // task list scanning)
-        Collection<? extends EmbeddingModel> models = getEmbeddingModels();
-        
-        List<Language> result = new ArrayList<Language>(5);
+        List<Language> result = applicableLanguages.get(mimeType);
+        if (result == null) {
+            result = new ArrayList<Language>(5);
 
-        final Language origLanguage = getLanguageByMimeType(mimeType);
-        if (origLanguage != null) {
-            result.add(origLanguage);
-        }
-        
-        for (EmbeddingModel model : models) {
-            if (model.getSourceMimeTypes().contains(mimeType)) {
-                Language language = getLanguageByMimeType(model.getTargetMimeType());
-                if (language != null && !result.contains(language)) {
-                    result.add(language);
+            // TODO - cache the answer since this is called a lot (for example during
+            // task list scanning)
+            Collection<? extends EmbeddingModel> models = getEmbeddingModels();
+
+            final Language origLanguage = getLanguageByMimeType(mimeType);
+            if (origLanguage != null) {
+                result.add(origLanguage);
+            }
+
+            for (EmbeddingModel model : models) {
+                if (model.getSourceMimeTypes().contains(mimeType)) {
+                    Language language = getLanguageByMimeType(model.getTargetMimeType());
+                    if (language != null && !result.contains(language)) {
+                        result.add(language);
+                    }
                 }
             }
+
+            applicableLanguages.put(mimeType, result);
         }
         
         return result;
+    }
+
+    /**
+     * Return true iff the given mime has incremental support, either as
+     * embedding models or parser
+     */
+    public boolean isIncremental(String mimeType) {
+        Boolean b = possiblyIncremental.get(mimeType);
+        if (b == null) {
+            List<Language> applicable = getApplicableLanguages(mimeType);
+
+            boolean incremental = false;
+            for (Language language : applicable) {
+                Parser parser = language.getParser(); // Todo - call createParserTask here?
+                if (parser instanceof IncrementalParser) {
+                    incremental = true;
+                }
+                if (!language.getMimeType().equals(mimeType)) {
+                    EmbeddingModel model = getEmbedding(language.getMimeType(), mimeType);
+                    if (model instanceof IncrementalEmbeddingModel) {
+                        incremental = true;
+                        break;
+                    }
+                }
+            }
+
+            b = incremental ? Boolean.TRUE : Boolean.FALSE;
+            possiblyIncremental.put(mimeType, b);
+        }
+
+        return b == Boolean.TRUE;
     }
     
     private ClassPath libraryPath;
@@ -406,19 +452,7 @@ public class LanguageRegistry implements Iterable<Language> {
 
     public Iterator<Language> iterator() {
         if (languages == null) {
-            return new Iterator<Language>() {
-
-                public boolean hasNext() {
-                    return false;
-                }
-
-                public Language next() {
-                    return null;
-                }
-
-                public void remove() {
-                }
-            };
+            return Collections.<Language>emptyList().iterator();
         } else {
             return languages.iterator();
         }
@@ -428,16 +462,23 @@ public class LanguageRegistry implements Iterable<Language> {
         if (languages == null) {
             // Temporary
             userdirCleanup();
+            reread(false);
+        }
+    }
 
-            readSfs();
-            
-            if (languages != null) {
-                mimeToLanguage = new HashMap<String,Language>(2*languages.size());
-                for (Language language : languages) {
-                    String mimeType = language.getMimeType();
-                    assert mimeType.equals(mimeType.toLowerCase()) : mimeType;
-                    mimeToLanguage.put( mimeType,language);
-                }
+
+    final void reread(boolean refreshExtensions) {
+        readSfs();
+        if (refreshExtensions) {
+            GsfDataLoader.getLoader(GsfDataLoader.class).initExtensions();
+        }
+        if (languages != null) {
+            mimeToLanguage = new HashMap<String,Language>(2*languages.size());
+            for (Language language : languages) {
+                String mimeType = language.getMimeType();
+                assert mimeType.equals(mimeType.toLowerCase()) : mimeType;
+                mimeToLanguage.put( mimeType,language);
+            }
 
                 // Ensure that we don't clobber databases (if in dev builds)
                 // When languages.ejs subclassed the JsLanguage config class,
@@ -471,10 +512,11 @@ public class LanguageRegistry implements Iterable<Language> {
 //                        }
 //                    }
 //                }
-            }
         }
     }
 
+    private ConfigListener listener;
+    private FileChangeListener weakListener;
     private void readSfs() {
         FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
         FileObject f = sfs.findResource(FOLDER);
@@ -483,12 +525,20 @@ public class LanguageRegistry implements Iterable<Language> {
             return;
         }
 
+        if (listener == null) {
+            listener = new ConfigListener();
+            weakListener = FileUtil.weakFileChangeListener(listener, f);
+            f.addFileChangeListener(weakListener);
+        }
+
         // Read languages
         FileObject[] children = f.getChildren();
-        languages = new ArrayList<Language>();
+        ArrayList<Language> tmpLanguages = new ArrayList<Language>();
 
         for (int i = 0; i < children.length; i++) {
             FileObject mimePrefixFile = children[i];
+            mimePrefixFile.removeFileChangeListener(weakListener);
+            mimePrefixFile.addFileChangeListener(weakListener);
 
             // Read languages
             FileObject[] innerChildren = mimePrefixFile.getChildren();
@@ -503,7 +553,7 @@ public class LanguageRegistry implements Iterable<Language> {
                 }
 
                 Language language = new Language(mime);
-                languages.add(language);
+                tmpLanguages.add(language);
 
                 Boolean useCustomEditorKit = (Boolean)mimeFile.getAttribute("useCustomEditorKit"); // NOI18N
                 if (useCustomEditorKit != null && useCustomEditorKit.booleanValue()) {
@@ -562,6 +612,7 @@ public class LanguageRegistry implements Iterable<Language> {
                 }
             }
         }
+        languages = tmpLanguages;
     }
 
     private void userdirCleanup() {
@@ -871,4 +922,32 @@ public class LanguageRegistry implements Iterable<Language> {
             Exceptions.printStackTrace(ioe);
         }
     }
+
+    private final class ConfigListener implements FileChangeListener {
+
+        public void fileFolderCreated(FileEvent fe) {
+            reread(true);
+        }
+
+        public void fileDataCreated(FileEvent fe) {
+            reread(true);
+        }
+
+        public void fileChanged(FileEvent fe) {
+            reread(true);
+        }
+
+        public void fileDeleted(FileEvent fe) {
+            reread(true);
+        }
+
+        public void fileRenamed(FileRenameEvent fe) {
+            reread(true);
+        }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) {
+            reread(true);
+        }
+    } // end of ConfigListener
+
 }

@@ -45,7 +45,7 @@ import java.text.DateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import org.netbeans.api.gsfpath.classpath.ClassPath;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
 
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
@@ -73,19 +73,22 @@ public class GsfDataLoader extends UniFileLoader {
     @Override
     protected void initialize() {
         super.initialize();
+        initExtensions();
+    }
 
-        ExtensionList list = getExtensions();
+    final void initExtensions() {
+        ExtensionList list = new ExtensionList();
 
         for (Language language : LanguageRegistry.getInstance()) {
-            list.addMimeType(language.getMimeType());
-
-            String[] extensions = language.getExtensions();
-
-            for (int i = 0; i < extensions.length; i++) {
-                assert extensions[i].charAt(0) != '.' : "Extensions should exclude the .";
-                list.addExtension(extensions[i]);
+            
+            if(language.useCustomEditorKit()) {
+                //do not try to load files which has their own editor support and dataobject
+                continue;
             }
+            
+            list.addMimeType(language.getMimeType());
         }
+        setExtensions(list);
 
         initialized = true;
     }
@@ -123,6 +126,9 @@ public class GsfDataLoader extends UniFileLoader {
                 String resourcePath = "";
                 if (cp != null) {
                     resourcePath = cp.getResourceName(target);
+                    if (resourcePath == null) {
+                        resourcePath = ""; // NOI18N
+                    }
                 } else {
                     ErrorManager.getDefault().log(ErrorManager.WARNING, "No classpath was found for folder: "+target);
                 }
@@ -178,6 +184,7 @@ public class GsfDataLoader extends UniFileLoader {
                 MapFormat f = new MapFormat(m);
                 f.setLeftBrace( "__" ); //NOI18N
                 f.setRightBrace( "__" ); //NOI18N
+                f.setExactMatch(false);
 
                 return f;
             }
