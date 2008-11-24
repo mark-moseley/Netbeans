@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
 import org.netbeans.modules.cnd.api.compilers.CompilerProvider;
@@ -52,8 +51,9 @@ import org.openide.util.NbBundle;
  *
  * @author gordonp
  */
+@org.openide.util.lookup.ServiceProvider(service = org.netbeans.modules.cnd.api.compilers.CompilerProvider.class)
 public class MakeProjectCompilerProvider extends CompilerProvider {
-    
+
     /**
      * Create a class derived from Tool
      *
@@ -61,29 +61,48 @@ public class MakeProjectCompilerProvider extends CompilerProvider {
      * this method. We can also add others, if desired. This was mainly a proof-of-concept that tool creation
      * could be deferred to makeproject.
      */
-    public Tool createCompiler(CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        if (flavor.isSunCompiler()) {
+    public Tool createCompiler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+        if (flavor.isSunStudioCompiler()) {
             if (kind == Tool.CCompiler) {
-                return new SunCCompiler(flavor, kind, name, displayName, path);
+                return new SunCCompiler(hkey, flavor, kind, name, displayName, path);
             } else if (kind == Tool.CCCompiler) {
-                return new SunCCCompiler(flavor, kind, name, displayName, path);
+                return new SunCCCompiler(hkey, flavor, kind, name, displayName, path);
             } else if (kind == Tool.FortranCompiler) {
-                return new SunFortranCompiler(flavor, kind, name, displayName, path);
+                return new SunFortranCompiler(hkey, flavor, kind, name, displayName, path);
+            } else if (kind == Tool.MakeTool) {
+                return new SunMaketool(hkey, flavor, name, displayName, path);
+            } else if (kind == Tool.DebuggerTool) {
+                return new SunDebuggerTool(hkey, flavor, name, displayName, path);
+            } else if (kind == Tool.Assembler) {
+                return new Assembler(hkey, flavor, kind, name, displayName, path);
             }
         } else /* if (flavor.isGnuCompiler()) */ { // Assume GNU (makeproject system doesn't handle Unknown)
-            if (kind == Tool.CCompiler) {
-                return new GNUCCompiler(flavor, kind, name, displayName, path);
-            } else if (kind == Tool.CCCompiler) {
-                return new GNUCCCompiler(flavor, kind, name, displayName, path);
+           if (kind == Tool.CCompiler) {
+               if ("MVC".equals(flavor.toString())) { // NOI18N
+                   return new MvcCompiler(hkey, flavor, kind, name, displayName, path);
+               } else {
+                   return new GNUCCompiler(hkey, flavor, kind, name, displayName, path);
+               }
+           } else if (kind == Tool.CCCompiler) {
+               if ("MVC".equals(flavor.toString())) { // NOI18N
+                   return new MvcCompiler(hkey, flavor, kind, name, displayName, path);
+               } else {
+                   return new GNUCCCompiler(hkey, flavor, kind, name, displayName, path);
+               }
             } else if (kind == Tool.FortranCompiler) {
-                return new GNUFortranCompiler(flavor, kind, name, displayName, path);
+                return new GNUFortranCompiler(hkey, flavor, kind, name, displayName, path);
+            } else if (kind == Tool.MakeTool) {
+                return new GNUMaketool(hkey, flavor, name, displayName, path);
+            } else if (kind == Tool.DebuggerTool) {
+                return new GNUDebuggerTool(hkey, flavor, name, displayName, path);
+            } else if (kind == Tool.Assembler) {
+                return new Assembler(hkey, flavor, kind, name, displayName, path);
             }
         }
         if (kind == Tool.CustomTool) {
-            return new CustomTool();
+            return new CustomTool(hkey);
         }
-        throw new IllegalArgumentException(NbBundle.getMessage(MakeProjectCompilerProvider.class, 
+        throw new IllegalArgumentException(NbBundle.getMessage(MakeProjectCompilerProvider.class,
                 "ERR_UnrecognizedCompilerType")); // NOI18N
     }
-    
 }
