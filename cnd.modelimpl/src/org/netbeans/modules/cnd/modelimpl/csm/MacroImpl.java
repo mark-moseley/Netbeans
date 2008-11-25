@@ -50,7 +50,9 @@ import java.util.Iterator;
 import java.util.List;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmMacro;
+import org.netbeans.modules.cnd.api.model.CsmMacroParameter;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
+import org.netbeans.modules.cnd.api.model.CsmParameterList;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.modelimpl.csm.core.OffsetableIdentifiableBase;
 import org.netbeans.modules.cnd.modelimpl.csm.core.Utils;
@@ -103,8 +105,8 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
         this(macroName, null, macroBody, unresolved, Utils.createOffsetable(unresolved, 0, 0), true);
     }
     
-    public static MacroImpl createSystemMacro(String macroName, String macroBody, CsmFile unresolved) {
-        return new MacroImpl(macroName, macroBody, unresolved);
+    public static SystemMacroImpl createSystemMacro(String macroName, String macroBody, CsmFile unresolved) {
+        return new SystemMacroImpl(macroName, macroBody, null, unresolved, false);
     }
     
     public MacroImpl(String macroName, List<String> macroParams, String macroBody, CsmFile containingFile, CsmOffsetable macroPos, boolean system) {
@@ -149,8 +151,8 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
         retValue.append(getName());
         if (getParameters() != null) {
             retValue.append("["); // NOI18N
-            for (Iterator it = getParameters().iterator(); it.hasNext();) {
-                String param = (String) it.next();
+            for (Iterator<? extends CharSequence> it = getParameters().iterator(); it.hasNext();) {
+                CharSequence param = it.next();
                 retValue.append(param);
                 if (it.hasNext()) {
                     retValue.append(", "); // NOI18N
@@ -170,7 +172,7 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
     
     public @Override boolean equals(Object obj) {
         boolean retValue;
-        if (obj == null || !(obj instanceof CsmMacro)) {
+        if (obj == null || !(obj instanceof MacroImpl)) {
             retValue = false;
         } else {
             MacroImpl other = (MacroImpl)obj;
@@ -217,5 +219,9 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
 
     protected CsmUID createUID() {
         return UIDUtilities.createMacroUID(this);
-    }    
+    }
+
+    public CsmParameterList<CsmParameterList, CsmMacroParameter> getParameterList() {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
 }
