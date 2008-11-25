@@ -45,6 +45,9 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.ResourceBundle;
 import org.netbeans.modules.cnd.api.utils.ElfExecutableFileFilter;
 import org.netbeans.modules.cnd.api.utils.FileChooser;
@@ -57,6 +60,7 @@ import org.netbeans.modules.cnd.api.utils.MacOSXDynamicLibraryFileFilter;
 import org.netbeans.modules.cnd.api.utils.MacOSXExecutableFileFilter;
 import org.netbeans.modules.cnd.api.utils.PeDynamicLibraryFileFilter;
 import org.netbeans.modules.cnd.api.utils.PeExecutableFileFilter;
+import org.netbeans.modules.cnd.api.utils.PeStaticLibraryFileFilter;
 import org.openide.explorer.propertysheet.ExPropertyEditor;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.nodes.Sheet;
@@ -81,7 +85,7 @@ public class MakefileConfiguration {
     }
     
     // MakeConfiguration
-    public void setMakeConfiguration(MakeConfiguration MakeConfiguration) {
+    public void setMakeConfiguration(MakeConfiguration makeConfiguration) {
         this.makeConfiguration = makeConfiguration;
     }
     public MakeConfiguration getMakeConfiguration() {
@@ -151,10 +155,23 @@ public class MakefileConfiguration {
     public String getAbsOutput() {
         if (getOutput().getValue().length() == 0)
             return ""; // NOI18N
-        else if (getOutput().getValue().length() > 0 && IpeUtils.isPathAbsolute(getOutput().getValue()))
+        else if (IpeUtils.isPathAbsolute(getOutput().getValue()))
             return getOutput().getValue();
-        else
-            return getMakeConfiguration().getBaseDir() + "/"  + getOutput().getValue(); // NOI18N
+        else {
+            // FIXME
+//            List<String> paths = new ArrayList<String>();
+//            paths.add(makeConfiguration.getBaseDir());
+//            paths.addAll(mcd.getSourceRoots());
+//
+//            for (String dir : paths) {
+//                dir = dir.replace("\\", "/");  // NOI18N
+//                String path = dir.replace("\\", "/") + '/' + getOutput().getValue();
+//                File file = new File(path);
+//                if (file.exists()) {
+//                    return path;
+//                }
+            return getMakeConfiguration().getBaseDir() + "/"  + getOutput().getValue();
+        }
     }
     
     // Clone and assign
@@ -347,7 +364,7 @@ public class MakefileConfiguration {
             
             if (Utilities.isWindows()) {
                 addChoosableFileFilter(PeExecutableFileFilter.getInstance());
-                addChoosableFileFilter(ElfStaticLibraryFileFilter.getInstance());
+                addChoosableFileFilter(PeStaticLibraryFileFilter.getInstance());
                 addChoosableFileFilter(PeDynamicLibraryFileFilter.getInstance());
             } else if (Utilities.getOperatingSystem() == Utilities.OS_MAC) {
                 addChoosableFileFilter(MacOSXExecutableFileFilter.getInstance());
