@@ -68,13 +68,11 @@ import java.util.List;
  * @author michaelnazarov@netbeans.org
  */
 
-public class Issue141992 extends cc
+public class Issue141855 extends cc
 {
-  static final String TEST_PHP_NAME = "PhpProject_cc_Issue141992";
+  static final String TEST_PHP_NAME = "PhpProject_cc_Issue141855";
 
-  static final int AAA_LIST_SIZE = 999;
-
-  public Issue141992( String arg0 )
+  public Issue141855( String arg0 )
   {
     super( arg0 );
   }
@@ -82,9 +80,9 @@ public class Issue141992 extends cc
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( Issue141992.class ).addTest(
+      NbModuleSuite.createConfiguration( Issue141855.class ).addTest(
           "CreateApplication",
-          "Issue141992"
+          "Issue141855"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -101,7 +99,7 @@ public class Issue141992 extends cc
     endTest( );
   }
 
-  public void Issue141992( ) throws Exception
+  public void Issue141855( ) throws Exception
   {
     startTest( );
 
@@ -109,38 +107,25 @@ public class Issue141992 extends cc
     EditorOperator eoPHP = new EditorOperator( "index.php" );
     Sleep( 1000 );
     // Locate comment
-    eoPHP.setCaretPosition( "// put your code here", false );
-
-    // Check constructor
-    String sCode = "";
-    for( int i = 1; i < 1000; i++ )
-    {
-      sCode = sCode + "\nclass a" + i + ( ( 1 == i ) ? "" : ( " extends a" + ( i - 1 ) ) ) + "\n{\npublic $a" + i + ";\n}";
-    }
-    eoPHP.insert( sCode );
-    Sleep( 20000 );
-    TypeCode( eoPHP, "\n$z = new a999;\n$z->" );
-
+    eoPHP.setCaretPosition( "?>", false );
+    // Add new line
+    eoPHP.insert( "\n" );
+    Sleep( 1000 );
+    // Press Ctrl+Space
+    eoPHP.typeKey( '<' );
+    Sleep( 1000 );
+    eoPHP.typeKey( '?' );
+    Sleep( 1000 );
+    eoPHP.typeKey( ' ', InputEvent.CTRL_MASK );
+    Sleep( 1000 );
     // Check code completion list
     CompletionInfo jCompl = GetCompletion( );
-    if( null == jCompl )
-      fail( "Unable to find completion list in any form." );
     //List list = jCompl.getCompletionItems( );
     // Magic CC number for complete list
-    if( AAA_LIST_SIZE != jCompl.size( ) )
-      fail( "Invalid CC list size: " + jCompl.size( ) + ", expected: " + AAA_LIST_SIZE );
+    if( COMPLETION_LIST_THRESHOLD > jCompl.listItems.size( ) )
+      fail( "Invalid CC list size: " + jCompl.listItems.size( ) + ", expected: " + COMPLETION_LIST_THRESHOLD );
 
-    jCompl.hideAll( );
-
-    // Remove added code
-    eoPHP.select( 10, eoPHP.getLineNumber( ) );
-    eoPHP.pressKey( KeyEvent.VK_DELETE );
-
-    // Strat new declaration
-    eoPHP.setCaretPosition( "// put your code here", false );
-    TypeCode( eoPHP, "\nclass a\n{\n" );
-    Sleep( 1000 );
-    TypeCode( eoPHP, "$" );
+    jCompl.listItself.hideAll( );
 
     endTest( );
   }

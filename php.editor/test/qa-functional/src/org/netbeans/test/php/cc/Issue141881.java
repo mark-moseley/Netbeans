@@ -68,13 +68,11 @@ import java.util.List;
  * @author michaelnazarov@netbeans.org
  */
 
-public class Issue141992 extends cc
+public class Issue141881 extends cc
 {
-  static final String TEST_PHP_NAME = "PhpProject_cc_Issue141992";
+  static final String TEST_PHP_NAME = "PhpProject_cc_Issue141881";
 
-  static final int AAA_LIST_SIZE = 999;
-
-  public Issue141992( String arg0 )
+  public Issue141881( String arg0 )
   {
     super( arg0 );
   }
@@ -82,9 +80,9 @@ public class Issue141992 extends cc
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( Issue141992.class ).addTest(
+      NbModuleSuite.createConfiguration( Issue141881.class ).addTest(
           "CreateApplication",
-          "Issue141992"
+          "Issue141881"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -101,7 +99,7 @@ public class Issue141992 extends cc
     endTest( );
   }
 
-  public void Issue141992( ) throws Exception
+  public void Issue141881( ) throws Exception
   {
     startTest( );
 
@@ -110,37 +108,31 @@ public class Issue141992 extends cc
     Sleep( 1000 );
     // Locate comment
     eoPHP.setCaretPosition( "// put your code here", false );
+    // Add new line
+    //eoPHP.insert( "\nclass a\n{\nfunction xx( )\n{\n}\n}\n$aa = new a;\n" );
+    //Sleep( 1000 );
 
     // Check constructor
-    String sCode = "";
-    for( int i = 1; i < 1000; i++ )
-    {
-      sCode = sCode + "\nclass a" + i + ( ( 1 == i ) ? "" : ( " extends a" + ( i - 1 ) ) ) + "\n{\npublic $a" + i + ";\n}";
-    }
-    eoPHP.insert( sCode );
-    Sleep( 20000 );
-    TypeCode( eoPHP, "\n$z = new a999;\n$z->" );
+    String sCode = "\nclass a\n{\nfunction xx( )\n{\n}\n}\n$aa = new a;\n$aa -";
+    TypeCode( eoPHP, sCode );
+    Sleep( 10000 );
+    eoPHP.typeKey( '>' );
 
     // Check code completion list
+
+    String[] asIdeals = { "xx" };
+
     CompletionInfo jCompl = GetCompletion( );
     if( null == jCompl )
-      fail( "Unable to find completion list in any form." );
+      fail( "Unale to find completion list in any form." );
     //List list = jCompl.getCompletionItems( );
     // Magic CC number for complete list
-    if( AAA_LIST_SIZE != jCompl.size( ) )
-      fail( "Invalid CC list size: " + jCompl.size( ) + ", expected: " + AAA_LIST_SIZE );
+    if( asIdeals.length != jCompl.size( ) )
+      fail( "Invalid CC list size: " + jCompl.size( ) + ", expected: " + asIdeals.length );
+    // Check each
+    CheckCompletionItems( jCompl, asIdeals );
 
     jCompl.hideAll( );
-
-    // Remove added code
-    eoPHP.select( 10, eoPHP.getLineNumber( ) );
-    eoPHP.pressKey( KeyEvent.VK_DELETE );
-
-    // Strat new declaration
-    eoPHP.setCaretPosition( "// put your code here", false );
-    TypeCode( eoPHP, "\nclass a\n{\n" );
-    Sleep( 1000 );
-    TypeCode( eoPHP, "$" );
 
     endTest( );
   }
