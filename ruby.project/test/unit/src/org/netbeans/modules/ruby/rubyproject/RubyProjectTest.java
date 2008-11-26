@@ -38,36 +38,49 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.ruby.rubyproject;
 
-package org.netbeans.modules.ruby.rubyproject.ui;
-
-import org.netbeans.api.project.Project;
-import org.netbeans.modules.ruby.rubyproject.RubyProject;
-import org.netbeans.modules.ruby.rubyproject.RubyProjectTestBase;
-import org.netbeans.spi.project.ui.LogicalViewProvider;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import org.netbeans.modules.ruby.rubyproject.rake.RakeSupport;
 import org.openide.filesystems.FileObject;
-import org.openide.nodes.FilterNode;
-import org.openide.nodes.Node;
+import org.openide.filesystems.FileUtil;
 
-public class RubyLogicalViewProviderTest extends RubyProjectTestBase {
+public class RubyProjectTest extends RubyProjectTestBase {
 
-    public RubyLogicalViewProviderTest(String testName) {
+    public RubyProjectTest(String testName) {
         super(testName);
     }
 
-    public void testFindPath() throws Exception {
-        RubyProject project = createTestProject("rubyprj", "README");
-        LogicalViewProvider lvp = project.getLookup().lookup(LogicalViewProvider.class);
-        assertNotNull("have a LogicalViewProvider", lvp);
-        Node root = new FilterNode(lvp.createLogicalView());
-        assertNotNull("found Rakefile", find(lvp, root, project, "Rakefile"));
-        assertNotNull("found README", find(lvp, root, project, "README"));
+    public void testRakeFileListener() throws Exception {
+        RubyProject project = createTestProject(true);
+        FileObject rakeFile = project.getRakeFile();
+        assertNotNull("has rake file", rakeFile);
+        int origSize;
+
+        // wait for asynchronously updated tasks from within ProjectOpenedHook.
+        // See RubyBaseProject#open.
+        while ((origSize = RakeSupport.getRakeTaskTree(project).size()) == 0) {
+            Thread.sleep(250);
+        }
+
+        appendToFile(rakeFile, "", "desc 'Says hey'", "task :hey");
+
+        // wait until Rakefile listener notifies the event and consecutive
+        // asynchronous Rake tasks refresh
+        while(RakeSupport.getRakeTaskTree(project).size() != (origSize + 1)) {
+            Thread.sleep(250);
+        }
     }
-    
-    private Node find(LogicalViewProvider lvp, Node root, Project project, String path) throws Exception {
-        FileObject f = project.getProjectDirectory().getFileObject(path);
-        assertNotNull("found " + path, f);
-        return lvp.findPath(root, f);
+
+    private void appendToFile(final FileObject file, final String... lines) throws IOException {
+        RandomAccessFile raf = new RandomAccessFile(FileUtil.toFile(file), "rw");
+        raf.seek(raf.length());
+        for (String line : lines) {
+            raf.writeBytes(line);
+            raf.writeByte('\n');
+        }
+        raf.close();
+        file.refresh();
     }
-    
 }

@@ -39,35 +39,41 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby.rubyproject.ui;
+package org.netbeans.modules.ruby.rubyproject;
 
-import org.netbeans.api.project.Project;
-import org.netbeans.modules.ruby.rubyproject.RubyProject;
-import org.netbeans.modules.ruby.rubyproject.RubyProjectTestBase;
-import org.netbeans.spi.project.ui.LogicalViewProvider;
+import java.util.Arrays;
+import org.netbeans.spi.project.ActionProvider;
+import org.netbeans.spi.project.support.ProjectOperations;
 import org.openide.filesystems.FileObject;
-import org.openide.nodes.FilterNode;
-import org.openide.nodes.Node;
 
-public class RubyLogicalViewProviderTest extends RubyProjectTestBase {
-
-    public RubyLogicalViewProviderTest(String testName) {
-        super(testName);
-    }
-
-    public void testFindPath() throws Exception {
-        RubyProject project = createTestProject("rubyprj", "README");
-        LogicalViewProvider lvp = project.getLookup().lookup(LogicalViewProvider.class);
-        assertNotNull("have a LogicalViewProvider", lvp);
-        Node root = new FilterNode(lvp.createLogicalView());
-        assertNotNull("found Rakefile", find(lvp, root, project, "Rakefile"));
-        assertNotNull("found README", find(lvp, root, project, "README"));
+public class RubyProjectOperationsTest extends RubyProjectTestBase {
+    
+    public RubyProjectOperationsTest(String name) {
+        super(name);
     }
     
-    private Node find(LogicalViewProvider lvp, Node root, Project project, String path) throws Exception {
-        FileObject f = project.getProjectDirectory().getFileObject(path);
-        assertNotNull("found " + path, f);
-        return lvp.findPath(root, f);
+    public void testDelete() throws Exception {
+        RubyProject project = createTestProject();
+        ActionProvider ap = project.getLookup().lookup(ActionProvider.class);
+        assertNotNull("have an action provider", ap);
+        assertTrue("delete action is enabled", ap.isActionEnabled(ActionProvider.COMMAND_DELETE, null));
+        
+        FileObject prjDir = project.getProjectDirectory();
+        
+        FileObject[] expectedMetadataFiles = {
+            prjDir.getFileObject("nbproject"),
+            prjDir.getFileObject("Rakefile"),
+            prjDir.getFileObject("README"),
+            prjDir.getFileObject("LICENSE"),
+        };
+        assertEquals("correct metadata files", Arrays.asList(expectedMetadataFiles), ProjectOperations.getMetadataFiles(project));
+        
+        FileObject[] expectedDataFiles = {
+            prjDir.getFileObject("lib"),
+            prjDir.getFileObject("test"),
+            prjDir.getFileObject("spec"),
+        };
+        assertEquals("correct data files", Arrays.asList(expectedDataFiles), ProjectOperations.getDataFiles(project));
     }
     
 }
