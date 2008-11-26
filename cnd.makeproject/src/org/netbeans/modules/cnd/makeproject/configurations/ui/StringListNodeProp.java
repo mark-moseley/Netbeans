@@ -44,29 +44,30 @@ import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
 import java.util.List;
 import java.util.ArrayList;
-import org.netbeans.api.project.Project;
-import org.netbeans.modules.cnd.makeproject.api.configurations.LibrariesConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.configurations.LibraryItem;
-import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.VectorConfiguration;
+import org.netbeans.modules.cnd.makeproject.ui.utils.StringListPanel;
 import org.openide.explorer.propertysheet.ExPropertyEditor;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.nodes.PropertySupport;
+import org.openide.util.HelpCtx;
 
-public class LibrariesNodeProp extends PropertySupport {
+public class StringListNodeProp extends PropertySupport {
 
-    private LibrariesConfiguration<LibraryItem> configuration;
-    Project project;
-    MakeConfiguration conf;
-    String baseDir;
-    String[] texts;
+    private VectorConfiguration<String> configuration;
+    private BooleanConfiguration inheritValues;
+    private String[] texts;
+    boolean addPathPanel;
+    private HelpCtx helpCtx;
 
-    public LibrariesNodeProp(LibrariesConfiguration<LibraryItem> configuration, Project project, MakeConfiguration conf, String baseDir, String[] texts) {
+    public StringListNodeProp(VectorConfiguration<String> configuration, BooleanConfiguration inheritValues, String[] texts, boolean addPathPanel, HelpCtx helpCtx) {
         super(texts[0], List.class, texts[1], texts[2], true, true);
         this.configuration = configuration;
-        this.project = project;
-        this.conf = conf;
-        this.baseDir = baseDir;
+        this.inheritValues = inheritValues;
         this.texts = texts;
+        this.addPathPanel = addPathPanel;
+        this.helpCtx = helpCtx;
     }
 
     @Override
@@ -104,9 +105,9 @@ public class LibrariesNodeProp extends PropertySupport {
 
     @Override
     public PropertyEditor getPropertyEditor() {
-        ArrayList<LibraryItem> clone = new ArrayList<LibraryItem>();
+        ArrayList<String> clone = new ArrayList<String>();
         clone.addAll(configuration.getValue());
-        return new DirectoriesEditor(clone);
+        return new StringEditor(clone);
     }
 
     @Override
@@ -118,35 +119,47 @@ public class LibrariesNodeProp extends PropertySupport {
         return super.getValue(attributeName);
     }
 
-    private class DirectoriesEditor extends PropertyEditorSupport implements ExPropertyEditor {
+    private class StringEditor extends PropertyEditorSupport implements ExPropertyEditor {
 
-        private List<LibraryItem> value;
+        private List<String> value;
         private PropertyEnv env;
 
-        public DirectoriesEditor(List<LibraryItem> value) {
+        public StringEditor(List<String> value) {
             this.value = value;
         }
 
-        public void setAsText(String text) {
-        }
-
+//        public void setAsText(String text) {
+//	    Vector newList = new Vector();
+//	    StringTokenizer st = new StringTokenizer(text, File.pathSeparator); // NOI18N
+//	    while (st.hasMoreTokens()) {
+//		newList.add(st.nextToken());
+//	    }
+//	    setValue(newList);
+//        }
+        @Override
         public String getAsText() {
             boolean addSep = false;
             StringBuilder ret = new StringBuilder();
             for (int i = 0; i < value.size(); i++) {
                 if (addSep) {
-                    ret.append(", "); // NOI18N
+                    ret.append(' ');
                 }
-                ret.append(value.get(i).toString());
+                ret.append(IpeUtils.quoteIfNecessary(value.get(i)));
                 addSep = true;
             }
             return ret.toString();
         }
 
+        @Override
         public java.awt.Component getCustomEditor() {
-            return new LibrariesPanel(project, conf, baseDir, value, this, env);
+            String text = null;
+            if (inheritValues != null) {
+                text = texts[3];
+            }
+            return new StringListPanel(value, addPathPanel, inheritValues, text, this, env, helpCtx);
         }
 
+        @Override
         public boolean supportsCustomEditor() {
             return true;
         }

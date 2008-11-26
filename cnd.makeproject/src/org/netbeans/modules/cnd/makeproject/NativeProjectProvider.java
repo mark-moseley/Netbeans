@@ -316,6 +316,7 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         }
     }
 
+    @SuppressWarnings("unchecked")
     private List<NativeProjectItemsListener> getListenersCopy() {
         synchronized (listeners) {
             return (listeners.size() == 0) ? Collections.EMPTY_LIST : new ArrayList<NativeProjectItemsListener>(listeners);
@@ -454,13 +455,13 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         boolean ccFiles = false;
         boolean libsChanged = false;
         boolean projectChanged = false;
-        VectorConfiguration cIncludeDirectories;
+        VectorConfiguration<String> cIncludeDirectories;
         BooleanConfiguration cInheritIncludes;
-        VectorConfiguration cPpreprocessorOption;
+        VectorConfiguration<String> cPpreprocessorOption;
         BooleanConfiguration cInheritMacros;
-        VectorConfiguration ccIncludeDirectories;
+        VectorConfiguration<String> ccIncludeDirectories;
         BooleanConfiguration ccInheritIncludes;
-        VectorConfiguration ccPreprocessorOption;
+        VectorConfiguration<String> ccPreprocessorOption;
         BooleanConfiguration ccInheritMacros;
         Item[] items;
 
