@@ -2,7 +2,7 @@
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -19,7 +19,7 @@
  * accompanied this code. If applicable, add the following below the
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
- * "Portions Copyrighted [year] [name of copyright owner]"
+ *			"Portions Copyrighted [year] [name of copyright owner]"
  *
  * Contributor(s):
  *
@@ -119,7 +119,6 @@ class Screen extends JComponent implements Accessible {
     public void setBounds(Rectangle r) {
 	super.setBounds(r);
     }
-
 
     /**
      * Allow Tab's to come through to us.
@@ -301,13 +300,15 @@ class Screen extends JComponent implements Accessible {
 
 	    switch (part) {
 		case CHARACTER:
-		    return new String(l.charArray(), b.col, 1);
+		    // return new String(l.charArray(), b.col, 1);
+            return String.valueOf(l.charAt(b.col));
 		case WORD:
 		    BExtent bword = term.buf.find_word(term.word_delineator, b);
 		    Extent word = bword.toExtent(term.firsta);
 		    return term.textWithin(word.begin, word.end);
 		case SENTENCE:
-		    return new String(l.charArray());
+		    // return new String(l.charArray());
+                    return l.toString();
 	    } 
 	    return null;
 	}
@@ -379,12 +380,12 @@ class Screen extends JComponent implements Accessible {
 
 	accessible_context.firePropertyChange(
 	    AccessibleContext.ACCESSIBLE_TEXT_PROPERTY, 
-	    null, new Integer(pos));
+	    null, Integer.valueOf(pos));
 	// sending null, pos is how JTextComponent does it.
 
 	accessible_context.firePropertyChange(
 	    AccessibleContext.ACCESSIBLE_CARET_PROPERTY, 
-	    new Integer(pos), new Integer(oldPos));
+	    Integer.valueOf(pos), Integer.valueOf(oldPos));
 
 	oldPos = pos;
     }

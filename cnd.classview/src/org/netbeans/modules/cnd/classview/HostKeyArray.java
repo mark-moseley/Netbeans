@@ -82,7 +82,8 @@ abstract public class HostKeyArray extends Children.Keys<PersistentKey> implemen
     private java.util.Map<PersistentKey,SortedName> myKeys ;
     private java.util.Map<PersistentKey,ChangeListener> myChanges;
     private boolean isInited = false;
-    
+    private boolean isDisposed = false;
+
     public HostKeyArray(ChildrenUpdater childrenUpdater, CsmProject project, PersistentKey id) {
         this.childrenUpdater = childrenUpdater;
         this.myProject = project;
@@ -95,6 +96,7 @@ abstract public class HostKeyArray extends Children.Keys<PersistentKey> implemen
     }
     
     protected void dispose(){
+        this.isDisposed = true;
         if (isInited) {
             isInited = false;
             myKeys.clear();
@@ -140,6 +142,8 @@ abstract public class HostKeyArray extends Children.Keys<PersistentKey> implemen
     
     protected SortedName getSortedName(CsmOffsetableDeclaration d){
         if( CsmKindUtilities.isClass(d) ) {
+            return new SortedName(1,d.getName(),0);
+        } else if( d.getKind() == CsmDeclaration.Kind.CLASS_FORWARD_DECLARATION ) {
             return new SortedName(1,d.getName(),0);
         } else if( d.getKind() == CsmDeclaration.Kind.ENUM ) {
             return new SortedName(1,d.getName(),1);
@@ -380,10 +384,11 @@ abstract public class HostKeyArray extends Children.Keys<PersistentKey> implemen
                 needUpdate = true;
             }
         }
-        for(PersistentKey key : members.keySet()){
-            if (myKeys.containsKey(key)){
+        for (java.util.Map.Entry<PersistentKey, SortedName> entry : members.entrySet()) {
+            PersistentKey key = entry.getKey();
+            if (myKeys.containsKey(key)) {
                 // update
-                myKeys.put(key,members.get(key));
+                myKeys.put(key, entry.getValue());
                 CsmOffsetableDeclaration what = findDeclaration(key);
                 if (what == null) {
                     // remove non-existent element
@@ -395,14 +400,14 @@ abstract public class HostKeyArray extends Children.Keys<PersistentKey> implemen
                     if (l != null) {
                         l.stateChanged(new ChangeEvent(what));
                     }
-                    if (CsmKindUtilities.isClassifier(what)||
-                            CsmKindUtilities.isEnum(what)){
+                    if (CsmKindUtilities.isClassifier(what) ||
+                            CsmKindUtilities.isEnum(what)) {
                         recursive.add(what);
                     }
                 }
             } else {
                 // new
-                myKeys.put(key,members.get(key));
+                myKeys.put(key, entry.getValue());
                 myChanges.remove(key);
                 needUpdate = true;
             }
@@ -495,7 +500,9 @@ abstract public class HostKeyArray extends Children.Keys<PersistentKey> implemen
     
     private void addNotify(boolean force) {
         synchronized (childrenUpdater.getLock(getProject())) {
-            if (isInited) return;
+            if (isInited || isDisposed) {
+                return;
+            }
             if (isNamespace() && !force){ //isGlobalNamespace()) {
                 myKeys = new HashMap<PersistentKey,SortedName>();
                 myKeys.put(PersistentKey.createKey(getProject()), new SortedName(0,"",0)); // NOI18N

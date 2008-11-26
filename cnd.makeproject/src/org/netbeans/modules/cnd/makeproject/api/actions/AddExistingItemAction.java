@@ -74,17 +74,18 @@ import org.openide.util.actions.NodeAction;
 public class AddExistingItemAction extends NodeAction {
 
     protected boolean enable(Node[] activatedNodes)  {
-	if (activatedNodes.length != 1)
-	    return false;
-        Object o = activatedNodes[0].getValue("Folder"); // NOI18N
-        if (!(o instanceof Folder))
+        if (activatedNodes.length != 1) {
             return false;
-	Folder folder = (Folder)o;
-	if (folder == null)
-	    return false;
-	if (!folder.isProjectFiles())
-	    return false;
-	return true;
+        }
+        Object o = activatedNodes[0].getValue("Folder"); // NOI18N
+        if (!(o instanceof Folder)) {
+            return false;
+        }
+        Folder folder = (Folder) o;
+        if (!folder.isProjectFiles()) {
+            return false;
+        }
+        return true;
     }
 
     public String getName() {
@@ -99,9 +100,12 @@ public class AddExistingItemAction extends NodeAction {
 	Folder folder = (Folder)n.getValue("Folder"); // NOI18N
 	assert folder != null;
 
-	ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider)project.getLookup().lookup(ConfigurationDescriptorProvider.class );
+	ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class );
 	ConfigurationDescriptor projectDescriptor = pdp.getConfigurationDescriptor();
 
+        if (!((MakeConfigurationDescriptor)projectDescriptor).okToChange()) {
+            return;
+        }
 	String seed = null;
 	if (FileChooser.getCurrectChooserFile() != null) {
 	    seed = FileChooser.getCurrectChooserFile().getPath();
