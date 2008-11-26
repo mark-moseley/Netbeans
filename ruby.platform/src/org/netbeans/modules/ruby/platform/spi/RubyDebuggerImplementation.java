@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,21 +41,51 @@
 
 package org.netbeans.modules.ruby.platform.spi;
 
-import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
+import org.netbeans.modules.ruby.platform.execution.RubyExecutionDescriptor;
 
 /**
  * Ability for Ruby project to debug Ruby scripts/applications.
  */
 public interface RubyDebuggerImplementation {
-    
+
+    /**
+     * Sets descriptor describing the process to be debugged.
+     *
+     * @param descriptor description of the process to be debugged
+     */
+    void describeProcess(final RubyExecutionDescriptor descriptor);
+
+    /**
+     * Checks whether the implementation is able to debug the {@link
+     * #describeProcess described process}. If not it might try to interact with
+     * the user to make the implementation ready for the process (i.e.
+     * installing additional gems). If still not ready, returns false.
+     * 
+     * @return whether the implementation is able to debug described process.
+     */
+    boolean prepare();
+
     /**
      * Starts debugging of the given script.
      * 
-     * @param descriptor description of the process to be debugged
      * @return debugger {@link java.lang.Process process}. Might be
      *         <tt>null</tt> if debugging cannot be started for some reason.
      *         E.g. interpreter cannot be obtained from preferences.
      */
-    Process debug(final ExecutionDescriptor descriptor);
-    
+    Process debug();
+
+    /**
+     * Attaches to the running debugger backend on the specified host and port.
+     * 
+     * @param host host to connect to
+     * @param port port to connect to
+     * @param timeout timeout until the attaching gives up
+     */
+    void attach(String host, int port, int timeout);
+
+    /**
+     * Action which shall be performed when a debugger is <em>forced</em> to
+     * stop, like pressing output window's <em>stop button</em>.
+     */
+    Runnable getFinishAction();
 }
