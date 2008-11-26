@@ -9,16 +9,17 @@
 
 package org.netbeans.test.subversion.main.checkout;
 
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jemmy.JemmyProperties;
+import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.ProxyConfigurationOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
+import org.netbeans.test.subversion.utils.TestKit;
 
 /**
  *
@@ -26,7 +27,6 @@ import org.netbeans.test.subversion.operators.RepositoryStepOperator;
  */
 public class ProxySettingsUITest extends JellyTestCase {
     
-    String os_name;
     Operator.DefaultStringComparator comOperator; 
     Operator.DefaultStringComparator oldOperator;
     
@@ -35,36 +35,26 @@ public class ProxySettingsUITest extends JellyTestCase {
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {        
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
         
     }
     
-    protected boolean isUnix() {
-        boolean unix = false;
-        if (os_name.indexOf("Windows") == -1) {
-            unix = true;
-        }
-        return unix;
-    }
-    
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new ProxySettingsUITest("testProxySettings"));
-        suite.addTest(new ProxySettingsUITest("testProxyBeforeUrl"));
-        return suite;
-    }    
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(ProxySettingsUITest.class).addTest(
+                    "testProxySettings",
+                    "testProxyBeforeUrl"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void testProxySettings() {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 3000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 3000);
+        if (TestKit.getOsName().indexOf("Mac") > -1)
+                new NewProjectWizardOperator().invoke().close();
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -87,8 +77,7 @@ public class ProxySettingsUITest extends JellyTestCase {
     }
     
     public void testProxyBeforeUrl() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 3000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 3000);
+        try {
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -102,7 +91,6 @@ public class ProxySettingsUITest extends JellyTestCase {
             co1so.invokeProxy();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
-            //e.printStackTrace();
         }
         assertNotNull(tee);     
         
@@ -112,7 +100,6 @@ public class ProxySettingsUITest extends JellyTestCase {
             co1so.invokeProxy();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
-            //e.printStackTrace();
         }
         assertNotNull(tee);     
         
@@ -122,7 +109,6 @@ public class ProxySettingsUITest extends JellyTestCase {
             co1so.invokeProxy();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
-            //e.printStackTrace();
         }
         assertNotNull(tee);     
         
@@ -132,9 +118,11 @@ public class ProxySettingsUITest extends JellyTestCase {
             co1so.invokeProxy();
         } catch (Exception e) {
             tee = (TimeoutExpiredException) e;
-            //e.printStackTrace();
         }
         assertNotNull(tee);     
         co.btCancel().pushNoBlock();
+        } catch (Exception e) {
+            throw new Exception("Test failed: " + e);
+        }
     }
 }
