@@ -49,6 +49,7 @@
 
 package org.netbeans.modules.cnd.dwarfdump.section;
 
+import java.io.ByteArrayOutputStream;
 import org.netbeans.modules.cnd.dwarfdump.dwarf.DwarfMacinfoTable;
 import org.netbeans.modules.cnd.dwarfdump.dwarf.DwarfMacinfoEntry;
 import org.netbeans.modules.cnd.dwarfdump.dwarfconsts.MACINFO;
@@ -70,7 +71,7 @@ public class DwarfMacroInfoSection extends ElfSection {
     }
     
     public DwarfMacinfoTable getMacinfoTable(long offset) {
-        Long lOffset = new Long(offset);
+        Long lOffset = Long.valueOf(offset);
         DwarfMacinfoTable table = macinfoTables.get(lOffset);
         
         if (table == null) {
@@ -153,5 +154,12 @@ public class DwarfMacroInfoSection extends ElfSection {
             macinfoTable.dump(out);
         }
     }    
-    
+
+    @Override
+    public String toString() {
+        ByteArrayOutputStream st = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(st);
+        dump(out);
+        return st.toString();
+    }
 }

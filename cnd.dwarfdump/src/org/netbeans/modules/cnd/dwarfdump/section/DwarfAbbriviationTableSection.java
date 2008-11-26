@@ -49,6 +49,7 @@
 
 package org.netbeans.modules.cnd.dwarfdump.section;
 
+import java.io.ByteArrayOutputStream;
 import org.netbeans.modules.cnd.dwarfdump.dwarf.DwarfAbbriviationTable;
 import org.netbeans.modules.cnd.dwarfdump.dwarf.DwarfAbbriviationTableEntry;
 import org.netbeans.modules.cnd.dwarfdump.reader.ElfReader;
@@ -78,8 +79,16 @@ public class DwarfAbbriviationTableSection extends ElfSection {
         }
     }
 
+    @Override
+    public String toString() {
+        ByteArrayOutputStream st = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(st);
+        dump(out);
+        return st.toString();
+    }
+
     public DwarfAbbriviationTable getAbbriviationTable(long offset) {
-        Long lOffset = new Long(offset);
+        Long lOffset = Long.valueOf(offset);
         DwarfAbbriviationTable table = tables.get(lOffset);
         
         if (table == null) {
