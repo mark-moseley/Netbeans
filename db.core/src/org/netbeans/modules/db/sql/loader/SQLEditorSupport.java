@@ -47,8 +47,9 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 import java.sql.Connection;
-import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JPanel;
@@ -61,7 +62,6 @@ import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.modules.db.api.sql.execute.SQLExecuteCookie;
 import org.netbeans.modules.db.api.sql.execute.SQLExecution;
 import org.netbeans.modules.db.core.SQLCoreUILogger;
-import org.netbeans.modules.db.sql.execute.ui.SQLResultPanelModel;
 import org.openide.awt.StatusDisplayer;
 import org.openide.cookies.EditCookie;
 import org.openide.cookies.EditorCookie;
@@ -75,9 +75,10 @@ import org.openide.util.Cancellable;
 import org.openide.util.MutexException;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.netbeans.modules.db.sql.execute.ui.SQLResultPanel;
 import org.netbeans.modules.db.sql.execute.SQLExecuteHelper;
+import org.netbeans.modules.db.sql.execute.SQLExecutionResult;
 import org.netbeans.modules.db.sql.execute.SQLExecutionResults;
+import org.openide.cookies.CloseCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.loaders.MultiDataObject;
 import org.openide.text.CloneableEditor;
@@ -94,7 +95,9 @@ import org.openide.windows.CloneableOpenSupport;
  *
  * @author Jesse Beaumont, Andrei Badea
  */
-public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, EditCookie, EditorCookie.Observable, PrintCookie, SQLExecuteCookie {
+public class SQLEditorSupport extends DataEditorSupport 
+        implements OpenCookie, EditCookie, EditorCookie.Observable, 
+        PrintCookie, SQLExecuteCookie, CloseCookie {
     
     private static final Logger LOGGER = Logger.getLogger(SQLEditorSupport.class.getName());
     private static final boolean LOG = LOGGER.isLoggable(Level.FINE);
@@ -107,9 +110,6 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
     
     // the RequestProcessor used for executing statements.
     private final RequestProcessor rp = new RequestProcessor("SQLExecution", 1, true); // NOI18N
-    
-    // the encoding of the current document
-    private String encoding;
     
     // the database connection to execute against
     private DatabaseConnection dbconn;
@@ -138,6 +138,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         setMIMEType(MIME_TYPE);
     }
     
+    @Override
     protected boolean notifyModified () {
         if (!super.notifyModified()) 
             return false;
@@ -155,6 +156,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         return true;
     }
 
+    @Override
     protected void notifyUnmodified () {
         super.notifyUnmodified();
 
@@ -167,6 +169,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         }
     }
     
+    @Override
     protected String messageToolTip() {
         if (isConsole()) {
             return getDataObject().getPrimaryFile().getName();
@@ -175,8 +178,9 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         }
     }
     
+    @Override
     protected String messageName() {
-        if (!getDataObject().isValid()) return ""; // NOI18N
+        if (!isValid()) return ""; // NOI18N
         
         if (isConsole()) {
             // just the name, no modified or r/o flags
@@ -186,8 +190,9 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         }
     }
     
+    @Override
     protected String messageHtmlName() {
-        if (!getDataObject().isValid()) return ""; // NOI18N
+        if (!isValid()) return ""; // NOI18N
         
         if (isConsole()) {
             // just the name, no modified or r/o flags
@@ -203,13 +208,14 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         }
     }
     
+    @Override
     protected void notifyClosed() {
         super.notifyClosed();
         
         closeExecutionResult();
         closeLogger();
         
-        if (isConsole() && getDataObject().isValid()) {
+        if (isConsole() && isValid()) {
             try {
                 getDataObject().delete();
             } catch (IOException e) {
@@ -218,6 +224,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         }
     }
     
+    @Override
     protected boolean canClose() {
         if (isConsole()) {
             return true;
@@ -230,10 +237,16 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         return ((SQLDataObject)getDataObject()).isConsole();
     }
     
+    boolean isValid() {
+        return getDataObject().isValid();
+    }
+    
+    @Override
     protected CloneableEditor createCloneableEditor() {
         return new SQLCloneableEditor(this);
     }
     
+    @Override
     protected Component wrapEditorComponent(Component editor) {
         JPanel container = new JPanel(new BorderLayout());
         container.setName(EDITOR_CONTAINER); // NOI18N
@@ -241,11 +254,13 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         return container;
     }
     
+    @Override
     public void open() {
         SQLCoreUILogger.logEditorOpened();
         super.open();
     }
     
+    @Override
     public void edit() {
         SQLCoreUILogger.logEditorOpened();
         super.edit();
@@ -286,7 +301,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
     
     /**
      * Executes either all or a part of the given sql string (which can contain
-     * zero or more SQL statements). If startOffset < endOffset, the part of
+     * zero or more SQL statements). If startOffset &lt; endOffset, the part of
      * sql specified is executed. If startOffset == endOffset, the statement
      * containing the character at startOffset, if any, is executed.
      *
@@ -294,14 +309,14 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
      * have to be delimited by \n.
      */
     void execute(String sql, int startOffset, int endOffset) {
-        DatabaseConnection dbconn;
+        DatabaseConnection dbConnection;
         synchronized (this) {
-            dbconn = this.dbconn;
+            dbConnection = this.dbconn;
         }
-        if (dbconn == null) {
+        if (dbConnection == null) {
             return;
         }
-        SQLExecutor executor = new SQLExecutor(this, dbconn, sql, startOffset, endOffset);
+        SQLExecutor executor = new SQLExecutor(this, dbConnection, sql, startOffset, endOffset);
         RequestProcessor.Task task = rp.create(executor);
         executor.setTask(task);
         task.schedule(0);
@@ -316,25 +331,26 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
         sqlPropChangeSupport.firePropertyChange(SQLExecution.PROP_EXECUTING, null, null);
     }
     
-    private void setResultModelToEditors(final SQLResultPanelModel model) {
-        Mutex.EVENT.writeAccess(new Runnable() {
+    private void setResultsToEditors(final SQLExecutionResults results) {
+       Mutex.EVENT.writeAccess(new Runnable() {
             public void run() {
+                List<Component> components = null;
+                
+                if (results != null) {
+                    components = new ArrayList<Component>();
+
+                    for (SQLExecutionResult result : results.getResults()) {
+                        for(Component component : result.getDataView().createComponents()){
+                            components.add(component);
+                        }
+                    }
+                }
+                
                 Enumeration editors = allEditors.getComponents();
                 while (editors.hasMoreElements()) {
                     SQLCloneableEditor editor = (SQLCloneableEditor)editors.nextElement();
-                    if (model == null && !editor.hasResultComponent()) {
-                        // if hasResultComponent() is false, setting a null model
-                        // would unnecessarily create the result component, so...
-                        continue;
-                    }
-                    
-                    SQLResultPanel resultComponent = editor.getResultComponent();
-                    
-                    // resultComponent will be null for a deserialized 
-                    // and not initialized CloneableEditor
-                    if (resultComponent != null) {
-                        resultComponent.setModel(model);
-                    }
+
+                    editor.setResults(components);
                 }
             }
         });
@@ -345,12 +361,11 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
     }
     
     private void closeExecutionResult() {
-        setResultModelToEditors(null);
+        setResultsToEditors(null);
         
         Runnable run = new Runnable() {
             public void run() {
                 if (executionResults != null) {
-                    executionResults.close();
                     executionResults = null;
                 }
             }
@@ -473,7 +488,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
                     parent.closeExecutionResult();
 
                     SQLExecutionLoggerImpl logger = parent.createLogger();
-                    SQLExecutionResults executionResults = SQLExecuteHelper.execute(sql, startOffset, endOffset, conn, handle, logger);
+                    SQLExecutionResults executionResults = SQLExecuteHelper.execute(sql, startOffset, endOffset, dbconn, logger);
                     handleExecutionResults(executionResults, logger);
                 } finally {
                     handle.finish();
@@ -489,46 +504,23 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
                 setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ExecutionCancelled"));
                 return;
             }
-            
+
             parent.setExecutionResults(executionResults);
-            
-            if (executionResults.hasExceptions()) {
-                // there was at least one exception
-                setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ExecutionFinishedWithErrors"));
-                // just that, the exceptions are in the Output window
-                return;
-            }
             
             if (executionResults.size() <= 0) {
                 // no results, but successfull
                 setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ExecutedSuccessfully"));
                 return;
             }
-            
-            SQLResultPanelModel model;
-            try {
-                model = SQLResultPanelModel.create(executionResults);
-            } catch (SQLException e) {
-                logger.logResultSetException(e);
-                setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ResultSetError"));
-                return;
-            } catch (IOException e) {
-                logger.logResultSetException(e);
-                setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ResultSetError"));
-                return;
+
+            parent.setResultsToEditors(executionResults);
+
+            if (executionResults.hasExceptions()) {
+                // there was at least one exception
+                setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ExecutionFinishedWithErrors"));
+            } else {
+                setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ExecutedSuccessfully"));
             }
-            
-            if (model == null) {
-                // execution cancelled
-                setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ExecutionCancelled"));
-                return;
-            } 
-                
-            if (!model.isEmpty()) {
-                parent.setResultModelToEditors(model);
-            }
-            
-            setStatusText(NbBundle.getMessage(SQLEditorSupport.class, "LBL_ExecutedSuccessfully"));
         }
         
         private void setStatusText(String statusText) {
@@ -566,6 +558,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
             return fileLock;
         }
 
+        @Override
         public void markModified() throws IOException {
             if (findSQLEditorSupport().isConsole()) {
                 modified = true;
@@ -574,6 +567,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
             }
         }
 
+        @Override
         public void unmarkModified() {
             if (findSQLEditorSupport().isConsole()) {
                 modified = false;
@@ -585,6 +579,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
             }
         }
 
+        @Override
         public boolean isModified() {
             if (findSQLEditorSupport().isConsole()) {
                 return modified;
@@ -593,6 +588,7 @@ public class SQLEditorSupport extends DataEditorSupport implements OpenCookie, E
             }
         }
 
+        @Override
         public CloneableOpenSupport findCloneableOpenSupport() {
             return findSQLEditorSupport();
         }
