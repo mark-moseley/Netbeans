@@ -134,6 +134,7 @@ public class JsParser implements IncrementalParser {
                 result = parseBuffer(context, Sanitize.NONE);
             } catch (IOException ioe) {
                 listener.exception(ioe);
+                result = createParseResult(file, null, null/*, null, null*/);
             }
 
             ParseEvent doneEvent = new ParseEvent(ParseEvent.Kind.PARSE, file, result);
@@ -259,9 +260,13 @@ public class JsParser implements IncrementalParser {
                                 removeChars = 1;
                             }
                         } else if (line.endsWith(",")) { // NOI18N                            removeChars = 1;
-                            removeChars = 1;
+                            if (!isLineEnd) {
+                                removeChars = 1;
+                            }
                         } else if (line.endsWith(", ")) { // NOI18N
-                            removeChars = 2;
+                            if (!isLineEnd) {
+                                removeChars = 2;
+                            }
                         } else if (line.endsWith(",)")) { // NOI18N
                             // Handle lone comma in parameter list - e.g.
                             // type "foo(a," -> you end up with "foo(a,|)" which doesn't parse - but
@@ -439,6 +444,10 @@ public class JsParser implements IncrementalParser {
                 return null;
             }
             if (context.source.charAt(newFunctionEnd-1) != '}') {
+                return null;
+            }
+
+            if (oldFunctionStart > newFunctionEnd) {
                 return null;
             }
 
@@ -877,10 +886,9 @@ public class JsParser implements IncrementalParser {
         final int targetVersion = SupportedBrowsers.getInstance().getLanguageVersion();
         compilerEnv.setLanguageVersion(targetVersion);
 
-        if (targetVersion >= org.mozilla.nb.javascript.Context.VERSION_1_7) {
-            // Let's try E4X... why not?
-            compilerEnv.setXmlAvailable(true);
-        }
+        boolean e4x = (targetVersion == org.mozilla.nb.javascript.Context.VERSION_DEFAULT) ||
+            (targetVersion >= org.mozilla.nb.javascript.Context.VERSION_1_7);
+        compilerEnv.setXmlAvailable(e4x);
         compilerEnv.setStrictMode(true);
         compilerEnv.setGeneratingSource(false);
         compilerEnv.setGenerateDebugInfo(false);
