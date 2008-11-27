@@ -45,6 +45,7 @@ import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.SourcePositions;
+import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
 import javax.lang.model.element.Element;
@@ -61,6 +62,7 @@ import org.netbeans.core.spi.multiview.MultiViewElement;
 import org.netbeans.core.spi.multiview.MultiViewElementCallback;
 import org.netbeans.core.spi.multiview.MultiViewFactory;
 import org.openide.awt.UndoRedo;
+import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
 import org.openide.text.CloneableEditor;
 import org.openide.text.DataEditorSupport;
@@ -136,6 +138,7 @@ public class SourceMultiViewElement extends CloneableEditor
             }
         };
         myLookup = Lookups.fixed(showCookie);
+        
     }
     
     public JComponent getToolbarRepresentation() {
@@ -153,10 +156,32 @@ public class SourceMultiViewElement extends CloneableEditor
         return this;
     }
     
+    @Override
+    public void updateName() {
+        super.updateName();
+        //update html displayname of the main multiview component
+        // fix bug 122727
+        updateMultiViewHtmlDisplayName();
+    }
     public void setMultiViewCallback(final MultiViewElementCallback callback) {
         multiViewCallback = callback;
+        //set html displayname of the main multiview component
+        updateMultiViewHtmlDisplayName();
     }
     
+    private void updateMultiViewHtmlDisplayName() {
+        if(multiViewCallback!=null) {
+            if (EventQueue.isDispatchThread()) {
+                multiViewCallback.getTopComponent().setHtmlDisplayName(getHtmlDisplayName());
+            } else {
+                EventQueue.invokeLater(new Runnable() {
+                    public void run() {
+                        multiViewCallback.getTopComponent().setHtmlDisplayName(getHtmlDisplayName());
+                    }
+                });
+            }
+        }
+    }
     @Override
     public void componentActivated() {
         super.componentActivated();
@@ -180,7 +205,12 @@ public class SourceMultiViewElement extends CloneableEditor
     @Override
     public void componentShowing() {
         super.componentShowing();
-        setActivatedNodes(new Node[] {getEditorSupport().getDataObject().getNodeDelegate()});
+        DataObject dobj = getEditorSupport().getDataObject();
+        if (dobj == null || !dobj.isValid()) {
+            setActivatedNodes(new Node[] {});
+        } else {
+            setActivatedNodes(new Node[] {getEditorSupport().getDataObject().getNodeDelegate()});
+        }
     }
     
     @Override
@@ -189,6 +219,7 @@ public class SourceMultiViewElement extends CloneableEditor
         setActivatedNodes(new Node[] {});
     }
     
+    @Override
     public void open() {
         if (multiViewCallback != null) {
             multiViewCallback.requestVisible();
