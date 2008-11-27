@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,41 +38,74 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-package org.netbeans.modules.ruby.platform.execution;
+package org.netbeans.modules.ruby.testrunner.ui;
 
 import java.io.File;
-import java.io.IOException;
-import org.netbeans.api.extexecution.print.LineConvertors;
+import java.util.logging.Logger;
+import org.netbeans.api.extexecution.print.LineConvertors.FileLocator;
+import org.netbeans.modules.ruby.platform.execution.ExecutionUtils;
+import org.netbeans.modules.ruby.platform.execution.OutputProcessor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.Exceptions;
+import org.openide.nodes.Node;
 
 /**
- * A FileLocator which searches for a file relative to a given directory.
  *
- * @author Tor Norbye
+ * @author Marian Petras, Erno Mononen
  */
-public class DirectoryFileLocator implements FileLocator, LineConvertors.FileLocator {
-    private FileObject root;
+final class OutputUtils {
 
-    public DirectoryFileLocator(FileObject root) {
-        this.root = root;
+    private static final Logger LOGGER = Logger.getLogger(OutputUtils.class.getName());
+    
+    private OutputUtils() {
     }
 
-    public FileObject find(String file) {
-        // This doesn't handle paths with "../"s etc,
-        // such as   "./script/../config/boot.rb"
-        // (which should be
-        try {
-            File f = new File(FileUtil.toFile(root), file);
-            if (f.exists()) {
-                f = f.getCanonicalFile();
-                return FileUtil.toFileObject(f);
+    /**
+     */
+    static void openCallstackFrame(Node node, String frameInfo, int line) {
+
+        Report report = getTestsuiteNode(node).getReport();
+        ExecutionUtils.FileLocation location = ExecutionUtils.getLocation(frameInfo);
+        if (location != null) {
+            FileObject fo = findFile(location.file, report.getFileLocator());
+            if (fo != null) {
+                if (line == -1) {
+                    line = location.line;
+                }
+                OutputProcessor.open(fo, line);
+                return;
             }
-        } catch (IOException ioe) {
-            Exceptions.printStackTrace(ioe);
         }
-        return root.getFileObject(file);
+
+        LOGGER.info("Could not open a file for " + frameInfo) ;
     }
+
+    static TestsuiteNode getTestsuiteNode(Node node) {
+        while (!(node instanceof TestsuiteNode)) {
+            node = node.getParentNode();
+        }
+        return (TestsuiteNode) node;
+    }
+
+    // TODO: copied from OutputUtils, should introduce this as a utility method
+    // in ruby.platform
+    static FileObject findFile(final String path, FileLocator fileLocator) {
+        if (fileLocator != null) {
+            FileObject fo = fileLocator.find(path);
+            if (fo != null) {
+                return fo;
+            }
+        }
+
+        // Perhaps it's an absolute path of some sort... try to resolve those
+        // Absolute path? Happens for stack traces in JRuby libraries and such
+        File file = new File(path);
+        if (file.isFile()) {
+            return FileUtil.toFileObject(FileUtil.normalizeFile(file));
+        } else {
+            LOGGER.warning("Cannot resolve file for \"" + path + "\" path.");
+            return null;
+        }
+    }
+
 }
