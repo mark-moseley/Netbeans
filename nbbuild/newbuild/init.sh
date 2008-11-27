@@ -19,11 +19,16 @@ if [ -z ${UPLOAD_JDK} ]; then
     export UPLOAD_JDK=0
 fi
 
-export ANT_OPTS="-Xmx512m"
+export ANT_OPTS="-Xmx512m -XX:MaxPermSize=256m"
 export JAVA_HOME=$JDK_HOME
 
 if [ -z ${DATESTAMP} ]; then
-    export DATESTAMP=`date -u +%Y%m%d%H%M`
+    if [ -z ${BUILD_ID} ]; then
+        export DATESTAMP=`date -u +%Y%m%d%H%M`
+    else
+        #Use BUILD_ID from hudson, remove all "-" and "_" and cut it to 12 chars
+        export DATESTAMP=`echo ${BUILD_ID} | sed -e "s/[-_]//g" | cut -c 1-12`
+    fi
 fi
 
 BUILDNUM=$BUILD_DESC-$DATESTAMP
@@ -46,7 +51,9 @@ if [ -z $DIST_SERVER_PATH ]; then
     DIST_SERVER_PATH=/releng/www/netbeans/6.0/nightly
 fi
 
-NB_ALL=$BASE_DIR/main
+if [ -z $NB_ALL ]; then
+    NB_ALL=$BASE_DIR/main
+fi
 
 DIST=$BASE_DIR/dist
 LOGS=$DIST/logs
@@ -67,5 +74,6 @@ RUBY_BUILD_LOG=$LOGS/$BASENAME-build-ruby.log
 NBMS_BUILD_LOC=$LOGS/$BASENAME-build-nbms.log
 SCP_LOG=$LOGS/$BASENAME-scp.log
 MAC_LOG=$LOGS/$BASENAME-native_mac.log
+MAC_LOG_NEW=$LOGS/$BASENAME-native_mac_new.log
 INSTALLER_LOG=$LOGS/$BASENAME-installers.log
 VISUALWEB_SANITY_LOG=$LOGS/$BASENAME-sanity-visualweb.log
