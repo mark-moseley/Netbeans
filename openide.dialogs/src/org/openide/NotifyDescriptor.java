@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,7 +43,6 @@ package org.openide;
 
 import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.lang.reflect.InvocationTargetException;
@@ -56,6 +55,7 @@ import javax.swing.JTextField;
 import javax.swing.UIManager;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
+import org.jdesktop.layout.GroupLayout;
 import org.openide.awt.Mnemonics;
 import org.openide.util.NbBundle;
 
@@ -105,6 +105,27 @@ public class NotifyDescriptor extends Object {
 
     /** Name of property for the OK button validation. */
     public static final String PROP_VALID = "valid"; // NOI18N
+
+    /** Name of property for the error message at the bottom of the wizard.
+     * To set such message use {@link #createNotificationLineSupport}
+     *
+     * @since 7.10
+     */
+    public static final String PROP_ERROR_NOTIFICATION = "errorNotification"; // NOI18N
+
+    /** Name of property for the error message at the bottom of the wizard.
+     * To set such message use {@link #createNotificationLineSupport}
+     *
+     * @since 7.10
+     */
+    public static final String PROP_WARNING_NOTIFICATION = "warningNotification"; // NOI18N
+
+    /** Name of property for the error message at the bottom of the wizard.
+     * To set such message use {@link #createNotificationLineSupport}
+     *
+     * @since 7.10
+     */
+    public static final String PROP_INFO_NOTIFICATION = "infoNotification"; // NOI18N
 
     //
     // Return values
@@ -193,6 +214,8 @@ public class NotifyDescriptor extends Object {
 
     /** Is OK button valid (enabled). */
     private boolean valid = true;
+
+    private NotificationLineSupport notificationLineSupport = null;
 
     /** The object specifying the detail object. */
 
@@ -462,7 +485,7 @@ public class NotifyDescriptor extends Object {
         getterCalled();
 
         if (options != null) {
-            return (Object[]) options.clone();
+            return options.clone ();
         }
 
         return options;
@@ -502,7 +525,7 @@ public class NotifyDescriptor extends Object {
         getterCalled();
 
         if (adOptions != null) {
-            return (Object[]) adOptions.clone();
+            return adOptions.clone ();
         }
 
         return null;
@@ -577,6 +600,62 @@ public class NotifyDescriptor extends Object {
         getterCalled();
 
         return title;
+    }
+
+    /** Create {@link NotificationLineSupport} if you want to notify users
+     * using info/warning/error messages in designed line at the bottom
+     * of your dialog. These message will be labelled with appropriate icons.
+     * <br>
+     * Note: Call this method <b>before</b> you call {@link DialogDisplayer#createDialog}
+     *
+     * @return NotificationLineSupport
+     * @since 7.10
+     */
+    public final NotificationLineSupport createNotificationLineSupport() {
+        notificationLineSupport = new NotificationLineSupport (this);
+        return notificationLineSupport;
+    }
+
+    /** Returns NotificationLineSupport if it was created or <code>null</code> if doesn't.
+     * <br>
+     * Note: NotificationLineSupport will not be created by default, API client
+     * has to create this support purposely with the exception {@link WizardDescriptor}
+     * which has such capability longer.
+     *
+     * @see #createNotificationLineSupport() 
+     * @return NotificationLineSupport or null if was not created yet
+     * @since 7.10
+     */
+    public final NotificationLineSupport getNotificationLineSupport() {
+        return notificationLineSupport;
+    }
+
+    void setInformationMessage (String msg) {
+        if (notificationLineSupport == null) {
+            throw new IllegalStateException ("NotificationLineSupport wasn't created yet.");
+        }
+        firePropertyChange (PROP_INFO_NOTIFICATION, null, msg);
+    }
+
+    void setWarningMessage (String msg) {
+        if (notificationLineSupport == null) {
+            throw new IllegalStateException ("NotificationLineSupport wasn't created yet.");
+        }
+        firePropertyChange (PROP_WARNING_NOTIFICATION, null, msg);
+    }
+
+    void setErrorMessage (String msg) {
+        if (notificationLineSupport == null) {
+            throw new IllegalStateException ("NotificationLineSupport wasn't created yet.");
+        }
+        firePropertyChange (PROP_ERROR_NOTIFICATION, null, msg);
+    }
+
+    void clearMessages () {
+        if (notificationLineSupport == null) {
+            throw new IllegalStateException ("NotificationLineSupport wasn't created yet.");
+        }
+        firePropertyChange (PROP_INFO_NOTIFICATION, null, null);
     }
 
     /**
@@ -902,21 +981,63 @@ public class NotifyDescriptor extends Object {
         * @return the component
         */
         protected Component createDesign(final String text) {
-            int index;
             JPanel panel = new JPanel();
 
             JLabel textLabel = new JLabel();
             Mnemonics.setLocalizedText(textLabel, text);
 
-            textLabel.setBorder(new EmptyBorder(0, 0, 0, 10));
-            panel.setLayout(new FlowLayout());
-            panel.setBorder(new EmptyBorder(11, 12, 1, 11));
+            boolean longText = text.length () > 80;
             textField = new JTextField(25);
-            panel.add(textLabel);
-            panel.add(textField);
             textLabel.setLabelFor(textField);
-            textField.setBorder(new CompoundBorder(textField.getBorder(), new EmptyBorder(2, 0, 2, 0)));
+            
             textField.requestFocus();
+            
+            GroupLayout layout = new GroupLayout(panel);
+            panel.setLayout(layout);
+            if (longText) {
+                layout.setHorizontalGroup(
+                    layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(layout.createSequentialGroup()
+                        .addContainerGap()
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(layout.createSequentialGroup()
+                                .add(textLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .add(32, 32, 32))
+                            .add(textField))
+                        .addContainerGap())
+                );
+            } else {
+                layout.setHorizontalGroup(
+                    layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(layout.createSequentialGroup()
+                        .addContainerGap()
+                        .add(textLabel)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(textField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 207, Short.MAX_VALUE)
+                        .addContainerGap())
+                );
+            }
+            if (longText) {
+                layout.setVerticalGroup(
+                    layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(layout.createSequentialGroup()
+                        .addContainerGap()
+                        .add(textLabel)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(textField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                );
+            } else {
+                layout.setVerticalGroup(
+                            layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(layout.createSequentialGroup()
+                                .addContainerGap()
+                                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                                    .add(textLabel)
+                                    .add(textField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        );
+            }
 
             javax.swing.KeyStroke enter = javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER, 0);
             javax.swing.text.Keymap map = textField.getKeymap();
