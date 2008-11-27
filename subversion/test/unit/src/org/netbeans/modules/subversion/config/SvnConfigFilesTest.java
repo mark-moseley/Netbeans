@@ -9,13 +9,21 @@ package org.netbeans.modules.subversion.config;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.ProxySelector;
 import java.util.prefs.Preferences;
 import java.util.regex.Pattern;
+import org.ini4j.Ini;
+import org.ini4j.Ini.Section;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.modules.subversion.SvnModuleConfig;
+import org.netbeans.modules.subversion.ui.repository.RepositoryConnection;
 import org.openide.util.NbPreferences;
 import org.tigris.subversion.svnclientadapter.SVNUrl;
 
@@ -91,10 +99,69 @@ public class SvnConfigFilesTest extends NbTestCase {
         System.setProperty("netbeans.t9y.svn.nb.config.path", "");
     }
 
-    public void testSubversionConfig() {
+    public void testSSL() throws MalformedURLException, IOException {
+        SVNUrl url = new SVNUrl("https://feher.lo.nem.lo.com/kuon");
+        RepositoryConnection rc = new RepositoryConnection(
+                url.toString(),
+                "usr", "psswd", null, false, "/cert/file", "pssphrs");
+
+        SvnModuleConfig.getDefault().insertRecentUrl(rc);
+        String path = "/tmp" + File.separator + "svn" + File.separator + "config" + System.currentTimeMillis();
+        System.setProperty("netbeans.t9y.svn.nb.config.path", path);
+        SvnConfigFiles scf = SvnConfigFiles.getInstance();
+        scf.storeSvnServersSettings(url);
+
+        File serversFile = new File(path + "/servers");
+        long lastMod = serversFile.lastModified();
+        Section s = getSection(serversFile);
+        assertNotNull(s);
+
+        // values were written
+        assertEquals("/cert/file", s.get("ssl-client-cert-file"));
+        assertEquals("pssphrs", s.get("ssl-client-cert-password"));
+
+        // nothing was changed ...
+        scf.storeSvnServersSettings(url);
+        // ... the file so also the file musn't change
+        assertEquals(lastMod, serversFile.lastModified());
+
+        // lets change the credentials ...
+        rc = new RepositoryConnection(
+                url.toString(),
+                "usr", "psswd", null, false, "/cert/file2", "pssphrs2");
+        SvnModuleConfig.getDefault().insertRecentUrl(rc);
+        scf.storeSvnServersSettings(url);
+        s = getSection(serversFile);
+        // values were written
+        assertNotNull(s);
+        assertNotSame(lastMod, serversFile.lastModified());
+        assertEquals("/cert/file2", s.get("ssl-client-cert-file"));
+        assertEquals("pssphrs2", s.get("ssl-client-cert-password"));
+
+        // lets test a new url
+        url = url.appendPath("whatever");
+        rc = new RepositoryConnection(
+                url.toString(),
+                "usr", "psswd", null, false, "/cert/file3", "pssphrs3");
+        SvnModuleConfig.getDefault().insertRecentUrl(rc);
+        lastMod = serversFile.lastModified();
+        scf.storeSvnServersSettings(url);
+        s = getSection(serversFile);
+        // values were written
+        assertNotNull(s);
+        assertNotSame(lastMod, serversFile.lastModified());
+        assertEquals("/cert/file3", s.get("ssl-client-cert-file"));
+        assertEquals("pssphrs3", s.get("ssl-client-cert-password"));
+    }
+
+    public void testSSH() throws MalformedURLException, IOException {
+        // TODO
+    }
+
+    public void testProxy() {
         String[] wordsActual = {""};
         String[] wordsExpected = {""};
-        String[] proxy = {"my.proxy", "my.proxy", "my.proxy", "", "", "my.proxy", "my.proxy", "my.proxy"};
+        String[] proxy = {"my.proxy", "my.proxy", "my.proxy", "", "", "my.proxy", "my.proxy", "my.proxy", null, null};
         int result = -1;
         
         //for (int i = 1; i < proxy.length + 1; i++) {
@@ -169,20 +236,35 @@ public class SvnConfigFilesTest extends NbTestCase {
         //tmp.deleteOnExit();
         System.setProperty("netbeans.t9y.svn.nb.config.path", svnNbPath);
 
-        //Proxy
-        setProxy(proxyHost, proxyPort);
-        Preferences pref = org.openide.util.NbPreferences.root().node("org/netbeans/core");
-        SvnConfigFiles scf = SvnConfigFiles.getInstance();
-        try {
+        //Proxy        
+        if(proxyHost == null) {
+            proxyPreferences.putInt("proxyType", 1);
+        } else {
+            setProxy(proxyHost, proxyPort);
             if (proxyHost.length() == 0 || proxyPort.length() == 0) {
                 proxyPreferences.putInt("proxyType", 0);
             } else {
                 proxyPreferences.putInt("proxyType", 2);
             }    
-            scf.setProxy(new SVNUrl("http://peterp.czech.sun.com/svn"));
+        }
+                
+        SvnConfigFiles scf = SvnConfigFiles.getInstance();
+        try {
+            scf.storeSvnServersSettings(new SVNUrl("http://peterp.czech.sun.com/svn"));
         } catch (MalformedURLException me) {
         }
 
+    }
+
+    private Section getSection(File serversFile) throws FileNotFoundException, IOException {
+        FileInputStream is = new FileInputStream(serversFile);
+        Ini ini = new Ini();
+        try {
+            ini.load(is);
+        } finally {
+            is.close();
+        }
+        return ini.get("global");
     }
 
     private void setProxy(String proxyHost, String proxyPort) {
@@ -230,5 +312,27 @@ public class SvnConfigFilesTest extends NbTestCase {
             System.out.println(string);
         }
         System.out.println("===");
+    }
+
+    public void testWinUserAppdata() throws NoSuchMethodException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+        SvnConfigFiles config = SvnConfigFiles.getInstance();;
+        Method m = config.getClass().getDeclaredMethod("getWinUserAppdata", new Class[]{String.class, String.class});
+        m.setAccessible(true);
+        
+        String ret = (String) m.invoke(config, new Object[] {"", ""});
+        assertEquals("", ret);
+
+        ret = (String) m.invoke(config, new Object[] {"c:\\dil\\dil", "c:\\foo\\bar"});
+        assertEquals("c:\\foo\\bar/dil", ret);
+
+        ret = (String) m.invoke(config, new Object[] {"c:\\dil\\dil", "c:\\foo\\bar\\"});
+        assertEquals("c:\\foo\\bar/dil", ret);
+
+        ret = (String) m.invoke(config, new Object[] {"c:\\dil\\dil", "c:\\foo\\bar"});
+        assertEquals("c:\\foo\\bar/dil", ret);
+
+        ret = (String) m.invoke(config, new Object[] {"c:\\dil\\dil\\", "c:\\foo\\bar\\"});
+        assertEquals("c:\\foo\\bar/dil", ret);
+
     }
 }
