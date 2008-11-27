@@ -38,76 +38,76 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
 import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.modules.cnd.api.compilers.CompilerSet;
-import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.makeproject.api.configurations.CompilerSet2Configuration;
 import org.openide.nodes.Node;
 
-public class CompilerSetNodeProp extends Node.Property {
+public class CompilerSetNodeProp extends Node.Property<String> {
+
     private CompilerSet2Configuration configuration;
     private boolean canWrite;
-    private String txt1;
+    //private String txt1;
     private String txt2;
     private String txt3;
     private String oldname;
 
     public CompilerSetNodeProp(CompilerSet2Configuration configuration, boolean canWrite, String txt1, String txt2, String txt3) {
-        super(Integer.class);
+        super(String.class);
         this.configuration = configuration;
-	this.canWrite = canWrite;
-	this.txt1 = txt1;
-	this.txt2 = txt2;
-	this.txt3 = txt3;
+        this.canWrite = canWrite;
+        //this.txt1 = txt1;
+        this.txt2 = txt2;
+        this.txt3 = txt3;
         oldname = configuration.getOption();
+        configuration.setCompilerSetNodeProp(this);
     }
-    
+
     public String getOldname() {
         return oldname;
     }
 
     @Override
     public String getName() {
-	return txt2;
+        return txt2;
     }
 
     @Override
     public String getShortDescription() {
-	return txt3;
+        return txt3;
     }
-    
+
     @Override
     public String getHtmlDisplayName() {
-        if (configuration.getCompilerSetName().getModified())
-            return "<b>" + getDisplayName(); // NOI18N
-        else
+        if (configuration.getCompilerSetName().getModified()) {
+            return configuration.isDevHostOnline() ? "<b>" + getDisplayName() : getDisplayName(); // NOI18N
+        } else {
             return null;
+        }
     }
-    
-    public Object getValue() {
+
+    public String getValue() {
         return configuration.getCompilerSetName().getValue();
     }
-    
-    public void setValue(Object v) {
-        configuration.setValue((String)v);
-}
-    
+
+    public void setValue(String v) {
+        configuration.setValue(v);
+    }
+
     @Override
     public void restoreDefaultValue() {
         configuration.getCompilerSetName().reset();
     }
-    
+
     @Override
     public boolean supportsDefaultValue() {
         return true;
     }
-    
+
     @Override
     public boolean isDefaultValue() {
         return !configuration.getCompilerSetName().getModified();
@@ -116,54 +116,54 @@ public class CompilerSetNodeProp extends Node.Property {
     public boolean canWrite() {
         return canWrite;
     }
-    
+
     public boolean canRead() {
         return true;
     }
 
-    @Override
-    public PropertyEditor getPropertyEditor() {
-	return new IntEditor();
+    public void repaint() {
+        ((CompilerSetEditor) getPropertyEditor()).repaint();
     }
 
-    private class IntEditor extends PropertyEditorSupport {
+    @Override
+    public PropertyEditor getPropertyEditor() {
+        return new CompilerSetEditor();
+    }
+
+    private class CompilerSetEditor extends PropertyEditorSupport {
+
         @Override
         public String getJavaInitializationString() {
             return getAsText();
         }
-        
+
         @Override
         public String getAsText() {
             String displayName = configuration.getDisplayName(true);
             return displayName;
         }
-        
+
         @Override
         public void setAsText(String text) throws java.lang.IllegalArgumentException {
-            CompilerSet compilerSet = CompilerSetManager.getDefault().getCompilerSetByDisplayName(text);
-            if (compilerSet != null) {
-                configuration.setCachedDisplayName(text);
-            }
-            else {
-                configuration.setCachedDisplayName(null);
-                compilerSet = CompilerSetManager.getDefault().getCompilerSet(text);
-            }
-            if (compilerSet != null) {
-                setValue(compilerSet.getName());
-            }
-            else {
-                setValue(text);
-            }
+            super.setValue(text);
         }
-        
+
         @Override
         public String[] getTags() {
             List<String> list = new ArrayList<String>();
-            if (CompilerSetManager.getDefault().getCompilerSet(getOldname()) == null) {
-                list.add(getOldname());
+            // TODO: this works unpredictable on switching development hosts
+            // TODO: should be resolved later on
+//            if (configuration.getCompilerSetManager().getCompilerSet(getOldname()) == null) {
+//                list.add(getOldname());
+//            }
+            if (configuration.isDevHostOnline()) {
+                list.addAll(configuration.getCompilerSetManager().getCompilerSetNames());
             }
-            list.addAll(CompilerSetManager.getDefault().getCompilerSetDisplayNames());
-            return (String[]) list.toArray(new String[list.size()]);
+            return list.toArray(new String[list.size()]);
+        }
+
+        public void repaint() {
+            firePropertyChange();
         }
     }
 }
