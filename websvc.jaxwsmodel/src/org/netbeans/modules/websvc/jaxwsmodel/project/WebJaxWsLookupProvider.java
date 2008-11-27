@@ -46,6 +46,8 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntBuildExtender;
@@ -64,12 +66,14 @@ import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Lookup;
+import org.openide.util.MutexException;
 import org.openide.util.lookup.Lookups;
 
 /**
  *
  * @author mkuchtiak
  */
+@LookupProvider.Registration(projectType="org-netbeans-modules-web-project")
 public class WebJaxWsLookupProvider implements LookupProvider {
     
     private String JAX_WS_XML_RESOURCE="/org/netbeans/modules/websvc/jaxwsmodel/resources/jax-ws.xml"; //NOI18N
@@ -86,7 +90,7 @@ public class WebJaxWsLookupProvider implements LookupProvider {
         final JaxWsModel jaxWsModel = getJaxWsModel(prj);
         ProjectOpenedHook openhook = new ProjectOpenedHook() {
             private FileChangeListener jaxWsListener;
-            private FileChangeListener jaxWsCreationListener;
+            private ChangeListener jaxWsCreationListener;
             private JaxWsModel.ServiceListener serviceListener;
             protected void projectOpened() {
                 if (jaxWsModel!=null) {
@@ -120,8 +124,8 @@ public class WebJaxWsLookupProvider implements LookupProvider {
                         Boolean jsr109 = jaxWsModel.getJsr109();
                         boolean isJsr109 = (jsr109==null?true:jsr109.booleanValue());
                         try {
-                            
-                            if (jaxws_build==null) {
+                            AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
+                            if (jaxws_build == null || extension == null) {
                                 // generate nbproject/jaxws-build.xml
                                 // add jaxws extension
                                 if (servicesLength+clientsLength > 0) {
@@ -139,7 +143,7 @@ public class WebJaxWsLookupProvider implements LookupProvider {
                         } catch (IOException ex) {
                             ex.printStackTrace();
                         }
-                        FileObject jaxws_fo = getJaxWsFileObject(prj);
+                        FileObject jaxws_fo = jaxWsModel.getJaxWsFile();
                         if (jaxws_fo!=null) {                     
                             jaxWsListener = new FileChangeAdapter() {
                                 public void fileChanged(FileEvent fe) {
@@ -148,25 +152,20 @@ public class WebJaxWsLookupProvider implements LookupProvider {
                             };  
                             jaxws_fo.addFileChangeListener(jaxWsListener);
                         } else {
-                            FileObject nbprojectDir = prj.getProjectDirectory().getFileObject("nbproject"); //NOI18N
-                            if (nbprojectDir!=null) {
-                                jaxWsCreationListener = new FileChangeAdapter() {
-                                    public void fileDataCreated(FileEvent fe) {
-                                        if ("jax-ws.xml".equals(fe.getFile().getNameExt())) { //NOI18N
-                                            FileObject jaxws_fo = getJaxWsFileObject(prj);
-                                            if (jaxws_fo!=null) {
-                                                jaxWsListener = new FileChangeAdapter() {
-                                                    public void fileChanged(FileEvent fe) {
-                                                        handleJaxsClientBuildScript();
-                                                    }
-                                                };  
-                                                jaxws_fo.addFileChangeListener(jaxWsListener);                                           
+                            jaxWsCreationListener = new ChangeListener() {
+                                public void stateChanged(ChangeEvent e) {
+                                    FileObject jaxws_fo = jaxWsModel.getJaxWsFile();
+                                    if (jaxws_fo!=null) {
+                                        jaxWsListener = new FileChangeAdapter() {
+                                            public void fileChanged(FileEvent fe) {
+                                                handleJaxsClientBuildScript();
                                             }
-                                        }
+                                        };
+                                        jaxws_fo.addFileChangeListener(jaxWsListener);
                                     }
-                                };
-                                nbprojectDir.addFileChangeListener(jaxWsCreationListener);
-                            }
+                                }
+                            };
+                            jaxWsModel.addChangeListener(jaxWsCreationListener);
                         }
 
                         if (jaxws_fo != null && !buildScriptGenerated) {
@@ -206,15 +205,14 @@ public class WebJaxWsLookupProvider implements LookupProvider {
             }
             
             protected void projectClosed() {
-                FileObject nbprojectDir = prj.getProjectDirectory().getFileObject("nbproject"); //NOI18N
-                if (nbprojectDir!=null) {
-                    nbprojectDir.removeFileChangeListener(jaxWsCreationListener);
-                    FileObject jaxws_fo = getJaxWsFileObject(prj);
-                    if (jaxws_fo!=null)
+                if (jaxWsModel != null) {
+                    jaxWsModel.removeChangeListener(jaxWsCreationListener);
+                    FileObject jaxws_fo = jaxWsModel.getJaxWsFile();
+                    if (jaxws_fo!=null) {
                         jaxws_fo.removeFileChangeListener(jaxWsListener);
+                    }
+                    jaxWsModel.removeServiceListener(serviceListener);
                 }
-                if (jaxWsModel!=null) jaxWsModel.removeServiceListener(serviceListener);
-                
             }
             
             private void handleJaxsClientBuildScript() {
@@ -242,7 +240,7 @@ public class WebJaxWsLookupProvider implements LookupProvider {
                             if (needToSave) ProjectManager.getDefault().saveProject(prj);
                         }
                     } catch (IOException ex) {
-                        ex.printStackTrace();
+                        Logger.getLogger(WebJaxWsLookupProvider.class.getName()).log(Level.WARNING, "Problems with generating jaxws-build.xml", ex);
                     }
                 }
             }
@@ -255,7 +253,7 @@ public class WebJaxWsLookupProvider implements LookupProvider {
     
     private JaxWsModel getJaxWsModel(Project prj) {
         try {
-            FileObject fo = getJaxWsFileObject(prj);
+            FileObject fo = findJaxWsFileObject(prj);
             if (fo==null)
                 return JaxWsModelProvider.getDefault().getJaxWsModel(
                         WSUtils.class.getResourceAsStream(JAX_WS_XML_RESOURCE));
@@ -268,12 +266,7 @@ public class WebJaxWsLookupProvider implements LookupProvider {
             return null;
         }
     }
-    
-    private FileObject getJaxWsFileObject(Project prj) {
-        FileObject jaxWsFo = findJaxWsFileObject(prj);
-        return jaxWsFo;
-    }
-    
+
     public FileObject findJaxWsFileObject(Project prj) {
         return prj.getProjectDirectory().getFileObject(TransformerUtils.JAX_WS_XML_PATH);
     }
@@ -322,6 +315,9 @@ public class WebJaxWsLookupProvider implements LookupProvider {
         TransformerUtils.transformClients(prj.getProjectDirectory(), styleSheetResource, true);
         FileObject jaxws_build = prj.getProjectDirectory().getFileObject(TransformerUtils.JAXWS_BUILD_XML_PATH);
         assert jaxws_build!=null;
+        if(jaxws_build == null) {
+            throw new IOException("Cannot generate jaxws-build.xml file");
+        }
         AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
         boolean extensionCreated = false;
         if (extension==null) {
@@ -365,10 +361,14 @@ public class WebJaxWsLookupProvider implements LookupProvider {
     
     private void removeJaxWsExtension(
                         FileObject jaxws_build, 
-                        AntBuildExtender ext) throws IOException {
+                        final AntBuildExtender ext) throws IOException {
         AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
         if (extension!=null) {
-            ext.removeExtension(JAXWS_EXTENSION);
+            ProjectManager.mutex().writeAccess(new Runnable() {
+                public void run() {
+                    ext.removeExtension(JAXWS_EXTENSION);
+                }
+            });           
         }
         if (jaxws_build!=null) {
             FileLock fileLock = jaxws_build.lock();
