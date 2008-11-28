@@ -13,23 +13,26 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.PrintStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.junit.NbTestSuite;
-import junit.textui.TestRunner;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputTabOperator;
+import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
+import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.jemmy.operators.Operator;
-import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.VersioningOperator;
 import org.netbeans.test.subversion.operators.WorkDirStepOperator;
+import org.netbeans.test.subversion.utils.MessageHandler;
 import org.netbeans.test.subversion.utils.RepositoryMaintenance;
 import org.netbeans.test.subversion.utils.TestKit;
 
@@ -45,50 +48,51 @@ public class ExportDiffPatchTest extends JellyTestCase {
     public static final String PROJECT_NAME = "JavaApp";
     public File projectPath;
     public PrintStream stream;
-    String os_name;
     Operator.DefaultStringComparator comOperator;
     Operator.DefaultStringComparator oldOperator;
+    static Logger log;
     
     /** Creates a new instance of ExportDiffPatchTest */
     public ExportDiffPatchTest(String name) {
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {        
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
-        
-    }
-    
-    protected boolean isUnix() {
-        boolean unix = false;
-        if (os_name.indexOf("Windows") == -1) {
-            unix = true;
+        if (log == null) {
+            log = Logger.getLogger(TestKit.LOGGER_NAME);
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
         }
-        return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new ExportDiffPatchTest("invokeExportDiffPatch"));
-        return suite;
-    }
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(ExportDiffPatchTest.class).addTest(
+                    "invokeExportDiffPatch"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void invokeExportDiffPatch() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);    
         try {
+            MessageHandler mh = new MessageHandler("Checking out");
+            log.addHandler(mh);
+
             TestKit.closeProject(PROJECT_NAME);
+            if (TestKit.getOsName().indexOf("Mac") > -1)
+                new NewProjectWizardOperator().invoke().close();
             
+            TestKit.TIME_OUT = 25;
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             VersioningOperator vo = VersioningOperator.invoke();
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            TestKit.showStatusLabels();
+            CheckoutWizardOperator.invoke();
             RepositoryStepOperator rso = new RepositoryStepOperator();
             
             //create repository...
@@ -96,7 +100,6 @@ public class ExportDiffPatchTest extends JellyTestCase {
             new File(TMP_PATH).mkdirs();
             work.mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
@@ -108,20 +111,16 @@ public class ExportDiffPatchTest extends JellyTestCase {
             wdso.checkCheckoutContentOnly(false);
             wdso.finish();
             //open project
-            OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-//            oto.clear();            
-            oto.waitText("Checking out... finished.");
+
+            TestKit.waitText(mh);
+
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-            
             TestKit.waitForScanFinishedAndQueueEmpty();
             
             //modify, save file and invoke Diff
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
+
             Node node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|Main.java");
             node.performPopupAction("Open");
             EditorOperator eo = new EditorOperator("Main.java");
@@ -129,7 +128,13 @@ public class ExportDiffPatchTest extends JellyTestCase {
             eo.insert(" insert", 5, 1);
             eo.insert("\tSystem.out.println(\"\");\n", 19, 1);
             eo.save();
+
+            mh = new MessageHandler("Refreshing");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
             node.performPopupAction("Subversion|Show Changes");
+            TestKit.waitText(mh);
             Thread.sleep(1000);
             vo = VersioningOperator.invoke();
             //Save action should change the file annotations
@@ -140,28 +145,29 @@ public class ExportDiffPatchTest extends JellyTestCase {
             assertEquals("Wrong annotation of node - file status should be new!!!", TestKit.MODIFIED_STATUS, status);
             assertEquals("Wrong number of records in Versioning view!!!", 1, vo.tabFiles().getRowCount());
             
-            //new ProjectsTabOperator().tree().clearSelection();
             node = new Node(new ProjectsTabOperator().tree(), PROJECT_NAME);
-            comOperator = new Operator.DefaultStringComparator(true, true);
-            oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
-            Operator.setDefaultStringComparator(comOperator);
+            //comOperator = new Operator.DefaultStringComparator(true, true);
+            //oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
+            //Operator.setDefaultStringComparator(comOperator);
+            new EventTool().waitNoEvent(3000);
+
+            mh = new MessageHandler("Exporting");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
             node.performMenuActionNoBlock("Versioning|Export Diff Patch...");
-            Operator.setDefaultStringComparator(oldOperator);
+            //Operator.setDefaultStringComparator(oldOperator);
             
-            //node.select();
-            
-            nbdialog = new NbDialogOperator("Export");
+            nbdialog = new NbDialogOperator("Export Diff");
             JButtonOperator btn = new JButtonOperator(nbdialog, "Export");
             JTextFieldOperator tf = new JTextFieldOperator(nbdialog, 0);
             String patchFile = "/tmp/patch" + System.currentTimeMillis() + ".patch";
             File file = new File(patchFile);
             tf.setText(file.getCanonicalFile().toString());
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
             btn.push();
-            oto.waitText("Diff Patch finished");
-            
+
+            TestKit.waitText(mh);
+            new EventTool().waitNoEvent(3000);
+
             BufferedReader br = new BufferedReader(new FileReader(file));
             String line = br.readLine();
             boolean generated = false;
@@ -172,9 +178,9 @@ public class ExportDiffPatchTest extends JellyTestCase {
             br.close();
             assertTrue("Diff Patch file is empty!", generated);
             System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", "");
+            TestKit.TIME_OUT = 15;
             stream.flush();
             stream.close();
-            
         } catch (Exception e) {
             throw new Exception("Test failed: " + e);
         } finally {
