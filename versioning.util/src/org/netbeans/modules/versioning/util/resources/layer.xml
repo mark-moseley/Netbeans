@@ -87,15 +87,18 @@ made subject to such option by the copyright holder.
         <folder name="Modes">
             <folder name="output">
                 <file name="versioning_output.wstcref" url="modes/output/versioning_output.wstcref">
-                    <attr name="position" intvalue="500"/>
+                    <attr name="position" intvalue="1600"/>
                 </file>
             </folder>
         </folder>
     </folder>
     
     <folder name="OptionsDialog">
-        <folder name="Advanced">
-            <file name="org-netbeans-modules-versioning-util-VcsAdvancedOptions.instance"/>
+        <folder name="advancedOptionsFolder">
+            <file name="org-netbeans-modules-versioning-util-VcsAdvancedOptions.instance">
+                <attr name="keywords" bundlevalue="Versioning"/>
+                <attr name="keywordsCategory" stringvalue="Versioning"/>
+            </file>
         </folder>
     </folder>
 </filesystem>
