@@ -41,13 +41,13 @@ package org.netbeans.modules.javascript.editing;
 
 import java.util.List;
 import java.util.Map;
+import org.mozilla.nb.javascript.Context;
 import org.mozilla.nb.javascript.Node;
 import org.mozilla.nb.javascript.Token;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.OffsetRange;
-import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.javascript.editing.lexer.LexUtilities;
 
 /**
@@ -59,13 +59,18 @@ public class AstOffsetTest extends JsTestBase {
     
     public AstOffsetTest(String testName) {
         super(testName);
-    }            
-    
+    }
+
     @Override
-    protected String describeNode(CompilationInfo info, Object obj, boolean includePath) throws Exception {
+    protected void setUp() throws Exception {
+        SupportedBrowsers.getInstance().setLanguageVersion(Context.VERSION_DEFAULT);
+    }
+
+    @Override
+    protected String describeNode(ParserResult info, Object obj, boolean includePath) throws Exception {
         Node node = (Node)obj;
         if (includePath) {
-            BaseDocument doc = LexUtilities.getDocument(info, false);
+            BaseDocument doc = LexUtilities.getDocument((JsParseResult) info, true);
             String s = null;
             while (node != null) {
                 int line = Utilities.getLineOffset(doc, node.getSourceStart());
@@ -87,19 +92,19 @@ public class AstOffsetTest extends JsTestBase {
     }
     
     @Override
-    protected void initializeNodes(CompilationInfo info, ParserResult result, List<Object> validNodes,
+    protected void initializeNodes(ParserResult result, List<Object> validNodes,
             Map<Object,OffsetRange> positions, List<Object> invalidNodes) throws Exception {
         //Node root = AstUtilities.getRoot(info);
-        Node root = AstUtilities.getRoot(result);
-        assertNotNull(root);
+        JsParseResult jspr = AstUtilities.getParseResult(result);
+        assertNotNull(jspr.getRootNode());
         
-        initialize(root, validNodes, invalidNodes, positions, info);
+        initialize(jspr.getRootNode(), validNodes, invalidNodes, positions, result);
     }
 
     private void initialize(Node node, List<Object> validNodes, List<Object> invalidNodes, Map<Object,
-            OffsetRange> positions, CompilationInfo info) throws Exception {
+            OffsetRange> positions, ParserResult info) throws Exception {
         if (node.getSourceStart() > node.getSourceEnd()) {
-            BaseDocument doc = LexUtilities.getDocument(info, false);
+            BaseDocument doc = LexUtilities.getDocument((JsParseResult)info, true);
             assertTrue(describeNode(info, node, true) + "; node=" + node.toString() + " at line " + org.netbeans.editor.Utilities.getLineOffset(doc, node.getSourceStart()), false);
         }
         OffsetRange range = new OffsetRange(node.getSourceStart(), node.getSourceEnd());
@@ -191,8 +196,33 @@ public class AstOffsetTest extends JsTestBase {
         checkOffsets("testfiles/functions.js");
     }
 
-//    public void testDestructuringAssignment() throws Exception {
-//        // http://developer.mozilla.org/en/docs/New_in_JavaScript_1.7#Destructuring_assignment
-//        checkOffsets("testfiles/destructuring_assignment.js");
-//    }
+    public void testEmbeddedCode1() throws Exception {
+        checkOffsets("testfiles/generated_identifiers.js");
+    }
+
+    public void testEmbeddedCode2() throws Exception {
+        checkOffsets("testfiles/lbracketlist.js");
+    }
+
+    public void testEmbeddedCode3() throws Exception {
+        checkOffsets("testfiles/embedding/issue136495.erb.js");
+    }
+
+    public void testEmbeddedCode4() throws Exception {
+        checkOffsets("testfiles/issue120499.js");
+    }
+
+    public void testEmbeddedCode6() throws Exception {
+        checkOffsets("testfiles/issue148423.js");
+    }
+
+    public void testEmbeddedCode5() throws Exception {
+        checkOffsets("testfiles/issue149019.js");
+    }
+
+    public void testJavaScript17Stuff() throws Exception {
+        // http://developer.mozilla.org/en/docs/New_in_JavaScript_1.7
+        SupportedBrowsers.getInstance().setLanguageVersion(Context.VERSION_1_7);
+        checkOffsets("testfiles/javascript17.js");
+    }
 }
