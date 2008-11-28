@@ -85,7 +85,7 @@ import java.text.MessageFormat;
  * 
  * @author Maros Sandor
  */
-class DiffSidebar extends JComponent implements DocumentListener, ComponentListener, FoldHierarchyListener, FileChangeListener {
+class DiffSidebar extends JPanel implements DocumentListener, ComponentListener, FoldHierarchyListener, FileChangeListener {
     
     private static final int BAR_WIDTH = 9;
     
@@ -134,8 +134,8 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
 
     private void refreshOriginalContent() {
-        File file = FileUtil.toFile(fileObject);
-        ownerVersioningSystem = VersioningManager.getInstance().getOwner(file);
+        File file = fileObject != null ? FileUtil.toFile(fileObject) : null;
+        ownerVersioningSystem = file != null ? VersioningManager.getInstance().getOwner(file) : null;
         originalContentSerial++;
         refreshDiff();
     }
@@ -211,7 +211,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         try {
             DiffController view = DiffController.create(new SidebarStreamSource(true), new SidebarStreamSource(false));
             DiffTopComponent tc = new DiffTopComponent(view);
-            tc.setName(fileObject.getNameExt() + " [Diff]"); // NOI18N
+            tc.setName(NbBundle.getMessage(DiffSidebar.class, "CTL_DiffPanel_Title", new Object[] {fileObject.getNameExt()})); // NOI18N
             tc.open();
             tc.requestActive();
             view.setLocation(DiffController.DiffPane.Modified, DiffController.LocationType.DifferenceIndex, getDiffIndex(diff));
@@ -385,9 +385,11 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         if (editorUI != null) {
             try{
                 JTextComponent component = editorUI.getComponent();
-                BaseTextUI textUI = (BaseTextUI)component.getUI();
-                int clickOffset = textUI.viewToModel(component, new Point(0, e.getY()));
-                line = Utilities.getLineOffset(document, clickOffset);
+                if (component != null) {
+                    BaseTextUI textUI = (BaseTextUI)component.getUI();
+                    int clickOffset = textUI.viewToModel(component, new Point(0, e.getY()));
+                    line = Utilities.getLineOffset(document, clickOffset);
+                }
             }catch (BadLocationException ble){
                 Logger.getLogger(DiffSidebar.class.getName()).log(Level.WARNING, "getLineFromMouseEvent", ble); // NOI18N
             }
