@@ -43,7 +43,10 @@ package org.netbeans.core.windows.view.ui.toolbars;
 
 import java.awt.event.ActionEvent;
 import java.util.concurrent.Callable;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
+import org.openide.awt.ToolbarPool;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.Repository;
@@ -61,6 +64,7 @@ public class ResetToolbarsAction extends AbstractAction {
     }
 
     public void actionPerformed(ActionEvent e) {
+        String name = ToolbarPool.getDefault().getConfiguration();
         FileSystem fs = Repository.getDefault().getDefaultFileSystem();
         FileObject fo = fs.findResource( "Toolbars" ); //NOI18N
         Object attr = fo.getAttribute( "removeWritables" ); //NOI18N
@@ -68,11 +72,11 @@ public class ResetToolbarsAction extends AbstractAction {
             try {
                 ((Callable)attr).call();
             } catch (Exception ex) {
-                //TODO handle exception
-                ex.printStackTrace();
+                Logger.getLogger(ResetToolbarsAction.class.getName()).log( Level.FINE, null, ex );
             }
         }
-        ToolbarConfiguration.resetToolbarIconSize();
+        ToolbarPool.getDefault().waitFinished();
+        ToolbarPool.getDefault().setConfiguration(name);
     }
     
 }
