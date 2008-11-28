@@ -94,10 +94,19 @@ public class ReaderInputStream extends InputStream {
         osw.flush();
         pos.flush();
 
-        return pis.read();
+        if (pis.available() > 0) {
+            return pis.read();
+        } else {
+            throw new IOException("Cannot encode input data using " + osw.getEncoding() + " encoding.");  // NOI18N
+        }
     }
 
+    @Override
     public int read(byte[] b, int off, int len) throws IOException {
+        if (len == 0) {
+            return 0;
+        }
+
         int c = read();
 
         if (c == -1) {
@@ -122,6 +131,7 @@ public class ReaderInputStream extends InputStream {
         return i;
     }
 
+    @Override
     public int available() throws IOException {
         int i = pis.available();
 
@@ -137,6 +147,7 @@ public class ReaderInputStream extends InputStream {
         }
     }
 
+    @Override
     public void close() throws IOException {
         reader.close();
         osw.close();
