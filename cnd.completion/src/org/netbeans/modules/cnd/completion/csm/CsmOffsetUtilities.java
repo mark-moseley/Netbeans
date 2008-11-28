@@ -46,10 +46,17 @@ import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import java.util.Iterator;
+import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmFunction;
 import org.netbeans.modules.cnd.api.model.CsmFunctionDefinition;
+import org.netbeans.modules.cnd.api.model.CsmFunctionParameterList;
+import org.netbeans.modules.cnd.api.model.CsmInitializerListContainer;
 import org.netbeans.modules.cnd.api.model.CsmParameter;
 import org.netbeans.modules.cnd.api.model.CsmType;
+import org.netbeans.modules.cnd.api.model.deep.CsmExpression;
+import org.netbeans.modules.cnd.api.model.deep.CsmIfStatement;
+import org.netbeans.modules.cnd.api.model.deep.CsmLoopStatement;
+import org.netbeans.modules.cnd.api.model.deep.CsmStatement;
 
 /**
  * utilities method for working with offsets of Csm objects
@@ -71,12 +78,51 @@ public class CsmOffsetUtilities {
         CsmOffsetable offs = (CsmOffsetable)obj;
         if ((offs.getStartOffset() <= offset) &&
                 (offset <= offs.getEndOffset())) {
+            if (offset == offs.getEndOffset()) {
+                if (CsmKindUtilities.isType(obj)) {
+                    CsmType type = (CsmType)obj;
+                    // we do not accept type if offset is after '*', '&' or '[]'
+                    return !type.isPointer() && !type.isReference() && (type.getArrayDepth() == 0);
+                } else if (endsWithBrace(offs)) {
+                    // if we right after closed "}" it means we are out of scope object
+                    return false;
+                }
+            }
             return true;
         } else {
             return false;
         }
     }
-    
+
+    private static boolean endsWithBrace(CsmOffsetable obj) {
+        if (!CsmKindUtilities.isScope(obj)) {
+            // only scopes can end with '}'
+            return false;
+        }
+        if (!CsmKindUtilities.isStatement(obj) || CsmKindUtilities.isCompoundStatement(obj)) {
+            // non-statement scope always ends with '}'
+            return true;
+        }
+        // special care is needed for scope statements
+        CsmStatement stmt = (CsmStatement) obj;
+        switch (stmt.getKind()) {
+            case IF:
+                // 'if' statement ends with '}' if its last branch ends with '}'
+                CsmStatement elseBranch = ((CsmIfStatement)stmt).getElse();
+                if (elseBranch != null) {
+                    return CsmKindUtilities.isCompoundStatement(elseBranch);
+                } else {
+                    return CsmKindUtilities.isCompoundStatement(((CsmIfStatement)stmt).getThen());
+                }
+            case FOR:
+            case WHILE:
+                // loop statement ends with '}' if its body ends with '}'
+                return CsmKindUtilities.isCompoundStatement(((CsmLoopStatement)stmt).getBody());
+            default:
+                return false;
+        }
+    }
+
     public static boolean isBeforeObject(CsmObject obj, int offset) {
         if (!CsmKindUtilities.isOffsetable(obj)) {
             return false;
@@ -104,7 +150,13 @@ public class CsmOffsetUtilities {
     // list is ordered by offsettable elements
     public static <T extends CsmObject> T findObject(Collection<T> list, CsmContext context, int offset) {
         assert (list != null) : "expect not null list";
-        for (Iterator<T> it = list.iterator(); it.hasNext();) {
+        return findObject(list.iterator(), context, offset);
+    }
+
+    // list is ordered by offsettable elements
+    public static <T extends CsmObject> T findObject(Iterator<T> it, CsmContext context, int offset) {
+        assert (it != null) : "expect not null list";
+        while (it.hasNext()) {
             T obj = it.next();
             assert (obj != null) : "can't be null declaration";
             if (CsmOffsetUtilities.isInObject((CsmObject)obj, offset)) {
@@ -127,24 +179,69 @@ public class CsmOffsetUtilities {
                 return false;
             }
             // check if offset is before parameters
-            Collection<CsmParameter> params = fun.getParameters();
-            if (params.size() > 0) {
-                CsmParameter firstParam = params.iterator().next();
-                if (CsmOffsetUtilities.isBeforeObject(firstParam, offset)) {
-                    return false;
+            CsmFunctionParameterList paramList = fun.getParameterList();
+//            if (paramList != null) {
+                if (CsmOffsetUtilities.isInObject(paramList, offset)) {
+                    return true;
                 }
-            } else {
-                // check initializer list for constructors
-                
-                // for function definitions check body
-                if (CsmKindUtilities.isFunctionDefinition(fun)) {
-                    CsmFunctionDefinition funDef = (CsmFunctionDefinition)fun;
-                    if (CsmOffsetUtilities.isBeforeObject(funDef.getBody(), offset)) {
+                Collection<CsmParameter> params = paramList.getParameters();
+                if (!params.isEmpty()) {
+                    CsmParameter firstParam = params.iterator().next();
+                    if (CsmOffsetUtilities.isBeforeObject(firstParam, offset)) {
                         return false;
                     }
+                    return true;
+                }
+//            }
+            // check initializer list for constructors
+            if (CsmKindUtilities.isConstructor(fun)) {
+                Collection<CsmExpression> izers = ((CsmInitializerListContainer) fun).getInitializerList();
+                if (!izers.isEmpty()) {
+                    CsmExpression firstIzer = izers.iterator().next();
+                    if (CsmOffsetUtilities.isBeforeObject(firstIzer, offset)) {
+                        return false;
+                    }
+                    return true;
                 }
             }
-        }              
+            // for function definitions check body
+            if (CsmKindUtilities.isFunctionDefinition(fun)) {
+                CsmFunctionDefinition funDef = (CsmFunctionDefinition) fun;
+                if (CsmOffsetUtilities.isBeforeObject(funDef.getBody(), offset)) {
+                    return false;
+                }
+            }
+            if (CsmKindUtilities.isFunctionDeclaration(fun)) {
+                return false;
+            }
+        }
         return inScope;
-    }    
+    }
+
+    public static boolean isInClassScope(final CsmClass clazz, final int offset) {
+        return isInObject(clazz, offset) 
+                && clazz.getLeftBracketOffset() < offset
+                && offset < clazz.getEndOffset();
+    }
+
+    /**
+     * Checks if two objects have same offsets. It usually means that
+     * they are result of macro expansion.
+     *
+     * @param o1  first object
+     * @param o2  second object
+     * @return <code>true</code> if both arguments are offsetable and
+     *          have equal start and end offsets, <code>false</code> otherwise
+     */
+    public static boolean sameOffsets(final CsmObject obj1, final CsmObject obj2) {
+        if (CsmKindUtilities.isOffsetable(obj1) && CsmKindUtilities.isOffsetable(obj2)) {
+            final CsmOffsetable ofs1 = (CsmOffsetable)obj1;
+            final CsmOffsetable ofs2 = (CsmOffsetable)obj2;
+            return ofs1.getStartOffset() == ofs2.getStartOffset()
+                    && ofs1.getEndOffset() == ofs2.getEndOffset();
+        } else {
+            return false;
+        }
+    }
+
 }
