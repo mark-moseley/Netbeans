@@ -48,13 +48,13 @@ import org.netbeans.modules.cnd.dwarfdump.dwarfconsts.ElfConstants;
 import org.netbeans.modules.cnd.dwarfdump.elf.ElfHeader;
 import org.netbeans.modules.cnd.dwarfdump.exception.WrongFileFormatException;
 import org.netbeans.modules.cnd.dwarfdump.section.ElfSection;
-import org.netbeans.modules.cnd.dwarfdump.elf.ProgramHeaderTable;
 import org.netbeans.modules.cnd.dwarfdump.elf.SectionHeader;
 import org.netbeans.modules.cnd.dwarfdump.section.StringTableSection;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.netbeans.modules.cnd.dwarfdump.trace.TraceDwarf;
 
 /**
  *
@@ -64,7 +64,6 @@ public class ElfReader extends ByteStreamReader {
     private boolean isCoffFormat;
     private boolean isMachoFormat;
     private ElfHeader elfHeader = null;
-    private ProgramHeaderTable programHeaderTable;
     private SectionHeader[] sectionHeadersTable;
     private ElfSection[] sections = null;
     private HashMap<String, Integer> sectionsMap = new HashMap<String, Integer>();
@@ -76,7 +75,9 @@ public class ElfReader extends ByteStreamReader {
         super(fname, reader);
         shiftIvArchive = shift;
         lengthIvArchive = length;
-        readHeader(magic);
+        if (!readHeader(magic)) {
+            return;
+        }
         readProgramHeaderTable();
         readSectionHeaderTable();
         
@@ -109,7 +110,7 @@ public class ElfReader extends ByteStreamReader {
         }
     }
     
-    public void readHeader(Magic magic) throws WrongFileFormatException, IOException {
+    public boolean readHeader(Magic magic) throws WrongFileFormatException, IOException {
         elfHeader = new ElfHeader();
         seek(shiftIvArchive);
         byte[] bytes = new byte[16];
@@ -117,19 +118,18 @@ public class ElfReader extends ByteStreamReader {
         switch (magic) {
             case Elf:
                 readElfHeader(bytes);
-                return;
+                return true;
             case Coff:
                 readCoffHeader(shiftIvArchive);
-                return;
+                return true;
             case Exe:
                 readPeHeader(true);
-                return;
+                return true;
             case Pe:
                 readPeHeader(false);
-                return;
+                return true;
             case Macho:
-                readMachoHeader();
-                return;
+                return readMachoHeader();
         }
         throw new WrongFileFormatException("Not an ELF/PE/COFF/MACH-O file"); // NOI18N
     }
@@ -204,14 +204,14 @@ public class ElfReader extends ByteStreamReader {
         //
         int optionalHeaderSize = readShort();
         // flags
-        int flags = readShort();
+        /*int flags =*/ readShort();
         if (optionalHeaderSize > 0) {
             skipBytes(optionalHeaderSize);
         }
         elfHeader.e_shoff = getFilePointer();
     }
     
-    private void readMachoHeader() throws IOException{
+    private boolean readMachoHeader() throws IOException{
         isMachoFormat = true;
         elfHeader.elfData = LSB;
         elfHeader.elfClass = ElfConstants.ELFCLASS32;
@@ -221,8 +221,8 @@ public class ElfReader extends ByteStreamReader {
         boolean is64 = readByte() == (byte)0xcf;
         seek(shiftIvArchive+16);
         int ncmds = readInt();
-        int sizeOfCmds = readInt();
-        int flags = readInt();
+        /*int sizeOfCmds =*/ readInt();
+        /*int flags =*/ readInt();
         if (is64){
             skipBytes(4);
         }
@@ -230,32 +230,35 @@ public class ElfReader extends ByteStreamReader {
         for (int j = 0; j < ncmds; j++){
             int cmd = readInt();
             int cmdSize = readInt();
-            if (cmd == 1 || cmd == 25) { //LC_SEGMENT LC_SEGMENT64
+            if (TraceDwarf.TRACED) {
+                System.out.println("Load command: " + LoadCommand.valueOf(cmd) + " (" + cmd + ")"); //NOI18N
+            }
+            if (LoadCommand.LC_SEGMENT.is(cmd) || LoadCommand.LC_SEGMENT_64.is(cmd) ) { //LC_SEGMENT LC_SEGMENT64
                 skipBytes(16);
                 if (is64) {
-                    long vmAddr = readLong();
-                    long vmSize = readLong();
-                    long fileOff = readLong();
-                    long fileSize = readLong();
+                    /*long vmAddr =*/ readLong();
+                    /*long vmSize =*/ readLong();
+                    /*long fileOff =*/ readLong();
+                    /*long fileSize =*/ readLong();
                 } else {
-                    int vmAddr = readInt();
-                    int vmSize = readInt();
-                    int fileOff = readInt();
-                    int fileSize = readInt();
+                    /*int vmAddr =*/ readInt();
+                    /*int vmSize =*/ readInt();
+                    /*int fileOff =*/ readInt();
+                    /*int fileSize =*/ readInt();
                 }
-                int vmMaxPort = readInt();
-                int vmInitPort = readInt();
+                /*int vmMaxPort =*/ readInt();
+                /*int vmInitPort =*/ readInt();
                 int nSects = readInt();
-                int cmdFlags = readInt();
+                /*int cmdFlags =*/ readInt();
                 for (int i = 0; i < nSects; i++){
                     SectionHeader h = readMachoSection(is64);
                     if (h != null){
                         headers.add(h);
                     }
                 }
-            } else if (cmd == 2){ //LC_SYMTAB
-                int symOffset = readInt();
-                int nsyms = readInt();
+            } else if (LoadCommand.LC_SYMTAB.is(cmd)){ //LC_SYMTAB
+                /*int symOffset =*/ readInt();
+                /*int nsyms =*/ readInt();
                 long strOffset = readInt()+shiftIvArchive;
                 int strSize = readInt();
                 // read string table
@@ -269,16 +272,48 @@ public class ElfReader extends ByteStreamReader {
                 skipBytes(cmdSize - 8);
             }
         }
-        if (headers.size()==0 || stringTableSection == null){
-            throw new WrongFileFormatException("Dwarf section not found in Mach-O file"); // NOI18N
+        if (TraceDwarf.TRACED && stringTableSection!=null ) {
+            stringTableSection.dump(System.out);
         }
+        if (headers.size()==0 || stringTableSection == null){
+            if (isThereAnyLinkedObjectFiles(stringTableSection)) {
+                // we got situation when Mac's linker put dwarf information not in the executable file
+                // but just put links to object files instead
+                return false;
+            }
+            throw new WrongFileFormatException("Dwarf section not found in Mach-O file"); // NOI18N
+        } 
         sectionHeadersTable = new SectionHeader[headers.size()];
         for(int i = 0; i < headers.size(); i++){
             sectionHeadersTable[i] = headers.get(i);
         }
         elfHeader.e_shstrndx = (short)(headers.size()-1);
+        return true;
     }
     
+    private boolean isThereAnyLinkedObjectFiles(StringTableSection stringTableSection) {
+        if (stringTableSection == null) {
+            return false;
+        }
+        int offset = 1;
+        while (offset < stringTableSection.getStringTable().length) {
+            String string = stringTableSection.getString(offset);
+            // XXX: find out how gdb determines object files link
+            // but this way would work 90% of times
+            if (string.length() > 2 && ".o".equals(string.substring(string.length()-2))) { //NOI18N
+                linkedObjectFiles.add(string);
+            }
+            offset += string.length() + 1;
+        }
+
+        return linkedObjectFiles.size() > 0;
+    }
+    
+    private List<String> linkedObjectFiles = new ArrayList<String>();
+    
+    public List<String> getLinkedObjectFiles() {
+        return linkedObjectFiles;
+    }
     
     private SectionHeader readMachoSection(boolean is64) throws IOException {
         byte[] sectName = new byte[16];
@@ -287,19 +322,18 @@ public class ElfReader extends ByteStreamReader {
         byte[] segName = new byte[16];
         read(segName);
         String segment = getName(segName, 0);
-        long addr;
         long size;
         if (is64) {
-            addr = readLong();
+            /*long addr =*/ readLong();
             size = readLong();
         } else {
-            addr = readInt();
+            /*long addr =*/ readInt();
             size = readInt();
         }
         long offset = readInt()+shiftIvArchive;
-        int align = readInt();
-        int reloff = readInt();
-        int nreloc = readInt();
+        /*int align =*/ readInt();
+        /*int reloff =*/ readInt();
+        /*int nreloc =*/ readInt();
         int segFlags = readInt();
         readInt();
         readInt();
@@ -317,6 +351,8 @@ public class ElfReader extends ByteStreamReader {
             h.sh_offset = offset;
             h.sh_flags = segFlags;
             return h;
+        } else if (TraceDwarf.TRACED) {
+            System.out.println("Segment,Section: " + segment + "," + section); //NOI18N
         }
         return null;
     }
@@ -395,14 +431,14 @@ public class ElfReader extends ByteStreamReader {
         }
         h.name = name;
         //System.out.println("Section: "+name);
-        int phisicalAddres = readInt();
-        int virtualAddres = readInt();
+        /*int phisicalAddres =*/ readInt();
+        /*int virtualAddres =*/ readInt();
         h.sh_size = readInt();
         h.sh_offset = shiftIvArchive + readInt();
-        int relocationOffset = readInt();
-        int lineNumberOffset = readInt();
-        int mumberRelocations = readShort();
-        int mumberLineNumbers = readShort();
+        /*int relocationOffset =*/ readInt();
+        /*int lineNumberOffset =*/ readInt();
+        /*int mumberRelocations =*/ readShort();
+        /*int mumberLineNumbers =*/ readShort();
         h.sh_flags = readInt();
         return h;
     }
@@ -439,4 +475,21 @@ public class ElfReader extends ByteStreamReader {
         return sectionHeadersTable[sectionIdx];
     }
     
+}
+
+enum LoadCommand {
+    UNKNOWN, LC_SEGMENT, LC_SYMTAB, LC_SYMSEG, LC_THREAD, LC_UNIXTHREAD, LC_LOADFVMLIB, LC_IDFVMLIB, LC_IDENT, LC_FVMFILE, LC_PREPAGE, LC_DYSYMTAB, LC_LOAD_DYLIB, LC_ID_DYLIB, LC_LOAD_DYLINKER, LC_ID_DYLINKER, LC_PREBOUND_DYLIB, LC_ROUTINES, LC_SUB_FRAMEWORK, LC_SUB_UMBRELLA, LC_SUB_CLIENT, LC_SUB_LIBRARY, LC_TWOLEVEL_HINTS, LC_PREBIND_CKSUM, LC_LOAD_WEAK_DYLIB, LC_SEGMENT_64, LC_ROUTINES_64, LC_UUID, UNDEFINED, LC_CODE_SIGNATURE;
+
+    public boolean is(int value) {
+        return ordinal() == value;
+    }
+    
+    public static LoadCommand valueOf(int k) {
+        for (LoadCommand command : values()) {
+            if (command.is(k)) {
+                return command;
+            }
+        }
+        return UNKNOWN;
+    }
 }

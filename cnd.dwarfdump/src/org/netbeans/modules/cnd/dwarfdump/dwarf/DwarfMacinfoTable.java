@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.dwarfdump.dwarf;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import org.netbeans.modules.cnd.dwarfdump.dwarfconsts.MACINFO;
 import java.io.PrintStream;
@@ -111,7 +112,7 @@ public class DwarfMacinfoTable {
     }
     
     private void readFileSourceTable() throws IOException {
-        long length = section.readMacinfoTable(this, fileSourceTableOffset, false);
+        /*long length =*/ section.readMacinfoTable(this, fileSourceTableOffset, false);
         fileSourceTableRead = true;
     }
     
@@ -193,5 +194,12 @@ public class DwarfMacinfoTable {
             entry.dump(out);
         }
     }
-    
+
+    @Override
+    public String toString() {
+        ByteArrayOutputStream st = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(st);
+        dump(out);
+        return st.toString();
+    }
 }
