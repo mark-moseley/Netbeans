@@ -1,3 +1,4 @@
+
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
@@ -38,26 +39,28 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-import java.util.Vector;
+import java.util.ArrayList;
+import java.util.List;
+import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.utils.CppUtils;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 
-public class VectorConfiguration {
-    private VectorConfiguration master;
+public class VectorConfiguration<E> {
 
-    private Vector value;
+    private VectorConfiguration<E> master;
+    private List<E> value;
     private boolean dirty = false;
 
-    public VectorConfiguration(VectorConfiguration master) {
-	this.master = master;
-	value = new Vector();
-	reset();
+    public VectorConfiguration(VectorConfiguration<E> master) {
+        this.master = master;
+        value = new ArrayList<E>();
+        reset();
     }
 
-    public VectorConfiguration getMaster() {
-	return master;
+    public VectorConfiguration<E> getMaster() {
+        return master;
     }
 
     public void setDirty(boolean dirty) {
@@ -67,57 +70,75 @@ public class VectorConfiguration {
     public boolean getDirty() {
         return dirty;
     }
-    
-    public void add(Object o) {
-	getValue().add(o);
+
+    public void add(E o) {
+        getValue().add(o);
     }
 
-    public void setValue(Vector b) {
-	this.value = b;
+    public void setValue(List<E> l) {
+        this.value = l;
     }
 
-    public Vector getValue() {
-	return value;
-	/*
-	if (master != null && !getModified())
-	    return master.getValue();
-	else
-	    return value;
-	*/
+    /*
+     * @deprecated use setValue(List l)
+     * See IZ 122300
+     */
+    @Deprecated
+    @SuppressWarnings("unchecked")
+    public void setValue(String s) {
+        List list = CppUtils.tokenizeString(s);
+        setValue(list);
     }
 
-    public String[] getValueAsArray() {
-	return (String[])getValue().toArray(new String[getValue().size()]);
+    public List<E> getValue() {
+        return value;
+    /*
+    if (master != null && !getModified())
+    return master.getValue();
+    else
+    return value;
+     */
     }
 
+//    public String[] getValueAsArray() {
+//        return (String[]) getValue().toArray(new String[getValue().size()]);
+//    }
     public boolean getModified() {
-	return value.size() != 0;
+        return value.size() != 0;
     }
 
     public void reset() {
-	value.removeAllElements();
+        //value.removeAll(); // FIXUP
+        value = new ArrayList<E>();
     }
 
-    public String getOption(String prependOption) {
-	StringBuilder option = new StringBuilder();
-	String[] values = getValueAsArray();
-	for (int i = 0; i < values.length; i++)
-	    option.append(prependOption + IpeUtils.escapeOddCharacters(values[i]) + " "); // NOI18N
-	return option.toString();
+    public String getOption(CompilerSet cs, String prependOption) {
+        StringBuilder option = new StringBuilder();
+        List<E> values = getValue();
+        for (E val : values) {
+            String s = val.toString();
+            if (s.length() > 0) { // See IZ 151364
+                if (cs != null) {
+                    s = cs.normalizeDriveLetter(s);
+                }
+                option.append(prependOption + IpeUtils.escapeOddCharacters(s) + " "); // NOI18N
+            }
+        }
+        return option.toString();
     }
-    
+
     // Clone and Assign
-    public void assign(VectorConfiguration conf) {
+    public void assign(VectorConfiguration<E> conf) {
         setDirty(!this.equals(conf));
-	reset();
-	getValue().addAll(conf.getValue());
+        reset();
+        getValue().addAll(conf.getValue());
     }
-     
-    public boolean equals(VectorConfiguration conf) {
+
+    public boolean equals(VectorConfiguration<E> conf) {
         boolean eq = true;
-        if (getValue().size() != conf.getValue().size())
+        if (getValue().size() != conf.getValue().size()) {
             eq = false;
-        else {
+        } else {
             for (int i = 0; i < getValue().size(); i++) {
                 if (!getValue().get(i).equals(conf.getValue().get(i))) {
                     eq = false;
@@ -128,9 +149,17 @@ public class VectorConfiguration {
         return eq;
     }
 
-    public Object clone() {
-	VectorConfiguration clone = new VectorConfiguration(master);
-	clone.setValue((Vector)getValue().clone());
-	return clone;
+    public VectorConfiguration<E> cloneConf() {
+        VectorConfiguration<E> clone = new VectorConfiguration<E>(master);
+        clone.setValue(new ArrayList<E>(getValue()));
+        return clone;
     }
+
+//    @Override
+//    @Deprecated
+//    public Object clone() {
+//        VectorConfiguration clone = new VectorConfiguration(master);
+//        clone.setValue((List) ((ArrayList) getValue()).clone());
+//        return clone;
+//    }
 }

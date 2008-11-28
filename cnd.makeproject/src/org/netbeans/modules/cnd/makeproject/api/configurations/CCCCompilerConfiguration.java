@@ -42,19 +42,18 @@
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.cnd.api.utils.CppUtils;
-import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
-import org.netbeans.modules.cnd.makeproject.configurations.ui.OptionsNodeProp;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager.CompilerDescriptor;
+import org.netbeans.modules.cnd.makeproject.configurations.ui.StringListNodeProp;
 import org.netbeans.modules.cnd.makeproject.configurations.ui.VectorNodeProp;
 import org.openide.nodes.Sheet;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
-public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
-    public static int MT_LEVEL_NONE = 0;
-    public static int MT_LEVEL_SAFE = 1;
-    public static int MT_LEVEL_AUTOMATIC = 2;
-    public static int MT_LEVEL_OPENMP = 3;
+public abstract class CCCCompilerConfiguration extends BasicCompilerConfiguration {
+    public static final int MT_LEVEL_NONE = 0;
+    public static final int MT_LEVEL_SAFE = 1;
+    public static final int MT_LEVEL_AUTOMATIC = 2;
+    public static final int MT_LEVEL_OPENMP = 3;
     private static final String[] MT_LEVEL_NAMES = {
 	getString("NoneTxt"),
 	getString("SafeTxt"),
@@ -64,11 +63,11 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
     private static final String[] MT_LEVEL_OPTIONS = null;
     private IntConfiguration mpLevel;
     
-    public static int LIBRARY_LEVEL_NONE = 0;
-    public static int LIBRARY_LEVEL_RUNTIME = 1;
-    public static int LIBRARY_LEVEL_CLASSIC = 2;
-    public static int LIBRARY_LEVEL_BINARY = 3;
-    public static int LIBRARY_LEVEL_CONFORMING = 4;
+    public static final int LIBRARY_LEVEL_NONE = 0;
+    public static final int LIBRARY_LEVEL_RUNTIME = 1;
+    public static final int LIBRARY_LEVEL_CLASSIC = 2;
+    public static final int LIBRARY_LEVEL_BINARY = 3;
+    public static final int LIBRARY_LEVEL_CONFORMING = 4;
     private static final String[] LIBRARY_LEVEL_NAMES = {
 	getString("NoneTxt"),
 	getString("RuntimeOnlyTxt"),
@@ -79,10 +78,10 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
     private static final String[] LIBRARY_LEVEL_OPTIONS = null;
     private IntConfiguration libraryLevel;
     
-    public static int STANDARDS_OLD = 0;
-    public static int STANDARDS_LEGACY = 1;
-    public static int STANDARDS_DEFAULT = 2;
-    public static int STANDARDS_MODERN = 3;
+    public static final int STANDARDS_OLD = 0;
+    public static final int STANDARDS_LEGACY = 1;
+    public static final int STANDARDS_DEFAULT = 2;
+    public static final int STANDARDS_MODERN = 3;
     private static final String[] STANDARDS_NAMES = {
 	getString("OldTxt"),
 	getString("LegacyTxt"),
@@ -92,9 +91,9 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
     private static final String[] STANDARD_OPTIONS = null;
     private IntConfiguration standardsEvolution;
 
-    public static int LANGUAGE_EXT_NONE = 0;
-    public static int LANGUAGE_EXT_DEFAULT = 1;
-    public static int LANGUAGE_EXT_ALL = 2;
+    public static final int LANGUAGE_EXT_NONE = 0;
+    public static final int LANGUAGE_EXT_DEFAULT = 1;
+    public static final int LANGUAGE_EXT_ALL = 2;
     private static final String[] LANGUAGE_EXT_NAMES = {
 	getString("NoneTxt"),
 	getString("DefaultTxt"),
@@ -103,21 +102,21 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
     private static final String[] LANGUAGE_EXT_OPTIONS = null;
     private IntConfiguration languageExt;
 
-    private VectorConfiguration includeDirectories;
+    private VectorConfiguration<String> includeDirectories;
     private BooleanConfiguration inheritIncludes;
-    private OptionsConfiguration preprocessorConfiguration;
+    private VectorConfiguration<String> preprocessorConfiguration;
     private BooleanConfiguration inheritPreprocessor;
 
     // Constructors
-    public CCCCompilerConfiguration(String baseDir, CCCCompilerConfiguration master) {
+    protected CCCCompilerConfiguration(String baseDir, CCCCompilerConfiguration master) {
 	super(baseDir, master);
 	mpLevel = new IntConfiguration(master != null ? master.getMTLevel() : null, MT_LEVEL_NONE, MT_LEVEL_NAMES, null);
 	libraryLevel = new IntConfiguration(master != null ? master.getLibraryLevel() : null, LIBRARY_LEVEL_BINARY, LIBRARY_LEVEL_NAMES, getLibraryLevelOptions());
 	standardsEvolution = new IntConfiguration(master != null ? master.getStandardsEvolution() : null, STANDARDS_DEFAULT, STANDARDS_NAMES, getStandardsEvolutionOptions());
 	languageExt = new IntConfiguration(master != null ? master.getLanguageExt() : null, LANGUAGE_EXT_DEFAULT, LANGUAGE_EXT_NAMES, getLanguageExtOptions());
-	includeDirectories = new VectorConfiguration(master != null ? master.getIncludeDirectories() : null);
+	includeDirectories = new VectorConfiguration<String>(master != null ? master.getIncludeDirectories() : null);
 	inheritIncludes = new BooleanConfiguration(null, true, null, null);
-	preprocessorConfiguration = new OptionsConfiguration();
+	preprocessorConfiguration = new VectorConfiguration<String>(master != null ? master.getPreprocessorConfiguration() : null);
 	inheritPreprocessor = new BooleanConfiguration(null, true, null, null);
     }
     
@@ -190,11 +189,11 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
     }
 
     // Include Directories
-    public VectorConfiguration getIncludeDirectories() {
+    public VectorConfiguration<String> getIncludeDirectories() {
 	return includeDirectories;
     }
 
-    public void setIncludeDirectories(VectorConfiguration includeDirectories) {
+    public void setIncludeDirectories(VectorConfiguration<String> includeDirectories) {
 	this.includeDirectories = includeDirectories;
     }
 
@@ -208,10 +207,10 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
     }
 
     // Preprocessor
-    public OptionsConfiguration getPreprocessorConfiguration() {
+    public VectorConfiguration<String> getPreprocessorConfiguration() {
 	return preprocessorConfiguration;
     }
-    public void setPreprocessorConfiguration(OptionsConfiguration preprocessorConfiguration) {
+    public void setPreprocessorConfiguration(VectorConfiguration<String> preprocessorConfiguration) {
 	this.preprocessorConfiguration = preprocessorConfiguration;
     }
 
@@ -239,28 +238,28 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
 	getInheritPreprocessor().assign(conf.getInheritPreprocessor());
     }
 
-    @Override
-    public Object clone() {
-	CCCCompilerConfiguration clone = new CCCCompilerConfiguration(getBaseDir(), (CCCCompilerConfiguration)getMaster());
-	// BasicCompilerConfiguration
-	clone.setDevelopmentMode((IntConfiguration)getDevelopmentMode().clone());
-	clone.setWarningLevel((IntConfiguration)getWarningLevel().clone());
-	clone.setSixtyfourBits((IntConfiguration)getSixtyfourBits().clone());
-	clone.setStrip((BooleanConfiguration)getStrip().clone());
-	clone.setAdditionalDependencies((StringConfiguration)getAdditionalDependencies().clone());
-	clone.setTool((StringConfiguration)getTool().clone());
-	clone.setCommandLineConfiguration((OptionsConfiguration)getCommandLineConfiguration().clone());
-	// XCompilerConfiguration
-	clone.setMTLevel((IntConfiguration)getMTLevel().clone());
-	clone.setLibraryLevel((IntConfiguration)getLibraryLevel().clone());
-	clone.setStandardsEvolution((IntConfiguration)getStandardsEvolution().clone());
-	clone.setLanguageExt((IntConfiguration)getLanguageExt().clone());
-	clone.setIncludeDirectories((VectorConfiguration)getIncludeDirectories().clone());
-	clone.setInheritIncludes((BooleanConfiguration)getInheritIncludes().clone());
-	clone.setPreprocessorConfiguration((OptionsConfiguration)getPreprocessorConfiguration().clone());
-	clone.setInheritPreprocessor((BooleanConfiguration)getInheritPreprocessor().clone());
-	return clone;
-    }
+//    @Override
+//    public Object clone() {
+//	CCCCompilerConfiguration clone = new CCCCompilerConfiguration(getBaseDir(), (CCCCompilerConfiguration)getMaster());
+//	// BasicCompilerConfiguration
+//	clone.setDevelopmentMode((IntConfiguration)getDevelopmentMode().clone());
+//	clone.setWarningLevel((IntConfiguration)getWarningLevel().clone());
+//	clone.setSixtyfourBits((IntConfiguration)getSixtyfourBits().clone());
+//	clone.setStrip((BooleanConfiguration)getStrip().clone());
+//	clone.setAdditionalDependencies((StringConfiguration)getAdditionalDependencies().clone());
+//	clone.setTool((StringConfiguration)getTool().clone());
+//	clone.setCommandLineConfiguration((OptionsConfiguration)getCommandLineConfiguration().clone());
+//	// XCompilerConfiguration
+//	clone.setMTLevel((IntConfiguration)getMTLevel().clone());
+//	clone.setLibraryLevel((IntConfiguration)getLibraryLevel().clone());
+//	clone.setStandardsEvolution((IntConfiguration)getStandardsEvolution().clone());
+//	clone.setLanguageExt((IntConfiguration)getLanguageExt().clone());
+//	clone.setIncludeDirectories((VectorConfiguration)getIncludeDirectories().clone());
+//	clone.setInheritIncludes((BooleanConfiguration)getInheritIncludes().clone());
+//	clone.setPreprocessorConfiguration((VectorConfiguration)getPreprocessorConfiguration().clone());
+//	clone.setInheritPreprocessor((BooleanConfiguration)getInheritPreprocessor().clone());
+//	return clone;
+//    }
 
     // Sheet
     public Sheet.Set getSet() {
@@ -270,49 +269,50 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
 	set1.setName("General"); // NOI18N
 	set1.setDisplayName(getString("GeneralTxt"));
 	set1.setShortDescription(getString("GeneralHint"));
-        // Include Dirctories
+    // Include Dirctories
 	StringBuilder inheritedValues = new StringBuilder();
         master = (CCCCompilerConfiguration)getMaster();
 	while (master != null) {
-	    inheritedValues.append(master.getIncludeDirectories().getOption("")); // NOI18N
-	    if (master.getInheritIncludes().getValue())
-                master = (CCCCompilerConfiguration)master.getMaster();
-            else
-                master = null;
+	    inheritedValues.append(master.getIncludeDirectories().getOption(null, "")); // NOI18N
+        if (master.getInheritIncludes().getValue()) {
+            master = (CCCCompilerConfiguration) master.getMaster();
+        } else {
+            master = null;
+        }
 	}
 	set1.put(new VectorNodeProp(getIncludeDirectories(), getInheritIncludes(), getBaseDir(), new String[] {"IncludeDirectories", getString("IncludeDirectoriesTxt"), getString("IncludeDirectoriesHint"), inheritedValues.toString()}, true, new HelpCtx("AddtlIncludeDirectories"))); // NOI18N
 	// Preprocessor Macros
 	inheritedValues = new StringBuilder();
         master = (CCCCompilerConfiguration)getMaster();
 	while (master != null) {
-	    inheritedValues.append(master.getPreprocessorConfiguration().getValue());
-	    if (master.getInheritPreprocessor().getValue())
-                master = (CCCCompilerConfiguration)master.getMaster();
-            else
-                master = null;
+	    inheritedValues.append(master.getPreprocessorConfiguration().getOption(null, "")); // NOI18N
+	    if (master.getInheritPreprocessor().getValue()) {
+            master = (CCCCompilerConfiguration) master.getMaster();
+        } else {
+            master = null;
+        }
 	}
-	String[] texts = new String[] {getString("PreprocessorDefinitionsTxt1"), getString("PreprocessorDefinitionsHint"), getString("PreprocessorDefinitionsTxt2"), getString("InheritedValuesTxt"), inheritedValues.toString()};
-	set1.put(new OptionsNodeProp(getPreprocessorConfiguration(), getInheritPreprocessor(), new PreprocessorOptions(), null, null, texts)); // NOI18N
+        set1.put(new StringListNodeProp(getPreprocessorConfiguration(), getInheritPreprocessor(), new String[] {"preprocessor-definitions", getString("PreprocessorDefinitionsTxt"), getString("PreprocessorDefinitionsHint"), inheritedValues.toString()}, true, new HelpCtx("AddtlIncludeDirectories"))); // NOI18N
         
         return set1;
     }
     
-    private class PreprocessorOptions implements AllOptionsProvider {
-	public String getAllOptions(BasicCompiler compiler) {
-	    CCCCompilerConfiguration master = (CCCCompilerConfiguration)getMaster();
-
-	    StringBuilder options = new StringBuilder();
-	    while (master != null) {
-		options.append(master.getPreprocessorConfiguration().getValue());
-                options.append(" "); // NOI18N
-                if (master.getInheritPreprocessor().getValue())
-                    master = (CCCCompilerConfiguration)master.getMaster();
-                else
-                    master = null;
-            }
-	    return CppUtils.reformatWhitespaces(options.toString());
-	}
-    }
+//    private class PreprocessorOptions implements AllOptionsProvider {
+//	public String getAllOptions(BasicCompiler compiler) {
+//	    CCCCompilerConfiguration master = (CCCCompilerConfiguration)getMaster();
+//
+//	    StringBuilder options = new StringBuilder();
+//	    while (master != null) {
+//		options.append(master.getPreprocessorConfiguration().getValue());
+//                options.append(" "); // NOI18N
+//                if (master.getInheritPreprocessor().getValue())
+//                    master = (CCCCompilerConfiguration)master.getMaster();
+//                else
+//                    master = null;
+//            }
+//	    return CppUtils.reformatWhitespaces(options.toString());
+//	}
+//    }
 
     // Sheet
     public Sheet getSheet(Project project) {
@@ -325,4 +325,10 @@ public class CCCCompilerConfiguration extends BasicCompilerConfiguration {
     private static String getString(String s) {
         return NbBundle.getMessage(CCCCompilerConfiguration.class, s);
     }
+    
+    protected abstract CompilerDescriptor getCompilerDescription();
+
+    protected abstract String getUserIncludeFlag();
+
+    protected abstract String getUserMacroFlag();
 }
