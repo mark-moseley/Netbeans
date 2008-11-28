@@ -44,6 +44,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 import javax.swing.JList;
 import javax.swing.ListModel;
 import javax.swing.SwingUtilities;
@@ -76,6 +77,7 @@ import org.netbeans.modules.editor.completion.CompletionJList;
  */
 public class CompletionJListOperator extends JListOperator {
     public static final String INSTANT_SUBSTITUTION = "InstantSubstitution";
+    private static final Logger LOG = Logger.getLogger(CompletionJListOperator.class.getName());
     
     /**
      * This constructor is intended to use just for your own risk.
@@ -93,14 +95,16 @@ public class CompletionJListOperator extends JListOperator {
     public List getCompletionItems() throws Exception {
         return getCompletionItems((JList) getSource());
     }
-    
+
     private static List getCompletionItems(JList compJList)
             throws Exception {
         ListModel model = (ListModel) compJList.getModel();
         // dump items to List
-        List<Object> data = new ArrayList<Object>(model.getSize());
-        for (int i=0; i < model.getSize(); i++) {
-            data.add(model.getElementAt(i));
+        CompletionJListOperator oper = new CompletionJListOperator(compJList);
+        int size = oper.getModelSize();
+        List<Object> data = new ArrayList<Object>(size);
+        for (int i=0; i < size; i++) {
+            data.add(oper.getModelElementAt(i));
         }
         return data;
     }
@@ -148,7 +152,7 @@ public class CompletionJListOperator extends JListOperator {
                         iarfMethod.setAccessible(true);
                         Boolean allResultsFinished = (Boolean) iarfMethod.invoke(comp, resultSets);
                         if (!allResultsFinished) {
-                            System.out.println(System.currentTimeMillis()+": all CC Results not finished yet.");
+                            LOG.fine(System.currentTimeMillis()+": all CC Results not finished yet.");
                             return null;
                         }
                     }
@@ -159,7 +163,7 @@ public class CompletionJListOperator extends JListOperator {
                     List list = getCompletionItems(compJList);
                     // check if it is no a 'Please Wait' item
                     if (list.size() > 0 && !(list.contains(PLEASE_WAIT))) {
-                        System.out.println(list);
+                        LOG.fine(list.toString());
                         return compJList;
                     } else {
                         return null;
@@ -333,4 +337,35 @@ public class CompletionJListOperator extends JListOperator {
         }
         
     }
+
+    private int getModelSize() {
+        return runMapping(new MapIntegerAction("getModel().getSize()") {
+
+            @Override
+            public int map() throws Exception {
+                return getModel().getSize();
+            }
+        });
+    }
+    private Object getModelElementAt(final int index) {
+        return runMapping(new MapAction("getModel().getElementAt()") {
+
+            @Override
+            public Object map() throws Exception {
+                return getModel().getElementAt(index);
+            }
+        });
+    }
+
+    @Override
+    public int findItemIndex(final ListItemChooser chooser, final int index) {
+        return runMapping(new MapIntegerAction("findItemIndex") {
+
+            @Override
+            public int map() throws Exception {
+                return CompletionJListOperator.super.findItemIndex(chooser, index);
+            }
+        });
+    }
+
 }
