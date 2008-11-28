@@ -40,9 +40,11 @@
  */
 
 package org.netbeans.modules.web.core.palette.items;
+
 import java.awt.Dialog;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ResourceBundle;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -51,6 +53,7 @@ import org.netbeans.modules.web.core.palette.JSPPaletteUtilities;
 import org.netbeans.modules.web.jsps.parserapi.PageInfo;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
+import org.openide.NotificationLineSupport;
 import org.openide.util.NbBundle;
 
 /**
@@ -59,11 +62,13 @@ import org.openide.util.NbBundle;
  */
 public class UseBeanCustomizer extends javax.swing.JPanel {
 
+    private static final ResourceBundle bundle = NbBundle.getBundle(UseBeanCustomizer.class);
+
     private Dialog dialog = null;
     private DialogDescriptor descriptor = null;
+    private NotificationLineSupport statusLine;
     private boolean dialogOK = false;
     PageInfo.BeanData[] beanData = null;
-
     UseBean useBean;
     JTextComponent target;
             
@@ -73,51 +78,45 @@ public class UseBeanCustomizer extends javax.swing.JPanel {
         this.target = target;
         
         initComponents();
+        
         jComboBox2.setModel(new DefaultComboBoxModel(UseBean.scopes));
         jComboBox2.setSelectedIndex(useBean.getScopeIndex());
         jTextField2.getDocument().addDocumentListener(new DocumentListener(){
-
             public void insertUpdate(DocumentEvent arg0) {
                 validateInput();
             }
-
             public void removeUpdate(DocumentEvent arg0) {
                 validateInput();
             }
-
             public void changedUpdate(DocumentEvent arg0) {
                 validateInput();
             }
         });
         jTextField1.getDocument().addDocumentListener(new DocumentListener(){
-
             public void insertUpdate(DocumentEvent arg0) {
                 validateInput();
             }
-
             public void removeUpdate(DocumentEvent arg0) {
                 validateInput();
             }
-
             public void changedUpdate(DocumentEvent arg0) {
                 validateInput();
             }
         });
-        
     }
     
     public boolean showDialog(PageInfo.BeanData[] beanData) {
         this.beanData = beanData;
         dialogOK = false;
         
-        String displayName = "";
+        String displayName = ""; // NOI18N
         try {
             displayName = NbBundle.getBundle("org.netbeans.modules.web.core.palette.items.resources.Bundle").getString("NAME_jsp-UseBean"); // NOI18N
         }
         catch (Exception e) {}
         
         descriptor = new DialogDescriptor
-                (this, NbBundle.getMessage(UseBeanCustomizer.class, "LBL_Customizer_InsertPrefix") + " " + displayName, true,
+                (this, bundle.getString("LBL_Customizer_InsertPrefix") + " " + displayName, true,   // NOI18N
                  DialogDescriptor.OK_CANCEL_OPTION, DialogDescriptor.OK_OPTION,
                  new ActionListener() {
                      public void actionPerformed(ActionEvent e) {
@@ -126,9 +125,10 @@ public class UseBeanCustomizer extends javax.swing.JPanel {
                             dialogOK = true;
                         }
                         dialog.dispose();
-		     }
-		 } 
-                );
+                     }
+                  }
+        );
+        statusLine = descriptor.createNotificationLineSupport();
         validateInput();
         dialog = DialogDisplayer.getDefault().createDialog(descriptor);
         dialog.setVisible(true);
@@ -138,7 +138,6 @@ public class UseBeanCustomizer extends javax.swing.JPanel {
     }
     
     private void collectInput() {
-
         useBean.setBean(jTextField2.getText());
         
         String clazz = jTextField1.getText();
@@ -146,43 +145,32 @@ public class UseBeanCustomizer extends javax.swing.JPanel {
         
         int scopeIndex = jComboBox2.getSelectedIndex();
         useBean.setScopeIndex(scopeIndex);
-        
     }
     
-    private void validateInput()
-    {
-        if(jTextField2.getText().equals(""))
-        {
-            String msg = NbBundle.getBundle("org.netbeans.modules.web.core.palette.items.Bundle").getString("Error_Empty_ID"); // NOI18N
+    private void validateInput() {
+        if (jTextField2.getText().length() < 1) {
+            statusLine.setInformationMessage(bundle.getString("Error_Empty_ID")); // NOI18N
             descriptor.setValid(false);
-            errorMessage.setText(msg);
             return;
         }
-        if(JSPPaletteUtilities.idExists(jTextField2.getText(), beanData))
-        {   
-            String msg = NbBundle.getBundle("org.netbeans.modules.web.core.palette.items.Bundle").getString("Error_not_uniq_ID"); // NOI18N
+        if (JSPPaletteUtilities.idExists(jTextField2.getText(), beanData)) {
+            statusLine.setErrorMessage(bundle.getString("Error_not_uniq_ID")); // NOI18N
             descriptor.setValid(false);
-            errorMessage.setText(msg);
             return;
         }
-        if(jTextField1.getText().equals(""))
-        {
-            String msg = NbBundle.getBundle("org.netbeans.modules.web.core.palette.items.Bundle").getString("Error_Empty_class"); // NOI18N
+        if (jTextField1.getText().length() < 1) {
+            statusLine.setInformationMessage(bundle.getString("Error_Empty_class")); // NOI18N
             descriptor.setValid(false);
-            errorMessage.setText(msg);
             return;
         }
-        if(!JSPPaletteUtilities.typeExists(target, jTextField1.getText()))
-        {
-            String msg = NbBundle.getBundle("org.netbeans.modules.web.core.palette.items.Bundle").getString("Error_No_Such_class"); // NOI18N
+        if (!JSPPaletteUtilities.typeExists(target, jTextField1.getText())) {
+            statusLine.setErrorMessage(bundle.getString("Error_No_Such_class")); // NOI18N
             descriptor.setValid(false);
-            errorMessage.setText(msg);
             return;
         }
- 
+
+        statusLine.clearMessages();
         descriptor.setValid(true);
-        errorMessage.setText("");
-       
     }
     
     /** This method is called from within the constructor to
@@ -190,7 +178,7 @@ public class UseBeanCustomizer extends javax.swing.JPanel {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
@@ -202,7 +190,6 @@ public class UseBeanCustomizer extends javax.swing.JPanel {
         jComboBox2 = new javax.swing.JComboBox();
         jTextField2 = new javax.swing.JTextField();
         jLabel3 = new javax.swing.JLabel();
-        errorMessage = new javax.swing.JLabel();
 
         jFileChooser1.setCurrentDirectory(null);
 
@@ -274,22 +261,11 @@ public class UseBeanCustomizer extends javax.swing.JPanel {
         jLabel3.setForeground(new java.awt.Color(255, 0, 0));
         add(jLabel3, new java.awt.GridBagConstraints());
 
-        errorMessage.setForeground(new java.awt.Color(255, 0, 0));
-        errorMessage.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
-        errorMessage.setVerticalTextPosition(javax.swing.SwingConstants.TOP);
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 3;
-        gridBagConstraints.gridwidth = 2;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(24, 12, 12, 12);
-        add(errorMessage, gridBagConstraints);
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(UseBeanCustomizer.class, "ACSD_UseBean_Dialog")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JLabel errorMessage;
     private javax.swing.JComboBox jComboBox2;
     private javax.swing.JFileChooser jFileChooser1;
     private javax.swing.JLabel jLabel1;
