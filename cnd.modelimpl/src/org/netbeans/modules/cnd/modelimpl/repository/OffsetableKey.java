@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.repository;
 
 import java.io.DataInput;
@@ -47,7 +46,7 @@ import java.io.IOException;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
-
+import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
 
 /**
  * File and offset -based key
@@ -55,128 +54,171 @@ import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 
 /*package*/
 abstract class OffsetableKey extends ProjectFileNameBasedKey implements Comparable {
-    
+
     private final int startOffset;
     private final int endOffset;
-    
-    private final char kind;
+    private final int hashCode;
     private final CharSequence name;
-    
+
     protected OffsetableKey(CsmOffsetable obj, String kind, CharSequence name) {
-	super((FileImpl) obj.getContainingFile());
-	this.startOffset = obj.getStartOffset();
-	this.endOffset = obj.getEndOffset();
-        assert kind.length()==1;
-	this.kind = kind.charAt(0);
-	this.name = name;
+        this((FileImpl) obj.getContainingFile(), obj.getStartOffset(), obj.getEndOffset(), kind, name);
     }
-    
+
+    protected OffsetableKey(FileImpl containingFile, int startOffset, int endOffset, String kind, CharSequence name) {
+        super(containingFile);
+        this.startOffset = startOffset;
+        this.endOffset = endOffset;
+        assert kind.length() == 1;
+        this.name = name;
+        this.hashCode = (_hashCode() << 8) | (kind.charAt(0) & 0xff);
+    }
+
+    /*package-local*/ char getKind() {
+        return (char) (hashCode & 0xff);
+    }
+
+    /*package-local*/ CharSequence getName() {
+        if (name != null && 0 < name.length() && isDigit(name.charAt(0))) {
+            return CharSequenceKey.empty();
+        }
+        return name;
+    }
+
+    // to improve performance of Character.isDigit(char)
+    private boolean isDigit(char c) {
+        switch (c) {
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                return true;
+        }
+        return false;
+    }
+
+    /*package-local*/ int getStartOffset() {
+        return startOffset;
+    }
+
+    /*package-local*/ int getEndOffset() {
+        return endOffset;
+    }
+
     @Override
     public void write(DataOutput aStream) throws IOException {
-	super.write(aStream);
-	aStream.writeInt(this.startOffset);
-	aStream.writeInt(this.endOffset);
-	aStream.writeChar(this.kind);
-	assert this.name != null;
-	aStream.writeUTF(this.name.toString());
+        super.write(aStream);
+        aStream.writeInt(this.startOffset);
+        aStream.writeInt(this.endOffset);
+        aStream.writeInt(this.hashCode);
+        assert this.name != null;
+        aStream.writeUTF(this.name.toString());
     }
-    
+
     protected OffsetableKey(DataInput aStream) throws IOException {
-	super(aStream);
-	this.startOffset = aStream.readInt();
-	this.endOffset = aStream.readInt();
-	this.kind = aStream.readChar();
-	this.name = NameCache.getManager().getString(aStream.readUTF());
-	assert this.name != null;
+        super(aStream);
+        this.startOffset = aStream.readInt();
+        this.endOffset = aStream.readInt();
+        this.hashCode = aStream.readInt();
+        this.name = NameCache.getManager().getString(aStream.readUTF());
+        assert this.name != null;
     }
-    
+
     @Override
     public String toString() {
-	return name + "[" + kind + " " + startOffset + "-" + endOffset + "] {" + getFileNameSafe() + "; " + getProjectName() + "}"; // NOI18N
+        return name + "[" + getKind() + " " + getStartOffset() + "-" + getEndOffset() + "] {" + getFileNameSafe() + "; " + getProjectName() + "}"; // NOI18N
     }
-    
+
     @Override
     public boolean equals(Object obj) {
-	if (!super.equals(obj)) {
-	    return false;
-	}
-	OffsetableKey other = (OffsetableKey)obj;
-	return  this.startOffset == other.startOffset &&
-		this.endOffset == other.endOffset &&
-		this.kind == other.kind &&
-		this.name.equals(other.name);
+        if (!super.equals(obj)) {
+            return false;
+        }
+        OffsetableKey other = (OffsetableKey) obj;
+        return this.startOffset == other.startOffset &&
+                this.endOffset == other.endOffset &&
+                this.getKind() == other.getKind() &&
+                this.name.equals(other.name);
     }
-    
+
     @Override
     public int hashCode() {
-	int retValue;
-	
-	retValue = 17*super.hashCode() + name.hashCode();
-	retValue = 17*retValue + kind;
-	retValue = 17*super.hashCode() + startOffset;
-	retValue = 17*retValue + endOffset;
-	return retValue;
+        return hashCode;
     }
-    
+
+    private final int _hashCode() {
+        int retValue;
+
+        retValue = 17 * super.hashCode() + name.hashCode();
+        retValue = 17 * retValue + startOffset;
+        retValue = 17 * retValue + endOffset;
+        return retValue;
+    }
+
     public int compareTo(Object o) {
-	if (this == o) {
-	    return 0;
-	}
-	OffsetableKey other = (OffsetableKey)o;
-	assert (kind ==other.kind);
-	//FUXUP assertion: unit and file tables should be deserialized before files deserialization.
-	//instead compare indexes.
-	//assert (this.getFileName().equals(other.getFileName()));
-	//assert (this.getProjectName().equals(other.getProjectName()));
-	assert (this.unitIndex == other.unitIndex);
-	assert (this.fileNameIndex == other.fileNameIndex);
-	int ofs1 = this.startOffset;
-	int ofs2 = other.startOffset;
-	if (ofs1 == ofs2) {
-	    return 0;
-	} else {
-	    return (ofs1 - ofs2);
-	}
+        if (this == o) {
+            return 0;
+        }
+        OffsetableKey other = (OffsetableKey) o;
+        assert (getKind() == other.getKind());
+        //FUXUP assertion: unit and file tables should be deserialized before files deserialization.
+        //instead compare indexes.
+        //assert (this.getFileName().equals(other.getFileName()));
+        //assert (this.getProjectName().equals(other.getProjectName()));
+        assert (this.getUnitId() == other.getUnitId());
+        assert (this.fileNameIndex == other.fileNameIndex);
+        int ofs1 = this.startOffset;
+        int ofs2 = other.startOffset;
+        if (ofs1 == ofs2) {
+            return 0;
+        } else {
+            return (ofs1 - ofs2);
+        }
     }
-    
+
     @Override
     public int getDepth() {
-	return super.getDepth() + 2;
+        return super.getDepth() + 2;
     }
-    
+
     @Override
     public CharSequence getAt(int level) {
-	int superDepth = super.getDepth();
-	if (level < superDepth) {
-	    return super.getAt(level);
-	} else {
-	    switch(level - superDepth) {
-		case 0:
-		    return new String(new char[]{this.kind});
-		case 1:
-		    return this.name;
-		default:
-		    
-		    throw new IllegalArgumentException("not supported level" + level); // NOI18N
-	    }
-	}
+        int superDepth = super.getDepth();
+        if (level < superDepth) {
+            return super.getAt(level);
+        } else {
+            switch (level - superDepth) {
+                case 0:
+                    return new String(new char[]{getKind()});
+                case 1:
+                    return this.name;
+                default:
+
+                    throw new IllegalArgumentException("not supported level" + level); // NOI18N
+            }
+        }
     }
-    
+
     public int getSecondaryDepth() {
-	return 2;
+        return 2;
     }
-    
+
     public int getSecondaryAt(int level) {
-	switch(level) {
-	    case 0:
-		
-		return this.startOffset;
-	    case 1:
-		
-		return this.endOffset;
-	    default:
-		
-		throw new IllegalArgumentException("not supported level" + level); // NOI18N
-	}
+        switch (level) {
+            case 0:
+
+                return this.startOffset;
+            case 1:
+
+                return this.endOffset;
+            default:
+
+                throw new IllegalArgumentException("not supported level" + level); // NOI18N
+        }
     }
 }
