@@ -41,14 +41,13 @@
 
 package org.netbeans.modules.j2ee.common;
 
-import java.awt.Color;
 import java.awt.Dialog;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import javax.swing.UIManager;
+import java.util.ResourceBundle;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.netbeans.api.db.explorer.ConnectionManager;
@@ -57,23 +56,24 @@ import org.netbeans.api.db.explorer.support.DatabaseExplorerUIs;
 import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
+import org.openide.NotificationLineSupport;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
 /**
  *
  * @author  Libor Kotouc
+ * @author  Petr Slechta
  */
 class DatasourceCustomizer extends javax.swing.JPanel {
-    
-    private final Color nbErrorForeground;
-    
+
+    private static final ResourceBundle bundle = NbBundle.getBundle(DatasourceCustomizer.class);
+
     private Dialog dialog = null;
     private DialogDescriptor descriptor = null;
+    private NotificationLineSupport statusLine;
     private boolean dialogOK = false;
-    
     private HashMap<String, Datasource> datasources;
-    
     private String jndiName;
     private String url;
     private String username;
@@ -98,7 +98,6 @@ class DatasourceCustomizer extends javax.swing.JPanel {
                 verify();
             }
         });
-        
         jndiNameField.getDocument().addDocumentListener(new DocumentListener() {
             public void changedUpdate(DocumentEvent e) {
                 verify();
@@ -110,19 +109,11 @@ class DatasourceCustomizer extends javax.swing.JPanel {
                 verify();
             }
         });
-        
-        Color errorColor = UIManager.getColor("nb.errorForeground"); //NOI18N
-        if (errorColor == null)
-            errorColor = new Color(255, 0, 0);
-        nbErrorForeground = errorColor;
-
-        errorLabel.setForeground(nbErrorForeground);
     }
     
     public boolean showDialog() {
-        
         descriptor = new DialogDescriptor
-                    (this, NbBundle.getMessage(DatasourceCustomizer.class, "LBL_DatasourceCustomizer"), true,
+                    (this, NbBundle.getMessage(DatasourceCustomizer.class, "LBL_DatasourceCustomizer"), true,  //NOI18N
                     DialogDescriptor.OK_CANCEL_OPTION, DialogDescriptor.OK_OPTION,
                     DialogDescriptor.DEFAULT_ALIGN,
                     new HelpCtx(DatasourceCustomizer.class),
@@ -141,8 +132,8 @@ class DatasourceCustomizer extends javax.swing.JPanel {
 		     }
 		 } 
                 );
-        
         descriptor.setClosingOptions(new Object[] { DialogDescriptor.CANCEL_OPTION });
+        statusLine = descriptor.createNotificationLineSupport();
         
         verify();
 
@@ -154,73 +145,60 @@ class DatasourceCustomizer extends javax.swing.JPanel {
     }
     
     private boolean handleConfirmation() {
-        
         jndiName = jndiNameField.getText().trim();
-        
         DatabaseConnection conn = (DatabaseConnection)connCombo.getSelectedItem();
-        
         if (conn.getPassword() == null) {
             ConnectionManager.getDefault().showConnectionDialog(conn);
         }
         if (conn.getPassword() == null) {
             //user did not provide the password
-            errorLabel.setText(NbBundle.getMessage(DatasourceCustomizer.class, "ERR_NoPassword"));
+            statusLine.setErrorMessage(bundle.getString("ERR_NoPassword"));  //NOI18N
             return false;
         }
         url = conn.getDatabaseURL();
         username = conn.getUser();
         password = conn.getPassword();
         driverClassName = conn.getDriverClass();
-        
         return true;
     }
     
     private boolean verify() {
-        
         boolean isValid = verifyJndiName();
         if (isValid)
             isValid = verifyConnection();
-        
         return isValid;
     }
     
     private boolean verifyJndiName() {
-        
         boolean valid = true;
         
         String jndiNameFromField = jndiNameField.getText().trim();
         if (jndiNameFromField.length() == 0) {
-            errorLabel.setText(NbBundle.getMessage(DatasourceCustomizer.class, "ERR_JNDI_NAME_EMPTY")); // NOI18N
+            statusLine.setInformationMessage(bundle.getString("ERR_JNDI_NAME_EMPTY"));  // NOI18N
             valid = false;
         }
-        else
-        if (datasourceAlreadyExists(jndiNameFromField)) {
-            errorLabel.setText(NbBundle.getMessage(DatasourceCustomizer.class, "ERR_DS_EXISTS")); // NOI18N
+        else if (datasourceAlreadyExists(jndiNameFromField)) {
+            statusLine.setErrorMessage(bundle.getString("ERR_DS_EXISTS")); // NOI18N
             valid = false;
         }
         else {
-            errorLabel.setText(""); // NOI18N
+            statusLine.clearMessages();
         }
-
         descriptor.setValid(valid);
-        
         return valid;
     }
     
     private boolean verifyConnection() {
-        
         boolean valid = true;
         
         if (!(connCombo.getSelectedItem() instanceof DatabaseConnection)) {
-            errorLabel.setText(NbBundle.getMessage(DatasourceCustomizer.class, "ERR_NO_CONN_SELECTED")); // NOI18N
+            statusLine.setInformationMessage(bundle.getString("ERR_NO_CONN_SELECTED"));  // NOI18N
             valid = false;
         }
         else {
-            errorLabel.setText(""); // NOI18N
+            statusLine.clearMessages();
         }
-
         descriptor.setValid(valid);
-        
         return valid;
     }
     
@@ -253,19 +231,20 @@ class DatasourceCustomizer extends javax.swing.JPanel {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
+
         jLabel1 = new javax.swing.JLabel();
         jLabel2 = new javax.swing.JLabel();
         jndiNameField = new javax.swing.JTextField();
-        errorLabel = new javax.swing.JLabel();
         connCombo = new javax.swing.JComboBox();
 
         setForeground(new java.awt.Color(255, 0, 0));
-        jLabel1.setLabelFor(jndiNameField);
-        org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(DatasourceCustomizer.class, "LBL_DSC_JndiName"));
 
-        org.openide.awt.Mnemonics.setLocalizedText(jLabel2, org.openide.util.NbBundle.getMessage(DatasourceCustomizer.class, "LBL_DSC_DbConn"));
+        jLabel1.setLabelFor(jndiNameField);
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(DatasourceCustomizer.class, "LBL_DSC_JndiName")); // NOI18N
+
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel2, org.openide.util.NbBundle.getMessage(DatasourceCustomizer.class, "LBL_DSC_DbConn")); // NOI18N
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -274,17 +253,12 @@ class DatasourceCustomizer extends javax.swing.JPanel {
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(layout.createSequentialGroup()
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(jLabel1)
-                            .add(jLabel2))
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(layout.createSequentialGroup()
-                                .add(jndiNameField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 359, Short.MAX_VALUE)
-                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED))
-                            .add(connCombo, 0, 359, Short.MAX_VALUE)))
-                    .add(errorLabel))
+                    .add(jLabel1)
+                    .add(jLabel2))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(jndiNameField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 327, Short.MAX_VALUE)
+                    .add(connCombo, 0, 327, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -296,10 +270,7 @@ class DatasourceCustomizer extends javax.swing.JPanel {
                     .add(jndiNameField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(layout.createSequentialGroup()
-                        .add(jLabel2)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 39, Short.MAX_VALUE)
-                        .add(errorLabel))
+                    .add(jLabel2)
                     .add(layout.createSequentialGroup()
                         .add(connCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .addContainerGap())))
@@ -309,10 +280,9 @@ class DatasourceCustomizer extends javax.swing.JPanel {
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JComboBox connCombo;
-    private javax.swing.JLabel errorLabel;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JTextField jndiNameField;
     // End of variables declaration//GEN-END:variables
-    
+
 }
