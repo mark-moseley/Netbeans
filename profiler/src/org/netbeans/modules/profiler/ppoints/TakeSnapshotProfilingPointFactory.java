@@ -44,8 +44,9 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.profiler.ppoints.ui.TakeSnapshotCustomizer;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
+import org.openide.util.Lookup;
 import java.io.File;
 import java.text.MessageFormat;
 import java.util.Properties;
@@ -57,6 +58,7 @@ import javax.swing.ImageIcon;
  *
  * @author Jiri Sedlacek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.ppoints.ProfilingPointFactory.class)
 public class TakeSnapshotProfilingPointFactory extends CodeProfilingPointFactory {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -69,19 +71,14 @@ public class TakeSnapshotProfilingPointFactory extends CodeProfilingPointFactory
     private static final String PP_DEFAULT_NAME = NbBundle.getMessage(TakeSnapshotProfilingPointFactory.class,
                                                                       "TakeSnapshotProfilingPointFactory_PpDefaultName"); // NOI18N
                                                                                                                           // -----
-    public static final Icon TAKE_SNAPSHOT_PP_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/takeSnapshotProfilingPoint.png")); // NOI18N
+    public static final Icon TAKE_SNAPSHOT_PP_ICON = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/takeSnapshotProfilingPoint.png")); // NOI18N
     public static final String TAKE_SNAPSHOT_PP_TYPE = PP_TYPE;
     public static final String TAKE_SNAPSHOT_PP_DESCR = PP_DESCR;
-    private static TakeSnapshotProfilingPointFactory defaultInstance;
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
     public static TakeSnapshotProfilingPointFactory getDefault() {
-        if (defaultInstance == null) {
-            defaultInstance = new TakeSnapshotProfilingPointFactory();
-        }
-
-        return defaultInstance;
+        return Lookup.getDefault().lookup(TakeSnapshotProfilingPointFactory.class);
     }
 
     public String getDescription() {
