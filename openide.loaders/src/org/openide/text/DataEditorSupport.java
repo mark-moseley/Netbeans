@@ -61,10 +61,10 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import javax.swing.text.EditorKit;
 import javax.swing.text.StyledDocument;
 import org.netbeans.api.queries.FileEncodingQuery;
@@ -72,6 +72,7 @@ import org.netbeans.modules.openide.loaders.DataObjectAccessor;
 import org.netbeans.modules.openide.loaders.UIException;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.cookies.EditorCookie;
 import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileEvent;
@@ -79,6 +80,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileLock;
+import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileSystem;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
@@ -311,11 +313,11 @@ public class DataEditorSupport extends CloneableEditorSupport {
         StyledDocument doc = super.createStyledDocument (kit);
             
         // set document name property
-        doc.putProperty(javax.swing.text.Document.TitleProperty,
+        doc.putProperty(Document.TitleProperty,
             FileUtil.getFileDisplayName(obj.getPrimaryFile())
         );
         // set dataobject to stream desc property
-        doc.putProperty(javax.swing.text.Document.StreamDescriptionProperty,
+        doc.putProperty(Document.StreamDescriptionProperty,
             obj
         );
         
@@ -606,7 +608,7 @@ public class DataEditorSupport extends CloneableEditorSupport {
         */
         private FileObject getFileImpl () {
             // updates the file if there was a change
-	    changeFile();
+            changeFile();
             return fileObject;
         }
         
@@ -627,9 +629,7 @@ public class DataEditorSupport extends CloneableEditorSupport {
         * file object.
         */
         protected final void changeFile () {
-
             FileObject newFile = getFile ();
-            
             if (newFile.equals (fileObject)) {
                 // the file has not been updated
                 return;
@@ -655,9 +655,21 @@ public class DataEditorSupport extends CloneableEditorSupport {
                 lockAgain = false;
             }
 
+            boolean wasNull = fileObject == null;
+
             fileObject = newFile;
             ERR.fine("changeFile: " + newFile + " for " + fileObject); // NOI18N
             fileObject.addFileChangeListener (new EnvListener (this));
+
+            //Update document TitleProperty
+            EditorCookie ec = getDataObject().getCookie(EditorCookie.class);
+            if (ec != null) {
+                StyledDocument doc = ec.getDocument();
+                if (doc != null) {
+                    doc.putProperty(Document.TitleProperty,
+                    FileUtil.getFileDisplayName(getDataObject().getPrimaryFile()));
+                }
+            }
 
             if (lockAgain) { // refresh lock
                 try {
@@ -667,7 +679,9 @@ public class DataEditorSupport extends CloneableEditorSupport {
                     Logger.getLogger(DataEditorSupport.class.getName()).log(Level.WARNING, null, e);
                 }
             }
-            
+            if (!wasNull) {
+                firePropertyChange("expectedTime", null, getTime()); // NOI18N
+            }
         }
         
         
@@ -801,6 +815,20 @@ public class DataEditorSupport extends CloneableEditorSupport {
             firePropertyChange(Env.PROP_VALID, Boolean.TRUE, Boolean.FALSE);            
              */
         }
+
+        /** Called from the <code>EnvListener</code>.
+         */
+        final void fileRenamed () {
+            //Update document TitleProperty
+            EditorCookie ec = getDataObject().getCookie(EditorCookie.class);
+            if (ec != null) {
+                StyledDocument doc = ec.getDocument();
+                if (doc != null) {
+                    doc.putProperty(Document.TitleProperty,
+                    FileUtil.getFileDisplayName(getDataObject().getPrimaryFile()));
+                }
+            }
+        }
         
         @Override
         public CloneableOpenSupport findCloneableOpenSupport() {
@@ -918,7 +946,15 @@ public class DataEditorSupport extends CloneableEditorSupport {
                 myEnv.fileChanged (fe.isExpected (), fe.getTime ());
             }
         }
-                
+        
+        @Override
+        public void fileRenamed(FileRenameEvent fe) {
+            Env myEnv = this.env.get();
+            if (myEnv != null) {
+                myEnv.fileRenamed();
+            }
+        }
+        
     }
     
     /** Listener on node representing associated data object, listens to the
@@ -1016,7 +1052,7 @@ public class DataEditorSupport extends CloneableEditorSupport {
 
         @Override
         public boolean equals(Object obj) {
-            return getClass() == obj.getClass();
+            return obj != null && getClass() == obj.getClass();
         }
     }
     
