@@ -55,10 +55,12 @@ import org.netbeans.modules.cnd.api.project.NativeFileItem.Language;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.discovery.api.ItemProperties;
 import org.netbeans.modules.cnd.discovery.api.ItemProperties.LanguageKind;
+import org.netbeans.modules.cnd.discovery.api.PkgConfigManager.PackageConfiguration;
+import org.netbeans.modules.cnd.discovery.api.PkgConfigManager.PkgConfig;
+import org.netbeans.modules.cnd.discovery.api.PkgConfigManager.ResolvedPath;
 import org.netbeans.modules.cnd.discovery.api.SourceFileProperties;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.Utilities;
 
 /**
@@ -70,14 +72,16 @@ public class ModelSource implements SourceFileProperties {
     private Item item;
     private CsmFile file;
     private Map<String,List<String>> searchBase;
+    private PkgConfig pkgConfig;
     private String itemPath;
     private List<String> userIncludePaths;
     private Set<String> includedFiles = new HashSet<String>();
     
-    public ModelSource(Item item, CsmFile file, Map<String,List<String>> searchBase){
+    public ModelSource(Item item, CsmFile file, Map<String,List<String>> searchBase, PkgConfig pkgConfig){
         this.item = item;
         this.file = file;
         this.searchBase = searchBase;
+        this.pkgConfig = pkgConfig;
     }
 
     public Set<String> getIncludedFiles() {
@@ -101,29 +105,6 @@ public class ModelSource implements SourceFileProperties {
             }
         }
         return itemPath;
-    }
-    
-    /**
-     * Path is include path like:
-     * .
-     * ../
-     * include
-     * Returns path in unix style
-     */
-    public static String convertRelativePathToAbsolute(SourceFileProperties source, String path){
-        if ( !( path.startsWith("/") || (path.length()>1 && path.charAt(1)==':') ) ) { // NOI18N
-            if (path.equals(".")) { // NOI18N
-                path = source.getCompilePath();
-            } else {
-                path = source.getCompilePath()+File.separator+path;
-            }
-            File file = new File(path);
-            path = FileUtil.normalizeFile(file).getAbsolutePath();
-        }
-        if (Utilities.isWindows()) {
-            path = path.replace('\\', '/');
-        }
-        return path;
     }
     
     private static final String PATTERN = "/../"; // NOI18N
@@ -194,6 +175,20 @@ public class ModelSource implements SourceFileProperties {
                     if (level < 5 && resolved != null) {
                         analyzeUnresolved(res, resolved, level+1);
                     }
+                } else {
+                    if (pkgConfig != null) {
+                        ResolvedPath rp = pkgConfig.getResolvedPath(include.getIncludeName().toString());
+                        if (rp != null) {
+                            res.add(rp.getIncludePath());
+                            for(PackageConfiguration pc : rp.getPackages()){
+                                for(String p : pc.getIncludePaths()){
+                                    if (!getSystemInludePaths().contains(p)){
+                                        res.add(p);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
                 includedFiles.add(resolved.getAbsolutePath().toString());
@@ -208,14 +203,14 @@ public class ModelSource implements SourceFileProperties {
         String name = include.getIncludeName().toString();
         String found = name.replace('\\','/');
         String prefix = null;
-        String back = null;
+        //String back = null;
         int i = found.lastIndexOf('/');
         if(i >= 0){
             prefix = found.substring(0,i+1);
             found = found.substring(i+1);
             i = prefix.lastIndexOf("./"); // NOI18N
             if (i >= 0) {
-                back = prefix.substring(0,i+2);
+                //back = prefix.substring(0,i+2);
                 prefix = prefix.substring(i+2);
                 if (prefix.length()==0) {
                     prefix = null;
