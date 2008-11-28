@@ -55,6 +55,8 @@ import org.openide.filesystems.*;
 import org.netbeans.api.diff.*;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.mercurial.HgProgressSupport;
+import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.versioning.util.Utils;
 
 /**
  * Shows basic conflict resolver UI.
@@ -92,15 +94,23 @@ public class ResolveConflictsExecutor extends HgProgressSupport {
         
         try {
             FileObject fo = FileUtil.toFileObject(file);
+            if(fo == null) {
+                Mercurial.LOG.warning("can't resolve conflicts for null fileobject : " + file + ", exists: " + file.exists());
+                return;
+            }
             handleMergeFor(file, fo, fo.lock(), merge);
         } catch (FileAlreadyLockedException e) {
-            Set components = TopComponent.getRegistry().getOpened();
-            for (Iterator i = components.iterator(); i.hasNext();) {
-                TopComponent tc = (TopComponent) i.next();
-                if (tc.getClientProperty(ResolveConflictsExecutor.class.getName()) != null) {
-                    tc.requestActive();
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    Set components = TopComponent.getRegistry().getOpened();
+                    for (Iterator i = components.iterator(); i.hasNext();) {
+                        TopComponent tc = (TopComponent) i.next();
+                        if (tc.getClientProperty(ResolveConflictsExecutor.class.getName()) != null) {
+                            tc.requestActive();
+                        }
+                    }
                 }
-            }
+            });
         } catch (IOException ioex) {
             org.openide.ErrorManager.getDefault().notify(ioex);
         }
@@ -143,6 +153,8 @@ public class ResolveConflictsExecutor extends HgProgressSupport {
         final StreamSource s1;
         final StreamSource s2;
         Charset encoding = FileEncodingQuery.getEncoding(fo);
+        Utils.associateEncoding(file, f1);
+        Utils.associateEncoding(file, f2);
         s1 = StreamSource.createSource(file.getName(), leftFileRevision, mimeType, f1);
         s2 = StreamSource.createSource(file.getName(), rightFileRevision, mimeType, f2);
         final StreamSource result = new MergeResultWriterInfo(f1, f2, f3, file, mimeType,
