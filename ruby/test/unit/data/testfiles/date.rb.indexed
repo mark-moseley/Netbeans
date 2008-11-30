@@ -1,26 +1,17 @@
 
 
 Document 0
-Delete:  source : <TESTURL>/date.rb
-
-Indexed:
-
-Not Indexed:
-
-
-Document 1
-Delete:
-Indexed:
+Searchable Keys:
   class : Date
   class-ig : date
-  constant : ABBR_DAYNAMES
-  constant : ABBR_MONTHNAMES
-  constant : DAYNAMES
-  constant : ENGLAND
-  constant : GREGORIAN
-  constant : ITALY
-  constant : JULIAN
-  constant : MONTHNAMES
+  constant : ABBR_DAYNAMES;Array
+  constant : ABBR_MONTHNAMES;
+  constant : DAYNAMES;Array
+  constant : ENGLAND;Fixnum
+  constant : GREGORIAN;TrueClass
+  constant : ITALY;Fixnum
+  constant : JULIAN;FalseClass
+  constant : MONTHNAMES;
   field : ajd
   field : of
   field : sg
@@ -111,30 +102,38 @@ Indexed:
   method : yday|DOCUMENTED|
   method : year|DOCUMENTED|
   method : zone|PRIVATE|
-  source : <TESTURL>/date.rb
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |DOCUMENTED|;1362
   includes : Comparable
   requires : date/format,rational
 
 
-Document 2
-Delete:
-Indexed:
+Document 1
+Searchable Keys:
   class : Date
   class-ig : date
   fqn : Date
-  source : <TESTURL>/date.rb
 
-Not Indexed:
+Not Searchable Keys:
+  attrs : |CLASS|
+  requires : date/format,rational
+
+
+Document 2
+Searchable Keys:
+  class : DateTime
+  class-ig : datetime
+  extends : Date
+  fqn : DateTime
+
+Not Searchable Keys:
   attrs : |CLASS|
   requires : date/format,rational
 
 
 Document 3
-Delete:
-Indexed:
+Searchable Keys:
   class : DateTime
   class-ig : datetime
   extends : Date
@@ -148,22 +147,7 @@ Indexed:
   method : parse(str,comp,sg)|DOCUMENTED|STATIC|
   method : strptime(str,fmt,sg)|DOCUMENTED|STATIC|
   method : valid_time?(h,min,s)|DOCUMENTED|STATIC|
-  source : <TESTURL>/date.rb
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |DOCUMENTED|;1138
-  requires : date/format,rational
-
-
-Document 4
-Delete:
-Indexed:
-  class : DateTime
-  class-ig : datetime
-  extends : Date
-  fqn : DateTime
-  source : <TESTURL>/date.rb
-
-Not Indexed:
-  attrs : |CLASS|
   requires : date/format,rational
