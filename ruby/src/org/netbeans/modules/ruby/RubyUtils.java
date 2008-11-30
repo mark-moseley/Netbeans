@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -23,14 +23,16 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.ruby;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
-import javax.swing.text.BadLocationException;
+import java.util.Map;
 import javax.swing.text.Document;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
@@ -43,12 +45,14 @@ import org.openide.util.NbBundle;
  * @author Tor Norbye
  */
 public class RubyUtils {
+    
+    public static final String RUBY_MIME_TYPE = RubyInstallation.RUBY_MIME_TYPE; // NOI18N
 
     private RubyUtils() {
     }
 
     public static boolean isRubyFile(FileObject f) {
-        return RubyMimeResolver.RUBY_MIME_TYPE.equals(f.getMIMEType());
+        return RubyInstallation.RUBY_MIME_TYPE.equals(f.getMIMEType());
     }
     
     public static boolean isMarkabyFile(FileObject fileObject) {
@@ -58,15 +62,39 @@ public class RubyUtils {
     public static boolean isRhtmlFile(FileObject f) {
         return RubyInstallation.RHTML_MIME_TYPE.equals(f.getMIMEType());
     }
+
+    public static boolean isRubyDocument(Document doc) {
+        String mimeType = (String)doc.getProperty("mimeType"); // NOI18N
+
+        return RubyInstallation.RUBY_MIME_TYPE.equals(mimeType);
+    }
     
     public static boolean isRhtmlDocument(Document doc) {
-        String mimeType = (String)doc.getProperty("mimeType");
+        String mimeType = (String)doc.getProperty("mimeType"); // NOI18N
 
         return RubyInstallation.RHTML_MIME_TYPE.equals(mimeType);
     }
+
+    public static boolean isYamlDocument(Document doc) {
+        String mimeType = (String)doc.getProperty("mimeType"); // NOI18N
+
+        return "text/x-yaml".equals(mimeType); // NOI18N
+    }
+
+    public static boolean isYamlFile(FileObject f) {
+        return "text/x-yaml".equals(f.getMIMEType()); // NOI18N
+    }
     
-    public static boolean isRubyOrRhtmlFile(FileObject f) {
-        return isRubyFile(f) || isRhtmlFile(f);
+    public static boolean isRhtmlOrYamlFile(FileObject f) {
+        String mimeType = f.getMIMEType();
+        return "text/x-yaml".equals(mimeType) || RubyInstallation.RHTML_MIME_TYPE.equals(mimeType); // NOI18N
+    }
+
+    public static boolean canContainRuby(FileObject f) {
+        String mimeType = f.getMIMEType();
+        return  RubyInstallation.RUBY_MIME_TYPE.equals(mimeType) ||
+                "text/x-yaml".equals(mimeType) ||  // NOI18N
+                RubyInstallation.RHTML_MIME_TYPE.equals(mimeType);
     }
     
     public static String camelToUnderlinedName(String name) {
@@ -374,23 +402,55 @@ public class RubyUtils {
         return sb.toString();
     }
 
-    /** Similar to isValidRubyClassName, but allows a number of ::'s to join class names */
-    public static boolean isValidRubyModuleName(String name) {
+    /**
+     * Whether this is valid fully qualified constant name, i.e. similar to
+     * {@link #isValidConstantName}, but allows a number of double-colons
+     * (<em>::</em>) to join scopes (module or class) names. E.g.:
+     *
+     * <pre>
+     *   module Colors
+     *   
+     *     module Converter
+     *       # module definition
+     *     end
+     *
+     *     RED   = "#FF0000"
+     *     GREEN = "#00FF00"
+     *     BLUE  = "#0000FF"
+     *
+     *   end
+     * </pre>
+     *
+     * Colors::Converter is a constant name for module, Color::Constant is
+     * an "common" constant.
+     * 
+     * @param name to check
+     * @return <code>true</code> or <code>false</code>
+     * @see #isValidConstantName
+     */
+    public static boolean isValidConstantFQN(final String name) {
         if (name.trim().length() == 0) {
             return false;
         }
         
         String[] mods = name.split("::"); // NOI18N
         for (String mod : mods) {
-            if (!isValidRubyClassName(mod)) {
+            if (!isValidConstantName(mod)) {
                 return false;
             }
         }
         
         return true;
     }
-    
-    public static boolean isValidRubyClassName(String name) {
+
+    /**
+     * Whether this is a valid constant name, i.e. also class or module name.
+     * 
+     * @param name to check
+     * @return <code>true</code> or <code>false</code>
+     * @see #isValidConstantFQN
+     */
+    public static boolean isValidConstantName(final String name) {
         if (isRubyKeyword(name)) {
             return false;
         }
@@ -507,15 +567,13 @@ public class RubyUtils {
     }
     
     public static boolean isRubyKeyword(String name) {
-        for (String s : RUBY_KEYWORDS) {
-            if (s.equals(name)) {
-                return true;
-            }
-        }
-        
-        return false;
+        return Arrays.binarySearch(RUBY_KEYWORDS, name) >= 0;
     }
-    
+
+    public static boolean isRubyPredefVar(String name) {
+        return Arrays.binarySearch(RUBY_PREDEF_VAR, name) >= 0;
+    }
+
     public static String getLineCommentPrefix() {
         return "#"; // NOI18N
     }
@@ -542,12 +600,43 @@ public class RubyUtils {
             "undef", "unless", "until", "when", "while", "yield"
         };
 
+    public static final Map<String, String> RUBY_PREDEF_VARS_CLASSES = new HashMap<String, String>();
+
+    static {
+        RUBY_PREDEF_VARS_CLASSES.put("__FILE__", "String"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("__LINE__", "Fixnum"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("ARGF", "Object"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("ARGV", "Array"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("DATA", "File"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("DATA", "IO"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("ENV", "Object"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("FALSE", "FalseClass"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("NIL", "NilClass"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("RUBY_PLATFORM", "String"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("RUBY_RELEASE_DATE", "String"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("RUBY_VERSION", "String"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("SCRIPT_LINES__", "Hash"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("STDERR", "IO"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("STDIN", "IO"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("STDOUT", "IO"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("TOPLEVEL_BINDING", "Binding"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("TRUE", "TrueClass"); // NOI18N
+    }
+
+    static final String[] RUBY_PREDEF_VAR =
+            RUBY_PREDEF_VARS_CLASSES.keySet().toArray(new String[RUBY_PREDEF_VARS_CLASSES.size()]);
+
+    static { // so we can use Arrays#binarySearch
+        Arrays.sort(RUBY_KEYWORDS);
+        Arrays.sort(RUBY_PREDEF_VAR);
+    }
+
     /** Return the class name corresponding to the given controller file */
     public static String getControllerClass(FileObject controllerFile) {
         Project p = FileOwnerQuery.getOwner(controllerFile);
         FileObject controllers = p.getProjectDirectory().getFileObject("app/controllers"); // NOI18N
         if (controllers != null) {
-            String relative = controllerFile.getName();;
+            String relative = controllerFile.getName();
             FileObject f = controllerFile.getParent();
             while (f != controllers && f != null) {
                 relative = f.getName() + "/" + relative;
@@ -754,162 +843,4 @@ public class RubyUtils {
 
         return controllerFile;
     }
-    
-    public static boolean isRowWhite(String text, int offset) throws BadLocationException {
-        try {
-            // Search forwards
-            for (int i = offset; i < text.length(); i++) {
-                char c = text.charAt(i);
-                if (c == '\n') {
-                    break;
-                }
-                if (!Character.isWhitespace(c)) {
-                    return false;
-                }
-            }
-            // Search backwards
-            for (int i = offset-1; i >= 0; i--) {
-                char c = text.charAt(i);
-                if (c == '\n') {
-                    break;
-                }
-                if (!Character.isWhitespace(c)) {
-                    return false;
-                }
-            }
-            
-            return true;
-        } catch (Exception ex) {
-            BadLocationException ble = new BadLocationException(offset + " out of " + text.length(), offset);
-            ble.initCause(ex);
-            throw ble;
-        }
-    }
-
-    public static boolean isRowEmpty(String text, int offset) throws BadLocationException {
-        try {
-            if (offset < text.length()) {
-                char c = text.charAt(offset);
-                if (!(c == '\n' || (c == '\r' && (offset == text.length()-1 || text.charAt(offset+1) == '\n')))) {
-                    return false;
-                }
-            }
-            
-            if (!(offset == 0 || text.charAt(offset-1) == '\n')) {
-                // There's previous stuff on this line
-                return false;
-            }
-
-            return true;
-        } catch (Exception ex) {
-            BadLocationException ble = new BadLocationException(offset + " out of " + text.length(), offset);
-            ble.initCause(ex);
-            throw ble;
-        }
-    }
-
-    public static int getRowLastNonWhite(String text, int offset) throws BadLocationException {
-        try {
-            // Find end of line
-            int i = offset;
-            for (; i < text.length(); i++) {
-                char c = text.charAt(i);
-                if (c == '\n' || (c == '\r' && (i == text.length()-1 || text.charAt(i+1) == '\n'))) {
-                    break;
-                }
-            }
-            // Search backwards to find last nonspace char from offset
-            for (i--; i >= 0; i--) {
-                char c = text.charAt(i);
-                if (c == '\n') {
-                    return -1;
-                }
-                if (!Character.isWhitespace(c)) {
-                    return i;
-                }
-            }
-
-            return -1;
-        } catch (Exception ex) {
-            BadLocationException ble = new BadLocationException(offset + " out of " + text.length(), offset);
-            ble.initCause(ex);
-            throw ble;
-        }
-    }
-
-    public static int getRowFirstNonWhite(String text, int offset) throws BadLocationException {
-        try {
-            // Find start of line
-            int i = offset-1;
-            if (i < text.length()) {
-                for (; i >= 0; i--) {
-                    char c = text.charAt(i);
-                    if (c == '\n') {
-                        break;
-                    }
-                }
-                i++;
-            }
-            // Search forwards to find first nonspace char from offset
-            for (; i < text.length(); i++) {
-                char c = text.charAt(i);
-                if (c == '\n') {
-                    return -1;
-                }
-                if (!Character.isWhitespace(c)) {
-                    return i;
-                }
-            }
-
-            return -1;
-        } catch (Exception ex) {
-            BadLocationException ble = new BadLocationException(offset + " out of " + text.length(), offset);
-            ble.initCause(ex);
-            throw ble;
-        }
-    }
-    
-    public static int getRowStart(String text, int offset) throws BadLocationException {
-        try {
-            // Search backwards
-            for (int i = offset-1; i >= 0; i--) {
-                char c = text.charAt(i);
-                if (c == '\n') {
-                    return i+1;
-                }
-            }
-
-            return 0;
-        } catch (Exception ex) {
-            BadLocationException ble = new BadLocationException(offset + " out of " + text.length(), offset);
-            ble.initCause(ex);
-            throw ble;
-        }
-    }
-    
-    public static boolean endsWith(StringBuilder sb, String s) {
-        int len = s.length();
-        
-        if (sb.length() < len) {
-            return false;
-        }
-        
-        for (int i = sb.length()-len, j = 0; j < len; i++, j++) { 
-            if (sb.charAt(i) != s.charAt(j)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    public static String truncate(String s, int length) {
-        assert length > 3; // Not for short strings
-        if (s.length() <= length) {
-            return s;
-        } else {
-            return s.substring(0, length-3) + "...";
-        }
-    }
-    
 }
