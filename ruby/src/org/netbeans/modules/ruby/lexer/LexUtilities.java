@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -46,21 +46,20 @@ import java.util.Set;
 
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
-import org.netbeans.api.gsf.CompilationInfo;
+import org.netbeans.modules.gsf.api.CompilationInfo;
 
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.netbeans.api.gsf.OffsetRange;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.gsf.api.TranslatedSource;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
-import org.openide.util.Exceptions;
 import org.openide.util.Exceptions;
 
 
@@ -72,6 +71,7 @@ import org.openide.util.Exceptions;
  * @author Tor Norbye
  */
 public class LexUtilities {
+    
     /** Tokens that match a corresponding END statement. Even though while, unless etc.
      * can be statement modifiers, those luckily have different token ids so are not a problem
      * here.
@@ -120,22 +120,41 @@ public class LexUtilities {
 
     /** For a possibly generated offset in an AST, return the corresponding lexing/true document offset */
     public static int getLexerOffset(CompilationInfo info, int astOffset) {
-        return info.getPositionManager().getLexicalOffset(info.getParserResult(), astOffset);
+        ParserResult result = info.getEmbeddedResult(RubyInstallation.RUBY_MIME_TYPE, 0);
+        if (result != null) {
+            TranslatedSource ts = result.getTranslatedSource();
+            if (ts != null) {
+                return ts.getLexicalOffset(astOffset);
+            }
+        }
+        
+        return astOffset;
     }
     
     public static OffsetRange getLexerOffsets(CompilationInfo info, OffsetRange astRange) {
-        int rangeStart = astRange.getStart();
-        int start = info.getPositionManager().getLexicalOffset(info.getParserResult(), rangeStart);
-        if (start == rangeStart) {
-            return astRange;
-        } else if (start == -1) {
+        if (astRange == OffsetRange.NONE) {
             return OffsetRange.NONE;
-        } else {
-            // Assumes the translated range maintains size
-            return new OffsetRange(start, start+astRange.getLength());
         }
+        ParserResult result = info.getEmbeddedResult(RubyInstallation.RUBY_MIME_TYPE, 0);
+        if (result != null) {
+            TranslatedSource ts = result.getTranslatedSource();
+            if (ts != null) {
+                int rangeStart = astRange.getStart();
+                int start = ts.getLexicalOffset(rangeStart);
+                if (start == rangeStart) {
+                    return astRange;
+                } else if (start == -1) {
+                    return OffsetRange.NONE;
+                } else {
+                    // Assumes the translated range maintains size
+                    return new OffsetRange(start, start+astRange.getLength());
+                }
+            }
+        }
+
+        return astRange;
     }
-    
+
     /** Find the ruby token sequence (in case it's embedded in something else at the top level */
     @SuppressWarnings("unchecked")
     public static TokenSequence<?extends RubyTokenId> getRubyTokenSequence(BaseDocument doc, int offset) {
@@ -145,7 +164,8 @@ public class LexUtilities {
     
     @SuppressWarnings("unchecked")
     private static TokenSequence<? extends RubyTokenId> findRhtmlDelimited(TokenSequence t, int offset) {
-        if (t.language().mimeType().equals(RubyInstallation.RHTML_MIME_TYPE)) {
+        String mimeType = t.language().mimeType();
+        if (mimeType.equals(RubyInstallation.RHTML_MIME_TYPE) || mimeType.equals(RubyInstallation.YAML_MIME_TYPE)) {
             t.move(offset);
             if (t.moveNext() && t.token() != null && 
                     "ruby-delimiter".equals(t.token().id().primaryCategory())) { // NOI18N
@@ -206,7 +226,7 @@ public class LexUtilities {
         return ts;
     }
 
-    public static Token<?extends RubyTokenId> getToken(BaseDocument doc, int offset) {
+    public static TokenSequence<?extends RubyTokenId> getPositionedSequence(BaseDocument doc, int offset) {
         TokenSequence<?extends RubyTokenId> ts = getRubyTokenSequence(doc, offset);
 
         if (ts != null) {
@@ -226,9 +246,18 @@ public class LexUtilities {
                 return null;
             }
 
-            Token<?extends RubyTokenId> token = ts.token();
+            return ts;
+        }
 
-            return token;
+        return null;
+    }
+
+    
+    public static Token<?extends RubyTokenId> getToken(BaseDocument doc, int offset) {
+        TokenSequence<?extends RubyTokenId> ts = getPositionedSequence(doc, offset);
+        
+        if (ts != null) {
+            return ts.token();
         }
 
         return null;
@@ -587,40 +616,6 @@ public class LexUtilities {
         return balance;
     }
 
-    public static int getLineIndent(BaseDocument doc, int offset) {
-        try {
-            int start = Utilities.getRowStart(doc, offset);
-            int end;
-
-            if (Utilities.isRowWhite(doc, start)) {
-                end = Utilities.getRowEnd(doc, offset);
-            } else {
-                end = Utilities.getRowFirstNonWhite(doc, start);
-            }
-
-            int indent = Utilities.getVisualColumn(doc, end);
-
-            return indent;
-        } catch (BadLocationException ble) {
-            Exceptions.printStackTrace(ble);
-
-            return 0;
-        }
-    }
-
-    public static void indent(StringBuilder sb, int indent) {
-        for (int i = 0; i < indent; i++) {
-            sb.append(' ');
-        }
-    }
-
-    public static String getIndentString(int indent) {
-        StringBuilder sb = new StringBuilder(indent);
-        indent(sb, indent);
-
-        return sb.toString();
-    }
-
     /**
      * Return true iff the line for the given offset is a Ruby comment line.
      * This will return false for lines that contain comments (even when the
@@ -639,61 +634,6 @@ public class LexUtilities {
         }
 
         return doc.getText(begin, 1).equals("#");
-    }
-
-    public static void adjustLineIndentation(BaseDocument doc, int offset, int adjustment) {
-        try {
-            int lineBegin = Utilities.getRowStart(doc, offset);
-
-            if (adjustment > 0) {
-                doc.remove(lineBegin, adjustment);
-            } else if (adjustment < 0) {
-                doc.insertString(adjustment, LexUtilities.getIndentString(adjustment), null);
-            }
-        } catch (BadLocationException ble) {
-            Exceptions.printStackTrace(ble);
-        }
-    }
-
-    /** Adjust the indentation of the line containing the given offset to the provided
-     * indentation, and return the new indent.
-     */
-    public static int setLineIndentation(BaseDocument doc, int offset, int indent) {
-        int currentIndent = getLineIndent(doc, offset);
-
-        try {
-            int lineBegin = Utilities.getRowStart(doc, offset);
-
-            if (lineBegin == -1) {
-                return currentIndent;
-            }
-
-            int adjust = currentIndent - indent;
-
-            if (adjust > 0) {
-                // Make sure that we are only removing spaces here
-                String text = doc.getText(lineBegin, adjust);
-
-                for (int i = 0; i < text.length(); i++) {
-                    if (!Character.isWhitespace(text.charAt(i))) {
-                        throw new RuntimeException(
-                            "Illegal indentation adjustment: Deleting non-whitespace chars: " +
-                            text);
-                    }
-                }
-
-                doc.remove(lineBegin, adjust);
-            } else if (adjust < 0) {
-                adjust = -adjust;
-                doc.insertString(lineBegin, getIndentString(adjust), null);
-            }
-
-            return indent;
-        } catch (BadLocationException ble) {
-            Exceptions.printStackTrace(ble);
-
-            return currentIndent;
-        }
     }
 
     /**
@@ -716,7 +656,9 @@ public class LexUtilities {
         if (ts.offset() == caretOffset) {
             // We're looking at the offset to the RIGHT of the caret
             // and here I care about what's on the left
-            ts.movePrevious();
+            if (!ts.movePrevious()) {
+                return null;
+            }
         }
 
         Token<?extends RubyTokenId> token = ts.token();
@@ -748,7 +690,9 @@ public class LexUtilities {
                     (id == RubyTokenId.QUOTED_STRING_LITERAL) || (id == RubyTokenId.EMBEDDED_RUBY)) {
                 string = token.text().toString();
                 segments++;
-                ts.movePrevious();
+                if (!ts.movePrevious()) {
+                    return null;
+                }
                 token = ts.token();
                 id = token.id();
             }
@@ -804,7 +748,9 @@ public class LexUtilities {
         if (ts.offset() == caretOffset) {
             // We're looking at the offset to the RIGHT of the caret
             // and here I care about what's on the left
-            ts.movePrevious();
+            if (!ts.movePrevious()) {
+                return -1;
+            }
         }
 
         Token<?extends RubyTokenId> token = ts.token();
@@ -815,7 +761,9 @@ public class LexUtilities {
             // Skip over embedded Ruby segments and literal strings until you find the beginning
             while ((id == RubyTokenId.ERROR) || (id == RubyTokenId.STRING_LITERAL) ||
                     (id == RubyTokenId.QUOTED_STRING_LITERAL) || (id == RubyTokenId.EMBEDDED_RUBY)) {
-                ts.movePrevious();
+                if (!ts.movePrevious()) {
+                    return -1;
+                }
                 token = ts.token();
                 id = token.id();
             }
@@ -887,7 +835,9 @@ public class LexUtilities {
         if (ts.offset() == caretOffset) {
             // We're looking at the offset to the RIGHT of the caret
             // and here I care about what's on the left
-            ts.movePrevious();
+            if (!ts.movePrevious()) {
+                return -1;
+            }
         }
 
         Token<?extends RubyTokenId> token = ts.token();
@@ -914,7 +864,9 @@ public class LexUtilities {
             while ((id == RubyTokenId.ERROR) || (id == RubyTokenId.STRING_LITERAL) ||
                     (id == RubyTokenId.QUOTED_STRING_LITERAL) ||
                     (id == RubyTokenId.REGEXP_LITERAL) || (id == RubyTokenId.EMBEDDED_RUBY)) {
-                ts.movePrevious();
+                if (!ts.movePrevious()) {
+                    return -1;
+                }
                 token = ts.token();
                 id = token.id();
             }

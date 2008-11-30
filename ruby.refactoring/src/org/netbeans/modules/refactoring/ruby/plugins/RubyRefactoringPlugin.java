@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -50,8 +50,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsfpath.classpath.ClassPath;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
 import org.netbeans.napi.gsfret.source.ClasspathInfo;
 import org.netbeans.napi.gsfret.source.CompilationController;
 import org.netbeans.napi.gsfret.source.ModificationResult;
@@ -75,7 +75,6 @@ public abstract class RubyRefactoringPlugin extends ProgressProviderAdapter impl
     private Problem problem;
     protected volatile boolean cancelRequest = false;
     private volatile CancellableTask currentTask;
-    
 
     protected abstract Problem preCheck(CompilationController javac) throws IOException;
     protected abstract Problem checkParameters(CompilationController javac) throws IOException;
@@ -141,7 +140,9 @@ public abstract class RubyRefactoringPlugin extends ProgressProviderAdapter impl
         if (cpInfo==null) {
             Logger.getLogger(getClass().getName()).log(Level.INFO, "Missing scope (ClasspathInfo), using default scope (all open projects)");
             cpInfo = RetoucheUtils.getClasspathInfoFor((FileObject)null);
-            refactoring.getContext().add(cpInfo);
+            if (cpInfo != null) {
+                refactoring.getContext().add(cpInfo);
+            }
         }
         return cpInfo;
     }
@@ -197,7 +198,11 @@ public abstract class RubyRefactoringPlugin extends ProgressProviderAdapter impl
             for (FileObject file : files) {
                 if (RubyUtils.isRubyFile(file)) {
                     rubyFiles.add(file);
-                } else if (RubyUtils.isRhtmlFile(file)) {
+                } else if (RubyUtils.isRhtmlOrYamlFile(file)) {
+                    // Avoid opening HUGE Yaml files - they may be containing primarily data
+                    if (file.getSize() > 512*1024) {
+                        continue;
+                    }
                     rhtmlFiles.add(file);
                 }
             }

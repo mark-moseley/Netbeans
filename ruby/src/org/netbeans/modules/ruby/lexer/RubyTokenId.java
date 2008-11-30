@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,11 +40,9 @@
  */
 package org.netbeans.modules.ruby.lexer;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.netbeans.api.lexer.InputAttributes;
@@ -52,8 +50,7 @@ import org.netbeans.api.lexer.Language;
 import org.netbeans.api.lexer.LanguagePath;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenId;
-import org.netbeans.api.lexer.TokenId;
-import org.netbeans.modules.ruby.RubyMimeResolver;
+import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.spi.lexer.LanguageEmbedding;
 import org.netbeans.spi.lexer.LanguageHierarchy;
 import org.netbeans.spi.lexer.Lexer;
@@ -159,7 +156,7 @@ public enum RubyTokenId implements TokenId {
     private static final Language<RubyTokenId> language =
         new LanguageHierarchy<RubyTokenId>() {
                 protected String mimeType() {
-                    return RubyMimeResolver.RUBY_MIME_TYPE;
+                    return RubyInstallation.RUBY_MIME_TYPE;
                 }
 
                 protected Collection<RubyTokenId> createTokenIds() {

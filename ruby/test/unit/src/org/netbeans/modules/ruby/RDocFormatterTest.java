@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,7 +42,6 @@
 package org.netbeans.modules.ruby;
 
 import org.netbeans.api.lexer.Token;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
@@ -169,7 +168,11 @@ public class RDocFormatterTest extends RubyTestBase {
         
         instance.appendLine("#   class EliteGenerator < Rails::Generator::Base");
         
-        assertEquals("<pre style=\"color:#000000;\">\n  class EliteGenerator &lt; Rails::Generator::Base\n</pre>\n", instance.toHtml());
+        assertEquals("<pre style=\"color:#000000;\">\n  <span style=\"color:#0000e6;\">class</span> <span" +
+                " style=\"color:#000000;font-style:italic;\">EliteGenerator</span> <span style=\"\">&lt;</s" +
+                "pan> <span style=\"color:#000000;font-style:italic;\">Rails</span><span style=\"\">::</s" +
+                "pan><span style=\"color:#000000;font-style:italic;\">Generator</span><span style=\"\">::</" +
+                "span><span style=\"color:#000000;font-style:italic;\">Base</span><br></pre>\n", instance.toHtml());
     }
 
     public void testNoEscape() {
@@ -232,12 +235,11 @@ public class RDocFormatterTest extends RubyTestBase {
         instance.appendLine("#\n");
         instance.appendLine("#\n");
         
-        // TODO - no formatting here because the font+color lookup isn't working at test time
-        String expected = 
+        String expected =
 "<pre>\n" +
 "File.<b>basename</b>(file_name [, suffix] ) -> base_name\n" +
 "<br></pre>\n" +
-"<hr>\n" +                
+"<hr>\n" +
 "#\n" +
 " #\n" +
 " Returns the last component of the filename given in <i>file_name</i>,\n" +
@@ -247,13 +249,10 @@ public class RDocFormatterTest extends RubyTestBase {
 " it is removed.\n" +
 " #\n" +
 " <pre style=\"color:#000000;\">\n" +
-"   File.basename(\"/home/gumby/work/ruby.rb\")          #=> \"ruby.rb\"\n" +
-"\n" +
-"   File.basename(\"/home/gumby/work/ruby.rb\", \".rb\")   #=> \"ruby\"\n" +
-"\n" +
-"</pre>\n" +
+"   <span style=\"color:#000000;font-style:italic;\">File</span><span style=\"\">.</span><span style=\"\">basename</span><span style=\"\">(</span><span style=\"color:#ce7b00;\">\"</span><span style=\"color:#ce7b00\"><span style=\"color:#ce7b00;\">/home/gumby/work/ruby.rb</span></span><span style=\"color:#ce7b00;\">\"</span><span style=\"\">)</span>          <span style=\"color:#969696\"><span style=\"color:#969696;\">#=> \"ruby.rb\"<br></span></span><br>   <span style=\"color:#000000;font-style:italic;\">File</span><span style=\"\">.</span><span style=\"\">basename</span><span style=\"\">(</span><span style=\"color:#ce7b00;\">\"</span><span style=\"color:#ce7b00\"><span style=\"color:#ce7b00;\">/home/gumby/work/ruby.rb</span></span><span style=\"color:#ce7b00;\">\"</span><span style=\"\">,</span> <span style=\"color:#ce7b00;\">\"</span><span style=\"color:#ce7b00\"><span style=\"color:#ce7b00;\">.rb</span></span><span style=\"color:#ce7b00;\">\"</span><span style=\"\">)</span>   <span style=\"color:#969696\"><span style=\"color:#969696;\">#=> \"ruby\"<br></span></span><br></pre>\n" +
 "#\n" +
 " #\n ";
+
         String html = instance.toHtml();
                 
         assertEquals(expected, html);
