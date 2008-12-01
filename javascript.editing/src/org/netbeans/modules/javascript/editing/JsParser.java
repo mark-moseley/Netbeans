@@ -134,6 +134,7 @@ public class JsParser implements IncrementalParser {
                 result = parseBuffer(context, Sanitize.NONE);
             } catch (IOException ioe) {
                 listener.exception(ioe);
+                result = createParseResult(file, null, null/*, null, null*/);
             }
 
             ParseEvent doneEvent = new ParseEvent(ParseEvent.Kind.PARSE, file, result);
@@ -259,9 +260,13 @@ public class JsParser implements IncrementalParser {
                                 removeChars = 1;
                             }
                         } else if (line.endsWith(",")) { // NOI18N                            removeChars = 1;
-                            removeChars = 1;
+                            if (!isLineEnd) {
+                                removeChars = 1;
+                            }
                         } else if (line.endsWith(", ")) { // NOI18N
-                            removeChars = 2;
+                            if (!isLineEnd) {
+                                removeChars = 2;
+                            }
                         } else if (line.endsWith(",)")) { // NOI18N
                             // Handle lone comma in parameter list - e.g.
                             // type "foo(a," -> you end up with "foo(a,|)" which doesn't parse - but
@@ -442,6 +447,10 @@ public class JsParser implements IncrementalParser {
                 return null;
             }
 
+            if (oldFunctionStart > newFunctionEnd) {
+                return null;
+            }
+
             String source = context.source.substring(oldFunctionStart, newFunctionEnd);
             Sanitize sanitizing = Sanitize.NEVER;
             boolean sanitizedSource = false;
@@ -488,26 +497,28 @@ public class JsParser implements IncrementalParser {
                 };
 
 
-                // Perform some basic cleanup of trailing dots, commas, etc.
-                String oldSource = context.source;
-                int oldCaretOffset = context.caretOffset;
-                context.source = source;
-                if (context.caretOffset >= oldFunctionStart && context.caretOffset <= newFunctionEnd) {
-                    context.caretOffset -= oldFunctionStart;
-                    boolean ok = sanitizeSource(context, Sanitize.EDITED_DOT);
+                FunctionNode newFunction = parser.parseFunction(source, context.file.getNameExt(), lineno);
+                if (newFunction == null) {
+                    // Perform some basic cleanup of trailing dots, commas, etc.
+                    if (context.caretOffset >= oldFunctionStart && context.caretOffset <= newFunctionEnd) {
+                        String oldSource = context.source;
+                        int oldCaretOffset = context.caretOffset;
+                        context.source = source;
+                        context.caretOffset -= oldFunctionStart;
+                        boolean ok = sanitizeSource(context, Sanitize.EDITED_DOT);
+                        context.source = oldSource;
+                        context.caretOffset = oldCaretOffset;
 
-                    if (ok) {
-                        assert context.sanitizedSource != null;
-                        sanitizedSource = true;
-                        source = context.sanitizedSource;
-                        context.sanitized = Sanitize.EDITED_DOT;
+                        if (ok) {
+                            assert context.sanitizedSource != null;
+                            sanitizedSource = true;
+                            context.sanitized = Sanitize.EDITED_DOT;
+                            parser = createParser(context, source, sanitizedSource, sanitizing);
+                            newFunction = parser.parseFunction(context.sanitizedSource, context.file.getNameExt(), lineno);
+                        }
                     }
                 }
 
-                context.source = oldSource;
-                context.caretOffset = oldCaretOffset;
-
-                FunctionNode newFunction = parser.parseFunction(source, context.file.getNameExt(), lineno);
                 if (newFunction == null) {
                     return null;
                 }
@@ -877,10 +888,9 @@ public class JsParser implements IncrementalParser {
         final int targetVersion = SupportedBrowsers.getInstance().getLanguageVersion();
         compilerEnv.setLanguageVersion(targetVersion);
 
-        if (targetVersion >= org.mozilla.nb.javascript.Context.VERSION_1_7) {
-            // Let's try E4X... why not?
-            compilerEnv.setXmlAvailable(true);
-        }
+        boolean e4x = (targetVersion == org.mozilla.nb.javascript.Context.VERSION_DEFAULT) ||
+            (targetVersion >= org.mozilla.nb.javascript.Context.VERSION_1_7);
+        compilerEnv.setXmlAvailable(e4x);
         compilerEnv.setStrictMode(true);
         compilerEnv.setGeneratingSource(false);
         compilerEnv.setGenerateDebugInfo(false);
