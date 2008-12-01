@@ -87,6 +87,7 @@ public class MakeArtifact {
     }
 
     public MakeArtifact(MakeConfigurationDescriptor pd, MakeConfiguration makeConfiguration) {
+                //PathMap pm = HostInfoProvider.default().getMapper(makeConfiguration.getDevelopmentHost().getName());
 		projectLocation = makeConfiguration.getBaseDir();
 		configurationName = makeConfiguration.getName();
 		active = makeConfiguration.isDefault();
@@ -94,7 +95,9 @@ public class MakeArtifact {
 		workingDirectory = projectLocation;
 		buildCommand = "${MAKE} " + MakeOptions.getInstance().getMakeOptions() + " -f " + pd.getProjectMakefileName() + " CONF=" + configurationName; // NOI18N
 		cleanCommand = "${MAKE} " + MakeOptions.getInstance().getMakeOptions() + " -f " + pd.getProjectMakefileName() + " CONF=" + configurationName + " clean"; // NOI18N
-		if (makeConfiguration.getConfigurationType().getValue() == MakeConfiguration.TYPE_MAKEFILE) {
+		if (makeConfiguration.getConfigurationType().getValue() == MakeConfiguration.TYPE_MAKEFILE
+                || makeConfiguration.getConfigurationType().getValue() == MakeConfiguration.TYPE_QT_APPLICATION
+                || makeConfiguration.getConfigurationType().getValue() == MakeConfiguration.TYPE_QT_LIBRARY) {
 		    configurationType = MakeArtifact.TYPE_UNKNOWN;
 		    output = makeConfiguration.getMakefileConfiguration().getOutput().getValue();
 		}
@@ -113,6 +116,7 @@ public class MakeArtifact {
 		else {
 		    assert false;// FIXUP: error
 		}
+                output = makeConfiguration.expandMacros(output);
     }
     
     public String getProjectLocation() {
@@ -201,7 +205,7 @@ public class MakeArtifact {
     public String getOutput() {
 	return output;
     }
-
+    
     @Override
     public String toString() {
         String ret = getConfigurationName();
