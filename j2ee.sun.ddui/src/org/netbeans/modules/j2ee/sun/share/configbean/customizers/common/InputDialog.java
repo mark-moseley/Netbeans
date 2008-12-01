@@ -299,24 +299,21 @@ public abstract class InputDialog extends JDialog implements HelpCtx.Provider {
      */    
     public void showErrors() {
         boolean hasErrors = false;
-        boolean hasWarnings = false;
 
         // clear existing errors first.
         messagePanel.removeAll();
 
         if(warningList != null && warningList.size() > 0) {
-            hasWarnings = true;
-
             for(Iterator iter = warningList.iterator(); iter.hasNext();) {
                 String message = iter.next().toString();
 
                 // Add warning message
                 JLabel label = new JLabel();
-                label.setIcon(BaseCustomizer.warningMessageIcon);
+                label.setIcon(Util.warningMessageIcon);
                 label.setText("<html>" + message + "</html>"); // NOI18N
                 label.getAccessibleContext().setAccessibleName(bundle.getString("ASCN_WarningMessage")); // NOI18N
                 label.getAccessibleContext().setAccessibleDescription(message);
-                label.setForeground(BaseCustomizer.getWarningForegroundColor());
+                label.setForeground(Util.getWarningForegroundColor());
 
                 GridBagConstraints constraints = new GridBagConstraints();
                 constraints.gridwidth = GridBagConstraints.REMAINDER;
@@ -333,11 +330,11 @@ public abstract class InputDialog extends JDialog implements HelpCtx.Provider {
 
                 // Add error message
                 JLabel label = new JLabel();
-                label.setIcon(BaseCustomizer.errorMessageIcon);
+                label.setIcon(Util.errorMessageIcon);
                 label.setText("<html>" + message + "</html>"); // NOI18N
                 label.getAccessibleContext().setAccessibleName(bundle.getString("ASCN_ErrorMessage")); // NOI18N
                 label.getAccessibleContext().setAccessibleDescription(message);
-                label.setForeground(BaseCustomizer.getErrorForegroundColor());
+                label.setForeground(Util.getErrorForegroundColor());
 
                 GridBagConstraints constraints = new GridBagConstraints();
                 constraints.gridwidth = GridBagConstraints.REMAINDER;
