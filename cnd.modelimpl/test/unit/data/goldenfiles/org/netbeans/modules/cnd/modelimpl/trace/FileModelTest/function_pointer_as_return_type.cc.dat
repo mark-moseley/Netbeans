@@ -52,13 +52,13 @@ FUNCTION DEFINITION get_ptr  [6:1/131-11:2/236] FunctionDDImpl SCOPE: $Global$
                 STATEMENT RETURN  [8:17/198-8:30/211] SCOPE: Stmt  [7:9/178-10:31/234] text: 'return &plus;'
             ELSE: 
                 STATEMENT RETURN  [10:17/220-10:31/234] SCOPE: Stmt  [7:9/178-10:31/234] text: 'return &minus;'
-FUNCTION DEFINITION __set_malloc_handler  [13:1/238-16:2/308] FunctionDDImpl SCOPE: $Global$ 
+FUNCTION DEFINITION __set_malloc_handler  [13:1/238-16:2/308] FunctionDDImpl SCOPE: function_pointer_as_return_type.cc
     SIGNATURE __set_malloc_handler(void(*)())
     UNIQUE NAME f:__set_malloc_handler(void(*)())
     DECLARATION: __set_malloc_handler  [13:1/238-16:2/308]
     PARAMETERS:
         __f [13:37/274-13:50/287]  TYPE: void TEXT=void(*)()  [13:37/274-13:44/281]  INIT: null  SCOPE: __set_malloc_handler 
-    RETURNS void TEXT=void(*)()  [13:1/238-13:15/252]
+    RETURNS void TEXT=void(*)()  [13:8/245-13:15/252]
     STATEMENT COMPOUND  [14:1/292-16:2/308] SCOPE: __set_malloc_handler 
         STATEMENT RETURN  [15:4/297-15:13/306] SCOPE: Stmt  [14:1/292-16:2/308] text: 'return 0;'
 FUNCTION genxGetAlloc [18:1/310-18:51/360] FunctionImpl SCOPE: $Global$ 
@@ -74,7 +74,7 @@ FUNCTION DEFINITION genxGetAlloc  [20:1/362-23:2/448] FunctionDDImpl SCOPE: $Glo
     DECLARATION: genxGetAlloc  [18:1/310-18:51/360]
     PARAMETERS:
         w [20:22/383-20:34/395]  TYPE: $unresolved$::genxWriter TEXT=genxWriter  [20:22/383-20:32/393]  INIT: null  SCOPE: genxGetAlloc 
-    RETURNS *int TEXT=int*(*)(void* userData,int bytes)  [20:1/362-20:8/369]
+    RETURNS *int TEXT=int*(*)(void*,int)  [20:1/362-20:8/369]
     STATEMENT COMPOUND  [21:1/426-23:2/448] SCOPE: genxGetAlloc 
         STATEMENT RETURN  [22:3/430-22:19/446] SCOPE: Stmt  [21:1/426-23:2/448] text: 'return w->alloc;'
 
@@ -120,15 +120,6 @@ FUNCTION DEFINITION get_ptr  [6:1/131-11:2/236] FunctionDDImpl SCOPE: $Global$
                 STATEMENT RETURN  [8:17/198-8:30/211] SCOPE: Stmt  [7:9/178-10:31/234] text: 'return &plus;'
             ELSE: 
                 STATEMENT RETURN  [10:17/220-10:31/234] SCOPE: Stmt  [7:9/178-10:31/234] text: 'return &minus;'
-FUNCTION DEFINITION __set_malloc_handler  [13:1/238-16:2/308] FunctionDDImpl SCOPE: $Global$ 
-    SIGNATURE __set_malloc_handler(void(*)())
-    UNIQUE NAME f:__set_malloc_handler(void(*)())
-    DECLARATION: __set_malloc_handler  [13:1/238-16:2/308]
-    PARAMETERS:
-        __f [13:37/274-13:50/287]  TYPE: void TEXT=void(*)()  [13:37/274-13:44/281]  INIT: null  SCOPE: __set_malloc_handler 
-    RETURNS void TEXT=void(*)()  [13:1/238-13:15/252]
-    STATEMENT COMPOUND  [14:1/292-16:2/308] SCOPE: __set_malloc_handler 
-        STATEMENT RETURN  [15:4/297-15:13/306] SCOPE: Stmt  [14:1/292-16:2/308] text: 'return 0;'
 FUNCTION genxGetAlloc [18:1/310-18:51/360] FunctionImpl SCOPE: $Global$ 
     DEFINITION: genxGetAlloc  [20:1/362-23:2/448]
     SIGNATURE genxGetAlloc(genxWriter)
@@ -142,7 +133,7 @@ FUNCTION DEFINITION genxGetAlloc  [20:1/362-23:2/448] FunctionDDImpl SCOPE: $Glo
     DECLARATION: genxGetAlloc  [18:1/310-18:51/360]
     PARAMETERS:
         w [20:22/383-20:34/395]  TYPE: $unresolved$::genxWriter TEXT=genxWriter  [20:22/383-20:32/393]  INIT: null  SCOPE: genxGetAlloc 
-    RETURNS *int TEXT=int*(*)(void* userData,int bytes)  [20:1/362-20:8/369]
+    RETURNS *int TEXT=int*(*)(void*,int)  [20:1/362-20:8/369]
     STATEMENT COMPOUND  [21:1/426-23:2/448] SCOPE: genxGetAlloc 
         STATEMENT RETURN  [22:3/430-22:19/446] SCOPE: Stmt  [21:1/426-23:2/448] text: 'return w->alloc;'
 
