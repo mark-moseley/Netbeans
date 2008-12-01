@@ -50,7 +50,6 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Hashtable;
 
-
 /**
  * Base class for two "recursive" method scanners, implementing the "eager" and "lazy" transitive call subgraph revelation and
  * instrumentation schemes. This class contains functionality used by both scaners.
@@ -364,7 +363,9 @@ public abstract class RecursiveMethodInstrumentor extends ClassManager {
 
     /** Create a single-class packet of instrumented methods or classes in response to a class load event. */
     protected Object[] createInstrumentedMethodPack(DynamicClassInfo clazz) {
-        if (nInstrMethods == 0) {
+        // if there is no method to instrument _and_ no profiling point for this class
+        // return immediately
+        if (nInstrMethods == 0 && getRuntimeProfilingPoints(engineSettings.getRuntimeProfilingPoints(), clazz).length == 0) {
             return null;
         }
 
@@ -439,11 +440,6 @@ public abstract class RecursiveMethodInstrumentor extends ClassManager {
         clazz.setMethodRoot(rootMethodIdx);
 
         return true;
-    }
-
-    protected boolean matchesWildcard(String wildcard, String loadedClassName) {
-        //    System.err.println("Matches wildcard: "+loadedClassName+", wild: "+wildcard + " : " + (loadedClassName.startsWith(wildcard) && (loadedClassName.indexOf('/', wildcard.length()) == -1)));
-        return loadedClassName.startsWith(wildcard) && (loadedClassName.indexOf('/', wildcard.length()) == -1); // NOI18N
     }
 
     //---------------------------- Private implementation of instrumentation data packing ---------------------------
