@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.cnd.highlight.semantic;
 
+import javax.swing.text.Document;
 import org.netbeans.modules.cnd.highlight.semantic.options.SemanticHighlightingOptions;
 import org.netbeans.modules.cnd.model.tasks.CaretAwareCsmFileTaskFactory;
 import org.openide.cookies.EditorCookie;
@@ -52,20 +53,55 @@ import org.openide.util.Exceptions;
  *
  * @author Sergey Grinev
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.model.tasks.CsmFileTaskFactory.class, position=10)
 public class MarkOccurrencesHighlighterFactory extends CaretAwareCsmFileTaskFactory {
 
     @Override
     protected PhaseRunner createTask(final FileObject fo) {
         MarkOccurrencesHighlighter ph = null;
-        if (SemanticHighlightingOptions.getEnableMarkOccurences()) {
+        if (enabled()) {
             try {
                 DataObject dobj = DataObject.find(fo);
                 EditorCookie ec = dobj.getCookie(EditorCookie.class);
-                ph = new MarkOccurrencesHighlighter(ec.getDocument());
+                Document doc = ec.getDocument();
+                if (doc != null) {
+                    ph = new MarkOccurrencesHighlighter(doc);
+                }
             } catch (DataObjectNotFoundException ex) {
                 Exceptions.printStackTrace(ex);
             }
         }
-        return ph != null ? ph : lazyRunner();
+        return ph != null ? ph :new PhaseRunner() {
+
+            public void run(Phase phase) {
+                // rest
+            }
+
+            public boolean isValid() {
+                return !enabled();
+            }
+            
+            public void cancel() {
+            }
+
+            public boolean isHighPriority() {
+                return false;
+            }
+        };
+    }
+    
+    private static boolean enabled() {
+        return SemanticHighlightingOptions.instance().getEnableMarkOccurrences()
+                &&!HighlighterBase.MINIMAL;
+    }
+
+    @Override
+    protected int taskDelay() {
+        return ModelUtils.OCCURRENCES_DELAY;
+    }
+
+    @Override
+    protected int rescheduleDelay() {
+        return ModelUtils.RESCHEDULE_OCCURRENCES_DELAY;
     }
 }
