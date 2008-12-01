@@ -54,15 +54,23 @@ public class Expression {
 
     public static final String LANGUAGE_JAVA_1_4 = JavaParser.LANGUAGE_JAVA_1_4;
     public static final String LANGUAGE_JAVA_1_5 = JavaParser.LANGUAGE_JAVA_1_5;
-    
+
     private static final String REPLACE_return = "return01234";
     private static final String REPLACE_class = "class01234";
+
+    static final String RETURN_MACRO = "{return}";
+    static final String CLASS_MACRO = "{class}";
 
     private String       strExpression;
     private String       language;
     private SimpleNode   root;
     private String       replace_return;
     private String       replace_class;
+
+    public Expression(String expr, String language) {
+        this.strExpression = expr;
+        this.language = language;
+    }
 
     /**
      * Creates a new expression by pre-parsing the given String representation of the expression.
@@ -72,7 +80,7 @@ public class Expression {
      * @return pre-parsed Java expression
      * @throws ParseException if the expression has wrong syntax
      */
-    public static Expression parse (String expr, String language) 
+    public static Expression parse (String expr, String language)
     throws ParseException {
         String replace_return = REPLACE_return;
         while (expr.indexOf(replace_return) >= 0) {
@@ -82,8 +90,8 @@ public class Expression {
         while (expr.indexOf(replace_class) >= 0) {
             replace_class = "class" + new Random().nextLong(); // NOI18N
         }
-        String replacedExpr = replaceSpecialVar(expr, "return", replace_return); // NOI18N
-        replacedExpr = replaceSpecialVar(replacedExpr, "class", replace_class); // NOI18N
+        String replacedExpr = replaceSpecialVar(expr, RETURN_MACRO, replace_return); // NOI18N
+        replacedExpr = replaceSpecialVar(replacedExpr, CLASS_MACRO, replace_class); // NOI18N
         StringReader reader = new StringReader(replacedExpr);
         try {
             JavaParser parser = new JavaParser(reader);
@@ -96,7 +104,7 @@ public class Expression {
             reader.close();
         }
     }
-    
+
     private static String replaceSpecialVar(String expr, String var, String replace_var) {
         int i = expr.indexOf(var);
         while (i >= 0) {
@@ -129,7 +137,7 @@ public class Expression {
         }
         return expr;
     }
-    
+
     private Expression(String expression, String language, SimpleNode root,
                        String replace_return, String replace_class) {
         strExpression = expression;
@@ -161,11 +169,11 @@ public class Expression {
     public String getExpression() {
         return strExpression;
     }
-    
+
     String returnReplaced() {
         return replace_return;
     }
-    
+
     String classReplaced() {
         return replace_class;
     }
