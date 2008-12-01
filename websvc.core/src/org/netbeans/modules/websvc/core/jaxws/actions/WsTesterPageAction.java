@@ -45,123 +45,120 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.text.MessageFormat;
-import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
-import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.websvc.jaxws.api.JaxWsTesterCookie;
+import org.netbeans.modules.websvc.wsstack.api.WSStack;
+import org.netbeans.modules.websvc.wsstack.jaxws.JaxWs;
+import org.netbeans.modules.websvc.wsstack.jaxws.JaxWsStackProvider;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
 import org.openide.awt.HtmlBrowser;
 import org.openide.awt.StatusDisplayer;
 import org.openide.filesystems.FileObject;
-import org.openide.util.RequestProcessor;
-import org.openide.util.actions.CookieAction;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.nodes.Node;
+import org.openide.util.actions.NodeAction;
 
-public class WsTesterPageAction extends CookieAction {
+public class WsTesterPageAction extends NodeAction {
     public String getName() {
         return NbBundle.getMessage(WsTesterPageAction.class, "LBL_TesterPageAction");
     }
-    
+
     public HelpCtx getHelpCtx() {
         return HelpCtx.DEFAULT_HELP;
     }
-    
-    protected int mode() {
-        return MODE_EXACTLY_ONE;
-    }
-    
-    protected Class[] cookieClasses() {
-        return new Class[] {JaxWsTesterCookie.class};
-    }
-    
-    protected boolean asynchronous() {
-        return false;
-    }
-    
+
     protected void performAction(Node[] activatedNodes) {
-        JaxWsTesterCookie cookie = 
-           activatedNodes[0].getCookie(JaxWsTesterCookie.class);
+        JaxWsTesterCookie cookie =
+           activatedNodes[0].getLookup().lookup(JaxWsTesterCookie.class);
         String wsdlURL = cookie.getTesterPageURL();
         try {
             final URL url = new URL(wsdlURL);
-            if (url!=null) {  
-                RequestProcessor.getDefault().post(new Runnable() {
-                    public void run() {
-                        boolean connectionOK=false;
+            if (url != null) {
+                boolean connectionOK = false;
+                try {
+                    URLConnection connection = url.openConnection();
+                    if (connection instanceof HttpURLConnection) {
+                        HttpURLConnection httpConnection = (HttpURLConnection) connection;
                         try {
-                            URLConnection connection = url.openConnection();
-                            if (connection instanceof HttpURLConnection) {
-                                HttpURLConnection httpConnection = (HttpURLConnection)connection;
-                                try {
-                                    httpConnection.setRequestMethod("GET"); //NOI18N
-                                    httpConnection.connect();
-                                    int responseCode = httpConnection.getResponseCode();
-                                    // for secured web services the response code is 405: we should allow to show the response
-                                    if (HttpURLConnection.HTTP_OK == responseCode || HttpURLConnection.HTTP_BAD_METHOD == responseCode)
-                                        connectionOK=true;
-                                } catch (java.net.ConnectException ex) {
-                                    // doing nothing - display warning
-                                } finally {
-                                    if (httpConnection!=null) 
-                                    httpConnection.disconnect();
-                                }
+                            httpConnection.setRequestMethod("GET"); //NOI18N
+                            httpConnection.connect();
+                            int responseCode = httpConnection.getResponseCode();
+                            // for secured web services the response code is 405: we should allow to show the response
+                            if (HttpURLConnection.HTTP_OK == responseCode
+                                    || HttpURLConnection.HTTP_BAD_METHOD == responseCode) {
+                                connectionOK = true;
                             }
-
-                        } catch (IOException ex) {
-                            ErrorManager.getDefault().notify(ex);
-                        }
-                        if (connectionOK) {
-                            HtmlBrowser.URLDisplayer.getDefault().showURL(url);
-                        } else {
+                        } catch (java.net.ConnectException ex) {
                             DialogDisplayer.getDefault().notify(
-                                    new NotifyDescriptor.Message(
-                                        NbBundle.getMessage(WsTesterPageAction.class,"MSG_UNABLE_TO_OPEN_TEST_PAGE",url),
-                                        NotifyDescriptor.WARNING_MESSAGE));
+                                new NotifyDescriptor.Message(
+                                    NbBundle.getMessage(WsTesterPageAction.class, "MSG_UNABLE_TO_OPEN_TEST_PAGE", url),
+                                    NotifyDescriptor.WARNING_MESSAGE));
+                        } finally {
+                            if (httpConnection != null) {
+                                httpConnection.disconnect();
+                            }
                         }
                     }
-                    
-                });
+
+                } catch (IOException ex) {
+                    ErrorManager.getDefault().notify(ex);
+                }
+                if (connectionOK) {
+                    HtmlBrowser.URLDisplayer.getDefault().showURL(url);
+                } else {
+                    DialogDisplayer.getDefault().notify(
+                            new NotifyDescriptor.Message(
+                                NbBundle.getMessage(WsTesterPageAction.class, "MSG_UNABLE_TO_OPEN_TEST_PAGE", url),
+                                NotifyDescriptor.WARNING_MESSAGE));
+                }
             }
         } catch (MalformedURLException ex) {
             StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(WsTesterPageAction.class,
                     "TXT_TesterPageUrl", wsdlURL));   //NOI18N
         }
     }
-    
+
     protected boolean enable(Node[] activatedNodes) {
-        if (activatedNodes==null || activatedNodes.length==0) return false;
-        FileObject srcRoot = (FileObject)activatedNodes[0].getLookup().lookup(FileObject.class);
-        if (srcRoot!=null) {
+        if (activatedNodes == null || activatedNodes.length == 0) {
+            return false;
+        }
+        FileObject srcRoot = (FileObject) activatedNodes[0].getLookup().lookup(FileObject.class);
+        if (srcRoot != null) {
             Project project = FileOwnerQuery.getOwner(srcRoot);
-            if (project!=null) {
+            if (project != null) {
                 return isTesterPageSupported(project);
             }
         }
         return false;
     }
-    
+
     private boolean isTesterPageSupported(Project project) {
-        JAXWSSupport wss = JAXWSSupport.getJAXWSSupport(project.getProjectDirectory());
-        if (wss != null) {
-            Map properties = wss.getAntProjectHelper().getStandardPropertyEvaluator().getProperties();
-            String serverInstance = (String)properties.get("j2ee.server.instance"); //NOI18N
-            if (serverInstance != null) {
-                J2eePlatform j2eePlatform = Deployment.getDefault().getJ2eePlatform(serverInstance);
-                if (j2eePlatform != null) {
-                    return j2eePlatform.isToolSupported("jaxws-tester"); //NOI18N
+        J2eeModuleProvider provider = (J2eeModuleProvider) project.getLookup().lookup(J2eeModuleProvider.class);
+        if (provider != null) {
+            String serverInstanceId = provider.getServerInstanceID();
+            if (serverInstanceId != null) {
+                try {
+                    J2eePlatform j2eePlatform =
+                            Deployment.getDefault().getServerInstance(serverInstanceId).getJ2eePlatform();
+                    WSStack<JaxWs> wsStack = JaxWsStackProvider.getJaxWsStack(j2eePlatform);
+                    return wsStack != null && wsStack.isFeatureSupported(JaxWs.Feature.TESTER_PAGE);
+                } catch (InstanceRemovedException ex) {
+                    Logger.getLogger(getClass().getName()).log(Level.INFO, "Failed to find J2eePlatform", ex);
                 }
             }
         }
         return false;
     }
-    
+
 
 }
