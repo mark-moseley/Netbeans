@@ -69,7 +69,6 @@ import java.util.Set;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import java.util.prefs.Preferences;
-import javax.swing.Action;
 import javax.swing.ComboBoxModel;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
@@ -99,6 +98,8 @@ import org.netbeans.api.debugger.jpda.DeadlockDetector.Deadlock;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.JPDAThreadGroup;
+import org.netbeans.api.debugger.jpda.ThreadsCollector;
+import org.netbeans.modules.debugger.jpda.ui.models.DebuggingTreeModel;
 import org.netbeans.modules.debugger.jpda.ui.views.ViewModelListener;
 
 import org.netbeans.spi.viewmodel.Models;
@@ -107,6 +108,7 @@ import org.openide.explorer.ExplorerUtils;
 import org.openide.explorer.view.Visualizer;
 import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
@@ -155,6 +157,8 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     private JPDADebugger debugger;
     private Session session;
     private JPDADebugger previousDebugger;
+    private Reference<JPDAThread> threadMadeCurrentRef;
+    private Reference<JPDAThread> threadToScrollRef;
 
     private ViewRefresher viewRefresher = new ViewRefresher();
     private BarsPanel leftPanel;
@@ -173,13 +177,13 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     
     /** Creates new form DebuggingView */
     public DebuggingView() {
-        setIcon(Utilities.loadImage ("org/netbeans/modules/debugger/jpda/resources/debugging.png")); // NOI18N
+        setIcon(ImageUtilities.loadImage ("org/netbeans/modules/debugger/jpda/resources/debugging.png")); // NOI18N
         // Remember the location of the component when closed.
         putClientProperty("KeepNonPersistentTCInModelWhenClosed", Boolean.TRUE); // NOI18N
         
         initComponents();
     
-        resumeIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_16.png"));
+        resumeIcon = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_16.png"));
         focusedResumeIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_focused_16.png"));
         pressedResumeIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/resume_button_pressed_16.png"));
         suspendIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/debugger/jpda/resources/suspend_button_16.png"));
@@ -188,15 +192,6 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         
         setBackground(treeBackgroundColor);
         
-        treeView = new DebugTreeView();
-        treeView.setRootVisible(false);
-        treeView.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        treeView.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
-        treeView.getAccessibleContext().setAccessibleName(NbBundle.getMessage(DebuggingView.class, "DebuggingView.treeView.AccessibleContext.accessibleName")); // NOI18N
-        treeView.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(DebuggingView.class, "DebuggingView.treeView.AccessibleContext.accessibleDescription")); // NOI18N
-        treeView.getTree().addMouseWheelListener(this);
-        
-        mainPanel.add(treeView, BorderLayout.CENTER);
         leftPanel = new BarsPanel();
         rightPanel = new IconsPanel();
         mainPanel.add(leftPanel, BorderLayout.WEST);
@@ -206,7 +201,7 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         tapPanel.setOrientation(TapPanel.DOWN);
         tapPanel.setExpanded(true);
         
-        infoPanel = new InfoPanel(tapPanel);
+        infoPanel = new InfoPanel(tapPanel, this);
         tapPanel.add(infoPanel);
         GridBagConstraints gridBagConstraints = new GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -215,9 +210,6 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         add(tapPanel, gridBagConstraints);
         
         manager.addPropertyChangeListener(this);
-        treeView.addTreeExpansionListener(this);
-        TreeModel model = treeView.getTree().getModel();
-        model.addTreeModelListener(this);
         
         prefListener = new DebuggingPreferenceChangeListener();
         preferences.addPreferenceChangeListener(WeakListeners.create(PreferenceChangeListener.class, prefListener, preferences));
@@ -225,8 +217,6 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
 
         scrollBarPanel.setVisible(false);
         treeScrollBar.addAdjustmentListener(this);
-        treeView.getViewport().addChangeListener(this);
-        treeView.getTree().addTreeSelectionListener(this);
 
         setSuspendTableVisible(preferences.getBoolean(FiltersDescriptor.SHOW_SUSPEND_TABLE, true));
     }
@@ -308,7 +298,7 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     private javax.swing.JScrollBar treeScrollBar;
     // End of variables declaration//GEN-END:variables
 
-    public void setRootContext(Models.CompoundModel model, DebuggerEngine engine) {
+    public void setRootContext(Models.CompoundModel model, final DebuggerEngine engine) {
         {   // Destroy the old node
             Node root = manager.getRootContext();
             if (root != null) {
@@ -321,12 +311,14 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         }
         if (threadsListener == null) {
             threadsListener = ThreadsListener.getDefault();
-            if (threadsListener != null) {
-                threadsListener.setDebuggingView(this);
-            }
         }
         if (engine != null) {
             final JPDADebugger deb = engine.lookupFirst(null, JPDADebugger.class);
+            if (deb != null) {
+                if (threadsListener != null) {
+                    threadsListener.setDebuggingView(this);
+                }
+            }
             synchronized (this) {
                 if (previousDebugger != null) {
                     previousDebugger.removePropertyChangeListener(this);
@@ -361,14 +353,33 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         Node root;
         if (model == null) {
             root = Node.EMPTY;
+            releaseTreeView();
         } else {
-            root = Models.createNodes(model, treeView);
-            treeView.setExpansionModel(model);
+            synchronized(this) {
+                if (treeView == null) {
+                    createTreeView();
+                }
+                root = Models.createNodes(model, treeView);
+                treeView.setExpansionModel(model);
+            }
         }
         manager.setRootContext(root);
         refreshView();
         updateSessionsComboBox();
-        adjustTreeScrollBar();
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                adjustTreeScrollBar(-1);
+                if (engine == null) {
+                    // Clean up the UI from memory leaks:
+                    setActivatedNodes (new Node[] {});
+                    DebugTreeView tView = getTreeView();
+                    if (tView != null) {
+                        tView.resetSelection();
+                    }
+                    //treeView.updateUI(); -- corrupts the UI!
+                }
+            }
+        });
     }
     
     public ExplorerManager getExplorerManager() {
@@ -384,9 +395,9 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         return view;
     }
 
-    public Action[] getFilterActions() {
+    /*public Action[] getFilterActions() {
         return FiltersDescriptor.getInstance().getFilterActions();
-    }
+    }*/
     
     public void setSuspendTableVisible(boolean visible) {
         rightPanel.setVisible(visible);
@@ -460,7 +471,13 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         super.componentOpened();
         Mode debuggingMode = WindowManager.getDefault().findMode(this);
         lastSelectedTCRef = new WeakReference(debuggingMode.getSelectedTopComponent());
-        requestVisible();
+        String side = null;
+        try {
+            side = (String) debuggingMode.getClass().getMethod("getSide").invoke(debuggingMode);
+        } catch (Exception ex) {}
+        if (side == null) {
+            requestVisible();
+        }
     }
 
     @Override
@@ -498,7 +515,11 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         
     @Override
     public boolean requestFocusInWindow() {
-        return treeView.requestFocusInWindow ();
+        DebugTreeView tView = getTreeView();
+        if (tView != null) {
+            return tView.requestFocusInWindow ();
+        }
+        return super.requestFocusInWindow();
     }
     
     @Override
@@ -517,6 +538,16 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
                 ExplorerManager.PROP_NODE_CHANGE.equals(propertyName)) {
             refreshView();
         } else if (JPDADebugger.PROP_CURRENT_THREAD.equals(propertyName)) {
+            JPDAThread currentThread;
+            synchronized (this) {
+                currentThread = (debugger != null) ? debugger.getCurrentThread() : null;
+            }
+            if (currentThread != null) {
+                JPDAThread thread = threadMadeCurrentRef != null ? threadMadeCurrentRef.get() : null;
+                if (thread == currentThread) {
+                    threadToScrollRef = new WeakReference(thread);
+                }
+            }
             refreshView();
         } else if (propertyName.equals (ExplorerManager.PROP_SELECTED_NODES)) {
             setActivatedNodes ((Node[]) evt.getNewValue ());
@@ -553,7 +584,46 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             }
         });
     }
-    
+
+    void makeThreadCurrent(JPDAThread thread) {
+        threadMadeCurrentRef = new WeakReference(thread);
+        thread.makeCurrent();
+    }
+
+    private synchronized void createTreeView() {
+        if (treeView != null) {
+            releaseTreeView();
+        }
+        treeView = new DebugTreeView();
+        treeView.setRootVisible(false);
+        treeView.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        treeView.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
+        treeView.getAccessibleContext().setAccessibleName(NbBundle.getMessage(DebuggingView.class, "DebuggingView.treeView.AccessibleContext.accessibleName")); // NOI18N
+        treeView.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(DebuggingView.class, "DebuggingView.treeView.AccessibleContext.accessibleDescription")); // NOI18N
+        treeView.getTree().addMouseWheelListener(this);
+        treeView.addTreeExpansionListener(this);
+        TreeModel model = treeView.getTree().getModel();
+        model.addTreeModelListener(this);
+        treeView.getViewport().addChangeListener(this);
+        treeView.getTree().addTreeSelectionListener(this);
+        mainPanel.add(treeView, BorderLayout.CENTER);
+    }
+
+    private synchronized void releaseTreeView() {
+        treeView.getTree().removeMouseWheelListener(this);
+        treeView.removeTreeExpansionListener(this);
+        TreeModel model = treeView.getTree().getModel();
+        model.removeTreeModelListener(this);
+        treeView.getViewport().removeChangeListener(this);
+        treeView.getTree().removeTreeSelectionListener(this);
+        mainPanel.remove(treeView);
+        treeView = null;
+    }
+
+    private DebugTreeView getTreeView() {
+        return treeView;
+    }
+
     // **************************************************************************
     // implementation of TreeExpansion and TreeModel listener
     // **************************************************************************
@@ -600,35 +670,39 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         }, 20);
     }
 
-    private void adjustTreeScrollBar() {
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                JViewport viewport = treeView.getViewport();
-                Point point = viewport.getViewPosition();
-                if (point.y < 0) {
-                    viewport.setViewPosition(new Point(point.x, 0));
-                }
-                Dimension viewSize = viewport.getExtentSize();
-                Dimension treeSize = viewport.getViewSize();
-                int unitHeight = treeView.getUnitHeight();
-                if (unitHeight > 0) {
-                    JScrollBar sbar = mainScrollPane.getVerticalScrollBar();
-                    if (sbar.getUnitIncrement() != unitHeight) {
-                        sbar.setUnitIncrement(unitHeight);
-                    }
-                }
-                if (treeSize.width <= viewSize.width) {
-                    scrollBarPanel.setVisible(false);
-                } else {
-                    scrollBarPanel.setVisible(true);
-                    treeScrollBar.setMaximum(treeSize.width);
-                    treeScrollBar.setVisibleAmount(viewSize.width);
-                    if (unitHeight > 0) {
-                        treeScrollBar.setUnitIncrement(unitHeight / 2);
-                    }
-                } // else
-            } // run()
-        });
+    private void adjustTreeScrollBar(int treeViewWidth) {
+        DebugTreeView tView = getTreeView();
+        if (tView == null) {
+            scrollBarPanel.setVisible(false);
+            return;
+        }
+        JViewport viewport = tView.getViewport();
+        Point point = viewport.getViewPosition();
+        if (point.y < 0) {
+            viewport.setViewPosition(new Point(point.x, 0));
+        }
+        Dimension viewSize = viewport.getExtentSize();
+        Dimension treeSize = viewport.getViewSize();
+        if (treeViewWidth < 0) {
+            treeViewWidth = treeSize.width;
+        }
+        int unitHeight = tView.getUnitHeight();
+        if (unitHeight > 0) {
+            JScrollBar sbar = mainScrollPane.getVerticalScrollBar();
+            if (sbar.getUnitIncrement() != unitHeight) {
+                sbar.setUnitIncrement(unitHeight);
+            }
+        }
+        if (treeViewWidth <= viewSize.width) {
+            scrollBarPanel.setVisible(false);
+        } else {
+            treeScrollBar.setMaximum(treeViewWidth);
+            treeScrollBar.setVisibleAmount(viewSize.width);
+            if (unitHeight > 0) {
+                treeScrollBar.setUnitIncrement(unitHeight / 2);
+            }
+            scrollBarPanel.setVisible(true);
+        } // else
     }
     
     // **************************************************************************
@@ -637,7 +711,11 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     // **************************************************************************
     
     public void adjustmentValueChanged(AdjustmentEvent e) {
-        JViewport viewport = treeView.getViewport();
+        DebugTreeView tView = getTreeView();
+        if (tView == null) {
+            return;
+        }
+        JViewport viewport = tView.getViewport();
         Point position = viewport.getViewPosition();
         Dimension viewSize = viewport.getExtentSize();
         Rectangle newRect = new Rectangle(e.getValue(), position.y, viewSize.width, viewSize.height);
@@ -645,11 +723,15 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     }
     
     // **************************************************************************
-    // implementation of ComponentListener on treeView
+    // implementation of ChangeListener on treeView
     // **************************************************************************
     
     public void stateChanged(ChangeEvent e) {
-        adjustTreeScrollBar();
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                adjustTreeScrollBar(-1);
+            }
+        });
     }
 
     // **************************************************************************
@@ -670,8 +752,9 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     
     public void valueChanged(TreeSelectionEvent e) {
         TreePath path = e.getNewLeadSelectionPath();
-        if (path != null) {
-            JTree tree = treeView.getTree();
+        DebugTreeView tView = getTreeView();
+        if (path != null && tView != null) {
+            JTree tree = tView.getTree();
             int row = tree.getRowForPath(path);
             Rectangle rect = tree.getRowBounds(row);
             if (rect == null) return ;
@@ -698,15 +781,21 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
     private final class ViewRefresher implements Runnable {
 
         public void run() {
+            DebugTreeView tView = getTreeView();
             refreshScheduled = false;
             leftPanel.clearBars();
             rightPanel.startReset();
             int sx = (rightPanel.getWidth() - ClickableIcon.CLICKABLE_ICON_WIDTH) / 2;
             int sy = 0;
 
-            JPDAThread currentThread = debugger != null ? debugger.getCurrentThread() : null;
+            JPDAThread currentThread;
+            ThreadsCollector tc;
+            synchronized (DebuggingView.this) {
+                currentThread = debugger != null ? debugger.getCurrentThread() : null;
+                tc = debugger != null ? debugger.getThreadsCollector() : null;
+            }
             // collect all deadlocked threads
-            Set<Deadlock> deadlocks = debugger != null ? debugger.getThreadsCollector().getDeadlockDetector().getDeadlocks() : Collections.EMPTY_SET;
+            Set<Deadlock> deadlocks = tc != null ? tc.getDeadlockDetector().getDeadlocks() : Collections.EMPTY_SET;
             if (deadlocks == null) {
                 deadlocks = Collections.EMPTY_SET;
             }
@@ -714,6 +803,11 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             for (Deadlock deadlock : deadlocks) {
                 deadlockedThreads.addAll(deadlock.getThreads());
             }
+
+            JPDAThread threadToScroll = threadToScrollRef != null ? threadToScrollRef.get() : null;
+            threadToScrollRef = null;
+            int scrollStart = -1, scrollEnd = -1;
+            boolean pathToScrollSearching = false;
 
             int mainPanelHeight = 0;
             int treeViewWidth = 0;
@@ -725,39 +819,50 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             int currentSY = 0;
             int height = 0;
 
-            for (TreePath path : treeView.getVisiblePaths()) {
-                Node node = Visualizer.findNode(path.getLastPathComponent());
-                JPDAThread jpdaThread = node.getLookup().lookup(JPDAThread.class);
-                JPDAThreadGroup jpdaThreadGroup = node.getLookup().lookup(JPDAThreadGroup.class);
-                
-                JTree tree = treeView.getTree();
-                Rectangle rect = tree.getRowBounds(tree.getRowForPath(path));
-                height = rect != null ? (int) Math.round(rect.getHeight()) : 0;
-                
-                if (jpdaThread != null || jpdaThreadGroup != null) {
-                    if (currentObject != null) {
-                        addPanels(currentObject, isCurrent, isAtBreakpoint, isInDeadlock,
-                                leftBarHeight, sx, currentSY, height);
-                    }
-                    leftBarHeight = 0;
-                    if (jpdaThread != null) {
-                        isCurrent = jpdaThread == currentThread && jpdaThread.isSuspended();
-                        isAtBreakpoint = threadsListener.isBreakpointHit(jpdaThread);
-                        isInDeadlock = deadlockedThreads.contains(jpdaThread);
-                    } else {
-                        isCurrent = false;
-                        isAtBreakpoint = false;
-                        isInDeadlock = false;
-                    }
-                    currentObject = jpdaThread != null ? jpdaThread : jpdaThreadGroup;
-                    currentSY = sy;
-                }
+            if (tView != null) {
+                for (TreePath path : tView.getVisiblePaths()) {
+                    Node node = Visualizer.findNode(path.getLastPathComponent());
+                    JPDAThread jpdaThread = node.getLookup().lookup(JPDAThread.class);
+                    JPDAThreadGroup jpdaThreadGroup = node.getLookup().lookup(JPDAThreadGroup.class);
 
-                mainPanelHeight += height;
-                treeViewWidth = rect != null ? Math.max(treeViewWidth, (int) Math.round(rect.getX() + rect.getWidth())) : treeViewWidth;
-                leftBarHeight += height;
-                sy += height;
-            } // for
+                    JTree tree = tView.getTree();
+                    Rectangle rect = tree.getRowBounds(tree.getRowForPath(path));
+                    height = rect != null ? (int) Math.round(rect.getHeight()) : 0;
+
+                    if (jpdaThread != null || jpdaThreadGroup != null) {
+                        pathToScrollSearching = jpdaThread == threadToScroll;
+                        if (pathToScrollSearching) {
+                            scrollStart = mainPanelHeight;
+                        }
+                        if (currentObject != null) {
+                            addPanels(currentObject, isCurrent, isAtBreakpoint, isInDeadlock,
+                                    leftBarHeight, sx, currentSY, height);
+                        }
+                        leftBarHeight = 0;
+                        if (jpdaThread != null) {
+                            isCurrent = jpdaThread == currentThread && (jpdaThread.isSuspended() ||
+                                    DebuggingTreeModel.isMethodInvoking(jpdaThread));
+                            isAtBreakpoint = threadsListener.isBreakpointHit(jpdaThread);
+                            isInDeadlock = deadlockedThreads.contains(jpdaThread);
+                        } else {
+                            isCurrent = false;
+                            isAtBreakpoint = false;
+                            isInDeadlock = false;
+                        }
+                        currentObject = jpdaThread != null ? jpdaThread : jpdaThreadGroup;
+                        currentSY = sy;
+                    }
+
+                    mainPanelHeight += height;
+                    treeViewWidth = rect != null ? Math.max(treeViewWidth, (int) Math.round(rect.getX() + rect.getWidth())) : treeViewWidth;
+                    leftBarHeight += height;
+                    sy += height;
+
+                    if (pathToScrollSearching) {
+                        scrollEnd = mainPanelHeight;
+                    }
+                } // for
+            } // if
             if (currentObject != null) {
                 addPanels(currentObject, isCurrent, isAtBreakpoint, isInDeadlock,
                         leftBarHeight, sx, currentSY, height);
@@ -767,11 +872,25 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
             leftPanel.repaint();
             rightPanel.revalidate();
             rightPanel.repaint();
-            treeView.getTree().setPreferredSize(new Dimension(treeViewWidth, 0));
+            if (tView != null) {
+                tView.getTree().setPreferredSize(new Dimension(treeViewWidth, 0));
+            }
             mainPanel.setPreferredSize(new Dimension(0, mainPanelHeight));
             mainScrollPane.revalidate();
             mainPanel.revalidate();
-            treeView.repaint();
+            if (tView != null) {
+                tView.repaint();
+            }
+
+            adjustTreeScrollBar(treeViewWidth);
+            if (scrollStart > -1) {
+                JViewport viewport = mainScrollPane.getViewport();
+                int aRectHeight = Math.min(scrollEnd - scrollStart + 1, viewport.getHeight());
+                Rectangle aRect = new Rectangle(0, scrollStart, 1, aRectHeight);
+                if (!aRect.isEmpty()) {
+                    ((JComponent)viewport.getView()).scrollRectToVisible(aRect);
+                }
+            }
         }
 
         private void addPanels(Object jpdaObject, boolean current, boolean atBreakpoint,
@@ -964,7 +1083,10 @@ public class DebuggingView extends TopComponent implements org.openide.util.Help
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
-            treeView.paintStripes(g, this);
+            DebugTreeView tView = getTreeView();
+            if (tView != null) {
+                tView.paintStripes(g, this);
+            }
         }
         
         private class IconItem {
