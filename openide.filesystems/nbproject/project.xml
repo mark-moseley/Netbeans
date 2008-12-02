@@ -51,13 +51,17 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.5</specification-version>
+                        <implementation-version/>
                     </run-dependency>
                 </dependency>
             </module-dependencies>
             <test-dependencies>
                 <test-type>
                     <name>unit</name>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.nbjunit</code-name-base>
+                        <compile-dependency/>
+                    </test-dependency>
                     <test-dependency>
                         <code-name-base>org.openide.filesystems</code-name-base>
                         <recursive/>
@@ -75,6 +79,7 @@ made subject to such option by the copyright holder.
             </test-dependencies>
             <public-packages>
                 <package>org.openide.filesystems</package>
+                <package>org.openide.filesystems.annotations</package>
             </public-packages>
         </data>
     </configuration>
