@@ -37,54 +37,42 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl.indexing;
+package org.netbeans.modules.parsing.impl.indexing.lucene;
 
 import java.io.IOException;
 import java.net.URL;
-import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.parsing.impl.indexing.IndexDocumentImpl;
+import org.netbeans.modules.parsing.impl.indexing.IndexImpl;
+import org.netbeans.modules.parsing.impl.indexing.IndexFactoryImpl;
 import org.netbeans.modules.parsing.spi.indexing.Context;
-import org.netbeans.modules.parsing.spi.indexing.CustomIndexer;
-import org.netbeans.modules.parsing.spi.indexing.EmbeddingIndexer;
-import org.netbeans.modules.parsing.spi.indexing.Indexable;
 import org.openide.filesystems.FileObject;
-import org.openide.util.Exceptions;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
  * @author Tomas Zezula
  */
-public abstract class SPIAccessor {
-    
-    private static volatile SPIAccessor instance;
+public class LuceneIndexFactory implements IndexFactoryImpl {
 
-    public static void setInstance (final SPIAccessor _instance) {
-        assert _instance != null;
-        instance = _instance;
+    public IndexDocumentImpl createDocument() {
+        return new LuceneDocument();
     }
 
-    public static synchronized SPIAccessor getInstance () {
-        if (instance == null) {
-            try {
-                Class.forName(Indexable.class.getName(), true, Indexable.class.getClassLoader());
-                assert instance != null;
-            } catch (ClassNotFoundException ex) {
-                Exceptions.printStackTrace(ex);
-            }
-        }
-        return instance;
+    public IndexImpl createIndex (Context ctx) throws IOException {
+        final URL luceneIndexFolder = getIndexFolder(ctx);
+        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder);
     }
 
-    public abstract Indexable create (final IndexableImpl delegate);
+    public IndexImpl getIndex(final Context ctx) throws IOException {
+        final URL luceneIndexFolder = getIndexFolder(ctx);
+        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder);
+    }
 
-    public abstract  Context createContext (final FileObject indexFolder,
-             final URL rootURL, String indexerName, int indexerVersion) throws IOException;
-
-    public abstract String getIndexerName (Context ctx);
-
-    public abstract int getIndexerVersion (Context ctx);
-
-    public abstract void index (CustomIndexer indexer, Iterable<? extends Indexable> files, Context context);
-
-    public abstract void index (EmbeddingIndexer indexer, Parser.Result parserResult, Context ctx);
+    private URL getIndexFolder (final Context ctx) throws IOException {
+        final FileObject indexFolder = ctx.getIndexFolder();
+        final String indexVersion = Integer.toString(LuceneIndex.VERSION);
+        final FileObject luceneIndexFolder = FileUtil.createFolder(indexFolder,indexVersion);    //NOI18N
+        return luceneIndexFolder.getURL();
+    }
 
 }

@@ -37,54 +37,79 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl.indexing;
+package org.netbeans.modules.parsing.spi.indexing;
 
 import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
-import org.netbeans.modules.parsing.spi.Parser;
-import org.netbeans.modules.parsing.spi.indexing.Context;
-import org.netbeans.modules.parsing.spi.indexing.CustomIndexer;
-import org.netbeans.modules.parsing.spi.indexing.EmbeddingIndexer;
-import org.netbeans.modules.parsing.spi.indexing.Indexable;
 import org.openide.filesystems.FileObject;
-import org.openide.util.Exceptions;
+import org.openide.filesystems.FileUtil;
+import org.openide.filesystems.URLMapper;
 
 /**
- *
+ * Represents a context of indexing given root.
  * @author Tomas Zezula
  */
-public abstract class SPIAccessor {
+//@NotThreadSafe
+public final class Context {
+
+    private final URL rootURL;
+    private final FileObject indexBaseFolder;
+    private final FileObject indexFolder;
+    private final String indexerName;
+    private final int indexerVersion;
+    private FileObject root;
     
-    private static volatile SPIAccessor instance;
 
-    public static void setInstance (final SPIAccessor _instance) {
-        assert _instance != null;
-        instance = _instance;
+    Context (final FileObject indexBaseFolder,
+             final URL rootURL, String indexerName, int indexerVersion) throws IOException {
+        assert indexBaseFolder != null;
+        assert rootURL != null;
+        assert indexerName != null;
+        this.indexBaseFolder = indexBaseFolder;
+        this.rootURL = rootURL;
+        this.indexerName = indexerName;
+        this.indexerVersion = indexerVersion;
+        final String path = indexerName+"/"+indexerVersion; //NOI18N
+        this.indexFolder = FileUtil.createFolder(this.indexBaseFolder,path);
     }
 
-    public static synchronized SPIAccessor getInstance () {
-        if (instance == null) {
-            try {
-                Class.forName(Indexable.class.getName(), true, Indexable.class.getClassLoader());
-                assert instance != null;
-            } catch (ClassNotFoundException ex) {
-                Exceptions.printStackTrace(ex);
-            }
+    /**
+     * Returns the cache folder where the indexer may store language metadata.
+     * For each root and indexer there exist a separate cache folder.
+     * @return The cahce folder
+     */
+    public FileObject getIndexFolder () {        
+        return this.indexFolder;
+    }
+
+    /**
+     * Return the {@link URI} of the processed root
+     * @return the absolute URI
+     */
+    public URL getRootURI () {
+        return this.rootURL;
+    }
+
+    /**
+     * Return the processed root, may return null
+     * when the processed root was deleted.
+     * The {@link Context#getRootURI()} can be used in
+     * this case.
+     * @return the root or null when the root doesn't exist
+     */
+    public FileObject getRoot () {
+        if (root == null) {            
+            root = URLMapper.findFileObject(this.rootURL);
         }
-        return instance;
+        return root;
     }
 
-    public abstract Indexable create (final IndexableImpl delegate);
+    String getIndexerName () {
+        return this.indexerName;
+    }
 
-    public abstract  Context createContext (final FileObject indexFolder,
-             final URL rootURL, String indexerName, int indexerVersion) throws IOException;
-
-    public abstract String getIndexerName (Context ctx);
-
-    public abstract int getIndexerVersion (Context ctx);
-
-    public abstract void index (CustomIndexer indexer, Iterable<? extends Indexable> files, Context context);
-
-    public abstract void index (EmbeddingIndexer indexer, Parser.Result parserResult, Context ctx);
-
+    int getIndexerVersion () {
+        return this.indexerVersion;
+    }   
 }
