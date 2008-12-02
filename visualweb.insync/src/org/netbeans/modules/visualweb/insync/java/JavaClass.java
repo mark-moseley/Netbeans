@@ -48,6 +48,7 @@ import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.VariableTree;
@@ -134,7 +135,12 @@ public class JavaClass {
          Boolean result = (Boolean)ReadTaskWrapper.execute( new ReadTaskWrapper.Read() {
             public Object run(CompilationInfo cinfo) {
                 TypeElement typeElement = typeElementHandle.resolve(cinfo);
-                TypeMirror superType = cinfo.getElements().getTypeElement(typeName).asType();
+                TypeElement superElement = cinfo.getElements().getTypeElement(typeName);
+                if (superElement == null) {
+                    // XXX #153978 Possible NPE.
+                    return Boolean.FALSE;
+                }
+                TypeMirror superType = superElement.asType();
                 if(superType.getKind() == TypeKind.DECLARED &&
                    cinfo.getTypes().isSubtype(typeElement.asType(), superType)) {
                         return Boolean.TRUE;
@@ -800,6 +806,18 @@ public class JavaClass {
             return null;
         }
 
+        @Override
+        public Tree visitMemberSelect(MemberSelectTree tree, Void v) {
+            if (useStatus != UsageStatus.USED) {
+                UsageStatus status = getUseStatus(getCurrentPath());
+                if(status != useStatus && status != UsageStatus.NOT_USED) {
+                    useStatus = status;
+                }
+                return super.visitMemberSelect(tree, v);
+            }
+            return null;
+        }
+        
         @Override
         public Tree visitMethod(MethodTree tree, Void v) {
             if (useStatus != UsageStatus.USED && !canSkip(getCurrentPath())) {
