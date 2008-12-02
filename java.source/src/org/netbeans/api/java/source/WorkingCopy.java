@@ -51,12 +51,14 @@ import com.sun.source.util.TreePathScanner;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.util.Context;
 import java.io.IOException;
+import java.lang.ref.Reference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -65,12 +67,16 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Position.Bias;
 import javax.tools.JavaFileObject;
 import org.netbeans.api.java.lexer.JavaTokenId;
+import org.netbeans.modules.java.source.parsing.JavacParserResult;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.openide.util.Parameters;
 import static org.netbeans.api.java.source.ModificationResult.*;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.modules.java.source.save.CasualDiff.Diff;
 import org.netbeans.modules.java.source.builder.TreeFactory;
 import org.netbeans.modules.java.source.engine.SourceReader;
 import org.netbeans.modules.java.source.engine.SourceRewriter;
+import org.netbeans.modules.java.source.parsing.CompilationInfoImpl;
 import org.netbeans.modules.java.source.pretty.ImportAnalysis2;
 import org.netbeans.modules.java.source.pretty.VeryPretty;
 import org.netbeans.modules.java.source.save.CasualDiff;
@@ -87,13 +93,15 @@ import org.openide.util.NbBundle;
  * @author Dusan Balek, Petr Hrebejk, Tomas Zezula
  */
 public class WorkingCopy extends CompilationController {
-    
+
+    static Reference<WorkingCopy> instance;
     private Map<Tree, Tree> changes;
     private Map<JavaFileObject, CompilationUnitTree> externalChanges;
     private Set<Diff> textualChanges;
     private Map<Integer, String> userInfo;
     private boolean afterCommit = false;
     private TreeMaker treeMaker;
+    private Map<Tree, Object> tree2Tag;
     
     WorkingCopy(final CompilationInfoImpl impl) {        
         super(impl);
@@ -105,6 +113,7 @@ public class WorkingCopy extends CompilationController {
         
         treeMaker = new TreeMaker(this, TreeFactory.instance(getContext()));
         changes = new IdentityHashMap<Tree, Tree>();
+        tree2Tag = new IdentityHashMap<Tree, Object>();
         externalChanges = null;
         textualChanges = new HashSet<Diff>();
         userInfo = new HashMap<Integer, String>();
@@ -115,6 +124,28 @@ public class WorkingCopy extends CompilationController {
     }
     
     // API of the class --------------------------------------------------------
+
+    /**
+     * Returns an instance of the {@link WorkingCopy} for
+     * given {@link Parser.Result} if it is a result
+     * of a java parser.
+     * @param result for which the {@link WorkingCopy} should be
+     * returned.
+     * @return a {@link WorkingCopy} or null when the given result
+     * is not a result of java parsing.
+     * @since 0.42
+     */
+    public static WorkingCopy get (final Parser.Result result) {
+        Parameters.notNull("result", result); //NOI18N
+        WorkingCopy copy = instance != null ? instance.get() : null;
+        if (copy != null && result instanceof JavacParserResult) {
+            final JavacParserResult javacResult = (JavacParserResult)result;
+            CompilationController controller = javacResult.get(CompilationController.class);
+            if (controller != null && controller.impl == copy.impl)
+                return copy;
+        }
+        return null;
+    }
 
     @Override
     public JavaSource.Phase toPhase(JavaSource.Phase phase) throws IOException {
@@ -230,6 +261,16 @@ public class WorkingCopy extends CompilationController {
         userInfo.put(start, NbBundle.getMessage(CasualDiff.class,"TXT_RenameInComment")); //NOI18N
     }
     
+    /**
+     * Tags a tree. Used in {@code ModificationResult} to determine position of tree inside document.
+     * @param t the tree to be tagged
+     * @param tag an {@code Object} used as tag
+     * @since 0.37
+     */
+    public synchronized void tag(Tree t, Object tag) {
+        tree2Tag.put(t, tag);
+    }
+    
     // Package private methods -------------------------------------------------        
     
     private static void commit(CompilationUnitTree topLevel, List<Diff> diffs, SourceRewriter out) throws IOException, BadLocationException {
@@ -277,15 +318,20 @@ public class WorkingCopy extends CompilationController {
                 return null;
             }
             Tree repl = changeMap.remove(tree);
-            Tree newRepl = super.translate(repl != null ? repl : tree);
+            Tree newRepl;
+            if (repl != null) {
+                newRepl = translate(repl);
+            } else {
+                newRepl = super.translate(tree);
+            }
             return newRepl;
         }
     }
             
     private static boolean REWRITE_WHOLE_FILE = Boolean.getBoolean(WorkingCopy.class.getName() + ".rewrite-whole-file");
     
-    private List<Difference> processCurrentCompilationUnit() throws IOException, BadLocationException {
-        final Set<TreePath> pathsToRewrite = new HashSet<TreePath>();
+    private List<Difference> processCurrentCompilationUnit(Map<?, int[]> tag2Span) throws IOException, BadLocationException {
+        final Set<TreePath> pathsToRewrite = new LinkedHashSet<TreePath>();
         final Map<TreePath, Map<Tree, Tree>> parent2Rewrites = new IdentityHashMap<TreePath, Map<Tree, Tree>>();
         boolean fillImports = true;
         
@@ -363,6 +409,7 @@ public class WorkingCopy extends CompilationController {
                         CompilationUnitTree cut = (CompilationUnitTree) t;
                         ia.setPackage(cut.getPackageName());
                         ia.setImports(cut.getImports());
+                        importsFilled = true;
                     }
                     if (t.getKind() == Kind.CLASS) {
                         classes.add((ClassTree) t);
@@ -376,9 +423,12 @@ public class WorkingCopy extends CompilationController {
                 ia.classEntered(ct);
             }
 
-            translator.attach(getContext(), ia, getCompilationUnit());
-            
+            translator.attach(getContext(), ia, getCompilationUnit(), tree2Tag);
+
             Tree brandNew = translator.translate(path.getLeaf(), parent2Rewrites.get(path));
+
+            //tagging debug
+            //System.err.println("brandNew=" + brandNew);
             
             for (ClassTree ct : classes) {
                 ia.classLeft();
@@ -388,14 +438,14 @@ public class WorkingCopy extends CompilationController {
                 fillImports = false;
             }
 
-            diffs.addAll(CasualDiff.diff(getContext(), this, path, (JCTree) brandNew, userInfo));
+            diffs.addAll(CasualDiff.diff(getContext(), this, path, (JCTree) brandNew, userInfo, tree2Tag, tag2Span));
         }
-        
+
         if (fillImports) {
             List<? extends ImportTree> nueImports = ia.getImports();
-            
+
             if (nueImports != null) { //may happen if no changes, etc.
-                diffs.addAll(CasualDiff.diff(getContext(), this, getCompilationUnit().getImports(), nueImports, userInfo));
+                diffs.addAll(CasualDiff.diff(getContext(), this, getCompilationUnit().getImports(), nueImports, userInfo, tree2Tag, tag2Span));
             }
         }
         
@@ -425,11 +475,11 @@ public class WorkingCopy extends CompilationController {
         for (CompilationUnitTree t : externalChanges.values()) {
             Translator translator = new Translator();
             
-            translator.attach(getContext(), new ImportAnalysis2(getContext()), t);
+            translator.attach(getContext(), new ImportAnalysis2(getContext()), t, tree2Tag);
             
             CompilationUnitTree nue = (CompilationUnitTree) translator.translate(t, changes);
             
-            VeryPretty printer = new VeryPretty(getContext());
+            VeryPretty printer = new VeryPretty(getContext(), VeryPretty.getCodeStyle(this));
             printer.print((JCTree.JCCompilationUnit) nue);
             result.add(new CreateChange(nue.getSourceFile(), printer.toString()));
         }
@@ -437,7 +487,7 @@ public class WorkingCopy extends CompilationController {
         return result;
     }
 
-    List<Difference> getChanges() throws IOException, BadLocationException {
+    List<Difference> getChanges(Map<?, int[]> tag2Span) throws IOException, BadLocationException {
         if (afterCommit)
             throw new IllegalStateException("The commit method can be called only once on a WorkingCopy instance");   //NOI18N
         afterCommit = true;
@@ -449,7 +499,7 @@ public class WorkingCopy extends CompilationController {
         
         List<Difference> result = new LinkedList<Difference>();
         
-        result.addAll(processCurrentCompilationUnit());
+        result.addAll(processCurrentCompilationUnit(tag2Span));
         result.addAll(processExternalCUs());
         
         return result;
