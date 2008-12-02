@@ -45,6 +45,7 @@ import java.util.Collection;
 import java.util.List;
 import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
+import org.netbeans.modules.cnd.api.model.CsmListeners;
 import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
 import org.netbeans.modules.cnd.loaders.CCDataObject;
 import org.netbeans.modules.cnd.loaders.CDataObject;
@@ -64,11 +65,11 @@ import org.openide.util.NbBundle;
 public class NavigatorComponent implements NavigatorPanel, LookupListener {
     
     /** Lookup template to search for java data objects. shared with InheritanceTreePanel */
-    private Lookup.Template CTemplate = new Lookup.Template(CDataObject.class);
+    private Lookup.Template<CDataObject> CTemplate = new Lookup.Template<CDataObject>(CDataObject.class);
     private Lookup.Result CContext;
-    private Lookup.Template CCTemplate = new Lookup.Template(CCDataObject.class);
+    private Lookup.Template<CCDataObject> CCTemplate = new Lookup.Template<CCDataObject>(CCDataObject.class);
     private Lookup.Result CCContext;
-    private Lookup.Template HTemplate = new Lookup.Template(HDataObject.class);
+    private Lookup.Template<HDataObject> HTemplate = new Lookup.Template<HDataObject>(HDataObject.class);
     private Lookup.Result HContext;
     /** UI of this navigator panel */
     private NavigatorPanelUI panelUI;
@@ -151,9 +152,8 @@ public class NavigatorComponent implements NavigatorPanel, LookupListener {
         }
     }
     
-    /** Default activated Node strategy is enough for now */
     public Lookup getLookup() {
-        return null;
+        return this.panelUI.getLookup();
     }
     
     // ModelBusyListener impl - sets wait cursor on content during computing
@@ -211,8 +211,8 @@ public class NavigatorComponent implements NavigatorPanel, LookupListener {
     
     private void setNewContentImpl(DataObject cdo, NavigatorPanelUI ui) {
         curModel = new NavigatorModel(cdo, ui, this);
-        CsmModelAccessor.getModel().addProgressListener(curModel);
-        CsmModelAccessor.getModel().addModelListener(curModel);
+        CsmListeners.getDefault().addProgressListener(curModel);
+        CsmListeners.getDefault().addModelListener(curModel);
         ui.getContent().setModel(curModel);
         try {
             curModel.addBusyListener(this);
@@ -224,8 +224,8 @@ public class NavigatorComponent implements NavigatorPanel, LookupListener {
     
     private void detachFromModel(NavigatorModel model) {
 	if( model != null ) {
-	    CsmModelAccessor.getModel().removeProgressListener(model);
-	    CsmModelAccessor.getModel().removeModelListener(model);
+	    CsmListeners.getDefault().removeProgressListener(model);
+	    CsmListeners.getDefault().removeModelListener(model);
 	    model.removeBusyListener(this);
 	    model.removeNotify();
 	}
