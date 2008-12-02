@@ -60,6 +60,7 @@ import org.openide.text.CloneableEditor;
 import org.openide.text.NbDocument;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.windows.TopComponent;
 
 /*
@@ -67,7 +68,7 @@ import org.openide.windows.TopComponent;
  */
 
 public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Serializable{
-    static final long serialVersionUID = -6305897237371751564L;
+    static final long serialVersionUID = -6551916877064602276L;
     private final static String XML_CONSTANT = "XML"; //NOI18N
     
     private JSFConfigEditorContext context;
@@ -85,7 +86,7 @@ public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Seria
         return XML_CONSTANT;
     }
     
-    private static final Image JSFConfigIcon = org.openide.util.Utilities.loadImage("org/netbeans/modules/web/jsf/resources/JSFConfigIcon.png"); // NOI18N
+    private static final Image JSFConfigIcon = ImageUtilities.loadImage("org/netbeans/modules/web/jsf/resources/JSFConfigIcon.png"); // NOI18N
     public Image getIcon() {
         return JSFConfigIcon;
     }
@@ -111,14 +112,16 @@ public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Seria
     }
     
     
-    
-    class JSFConfigMultiviewElement extends CloneableEditor implements MultiViewElement, Serializable {
-        static final long serialVersionUID = -6305897237371751564L;
+    static class JSFConfigMultiviewElement extends CloneableEditor implements MultiViewElement, Serializable {
+        static final long serialVersionUID = 8106347205077610597L;
         
         private JSFConfigEditorContext context;
         private transient JComponent toolbar;
         private transient JSFConfigDataObject jsfDataObject;
         
+        // Default constructor needed for org.openide.windows.TopComponent
+        public JSFConfigMultiviewElement() {}
+
         public JSFConfigMultiviewElement(JSFConfigEditorContext context, JSFConfigEditorSupport support) {
             super(support);
             support.initializeCloneableEditor(this);
@@ -193,7 +196,9 @@ public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Seria
         }
         
         public void setMultiViewCallback(MultiViewElementCallback callback) {
-            context.setMultiViewTopComponent(callback.getTopComponent());
+            if (context != null && callback != null) {
+                context.setMultiViewTopComponent(callback.getTopComponent());
+            }
         }
         
         public CloseOperationState canCloseElement() {
