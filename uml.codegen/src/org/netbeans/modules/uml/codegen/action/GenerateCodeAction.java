@@ -171,8 +171,12 @@ public class GenerateCodeAction extends CookieAction
             } // for
         } // else - more than one node selected
 
-        UMLProjectProperties prjProps = 
-            retrieveUMLProject().getUMLProjectProperties();
+        UMLProject pr=retrieveUMLProject();
+        if(pr==null)
+        {
+            return;
+        }
+        UMLProjectProperties prjProps =pr.getUMLProjectProperties();
         
         String targetFolderName = prjProps.getCodeGenFolderLocation();
         boolean hasTargetJavaPrj = true;
@@ -184,8 +188,9 @@ public class GenerateCodeAction extends CookieAction
         
         else
         {
+            File normalizedFile = FileUtil.normalizeFile(new File(targetFolderName));
             FileObject targetSrcFolderFO = 
-                FileUtil.toFileObject(new File(targetFolderName));
+                FileUtil.toFileObject(normalizedFile);
 
             if (targetSrcFolderFO == null || !targetSrcFolderFO.isValid())
             {
@@ -420,12 +425,19 @@ public class GenerateCodeAction extends CookieAction
         if (assocProject instanceof UMLProject)
         {
             UMLProject umlProject = (UMLProject)assocProject;
+            UMLProjectProperties props = umlProject.getUMLProjectProperties();
         
-            if (umlProject.getUMLProjectProperties().getProjectMode()
-                .equals(UMLProject.PROJECT_MODE_ANALYSIS_STR))
+            if (props != null) 
             {
-                return false;
-            }
+                String mode = props.getProjectMode();
+                if (mode != null) 
+                {
+                    if (mode.equals(UMLProject.PROJECT_MODE_ANALYSIS_STR))
+                    {
+                        return false;
+                    }
+                }
+            }         
         }
         
         else
