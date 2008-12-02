@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -23,11 +23,13 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.openide;
 
 import java.awt.Component;
+import java.io.IOException;
+import java.util.Set;
 import javax.swing.JPanel;
 import javax.swing.event.ChangeListener;
 import org.netbeans.junit.NbTestCase;
@@ -36,7 +38,7 @@ import org.openide.util.HelpCtx;
 
 /**
  *
- * @author Jaroslav Tulach
+ * @author Jaroslav Tulach, Jiri Rechtacek
  */
 public class WizardSetDataAndIteratorTest extends NbTestCase {
 
@@ -44,22 +46,35 @@ public class WizardSetDataAndIteratorTest extends NbTestCase {
         super(s);
     }
 
+    @Override
+    protected final boolean runInEQ () {
+        return true;
+    }
     
     public void testSetDataAndIterator() throws Exception {
-        MyWizard w = new MyWizard();        
+        MyWizard w = new MyWizard(new MyIter ());
         assertTrue("Finish enabled", w.isFinishEnabled());        
         assertEquals("Right Settings passed", w, MyPanel.set);
     }
+
+    public void testInitializeAfterSetDataAndIterator () {
+        MyInstantiatingIter myIt = new MyInstantiatingIter ();
+        MyWizard w = new MyWizard (myIt);
+        assertTrue ("InstantiatingIterator.initialize() called.", myIt.initialized);
+        assertEquals ("Initialized called on correct wizard.", w, myIt.initializedOnWD);
+    }
+
     private static class MyWizard extends WizardDescriptor {
-        public MyWizard() {
+        public MyWizard(WizardDescriptor.Iterator<MyWizard> it) {
             super();
-            setPanelsAndSettings(new MyIter(), this);
+            MyPanel.set = null;
+            setPanelsAndSettings(it, this);
         }
     }
     
     private static class MyIter implements WizardDescriptor.Iterator<MyWizard> {
         private MyPanel myPanel = new MyPanel();
-        
+
         public Panel<org.openide.WizardSetDataAndIteratorTest.MyWizard> current() {
             return myPanel;
         }
@@ -88,9 +103,28 @@ public class WizardSetDataAndIteratorTest extends NbTestCase {
         }
 
         public void removeChangeListener(ChangeListener l) {
-        }        
+        }
     }
-    
+
+    private static class MyInstantiatingIter extends MyIter implements WizardDescriptor.InstantiatingIterator<MyWizard> {
+        public boolean initialized = false;
+        public WizardDescriptor initializedOnWD = null;
+        public Set instantiate () throws IOException {
+            fail ("No reason to call instantiate.");
+            return null;
+        }
+
+        public void initialize (WizardDescriptor wizard) {
+            initialized = true;
+            initializedOnWD = wizard;
+        }
+
+        public void uninitialize (WizardDescriptor wizard) {
+            initialized = false;
+            initializedOnWD = null;
+        }
+    }
+
     private static class MyPanel implements WizardDescriptor.Panel<MyWizard> {
         private static MyWizard set;
         
