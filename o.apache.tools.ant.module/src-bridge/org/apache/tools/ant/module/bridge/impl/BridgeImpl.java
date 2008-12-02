@@ -54,7 +54,6 @@ import java.net.URL;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,9 +78,6 @@ import org.apache.tools.ant.types.Path;
 import org.netbeans.api.progress.ProgressHandle;
 import org.openide.ErrorManager;
 import org.openide.awt.StatusDisplayer;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
@@ -96,7 +92,7 @@ import org.openide.windows.OutputWriter;
 public class BridgeImpl implements BridgeInterface {
     
     /** Number of milliseconds to wait before forcibly halting a runaway process. */
-    private static final int STOP_TIMEOUT = 3000;
+    private static final int STOP_TIMEOUT = 10000;
     
     private static boolean classpathInitialized = false;
     
@@ -272,6 +268,10 @@ public class BridgeImpl implements BridgeInterface {
             loggersByThread.put(currentThread, logger);
         }
         try {
+            if (Thread.interrupted()) {
+                logger.shutdown();
+                return false;
+            }
             // Execute the configured project
             //writer.println("#4"); // NOI18N
             project.executeTargets(targs);
@@ -301,8 +301,12 @@ public class BridgeImpl implements BridgeInterface {
             public void run() {
                 IntrospectedInfo custom = AntSettings.getCustomDefs();
                 Map<String,Map<String,Class>> defs = new HashMap<String,Map<String,Class>>();
-                defs.put("task", NbCollections.checkedMapByCopy(project.getTaskDefinitions(), String.class, Class.class, true));
-                defs.put("type", NbCollections.checkedMapByCopy(project.getDataTypeDefinitions(), String.class, Class.class, true));
+                try {
+                    defs.put("task", NbCollections.checkedMapByCopy(project.getTaskDefinitions(), String.class, Class.class, true));
+                    defs.put("type", NbCollections.checkedMapByCopy(project.getDataTypeDefinitions(), String.class, Class.class, true));
+                } catch (ThreadDeath t) {
+                    // #137883: late clicks on Stop which can be ignored.
+                }
                 custom.scanProject(defs);
                 AntSettings.setCustomDefs(custom);
                 logger.shutdown();
@@ -333,12 +337,8 @@ public class BridgeImpl implements BridgeInterface {
 
     private static final RequestProcessor.Task refreshFilesystemsTask = RequestProcessor.getDefault().create(new Runnable() {
         public void run() {
-            // #8993: also try to refresh masterfs...this is hackish...
-            // cf. also RefreshAllFilesystemsAction
-            for (FileSystem fs : getFileSystems()) {
-                Logger.getLogger(BridgeImpl.class.getName()).log(Level.FINE, "Refreshing filesystem {0}", fs);
-                fs.refresh(false);
-            }
+            Logger.getLogger(BridgeImpl.class.getName()).log(Level.FINE, "Refreshing filesystems");
+            FileUtil.refreshAll(); 
         }
     });
 
@@ -351,18 +351,15 @@ public class BridgeImpl implements BridgeInterface {
             // Try stopping at a safe point.
             StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(BridgeImpl.class, "MSG_stopping", logger.getDisplayNameNoLock()));
             logger.stop();
-            process.interrupt();
-            // But if that doesn't do it, double-check later...
-            // Yes Thread.stop() is deprecated; that is why we try to avoid using it.
-            RequestProcessor.getDefault().create(new Runnable() {
-                public void run () {
-                    forciblyStop(process);
-                }
-            }).schedule(STOP_TIMEOUT);
-        } else {
-            // Try killing it now!
-            forciblyStop(process);
         }
+        process.interrupt();
+        // But if that doesn't do it, double-check later...
+        // Yes Thread.stop() is deprecated; that is why we try to avoid using it.
+        RequestProcessor.getDefault().create(new Runnable() {
+            public void run () {
+                forciblyStop(process);
+            }
+        }).schedule(STOP_TIMEOUT);
     }
     
     private void forciblyStop(Thread process) {
@@ -376,34 +373,7 @@ public class BridgeImpl implements BridgeInterface {
     private static void stopThread(Thread process) {
         process.stop();
     }
-    
-    //copy - paste programming
-    //http://ant.netbeans.org/source/browse/ant/src-bridge/org/apache/tools/ant/module/bridge/impl/BridgeImpl.java.diff?r1=1.15&r2=1.16
-    //http:/java.netbeans.org/source/browse/java/javacore/src/org/netbeans/modules/javacore/Util.java    
-    //http://core.netbeans.org/source/browse/core/ui/src/org/netbeans/core/ui/MenuWarmUpTask.java
-    //http://core.netbeans.org/source/browse/core/src/org/netbeans/core/actions/RefreshAllFilesystemsAction.java
-    //http://java.netbeans.org/source/browse/java/api/src/org/netbeans/api/java/classpath/ClassPath.java
-        
-    private static FileSystem[] getFileSystems() {
-        File[] roots = File.listRoots();
-        Set<FileSystem> allRoots = new LinkedHashSet<FileSystem>();
-        assert roots != null && roots.length > 0 : "Could not list file roots"; // NOI18N
-
-        for (File root : roots) {
-            FileObject random = FileUtil.toFileObject(root);
-            if (random == null) continue;
             
-            FileSystem fs;
-            try {
-                fs = random.getFileSystem();
-                allRoots.add(fs);
-            } catch (FileStateInvalidException e) {
-                throw new AssertionError(e);
-            }
-        }
-        assert !allRoots.isEmpty() : "Could not get any filesystem"; // NOI18N
-        return allRoots.toArray(new FileSystem[allRoots.size()]);
-    }
 
     private static void addCustomDefs(Project project) throws BuildException, IOException {
         long start = System.currentTimeMillis();
