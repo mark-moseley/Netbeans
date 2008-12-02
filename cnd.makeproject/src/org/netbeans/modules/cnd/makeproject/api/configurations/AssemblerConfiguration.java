@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
 import org.netbeans.modules.cnd.makeproject.configurations.ui.OptionsNodeProp;
@@ -50,22 +49,22 @@ import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.openide.nodes.Sheet;
 import org.openide.util.NbBundle;
 
-public class FortranCompilerConfiguration extends BasicCompilerConfiguration implements AllOptionsProvider {
-
+public class AssemblerConfiguration extends BasicCompilerConfiguration implements AllOptionsProvider {
     // Constructors
-    public FortranCompilerConfiguration(String baseDir, FortranCompilerConfiguration master) {
+
+    public AssemblerConfiguration(String baseDir, AssemblerConfiguration master) {
         super(baseDir, master);
     }
 
     // Clone and assign
-    public void assign(FortranCompilerConfiguration conf) {
+    public void assign(AssemblerConfiguration conf) {
         // From XCompiler
         super.assign(conf);
     }
 
     @Override
-    public FortranCompilerConfiguration clone() {
-        FortranCompilerConfiguration clone = new FortranCompilerConfiguration(getBaseDir(), (FortranCompilerConfiguration) getMaster());
+    public AssemblerConfiguration clone() {
+        AssemblerConfiguration clone = new AssemblerConfiguration(getBaseDir(), (AssemblerConfiguration) getMaster());
         // BasicCompilerConfiguration
         clone.setDevelopmentMode(getDevelopmentMode().clone());
         clone.setWarningLevel(getWarningLevel().clone());
@@ -80,13 +79,13 @@ public class FortranCompilerConfiguration extends BasicCompilerConfiguration imp
     // Interface OptionsProvider
     @Override
     public String getOptions(BasicCompiler compiler) {
-        String options = "$(COMPILE.f) "; // NOI18N
+        String options = "$(AS) $(ASFLAGS) "; // NOI18N
         options += getAllOptions2(compiler) + " "; // NOI18N
         options += getCommandLineConfiguration().getValue() + " "; // NOI18N
         return CppUtils.reformatWhitespaces(options);
     }
 
-    public String getFFlagsBasic(BasicCompiler compiler) {
+    public String getAsFlagsBasic(BasicCompiler compiler) {
         String options = ""; // NOI18N
         options += compiler.getStripOption(getStrip().getValue()) + " "; // NOI18N
         options += compiler.getSixtyfourBitsOption(getSixtyfourBits().getValue()) + " "; // NOI18N
@@ -96,17 +95,17 @@ public class FortranCompilerConfiguration extends BasicCompilerConfiguration imp
         return CppUtils.reformatWhitespaces(options);
     }
 
-    public String getFFlags(BasicCompiler compiler) {
-        String options = getFFlagsBasic(compiler) + " "; // NOI18N
+    public String getAsFlags(BasicCompiler compiler) {
+        String options = getAsFlagsBasic(compiler) + " "; // NOI18N
         options += getCommandLineConfiguration().getValue() + " "; // NOI18N
         return CppUtils.reformatWhitespaces(options);
     }
 
     public String getAllOptions(BasicCompiler compiler) {
-        CCompilerConfiguration master = (CCompilerConfiguration) getMaster();
+        AssemblerConfiguration master = (AssemblerConfiguration) getMaster();
 
         String options = ""; // NOI18N
-        options += getFFlagsBasic(compiler) + " "; // NOI18N
+        options += getAsFlagsBasic(compiler) + " "; // NOI18N
         if (master != null) {
             options += master.getCommandLineConfiguration().getValue() + " "; // NOI18N
         }
@@ -115,8 +114,6 @@ public class FortranCompilerConfiguration extends BasicCompilerConfiguration imp
     }
 
     public String getAllOptions2(BasicCompiler compiler) {
-        FortranCompilerConfiguration master = (FortranCompilerConfiguration) getMaster();
-
         String options = ""; // NOI18N
         options += compiler.getDevelopmentModeOptions(getDevelopmentMode().getValue()) + " "; // NOI18N
         options += compiler.getWarningLevelOptions(getWarningLevel().getValue()) + " "; // NOI18N
@@ -127,9 +124,11 @@ public class FortranCompilerConfiguration extends BasicCompilerConfiguration imp
     public Sheet getGeneralSheet(MakeConfiguration conf) {
         Sheet sheet = new Sheet();
         CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
-        BasicCompiler fortranCompiler = compilerSet == null ? null : (BasicCompiler) compilerSet.getTool(Tool.FortranCompiler);
+        BasicCompiler assemblerCompiler = compilerSet == null ? null : (BasicCompiler) compilerSet.getTool(Tool.Assembler);
 
-        sheet.put(getBasicSet());
+        Sheet.Set basicSet = getBasicSet();
+        basicSet.remove("StripSymbols"); // NOI18N
+        sheet.put(basicSet);
         if (getMaster() != null) {
             sheet.put(getInputSet());
         }
@@ -137,8 +136,8 @@ public class FortranCompilerConfiguration extends BasicCompilerConfiguration imp
         set4.setName("Tool"); // NOI18N
         set4.setDisplayName(getString("ToolTxt1"));
         set4.setShortDescription(getString("ToolHint1"));
-        if (fortranCompiler != null) {
-            set4.put(new StringNodeProp(getTool(), fortranCompiler.getName(), false, "Tool", getString("ToolTxt2"), getString("ToolHint2"))); // NOI18N
+        if (assemblerCompiler != null) {
+            set4.put(new StringNodeProp(getTool(), assemblerCompiler.getName(), false, "Tool", getString("ToolTxt2"), getString("ToolHint2"))); // NOI18N
         }
         sheet.put(set4);
 
@@ -147,8 +146,8 @@ public class FortranCompilerConfiguration extends BasicCompilerConfiguration imp
         set2.setName("CommandLine"); // NOI18N
         set2.setDisplayName(getString("CommandLineTxt"));
         set2.setShortDescription(getString("CommandLineHint"));
-        if (fortranCompiler != null) {
-            set2.put(new OptionsNodeProp(getCommandLineConfiguration(), null, this, fortranCompiler, null, texts));
+        if (assemblerCompiler != null) {
+            set2.put(new OptionsNodeProp(getCommandLineConfiguration(), null, this, assemblerCompiler, null, texts));
         }
         sheet.put(set2);
 
@@ -157,6 +156,6 @@ public class FortranCompilerConfiguration extends BasicCompilerConfiguration imp
 
     /** Look up i18n strings here */
     private static String getString(String s) {
-        return NbBundle.getMessage(FortranCompilerConfiguration.class, s);
+        return NbBundle.getMessage(AssemblerConfiguration.class, s);
     }
 }

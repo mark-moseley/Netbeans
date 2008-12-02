@@ -41,52 +41,77 @@
 
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-public class BooleanConfiguration {
-    private BooleanConfiguration master;
+import java.util.ArrayList;
+import java.util.List;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ui.CustomizerNode;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ui.CustomizerRootNodeProvider;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ui.PrioritizedCustomizerNode;
 
-    private boolean def;
-    private String falseValue;
-    private String trueValue;
+public class DebuggerChooserConfiguration {
 
-    private boolean value;
+    private static List<CustomizerNode>  nodes = null;
+    private static String[] names;
+    private static int def;
+
+    private int value;
     private boolean modified;
     private boolean dirty = false;
 
-    public BooleanConfiguration(BooleanConfiguration master, boolean def) {
-        this.master = master;
-        this.def = def;
-        falseValue = ""; // NOI18N
-        trueValue = ""; // NOI18N
+    public DebuggerChooserConfiguration() {
+        init();
         reset();
     }
 
-    public BooleanConfiguration(BooleanConfiguration master, boolean def, String falseValue, String trueValue) {
-        this.master = master;
-        this.def = def;
-        this.falseValue = falseValue;
-        this.trueValue = trueValue;
-        reset();
+    public DebuggerChooserConfiguration(DebuggerChooserConfiguration conf) {
+        value = conf.value;
+        setModified(false);
     }
 
-    protected BooleanConfiguration getMaster() {
-        return master;
-    }
+    private static void init() {
+        if (nodes == null) {
+            nodes = CustomizerRootNodeProvider.getInstance().getCustomizerNodes("Debug"); // NOI18N
+            String[] defnames = new String[] { "" };
 
-    public void setValue(boolean b) {
-        this.value = b;
-        if (master != null) {
-            setModified(true);
-        } else {
-            setModified(b != getDefault());
+            if (nodes.size() >= 1) {
+                int priority = PrioritizedCustomizerNode.DEFAULT_PRIORITY;
+                int idx = 0;
+                List<String> n = new ArrayList<String>();
+                for (CustomizerNode node : nodes) {
+                    if (node instanceof PrioritizedCustomizerNode) {
+                        if (((PrioritizedCustomizerNode) node).getPriority() > priority) {
+                            priority = ((PrioritizedCustomizerNode) node).getPriority();
+                            idx = n.size();
+                        }
+                    }
+                    n.add(node.getDisplayName());
+                }
+                names = n.toArray(defnames);
+                def = idx;
+            } else {
+                names = defnames;
+                def = 0;
+            }
         }
     }
 
-    public boolean getValue() {
-        if (master != null && !getModified()) {
-            return master.getValue();
-        } else {
-            return value;
+    public void setValue(int value) {
+        this.value = value;
+        setModified(true);
+    }
+
+    public void setValue(String s) {
+        if (s != null) {
+            for (int i = 0; i < names.length; i++) {
+                if (s.equals(names[i])) {
+                    setValue(i);
+                    break;
+                }
+            }
         }
+    }
+    
+    public int getValue() {
+        return value;
     }
 
     public void setModified(boolean b) {
@@ -104,14 +129,9 @@ public class BooleanConfiguration {
     public boolean getDirty() {
         return dirty;
     }
-
-    public boolean getDefault() {
+    
+    public int getDefault() {
         return def;
-    }
-
-    public void setDefault(boolean b) {
-        def = b;
-        setModified(value != def);
     }
 
     public void reset() {
@@ -119,27 +139,35 @@ public class BooleanConfiguration {
         setModified(false);
     }
 
-    public String getOption() {
-        if (getValue()) {
-            return trueValue;
+    public String getName() {
+        if (getValue() < names.length) {
+            return names[getValue()];
         } else {
-            return falseValue;
+            return "???"; // FIXUP // NOI18N
         }
     }
 
+    public CustomizerNode getNode() {
+        if (getValue() < nodes.size()) {
+            return nodes.get(getValue());
+        } else {
+            return null;
+        }
+    }
+
+    public String[] getNames() {
+        return names;
+    }
+
     // Clone and Assign
-    public void assign(BooleanConfiguration conf) {
-        dirty |= conf.getValue() ^ getValue();
+    public void assign(DebuggerChooserConfiguration conf) {
+        dirty = getValue() != conf.getValue();
         setValue(conf.getValue());
         setModified(conf.getModified());
     }
 
     @Override
-    public BooleanConfiguration clone() {
-        BooleanConfiguration clone = new BooleanConfiguration(master, def, falseValue, trueValue);
-        clone.setValue(getValue());
-        clone.setModified(getModified());
-        return clone;
+    public DebuggerChooserConfiguration clone() {
+        return new DebuggerChooserConfiguration(this);
     }
-
 }

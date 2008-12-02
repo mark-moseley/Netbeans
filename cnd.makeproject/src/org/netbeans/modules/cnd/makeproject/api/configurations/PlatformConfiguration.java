@@ -41,93 +41,65 @@
 
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-import java.util.List;
-import org.netbeans.modules.cnd.api.utils.CppUtils;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
+import org.netbeans.modules.cnd.makeproject.configurations.ui.PlatformNodeProp;
 
-public class OptionsConfiguration {
-    private String preDefined = ""; // NOI18N
-    boolean dirty = false;
+public class PlatformConfiguration extends IntConfiguration implements PropertyChangeListener {
+    
+    private PlatformNodeProp pnp;
+    private DevelopmentHostConfiguration dhconf;
 
-    private String commandLine;
-    private boolean commandLineModified;
-
-    // Constructors
-    public OptionsConfiguration() {
-	optionsReset();
-    }
-
-    public void setDirty(boolean dirty) {
-        this.dirty = dirty;
+    public PlatformConfiguration(DevelopmentHostConfiguration dhconf, int def, String[] names) {
+        super(null, def, names, null);
+        pnp = null;
+        this.dhconf = dhconf;
     }
 
-    public boolean getDirty() {
-        return dirty;
-    }
-
-    // Options
-    public void setValue(String commandLine) {
-	this.commandLine = commandLine;
-	setModified(!commandLine.equals(getDefault()));
-    }
-    public String getValue() {
-	return commandLine;
-    }
-    public void setModified(boolean b) {
-	this.commandLineModified = b;
-    }
-    public boolean getModified() {
-	return commandLineModified;
-    }
-    public String getDefault() {
-	return ""; // NOI18N
-    }
-    public void optionsReset() {
-	commandLine = getDefault();
-	commandLineModified = false;
-    }
-
-    public String getOptions(String prepend) {
-	return CppUtils.reformatWhitespaces(getValue(), prepend);
-    }
-
-    public String[] getValues() {
-        List<String> list = getValuesAsList();
-	String[] values = new String[list.size()];
-        int i = 0;
-        for (String s : list) {
-            values[i++] = s;
-	}
-        return values;
-    }
-
-    public List<String> getValuesAsList() {
-        return CppUtils.tokenizeString(getValue());
-    }
-
-    // Predefined
-    public void setPreDefined(String preDefined) {
-	this.preDefined = preDefined;
-    }
-    public String getPreDefined() {
-	return preDefined;
-    }
-
-    // Clone and assign
-    public void assign(OptionsConfiguration conf) {
-        setDirty(!conf.getValue().equals(getValue()));
+    private PlatformConfiguration(PlatformConfiguration conf) {
+        super(null, conf.getDefault(), conf.getNames(), null);
         setValue(conf.getValue());
         setModified(conf.getModified());
-        //setDirty(conf.getDirty());
-        setPreDefined(conf.getPreDefined());
+        pnp = conf.pnp;
+        dhconf = conf.dhconf;
+    }
+    
+    public void setPlatformNodeProp(PlatformNodeProp pnp) {
+        this.pnp = pnp;
     }
 
     @Override
-    public OptionsConfiguration clone() {
-        OptionsConfiguration clone = new OptionsConfiguration();
-        clone.setValue(getValue());
-        clone.setModified(getModified());
-        clone.setDirty(getDirty());
-        clone.setPreDefined(getPreDefined());
+    public String getName() {
+        return dhconf.isOnline() ? super.getName() : "";
+    }
+
+    public void propertyChange(PropertyChangeEvent evt) {
+        dhconf = (DevelopmentHostConfiguration) evt.getNewValue();
+        String hkey = dhconf.getName();
+        int platform = CompilerSetManager.getDefault(hkey).getPlatform();
+        if (platform == -1) {
+            // TODO: CompilerSet is not reliable about platform; it must be.
+            platform = PlatformTypes.PLATFORM_NONE;
+        }
+        setValue(platform);
+    }
+
+    public boolean isDevHostOnline() {
+        return dhconf.isOnline();
+    }
+
+    // Clone and Assign
+    public void assign(PlatformConfiguration conf) {
+        super.assign(conf);
+        pnp = conf.pnp;
+        dhconf = conf.dhconf;
+    }
+
+    @Override
+    public PlatformConfiguration clone() {
+        PlatformConfiguration clone = new PlatformConfiguration(this);
         return clone;
     }
 }
