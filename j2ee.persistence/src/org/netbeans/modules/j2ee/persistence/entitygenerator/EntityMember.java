@@ -42,6 +42,7 @@ package org.netbeans.modules.j2ee.persistence.entitygenerator;
 
 import org.netbeans.modules.dbschema.ColumnElement;
 import org.netbeans.modules.j2ee.persistence.dd.JavaPersistenceQLKeywords;
+import org.netbeans.modules.j2ee.persistence.entitygenerator.EntityRelation.CollectionType;
 import org.openide.util.*;
 
 //TODO move static methods into a separate util class or into code generator
@@ -103,6 +104,23 @@ public abstract class EntityMember {
             fieldName += "Collection";  // NOI18N
         }
         return makeFieldName(fieldName);
+    }
+    
+    /**
+     * Fix the relationship field name to be more related to the collection type.
+     *
+     * @param orgName The original name
+     * @param colType The collection type, such as, java.util.List, java.util.Set
+     * @return The nicer name
+     */
+    public static String fixRelationshipFieldName(String orgName, CollectionType colType) {
+        String newName = orgName;
+        if (orgName.endsWith("Collection")) { // NOI18N
+            int ix = orgName.lastIndexOf("Collection"); // NOI18N
+            newName = orgName.substring(0, ix) + colType.getShortName();
+        }
+        
+        return newName;
     }
 
     private static StringBuilder makeName(String fieldName) {
@@ -230,13 +248,43 @@ public abstract class EntityMember {
     public abstract void setPrimaryKey(boolean isPk, boolean isPkField);
     
     /**
+     * Determine if its value is automatically generated/incremented by the database
+     */
+    public abstract boolean isAutoIncrement();
+    
+    /**
      * @return true if underlying type supports finder equal queries
      */
     public abstract boolean supportsFinder();
     
+    /** 
+     * Get the length of the column - for character type fields only.
+     * 
+     * @return the length, <code>null</code> if it is not a character type
+     * field or there is no length.
+     */
+    public abstract Integer getLength();
+
+    /** 
+     * Get the precision of the column - for numeric type fields only.
+     * 
+     * @return the precision, <code>null</code> if it is not a numeric type
+     * field or there is no precision.
+     */
+    public abstract Integer getPrecision();
+
+    /** 
+     * Get the scale of the column - for numeric type fields only.
+     * 
+     * @return the scale, <code>null</code> if it is not a numeric type
+     * field or there is no scale.
+     */
+    public abstract Integer getScale();
+    
     /**
      * override java.lang.Object#equals based on member name.
      */
+    @Override
     public boolean equals(Object other) {
         if (other == null || !(other.getClass().isInstance(getClass()))) {
             return false;
@@ -247,10 +295,10 @@ public abstract class EntityMember {
     /**
      * override java.lang.Object#hashCode
      */
+    @Override
     public int hashCode() {
         return getMemberName().hashCode();
     }
-    
     
     public abstract boolean isNullable();
     public abstract String getColumnName();
