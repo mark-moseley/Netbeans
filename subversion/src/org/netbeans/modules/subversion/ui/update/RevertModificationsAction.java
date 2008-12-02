@@ -90,7 +90,8 @@ public class RevertModificationsAction extends ContextAction {
             return;
         }
         final Context ctx = getContext(nodes);
-        final File root = ctx.getRootFiles()[0];
+        final File root = SvnUtils.getActionRoot(ctx);
+        if(root == null) return;
         final SVNUrl rootUrl;
         final SVNUrl url;
         
@@ -164,12 +165,18 @@ public class RevertModificationsAction extends ContextAction {
                             deletedFiles.addAll(getDeletedParents(file));
                         }                        
                                 
-                        client.revert(files, recursive);
+                        // XXX JAVAHL client.revert(files, recursive);
+                        for (File file : files) {
+                            client.revert(file, recursive);
+                        }
                         
                         // revert also deleted parent folders
                         // for all undeleted files
                         if(deletedFiles.size() > 0) {
-                            client.revert(deletedFiles.toArray(new File[deletedFiles.size()]), false);   
+                            // XXX JAVAHL client.revert(deletedFiles.toArray(new File[deletedFiles.size()]), false);
+                            for (File file : deletedFiles) {
+                                client.revert(file, false);
+                            }    
                         }                        
                     }
                 }
