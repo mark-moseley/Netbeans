@@ -38,10 +38,10 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.vmd.midp.propertyeditors;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.Collections;
@@ -71,13 +71,24 @@ public final class PropertyEditorComboBox extends PropertyEditorUserCode impleme
     private final Map<String, PropertyValue> values;
     private String[] tags;
     private String valueLabel;
-
     private TypeID typeID;
     private TypeID enableTypeID;
-
     private CustomEditor customEditor;
     private JRadioButton radioButton;
-    private static String[] USERCODE_TAGS =  new String[]{(PropertyEditorUserCode.USER_CODE_TEXT)};
+    private static String[] USERCODE_TAGS = new String[]{(PropertyEditorUserCode.USER_CODE_TEXT)};
+
+    @Override
+    public void cleanUp(DesignComponent component) {
+        super.cleanUp(component);
+        typeID = null;
+        tags = null;
+        if (customEditor != null) {
+            customEditor.cleanUp();
+            customEditor = null;
+        }
+        radioButton = null;
+        enableTypeID = null;
+    }
 
     private PropertyEditorComboBox(Map<String, PropertyValue> values, TypeID typeID,
             TypeID enableTypeID, String valueLabel, String userCodeLabel) {
@@ -88,9 +99,6 @@ public final class PropertyEditorComboBox extends PropertyEditorUserCode impleme
         this.enableTypeID = enableTypeID;
         this.valueLabel = valueLabel;
         createTags();
-        initComponents();
-
-        initElements(Collections.<PropertyEditorElement>singleton(this));
     }
 
     public static PropertyEditorComboBox createInstance(Map<String, PropertyValue> values,
@@ -100,6 +108,7 @@ public final class PropertyEditorComboBox extends PropertyEditorUserCode impleme
 
     public static PropertyEditorComboBox createInstance(Map<String, PropertyValue> values,
             TypeID typeID, TypeID enableTypeID, String valueLabel, String userCodeLabel) {
+
         if (values == null) {
             throw new IllegalArgumentException("Argument values can't be null"); // NOI18N
         }
@@ -114,9 +123,24 @@ public final class PropertyEditorComboBox extends PropertyEditorUserCode impleme
         return instance;
     }
 
+    @Override
+    public void setAsText(String text) {
+        if (canWrite()) {
+            if (text.equals(NULL_TEXT)) {
+                super.setValue(NULL_VALUE);
+            } else  {
+                saveValue(text);
+            }
+        }
+    }
+    
     private void initComponents() {
         radioButton = new JRadioButton();
         Mnemonics.setLocalizedText(radioButton, valueLabel);
+
+        radioButton.getAccessibleContext().setAccessibleName(radioButton.getText());
+        radioButton.getAccessibleContext().setAccessibleDescription(radioButton.getText());
+
         customEditor = new CustomEditor();
         customEditor.updateModel();
     }
@@ -162,6 +186,8 @@ public final class PropertyEditorComboBox extends PropertyEditorUserCode impleme
         return null;
     }
 
+
+
     public void updateState(PropertyValue value) {
         if (isCurrentValueANull() || value == null) {
             // clear customEditor if needed
@@ -192,7 +218,7 @@ public final class PropertyEditorComboBox extends PropertyEditorUserCode impleme
     public String[] getTags() {
         if (isCurrentValueAUserCodeType()) {
             return USERCODE_TAGS;
-        } 
+        }
         return tags;
     }
 
@@ -231,9 +257,26 @@ public final class PropertyEditorComboBox extends PropertyEditorUserCode impleme
         return canWrite[0];
     }
 
+    @Override
+    public Component getCustomEditor() {
+        if (customEditor == null) {
+            initComponents();
+            initElements(Collections.<PropertyEditorElement>singleton(this));
+        }
+        return super.getCustomEditor();
+    }
+
     private class CustomEditor extends JPanel implements ActionListener {
 
         private JComboBox combobox;
+
+        void cleanUp() {
+            if (combobox != null) {
+                combobox.removeActionListener(this);
+                combobox = null;
+            }
+            this.removeAll();
+        }
 
         public CustomEditor() {
             initComponents();
@@ -244,6 +287,12 @@ public final class PropertyEditorComboBox extends PropertyEditorUserCode impleme
             combobox = new JComboBox();
             combobox.setModel(new DefaultComboBoxModel());
             combobox.addActionListener(this);
+
+            combobox.getAccessibleContext().setAccessibleName(
+                    radioButton.getAccessibleContext().getAccessibleName());
+            combobox.getAccessibleContext().setAccessibleDescription(
+                    radioButton.getAccessibleContext().getAccessibleDescription());
+
             add(combobox, BorderLayout.CENTER);
         }
 
