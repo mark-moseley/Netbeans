@@ -50,6 +50,10 @@ import org.netbeans.modules.websvc.rest.model.api.RestConstants;
  */
 public class Constants {
     
+    public static final String RESOURCE_SUFFIX = "Resource";
+        
+    public static final String CONVERTER_SUFFIX = "Converter";      //NOI18N
+    
     public static final String XML_TRANSIENT_ANNOTATION = "XmlTransient"; //NOI18N
    
     public static final String XML_ROOT_ELEMENT_ANNOTATION = "XmlRootElement";  //NOI18N
@@ -58,47 +62,55 @@ public class Constants {
     
     public static final String XML_ATTRIBUTE_ANNOTATION = "XmlAttribute";  //NOI18N
     
-    public static final String WEB_APPLICATION_EXCEPTION = RestConstants.REST_API_PACKAGE + "WebApplicationException";
-    
-    public static final String HTTP_RESPONSE = RestConstants.REST_API_PACKAGE + "core.Response"; //NOI18N
-    
-    public static final String RESPONSE_BUILDER = RestConstants.REST_API_PACKAGE + "core.Response.Builder";       //NOI8N
-    
-    public static final String ENTITY_TYPE = RestConstants.REST_API_PACKAGE + "Entity";
-    
-    public static final String HTTP_CONTEXT = RestConstants.REST_API_PACKAGE + "core.HttpContext";    //NOI18N
-    
-    public static final String URI_INFO = RestConstants.REST_API_PACKAGE + "core.UriInfo";     //NOI18N
+    public static final String PERSISTENCE_CONTEXT_ANNOTATION = "PersistenceContext";       //NOI18N
     
     public static final String URI_TYPE = "java.net.URI";       //NOI18N
     
-    public static final String QUERY_TYPE = "javax.persistence.Query";       //NOI18N
+    public static final String PERSISTENCE_PACKAGE = "javax.persistence.";      //NOI18N
     
-    public static final String ENTITY_MANAGER_TYPE = "javax.persistence.EntityManager";       //NOI18N
+    public static final String QUERY_TYPE = PERSISTENCE_PACKAGE + "Query";       //NOI18N
     
-    public static final String ENTITY_MANAGER_FACTORY = "javax.persistence.EntityManagerFactory";       //NOI18N
+    public static final String ENTITY_MANAGER_TYPE = PERSISTENCE_PACKAGE + "EntityManager";       //NOI18N
     
-    public static final String ENTITY_TRANSACTION = "javax.persistence.EntityTransaction";
+    public static final String ENTITY_MANAGER_FACTORY = PERSISTENCE_PACKAGE + "EntityManagerFactory";       //NOI18N
     
-    public static final String PERSISTENCE = "javax.persistence.Persistence";
+    public static final String ENTITY_TRANSACTION = PERSISTENCE_PACKAGE + "EntityTransaction";      //NOI18N
+        
+    public static final String PERSISTENCE = PERSISTENCE_PACKAGE + "Persistence";       //NOI18N
     
-    public static final String NO_RESULT_EXCEPTION = "javax.persistence.NoResultException";        //NOI18N
+    public static final String PERSISTENCE_CONTEXT = PERSISTENCE_PACKAGE + PERSISTENCE_CONTEXT_ANNOTATION;
     
-    public static final String XML_ROOT_ELEMENT = "javax.xml.bind.annotation.XmlRootElement";             //NOI18N
+    public static final String PERSISTENCE_ENTITY = PERSISTENCE_PACKAGE + "Entity";     //NOI18N
+
+    public static final String PERSISTENCE_TABLE = PERSISTENCE_PACKAGE + "Table";       //NOI18M
     
-    public static final String XML_ELEMENT = "javax.xml.bind.annotation.XmlElement";                 //NOI18N
+    public static final String NO_RESULT_EXCEPTION = PERSISTENCE_PACKAGE + "NoResultException";        //NOI18N
     
-    public static final String XML_ATTRIBUTE = "javax.xml.bind.annotation.XmlAttribute";                 //NOI18N
+    public static final String XML_ANNOTATION_PACKAGE = "javax.xml.bind.annotation.";       //NOI18N
     
-    public static final String XML_TRANSIENT = "javax.xml.bind.annotation.XmlTransient";                 //NOI18N
+    public static final String XML_ROOT_ELEMENT = XML_ANNOTATION_PACKAGE + XML_ROOT_ELEMENT_ANNOTATION;          
+    
+    public static final String XML_ELEMENT = XML_ANNOTATION_PACKAGE + XML_ELEMENT_ANNOTATION;
+    
+    public static final String XML_ATTRIBUTE = XML_ANNOTATION_PACKAGE + XML_ATTRIBUTE_ANNOTATION;           
+    
+    public static final String XML_TRANSIENT = XML_ANNOTATION_PACKAGE + XML_TRANSIENT_ANNOTATION;       
     
     public static final String VOID = "void";           //NOI18N
+    
+    public static final String COLLECTION = "Collection"; //NOI18N
     
     public static final String COLLECTION_TYPE = "java.util.Collection"; //NOI18N
     
     public static final String COLLECTIONS_TYPE = "java.util.Collections";  //NOI18N
+
+    public static final String LIST_TYPE = "java.util.List";        //NOI18N
+
+    public static final String SET_TYPE = "java.util.Set";      //NOI18N
     
     public static final String ARRAY_LIST_TYPE = "java.util.ArrayList"; //NOI18N
+
+    public static final String HASH_SET_TYPE = "java.util.HashSet"; //NOI18N
     
     public static final Modifier[] PUBLIC = new Modifier[] { Modifier.PUBLIC };
     
@@ -123,7 +135,8 @@ public class Constants {
         XML("application/xml", "Xml"),      //NOI18N
         JSON("application/json", "Json"),   //NOI18N
         TEXT("text/plain", "Text"),         //NOI18N
-        HTML("text/html", "Html");          //NOI18N
+        HTML("text/html", "Html"),          //NOI18N
+        IMAGE("image/png", "Image");          //NOI18N
         
         private String value;
         private String suffix;
