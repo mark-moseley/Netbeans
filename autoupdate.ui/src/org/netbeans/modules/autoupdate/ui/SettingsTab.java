@@ -53,6 +53,8 @@ import java.text.SimpleDateFormat;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -64,6 +66,7 @@ import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.event.TableModelEvent;
@@ -79,7 +82,6 @@ import org.netbeans.modules.autoupdate.ui.actions.AutoupdateSettings;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 
@@ -97,6 +99,7 @@ public class SettingsTab extends javax.swing.JPanel {
     private Action addAction;   
     private Listener listener;
     private PluginManagerUI manager;
+    private boolean refreshModel;
     
     /** Creates new form UnitTab */
     public SettingsTab(PluginManagerUI manager) {
@@ -175,6 +178,7 @@ public class SettingsTab extends javax.swing.JPanel {
                 getSettingsTableModel ().refreshModel ();                
             }
         });        
+        refreshModel = false;
         addListener ();                
     }
     
@@ -182,6 +186,28 @@ public class SettingsTab extends javax.swing.JPanel {
     public void removeNotify () {
         super.removeNotify ();
         removeListener ();
+        doLazyRefresh (null);
+    }
+    
+    public void doLazyRefresh (final Runnable postTask) {
+        if (needRefresh ()) {
+            Utilities.startAsWorkerThread (new Runnable () {
+                public void run () {
+                    setWaitingState (true);
+                    try {
+                        Utilities.presentRefreshProviders (manager, false);
+                        manager.updateUnitsChanged ();
+                        if (postTask != null) {
+                            postTask.run ();
+                        }
+                    } finally {
+                        setWaitingState (false);
+                    }
+                }
+            });
+            
+        }
+        refreshModel = false;
     }
             
     private static String getMessage(final String key) {
@@ -238,7 +264,7 @@ public class SettingsTab extends javax.swing.JPanel {
         org.openide.awt.Mnemonics.setLocalizedText(lGeneral, org.openide.util.NbBundle.getMessage(SettingsTab.class, "SettingsTab.lGeneral.text")); // NOI18N
 
         org.openide.awt.Mnemonics.setLocalizedText(cbGlobalInstall, org.openide.util.NbBundle.getMessage(SettingsTab.class, "SettingsTab.cbSharedInstall.text")); // NOI18N
-        cbGlobalInstall.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 7, 0, 0));
+        cbGlobalInstall.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         cbGlobalInstall.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 cbGlobalInstallActionPerformed(evt);
@@ -253,6 +279,9 @@ public class SettingsTab extends javax.swing.JPanel {
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(layout.createSequentialGroup()
+                        .add(10, 10, 10)
+                        .add(cbGlobalInstall))
+                    .add(layout.createSequentialGroup()
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
                             .add(addButton)
                             .add(spTab, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 785, Short.MAX_VALUE))
@@ -261,19 +290,18 @@ public class SettingsTab extends javax.swing.JPanel {
                         .add(12, 12, 12)
                         .add(lCheckPeriod)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(cbCheckPeriod, 0, 506, Short.MAX_VALUE)
+                        .add(cbCheckPeriod, 0, 533, Short.MAX_VALUE)
                         .add(58, 58, 58)
                         .add(bProxy))
                     .add(layout.createSequentialGroup()
                         .add(lGeneral)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(jSeparatorAdvanced, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 711, Short.MAX_VALUE))
+                        .add(jSeparatorAdvanced, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 734, Short.MAX_VALUE))
                     .add(layout.createSequentialGroup()
                         .add(lConnection)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(jSeparatorConnection, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 565, Short.MAX_VALUE))
-                    .add(lUpdateCenters)
-                    .add(cbGlobalInstall))
+                        .add(jSeparatorConnection, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 626, Short.MAX_VALUE))
+                    .add(lUpdateCenters))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -321,7 +349,7 @@ public class SettingsTab extends javax.swing.JPanel {
             return ;
         } else {
             for (File f : dirs) {
-                if (f.exists () && f.isDirectory () && ! f.canWrite ()) {
+                if (f.exists () && f.isDirectory () && ! Utilities.canWriteInCluster (f)) {
                     NotifyDescriptor nd = new NotifyDescriptor (NbBundle.getMessage (SettingsTab.class, "SettingsTab.cbSharedInstall.ReadOnlyMessage", f),
                             NbBundle.getMessage (SettingsTab.class, "SettingsTab.cbSharedInstall.ReadOnlyTitle"),
                             NotifyDescriptor.ERROR_MESSAGE,
@@ -371,7 +399,7 @@ private class Listener implements ListSelectionListener,  TableModelListener {
     
     private void modelOrSelectionChanged() {
         int rowIndex = table.getSelectedRow();
-        if (rowIndex != -1) {
+        if (rowIndex != -1 && table.getRowCount() > 0) {
             UpdateUnitProvider uup = ((SettingsTableModel)table.getModel()).getUpdateUnitProvider(rowIndex);
             if (uup != null) {
                 StringBuffer sb = new StringBuffer();
@@ -393,6 +421,9 @@ private class Listener implements ListSelectionListener,  TableModelListener {
                     }
                     sb.append("<b>" + getMessage("SettingsTab_UpdateUnitProvider_URL") + // NOI18N
                             " </b><a href=\"" + u.toExternalForm() + "\">" + u.toExternalForm() + "</a><br>"); // NOI18N
+                    editAction.setEnabled (true);
+                } else {
+                    editAction.setEnabled (false);
                 }
 
                 details.setText(sb.toString());
@@ -415,58 +446,55 @@ private class Listener implements ListSelectionListener,  TableModelListener {
         Preferences p = NbPreferences.root().node("/org/netbeans/modules/autoupdate");//NOI18N
         return p.getLong(unitProvider.getName()+"_"+UnitTab.PROP_LAST_CHECK, 0);//NOI18N
     }
-
+    
+    private boolean needRefresh () {
+        return refreshModel;
+    }
+    
+    public void setNeedRefresh () {
+        refreshModel = true;
+        getPluginManager ().undecorateTabTitles ();
+    }
+    
     private void setData (final UpdateUnitProvider provider, UpdateUnitProviderPanel panel) {
         provider.setDisplayName (panel.getProviderName ());
         boolean forceRead = false;
-        boolean refreshModel = false;
         try {
             URL oldUrl = provider.getProviderURL ();
             URL newUrl = new URL (panel.getProviderURL ());
             if (! oldUrl.toExternalForm ().equals (newUrl.toExternalForm ())) {
                 provider.setProviderURL (newUrl);
-                refreshModel = true;
+                setNeedRefresh ();
                 forceRead = true;
             }
         } catch(MalformedURLException mex) {
-            Exceptions.printStackTrace (mex);
+            Logger.getLogger (SettingsTab.class.getName ()).log (Level.INFO, mex.getLocalizedMessage (), mex);
         }
-        boolean oldValue = provider.isEnabled ();
-        if (oldValue != panel.isActive ()) {
-            refreshModel = true;
+        
+        provider.setEnable (panel.isActive ());
+        if (panel.isActive ()) {
+            // was not enabled and will be -> add it to model and read its content
+            refreshProvider (provider, forceRead);
+        } else {
+            setNeedRefresh ();
         }
-        if (refreshModel) {
-            provider.setEnable (panel.isActive ());
-            if (oldValue && ! forceRead) {
-                // was enabled and won't be more -> remove it from model
-                setWaitingState (true);
-                Utilities.startAsWorkerThread (new Runnable () {
-                    public void run () {
-                        try {
-                            getPluginManager ().updateUnitsChanged ();
-                        } finally {
-                            setWaitingState (false);
-                        }
-                    }
-                });
-            } else {
-                final boolean force = forceRead;
-                // was enabled and won't be more -> add it from model and read its content
-                setWaitingState (true);
-                Utilities.startAsWorkerThread (new Runnable () {
+    }
+    
+    public void refreshProvider (final UpdateUnitProvider provider, final boolean force) {
+        // was not enabled and will be -> add it to model and read its content
+        setWaitingState (true);
+        Utilities.startAsWorkerThread (new Runnable () {
 
-                    public void run () {
-                        try {
-                            Utilities.presentRefreshProviders (Collections.singleton (provider), getPluginManager (), force);
-                            getPluginManager ().updateUnitsChanged ();
-                        } finally {
-                            setWaitingState (false);
-                        }
-                    }
-                    
-                });
+            public void run () {
+                try {
+                    Utilities.presentRefreshProviders (Collections.singleton (provider), getPluginManager (), force);
+                    getPluginManager ().updateUnitsChanged ();
+                } finally {
+                    setWaitingState (false);
+                }
             }
-        }
+
+        });
     }
     
     private static DialogDescriptor getCustomizerDescriptor (UpdateUnitProviderPanel panel) {
@@ -490,6 +518,9 @@ private class Listener implements ListSelectionListener,  TableModelListener {
             if (rowIndex != -1) {
                 final UpdateUnitProvider provider = getSettingsTableModel().getUpdateUnitProvider(rowIndex);
                 if (provider == null) return;
+                if (provider.getProviderURL() == null) {
+                    return ;
+                }
                 final UpdateUnitProviderPanel panel = new UpdateUnitProviderPanel(provider.isEnabled(),
                         provider.getDisplayName(), // display name
                         provider.getProviderURL().toExternalForm(), // URL
@@ -498,7 +529,6 @@ private class Listener implements ListSelectionListener,  TableModelListener {
                 panel.getOKButton().addActionListener(new ActionListener(){
                     public void actionPerformed(ActionEvent arg0) {
                         setData(provider, panel);
-                        //getSettingsTableModel().refreshModel();
                         table.getSelectionModel().setSelectionInterval(rowIndex, rowIndex);
                         
                     }
@@ -575,7 +605,7 @@ private class Listener implements ListSelectionListener,  TableModelListener {
                         
                         
                     } catch(MalformedURLException mex) {
-                        Exceptions.printStackTrace(mex);
+                        Logger.getLogger (SettingsTab.class.getName ()).log (Level.INFO, mex.getLocalizedMessage (), mex);
                     }
                 }
             });
@@ -596,7 +626,12 @@ private class Listener implements ListSelectionListener,  TableModelListener {
         @Override
         public void addNotify() {
             super.addNotify();
-            getParent().setBackground(getBackground());            
+            //#154148
+            if(UIManager.getLookAndFeel().getID().equals("Nimbus")) {
+                getParent().setBackground(new Color(getBackground().getRGB(), false));
+            } else {
+                getParent().setBackground(getBackground());
+            }
         }
         
         
