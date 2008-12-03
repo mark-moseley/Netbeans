@@ -53,8 +53,6 @@ import org.netbeans.modules.cnd.apt.support.APTSystemStorage;
 import org.netbeans.modules.cnd.apt.support.APTDriver;
 import org.netbeans.modules.cnd.apt.utils.APTCommentsFilter;
 import org.netbeans.modules.cnd.apt.utils.APTTraceUtils;
-import org.netbeans.modules.cnd.modelimpl.cache.CacheManager;
-import org.netbeans.modules.cnd.modelimpl.csm.core.LibProjectImpl;
 import java.io.*;
 import java.util.*;
 import java.util.List;
@@ -62,6 +60,7 @@ import java.util.List;
 import antlr.*;
 import antlr.collections.*;
 
+import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.util.*;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
@@ -110,7 +109,7 @@ public class TraceModel extends TraceModelBase {
 
 	public String getLPS() {
 	    if (time == 0 || lineCount <= 0) {
-		return "N/A"; // NOI18N
+		return "N/A"; 
 	    } else {
 		return "" + (lineCount * 1000 / time);
 	    }
@@ -151,11 +150,7 @@ public class TraceModel extends TraceModelBase {
 
     public static void main(String[] args) {
 	new TraceModel().test(args);
-	if (TraceFlags.USE_AST_CACHE) {
-	    CacheManager.getInstance().close();
-	} else {
-	    APTDriver.getInstance().close();
-	}
+    APTDriver.getInstance().close();
 	//System.out.println("" + org.netbeans.modules.cnd.apt.utils.APTIncludeUtils.getHitRate());
     }
 	
@@ -191,6 +186,7 @@ public class TraceModel extends TraceModelBase {
     private boolean stopAfterAll = false;
     private boolean printTokens = false;
     private boolean dumpModelAfterCleaningCache = false; // --clean4dump
+    private boolean dumpTemplateParameters = false; // --tparm
     
     private int repeatCount = 1; // --repeat
 
@@ -337,32 +333,25 @@ public class TraceModel extends TraceModelBase {
 	if( super.processFlag(flag) ) {
 	    return true;
 	} else if ("dumplib".equals(flag)) { // NOI18N
-	    // NOI18N
 	    dumpLib = true;
 	} else if ("listfiles".equals(flag)) { // NOI18N
-	    // NOI18N
 	    listFilesAtEnd = true;
 	} else if ("raw".equals(flag)) { // NOI18N
-	    // NOI18N
 	    testRawPerformance = true;
 	    //TraceFlags.DO_NOT_RENDER = true;
 	} else if ("listfiles".equals(flag)) { // NOI18N
-	    // NOI18N
 	    printUserFileList = true;
 	} else if ("mbs".equals(flag)) { // NOI18N
-	    // NOI18N
 	    memBySize = true;
 	} else if ("cleanrepository".equals(flag)) { // NOI18N
-	    // NOI18N
 	    doCleanRepository = true;
 	} else if ("folding".equals(flag)) { // NOI18N
-	    // NOI18N
 	    testFolding = true;
 	} else if ("clean4dump".equals(flag)) { // NOI18N
-	    // NOI18N
 	    dumpModelAfterCleaningCache = true;
-	}
-	else if ( "repeat".equals(flag) || flag.startsWith("repeat:")) { // NOI18N
+	} else if ("tparm".equals(flag)) { // NOI18N
+            dumpTemplateParameters = true;
+        } else if ( "repeat".equals(flag) || flag.startsWith("repeat:")) { // NOI18N
 	    int len = "repeat".length(); // NOI18N
 	    if( flag.length() == len ) {
 		repeatCount = 2;
@@ -740,11 +729,11 @@ public class TraceModel extends TraceModelBase {
 	return wasWait;
     }
 
-    private void sleep(int timeout, String message) {
-	System.err.printf("Sleeping: %s\n", message);
-	sleep(timeout);
-	System.err.printf("Awoke (%s)\n", message);
-    }
+//    private void sleep(int timeout, String message) {
+//	System.err.printf("Sleeping: %s\n", message);
+//	sleep(timeout);
+//	System.err.printf("Awoke (%s)\n", message);
+//    }
     
     private void sleep(int timeout) {
 	try {
@@ -782,10 +771,10 @@ public class TraceModel extends TraceModelBase {
 	return map;
     }
 
-    private APTPreprocHandler getPreprocHandler(File file) {
-	APTPreprocHandler preprocHandler = APTHandlersSupport.createPreprocHandler(getMacroMap(file), getIncludeHandler(file), !file.getPath().endsWith(".h")); // NOI18N
-	return preprocHandler;
-    }
+//    private APTPreprocHandler getPreprocHandler(File file) {
+//	APTPreprocHandler preprocHandler = APTHandlersSupport.createPreprocHandler(getMacroMap(file), getIncludeHandler(file), !file.getPath().endsWith(".h")); // NOI18N
+//	return preprocHandler;
+//    }
 
     private APTMacroMap getSysMap(File file) {
 	APTMacroMap map = sysAPTData.getMacroMap("TraceModelSysMacros", getSysMacros()); // NOI18N
@@ -816,10 +805,12 @@ public class TraceModel extends TraceModelBase {
     private long testAPTLexer(File file, boolean printTokens) throws FileNotFoundException, RecognitionException, TokenStreamException, IOException, ClassNotFoundException {
 	print("Testing APT lexer:"); // NOI18N
 	long time = System.currentTimeMillis();
+        Reader reader = null;
 	InputStream stream = null;
 	try {
 	    stream = new BufferedInputStream(new FileInputStream(file), TraceFlags.BUF_SIZE);
-	    TokenStream ts = APTTokenStreamBuilder.buildTokenStream(file.getAbsolutePath(), stream);
+            reader = new InputStreamReader(stream, FileEncodingQuery.getDefaultEncoding());
+	    TokenStream ts = APTTokenStreamBuilder.buildTokenStream(file.getAbsolutePath(), reader);
 	    for (Token t = ts.nextToken(); !APTUtils.isEOF(t); t = ts.nextToken()) {
 		if (printTokens) {
 		    print("" + t);
@@ -831,6 +822,9 @@ public class TraceModel extends TraceModelBase {
 	    }
 	    return time;
 	} finally {
+            if (reader != null) {
+                reader.close();
+            }
 	    if (stream != null) {
 		stream.close();
 	    }
@@ -934,7 +928,7 @@ public class TraceModel extends TraceModelBase {
     private void testAPT(NativeFileItem item) throws FileNotFoundException, RecognitionException, TokenStreamException, IOException, ClassNotFoundException {
 	File file = item.getFile();
 	FileBuffer buffer = new FileBufferFile(file);
-	print("Testing APT:" + file); // NOI18N
+	print("Testing APT: " + file.getName()); // NOI18N
 	long minLexer = Long.MAX_VALUE;
 	long maxLexer = Long.MIN_VALUE;
 	long minAPTLexer = Long.MAX_VALUE;
@@ -1053,7 +1047,7 @@ public class TraceModel extends TraceModelBase {
 	if (firstFile == null || firstFile.equalsIgnoreCase(file.getAbsolutePath())) {
 	    firstFile = file.getAbsolutePath();
 	    APTDriver.getInstance().invalidateAll();
-	    getProject().invalidateFiles();
+	    getProject().debugInvalidateFiles();
 	} else {
 	    APTDriver.getInstance().invalidateAPT(buffer);
 	}
@@ -1146,7 +1140,7 @@ public class TraceModel extends TraceModelBase {
 	FileImpl fileImpl = (FileImpl) getProject().testAPTParseFile(item);
         waitProjectParsed(false);
         if (dumpAst || writeAst || showAstWindow) {
-            tree = fileImpl.parse(null);
+            tree = fileImpl.debugParse();
         }
 	errCount = fileImpl.getErrorCount();
 	if (dumpPPState) {
@@ -1180,7 +1174,7 @@ public class TraceModel extends TraceModelBase {
 	}
 
 	if (testCache) {
-	    cacheTimes.put(item.getFile().getName(), new Long(time));
+	    cacheTimes.put(item.getFile().getName(), Long.valueOf(time));
 	}
 	if (dumpAst) {
 	    System.out.println("AST DUMP for file " + item.getFile().getName()); // NOI18N
@@ -1207,6 +1201,7 @@ public class TraceModel extends TraceModelBase {
 	if (dumpModel) {
 	    if (fileImpl != null) {
 		tracer.setDeep(deep);
+                tracer.setDumpTemplateParameters(dumpTemplateParameters);
 		tracer.setTestUniqueName(testUniqueName);
 		tracer.dumpModel(fileImpl);
 		if (!dumpFileOnly) {
@@ -1268,9 +1263,9 @@ public class TraceModel extends TraceModelBase {
 	frame.setVisible(true);
     }
 
-    private boolean isDummyUnresolved(CsmDeclaration decl) {
-	return decl == null || decl instanceof Unresolved.UnresolvedClass;
-    }
+//    private boolean isDummyUnresolved(CsmDeclaration decl) {
+//	return decl == null || decl instanceof Unresolved.UnresolvedClass;
+//    }
 
     public static void dumpAst(AST ast) {
 	ASTVisitor visitor = new ASTVisitor() {
