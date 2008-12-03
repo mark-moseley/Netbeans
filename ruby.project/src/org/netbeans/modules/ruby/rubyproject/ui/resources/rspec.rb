@@ -2,11 +2,12 @@
 <#-- You can change the contents of the license inserted into
  #   each template by opening Tools | Templates and editing
  #   Licenses | Default License  -->
-<#assign licenseFirst = "# ">
 <#assign licensePrefix = "# ">
-<#assign licenseLast = " ">
 <#include "../Licenses/license-${project.license}.txt">
-require '${classfile}'
+
+<#-- the file to require variable here can be a path to spec_helper (if it exists) -->
+<#-- or the name of the tested file. quoting is handled in RubyTargetChooserPanel -->
+require ${file_to_require}
 
 describe ${classname} do
   before(:each) do
