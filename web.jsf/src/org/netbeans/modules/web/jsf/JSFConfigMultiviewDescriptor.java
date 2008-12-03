@@ -42,6 +42,9 @@
 package org.netbeans.modules.web.jsf;
 
 import java.awt.Image;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.io.Serializable;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
@@ -60,6 +63,7 @@ import org.openide.text.CloneableEditor;
 import org.openide.text.NbDocument;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.windows.TopComponent;
 
 /*
@@ -67,7 +71,7 @@ import org.openide.windows.TopComponent;
  */
 
 public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Serializable{
-    static final long serialVersionUID = -6305897237371751564L;
+    static final long serialVersionUID = -6551916877064602276L;
     private final static String XML_CONSTANT = "XML"; //NOI18N
     
     private JSFConfigEditorContext context;
@@ -85,7 +89,7 @@ public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Seria
         return XML_CONSTANT;
     }
     
-    private static final Image JSFConfigIcon = org.openide.util.Utilities.loadImage("org/netbeans/modules/web/jsf/resources/JSFConfigIcon.png"); // NOI18N
+    private static final Image JSFConfigIcon = ImageUtilities.loadImage("org/netbeans/modules/web/jsf/resources/JSFConfigIcon.png"); // NOI18N
     public Image getIcon() {
         return JSFConfigIcon;
     }
@@ -101,8 +105,7 @@ public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Seria
     public MultiViewElement createElement() {
         MultiViewElement element = null;
         try {
-            DataObject dObject = DataObject.find(context.getFacesConfigFile());
-            JSFConfigDataObject jsfDataObject = (JSFConfigDataObject) dObject;
+            JSFConfigDataObject jsfDataObject = (JSFConfigDataObject) DataObject.find(context.getFacesConfigFile());
             element =  new JSFConfigMultiviewElement(context, jsfDataObject.getEditorSupport());
         } catch (DataObjectNotFoundException ex) {
             Exceptions.printStackTrace(ex);
@@ -111,32 +114,21 @@ public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Seria
     }
     
     
-    
-    class JSFConfigMultiviewElement extends CloneableEditor implements MultiViewElement, Serializable {
-        static final long serialVersionUID = -6305897237371751564L;
+    static class JSFConfigMultiviewElement extends CloneableEditor implements MultiViewElement, Serializable {
+        static final long serialVersionUID = 8106347205077610597L;
         
         private JSFConfigEditorContext context;
         private transient JComponent toolbar;
-        private transient JSFConfigDataObject jsfDataObject;
         
+        // Constructor for deserialization only
+        public JSFConfigMultiviewElement() {
+            super();
+        }
+
         public JSFConfigMultiviewElement(JSFConfigEditorContext context, JSFConfigEditorSupport support) {
             super(support);
             support.initializeCloneableEditor(this);
             this.context = context;
-            init();
-        }
-        
-        private void init() {            
-            try {
-                DataObject dObject = DataObject.find(context.getFacesConfigFile());
-
-                jsfDataObject = (org.netbeans.modules.web.jsf.JSFConfigDataObject) dObject;
-            }
-            catch (DataObjectNotFoundException ex) {
-                java.util.logging.Logger.getLogger("global").log(java.util.logging.Level.SEVERE,
-                                                                 ex.getMessage(),
-                                                                 ex);
-            }
         }
         
         public JComponent getVisualRepresentation() {
@@ -193,7 +185,9 @@ public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Seria
         }
         
         public void setMultiViewCallback(MultiViewElementCallback callback) {
-            context.setMultiViewTopComponent(callback.getTopComponent());
+            if (context != null && callback != null) {
+                context.setMultiViewTopComponent(callback.getTopComponent());
+            }
         }
         
         public CloseOperationState canCloseElement() {
@@ -204,6 +198,20 @@ public class JSFConfigMultiviewDescriptor implements MultiViewDescription, Seria
         @Override
         public javax.swing.Action[] getActions() {
             return super.getActions();
+        }
+
+        @Override
+        public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+            super.readExternal(in);
+
+            context = (JSFConfigEditorContext)in.readObject();
+        }
+
+        @Override
+        public void writeExternal(ObjectOutput out) throws IOException {
+            super.writeExternal(out);
+
+            out.writeObject(context);
         }
     }
 }
