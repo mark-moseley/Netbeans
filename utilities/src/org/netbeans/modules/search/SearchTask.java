@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.search;
 
+import java.nio.charset.Charset;
 import java.util.List;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
@@ -139,6 +140,12 @@ final class SearchTask implements Runnable, Cancellable {
 
     /**
      */
+    BasicSearchCriteria getSearchCriteria() {
+        return basicSearchCriteria;
+    }
+
+    /**
+     */
     ResultModel getResultModel() {
         ensureResultModelExists();
         return resultModel;
@@ -162,9 +169,11 @@ final class SearchTask implements Runnable, Cancellable {
      * if number of the found objects reached the limit.
      *
      * @param  object  found matching object
+     * @param  charset  charset used for full-text search of the object,
+     *                  or {@code null} if the object was not full-text searched
      */
-    void matchingObjectFound(Object object) {
-        boolean canContinue = resultModel.objectFound(object);
+    void matchingObjectFound(Object object, Charset charset) {
+        boolean canContinue = resultModel.objectFound(object, charset);
         if (!canContinue) {
             searchGroup.stopSearch();
         }
