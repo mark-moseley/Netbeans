@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.jumpto.type;
+package org.netbeans.modules.jumpto.symbol;
 
 import java.awt.Color;
 import java.awt.event.ActionEvent;
@@ -47,6 +47,7 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
+import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
@@ -66,7 +67,8 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.text.BadLocationException;
 import org.netbeans.modules.jumpto.SearchHistory;
-import org.netbeans.spi.jumpto.type.TypeDescriptor;
+import org.netbeans.modules.jumpto.type.UiOptions;
+import org.netbeans.spi.jumpto.symbol.SymbolDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.ImageUtilities;
@@ -85,7 +87,7 @@ public class GoToPanel extends javax.swing.JPanel {
     private ContentProvider contentProvider;
     private boolean containsScrollPane;
     private JLabel messageLabel;
-    private TypeDescriptor selectedType;
+    private SymbolDescriptor selectedSymbol;
     
     private String oldText;
     
@@ -114,7 +116,7 @@ public class GoToPanel extends javax.swing.JPanel {
         messageLabel.setBackground(bgColorBrighter);
         messageLabel.setHorizontalAlignment(SwingConstants.CENTER);
         messageLabel.setEnabled(true);
-        messageLabel.setText(NbBundle.getMessage(GoToPanel.class, "TXT_NoTypesFound")); // NOI18N
+        messageLabel.setText(NbBundle.getMessage(GoToPanel.class, "TXT_NoSymbolsFound")); // NOI18N
         messageLabel.setFont(matchesList.getFont());
         
         // matchesList.setBackground( bgColorBrighter );
@@ -124,9 +126,9 @@ public class GoToPanel extends javax.swing.JPanel {
         
         PatternListener pl = new PatternListener( this );
         nameField.getDocument().addDocumentListener(pl);
-        caseSensitive.setSelected(UiOptions.GoToTypeDialog.getCaseSensitive());
+        matchesList.addListSelectionListener(pl);   
+        caseSensitive.setSelected(UiOptions.GoToSymbolDialog.getCaseSensitive());
         caseSensitive.addItemListener(pl);
-        matchesList.addListSelectionListener(pl);                       
 
         searchHistory = new SearchHistory(GoToPanel.class, nameField);
     }
@@ -135,6 +137,10 @@ public class GoToPanel extends javax.swing.JPanel {
     public void removeNotify() {
         searchHistory.saveHistory();
         super.removeNotify();
+    }
+    
+    public boolean isCaseSensitive () {
+        return this.caseSensitive.isSelected();
     }
     
     /** Sets the model from different therad
@@ -148,12 +154,12 @@ public class GoToPanel extends javax.swing.JPanel {
                    matchesList.setSelectedIndex(0);
                    setListPanelContent(null,false);
                    if ( time != -1 ) {
-                       GoToTypeAction.LOGGER.fine("Real search time " + (System.currentTimeMillis() - time) + " ms.");
+                       GoToSymbolAction.LOGGER.fine("Real search time " + (System.currentTimeMillis() - time) + " ms.");
                        time = -1;
                    }
                }
                else {
-                   setListPanelContent( NbBundle.getMessage(GoToPanel.class, "TXT_NoTypesFound") ,false ); // NOI18N
+                   setListPanelContent( NbBundle.getMessage(GoToPanel.class, "TXT_NoSymbolsFound") ,false ); // NOI18N
                }
            }
        });
@@ -175,12 +181,12 @@ public class GoToPanel extends javax.swing.JPanel {
         });
     }
     
-    public void setSelectedType() {
-        selectedType = ((TypeDescriptor) matchesList.getSelectedValue());
+    public void setSelectedSymbol() {
+        selectedSymbol = ((SymbolDescriptor) matchesList.getSelectedValue());
     }
     
-    public TypeDescriptor getSelectedType() {
-        return selectedType;
+    public SymbolDescriptor getSelectedSymbol() {
+        return selectedSymbol;
     }
 
     void setWarning(String warningMessage) {
@@ -221,7 +227,7 @@ public class GoToPanel extends javax.swing.JPanel {
         setLayout(new java.awt.GridBagLayout());
 
         jLabelText.setLabelFor(nameField);
-        org.openide.awt.Mnemonics.setLocalizedText(jLabelText, org.openide.util.NbBundle.getMessage(GoToPanel.class, "TXT_GoToType_TypeName_Label")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jLabelText, org.openide.util.NbBundle.getMessage(GoToPanel.class, "TXT_GoToSymbol_TypeName_Label")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
@@ -229,7 +235,6 @@ public class GoToPanel extends javax.swing.JPanel {
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 4, 0);
         add(jLabelText, gridBagConstraints);
-        jLabelText.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GoToPanel.class, "GoToPanel.jLabelText.AccessibleContext.accessibleDescription")); // NOI18N
 
         nameField.setFont(new java.awt.Font("Monospaced", 0, getFontSize()));
         nameField.setBorder(javax.swing.BorderFactory.createEtchedBorder());
@@ -255,8 +260,8 @@ public class GoToPanel extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 8, 0);
         add(nameField, gridBagConstraints);
 
-        jLabelList.setLabelFor(matchesList);
-        jLabelList.setText(org.openide.util.NbBundle.getMessage(GoToPanel.class, "TXT_GoToType_MatchesList_Label")); // NOI18N
+        jLabelList.setLabelFor(matchesScrollPane1);
+        jLabelList.setText(org.openide.util.NbBundle.getMessage(GoToPanel.class, "TXT_GoToSymbol_MatchesList_Label")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.SOUTHWEST;
@@ -278,8 +283,6 @@ public class GoToPanel extends javax.swing.JPanel {
             }
         });
         matchesScrollPane1.setViewportView(matchesList);
-        matchesList.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(GoToPanel.class, "ACSD_GoToListName")); // NOI18N
-        matchesList.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GoToPanel.class, "GoToPanel.matchesList.AccessibleContext.accessibleDescription")); // NOI18N
 
         listPanel.add(matchesScrollPane1, java.awt.BorderLayout.CENTER);
 
@@ -294,17 +297,17 @@ public class GoToPanel extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 8, 0);
         add(listPanel, gridBagConstraints);
 
-        org.openide.awt.Mnemonics.setLocalizedText(caseSensitive, org.openide.util.NbBundle.getMessage(GoToPanel.class, "TXT_GoToType_CaseSensitive")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(caseSensitive, org.openide.util.NbBundle.getMessage(GoToPanel.class, "CTL_CaseSensitive")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
+        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(0, 0, 4, 0);
+        gridBagConstraints.insets = new java.awt.Insets(0, 0, 8, 0);
         add(caseSensitive, gridBagConstraints);
-        caseSensitive.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GoToPanel.class, "GoToPanel.caseSensitive.AccessibleContext.accessibleDescription")); // NOI18N
+        caseSensitive.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GoToPanel.class, "AD_CaseSensitive")); // NOI18N
 
-        jLabelLocation.setText(org.openide.util.NbBundle.getMessage(GoToPanel.class, "LBL_GoToType_LocationJLabel")); // NOI18N
+        jLabelLocation.setText(org.openide.util.NbBundle.getMessage(GoToPanel.class, "LBL_GoToSymbol_LocationJLabel")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 4, 0);
         add(jLabelLocation, gridBagConstraints);
@@ -346,7 +349,7 @@ public class GoToPanel extends javax.swing.JPanel {
     private void nameFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_nameFieldActionPerformed
         if (contentProvider.hasValidContent()) {
             contentProvider.closeDialog();
-            setSelectedType();        
+            setSelectedSymbol();
         }
     }//GEN-LAST:event_nameFieldActionPerformed
     
@@ -377,11 +380,7 @@ public class GoToPanel extends javax.swing.JPanel {
     
     private int getFontSize () {
         return this.jLabelList.getFont().getSize();
-    }
-    
-    public boolean isCaseSensitive () {
-        return this.caseSensitive.isSelected();
-    }
+    }        
     
     void setListPanelContent( String message ,boolean waitIcon ) {
         
@@ -451,17 +450,17 @@ public class GoToPanel extends javax.swing.JPanel {
             a.actionPerformed(new ActionEvent(matchesList, 0, action));
         }
     }
-    
-    private static class PatternListener implements DocumentListener, ItemListener, ListSelectionListener {
+
+    private static class PatternListener implements DocumentListener, ListSelectionListener, ItemListener {
                
         private final GoToPanel dialog;
         
         
-        PatternListener( GoToPanel dialog ) {
+        PatternListener( GoToPanel dialog  ) {
             this.dialog = dialog;
         }
         
-        PatternListener( DocumentEvent e, GoToPanel dialog ) {
+        PatternListener( DocumentEvent e, GoToPanel dialog  ) {
             this.dialog = dialog;
         }
         
@@ -479,21 +478,19 @@ public class GoToPanel extends javax.swing.JPanel {
             update();
         }
         
-        // Item Listener -------------------------------------------------------
-        
-        public void itemStateChanged (final ItemEvent e) {
-            UiOptions.GoToTypeDialog.setCaseSensitive(dialog.isCaseSensitive());
+        public void itemStateChanged(ItemEvent e) {
+            UiOptions.GoToSymbolDialog.setCaseSensitive(dialog.isCaseSensitive());
             update();
         }
-        
+                
         // ListSelectionListener -----------------------------------------------
         
         public void valueChanged(ListSelectionEvent ev) {
             // got "Not computed yet" text sometimes
             Object obj = dialog.matchesList.getSelectedValue();
             
-            if (obj instanceof TypeDescriptor) {
-                TypeDescriptor selectedValue = ((TypeDescriptor) obj);
+            if (obj instanceof SymbolDescriptor) {
+                SymbolDescriptor selectedValue = ((SymbolDescriptor) obj);
                 if ( selectedValue != null ) {
                     String fileName = "";
                     FileObject fo = selectedValue.getFileObject();
@@ -518,8 +515,7 @@ public class GoToPanel extends javax.swing.JPanel {
             }
             dialog.oldText = text;
             dialog.contentProvider.setListModel(dialog,text);            
-        }
-                                         
+        }                                         
     }
              
     
@@ -527,7 +523,7 @@ public class GoToPanel extends javax.swing.JPanel {
         
         public ListCellRenderer getListCellRenderer( JList list );
         
-        public void setListModel( GoToPanel panel, String text );
+        public void setListModel( GoToPanel panel, String text  );
         
         public void closeDialog();
         
