@@ -85,7 +85,7 @@ final class StatusLine extends JLabel implements ChangeListener, Runnable {
                 if (startTime != 0L) {
                     Color c = UIManager.getColor("Label.foreground");
                     if (c != null) {
-                        int alpha = 256 * (int)(t - startTime) / 2000;
+                        int alpha = 256 * (int)(Math.max(0, t - startTime)) / 2000;
                         StatusLine.this.setForeground(
                                 new Color(c.getRed(), c.getGreen(), c.getBlue(), 255 - Math.min(255, alpha)));
                     }
@@ -155,13 +155,13 @@ final class StatusLine extends JLabel implements ChangeListener, Runnable {
     /** #62967: Pref size so that status line is able to shrink as much as possible.
      */
     public Dimension getPreferredSize() {
-        return new Dimension(100, 0);
+        return new Dimension(100, super.getPreferredSize().height);
     }
     
     /** #62967: Minimum size so that status line is able to shrink as much as possible.
      */
     public Dimension getMinimumSize() {
-        return new Dimension(0, 0);
+        return new Dimension(0, super.getMinimumSize().height);
     }
 
 }
