@@ -99,7 +99,7 @@ public class RegionManager {
      * <p>
      * Any text before and at 'end' will belong to this region.
      */
-    public void endRegion(Coord end) throws RegionException {
+    public ActiveRegion endRegion(Coord end) throws RegionException {
 	if (region == null) {
 	    throw new RegionException("endRegion(): ",		// NOI18N
 				      "no current active region");// NOI18N
@@ -110,12 +110,16 @@ public class RegionManager {
 
 	region.setEnd(end);
 
+        ActiveRegion endedRegion = region;
+
 	if (region.nested) {
 	    region = parent;
 	    parent = region.parent;
 	} else {
 	    region = null;
 	}
+
+        return endedRegion;
     }
 
     /**
