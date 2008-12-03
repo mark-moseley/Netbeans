@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -37,91 +37,48 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.html.editor.gsf;
+package org.netbeans.modules.javascript.editing;
 
 import java.util.Collections;
 import java.util.Set;
-import org.netbeans.editor.ext.html.parser.AstNode;
-import org.netbeans.editor.ext.html.parser.AstPath;
 import org.netbeans.modules.csl.api.ElementHandle;
 import org.netbeans.modules.csl.api.ElementKind;
 import org.netbeans.modules.csl.api.Modifier;
 import org.netbeans.modules.csl.api.OffsetRange;
 import org.netbeans.modules.csl.spi.ParserResult;
-import org.netbeans.modules.html.editor.HTMLKit;
+import org.netbeans.modules.javascript.editing.lexer.JsTokenId;
 import org.openide.filesystems.FileObject;
 
 /**
  *
- * @author marek
+ * @author Tor Norbye
  */
-public class HtmlElementHandle implements ElementHandle {
-
-    private AstNode node;
-    private FileObject fo;
+public abstract class JsElement implements Element {
+    public abstract String getName();
+    public abstract ElementKind getKind();
     
-    HtmlElementHandle(AstNode node, FileObject fo) {
-        this.node = node;
-        this.fo = fo;
-    }
-    
-    public FileObject getFileObject() {
-        return fo;
-    }
-
     public String getMimeType() {
-        return HTMLKit.HTML_MIME_TYPE;
+        return JsTokenId.JAVASCRIPT_MIME_TYPE;
     }
 
-    public String getName() {
-        return node.name();
+    public boolean signatureEquals(ElementHandle handle) {
+        // XXX TODO
+        return false;
     }
 
-    //XXX what's that????
-    public String getIn() {
+    public FileObject getFileObject() {
         return null;
     }
-
-    public ElementKind getKind() {
-        return ElementKind.TAG;
-    }
-
+    
     public Set<Modifier> getModifiers() {
         return Collections.emptySet();
     }
 
-    public boolean signatureEquals(ElementHandle handle) {
-        if(!(handle instanceof HtmlElementHandle)) {
-            return false;
-        }
-        
-        AstNode foreignNode = ((HtmlElementHandle)handle).node();
-        if(node == foreignNode) {
-            return true;
-        }
-        
-        AstPath fnPath = foreignNode.path();
-        AstPath path = node.path();
-        
-        return path.equals(fnPath);
-    }
-
-    public AstNode node() {
-        return node;
+    public String getIn() {
+        return null;
     }
 
     public OffsetRange getOffsetRange(ParserResult result) {
-      ElementHandle object = HtmlGSFParser.resolveHandle(result, this);
-        if (object instanceof HtmlElementHandle) {
-            AstNode n = ((HtmlElementHandle) object).node();
-            return new OffsetRange(
-                    result.getSnapshot().getOriginalOffset(n.startOffset()),
-                    result.getSnapshot().getOriginalOffset(n.endOffset()));
-
-        } else {
-            throw new IllegalArgumentException("Foreign element: " + object + " of type " +
-                    ((object != null) ? object.getClass().getName() : "null")); //NOI18N
-        }
+        return OffsetRange.NONE;
     }
-    
 }
