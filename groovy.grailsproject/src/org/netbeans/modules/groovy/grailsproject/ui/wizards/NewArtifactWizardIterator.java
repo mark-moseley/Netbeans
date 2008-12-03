@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,9 +20,9 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * Contributor(s):
- * 
+ *
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 
@@ -34,6 +34,7 @@ import java.text.MessageFormat;
 import java.util.HashSet;
 import java.util.Set;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.extexecution.input.InputProcessor;
 import org.openide.WizardDescriptor;
 import javax.swing.JComponent;
 import org.openide.util.NbBundle;
@@ -44,147 +45,149 @@ import java.util.logging.Logger;
 import java.util.logging.Level;
 import org.netbeans.api.progress.ProgressHandle;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import org.netbeans.api.project.ProjectInformation;
-import org.netbeans.modules.extexecution.api.ExecutionDescriptorBuilder;
-import org.netbeans.modules.extexecution.api.ExecutionService;
-import org.netbeans.modules.extexecution.api.input.InputProcessors;
+import org.netbeans.api.extexecution.ExecutionDescriptor.InputProcessorFactory;
+import org.netbeans.api.extexecution.ExecutionDescriptor;
+import org.netbeans.api.extexecution.ExecutionService;
+import org.netbeans.api.extexecution.input.InputProcessors;
 import org.netbeans.modules.groovy.grails.api.ExecutionSupport;
 import org.netbeans.modules.groovy.grails.api.GrailsProjectConfig;
 import org.netbeans.modules.groovy.grails.api.GrailsRuntime;
 import org.netbeans.modules.groovy.grailsproject.GrailsProject;
 import org.netbeans.modules.groovy.grailsproject.SourceCategory;
 import org.netbeans.modules.groovy.grailsproject.actions.RefreshProjectRunnable;
-import org.openide.util.Task;
-
+import org.netbeans.spi.project.ui.templates.support.Templates;
+import org.openide.util.Exceptions;
 
 /**
  *
  * @author schmidtm
+ * @author Martin Adamek
  */
-public class NewArtifactWizardIterator implements  WizardDescriptor.InstantiatingIterator<WizardDescriptor>,
-                                                      WizardDescriptor.ProgressInstantiatingIterator<WizardDescriptor>{
-    
-     GetArtifactNameStep pls = null;
-    boolean        serverRunning = false;
-    boolean        serverConfigured = true;
-    GrailsProject project;
-    SourceCategory cat;
-    String wizardTitle;
-    String serverCommand;
-    String artifactName = "";
-    
-    private  final Logger LOG = Logger.getLogger(NewArtifactWizardIterator.class.getName());
-    
-    public NewArtifactWizardIterator (GrailsProject project, SourceCategory cat) {
+public class NewArtifactWizardIterator implements 
+        WizardDescriptor.InstantiatingIterator<WizardDescriptor>, WizardDescriptor.ProgressInstantiatingIterator<WizardDescriptor> {
+
+    private GetArtifactNameStep pls = null;
+    private boolean serverRunning = false;
+    private boolean serverConfigured = true;
+    private WizardDescriptor wizard;
+    private SourceCategory sourceCategory;
+    private String serverCommand;
+    private String artifactName = "";
+    private GrailsProject project;
+
+    private final Logger LOG = Logger.getLogger(NewArtifactWizardIterator.class.getName());
+
+    public static NewArtifactWizardIterator create() {
+        return new NewArtifactWizardIterator();
+    }
+
+    public NewArtifactWizardIterator(GrailsProject project, SourceCategory category, String artifactName) {
         this.project = project;
-        this.cat = cat;
-        
-        switch(cat){
-            case DOMAIN:
-                wizardTitle = NbBundle.getMessage(NewArtifactWizardIterator.class,"WIZARD_TITLE_DOMAIN");
-                serverCommand = "create-domain-class"; // NOI18N
-                break;
-            case CONTROLLERS:
-                wizardTitle = NbBundle.getMessage(NewArtifactWizardIterator.class,"WIZARD_TITLE_CONTROLLERS");
-                serverCommand = "create-controller"; // NOI18N
-                break;
-            case SERVICES:
-                wizardTitle = NbBundle.getMessage(NewArtifactWizardIterator.class,"WIZARD_TITLE_SERVICES");
-                serverCommand = "create-service"; // NOI18N
-                break; 
-            case VIEWS:
-                wizardTitle = NbBundle.getMessage(NewArtifactWizardIterator.class,"WIZARD_TITLE_VIEWS");
-                serverCommand = "generate-views"; // NOI18N
-                break;    
-            case TAGLIB:
-                wizardTitle = NbBundle.getMessage(NewArtifactWizardIterator.class,"WIZARD_TITLE_TAGLIB");
-                serverCommand = "create-tag-lib"; // NOI18N
-                break;    
-            case SCRIPTS:
-                wizardTitle = NbBundle.getMessage(NewArtifactWizardIterator.class,"WIZARD_TITLE_SCRIPTS");
-                serverCommand = "create-script"; // NOI18N
-                break;    
+        this.sourceCategory = category;
+        this.artifactName = artifactName;
+    }
+
+    private NewArtifactWizardIterator() {
+        super();
+    }
+
+    public Set instantiate(final ProgressHandle handle) throws IOException {
+        Set<FileObject> resultSet = new HashSet<FileObject>();
+
+        serverRunning = true;
+        handle.start(100);
+        try {
+            ProjectInformation inf = project.getLookup().lookup(ProjectInformation.class);
+            String displayName = inf.getDisplayName() + " (" + serverCommand + ")"; // NOI18N
+
+            Callable<Process> callable = ExecutionSupport.getInstance().createSimpleCommand(
+                    serverCommand, GrailsProjectConfig.forProject(project), pls.getArtifactName());
+
+            ExecutionDescriptor descriptor = new ExecutionDescriptor()
+                    .frontWindow(true).inputVisible(true);
+            descriptor = descriptor.outProcessorFactory(new InputProcessorFactory() {
+                public InputProcessor newInputProcessor(InputProcessor defaultProcessor) {
+                    return InputProcessors.proxy(defaultProcessor, InputProcessors.bridge(new ProgressSnooper(handle, 100, 2)));
+                }
+            });
+            descriptor = descriptor.postExecution(new RefreshProjectRunnable(project));
+
+            ExecutionService service = ExecutionService.newService(callable, descriptor, displayName);
+            Future<Integer> future = service.run();
+            try {
+                // TODO handle return value
+                future.get();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException ex) {
+                Exceptions.printStackTrace(ex.getCause());
+            }
+        } finally {
+            handle.progress(100);
+        }
+        serverRunning = false;
+
+        LOG.log(Level.FINEST, "Artifact Name: " + pls.getFileName());
+        File artifactFile = new File(pls.getFileName());
+
+        if (artifactFile != null) {
+            LOG.log(Level.FINEST, "Created File: " + artifactFile.getAbsolutePath());
+            project.getProjectDirectory().getFileSystem().refresh(true);
+            artifactFile = FileUtil.normalizeFile(artifactFile);
+            FileObject fo = FileUtil.toFileObject(artifactFile);
+
+            if (fo != null) {
+                resultSet.add(fo);
+            } else {
+                LOG.log(Level.WARNING, "Problem creating FileObject(null): " + artifactFile.getAbsolutePath());
             }
         }
-   
-   public NewArtifactWizardIterator (GrailsProject project, SourceCategory cat, String artifactName) {
-        this (project, cat);
-        this.artifactName = artifactName;
-    } 
-       
-   public Set instantiate(ProgressHandle handle) throws IOException {
-            Set<FileObject> resultSet = new HashSet<FileObject>();
-            
-            serverRunning = true;
 
-            handle.start(100);
-            try {
-                ProjectInformation inf = project.getLookup().lookup(ProjectInformation.class);
-                String displayName = inf.getDisplayName() + " (" + serverCommand + ")"; // NOI18N
-
-                Callable<Process> callable = ExecutionSupport.getInstance().createSimpleCommand(
-                        serverCommand, GrailsProjectConfig.forProject(project), pls.getDomainClassName());
-
-                ExecutionDescriptorBuilder builder = new ExecutionDescriptorBuilder();
-                builder.frontWindow(true).inputVisible(true);
-                builder.outProcessor(InputProcessors.bridge(new ProgressSnooper(handle, 100, 2)));
-                builder.postExecution(new RefreshProjectRunnable(project));
-
-                ExecutionService service = ExecutionService.newService(callable, builder.create(), displayName);
-                Task task = service.run();
-                task.waitFinished();
-            } finally {
-                handle.progress(100);
-            }
-            serverRunning = false;
-            
-            LOG.log(Level.FINEST, "Artifact Name: " + pls.getFileName());
-            File artifactFile = new File(pls.getFileName());
-            
-            if (artifactFile != null) {
-                LOG.log(Level.FINEST, "Created File: " + artifactFile.getAbsolutePath());
-                project.getProjectDirectory().getFileSystem().refresh(true);
-                artifactFile = FileUtil.normalizeFile(artifactFile);
-                FileObject fo = FileUtil.toFileObject(artifactFile);
-                
-                if (fo == null){
-                    LOG.log(Level.WARNING, "Problem creating FileObject(null): " + artifactFile.getAbsolutePath());
-                    }
-                resultSet.add(fo);
-            }
-
-            return resultSet;
-
+        return resultSet;
     }
-    
+
     public Set instantiate() throws IOException {
-
-            Set<FileObject> resultSet = new HashSet<FileObject>();
-
-            return resultSet;
+        Set<FileObject> resultSet = new HashSet<FileObject>();
+        return resultSet;
     }
 
-    
-    public void initialize(WizardDescriptor wizard) {      
+
+    public void initialize(WizardDescriptor wizard) {
+        FileObject template = Templates.getTemplate(wizard);
+
+        this.wizard = wizard;
+        if (sourceCategory == null) {
+            // might be already initialized by non-wizard actions like Create View
+            this.sourceCategory = GrailsArtifacts.getCategoryForTemplate(template);
+        }
+        if (project == null) {
+            // might be already initialized by non-wizard actions like Create View
+            project = (GrailsProject) Templates.getProject(wizard);
+        }
+        this.serverCommand = sourceCategory.getCommand();
+
         if(!GrailsRuntime.getInstance().isConfigured()) {
-            wizard.putProperty("WizardPanel_errorMessage", 
-                    NbBundle.getMessage(NewArtifactWizardIterator.class, 
+            wizard.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE,
+                    NbBundle.getMessage(NewArtifactWizardIterator.class,
                     "NewGrailsProjectWizardIterator.NoGrailsServerConfigured"));
             serverConfigured = false;
-            }
-        
-        pls = new GetArtifactNameStep(serverRunning, serverConfigured, project, cat);
-        
+        }
+
+        pls = new GetArtifactNameStep(serverRunning, serverConfigured, project, sourceCategory);
         Component c = pls.getComponent();
-        
-        pls.setArtifactName(artifactName);
-        
         if (c instanceof JComponent) { // assume Swing components
             JComponent jc = (JComponent)c;
-            jc.putClientProperty("WizardPanel_contentSelectedIndex", Integer.valueOf(1)); // NOI18N
-            jc.putClientProperty("WizardPanel_contentData", new String[] { wizardTitle }  ); // NOI18N
-            }
-        
+            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, Integer.valueOf(1));
+            String title = GrailsArtifacts.getWizardTitle(sourceCategory);
+            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, new String[] {
+                NbBundle.getMessage(NewGrailsProjectWizardIterator.class, "LBL_ChooseFileType"),
+                title
+            });
+        }
+
     }
 
     public void uninitialize(WizardDescriptor wizard) {
@@ -219,5 +222,5 @@ public class NewArtifactWizardIterator implements  WizardDescriptor.Instantiatin
     public void addChangeListener(ChangeListener l) {}
 
     public void removeChangeListener(ChangeListener l) {}
-    
+
 }
