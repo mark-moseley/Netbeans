@@ -10,21 +10,23 @@
 package org.netbeans.test.subversion.main.commit;
 
 import java.io.File;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.table.TableModel;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.JellyTestCase;
+import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jemmy.JemmyProperties;
-import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.JTableOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CommitOperator;
 import org.netbeans.test.subversion.operators.CommitStepOperator;
 import org.netbeans.test.subversion.operators.FolderToImportStepOperator;
 import org.netbeans.test.subversion.operators.ImportWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
+import org.netbeans.test.subversion.utils.MessageHandler;
 import org.netbeans.test.subversion.utils.RepositoryMaintenance;
 import org.netbeans.test.subversion.utils.TestKit;
 
@@ -37,58 +39,46 @@ public class CommitUiTest extends JellyTestCase {
     public static final String TMP_PATH = "/tmp";
     public static final String REPO_PATH = "repo";
     public static final String WORK_PATH = "work";
-    public static final String PROJECT_NAME = "SVNApplication";
+    public static final String PROJECT_NAME = "JavaApp";
     public File projectPath;
 
-    String os_name;
+    static Logger log;
 
     /** Creates a new instance of CheckoutUITest */
     public CommitUiTest(String name) {
         super(name);
     }
 
+    @Override
     protected void setUp() throws Exception {
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### " + getName() + " ###");
-    }
-
-    protected boolean isUnix() {
-        boolean unix = false;
-        if (os_name.indexOf("Windows") == -1) {
-            unix = true;
+        if (log == null) {
+            log = Logger.getLogger(TestKit.LOGGER_NAME);
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
         }
-        return unix;
     }
-
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new CommitUiTest("testInvokeCloseCommit"));
-        return suite;
-    }
+    
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(CommitUiTest.class).addTest(
+                    "testInvokeCloseCommit"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
 
     public void testInvokeCloseCommit() throws Exception {
-        long timeout_c = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
         try {
-            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        } catch (TimeoutExpiredException e) {
-            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", timeout_c);
-        }
+            MessageHandler mh = new MessageHandler("Committing");
+            log.addHandler(mh);
 
-        long timeout_d = JemmyProperties.getCurrentTimeout("DialogWaiter.WaitDialogTimeout");
-        try {
-            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);
-        } catch (TimeoutExpiredException e) {
-            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", timeout_d);
-        }
-
-        try {
             TestKit.closeProject(PROJECT_NAME);
+            if (TestKit.getOsName().indexOf("Mac") > -1)
+                new NewProjectWizardOperator().invoke().close();
 
             new File(TMP_PATH).mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
@@ -111,6 +101,8 @@ public class CommitUiTest extends JellyTestCase {
             CommitStepOperator cso = new CommitStepOperator();
             cso.finish();
 
+            TestKit.waitText(mh);
+
             TestKit.createNewElements(PROJECT_NAME, "xx", "NewClass");
             TestKit.createNewElement(PROJECT_NAME, "xx", "NewClass2");
             TestKit.createNewElement(PROJECT_NAME, "xx", "NewClass3");
@@ -121,7 +113,7 @@ public class CommitUiTest extends JellyTestCase {
             co.selectCommitAction("NewClass.java", "Add As Binary");
             co.selectCommitAction("NewClass.java", "Exclude from Commit");
             co.selectCommitAction(2, "Add As Text");
-            co.selectCommitAction(2, "Add As Binary");
+//            co.selectCommitAction(2, "Add As Binary");
             co.selectCommitAction(2, "Exclude from Commit");
 
             JTableOperator table = co.tabFiles();
@@ -136,13 +128,10 @@ public class CommitUiTest extends JellyTestCase {
 
             co.verify();
             co.cancel();
-            //TestKit.removeAllData(PROJECT_NAME);
         } catch (Exception e) {
             throw new Exception("Test failed: " + e);
         } finally {
             TestKit.closeProject(PROJECT_NAME);
-            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", timeout_c);
-            JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", timeout_d);
         }
     }
 }
