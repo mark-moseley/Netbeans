@@ -49,6 +49,8 @@ import java.util.Set;
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.Task;
 import org.apache.tools.ant.types.DirSet;
+import org.apache.tools.ant.types.PatternSet;
+import org.apache.tools.ant.types.selectors.SelectorUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -67,6 +69,14 @@ public class DeleteUnreferencedClusterFiles extends Task {
      */
     public void addConfiguredClusters(DirSet clusters) {
         this.clusters = clusters;
+    }
+    
+    private PatternSet patterns;
+    /**
+     * Option to remove files from those checks
+     */
+    public void addConfiguredSelection(PatternSet p) {
+        patterns = p;
     }
 
     private File report;
@@ -115,7 +125,7 @@ public class DeleteUnreferencedClusterFiles extends Task {
         pseudoTests.put("testMissingFiles", missingFiles.length() > 0 ? "Some files were missing" + missingFiles : null);
         pseudoTests.put("testExtraFiles", extraFiles.length() > 0 ? "Some extra files were present" + extraFiles : null);
         pseudoTests.put("testDuplicatedFiles", duplicatedFiles.length() > 0 ? "Some files were registered in two or more NBMs" + duplicatedFiles : null);
-        JUnitReportWriter.writeReport(this, report, pseudoTests);
+        JUnitReportWriter.writeReport(this, null, report, pseudoTests);
     }
 
     private void scanForExtraFiles(File d, String prefix, Set<String> files, String cluster, StringBuilder extraFiles) {
@@ -131,6 +141,10 @@ public class DeleteUnreferencedClusterFiles extends Task {
                 scanForExtraFiles(f, prefix + n + "/", files, cluster, extraFiles);
             } else {
                 String path = prefix + n;
+                if ( patterns != null )
+                    for( String p: patterns.getExcludePatterns(getProject()) ) 
+                        if (SelectorUtils.matchPath(p, path)) return;
+                    
                 if (!files.contains(path)) {
                     extraFiles.append("\n" + cluster + ": untracked file " + path);
                     f.delete();

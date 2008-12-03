@@ -190,7 +190,7 @@ public class CreateLicenseSummary extends Task {
         } catch (IOException x) {
             throw new BuildException(x, getLocation());
         }
-        JUnitReportWriter.writeReport(this, reportFile, pseudoTests);
+        JUnitReportWriter.writeReport(this, null, reportFile, pseudoTests);
     }
     private String getMaybeMissing(Map<String,String> headers, String headerName) {
         if (headers.containsKey(headerName)) {
@@ -205,9 +205,9 @@ public class CreateLicenseSummary extends Task {
         for (String cluster : getProject().getProperty("nb.clusters.list").split("[, ]+")) {
             for (String module : getProject().getProperty(cluster).split("[, ]+")) {
                 File d = new File(new File(nball, module), "external");
-                Set<String> cvsFiles = VerifyLibsAndLicenses.findCvsControlledFiles(d, false);
-                Map<String,Map<String,String>> binary2License = findBinary2LicenseHeaderMapping(cvsFiles, d);
-                for (String n : cvsFiles) {
+                Set<String> hgFiles = VerifyLibsAndLicenses.findHgControlledFiles(d);
+                Map<String,Map<String,String>> binary2License = findBinary2LicenseHeaderMapping(hgFiles, d);
+                for (String n : hgFiles) {
                     if (!n.endsWith(".jar") && !n.endsWith(".zip")) {
                         continue;
                     }
