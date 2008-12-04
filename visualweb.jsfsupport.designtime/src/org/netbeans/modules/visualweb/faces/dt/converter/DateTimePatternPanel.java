@@ -53,6 +53,7 @@ import javax.swing.event.DocumentEvent;
 import com.sun.rave.designtime.DesignProperty;
 import java.util.ResourceBundle;
 import org.netbeans.modules.visualweb.faces.dt.AbstractPropertyJPanel;
+import org.openide.awt.Mnemonics;
 
 /**
  * @author eric
@@ -172,7 +173,8 @@ public class DateTimePatternPanel extends AbstractPropertyJPanel {
 
         label = new javax.swing.JLabel();
         label.setHorizontalAlignment(SwingConstants.LEFT);
-        label.setText(bundle.getString("dateTime_pattern")); //NOI18N
+        label.setLabelFor(patternInputField);
+        Mnemonics.setLocalizedText(label, bundle.getString("dateTime_pattern"));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -241,7 +243,8 @@ public class DateTimePatternPanel extends AbstractPropertyJPanel {
          */
         label = new javax.swing.JLabel();
         label.setHorizontalAlignment(SwingConstants.RIGHT);
-        label.setText(bundle.getString("test")); //NOI18N
+        label.setDisplayedMnemonic(bundle.getString("Test_mnemonic").charAt(0));
+        Mnemonics.setLocalizedText(label, bundle.getString("test"));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 2;
