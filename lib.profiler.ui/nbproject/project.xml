@@ -55,11 +55,23 @@ made subject to such option by the copyright holder.
                         <specification-version>1.1</specification-version>
                     </run-dependency>
                 </dependency>
+                <dependency>
+                    <code-name-base>org.openide.util</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                </dependency>
             </module-dependencies>
             <friend-packages>
+                <friend>org.netbeans.modules.javafx.profiler</friend>
                 <friend>org.netbeans.modules.profiler</friend>
+                <friend>org.netbeans.modules.profiler.attach</friend>
                 <friend>org.netbeans.modules.profiler.freeform</friend>
                 <friend>org.netbeans.modules.profiler.j2ee</friend>
+                <friend>org.netbeans.modules.profiler.j2se</friend>
+                <friend>org.netbeans.modules.profiler.selector.java</friend>
+                <friend>org.netbeans.modules.profiler.selector.spi</friend>
+                <friend>org.netbeans.modules.profiler.selector.ui</friend>
+                <friend>org.netbeans.modules.profiler.utilities</friend>
                 <package>org.netbeans.lib.profiler.ui</package>
                 <package>org.netbeans.lib.profiler.ui.charts</package>
                 <package>org.netbeans.lib.profiler.ui.components</package>
@@ -68,11 +80,9 @@ made subject to such option by the copyright holder.
                 <package>org.netbeans.lib.profiler.ui.components.treetable</package>
                 <package>org.netbeans.lib.profiler.ui.cpu</package>
                 <package>org.netbeans.lib.profiler.ui.cpu.statistics</package>
-                <package>org.netbeans.lib.profiler.ui.cpu.statistics.drilldown</package>
                 <package>org.netbeans.lib.profiler.ui.graphs</package>
                 <package>org.netbeans.lib.profiler.ui.memory</package>
                 <package>org.netbeans.lib.profiler.ui.monitor</package>
-                <package>org.netbeans.lib.profiler.ui.resources</package>
                 <package>org.netbeans.lib.profiler.ui.threads</package>
             </friend-packages>
         </data>

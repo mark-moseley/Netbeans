@@ -41,21 +41,21 @@
 package org.netbeans.modules.profiler.j2ee.selector.nodes.ejb.entity;
 
 import org.netbeans.api.java.source.ClasspathInfo;
-import org.netbeans.modules.profiler.selector.api.nodes.ClassNode;
-import org.netbeans.modules.profiler.selector.api.nodes.ContainerNode;
 import javax.lang.model.element.TypeElement;
 import javax.swing.Icon;
+import org.netbeans.modules.profiler.selector.java.nodes.JavaClassNode;
+import org.netbeans.modules.profiler.selector.spi.nodes.ContainerNode;
 
 
 /**
  *
  * @author Jaroslav Bachorik
  */
-public class JPAEntityNode extends ClassNode {
+public class JPAEntityNode extends JavaClassNode {
     //~ Constructors -------------------------------------------------------------------------------------------------------------
 
     /** Creates a new instance of JPAEntityNode */
-    public JPAEntityNode(final ClasspathInfo cpInfo, final Icon icon, final TypeElement classElement, final ContainerNode parent) {
-        super(cpInfo, icon, classElement, parent);
+    public JPAEntityNode(final ClasspathInfo cpInfo, String displayName, final Icon icon, final TypeElement classElement, final ContainerNode parent) {
+        super(cpInfo, displayName, icon, false, classElement, parent);
     }
 }
