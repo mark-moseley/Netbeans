@@ -42,6 +42,7 @@
 package org.netbeans.modules.web.jsf.wizards;
 
 import java.awt.Component;
+import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -51,22 +52,24 @@ import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 
 import org.openide.WizardDescriptor;
+import org.openide.loaders.TemplateWizard;
 import org.openide.util.HelpCtx;
 
 /**
  * Panel asking for web frameworks to use.
  * @author Radko Najman
  */
-final class ManagedBeanPanel implements WizardDescriptor.Panel, WizardDescriptor.FinishablePanel {
+final class ManagedBeanPanel implements WizardDescriptor.Panel, WizardDescriptor.FinishablePanel, ChangeListener {
 
-    private WizardDescriptor wizardDescriptor;
+    private TemplateWizard wizard;
     private ManagedBeanPanelVisual component;
+    private String managedBeanClass;
     
     private Project project;
     /** Create the wizard panel descriptor. */
-    public ManagedBeanPanel(Project project, WizardDescriptor wizardDescriptor) {
+    public ManagedBeanPanel(Project project, TemplateWizard wizard) {
         this.project = project;
-        this.wizardDescriptor = wizardDescriptor;
+        this.wizard = wizard;
     }
     
     public boolean isFinishPanel() {
@@ -74,19 +77,51 @@ final class ManagedBeanPanel implements WizardDescriptor.Panel, WizardDescriptor
     }
 
     public Component getComponent() {
-        if (component == null)
-            component = new ManagedBeanPanelVisual(project);
+        if (component == null) {
+            ManagedBeanPanelVisual gui = new ManagedBeanPanelVisual(project);
+            gui.addChangeListener(this);
+            component = gui;
+        }
 
         return component;
     }
-    
+
+    public void updateManagedBeanName(WizardDescriptor.Panel panel) {
+        String targetName = null;
+        Component gui = panel.getComponent();
+        try {
+            // XXX JavaTargetChooserPanel should introduce new API to get current contents
+            // of its component JavaTargetChooserPanelGUI (see Issue#154655)
+            Method getTargetName = gui.getClass().getMethod("getTargetName", (Class[]) null); // NOI18N
+            targetName = (String) getTargetName.invoke(gui, (Object[]) null);
+        } catch (Exception ex) {
+            return;
+        }
+
+        if ((targetName == null) || targetName.trim().equals("")) {
+            return;
+        }
+
+        if (targetName.equals(managedBeanClass)) {
+            return;
+        } else {
+            managedBeanClass = targetName;
+        }
+
+        getComponent();
+        String name = component.getManagedBeanName();
+        if ((name == null) || !name.equals(managedBeanClass)) {
+            component.setManagedBeanName(managedBeanClass);
+        }
+    }
+
     public HelpCtx getHelp() {
         return new HelpCtx(ManagedBeanPanel.class);
     }
     
     public boolean isValid() {
         getComponent();
-        return component.valid(wizardDescriptor);
+        return component.valid(wizard);
     }
     
     private final Set/*<ChangeListener>*/ listeners = new HashSet(1);
@@ -113,14 +148,14 @@ final class ManagedBeanPanel implements WizardDescriptor.Panel, WizardDescriptor
     }
     
     public void readSettings(Object settings) {
-        wizardDescriptor = (WizardDescriptor) settings;
-        component.read(wizardDescriptor);
+        wizard = (TemplateWizard) settings;
+        component.read(wizard);
         
         // XXX hack, TemplateWizard in final setTemplateImpl() forces new wizard's title
         // this name is used in NewProjectWizard to modify the title
         Object substitute = ((JComponent) component).getClientProperty("NewProjectWizard_Title"); // NOI18N
         if (substitute != null)
-            wizardDescriptor.putProperty("NewProjectWizard_Title", substitute); // NOI18N
+            wizard.putProperty("NewProjectWizard_Title", substitute); // NOI18N
     }
     
     public void storeSettings(Object settings) {
@@ -130,4 +165,7 @@ final class ManagedBeanPanel implements WizardDescriptor.Panel, WizardDescriptor
         ((WizardDescriptor) d).putProperty("NewProjectWizard_Title", null); // NOI18N
     }
 
+    public void stateChanged(ChangeEvent arg0) {
+        isValid();
+    }
 }
